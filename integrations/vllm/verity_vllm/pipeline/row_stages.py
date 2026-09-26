@@ -475,7 +475,7 @@ class SingleRow(Row):
     def form_b(self) -> None:
         """Required values the replay has no evaluator for are value-checked by form (B) alone, complete only over EVERY
         step: the row default snapshot steps become ``all`` for them (an explicit ``--snapshot-steps`` stands, named)."""
-        from verity_vllm.check.replay.sampled_replay import form_b_families
+        from verity_vllm.check.replay.coverage import form_b_families
         try:
             f = form_b_families(json.load(open(f"{self.d}/manifest.json")))
             fb, rc = " ".join(f"{k}x{v}" for k, v in sorted(f.items())), 0
@@ -517,7 +517,21 @@ class SingleRow(Row):
             cmd.append("--replay-cache")
         if ck.required_classes:
             cmd += ["--required-classes", ck.required_classes]
+        if ck.vu_export != "0":
+            cmd += ["--vu-export-dir", self.vu_export_dir()]
         return cmd
+
+    def vu_export_dir(self) -> str:
+        """Where the Commit exports the row's sampled VUs (`pipeline.vu_export`): inside the research run dir when there is one, so the
+        run's custody preserves them; else beside the row.  `provenance.json` there names the row and the shipped source."""
+        rd = self.env.research_run_dir
+        d = os.path.join(rd, "vu-export", self.row) if rd else f"{self.d}/vu-export"
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "provenance.json"), "w") as f:
+            json.dump({"row_key": self.row, "research_run_dir": rd, "research_run": self.env.environ.get("RESEARCH_RUN_ID"),
+                       "source": {"commit": self.env.environ.get("RESEARCH_SOURCE_SHA"),
+                                  "dirty": False if self.env.environ.get("RESEARCH_SOURCE_SHA") else None}}, f)
+        return d
 
     def manifest_of_record(self) -> str:
         """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it

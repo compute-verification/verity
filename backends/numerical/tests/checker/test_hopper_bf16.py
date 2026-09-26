@@ -18,7 +18,7 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.ml.tc.cast import f32_to_bf16_word
 from verity.ml.tc.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot_chain
-from verity.verification.target import BF16_HOPPER, TC_VECTORS
+from verity.proofs.target import BF16_HOPPER, TC_VECTORS
 from verity_numerical.checker import REAL, Params, Reject, check_step, check_vu, contracts, gen_step, gen_vu, step_output, vu_output
 from verity_numerical.checker import reference
 

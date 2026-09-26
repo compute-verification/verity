@@ -12,7 +12,7 @@ Files (``bb_export`` formats, ``<QQ`` header then u32 LE): ``units.bin`` (264 co
 (``link <in|-> <out> <epi> <init mod p> <zero_nonlast>``); ``manifest.json`` with ``variant: v2``.
 
     python -m gpu.v2.export export --root fixtures/bench-instances/v1 --tier vu-k1536 --hi 4096 --out DIR --procs 16
-    python -m gpu.v2.export export --root ... --tier vu-k1536-neg --out DIR          # DIR/neg/<id>/ per instance
+    python -m gpu.v2.export export --root ... --tier vu-k1536-neg --out DIR          # DIR/neg/<id>/ per input
     python -m gpu.v2.export synth --out DIR --vus 2 --steps 3                      # + DIR/negatives (4 chain cases)
     python -m gpu.v2.export negatives --out DIR                                    # a-v2's 30 unit + 4 chain cases
     python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16 --out DIR        # statement files only, at that model

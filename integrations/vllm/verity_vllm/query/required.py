@@ -2,7 +2,7 @@
 
 What this module DECIDES (structure + correspondence, no by-name table):
 
-* WHICH Values are required: `verity.verification.query.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
+* WHICH Values are required: `verity.proofs.query.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
   module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
@@ -47,7 +47,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from verity.verification.query import Policy, RequiredValues, ValueRef, required_values
+from verity.proofs.query import Policy, RequiredValues, ValueRef, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 

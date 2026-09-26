@@ -80,7 +80,7 @@ def patch(doc: dict, prover: dict, verifier: dict, a) -> dict:
                 "union": "union bound over the batch's sequential sub-batch proofs (red-team-flock grant of flock-pure-block/v2)"})
     be = fp["software"]["backend"]
     be["commit"], be["binary_sha256"] = prover["commit"], prover["binary_sha256"]
-    fp["software"]["verifier"] = {"binary": "flock-pure-gpu serve (CPU build)", "commit": verifier["commit"],
+    fp["software"]["verifier"] = {"binary": f"{getattr(a, 'verifier_binary', 'flock-pure-gpu')} serve (CPU build)", "commit": verifier["commit"],
                                   "binary_sha256": verifier["binary_sha256"], "run": verifier["run"], "host": verifier["host"],
                                   "operator": (doc.get("interaction") or {}).get("verifier_operator")}
     ms = {m["name"]: m for m in doc["measurements"]}
@@ -121,6 +121,7 @@ def main(argv=None) -> int:
     ap.add_argument("--rtt-ms", type=float, default=None)
     ap.add_argument("--rtt-method", default=None)
     ap.add_argument("--supersedes", default=None)
+    ap.add_argument("--verifier-binary", default="flock-pure-gpu")
     a = ap.parse_args(argv)
     pd, vd = Path(a.prover_run), Path(a.verifier_run)
     raw = json.loads((pd / "result.json").read_text())

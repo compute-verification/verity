@@ -1,6 +1,6 @@
 """[R19 admit] F-r18-admit-1 -- the Commit host working set on the 188 GB L40S class: the two mechanisms, each pinned by a CPU test.
 
-(c) fork-COW children: `sampled_replay._parallel_replay` freezes the parent's heap (gc.freeze) before forking the evaluator pool, so a
+(c) fork-COW children: `driver._parallel_replay` freezes the parent's heap (gc.freeze) before forking the evaluator pool, so a
     child's cyclic collection never traverses (and copy-on-write duplicates) the inherited C2 heap -- the "two ForkPoolWorkers at ~72 GB"
     of R17 #23 (= the parent's programs + oracle heap, 74.8 GB modelled), the >= 17 GiB post-fork growth that killed #60 twice.  Tests:
     the children run with the frozen heap, the parent is unfrozen after the pool joins, the record names it, the replay record is
@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import driver as SR
 
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
 from tests.check import test_sampled_replay as TSR
@@ -39,6 +39,18 @@ def world():
 
 
 # ------------------------------------------------------------------------------------------------------ (c) gc.freeze before the fork
+@pytest.fixture(autouse=True)
+def _heap_not_frozen_by_an_earlier_test():
+    """vLLM's `EngineCore.__init__` calls `freeze_gc_heap()` and never unfreezes, so an in-process engine built earlier in the same worker
+    leaves a permanent generation these tests would read as their own; it is frozen again afterwards."""
+    frozen = gc.get_freeze_count()
+    if frozen:
+        gc.unfreeze()
+    yield
+    if frozen:
+        gc.freeze()
+
+
 def _child_probe(vu: dict) -> tuple[dict, dict, float]:
     """The per-VU closure of a forked child: reports the child's gc state (frozen count, pid) as its record."""
     return vu, {"result": True, "frozen": gc.get_freeze_count(), "pid": os.getpid(), "i": vu["i"]}, 0.0

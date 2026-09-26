@@ -350,6 +350,7 @@ def prove_table(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcri
                 vals.append(py_ext(v[0].to(torch.int64)))
         out.extend(vals)
         tr.absorb_exts(vals)
+        tr.reserve(2)
         mu = tr.challenge()
         pv = e_add(vals[0], e_mul(mu, e_sub(vals[1], vals[0])))
         qv = e_add(vals[2], e_mul(mu, e_sub(vals[3], vals[2])))
@@ -390,6 +391,7 @@ def verify_table(n: int, tr: Transcript, rd: Reader) -> LeafClaim:
         if e_mul(ex, g) != running:
             raise VerifyError(f"LogUp level {k}: final check")
         tr.absorb_exts(vals)
+        tr.reserve(2)
         mu = tr.challenge()
         pv = e_add(p0, e_mul(mu, e_sub(p1, p0)))
         qv = e_add(q0, e_mul(mu, e_sub(q1, q0)))

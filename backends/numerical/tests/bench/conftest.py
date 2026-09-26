@@ -28,7 +28,7 @@ CONFORMING_FINGERPRINT: dict[str, Any] = {
     "software": {"backend": {"name": "synthetic", "version": "0", "commit": None}, "toolchain": {"python": "3.12"}},
     "preprocessing": "none",
     "retention": "retained",
-    # null: not measured on the shared instance set (bench-instances/v1); see contract.instances_ref
+    # null: not measured on the shared input set (bench-instances/v1); see contract.instances_ref
     "instances": None,
 }
 

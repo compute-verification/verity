@@ -7,7 +7,7 @@
 //! in `veritor.tc-ampere-bf16@1` ([`crate::tc`]: 96 `mma` steps from `+0`, groups `[8, 8]`, a 25-bit adder, exponent
 //! floor `-132`; a non-finite operand or a saturation before the last step is outside the domain and rejects; a
 //! saturation inside the last step is the valid output `+-inf`, and the rest of that step is not examined).  The
-//! format, `y` and the instance-set identity are public; every `x_i`, `W_i` is private and NOT authenticated --
+//! format, `y` and the input-set identity are public; every `x_i`, `W_i` is private and NOT authenticated --
 //! binding the rows to the frozen set is the authentication Table 2's `authentication = excluded` column leaves out,
 //! so the identity is a label the guest carries through, not something it checks.
 //!

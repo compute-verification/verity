@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.derived_rows` — vectorized derived-boundary evaluators equal the registered gate
+"""`verity_vllm.program.kernels.derived_rows` — vectorized derived-boundary evaluators equal the registered gate
 semantics, gate for gate: the scalar kernels match the primitives on random + adversarial words, and the
 row evaluators match `evaluate_call` transcripts of the composites on small shapes, **including the interior
 gates** a derived boundary would select (norm `inv`/`s`, per-block attention (m, l, o), silu `mid`).
@@ -20,7 +20,7 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 
 def _derived():
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     try:
         D._fa2_tables()
         D._rms_tables()
@@ -30,7 +30,7 @@ def _derived():
 
 
 def _standalone(spec):
-    from verity_vllm.program.registry.crosscheck import _standalone
+    from tests.program.crosscheck import _standalone
     return _standalone(spec)
 
 
@@ -343,7 +343,7 @@ def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampe
     word for word on random finite lanes (subnormals kept) and on realistic N(0,1) operands; and it DIFFERS from the Ampere twin on a
     measurable fraction of lanes, so a wrong dispatch of the Gemm_v2 evaluator cannot pass this test.  The refactor that parameterised
     the pipeline leaves the Ampere twin byte-identical (test_tc_dot16_matches_prim)."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
     ref = _veritor_silicon()                                                      # None on a 3.11 interpreter (the pods): the port IS the prim there
     rng = np.random.default_rng(90)
@@ -405,7 +405,7 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     """[R17 dense, ruling R17-9] `rope_rows` (RoPE_v1{NHEADS,D} vectorised) == prims.RopeOut / RopeOutAdd per coordinate on random
     wide-exponent bf16 words (subnormals, zeros, signed zero cache words included) and on realistic magnitudes; the head axis
     broadcasts one cache row; a perturbed input word moves exactly the two output words that read it (lo and hi of its pair)."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry import prims as P
     rng = np.random.default_rng(3)
 
@@ -452,7 +452,7 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     from verity.ir.defs import bind
     from verity.ir.evaluate import evaluate_call
     from verity_vllm.program.registry import b1
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     NH, KVH, Dh, BN = 4, 2, 64, 128
     rng = np.random.default_rng(7000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -478,7 +478,7 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     from verity.ir.defs import bind
     from verity.ir.evaluate import evaluate_call
     from verity_vllm.program.registry import b1, hopper
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry import prims as P
     NH, KVH, Dh, BN = (12, 2, 128, 128) if geometry == "qwen" else (32, 8, 64, 192)
     rng = np.random.default_rng(9000 + T)
@@ -518,7 +518,7 @@ def test_fa3_tile_bn_192_vs_128_differs_exactly_where_the_key_partition_differs(
     partitions of the T keys differ (ceil(T/BN) >= 2 under at least one of them: the online-softmax rescale points move).  For T <= 128 both
     are ONE block whose masked lanes are exact zeros, so the bodies are bit-identical there: a 'wrong BN' on such a row is not a
     distinguishable fault, and a negative that swaps BN must pick T > 128 (on the llama H100 B8 record: the LP >= 155 requests' rows)."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     NH, KVH, Dh = 4, 2, 64
     same, differ = [], []
     for T in (1, 33, 100, 128):

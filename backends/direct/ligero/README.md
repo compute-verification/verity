@@ -5,7 +5,7 @@ the 4096-VU decision workload, HVZK). Design: `PROTOCOL.md`. Proof class **NON_Z
 **COMPLETE_HVZK_BACKEND** with `--zk --no-coin-commitment`, **COMPLETE_ZK_BACKEND** with `--zk` (lane b-zk, third
 pass below: HM96 coin commitment, PROTOCOL.md 8c; hash and challenge expander are host placeholders; the relation is
 WP2's checker, nothing dropped). Every number below was measured on `vy-g3` (NVIDIA L40S 48 GB, torch cu124) on the frozen
-instance set `fixtures/bench-instances/v1`.
+input set `fixtures/bench-instances/v1`.
 
 ## Third pass (lane b-zk, ledger `b-zk.jsonl`, plot `plots/overhead_b-zk.png`): COMPLETE_ZK_BACKEND, 4.6x
 

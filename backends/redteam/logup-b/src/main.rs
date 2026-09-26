@@ -1,4 +1,4 @@
-//! Red-team 3 battery against the Candidate B LogUp realisation (`verity-direct`, PROTOCOL.md section 14):
+//! Red-team 3 battery against the B-Ligero LogUp realisation (`verity-direct`, PROTOCOL.md section 14):
 //! adversarial `(main, aux)` pairs built with the lane's own witness generator and *adversarially chosen*
 //! auxiliary columns (the helper of an out-of-table query carries the term the honest prover cannot compute,
 //! `g` follows a tampered multiplicity, the running sum is re-accumulated), run through the real

@@ -1,6 +1,6 @@
 """Statement negatives for a Flock cell's instance files, run with the cell's own binary against a loopback verifier.
 
-    python -m verity_flock.negatives --bin flock-pure-gpu --relation R --vus N --scheme sha256|blake3 --out DIR [--prove-arg --gpu]
+    python -m verity_flock.negatives --bin flock-pure-gpu --relation R --vus N --leaf sha256|blake3 --out DIR [--prove-arg --gpu]
 
 Each case writes the verifier's instance file from the recipe, changes it the way a cheating prover would need the
 verifier to accept, and checks that an honest prover's session over the original data is refused:
@@ -76,7 +76,7 @@ def main(argv=None) -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--relation", required=True)
     ap.add_argument("--vus", type=int, default=64)
-    ap.add_argument("--scheme", default="blake3", choices=sorted(instances.SCHEMES))
+    ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES))
     ap.add_argument("--out", required=True)
     ap.add_argument("--prove-arg", action="append", default=[])
     a = ap.parse_args(argv)
@@ -84,18 +84,18 @@ def main(argv=None) -> int:
     d.mkdir(parents=True, exist_ok=True)
     (d / "net.txt").write_text(lowering.netlist(a.relation))
     honest = d / "honest.bin"
-    instances.write(honest, a.relation, a.vus, scheme=a.scheme)
+    instances.write(honest, a.relation, a.vus, leaf=a.leaf)
     ok = True
     for i, (case, change, want) in enumerate([("honest_control", None, True), ("valid_chain_over_wrong_row", "row", False),
                                               ("forged_output_word", "output", False)]):
         vf = honest
         if change:
             vf = d / f"verifier-{case}.bin"
-            _rewrite(honest, vf, a.relation, a.scheme, change)
+            _rewrite(honest, vf, a.relation, a.leaf, change)
         r = session(a, honest, vf, d, 7600 + i)
         passed = r["accepted"] == want
         ok &= passed
-        print("NEG\t" + json.dumps({"case": case, "scheme": a.scheme, "relation": a.relation, "expect": "accept" if want else "reject",
+        print("NEG\t" + json.dumps({"case": case, "leaf": a.leaf, "relation": a.relation, "expect": "accept" if want else "reject",
                                     "accepted": r["accepted"], "pass": passed, "why": r["why"]}), flush=True)
     print("NEGATIVES\t" + json.dumps({"all_pass": ok}), flush=True)
     return 0 if ok else 1

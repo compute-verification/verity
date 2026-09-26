@@ -17,7 +17,7 @@ torch at module level:
 
 `produce` draws the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
 output words (`case_<i>/in_<j>.npy`, `out_<k>.npy`, `case.json`).  `check` rebuilds `spec(statics)`, evaluates its body on
-the SAME input words through the Verity evaluator (a one-call Program; `evaluate_call`) and compares the output encodings
+the SAME input words through the Verity evaluator (core `verity.evaluation.evaluate`) and compares the output encodings
 word for word.  Gate G4 reads the resulting `quarantine.json`: `differential.passed == differential.total > 0` for every
 quarantined definition the run used.  Edge-kind inputs (`zeros`, `max`, `subnormal`, `alternating`) are required: at least
 one case per kind; `check` fails the admission otherwise.
@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import random
 import sys
 import time
 from pathlib import Path
@@ -39,6 +38,7 @@ from dataclasses import dataclass, field
 
 from verity_vllm.config import option
 
+from verity_vllm.commit import challenge as CH
 from verity_vllm.properties.record import seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
@@ -95,7 +95,7 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
     import torch
 
     mod = importlib.import_module(adapter)
-    rng_py = random.Random(seed)
+    rng_py = CH.stream(seed)
     out.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, Any] = {"schema": "verity-gen/difftest-produce/v1", "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
                                 "seed": seed, "n": n, "torch": torch.__version__, "device": torch.cuda.get_device_name(0) if device.startswith("cuda") else device,
@@ -104,7 +104,7 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
             "uint8": torch.uint8, "int8": torch.int8, "bool": torch.bool}
     for i in range(n):
         case = mod.cases(rng_py, i)
-        rng = np.random.default_rng(seed * 1_000_003 + i)
+        rng = CH.generator(CH.case_seed(seed, i))
         cdir = out / f"case_{i}"
         cdir.mkdir(exist_ok=True)
         ins = []
@@ -142,36 +142,16 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
 # --- check (verity venv) ------------------------------------------------------------------------------------------------
 
 def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
-    """Encodings returned by one call of `spec` on operands given as word arrays (a one-call Program)."""
-    from verity.ir.defs import Builder, CompositeDefinition, bind
-    from verity.ir.evaluate import evaluate_call
-    from verity.ir.layout import FunctionCall
-    from verity.ir.program import Program
-    from verity.ir.refs import Affine, Coll
+    """Encodings returned by one call of `spec` on operands given as word arrays: core `verity.evaluation.evaluate`."""
+    from verity.evaluation import evaluate
 
-    from verity_vllm.observe.fold.fold import _replayer
-
-    params, ret = spec.signature()
+    params, _ = spec.signature()
     if len(params) != len(operand_words):
         raise ValueError(f"{spec.id}: {len(params)} parameters, {len(operand_words)} operands")
-    args: list[int] = []
     for (pname, pt), w in zip(params, operand_words):
         if pt.leaves != w.size:
             raise ValueError(f"{spec.id}: parameter {pname} has {pt.leaves} leaves, operand has {w.size} words")
-        args += [int(x) for x in w.reshape(-1).tolist()]
-    B = Builder(params, ret)
-    colls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
-    out = B.call(spec, *colls)
-    body = B.finish(out)
-    defn = CompositeDefinition("DiffTest", 1, (), lambda S, _p=params, _r=ret: (_p, _r), _replayer(body),
-                               doc="difftest one-call program", conformance="derived: difftest", register=False)
-    top = bind(defn)
-    top.set_body(body)
-    program = Program(top)
-    circuit = program.circuit
-    n_in = len(program.root.body.nodes) - len(body.nodes)
-    call = FunctionCall(circuit, circuit.root_scope, n_in + 0)
-    return list(evaluate_call(circuit, call, args))
+    return list(evaluate(spec, *(w.reshape(-1).tolist() for w in operand_words)))
 
 
 def check(adapter: str, d: Path) -> dict[str, Any]:

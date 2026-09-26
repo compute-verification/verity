@@ -1,7 +1,7 @@
 """rev R16 F-r16-08 -- one identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
 
 BRIEF §3 C1: "every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
-identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `sampled_replay.CommittedStore` keys the
+identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `opening.CommittedStore` keys the
 committed words by (request, step, op_path, member) and keeps the first entry (min invocation), so a second binding of the SAME identity
 to a different buffer is never read by form (A) and is not a named failure anywhere on the (A) path.  Honest records have 0 copies
 (153/153 R15/R16 coverage records), so gating on it costs nothing.
@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.commit.binding import coverage_check, identity, identity_dict
-from verity_vllm.check.replay.sampled_replay import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore
 
 PD = "ab" * 32
 

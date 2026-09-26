@@ -25,7 +25,7 @@ mkdir -p "$RUN_DIR"
 cd "$ROOT"
 echo "commit=$(git rev-parse --short HEAD 2>/dev/null || echo snapshot) rustc=$(rustc --version) vus=$VUS threads=$VERITY_GKR_THREADS"
 
-# ---- Candidate A -------------------------------------------------------------------------------------------------
+# ---- A-GKR -------------------------------------------------------------------------------------------------
 (cd backends/gkr && cargo build --release -j12 2>&1 | tail -1)
 uv run --package verity-numerical python -m verity_numerical.redteam.vu_forge_a --out "$RUN_DIR/forge_a" --vus "$VUS" --root fixtures/bench-instances/v1
 : > "$RUN_DIR/a_results.jsonl"
@@ -44,7 +44,7 @@ for d in "$RUN_DIR"/forge_a/*/; do
 done
 rm -rf "$RUN_DIR"/forge_a/*/units.bin   # the witnesses are reproducible from the manifest; keep the run small
 
-# ---- Candidate B + challenger ------------------------------------------------------------------------------------
+# ---- B-Ligero + challenger ------------------------------------------------------------------------------------
 (cd backends/redteam/vu-battery-b && cargo build --release -j12 2>&1 | tail -1)
 "$CARGO_TARGET_DIR/release/redteam-vu-b" challenger --out "$RUN_DIR" --samples 100000 > "$RUN_DIR/challenger_audit.txt"
 QARG=""; [ -n "${QUERIES:-}" ] && QARG="--queries $QUERIES"

@@ -6,7 +6,7 @@ import gzip
 import json
 
 import pytest
-from verity.verification.query import ValueRef, boundary
+from verity.proofs.query import ValueRef, boundary
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, parse_call_name
 from verity_vllm.query.module_body import Q_module_body_v1

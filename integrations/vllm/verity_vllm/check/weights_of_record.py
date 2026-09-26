@@ -357,7 +357,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
 
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
-    from verity_vllm.check.replay.sampled_replay import parse_struct
+    from verity_vllm.check.replay.index import parse_struct
     wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
     if not wparam or not str(wparam).startswith("{"):
         return []

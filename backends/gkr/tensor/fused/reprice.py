@@ -1,4 +1,4 @@
-"""Laptop side: a fetched ``bench.json`` of ``fused/bench.py`` -> Candidate A re-priced with the measured fused round.
+"""Laptop side: a fetched ``bench.json`` of ``fused/bench.py`` -> A-GKR re-priced with the measured fused round.
 
     uv run --package verity-numerical python backends/gkr/tensor/fused/reprice.py ~/.research/runs/<run>/bench.json \
         --report backends/numerical/reports/fused_sumcheck_4090

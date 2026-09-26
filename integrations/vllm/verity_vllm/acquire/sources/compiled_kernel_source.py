@@ -27,21 +27,22 @@ from typing import Any
 
 import torch
 
+from verity_vllm.engine import hooks
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, roles_of
 
 _INDUCTOR_DEBUG_LEVEL = "1"                                                     # torch._inductor IntermediateValueDebuggingLevel.SAVE_ONLY
 
 
-def install_wrapper_hooks(hook) -> dict[str, Any]:
+def install_wrapper_hooks(hook, into: hooks.Hooks) -> dict[str, Any]:
     """Patch Inductor so the generated wrappers call `hook(name, tensor)` around every kernel launch.  Must run BEFORE the engine compiles."""
     from torch._inductor import config as icfg
     from torch._inductor import hooks as ih
     from torch._inductor.codegen import debug_utils as du
 
-    icfg.aot_inductor.debug_intermediate_value_printer = _INDUCTOR_DEBUG_LEVEL
-    du.DebugPrinterManager.codegen_intermediate_tensor_value_save = _patched_save
+    into.patch(icfg.aot_inductor, "debug_intermediate_value_printer", _INDUCTOR_DEBUG_LEVEL)
+    into.patch(du.DebugPrinterManager, "codegen_intermediate_tensor_value_save", _patched_save)
     if hook not in ih.INTERMEDIATE_HOOKS:
-        ih.INTERMEDIATE_HOOKS.append(hook)
+        into.append(ih.INTERMEDIATE_HOOKS, hook)
     return {"debug_printer_level": _INDUCTOR_DEBUG_LEVEL, "intermediate_hooks": len(ih.INTERMEDIATE_HOOKS)}
 
 
@@ -78,6 +79,7 @@ class CompiledKernelSource:
         self.stale: dict[tuple, torch.Tensor] = {}
         self.errors: list[str] = []
         self.hooks_info: dict[str, Any] = {}
+        self._hooks = hooks.Hooks()
         self.stats: dict[str, Any] = {"capture_copies": 0, "capture_skipped_weights": 0, "eager_acquisitions": 0, "replay_drains": 0,
                                       "steps": 0, "eager_steps": 0, "replayed_steps": 0, "hook_calls_outside_step": 0, "omitted": 0,
                                       "slot_bytes": 0, "unknown_kernel_args": 0, "role_map_misses": 0, "drain_s": 0.0}
@@ -114,7 +116,7 @@ class CompiledKernelSource:
     # ------------------------------------------------------------------ installation (before the engine compiles)
 
     def install_hooks(self) -> None:
-        self.hooks_info = install_wrapper_hooks(self._hook)
+        self.hooks_info = install_wrapper_hooks(self._hook, self._hooks)
         from vllm.compilation import piecewise_backend as pb
 
         src = self
@@ -126,7 +128,7 @@ class CompiledKernelSource:
             src._enter_piece(self_pb.piecewise_compile_index)
             return orig_call(self_pb, *args)
 
-        pb.PiecewiseBackend.__call__ = call
+        self._hooks.patch(pb.PiecewiseBackend, "__call__", call)
         try:
             from vllm.compilation import cuda_graph as cg
 
@@ -144,7 +146,7 @@ class CompiledKernelSource:
                 finally:
                     src.in_cgw = False
 
-            cg.CUDAGraphWrapper.__call__ = cgw_call
+            self._hooks.patch(cg.CUDAGraphWrapper, "__call__", cgw_call)
             self.hooks_info["graph_hook"] = "CUDAGraphWrapper.__call__"
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"CUDAGraphWrapper patch: {e!r}")
@@ -252,6 +254,10 @@ class CompiledKernelSource:
 
     def uninstall(self) -> None:
         pass
+
+    def remove_hooks(self) -> None:
+        """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
+        self._hooks.uninstall()
 
     def declaration_classes(self) -> list[dict]:
         # the committer's coverage_declaration tallies this source's tensors itself (class `compiled_kernel_buffers`, bound-as-leaf; the

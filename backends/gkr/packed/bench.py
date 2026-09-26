@@ -1,7 +1,7 @@
 """Measure the packed sumcheck (``sumcheck_packed``) on one GPU: per-round times for k in {0..4}, the whole sumcheck at
-several table sizes, a linear fit -> Candidate A's per-VU checker-sumcheck seconds, achieved fraction of the INT8 peak,
+several table sizes, a linear fit -> A-GKR's per-VU checker-sumcheck seconds, achieved fraction of the INT8 peak,
 memory; writes ``bench.json`` and the ``research/result/v0.1`` envelope.  ``--reprice`` (laptop, needs
-``verity_numerical``) turns a fetched ``bench.json`` into the re-priced Candidate A overheads.
+``verity_numerical``) turns a fetched ``bench.json`` into the re-priced A-GKR overheads.
 
 Pod::
 
@@ -47,11 +47,11 @@ GPU_PEAKS = {
     "NVIDIA A100-SXM4-80GB": {"int8_dense_tops": 624.0, "hbm_bytes_per_s": 2.039e12, "fp32_tflops": 19.5, "bf16_dense_tflops": 312.0,
                               "source": "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB): INT8 624 TOPS dense, HBM2e 2,039 GB/s, FP32 19.5 TFLOPS"},
 }
-PROFILE = "first-campaign-target/2026-09-21"   # verity.verification.target.FIRST.name (copied: the pod has no workspace install)
+PROFILE = "first-campaign-target/2026-09-21"   # verity.proofs.target.FIRST.name (copied: the pod has no workspace install)
 DOMAIN = "finite"
 K_TARGET, B_TARGET = 1536, 4096
 UNITS = B_TARGET * K_TARGET // 16              # 393,216 transition units in the batch
-#: Candidate A's checker layers (``accounting.CHECKER_LAYER_WIDTHS_A``, output layer first): carried width per unit;
+#: A-GKR's checker layers (``accounting.CHECKER_LAYER_WIDTHS_A``, output layer first): carried width per unit;
 #: the c-round tables of layer i are ``units x (input width)`` (PROTOCOL.md 1: reads 2^10 for the computed layers, 2^9 for depth 1).
 LAYER_WIDTHS = (137, 679, 673, 669, 647, 533)
 LAYER_READ_LOG2 = (10, 10, 10, 10, 10, 9)

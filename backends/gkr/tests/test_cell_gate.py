@@ -1,5 +1,6 @@
 """E1: tools/cell_gate.py admits only exchange-mode, gated session records with the cell's Σ, an accepted verdict, a
-complete link context, the proofs kept beside the record, and a non-producer verifier."""
+complete link context, the proofs kept beside the record, a non-producer verifier, live prime coins in order
+(PROTOCOL 17.6) and the committed words the Flock replay needs (G2)."""
 from __future__ import annotations
 
 import copy
@@ -17,16 +18,22 @@ M = 3
 SIGMA_TXT = f"verity/link-L/v2\nscheme blake3-keyed/row/v2\nm {M}\n"
 SIGMA = hashlib.sha256(SIGMA_TXT.encode()).hexdigest()
 PROOFS = {"chain/rep0": b"proof zero", "chain/rep1": b"proof one"}
+H = lambda b: hashlib.sha256(b).hexdigest()   # noqa: E731
+ROOT_F, ROOT_B, PUBLICS = b"f" * 32, b"b" * 32, b"p" * 96
 
 
 def honest() -> dict:
     return {
         "kind": "flock-live-session/v1",
-        "hello": json.dumps({"profile": "fast100", "reps": 2, "link": {"sigma": SIGMA, "m": M, "points": 2}}),
+        "hello": json.dumps({"profile": "fast100", "reps": 2, "link": {"sigma": SIGMA, "m": M, "points": 2}, "prime": "live-coins/v1"}),
         "link_mode": "exchange",
-        "link": {"mode": "exchange", "sigma": SIGMA, "root_f_sha256": "aa" * 32, "root_b_sha256": {"chain": "bb" * 32},
+        "link": {"mode": "exchange", "sigma": SIGMA, "root_f_sha256": H(ROOT_F), "root_b_sha256": {"chain": H(ROOT_B)},
+                 "publics_sha256": {"chain": H(PUBLICS)}, "root_f": ROOT_F.hex(), "root_b": {"chain": ROOT_B.hex()},
+                 "publics": {"chain": PUBLICS.hex()},
                  "points": [["01" * 16] * M, ["02" * 16] * M], "y": ["03" * 16, "04" * 16]},
-        "config": {"require_link": True, "reps": 2},
+        "config": {"require_link": True, "reps": 2, "prime_live": True},
+        "prime": {"mode": "live-coins/v1", "before_commit": 2,
+                  "rounds": [{"state": f"{k:02x}" * 32, "n": n, "words": list(range(k, k + 6 * n))} for k, n in ((1, 3), (2, 1), (3, 5))]},
         "proof_sha256": [{"stream": s, "sha256": hashlib.sha256(b).hexdigest(), "bytes": len(b)} for s, b in PROOFS.items()],
         "aborted": None,
         "verdict": {"accepted": True, "reps": [{"stream": s, "ok": True} for s in PROOFS]},
@@ -73,7 +80,24 @@ def mutate(f):
     ("proof_altered", honest(), {"proofs": {**PROOFS, "chain/rep1": b"another proof"}}, "preserved"),
     ("producer_verifier", honest(), {"operator": "agkr-flock-cell"}, "non_producer"),
     ("anonymous_verifier", honest(), {"operator": ""}, "non_producer"),
+    ("prime_fiat_shamir", mutate(lambda r: r.update(prime=None)), {}, "prime_live"),
+    ("prime_not_configured", mutate(lambda r: r["config"].update(prime_live=False)), {}, "prime_live"),
+    ("prime_not_in_hello", mutate(lambda r: r.update(hello=r["hello"].replace(', "prime": "live-coins/v1"', ""))), {}, "prime_live"),
+    ("prime_none_before_root_f", mutate(lambda r: r["prime"].update(before_commit=0)), {}, "prime_live"),
+    ("prime_none_after_y", mutate(lambda r: r["prime"].update(before_commit=3)), {}, "prime_live"),
+    ("prime_word_not_below_p", mutate(lambda r: r["prime"]["rounds"][1]["words"].__setitem__(0, G.P)), {}, "prime_live"),
+    ("prime_round_short", mutate(lambda r: r["prime"]["rounds"][2]["words"].pop()), {}, "prime_live"),
+    ("publics_dropped", mutate(lambda r: r["link"].pop("publics")), {}, "replayable"),
+    ("publics_edited", mutate(lambda r: r["link"]["publics"].update(chain=(b"q" * 96).hex())), {}, "replayable"),
+    ("root_b_edited", mutate(lambda r: r["link"]["root_b"].update(chain=(b"c" * 32).hex())), {}, "replayable"),
 ])
 def test_refused(tmp_path, name, rec, kw, fails):
     checks = run(tmp_path, rec, **kw)
     assert not checks[fails]["ok"], (name, checks[fails])
+
+
+def test_prime_coins_txt_is_the_verifiers_format():
+    text = G.prime_coins_txt(honest())
+    lines = text.splitlines()
+    assert lines[:2] == ["prime-coins live-coins/v1", "before_commit 2"] and len(lines) == 5
+    assert lines[2].split()[:3] == ["round", "01" * 32, "3"] and len(lines[2].split()) == 3 + 18

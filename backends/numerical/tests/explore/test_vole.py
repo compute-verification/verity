@@ -71,7 +71,7 @@ def test_census_columns_b4096():
     assert est["vole.correlations"] == 83_434 * 4096 + 66_623 == 341_812_287
     assert est["vole.mul_checks"] == 63_749 * 4096
     assert est["census.committed_elements"] == est["vole.correlations"]
-    assert 2.73e9 < est["transcript.bytes"] < 2.74e9            # 37x Candidate A (74.7 MB), 8.6x Candidate B (318 MB)
+    assert 2.73e9 < est["transcript.bytes"] < 2.74e9            # 37x A-GKR (74.7 MB), 8.6x B-Ligero (318 MB)
     assert est["rounds.sequential_depth"] == 2 and est["rounds.protocol"] == 2
     assert est["census.hash_bytes"] == 0
     assert 200 < est["estimate.prover_seconds"] < 240              # 1 thread, r=3: 602M gate-eq / 4.8M/s x 3.5

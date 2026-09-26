@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import coverage as COV, index as IX, population as POP
 from tests.check.test_sampled_replay import _program
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
@@ -21,10 +21,10 @@ def _v2_manifest(inst: dict, res: dict | None = None, **kw) -> dict:
     return request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id="r0", **kw).manifest
 
 
-def _reconciles(man: dict, pi: SR.ProgramIndex, rank: int = 0) -> None:
+def _reconciles(man: dict, pi: IX.ProgramIndex, rank: int = 0) -> None:
     addresses: dict = {}
-    SR.population(pi, "r0", rank=rank, addresses=addresses)
-    checks = SR.query_population(man, addresses, set(), ranks=[rank])["query_checks"]
+    POP.population(pi, "r0", rank=rank, addresses=addresses)
+    checks = COV.query_population(man, addresses, set(), ranks=[rank])["query_checks"]
     bad = {k: v for k, v in checks.items() if isinstance(v, dict) and v.get("n")}
     assert not bad, bad
 
@@ -34,7 +34,7 @@ def test_the_crossing_interior_row_is_addressed_as_the_module_output_it_crosses_
     the v2 query requires it as (model, out) and the rule addresses exactly those rows, with the manifest's row count."""
     inst, _woff = _program(scale=True)
     man = _v2_manifest(inst)
-    pi = SR.ProgramIndex(inst)
+    pi = IX.ProgramIndex(inst)
     crossing = {r["i"]: r["spec"] for r in inst["rows"] if (d := pi.describe(r)) is not None and d["op_path"] == "model" and d["members"]}
     assert crossing and all(spec.startswith("Bf16MulScalarTensor_v1{") for spec in crossing.values()), crossing
     assert all([m[0] for m in pi.describe(inst["rows"][i])["members"]] == ["out"] for i in crossing)
@@ -49,7 +49,7 @@ def test_the_addressed_rows_reconcile_with_the_manifest_identity_by_identity(var
     inst, _woff = _program(**variant)
     man = _v2_manifest(inst)
     assert man["complete"], man["unmodelled"]
-    _reconciles(man, SR.ProgramIndex(inst))
+    _reconciles(man, IX.ProgramIndex(inst))
 
 
 def _tp_rank_program(rank: int, world: int = 2) -> dict:
@@ -99,4 +99,4 @@ def test_a_tp_rank_programs_addressed_rows_reconcile_with_its_rank_manifest(rank
     man = _v2_manifest(inst, res, workload={"sweep": {"row_id": "tp2-df", "batch": 1, "arrive_steps": [0]}}, rank=rank, ranks=2)
     assert man["complete"], man["unmodelled"]
     assert {x["output_member"] for x in man["identities"] if x["family"] == "tp_rank_partials"} == {f"part_rank{rank}", f"shard_rank{rank}"}
-    _reconciles(man, SR.ProgramIndex(inst, tp={"rank": rank, "world": 2}, attention_paths=list(IMPL)), rank=rank)
+    _reconciles(man, IX.ProgramIndex(inst, tp={"rank": rank, "world": 2}, attention_paths=list(IMPL)), rank=rank)

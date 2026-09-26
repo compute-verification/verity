@@ -3,7 +3,7 @@
     uv run --frozen --package verity-numerical python backends/shared/hash_gpu/reprice.py \
         --bench <fetched bench.json> --run-id r2026... --out backends/numerical/reports/hash_gpu.json
 
-For every hash measured at the Ligero shapes of Candidates A and B (BabyBear, 2^-128, B = 4096) this takes the
+For every hash measured at the Ligero shapes of A-GKR and B-Ligero (BabyBear, 2^-128, B = 4096) this takes the
 full-tree bytes/s on the RTX 4090 and evaluates ``Priced.times`` at TensorZKP's realistic utilisation (0.172) on:
 the 4090 itself (measured rate, the 4090's tensor peak), and the A100 / H100 with the hash rate scaled by the
 stated HBM/GDDR bandwidth ratio (2,039 / 1,008 and 3,350 / 1,008) -- a SCALING, labelled as such, not a measurement

@@ -1,7 +1,7 @@
-"""The full Verity VU for Candidate A: the epilogue circuit and the chained-unit witness of ``bench-instances/v1``.
+"""The full Verity VU for A-GKR: the epilogue circuit and the chained-unit witness of ``bench-instances/v1``.
 
 A VU of ``K = 1536`` is 96 word-chained transition units from ``c_0 = 0`` plus the epilogue (``Epilogue.check``:
-the RN-even cast of the last FP32 word to the BF16 output word).  Candidate A proves it as two data-parallel
+the RN-even cast of the last FP32 word to the BF16 output word).  A-GKR proves it as two data-parallel
 circuits over one commitment (PROTOCOL.md section 12): the unit circuit (``build_unit_circuit``) over ``B * 96``
 unit rows laid out VU-major (row ``v * 96 + i`` is unit ``i`` of VU ``v``), and the epilogue circuit
 (:func:`build_epilogue_circuit`) over ``B`` rows.  The chain linkage (unit ``i``'s ``y`` = unit ``i+1``'s ``x.c``,

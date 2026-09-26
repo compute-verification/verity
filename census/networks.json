@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dc-1ms-100gbps",
+    "label": "same datacenter (reference)",
+    "rtt_s": 0.001,
+    "bandwidth_bps": 100e9,
+    "sources": [
+      {
+        "label": "reporting standard (Daniel, 2026-09-25): t = compute + rounds x RTT + bytes / bandwidth; the reference is the same datacenter"
+      }
+    ],
+    "role": "reference"
+  },
+  {
+    "id": "rtt-20ms-100gbps",
+    "label": "20 ms RTT, 100 Gb/s",
+    "rtt_s": 0.02,
+    "bandwidth_bps": 100e9,
+    "sources": [
+      {
+        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+      }
+    ],
+    "role": "sensitivity"
+  },
+  {
+    "id": "rtt-100ms-100gbps",
+    "label": "100 ms RTT, 100 Gb/s",
+    "rtt_s": 0.1,
+    "bandwidth_bps": 100e9,
+    "sources": [
+      {
+        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+      }
+    ],
+    "role": "sensitivity"
+  },
+  {
+    "id": "dc-1ms-10gbps",
+    "label": "1 ms RTT, 10 Gb/s",
+    "rtt_s": 0.001,
+    "bandwidth_bps": 10e9,
+    "sources": [
+      {
+        "label": "interaction drill-down sensitivity profile (reporting standard, 2026-09-25)"
+      }
+    ],
+    "role": "sensitivity"
+  }
+]

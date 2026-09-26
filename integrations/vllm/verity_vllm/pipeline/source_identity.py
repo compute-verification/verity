@@ -56,7 +56,7 @@ SourceIdentityError = _sid.SourceIdentityError
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
 PACKAGE_ROOTS = {
-    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.verification
+    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.proofs
     "verity_vllm": ("verity_vllm", "integrations/vllm"),
     "research": ("research", "tools/research/src"),                    # the runner/telemetry package of the tree of record
 }

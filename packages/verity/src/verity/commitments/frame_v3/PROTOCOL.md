@@ -67,12 +67,31 @@ business, since frame-v3 domain bindings name K and the schema.
 For rows over 1024 bytes, a backend may prove the chunk chaining values and let the verifier do the parent fold
 natively, as B-Ligero does. The layout still describes the whole-row digest, which is what the tree leaf binds.
 
+## 4a. NVFP4 rows: `sha256/row-nvfp4/v1` and `blake3-keyed/row-nvfp4/v1`
+
+An NVFP4 row (an x row or W column of `k` E2M1 codes with one UE4M3 scale per 16 codes; k = 1536 gives 864 bytes)
+hashes the code buffer, then the scale buffer, as NVFP4 tensors hold them in memory, so a serving-side committer hashes
+rows without repacking (Daniel, 2026-09-26 01:05Z):
+
+~~~text
+nvfp4_row_bytes = codes packed two per byte (code 2i in the low nibble, 2i+1 in the high), in row order  (k/2 bytes)
+                ‖ the k/16 scale bytes in row order
+prefix = ( "verity/sha256-row-nvfp4/v1\0" ‖ u8 role ‖ u8 4 ‖ u32be k ‖ u32be k/16 )  zero-padded to 64 bytes
+sha256/row-nvfp4/v1:       digest = SHA-256( prefix ‖ nvfp4_row_bytes )
+blake3-keyed/row-nvfp4/v1: digest = BLAKE3( nvfp4_row_bytes, key = the §4 key for the role )
+~~~
+
+The SHA-256 prefix binds the role, the 4-bit code width, `k` and the scale count. The BLAKE3 schema uses §4's role keys;
+its schema string, which the tree leaf binds, separates it from `blake3-keyed/row/v2`. Reference and conformance
+vectors: `verity.commitments.rowleaf` (`nvfp4_row_bytes`, `sha256_row_nvfp4_digest`, `blake3_row_nvfp4_digest`) and
+`nvfp4_row_v1_vectors.json` beside this file (flock-backend's reference, checked by `test_rowleaf_nvfp4.py`).
+
 ## 5. Hashes
 
 Table 1 lists these hashes, all of class standard:
 
-- SHA-256, for the frame-v3 leaves, nodes, pads and domain ids, and for `sha256/row/v1`;
-- BLAKE3 (keyed), for `blake3-keyed/row/v2`.
+- SHA-256, for the frame-v3 leaves, nodes, pads and domain ids, and for `sha256/row/v1` and `sha256/row-nvfp4/v1`;
+- BLAKE3 (keyed), for `blake3-keyed/row/v2` and `blake3-keyed/row-nvfp4/v1`.
 
 The Poseidon2 row leaf `poseidon2-babybear-w24/row/v2h` (`rowleaf.SCHEMA_ROW`) stays in the code so that recorded
 results keep verifying. It is algebraic, so no core scheme configuration offers it.

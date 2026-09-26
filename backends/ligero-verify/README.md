@@ -1,4 +1,4 @@
-# ligero-verify: the independent verifier for Candidate B's B-Ligero proofs
+# ligero-verify: the independent verifier for B-Ligero's chain proofs
 
 Lanes `b-verifier` / `b-verifier-2` (the latter brought it to the b-zk-fix protocol, `main` a52441c). A dependency-free Rust verifier for the chain proofs of `backends/direct/ligero` (BabyBear Ligero
 with statement-bound SHAKE-256 challenges, BLAKE3 Merkle, BLAKE2b statement digest and HM96 coin commitments;

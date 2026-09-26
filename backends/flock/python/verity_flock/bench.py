@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 from . import instances, lowering
-from .backend import FLOCK_BLOCK, FLOCK_FRAME_V3_BLAKE3, lowering_version
+from .backend import BACKENDS, FLOCK_FRAME_V3_BLAKE3, lowering_version
 
 RULE = ("double total VUs from start at fixed per-proof settings until two successive doublings together raise the median "
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
@@ -201,10 +201,11 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover", "open_rtt_ms"):
+        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover", "open_rtt_ms", "domain_digests", "scheme"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["units"] = runs[0].get("units")
         m["n_blake3"] = sum(r.get("n_blake3") or 0 for r in runs)
+        m["n_sha256"] = sum(r.get("n_sha256") or 0 for r in runs)
         m["n_units"] = sum(r.get("n_units") or 0 for r in runs)
         if all(isinstance(r.get("buckets"), list) for r in runs):
             m["buckets"] = {b: sum(rep.get(b, 0.0) for r in runs for rep in r["buckets"]) for b in ("t.witness", "t.encoding_commitment", "t.arithmetic")}
@@ -221,7 +222,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     headers, gen_s = [], 0.0
     for i, (lo, hi) in enumerate(subs):
         t0 = time.time()
-        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi, a.scheme))
+        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf))
         gen_s += time.time() - t0
     tg = _guard()
     guard = tg.Guard(sampler=_sampler).start()
@@ -297,7 +298,8 @@ def result(a, p: dict, sweep: dict) -> dict:
     n = p["total"]
     profile = PROFILES[a.relation]
     binary = Path(a.bin).name
-    rec = (FLOCK_BLOCK if binary == FLOCK_BLOCK.binary else FLOCK_FRAME_V3_BLAKE3).record()
+    backend = next((b for b in BACKENDS if b.binary == binary), FLOCK_FRAME_V3_BLAKE3)
+    rec = backend.record()
     first = timed[0]
     hw = contract.probe_hardware()
     fp = contract.fingerprint(
@@ -318,9 +320,10 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme="frame-v3/" + instances.SCHEMES[a.scheme], statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
+        scheme=(f"frame-v3/{instances.SCHEMES[a.leaf]}" if a.scheme == "frame-v3" else backend.scheme), statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
-        n_blake3=first["n_blake3"], n_units=first["n_units"],
+        n_blake3=first["n_blake3"], n_units=first["n_units"], **({"n_sha256": first["n_sha256"]} if first.get("n_sha256") else {}),
+        **({"domain_digests": first["domain_digests"]} if first.get("domain_digests") else {}),
         rtt_method="net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier,
                                                                          "process": "flock-pure serve (separate process)"})
@@ -397,7 +400,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
         d = out / f"p{i}-{total}"
         d.mkdir(parents=True, exist_ok=True)
         for j, (lo, hi) in enumerate(subbatches(total, a.per_proof)):
-            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi, a.scheme)
+            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
             jobs.append((d, j))
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
@@ -428,7 +431,9 @@ def main(argv=None) -> int:
     ap.add_argument("--operator", default="")
     ap.add_argument("--rtt-target", default="", help="host:port on the verifier pod to time TCP connects to (its sshd)")
     ap.add_argument("--loopback", action="store_true", help="after the sweep, a loopback probe at the plateau point")
-    ap.add_argument("--scheme", default="blake3", choices=sorted(instances.SCHEMES), help="row-leaf schema of trees a and b")
+    ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3",
+                    help="the commitment scheme the instance files' roots are under (the binary must prove that statement)")
+    ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES), help="frame-v3 row-leaf schema of trees a and b")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)

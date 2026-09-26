@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120, NativePeak
-from verity_numerical.bench import contract
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120
+from verity_numerical.bench import census, contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
 
@@ -56,8 +56,8 @@ def test_envelope_problems_are_reported(conforming: dict) -> None:
 @pytest.mark.parametrize(
     ("field", "value", "fragment"),
     [
-        ("profile", "another-target", "profile must be a target of verity.verification.target"),
-        ("profile", None, "profile must be a target of verity.verification.target"),
+        ("profile", "another-target", "profile must be a target of verity.proofs.target"),
+        ("profile", None, "profile must be a target of verity.proofs.target"),
         ("domain", "", "domain must be a non-empty string"),
         ("K", 24, "K must be a positive multiple of 16"),
         ("K", None, "K must be a positive multiple of 16"),
@@ -318,7 +318,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
     (9.846 ps per K=1536 VU; 340 us/VU = 3.45e7x) is unchanged."""
 
     ref = contract.native_reference()
-    assert isinstance(ref, NativePeak) and ref is FIRST.native_peak and ref is contract.native_reference(FIRST.name)
+    assert ref is contract.native_peak_of(FIRST) and ref is contract.native_reference(FIRST.name)
     assert ref.flop_per_second == 312e12 and ref.accumulate == "fp32" and "A100" in ref.device
     assert contract.native_seconds_per_vu(1536) == pytest.approx(9.846e-12, rel=1e-3)
     assert contract.native_seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, FIRST.name) == contract.native_seconds_per_vu(1536, contract.PROFILE)
@@ -341,18 +341,18 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     the BF16 constant would give.  FP8 Hopper: the H100's 1978.9 TFLOPS dense FP8 peak, 1.55 ps per VU."""
 
     ada = contract.native_reference(FP8_ADA_MMA.name)
-    assert ada is FP8_ADA_MMA.native_peak and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
+    assert ada is contract.native_peak_of(FP8_ADA_MMA) and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
     assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(9.30e-12, rel=1e-3)
     assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(2 * 1536 / 330.3e12)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
     hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    assert hopper is FP8_HOPPER_WGMMA.native_peak and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
-        assert t.native_peak.seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, t.name)
-        assert "sparsity" not in t.native_peak.rate and "dense" in t.native_peak.rate and t.native_peak.source
+        assert census.native_seconds_per_instance(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)
+        assert "sparsity" not in contract.native_peak_of(t).rate and "dense" in contract.native_peak_of(t).rate and census.source(contract.native_peak_of(t))
 
 
 def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: dict) -> None:
@@ -362,7 +362,7 @@ def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: d
     fp8 = contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": FP8_ADA_MMA.name})
     assert fp8["profile"] == FP8_ADA_MMA.name and contract.validate_fingerprint(fp8) == []
     problems = contract.validate({**conforming, "workload_fingerprint": {**fp, "profile": "fp8-ada-mma-draft/2099-01-01"}})
-    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity.verification.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
+    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity.proofs.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
     with pytest.raises(ValueError, match="profile must be a target"):
         contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": "another-target"})
 
@@ -516,7 +516,7 @@ def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
     assert (fp["profile"], fp["domain"], fp["K"], fp["B"], fp["proof_class"], fp["authentication"], fp["zk_mode"], fp["retention"]) == (
         FIRST.name, "finite", 16, 1, "NO_PROOF", "included", "none", "retained")
     assert fp["security"]["target"] is None and set(fp["hardware"]) == {"gpu", "cpu"}
-    assert fp["software"]["backend"]["name"] == "verity.verification.transparent"
+    assert fp["software"]["backend"]["name"] == "verity.proofs.transparent"
     assert {m["name"] for m in result["measurements"]} >= {"reference_check_wall", "vu.count", "workload_wall"}
     assert json.loads(proc.stdout)["contract"] == "conforms"
 
@@ -607,3 +607,4 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     assert conflict is None and warnings == ["candidate instances is null: not measured on the shared instance set"]
     conflict, warnings = contract.compare_instances({k: v for k, v in a.items() if k != "instances"}, {**b, "instances": None})
     assert conflict is None and len(warnings) == 2 and warnings[0].startswith("baseline does not record instances")
+

@@ -15,7 +15,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.engine import vllm_adapter as A  # noqa: E402
+from verity_vllm.engine import build as B, vllm_adapter as A  # noqa: E402
 from verity_vllm.program.frontend.target_profile import TargetProfile  # noqa: E402
 
 
@@ -57,9 +57,9 @@ def _engine(profile, llm):
 
 def test_target_mismatches_refuse_a_mislabelled_execution(monkeypatch):
     dev = TargetProfile.default()
-    monkeypatch.setattr(A.torch.cuda, "get_device_properties",
+    monkeypatch.setattr(B.torch.cuda, "get_device_properties",
                         lambda i: types.SimpleNamespace(major=dev.compute_capability[0], minor=dev.compute_capability[1], multi_processor_count=dev.num_sms))
-    monkeypatch.setattr(A, "observed_flash_attn_version", lambda model: 2)
+    monkeypatch.setattr(B, "observed_flash_attn_version", lambda model: 2)
     eager, compiled = dev, dev.with_overrides(compilation="piecewise")
     assert A.target_mismatches(_engine(eager, _llm(True, _CG.NONE))) == []
     assert A.target_mismatches(_engine(compiled, _llm(False))) == []

@@ -25,9 +25,31 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
-  - `verity.commitments`, `verity.verification`, `verity.resource_accounting`:
-    created when code lands, not before.
-  - Tests live in `packages/verity/tests/<module>/`.
+ - `verity.randomness`: `derive(source, domain, context) -> Key`, the one
+ challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
+ over counter-mode streams. Stdlib only, and it imports no other core module.
+ Its byte formats are pinned by `tests/randomness/vectors.json`.
+ - `verity.proofs`: single statements and how a backend is judged on them,
+ plus `proofs.profile.IntegrityProfile`, which records what verification
+ established: the exhaustive facts, the two-stage law and δ. Consumers read
+ it with their own utilities; their readers stay out of core. Its tests live
+ in `tests/proofs/`.
+ - `verity.commitments`: see its module docstring.
+ - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
+ such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
+ entities render. Stdlib only; imports no other core module.
+ Other modules are created when code lands, not before.
+ - Tests live in `packages/verity/tests/<module>/`.
+- `protocols/`: one distribution per protocol, and each imports only the
+ stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
+ The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
+ two-stage law, its beacon-keyed draws, and verification plans. See its
+ `PROTOCOL.md`. Applications (vLLM) compose protocols.
+- `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
+ `subcircuits.json`, `input_sets.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
+ and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
+ read it with `verity_numerical.bench.census` (a few lines), the docs site reads the same files, and
+ core never reads it (`test_boundaries.py`): core takes such numbers as parameters.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
@@ -39,7 +61,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
 
 Dependency direction (README "Development"): `ir <- ml`, `ir <- commitments`,
-`ir + commitments <- verification`, everything else depends inward on the
+`ir + commitments <- proofs`, everything else depends inward on the
 core. Backends must be testable without a frontend or runtime integration.
 
 ~~~text
@@ -53,6 +75,9 @@ Solve the current task with the smallest clear implementation. Reuse
 existing code and commands before adding abstractions or procedures. Add
 shared infrastructure when a concrete use case, recurring failure, or
 material risk justifies it; do not build for speculative requirements.
+
+Use the Glossary's terms (`README.md`); when a term changes, update the Glossary
+and roll it out in the same change.
 
 Enforce deterministic requirements in code where practical. Use skills for
 recurring, non-obvious workflows, not as a substitute for tooling or as a

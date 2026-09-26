@@ -1,16 +1,16 @@
-"""What authenticating the boundary values against Verity's leaf-Merkle roots costs Candidates A and B.
+"""What authenticating the boundary values against Verity's leaf-Merkle roots costs A-GKR and B-Ligero.
 
 A relation-only proof (``authentication = excluded``, both PROTOCOL.md files) is not a Verity proof: the batch's
-``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.verification.target``: "boundary words are
+``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.proofs.target``: "boundary words are
 authenticated as packed words against the object's Merkle roots").  This module reads the real K=1536 obligation
 (``fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``) for the leaf structure -- nothing about
 leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of paying for that binding.
 
-What is authenticated per instance (read from the fixture by :func:`read_openings`)
+What is authenticated per input (read from the fixture by :func:`read_openings`)
 ====================================================================================
 
 Three whole-tensor leaves under the ``verity-vllm/leaf/v1`` scheme (``verity.commitments.leaves``), opened as packed
-leaves (``verity.verification.packed``): the checker hashes the *whole* leaf and reads words at statement-fixed
+leaves (``verity.proofs.packed``): the checker hashes the *whole* leaf and reads words at statement-fixed
 indices; range openings do not exist yet (``leaves.py`` docstring).
 
 * ``x``: the activation row, one leaf of the runtime tree (``ru/<session>``, 368 leaves, depth 9), layout
@@ -29,22 +29,22 @@ coordinate ``j``), so leaf hashing amortises across the batch by the sharing str
 What is private (the reading this module costs first, and the alternative)
 ==========================================================================
 
-*Reading P (protocol as written).*  The opened values are the prover's private input: ``verity.verification.wire``
+*Reading P (protocol as written).*  The opened values are the prover's private input: ``verity.proofs.wire``
 calls the witness "the guest's private input"; the SP1 guest commits only ``h_O || h_L || verdict`` (65 bytes,
 ``binding.BOUND_PUBLIC_VALUES_LEN``), so the verifier sees the roots (through ``O``) and the verdict, never ``x``,
-``W`` or ``y``.  Both candidate protocols say so outright: Candidate A section 1 marks the per-unit words
+``W`` or ``y``.  Both candidate protocols say so outright: ``backends/gkr/PROTOCOL.md`` section 1 marks the per-unit words
 ``x_u`` **not public**; the ZK requirement is exactly that the transcript reveal nothing about the opened values
 beyond what ``O`` states (leaf identities, ranks, layouts, roots are public in ``O``).  The leaf *digests* are
 committed material as well: disclosing them to the verifier is a hiding assumption on SHA-256 beyond the collision
 resistance the protocols assume (section 7 of both), recorded on the options that do it.
 
-*Reading C (values in the clear).*  ``verity.verification.transparent`` and ``packed.check_packed_openings`` are
+*Reading C (values in the clear).*  ``verity.proofs.transparent`` and ``packed.check_packed_openings`` are
 reference checkers that see the openings in the clear and are declared "not zero-knowledge; it is the reference".
 Nothing in ``verity.commitments`` forbids handing the opened leaves to a verifier; a backend that does so is a
 ``NON_ZK_PROOF`` at best under ``backends/AGENTS.md``'s labels.  Option (b) is costed under this reading and marked
 incompatible with reading P.
 
-Options (per instance and per batch; see :func:`cost_option`)
+Options (per input and per batch; see :func:`cost_option`)
 ============================================================
 
 (a) Merkle openings verified inside the proof: SHA-256 of every distinct leaf (whole tensor row) plus the
@@ -63,9 +63,9 @@ Cost model (all constants are cited or derived in :data:`CITATIONS`; every figur
 
 * SHA-256 compression as an arithmetic circuit: 26 170 nonlinear R1CS constraints per two-to-one compression
   (faulhornlabs/hash-circuits; circomlib ``Sha256(256)`` is 29 380 incl. padding).  A multiplication gate of a
-  layered circuit per nonlinear constraint (Candidate A's GKR counts gates; Candidate B's Ligero commits 3 aligned
+  layered circuit per nonlinear constraint (A-GKR's GKR counts gates; B-Ligero's Ligero commits 3 aligned
   slots per product, ``census.columns_committed_b``'s rule).
-* Candidate A commits inputs and hints only: for SHA-256 the hints are the bit decompositions the circuit needs --
+* A-GKR commits inputs and hints only: for SHA-256 the hints are the bit decompositions the circuit needs --
   every 32-bit addition output re-decomposed (64 rounds x 4 additions + 8 final + 48 schedule = 312 additions,
   32 bits each) plus the 512 message bits of the block: 10 496 committed elements per compression (derivation,
   est.; the booleanity products are inside the 26 170).
@@ -77,9 +77,9 @@ Cost model (all constants are cited or derived in :data:`CITATIONS`; every figur
   3 BF16 words packed per element (48 bits < 64: no wrap) = 24 words per permutation; a 2-to-1 node is one
   permutation (two 4-element digests fit the rate).  A's committed extra: none (packing is linear, S-boxes are
   gates); B's: 3 slots per multiplication.
-* Depth (Candidate A's latency axis): Merkle-Damgard chains the compressions of one leaf; a layered GKR either
+* Depth (A-GKR's latency axis): Merkle-Damgard chains the compressions of one leaf; a layered GKR either
   runs the chain layer by layer (est. 3 layers per SHA-256 round, 192 per compression) or commits every chaining
-  state as hints (256 bits per block) and hashes blocks in parallel.  Both are reported.  Candidate B's depth is
+  state as hints (256 bits per block) and hashes blocks in parallel.  Both are reported.  B-Ligero's depth is
   unchanged (local constraints).
 """
 
@@ -98,7 +98,7 @@ from verity.commitments.leaves import (
     NODE_TAG,
     path_shape,
 )
-from verity.verification.packed import decode_packed_witness
+from verity.proofs.packed import decode_packed_witness
 
 from verity_numerical.security import accounting
 from verity_numerical.security.census import census_vu
@@ -147,13 +147,13 @@ CITATIONS: dict[str, str] = {
     "poseidon2_r1cs": "faulhornlabs/hash-circuits: Poseidon2 (t=3, BN254) two-to-one compression ~240 nonlinear R1CS constraints (order-of-magnitude cross-check).",
     "leaf_scheme": "packages/verity/src/verity/commitments/leaves.py: H(tag,*parts)=sha256(u32be(len tag)||tag||(u64be(len part)||part)*); "
                    "leaf=(id,dtype,shape,value); node/lift; DIGEST_BYTES=32; path_shape/tree_depth.",
-    "packed": "packages/verity/src/verity/verification/packed.py: 'the guest authenticates the whole packed leaf against the committed root, then reads the "
+    "packed": "packages/verity/src/verity/proofs/packed.py: 'the guest authenticates the whole packed leaf against the committed root, then reads the "
               "word at the statement-fixed index'; 'a leaf is hashed once however many positions read words of it'; canonical_id/dtype/shape are the prover's to supply.",
-    "privacy_witness": "packages/verity/src/verity/verification/wire.py:465 'The canonical bytes of a witness (the guest's private input)'; "
+    "privacy_witness": "packages/verity/src/verity/proofs/wire.py:465 'The canonical bytes of a witness (the guest's private input)'; "
                        "binding.py: public values = h_O || h_L || verdict (65 bytes), nothing else.",
     "privacy_protocol": "backends/gkr/PROTOCOL.md section 1: x_u (per-unit words, hints, row columns) public? **no**; section 7: only collision resistance "
                         "of H is assumed for soundness, hiding beyond CRH is an extra assumption; backends/direct/PROTOCOL.md sections 1, 7, 8 likewise.",
-    "privacy_reference": "packages/verity/src/verity/verification/transparent.py:10: the reference checker is 'not zero-knowledge; it is the reference every other "
+    "privacy_reference": "packages/verity/src/verity/proofs/transparent.py:10: the reference checker is 'not zero-knowledge; it is the reference every other "
                          "backend must agree with' -- it sees openings in the clear.",
     "readme_commitments": "README.md 'Commitments': verity.commitments owns application-level layouts, roots, openings; proof-system-internal commitments "
                           "are the backend's.  Changing the leaf hash is a verity.commitments (protocol) change.",
@@ -341,7 +341,7 @@ class HashCircuit:
 
     name: str
     mul_gates: int                  # multiplication gates (A: GKR gates; B: products)
-    committed_a: int                # extra committed elements for Candidate A per invocation (hints)
+    committed_a: int                # extra committed elements for A-GKR per invocation (hints)
     layers: int                     # multiplicative depth per invocation (est.)
     bytes_per_invocation: int       # payload absorbed per invocation
     node_invocations: int           # invocations per Merkle node
@@ -349,7 +349,7 @@ class HashCircuit:
 
     @property
     def committed_b(self) -> int:
-        """Candidate B commits 3 aligned slots per product (``census.columns_committed_b``'s rule)."""
+        """B-Ligero commits 3 aligned slots per product (``census.columns_committed_b``'s rule)."""
         return 3 * self.mul_gates
 
 
@@ -393,7 +393,7 @@ class OptionCost:
     hiding_assumption: str
     sharing: str
     B: int
-    # per instance (amortised)
+    # per input (amortised)
     hash_invocations_per_instance: float
     hash_invocations_by_type: dict[str, float]
     mul_gates_per_instance: float

@@ -33,10 +33,10 @@ element, two of them (``r`` and ``1 - r``) per table.  Summing ``t`` over the ro
 sumcheck over ``N`` elements costs ``N (dL)^2 (2^m + 8 m)`` matmul MACs and ``N (2^m - 4)`` Hadamards: 20 (dL)^2 for
 TensorZKP's degree-2 product (their 4.04 ms at 2^25 is 17% of the H100 INT8 peak: :func:`tensorzkp_calibration`).
 
-Designs.  Candidate A (``backends/gkr/PROTOCOL.md``): data-parallel GKR over the census's layered checker (tables of
+Designs.  A-GKR (``backends/gkr/PROTOCOL.md``): data-parallel GKR over the census's layered checker (tables of
 ``units x carried width`` per layer, ``CHECKER_LAYER_WIDTHS_A``, degree 3, three factors ``eq, V_l, V_r``), logUp
 fractional-sum GKR per table (levels of ``2^(n-k)`` fractions, three degree-3 terms over five tables), Ligero over the
-committed matrix (encoding + row combination).  Candidate B (``backends/direct/PROTOCOL.md``): Ligero over the whole
+committed matrix (encoding + row combination).  B-Ligero (``backends/direct/PROTOCOL.md``): Ligero over the whole
 trace, helper columns, linear and quadratic row tests; the sparse constraint combination ``r^T A`` is per-unit sparse
 (SIMT).  "Hint-free" (lookups on computed wires) in its two branches: commit the 140 query wires (+140 columns/unit,
 depth 381 -- the PROTOCOL.md default) or do not (depth 630, ``commit_query_wires=False``).  Encoding options
@@ -57,7 +57,7 @@ SIMT field multiplications at a stated rate; hashing at a stated GB/s; the parts
 Privacy knob (``zk``, zk-construction lane, 2026-09-22; ``backends/ZK_CONSTRUCTION.md``).  The accountant's rows
 (``ligero_rows``) and committed elements already contain the honest-verifier ZK layer of the protocol documents: the
 ``k - l`` row randomizers (payload ``l = 3840`` of ``k = 4096`` symbols), the three blinding rows, the transcript pads
-of Candidate A (``pad_elements`` x extension degree) and the HM96 leaf commitments.  ``zk="hvzk"`` (default) is
+of A-GKR (``pad_elements`` x extension degree) and the HM96 leaf commitments.  ``zk="hvzk"`` (default) is
 therefore what ``tensor.md`` reported; ``zk="none"`` removes them (payload ``k`` per row, no blinding rows, no pads,
 plain Merkle leaves) and is the non-ZK diagnostic a kernel measurement corresponds to; ``zk="malicious"`` adds the
 verifier-coin-commitment step 0 (HM96, ``rounds.protocol`` commitments verified by the prover; +1 depth).  Prover
@@ -400,11 +400,11 @@ DESIGNS: dict[str, Design] = {
     "A-hintfree-depth630": Design("A-hintfree-depth630", "A", False, "GKR + logUp-GKR + Ligero; lookups on computed wires, nothing extra committed (depth 630)"),
     "B": Design("B", "B", True, "direct constraints in Ligero + logUp helper columns (depth 3)"),
 }
-#: The "+140 columns" branch of the hint-free variant is Candidate A's default layout (PROTOCOL.md 4.3).
+#: The "+140 columns" branch of the hint-free variant is A-GKR's default layout (PROTOCOL.md 4.3).
 HINT_FREE_BRANCHES = {"commit_query_wires": "A", "no_commit": "A-hintfree-depth630"}
 
 #: Hint (witness) generation on SIMT: integer ops per unit.  ASSUMPTION (unmeasured on GPU): ~20 integer ops per checker
-#: predicate (358 mul + 137 lin + 306 lookups + 225 hints ~ 1,000 predicates).  Anchor: Candidate B's Rust generator
+#: predicate (358 mul + 137 lin + 306 lookups + 225 hints ~ 1,000 predicates).  Anchor: B-Ligero's Rust generator
 #: takes 4.7 s for 4,096 units single-threaded (backends/direct/README.md) = 1.15 ms per unit on one CPU core.
 HINT_OPS_PER_UNIT = 20_000
 HINT_CPU_SECONDS_PER_UNIT = 4.7 / 4096
@@ -684,7 +684,7 @@ def price_design(design: Design, fs: FieldSpec, target_log2: int, B: int = B_TAR
 
 def unit_price(fs: FieldSpec, target_log2: int = -128) -> dict:
     """The transition unit (``census_unit`` / the field's small-field census) in limb MACs: (a) matmul-expressible work
-    -- one degree-3 GKR sumcheck element per carried wire and one fractional-GKR leaf per lookup, as Candidate A runs
+    -- one degree-3 GKR sumcheck element per carried wire and one fractional-GKR leaf per lookup, as A-GKR runs
     them -- and (b) non-matmul work in F_t-equivalent SIMT multiplications, both per unit and per K=1536 VU."""
     sfc = _small_field(fs)
     d = extension_degree(fs, target_log2)

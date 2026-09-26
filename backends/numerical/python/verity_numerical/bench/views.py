@@ -1,37 +1,37 @@
 """The tables of the approved spec (``kb/TABLES.md``, approved 2026-09-25): a labelled PREVIEW beside the frozen canonical tables.
 
-    python -m verity_numerical.bench.views --root <store root> [--format md|json] [--rules spec|unfiltered|legacy]
+    python -m verity_numerical.bench.views --root <store root> [--format md|json|entities] [--rules spec|unfiltered|legacy]
                                            [--security-bits N] [--include-archived]
-    python -m verity_numerical.bench.views --root <store root> --parity [--snapshot NAME]
+    python -m verity_numerical.bench.views --root <store root> --parity [--snapshot NAME | --take-snapshot] [--record]
 
 Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`verity_numerical.bench.tables` and
 :mod:`~verity_numerical.bench.drilldown`; these views are previews and are never shown as the published numbers.
 
-* **Table 1** -- backend configurations and their security, one entry per backend family followed by its configurations
-  (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
+* **Table 1** -- backends and statements with their security, one entry per backend family followed by one row per backend
+  and statement (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
   y; the commitment scheme (:data:`SCHEMES`); every hash of the soundness argument with its role, property and class; ZK class
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
   proximity bounds (regime, proven or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
-  ``verity.verification.target.TARGETS`` entry and scheme some configuration declares), a native column, one column per
+  ``verity.proofs.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
-  compute-bound datasheet estimate (:func:`native`); ``P`` is instances per second end to end, committing the batch's values and
-  then proving (:func:`throughput`).  A cell is the family's best admissible configuration (highest ``P``, ties to the lower
+  compute-bound datasheet estimate (:func:`native`); ``P`` is inputs per second end to end, committing the batch's values and
+  then proving (:func:`throughput`).  A cell is the family's best admissible backend and statement (highest ``P``, ties to the lower
   artifact id) that proves the full relation over a core-defined scheme and passes the view's filters (:class:`Rules`: by
-  default a whole-proof bound of 2^-128), marked ``(prov.)`` while its configuration's statement has no red-team clearance on
+  default a whole-proof bound of 2^-128), marked ``(prov.)`` while its statement has no red-team clearance on
   that subcircuit and ``(alg.)`` when its soundness argument uses an algebraic hash (flagged in Table 1).
-* **Table 3** -- where the time goes: seconds per instance of commitment and of each proving bucket, with shares of end to end,
+* **Table 3** -- where the time goes: seconds per input of commitment and of each proving bucket, with shares of end to end,
   and the cell split into serving overhead (commitment x N) and proving overhead (proving x N).
 
 Every rejected result is listed with its first reason (:data:`REASON_LETTERS`, the spec's order); ``--format json`` has them all.
 
-The v1 adapter: ``bench-result/v1`` results carry no configuration id, so their configuration is the ``drilldown.VARIANTS`` entry
+The v1 adapter: ``bench-result/v1`` results carry no ``configuration`` id (a backend and statement), so theirs is the ``drilldown.VARIANTS`` entry
 that recognises them (:func:`configuration_of`) and their family the ``tables.CANDIDATES`` entry; name recognisers live nowhere
 else in these views.  A result names its commitment time as the measurement :data:`COMMIT` and its
 protocol as the ``protocol`` / ``sweep`` blocks (``benchmark-standard`` §6.1, ``bench-result/v2``); no v1 result records the
 protocol, so no v1 result meets it (reason M).
 
-``--rules legacy`` renders with today's parameters (2^-128 on target and achieved, B = 4096, K = 1536, the frozen instance range,
+``--rules legacy`` renders with today's parameters (2^-128 on target and achieved, B = 4096, K = 1536, the frozen input range,
 the bare and ``+ in-proof hash`` columns, proving time only): the switch's parity gate, which ``--parity`` checks against a
 fresh :func:`tables.build` of the same store (and, with ``--snapshot NAME``, against that ``tables --snapshot``'s members).
 """
@@ -40,24 +40,31 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as _dt
 import hashlib
 import json
 import math
+import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
-from verity.verification.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
-from verity_numerical.bench import contract
+from verity import claims as claims_registry
+from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
 
 __all__ = ["COMMIT", "CONFIGURATIONS", "FAMILIES", "LEGACY", "REASON_LETTERS", "SPEC", "UNFILTERED", "Configuration", "Family",
-           "Rules", "Views", "build", "configuration_of", "main", "native", "parity", "render_json", "render_markdown", "throughput"]
+           "Rules", "Views", "build", "configuration_of", "main", "native", "parity", "render_entities", "render_json", "render_markdown", "throughput"]
 
 PREVIEW = ("PREVIEW of the approved tables spec (kb/TABLES.md): not the published tables. The published numbers switch once, in a "
            "6 PM PT digest labelled as a change of method; until then the canonical tables are `verity_numerical.bench.tables`.")
+#: The banner of the published render (``--published``, the steward's ``published = "views"``): the switch has happened.
+PUBLISHED = ("The published tables, under the approved spec (kb/TABLES.md), since the switch digest labelled as a change of method. "
+             "The frozen 2026-09-22 tables (`verity_numerical.bench.tables`) remain as a drill-down beside this render (`<stamp>-tables-frozen.md`).")
 
 #: Commitment seconds per batch: the warm median of committing the batch's values afresh, as lane hash-commit writes it (with
 #: ``commit.cold_seconds``, ``commit.reps`` and ``e2e.seconds`` = this + ``t.total``).
@@ -110,7 +117,7 @@ SCHEMES: tuple[Scheme, ...] = (
 _SCHEME = {s.id: s for s in SCHEMES}
 
 
-# --- Table 1: families and configurations ------------------------------------------------------------------------------------------
+# --- Table 1: families, backends and statements ------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -122,11 +129,35 @@ class Family:
     description: str
     setup: str
     interaction: str
+    note: str = ""
 
 
-FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction) for c in T.CANDIDATES)
+#: Which composed backends a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
+FAMILY_NOTES = {
+    "A-GKR": "route (a), the A-GKR prime side with Flock's keyed-BLAKE3 row hashes and the sigma link in one live session, is an "
+             "A-GKR configuration and fills this column",
+    "Flock": "pure Flock only: the relation and its row hashes in one binary-field circuit; route (a) is in the A-GKR column",
+}
+
+#: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its family is declared here.  The
+#: v1 adapter recognises it by ``software.backend.name`` starting ``flock``.  Declared class NON_ZK_PROOF: Flock is not zero-knowledge
+#: yet (the Flock lane may change it).
+FLOCK = T.Candidate(
+    id="Flock", description="Flock: Ligerito-family binary-field prover (GF(2^128)) over the union circuit of the unit and its keyed-BLAKE3 row leaves",
+    zk="as configured", verifier_model="as configured", soundness="as configured", setup="none (no trusted setup)",
+    interaction="live verifier coins (flock-128-r2); Fiat–Shamir variant below 2^-128", assumptions="as configured",
+    proof_classes=("NON_ZK_PROOF",), drilldown_classes=(),
+    backend_names=("flock",))
+CANDIDATES = (*T.CANDIDATES, FLOCK)
+FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction, FAMILY_NOTES.get(c.id, ""))
+                                     for c in CANDIDATES)
 _FAMILY = {f.id: f for f in FAMILIES}
-_CANDIDATE = {c.id: c for c in T.CANDIDATES}
+_CANDIDATE = {c.id: c for c in CANDIDATES}
+
+
+def candidate_for(backend: Any) -> T.Candidate | None:
+    """The backend family of a result: ``tables.candidate_for``, else Flock."""
+    return T.candidate_for(backend) or (FLOCK if FLOCK.recognises(backend) else None)
 
 
 @dataclass(frozen=True)
@@ -157,6 +188,8 @@ class Proximity:
 
 
 FULL = "full relation"
+#: Route (a): A-GKR's prime proof with Flock's keyed-BLAKE3 rows and the sigma link (drilldown's ``VARIANTS`` entry of the same id).
+ROUTE_A = "A-GKR route (a): prime + Flock rows + sigma link"
 _WEAK_PUBLIC = "weaker: operands public, no commitment (the verifier could recompute y)"
 _WEAK_PRIVATE = "weaker: operands private and bound to nothing"
 _WEAK_REHASH = "weaker: operands published for the verifier to re-hash (it could recompute y)"
@@ -180,8 +213,8 @@ _AGKR_DOMINANT = "IRS query term (2^-130.2 at t = 192) and the LogUp identity te
 
 @dataclass(frozen=True)
 class Configuration:
-    """One Table 1 row.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry no configuration id); the ZK and
-    per-proof soundness words are that entry's.  ``scheme`` is the :data:`SCHEMES` id its statements bind (``None``: the statement
+    """One Table 1 row: a backend and a statement.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry
+    no ``configuration`` id); the ZK and per-proof soundness words are that entry's.  ``scheme`` is the :data:`SCHEMES` id its statements bind (``None``: the statement
     commits nothing); ``hashes`` is every hash the soundness argument relies on.  ``unsupported`` maps a target name to the
     backend's declared reason (``n/s``)."""
 
@@ -199,6 +232,7 @@ class Configuration:
     transferability: str
     assumptions: str
     pin: str
+    interaction: str = ""
     archived: bool = False
     unsupported: Mapping[str, str] = field(default_factory=dict)
 
@@ -254,6 +288,11 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          "frame-v3 SHA-256 trees over sha256/row/v1 row digests (prefix block and padding block by the verifier)" + _IN_PROOF,
          (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (row digests)"), *_B_HASHES), assumptions=_B_ASSUME,
          pin=_B_PIN + "; leaf schema sha256/row/v1", **_B_KW),
+    _cfg("B-Ligero + vllm-v1 SHA-256 in circuit", FULL, _H_PORTS, "vllm-v1",
+         "vllm-v1 SHA-256 trees over position leaves of every operand row (all compressions in-circuit), bound by step roots "
+         "over verifier-derived domains whose digests the statement absorbs" + _IN_PROOF,
+         (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *_B_HASHES), assumptions=_B_ASSUME,
+         pin=_B_PIN + "; leaf schema vllm-v1/pos-leaf/v0, step-root domains", **_B_KW),
     _cfg("B-Ligero + Ajtai n=64", FULL, _H_PORTS + " (binding only, not hiding)", "frame-v3/ajtai-row",
          "SHA-256 trees over Ajtai (Ring-SIS, n = 64) row digests" + _IN_PROOF,
          (_SHA256_STMT, Hash("Ajtai n=64 (linear digest)", _STMT, "Ring-SIS binding", True), *_B_HASHES),
@@ -278,6 +317,16 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          (Hash("SHA-512", _INTERNAL, _CR), Hash("SHA-256", _COINS, _RO + " (Fiat–Shamir coins)")), _AGKR_DOMINANT, _AGKR_PROX,
          "transferable (SHA-256 Fiat–Shamir coins)", "BabyBear^6; LogUp fractional-sum soundness",
          "verity-gkr-verify refuses a circuit set its pins.txt does not list (PR #13)"),
+    _cfg(ROUTE_A, FULL, "x, W committed (private) as keyed-BLAKE3 rows proved in Flock; y public", "frame-v3/blake3-row",
+         "A-GKR prime proof of the relation, with the operands committed as keyed-BLAKE3 rows (blake3-keyed/row/v2) proved in Flock "
+         "(flock-128-r2, live coins) and joined to the prime side by the sigma link (two GF(2^128) points); frame-v3 SHA-256 trees",
+         (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
+          Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
+         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
+         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)")),
+         "interactive: live-verifier-only (live prime and Flock coins in one session)",
+         "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
+         "verity-gkr-verify pins (PR #13) plus the Flock profile params and the link version (session-2xgf2_128/v2, verity/link-L/v2)"),
     _cfg("SP1 stock (relation-only / bare guest)", _WEAK_PRIVATE, "x, W guest input (unbound)", None, "none for the operands",
          _SP1_HASHES, _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME,
          "verifying key (guest ELF digest), sp1-sdk =6.4.0"),
@@ -299,38 +348,85 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME + "; the TC_DOT chip's constraints",
          "verifying key plus the TC_DOT fork commit"),
 )
+_B_LIVE_MODEL = ("interactive protocol: 3 round trips with a live verifier (the step-0 coin commitment, then the column and opening "
+                 "challenges), the verifier online for the whole proof; results verified from files (the runner's coins replayed) are "
+                 "charged the protocol's sequential depth (3 per proof x the sub-batch proofs run one after another; derived: file-verified, no "
+                 "measured RTT), network time = (proof + statement bytes) ÷ bandwidth")
+_INTERACTION = {
+    **{c.id: _B_LIVE_MODEL for c in CONFIGURATIONS if c.family == "B-Ligero"},
+    "B-Ligero Fiat–Shamir (HVZK)": "non-interactive (Fiat–Shamir): rounds = 0, no one online",
+    "Ligerito": "live verify session: the verifier is online for the session's rounds",
+    "A-GKR CPU (Rust)": "non-interactive (SHA-256 Fiat–Shamir): rounds = 0; the interactive object is not implemented",
+    "A-GKR GPU (torch/Triton)": "non-interactive (SHA-256 Fiat–Shamir coins): rounds = 0; the interactive object is not implemented",
+    ROUTE_A: "live verifier: the prime side's coins and Flock's coins in one session (PROTOCOL 17.6); the verifier must be online for "
+             "the whole proof",
+    **{c.id: "non-interactive (Fiat–Shamir STARK): rounds = 0, no one online" for c in CONFIGURATIONS if c.family == "SP1"},
+}
+FLOCK_CONFIG = Configuration(
+    "Flock (flock-128-r2, live coins)", "Flock", FULL, _H_PORTS, "frame-v3/blake3-row",
+    "frame-v3 SHA-256 trees over keyed-BLAKE3 row digests; the union circuit proves the digests (chunk CVs) and y are public "
+    "(lane flock-backend's design, unreviewed)",
+    (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row digests)"),
+     Hash("BLAKE3 / SHA-256", _INTERNAL, _CR + " (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"),
+     Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
+    "No: not zero-knowledge yet (declared class NON_ZK_PROOF; the Flock lane may change it)",
+    "2^-195.5 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit); red-team-flock: NOT GRANTED until "
+    "R1–R8 (reps bound to one commitment, a live challenger); under Fiat–Shamir at most 2^-75.6",
+    "the Ligerito query term per run (2^-97.8), squared by the two live-coin reps; it does not grow with the batch",
+    (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)"),),
+    "interactive: live-verifier-only", "GF(2^128) PIOP sites; the aarch64 AG r1 path gives about 14 bits of nonce choice (red-team-flock GAP)",
+    "Flock b684b12 profile params pinned (commitment.params == expected)",
+    interaction="live verifier: coins for every squeeze of both reps (Fiat–Shamir cannot reach 2^-128 for this profile); the verifier "
+                "must be online for the whole proof")
+#: Pure Flock over vllm-v1 commitments (``software.backend.name`` ``flock-vllm-v1``, statement ``verity/flock-vllm-block/v1``).
+FLOCK_VLLM_CONFIG = dataclasses.replace(
+    FLOCK_CONFIG, id="Flock over vllm-v1 (flock-128-r2, live coins)", scheme="vllm-v1",
+    commitment="vllm-v1 SHA-256 trees over position leaves of every operand row, bound by step roots over the verifier's port "
+               "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
+               "(statement verity/flock-vllm-block/v1)",
+    hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *FLOCK_CONFIG.hashes[2:]),
+    soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
+              "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
+CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID), "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
-                  "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Transferability", "Assumptions",
-                  "Pin", "Archived", "Cells")
+                  "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
+                  "Assumptions", "Pin", "Archived", "Cells")
 
 
 def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Configuration] | None = None) -> Configuration | None:
     """The declared configuration of a ``bench-result/v1`` result (the v1 adapter: the ``drilldown.VARIANTS`` entry that recognises
     it), or ``None``."""
 
+    cfgs = configurations or _CONFIG
     v = D.classify(D.features(meta))
-    return (configurations or _CONFIG).get(v.id) if v else None
+    if v is not None:
+        return cfgs.get(v.id)
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    name = _get(fp, "software", "backend", "name")
+    if not FLOCK.recognises(name):
+        return None
+    return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
 
 
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
 
 #: The work model until ``verity.silicon`` declares per-primitive costs: a GemmCoordinate<K> is K/16 tensor-core steps of 16
-#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``Target.native_peak``.
+#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``contract.native_peak_of``.
 WORK_MODEL = "work-model/v0: K/16 tensor-core steps x 32 FLOP (+1 conversion, not binding); peaks Target.native_peak"
 
 
 def native(target: Target, K: int = T.K) -> dict[str, Any]:
-    """``N`` for the target's subcircuit on its hardware class: instances per second = 1 / max over units of ops / peak, the
+    """``N`` for the target's subcircuit on its hardware class: inputs per second = 1 / max over units of ops / peak, the
     tensor cores being the busiest unit of a GEMM coordinate; with the busiest unit, the peak entry and the work model."""
 
     steps, flop = K // 16, (K // 16) * 32
-    peak = target.native_peak
+    peak = contract.native_peak_of(target)
     return {"instances_per_second": peak.flop_per_second / flop, "unit": "tensor cores", "ops_per_instance": flop, "steps": steps,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": peak.flop_per_second, "device": peak.device,
-            "source": peak.source, "work_model": WORK_MODEL}
+            "source": census.source(peak), "work_model": WORK_MODEL}
 
 
 # --- the view's rules -------------------------------------------------------------------------------------------------------------
@@ -340,7 +436,8 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
 class Rules:
     """A view's parameters.  ``security_log2``: the whole-proof bound filter (``None`` = unfiltered); ``standard_hashes``: an
     optional filter (off in the published view) dropping configurations with an algebraic hash anywhere in the soundness
-    argument.  ``legacy``: today's
+    argument.  ``interaction_validated``: an interactive result must carry the interaction record and be within tolerance of the
+    reference profile (M otherwise); off only for a preview.  ``legacy``: today's
     parameters (the parity render): B = 4096 and K = 1536, the frozen range, security.target also <= the filter, the bare and
     ``+ in-proof hash`` columns instead of the full relation, proving time only, no custody or protocol check."""
 
@@ -349,6 +446,7 @@ class Rules:
     standard_hashes: bool = False
     legacy: bool = False
     include_archived: bool = False
+    interaction_validated: bool = True
 
 
 SPEC = Rules("spec")
@@ -374,9 +472,117 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
     return None
 
 
-def throughput(meta: Mapping[str, Any], rules: Rules) -> dict[str, Any] | None:
-    """``P``: instances per timed run over its end-to-end seconds (committing the batch, :data:`COMMIT`, then proving); under the
-    legacy rules proving only.  ``None`` without a positive ``t.total`` and batch."""
+# --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
+
+#: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``census/networks.json``: same datacenter); the
+#: interaction drill-down adds ``census.SENSITIVITY_NETWORKS``.
+REF_RTT_S, REF_BANDWIDTH_BPS = census.REFERENCE_NETWORK.rtt_s, census.REFERENCE_NETWORK.bandwidth_bps
+#: A measured interactive run must be within this fraction of the formula at the reference profile.
+INTERACTION_TOLERANCE = 0.10
+
+
+#: A result's statement bytes (sent beside the proof): the relation's statements over the run's sub-batch proofs.
+STATEMENT_BYTES = ("relation.statement_bytes_total", "relation.hash.statement_bytes_total")
+
+
+def interaction(meta: Mapping[str, Any], interactive: bool = False) -> dict[str, Any]:
+    """The interaction record of a result.  ``live``: it ran against a live verifier (live-verifier evidence, or a measured RTT,
+    network wait or ``t.total_live``).
+
+    A **live** result's record is measured: ``rounds`` (round trips on the critical path: ``rounds.sequential_depth``, else
+    ``rounds.protocol``), ``bytes_up`` (``net.bytes_out``, else the proof bytes), ``bytes_down`` (``net.bytes_in``, the coins),
+    ``rtt_ms`` (``net.rtt_ms``) with ``rtt_method`` (the ``interaction`` block's, or the live-verifier evidence's), and the wall
+    split: ``prover_s`` (``t.total``), ``verifier_s`` (verifier compute the prover waited on: ``verify.critical_s``, else 0 -- the
+    measured wait includes it) and ``wait_s`` (``net.wait_seconds``, else ``t.total_live - t.total``).  A record whose ``interaction``
+    block says ``t_total_includes_wait`` (Flock's live coins) has its prover compute in ``live.prover_compute_seconds`` (else
+    ``t.total`` minus the wait).  The prover's own per-round live-coin handling, measured on loopback
+    (``live.loopback_round_seconds``), is prover compute: rounds x that (at most the measured wait) moves from the wait into
+    ``prover_s``, and only the excess over loopback counts as network wait (``loopback_s`` records the amount moved).
+
+    Any other result is a proof verified from its files and its record is derived (``derived``): bytes up = the proof bytes
+    (``proof_bytes``, else ``transcript.bytes``) plus the statement bytes (:data:`STATEMENT_BYTES`), no measured RTT.  Its
+    rounds (``rounds_source``): a Fiat–Shamir proof has none (0); an ``interactive`` protocol's file-replayed transcript (every
+    B-interactive cell today) pays the protocol's sequential depth, ``"derived: file-verified"``: the per-proof depth
+    (``rounds.sequential_depth``, else ``rounds.protocol``) x the proofs that run one after another -- ``N_subbatches``
+    sub-batch proofs, ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves (root's
+    ruling 2026-09-26)."""
+
+    m = T._measurements(meta)
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    block = meta.get("interaction") if isinstance(meta.get("interaction"), Mapping) else fp.get("interaction")
+    block = block if isinstance(block, Mapping) else {}
+    lv = _get(meta, "validation", "evidence", "live_verifier")
+    lv = lv if isinstance(lv, Mapping) else {}
+    num = lambda k: float(m[k]) if _num(m.get(k)) else None  # noqa: E731
+    proof = next((v for v in (num("proof_bytes"), num("transcript.bytes")) if v is not None), None)
+    live = bool(lv) or any(num(k) is not None for k in ("net.rtt_ms", "net.wait_seconds", contract.T_TOTAL_LIVE))
+    if not live:
+        stmt = next((v for v in (num(k) for k in STATEMENT_BYTES) if v is not None), 0.0)
+        rounds, source = 0.0, "fiat-shamir"
+        if interactive:
+            depth = next((v for v in (num("rounds.sequential_depth"), num("rounds.protocol")) if v is not None), 0.0)
+            proofs, flight = fp.get("N_subbatches"), _get(fp, "software", "backend", "pipeline")
+            proofs = proofs if _num(proofs) and proofs >= 1 else 1
+            waves = math.ceil(proofs / flight) if _num(flight) and flight >= 1 else proofs
+            rounds, source = depth * waves, "derived: file-verified"
+        return {"live": False, "derived": True, "rounds": rounds, "rounds_source": source, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
+                "proof_bytes": proof, "statement_bytes": stmt, "rtt_ms": None, "rtt_method": None,
+                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0,
+                "loopback_round_s": None, "loopback_method": None}
+    rounds = num("rounds.sequential_depth")
+    rounds = num("rounds.protocol") if rounds is None else rounds
+    up = next((v for v in (num("net.bytes_out"), proof) if v is not None), None)
+    wait = num("net.wait_seconds")
+    if wait is None and num(contract.T_TOTAL_LIVE) is not None and num(contract.T_TOTAL) is not None:
+        wait = max(0.0, num(contract.T_TOTAL_LIVE) - num(contract.T_TOTAL))
+    compute = num(contract.T_TOTAL)
+    if block.get("t_total_includes_wait") is True and compute is not None and wait is not None:
+        compute = next((v for v in (num("live.prover_compute_seconds"),) if v is not None), compute - wait)
+    loop, moved = num("live.loopback_round_seconds"), 0.0
+    if loop is not None and rounds and wait is not None and compute is not None:
+        moved = min(wait, rounds * loop)
+        compute, wait = compute + moved, wait - moved
+    return {"live": True, "derived": False, "rounds": rounds, "rounds_source": "measured", "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
+            "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
+            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "bandwidth_bps": num("net.bandwidth_bps"), "prover_s": compute,
+            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved,
+            "loopback_round_s": loop if moved else None, "loopback_method": block.get("loopback_method") if moved else None}
+
+
+def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_bps: float = REF_BANDWIDTH_BPS) -> float:
+    """t = compute + rounds x RTT + bytes / bandwidth, compute = prover compute + the verifier compute the prover waits on."""
+    return ((ix["prover_s"] or 0.0) + ix["verifier_s"] + (ix["rounds"] or 0.0) * rtt_s
+            + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bandwidth_bps)
+
+
+def interaction_problem(ix: Mapping[str, Any]) -> str | None:
+    """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
+    and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
+    and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
+    the run's own measured RTT (``net.rtt_ms``) and bandwidth (``net.bandwidth_bps``, else the reference's): the check validates
+    the model against the run itself; the published figure is the formula at the reference profile (root's ruling 2026-09-25)."""
+    if not ix["live"]:
+        return None
+    if ix["rounds"] is None:
+        return "interaction: a live-verifier result without its rounds (rounds.sequential_depth)"
+    missing = [k for k, ok in (("measured RTT (net.rtt_ms)", ix["rtt_ms"] is not None), ("how the RTT was measured", bool(ix["rtt_method"])),
+                               ("network wait (net.wait_seconds or t.total_live)", ix["wait_s"] is not None)) if not ok]
+    if missing:
+        return f"interaction: {ix['rounds']:.0f} rounds but no {', no '.join(missing)}"
+    bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
+    model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
+    measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
+    if model > 0 and abs(measured - model) > INTERACTION_TOLERANCE * model:
+        return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
+                f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
+                f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
+    return None
+
+
+def throughput(meta: Mapping[str, Any], rules: Rules, interactive: bool = False) -> dict[str, Any] | None:
+    """``P``: instances per timed run over its end-to-end seconds (committing the batch, :data:`COMMIT`, then the interaction
+    formula at the reference profile: prover compute + rounds x 1 ms + bytes / 100 Gb/s; ``interactive``: the configuration's
+    protocol is interactive, :func:`interaction`); under the legacy rules proving only.  ``None`` without a positive ``t.total`` and batch."""
 
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
     m = T._measurements(meta)
@@ -384,8 +590,11 @@ def throughput(meta: Mapping[str, Any], rules: Rules) -> dict[str, Any] | None:
     if not (_num(t) and t > 0 and _num(n) and n > 0):
         return None
     commit = 0.0 if rules.legacy else (float(m[COMMIT]) if _num(m.get(COMMIT)) else 0.0)
-    return {"instances": n, "proving_s": float(t), "commit_s": commit, "end_to_end_s": float(t) + commit,
-            "instances_per_second": n / (float(t) + commit), "commit_v1_s": m.get(COMMIT_V1) if _num(m.get(COMMIT_V1)) else None}
+    ix = interaction(meta, interactive)
+    net = 0.0 if rules.legacy else interaction_time(ix) - float(t)
+    e2e = float(t) + net + commit
+    return {"instances": n, "proving_s": float(t), "commit_s": commit, "interaction_s": net, "end_to_end_s": e2e,
+            "instances_per_second": n / e2e, "commit_v1_s": m.get(COMMIT_V1) if _num(m.get(COMMIT_V1)) else None, "interaction": ix}
 
 
 # --- admissibility ----------------------------------------------------------------------------------------------------------------
@@ -480,7 +689,7 @@ def _recipe(text: str) -> Callable[[int], str]:
 #: The synthetic sets as streams: instance i is a function of (generator, seed, i) alone (``relchain._instance``,
 #: ``fp4.chain.instances_fp4``), so the set over [0, n) is a prefix-consistent extension of the frozen [0, 4096).  Their
 #: ``manifest_sha256`` hashes the generator, seed and n (``relchain.instances_digest``, ``fp4.chain.instances_digest``); each
-#: recipe here reproduces the digest ``contract`` pins at n = 4096 (tested).  The A100 set is a fixture of 4,096 instances with
+#: recipe here reproduces the digest ``contract`` pins at n = 4096 (tested).  The A100 set is a fixture of 4,096 inputs with
 #: no stream beyond them: a larger batch repeats instances, which can inflate throughput, so it is rejected (I).
 STREAMS: dict[str, Callable[[int], str]] = {
     FP8_ADA_MMA.name: _recipe(f"fp8-ada synthetic|seed={contract.FP8_ADA_INSTANCES_SEED}|n={{n}}|K={T.K}"),
@@ -494,7 +703,7 @@ _STREAM_SEEDS = {FP8_ADA_MMA.name: contract.FP8_ADA_INSTANCES_SEED, BF16_HOPPER.
 
 
 def instance_range(target: Target, inst: Mapping[str, Any]) -> tuple[str | None, str | None]:
-    """``(how, None)`` when ``inst`` is the target's declared instance set over [0, n) -- ``how`` is ``"frozen"`` (exactly the
+    """``(how, None)`` when ``inst`` is the target's declared input set over [0, n) -- ``how`` is ``"frozen"`` (exactly the
     frozen ref), ``"prefix"`` (a prefix of it) or ``"stream"`` (a prefix-consistent extension of a synthetic set, identified by
     generator, seed and n) -- else ``(None, why)``, ``why`` ``None`` when it simply names another set."""
 
@@ -635,8 +844,8 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("F", why))
     p += _instances(ctx, rules, equivs, self_)
     gpu = _get(fp, "hardware", "gpu") if isinstance(_get(fp, "hardware", "gpu"), Mapping) else None
-    if not T.same_sku(gpu.get("name") if gpu else None, ctx.target.native_peak.device):
-        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {ctx.target.native_peak.device!r}"))
+    if not T.same_sku(gpu.get("name") if gpu else None, contract.native_peak_of(ctx.target).device):
+        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {contract.native_peak_of(ctx.target).device!r}"))
     variant = T.device_variant(gpu, ctx.target)
     if variant:
         p.append(("K", variant))
@@ -652,6 +861,9 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("B", f"B_real {fp.get('B_real')!r} != B {fp.get('B')!r}"))
     else:
         why = _protocol(meta, ctx.config)
+        if why:
+            p.append(("M", why))
+        why = interaction_problem(interaction(meta)) if rules.interaction_validated else None
         if why:
             p.append(("M", why))
     verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
@@ -711,6 +923,10 @@ class Views:
     not_families: dict[str, list[str]] = field(default_factory=dict)
     configurations: tuple[Configuration, ...] = CONFIGURATIONS
     unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
+    admissible: list[ViewCell] = field(default_factory=list)  #: every admissible result as a cell (``cells`` holds each family's best)
+    security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
+    prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
+    interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
 
     def columns(self) -> list[str]:
         if not self.rules.legacy:
@@ -725,6 +941,22 @@ def _batching(fp: Mapping[str, Any]) -> dict[str, Any]:
             "in_flight": _get(fp, "software", "backend", "pipeline"), "columns_per_proof": _get(fp, "security", "rs_l")}
 
 
+def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
+    """Every ``bench-result/v1`` as ``(art, envelope)``.  The spec rules also read a result registered with a lane summary as its
+    meta and the result envelope as its JSON payload (the drill-down's ``_envelope``; route (a)'s cell art:4b52879f is one); the
+    legacy rules read the meta only, as the frozen tables do."""
+    out = []
+    for row in store.index.select_artifacts(kind=T.RESULT_KIND):
+        doc = D._doc(store, row)
+        meta = doc.get("meta") or {}
+        if not rules.legacy and not isinstance(meta.get("workload_fingerprint"), Mapping):
+            env, _, payload = D._envelope(store, row["id"], doc)
+            if env is not None and payload:
+                meta = env
+        out.append((row["id"], meta))
+    return out
+
+
 def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuration] = CONFIGURATIONS) -> Views:
     """Read the store, apply :func:`reject_codes` under ``rules`` and assemble Tables 1-3 (rendering is separate)."""
 
@@ -733,10 +965,10 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     equivs = T.instance_equivs(store)
     V.unreadable = [f"{e.artifact}: {e.unreadable}" for e in equivs if e.unreadable]
     entries: list[Ctx] = []
-    for art, meta in T._artifacts(store, T.RESULT_KIND):
+    for art, meta in _results(store, rules):
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
         backend = _get(fp, "software", "backend", "name")
-        cand = T.candidate_for(backend)
+        cand = candidate_for(backend)
         if cand is None:
             V.not_families.setdefault(backend if isinstance(backend, str) else "(no software.backend.name)", []).append(art)
             continue
@@ -745,7 +977,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
-                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.verification.target")]})
+                               "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.proofs.target")]})
             continue
         entries.append(Ctx(art, meta, list(store.labels(art)), attempt, target, _FAMILY[cand.id], config, []))
     by_statement: dict[tuple[str | None, str], list[Any]] = {}
@@ -765,7 +997,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
         codes = reject_codes(store, c, rules, equivs)
-        P = throughput(c.meta, rules)
+        P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
         key = (c.target.name, scheme_of(c), _column(c, rules))
         if not codes and P is not None:
             pools.setdefault(key, []).append((c, P))
@@ -789,12 +1021,34 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         return {"artifact": c.art, "configuration": c.config.id if c.config else None, "bound_log2": whole_proof_log2(c.meta["workload_fingerprint"]),
                 "hashes": [h.text() for h in (c.config.hashes if c.config else ())], "overhead": N / P["instances_per_second"]}
 
+    def make_cell(c: Ctx, P: dict[str, Any], target: Target, scheme: str | None, col: str, N: Mapping[str, Any]) -> ViewCell:
+        vb = T.independent_verification(c.meta, c.labels, c.attempt)
+        V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
+        m = T._measurements(c.meta)
+        block = c.meta.get("interaction") if isinstance(c.meta.get("interaction"), Mapping) else c.meta["workload_fingerprint"].get("interaction")
+        V.interaction_raw[c.art] = {"rounds_protocol": m.get("rounds.protocol"), "sequential_depth": m.get("rounds.sequential_depth"),
+                                    "loopback_round_s": m.get("live.loopback_round_seconds"),
+                                    "loopback_method": block.get("loopback_method") if isinstance(block, Mapping) else None}
+        gpu = _get(c.meta["workload_fingerprint"], "hardware", "gpu")
+        V.prover_gpu[c.art] = gpu.get("name") if isinstance(gpu, Mapping) else None
+        return ViewCell(line=target.name, column=col, artifact=c.art, configuration=c.config.id if c.config else None,
+                        native=N["instances_per_second"], throughput=P, overhead=N["instances_per_second"] / P["instances_per_second"],
+                        bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
+                        provisional=None if rules.legacy else provisional(c),
+                        legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
+                                       vb.by if vb else None, _equiv_of(c, rules, equivs),
+                                       _open_finding(c.labels)),
+                        batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
+                        algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
+                        instances=dict(c.meta["workload_fingerprint"].get("instances") or {}),
+                        setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None)
+
     columns = [f.id for f in FAMILIES] + ([f.id + T.AUTH_COLUMN_SUFFIX["included-hash"] for f in FAMILIES] if rules.legacy else [])
     for target in TARGETS.values():
         N = native(target)
         for scheme in line_schemes:
             line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
-                                    "status": target.status, "device": target.native_peak.device, "native": N,
+                                    "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
                                     "instruction": target.instruction, "cells": {}, "empty": {}}
             for col in columns:
                 key = (target.name, scheme, col)
@@ -809,18 +1063,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                             f"hashes {'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")}
                     continue
                 c, P = hit
-                vb = T.independent_verification(c.meta, c.labels, c.attempt)
-                cell = ViewCell(line=target.name, column=col, artifact=c.art, configuration=c.config.id if c.config else None,
-                                native=N["instances_per_second"], throughput=P, overhead=N["instances_per_second"] / P["instances_per_second"],
-                                bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
-                                provisional=None if rules.legacy else provisional(c),
-                                legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
-                                               vb.by if vb else None, _equiv_of(c, rules, equivs),
-                                               _open_finding(c.labels)),
-                                batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
-                                algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
-                                instances=dict(c.meta["workload_fingerprint"].get("instances") or {}),
-                                setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None)
+                cell = make_cell(c, P, target, scheme, col, N)
+                V.admissible += [cell if o.art == c.art else make_cell(o, oP, target, scheme, col, N) for o, oP in pools[key]]
                 alt = best(pools.get(key, []) + unfiltered.get(key, []))
                 if alt is not None and alt[0].art != c.art:
                     cell.unfiltered = pick(*alt, N["instances_per_second"])
@@ -888,6 +1132,23 @@ def parity(store: Any, frozen: T.Tables | None = None, members: Sequence[str] | 
     return out
 
 
+PARITY_KIND = "tables-parity/v1"
+
+
+def parity_record(store: Any, snapshot: tuple[str, str, Sequence[str]] | None, frozen: T.Tables | None = None) -> dict[str, Any]:
+    """The recorded parity render (TABLES.md "The switch", condition 2): :func:`parity` against ``snapshot`` = (name, art id,
+    members), with every legacy-rules cell's artifact and ratio beside the frozen one."""
+    frozen = frozen or T.build(store)
+    diffs = parity(store, frozen, members=snapshot[2] if snapshot else None)
+    old = {(c.target, c.candidate + T.AUTH_COLUMN_SUFFIX.get(c.authentication, "")): c for c in frozen.cells}
+    cells = [{"line": c.line, "column": c.column, "artifact": c.artifact, "views_overhead": c.overhead,
+              "tables_overhead": old[(c.line, c.column)].overhead if (c.line, c.column) in old else None, "printed": T.fmt_overhead(c.overhead)}
+             for c in build(store, LEGACY).cells]
+    return {"schema": "verity/tables-parity/v1", "rules": LEGACY.name, "ok": not diffs, "differences": diffs,
+            "snapshot": snapshot[0] if snapshot else None, "snapshot_artifact": snapshot[1] if snapshot else None,
+            "tables_cells": len(frozen.cells), "cells": cells}
+
+
 # --- rendering --------------------------------------------------------------------------------------------------------------------
 
 
@@ -935,7 +1196,8 @@ def table1_rows(V: Views) -> list[tuple[str, list[str]]]:
             soundness = (bounds + " — " if bounds else "") + cfg.soundness + "; dominant term: " + cfg.dominant_term
             flag = f"**{ALGEBRAIC_FLAG}** ({', '.join(sorted({h.name for h in cfg.algebraic()}))})" if cfg.algebraic() else ""
             out.append((fid or "(no Table 2 family)", [cfg.id, flag, cfg.statement, cfg.ports, scheme, "; ".join(h.text() for h in cfg.hashes),
-                                                        cfg.zk, soundness, "; ".join(x.text() for x in cfg.proximity), cfg.transferability,
+                                                        cfg.zk, soundness, "; ".join(x.text() for x in cfg.proximity), cfg.interaction or T.EMPTY,
+                                                        cfg.transferability,
                                                         cfg.assumptions, cfg.pin, "yes" if cfg.archived else "no",
                                                         ", ".join(w for w, _ in cells) or T.EMPTY]))
     return out
@@ -946,7 +1208,7 @@ def _cell_name(c: ViewCell) -> str:
 
 
 def overheads(c: ViewCell) -> tuple[float, float]:
-    """``(serving overhead, proving overhead)`` of a cell: commitment and proving seconds per instance, each times N; they sum
+    """``(serving overhead, proving overhead)`` of a cell: commitment and proving seconds per input, each times N; they sum
     to the cell's ``N / P``."""
     P = c.throughput
     return c.native * P["commit_s"] / P["instances"], c.native * P["proving_s"] / P["instances"]
@@ -957,31 +1219,114 @@ def _fmt_x(v: float) -> str:
 
 
 def stages(c: ViewCell) -> dict[str, Any]:
-    """Table 3 in overhead units: each stage's seconds per instance × N (commitment, the six buckets, joints, Other), which sum to
+    """Table 3 in overhead units: each stage's seconds per input × N (commitment, interaction -- network wait at the reference
+    profile --, the six buckets, joints, Other), which sum to
     the cell's ``N / P``; and the one-time setup (``fixed.setup_seconds``) as seconds and amortized ×native over the measured
     batch (setup × N ÷ instances), outside that sum."""
     P, ph = c.throughput, c.legacy.phases
     k = c.native / P["instances"]
     setup = c.setup_s
-    return {"commitment": P["commit_s"] * k,
+    return {"commitment": P["commit_s"] * k, "interaction": P.get("interaction_s", 0.0) * k,
             "buckets": {b: (v * k if v is not None else None) for b, v in ph["buckets"].items()},
             "joints": {name: {"covers": j["covers"], "overhead": j["seconds"] * k} for name, j in ph["joints"].items()},
             "other": ph["other"] * k if _num(ph["other"]) else None,
             "setup": {"seconds": float(setup), "amortized": float(setup) * k, "instances": P["instances"]} if _num(setup) and setup > 0 else None}
 
 
-def render_markdown(V: Views) -> str:
+def _family_text(fam: Family) -> str:
+    return (f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}"
+            + (f"; {fam.note}" if fam.note else ""))
+
+
+def _mark_names(c: ViewCell) -> list[str]:
+    """The Table 2 marks of a cell, in print order: ``provisional``, ``algebraic``, ``under-reverification``."""
+    return [m for m, on in (("provisional", c.provisional), ("algebraic", c.algebraic), ("under-reverification", c.legacy.finding)) if on]
+
+
+_MARK_TEXT = {"provisional": "(prov.)", "algebraic": "(alg.)", "under-reverification": f"({T.UNDER_REVERIFICATION})"}
+
+
+def _cell_note(c: ViewCell, col: str) -> str:
+    P, b = c.throughput, c.batching
+    text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
+            f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
+            f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
+            f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
+    if c.legacy.instances_equiv:
+        text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
+    ixl = P.get("interaction") or {}
+    if ixl.get("loopback_s"):
+        text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
+                 f"({ixl['loopback_method'] or 'method not recorded'})")
+    if c.provisional:
+        text += f"; provisional: {c.provisional}"
+    if c.legacy.finding:
+        text += f"; {c.legacy.finding}"
+    if c.algebraic:
+        text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
+    if c.unfiltered:
+        u = c.unfiltered
+        text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
+                 f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
+    return text
+
+
+def table2_grid(V: Views) -> list[dict[str, Any]]:
+    """Table 2 as printed, one entry per line: its row ``label``, the native column and each family column as ``display`` (the
+    printed text without its footnote number) and ``note`` (the footnote text), with ``state`` (``cell``, or the empty
+    cell's: ``n/s``, ``none``, ``weaker``, ``rejected``, ``below-filter``), ``marks`` and the ``cell`` itself.  The markdown
+    numbers the footnotes in this order: each line's native column, then its family columns."""
+    out = []
+    for ln in V.lines:
+        N = ln["native"]
+        g: dict[str, Any] = {
+            "line": ln, "label": f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
+            "native": {"display": _native_text(N), "note": f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
+                                                           f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}"},
+            "cells": {}}
+        for col in V.columns():
+            c = ln["cells"].get(col)
+            if c is None:
+                e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
+                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
+                g["cells"][col] = {"display": "n/s" if e["state"] == "n/s" else T.EMPTY, "note": f"{where}: {e['text']}", "state": e["state"],
+                                   "marks": [], "cell": None}
+                continue
+            marks = _mark_names(c)
+            g["cells"][col] = {"display": " ".join([T.fmt_overhead(c.overhead), *(_MARK_TEXT[m] for m in marks)]), "note": _cell_note(c, col),
+                               "state": "cell", "marks": marks, "cell": c}
+        out.append(g)
+    return out
+
+
+def table3_row(c: ViewCell) -> dict[str, str]:
+    """Table 3's printed row of a cell: ``commitment``, ``interaction``, each of :data:`contract.BUCKETS`, ``other``, ``total`` and
+    ``setup`` (a fused stage prints once in its first bucket, the continuation mark in the others)."""
+    st = stages(c)
+    share = lambda v: f"{_fmt_x(v)} ({100 * v / c.overhead:.0f}%)"  # noqa: E731
+    cells = {b: share(v) for b, v in st["buckets"].items() if v is not None}
+    for j in st["joints"].values():
+        first, *rest = j["covers"]
+        cells[first] = f"{'+'.join(j['covers'])}: {share(j['overhead'])}"
+        cells.update({b: T.JOINT_CONTINUATION for b in rest})
+    su = st["setup"]
+    return {"commitment": share(st["commitment"]), "interaction": share(st["interaction"]), **{b: cells.get(b, T.EMPTY) for b in contract.BUCKETS},
+            "other": share(st["other"]) if st["other"] is not None else T.EMPTY, "total": f"{T.fmt_overhead(c.overhead)} (100%)",
+            "setup": f"{T.fmt_seconds(su['seconds'])} · {_fmt_x(su['amortized'])} over {su['instances']}" if su else T.EMPTY}
+
+
+def render_markdown(V: Views, published: bool = False) -> str:
     rules = V.rules
     filt = ", ".join(([f"whole-proof bound 2^{rules.security_log2:g} or better"] if rules.security_log2 is not None else [])
                      + (["no algebraic hash in the soundness argument"] if rules.standard_hashes else [])) or "unfiltered"
-    out = [f"> {PREVIEW}", "", f"Rules: `{rules.name}` ({filt}" + ("; legacy parameters: B = 4096, K = 1536, bare and + in-proof hash "
+    out = [f"> {PUBLISHED if published else PREVIEW}", "", f"Rules: `{rules.name}` ({filt}" + ("; legacy parameters: B = 4096, K = 1536, bare and + in-proof hash "
                                                                  "columns, proving time only" if rules.legacy else "") + ").", "",
            "## Table 1 — Backend configurations and their security", ""]
     rows1, fam_seen = [], None
     for fid, row in table1_rows(V):
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
-            desc = f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}" if fam else "not a Table 2 column"
+            desc = _family_text(fam) if fam else "not a Table 2 column"
             rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
@@ -991,7 +1336,8 @@ def render_markdown(V: Views) -> str:
             f"uses an algebraic hash (Poseidon2 and the like) is admissible and flagged: {ALGEBRAIC_FLAG}. Bounds "
             "are the accountant's whole-proof figures at each cell's batching (`security.achieved_log2`), from proven proximity bounds only.", "",
             "## Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme", "",
-            "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end "
+            "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end at the reference "
+            "network (same datacenter, 1 ms RTT, 100 Gb/s: t = compute + rounds × RTT + bytes ÷ bandwidth) "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
             f"`({T.UNDER_REVERIFICATION})` = the latest `finding` label on the result is open (a `PULLED` one rejects it, D); "
@@ -1004,60 +1350,23 @@ def render_markdown(V: Views) -> str:
         return f"[{len(notes)}]"
 
     cols = V.columns()
-    rows2 = []
-    for ln in V.lines:
-        N = ln["native"]
-        row = [f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
-               _native_text(N) + " " + note(f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
-                                            f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}")]
-        for col in cols:
-            c = ln["cells"].get(col)
-            if c is None:
-                e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
-                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
-                row.append(("n/s " if e["state"] == "n/s" else f"{T.EMPTY} ") + note(f"{where}: {e['text']}"))
-                continue
-            P, b = c.throughput, c.batching
-            text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
-                    f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
-                    f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
-                    f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
-            if c.legacy.instances_equiv:
-                text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
-            if c.provisional:
-                text += f"; provisional: {c.provisional}"
-            if c.legacy.finding:
-                text += f"; {c.legacy.finding}"
-            if c.algebraic:
-                text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
-            if c.unfiltered:
-                u = c.unfiltered
-                text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
-                         f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
-            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "")
-                       + (f" ({T.UNDER_REVERIFICATION})" if c.legacy.finding else "") + " " + note(text))
-        rows2.append(row)
+    rows2 = [[g["label"], g["native"]["display"] + " " + note(g["native"]["note"]),
+              *[g["cells"][col]["display"] + " " + note(g["cells"][col]["note"]) for col in cols]] for g in table2_grid(V)]
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
     out += ["## Table 3 — Where the overhead comes from (each stage × N, share of the cell)", "",
-            "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + the six buckets + Other "
-            "add up to the cell (Total). Commitment is the serving overhead; the buckets and Other are the proving overhead. A fused stage "
+            "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + interaction + the six "
+            "buckets + Other add up to the cell (Total). Commitment is the serving overhead; interaction is the network wait at the "
+            "reference profile (rounds × 1 ms + bytes ÷ 100 Gb/s, plus verifier compute the prover waits on); the buckets and Other are "
+            "the proving overhead. A fused stage "
             f"prints once in its first column, `{T.JOINT_CONTINUATION}` in the others. Setup, one-time (keys, circuit setup: "
             "`fixed.setup_seconds`) is outside the cell: its seconds, and ×native amortized over the measured batch (setup × N ÷ the "
             "batch's instances). Seconds per instance are in the drill-down below.", ""]
     rows3, rows3s = [], []
     for c in V.cells:
-        st = stages(c)
-        share = lambda v: f"{_fmt_x(v)} ({100 * v / c.overhead:.0f}%)"  # noqa: E731
-        cells = {b: share(v) for b, v in st["buckets"].items() if v is not None}
-        for name, j in st["joints"].items():
-            first, *rest = j["covers"]
-            cells[first] = f"{'+'.join(j['covers'])}: {share(j['overhead'])}"
-            cells.update({b: T.JOINT_CONTINUATION for b in rest})
-        su = st["setup"]
-        setup = f"{T.fmt_seconds(su['seconds'])} · {_fmt_x(su['amortized'])} over {su['instances']}" if su else T.EMPTY
-        rows3.append([_cell_name(c), share(st["commitment"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
-                      share(st["other"]) if st["other"] is not None else T.EMPTY, f"{T.fmt_overhead(c.overhead)} (100%)", setup])
+        r3 = table3_row(c)
+        su = stages(c)["setup"]
+        rows3.append([_cell_name(c), r3["commitment"], r3["interaction"], *[r3[b] for b in contract.BUCKETS], r3["other"], r3["total"], r3["setup"]])
         P, ph = c.throughput, c.legacy.phases
         n, total = P["instances"], P["end_to_end_s"]
         pct = lambda v: f"{fmt_per_instance(v / n)} ({100 * v / total:.0f}%)"  # noqa: E731
@@ -1066,15 +1375,37 @@ def render_markdown(V: Views) -> str:
             first, *rest = j["covers"]
             secs[first] = f"{'+'.join(j['covers'])}: {pct(j['seconds'])}"
             secs.update({b: T.JOINT_CONTINUATION for b in rest})
-        rows3s.append([_cell_name(c), pct(P["commit_s"]), *[secs.get(b, T.EMPTY) for b in contract.BUCKETS],
+        rows3s.append([_cell_name(c), pct(P["commit_s"]), pct(P.get("interaction_s", 0.0)), *[secs.get(b, T.EMPTY) for b in contract.BUCKETS],
                        pct(ph["other"]) if _num(ph["other"]) else T.EMPTY, f"{fmt_per_instance(total / n)} (100%)",
                        T.fmt_seconds(su["seconds"]) if su else T.EMPTY])
-    head = ("Cell", "Commitment", "Witness", "Encoding + witness commitment", "Arithmetic", "Lookup", "ZK additional", "Serialization", "Other")
+    head = ("Cell", "Commitment", "Interaction", "Witness", "Encoding + witness commitment", "Arithmetic", "Lookup", "ZK additional", "Serialization", "Other")
     out += [T._md_table((*head, "Total (the cell)", "Setup, one-time (not in the total)"), rows3)
             if rows3 else f"(no Table 2 cell {T.EMPTY} nothing to decompose)", ""]
+    derived = [c for c in V.cells if c.throughput["interaction"]["derived"]]
+    if derived:
+        shares = [100 * stages(c)["interaction"] / c.overhead for c in derived]
+        out += [f"Interaction note: {len(derived)} of {len(V.cells)} cells are verified from files, so their interaction is derived "
+                f"(no measured RTT; rounds = 0 under Fiat–Shamir, else the protocol's sequential depth; network time = rounds × 1 ms + "
+                f"(proof + statement bytes) ÷ 100 Gb/s). That interaction is {min(shares):.0f}–{max(shares):.0f}% of those cells at the "
+                f"reference network: proof size is a real cost.", ""]
     if rows3s:
         out += ["### Table 3 drill-down — seconds per instance (share of end to end)", "",
                 T._md_table((*head, "End to end", "Setup, one-time (s)"), rows3s), ""]
+        rowsi = []
+        for c in V.cells:
+            ix, P = c.throughput["interaction"], c.throughput
+            at = lambda rtt, bw=REF_BANDWIDTH_BPS: c.native * (P["commit_s"] + interaction_time(ix, rtt, bw)) / P["instances"]  # noqa: E731
+            rtt = (f"{ix['rtt_ms']:.3g} ms ({ix['rtt_method'] or 'method not recorded'})" if ix["rtt_ms"] is not None
+                   else "— (file-verified)" if ix["derived"] else T.EMPTY)
+            rounds = f"{ix['rounds']:.0f} (derived)" if ix["derived"] else f"{ix['rounds']:.0f}" if ix["rounds"] is not None else T.UNMEASURED
+            rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
+                          D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
+                          T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
+                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]])
+        out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth", "",
+                T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
+                             "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",
+                             "At 1 ms, 10 Gb/s"), rowsi), ""]
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "
@@ -1095,9 +1426,9 @@ def render_markdown(V: Views) -> str:
     return "\n".join(out) + "\n"
 
 
-def render_json(V: Views) -> dict[str, Any]:
+def render_json(V: Views, published: bool = False) -> dict[str, Any]:
     return {
-        "schema": "verity/tables-views/v1", "preview": PREVIEW, "rules": dataclasses.asdict(V.rules),
+        "schema": "verity/tables-views/v1", **({"published": PUBLISHED} if published else {"preview": PREVIEW}), "rules": dataclasses.asdict(V.rules),
         "reason_letters": REASON_LETTERS, "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
         "work_model": WORK_MODEL,
         "table1": {"columns": list(TABLE1_COLUMNS), "families": [dataclasses.asdict(f) for f in FAMILIES],
@@ -1117,49 +1448,692 @@ def render_json(V: Views) -> dict[str, Any]:
     }
 
 
+# --- entities: the render as charted by the docs site -----------------------------------------------------------------------------
+
+ENTITIES_SCHEMA = "verity/tables-entities/v1"
+#: The ZK class of a configuration, from the leading words of its declared ZK text (the text rides alongside).  A B-Ligero
+#: configuration that runs "as the B-Ligero mode it runs in" is one of its live interactive modes: malicious-verifier ZK.
+ZK_CLASSES = (("malicious-verifier zk", "malicious-verifier-zk"), ("as the b-ligero mode it runs in", "malicious-verifier-zk"),
+              ("hvzk", "hvzk"), ("no", "none"), ("unknown", "unknown"))
+#: Table 3's stages in print order, with the column titles: the phases a result's overhead splits into.
+#: An "Other" share in [-OTHER_CLAMP, 0) is shown as 0 (``clamped``, the raw value kept); anything more negative is ``flagged``.
+OTHER_CLAMP = 0.005
+PHASES = (("commitment", "Commitment"), ("interaction", "Interaction"), ("witness", "Witness"),
+          ("encoding_commitment", "Encoding + witness commitment"), ("arithmetic", "Arithmetic"), ("lookup", "Lookup"),
+          ("zk_additional", "ZK additional"), ("serialization", "Serialization"), ("other", "Other"))
+
+
+def zk_class(cfg: Configuration) -> str:
+    """The short ZK class (:data:`ZK_CLASSES`) of a configuration; ``ValueError`` when its text matches none."""
+    t = cfg.zk.lower()
+    for prefix, cls in ZK_CLASSES:
+        if t.startswith(prefix):
+            return cls
+    raise ValueError(f"{cfg.id}: no ZK class for {cfg.zk!r}")
+
+
+def split_list(text: str) -> list[str]:
+    """``text``'s ``"; "``-separated items outside parentheses (``"; ".join`` of the result is ``text``)."""
+    out, depth, cur = [], 0, ""
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        depth += (ch == "(") - (ch == ")")
+        if depth == 0 and text.startswith("; ", i):
+            out.append(cur)
+            cur, i = "", i + 2
+            continue
+        cur += ch
+        i += 1
+    return [*out, cur] if cur or out else []
+
+
+def slug(text: str) -> str:
+    return "-".join("".join(ch if ch.isalnum() else " " for ch in text.lower()).split())
+
+
+def subcircuit_id(target_name: str | None) -> str | None:
+    """The census subcircuit (a fully bound template) a target name denotes (its ``legacy_target``)."""
+    return census.subcircuit_of(target_name).id if target_name else None
+
+
+def verity_commit() -> str | None:
+    """The commit of the source tree this renderer runs from (``None`` outside a git checkout)."""
+    import subprocess  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() or None if out.returncode == 0 else None
+
+
+#: ``verity.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
+HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3",),
+                  "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
+                  "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
+                  "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
+#: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
+#: is cited once, as the ``random-oracle`` model.
+HASH_PROPERTIES = (("collision resistance", "cr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
+                   ("prg", "xof"), ("ring-sis", "sis"))
+PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
+#: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
+ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
+#: An ``unknown`` ZK text claims nothing, so it maps to ``no-zk`` (Verity claims no zero knowledge for it; the text says why).
+_ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk", "unknown": "no-zk"}
+#: B-Ligero's malicious-verifier ZK also rests on the random-oracle model for its unsalted Merkle leaves
+#: (backends/direct/ligero/PROTOCOL.md, red-team-zk-2 G3): the unopened columns are hidden only by Blake3(column).
+_LIGERO_MERKLE_HIDING = ("proof-internal commitment (Merkle hiding: unsalted leaves)",
+                         "BLAKE3 (proof-internal commitment; random oracle (hiding of the unopened, unsalted Merkle leaves Blake3(column)); "
+                         "red-team-zk-2 G3)")
+
+
+def _role(h: Hash) -> str:
+    """A hash's role as the configuration declares it: its role, with the detail its assumed property gives in parentheses
+    (``statement commitment (row digests)``), or the property itself when it is not a bare property name
+    (``PRG of the verifier's coins``)."""
+    prop = h.prop
+    if "(" in prop and prop.endswith(")"):
+        detail = prop[prop.index("(") + 1:-1]
+    else:
+        detail = "" if prop.lower() in (_CR, _RO) else prop
+    return f"{h.role} ({detail})" if detail else h.role
+
+
+def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, Any]]:
+    """A configuration's security claims: each a ``property`` (a ``verity.claims`` id with its Table 1 text, and for soundness
+    ``param``, the weakest whole-proof bound at its cells as TeX) with the ``assumptions`` it rests on, each an id (``None``
+    and ``unmapped`` when the renderer has none yet), its ``role`` as the configuration declares it (a hash's role and
+    detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
+
+    * soundness rests on every hash of the soundness argument but those assumed to be random oracles, the proximity bounds
+      and the configuration's other assumptions;
+    * ZK: malicious-verifier ZK whose text names the coin commitment rests on the hashes that commit the coins; HVZK on an
+      honest verifier;
+    * non-interactive (transferable) rests on the random oracle, once per hash modelled as one; an interactive
+      configuration is designated-verifier and rests on nothing further;
+    * setup: transparent, resting on nothing."""
+
+    def prop(id_: str | None, text: str, param: str | None = None) -> dict[str, Any]:
+        return {"id": id_, "param": param, "text": text, "unmapped": id_ is None}
+
+    def rests(id_: str | None, role: str, text: str) -> dict[str, Any]:
+        return {"id": id_, "role": role, "text": text, "unmapped": id_ is None}
+
+    def hash_ids(h: Hash) -> list[str | None]:
+        p = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
+        return [f"{p}/{i}" for i in HASH_INSTANCES.get(h.name, ())] if p else []
+
+    transferable = cfg.transferability.startswith("transferable")
+    oracles = [h for h in cfg.hashes if h.prop.lower().startswith("random oracle")]
+    sound = [rests(i, _role(h), h.text()) for h in cfg.hashes if h not in oracles for i in (hash_ids(h) or [None])]
+    sound += [rests(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.component, x.text())
+              for x in cfg.proximity]
+    sound += [rests(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), "", a) for a in split_list(cfg.assumptions)]
+    if transferable:
+        sound += [rests("random-oracle", _role(h), h.text()) for h in oracles]
+    cls = zk_class(cfg)
+    zk_rests: list[dict[str, Any]] = []
+    if cls == "malicious-verifier-zk" and "coin commitment" in cfg.zk.lower():
+        zk_rests = [rests(i, _role(h), h.text()) for h in cfg.hashes if "coin commitment" in h.prop.lower() for i in (hash_ids(h) or [None])]
+    if cls == "malicious-verifier-zk" and cfg.family == "B-Ligero":
+        zk_rests.append(rests("random-oracle", *_LIGERO_MERKLE_HIDING))
+    elif cls == "hvzk":
+        zk_rests = [rests("honest-verifier", "zero knowledge only (soundness does not rest on it)", cfg.zk)]
+    claims = [{"property": prop("computational-soundness" if transferable else "statistical-soundness", cfg.soundness,
+                                f"2^{{-{bits:.1f}}}" if bits is not None else None), "assumptions": sound},
+              {"property": prop(_ZK_GUARANTEE.get(cls), cfg.zk), "assumptions": zk_rests}]
+    if transferable:
+        claims.append({"property": prop("non-interactive", cfg.transferability),
+                       "assumptions": [rests("random-oracle", _role(h), h.text()) for h in oracles]})
+    elif cfg.transferability.startswith("interactive"):
+        claims.append({"property": prop("designated-verifier", cfg.transferability), "assumptions": []})
+    else:
+        claims.append({"property": prop(None, cfg.transferability), "assumptions": []})
+    fam = _FAMILY.get(cfg.family or "")
+    if fam:
+        claims.append({"property": prop("transparent-setup" if fam.setup.startswith("none") else None, fam.setup), "assumptions": []})
+    return claims
+
+
+#: The families' names in the entities render (Daniel, 2026-09-25): a letter, then the family.  The markdown keeps its column
+#: headers (``FAMILIES``); each family entity carries its header as ``column``.
+FAMILY_NAMES = {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "Flock": "C-Flock", "SP1": "D-SP1"}
+
+
+def _fam(fid: str | None) -> str | None:
+    return FAMILY_NAMES.get(fid, fid) if fid else fid
+
+
+#: Composed backends with their own id (docs ontology, "Presentation rules"): route (a) renders in the A-GKR column, and its
+#: profile adds C-Flock's assumptions and the sigma link's.
+COMPOSED = {ROUTE_A: "A-route-a"}
+
+
+def backend_of(cfg: Configuration) -> str | None:
+    """The backend (an implementation of the Backend interface) a configuration belongs to: ``<letter>-interactive`` or
+    ``<letter>-fs``, or a composed backend's own id (:data:`COMPOSED`); ``None`` outside the backend families."""
+    if cfg.id in COMPOSED:
+        return COMPOSED[cfg.id]
+    return f"{_fam(cfg.family)[0]}-{'fs' if cfg.transferability.startswith('transferable') else 'interactive'}" if cfg.family else None
+
+
+#: Scheme ids for the site, naming the framing and the leaf hash (the tree hash is the framing's: frame-v3 and vllm-v1 trees
+#: are SHA-256), by the renderer's scheme id (``legacy_id``; the markdown prints those).  A new id only where the committed
+#: bytes differ.
+SCHEME_IDS = {"frame-v3/sha256": "frame-v3/sha-256", "frame-v3/blake3-row": "frame-v3/blake3-keyed", "vllm-v1": "vllm-v1/sha-256",
+              "frame-v3/poseidon2-row": "frame-v3/poseidon2-babybear", "frame-v3/poseidon2-tile": "frame-v3/poseidon2-babybear-tile64",
+              "frame-v3/ajtai-row": "frame-v3/ajtai"}
+#: The ``ligero-verify`` leaf schemes (``src/leaf.rs``) that commit each scheme's leaves: a circuit, not a scheme.  ``blake3``
+#: and ``blake3-xob`` share the schema ``blake3-keyed/row/v2``, its params digest and leaf bytes, so they commit the same bytes
+#: (``leaf/conformance_test.py`` asserts it): one scheme, two circuits.
+LEAF_CIRCUITS = {"frame-v3/sha-256": ("sha256",), "frame-v3/blake3-keyed": ("blake3", "blake3-xob"), "vllm-v1/sha-256": ("vllm-v1",),
+                 "frame-v3/poseidon2-babybear": ("poseidon2",), "frame-v3/poseidon2-babybear-tile64": (), "frame-v3/ajtai": ("ajtai-n64", "ajtai-n128")}
+
+
+def scheme_id(legacy: str | None) -> str | None:
+    return SCHEME_IDS.get(legacy, legacy) if legacy else legacy
+
+
+def mode_of(cfg: Mapping[str, Any]) -> str:
+    """``fs`` (Fiat–Shamir: non-interactive, transferable) or ``interactive``."""
+    return "fs" if cfg["transferability"].startswith("transferable") else "interactive"
+
+
+def backends(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Table 1 as backends (each implements the Backend interface): per backend family and interaction mode,
+    ``<letter>-interactive`` or ``<letter>-fs`` (``A-fs``: A-GKR under Fiat–Shamir), and composed backends by their own id
+    (``A-route-a``), each with its member configurations and its claims written out in full.  Each claim slot (soundness,
+    ZK, interaction, setup) holds the property its members share (``id`` ``None`` and ``unmapped`` when they differ or have
+    none; ``texts`` are theirs), resting on every assumption any member rests on for it, with the roles the code declares and
+    the members that cite it; the soundness ``param`` is the weakest of the members'.  A composed backend's soundness also
+    rests on its components' assumptions (``from``: the component).  Statement-commitment hashes are left out: they are the
+    statement's (its scheme's), and a result's full assumption set is its backend's plus its statement's.  ``implementations``
+    names the renderer's configurations a backend covers (an implementation detail): those with a result in this render when any
+    has one (the profile is what the published results rest on); the others are ``declared_without_results``."""
+    order = {"interactive": 0, "route": 1, "fs": 2}
+    ids = sorted({c["backend"] for c in configurations if c["backend"]},
+                 key=lambda b: (b[0], order["route"] if b not in (f"{b[0]}-interactive", f"{b[0]}-fs") else order[b.split("-", 1)[1]], b))
+    out = []
+    for bid in ids:
+        declared = [c for c in configurations if c["backend"] == bid]
+        members = [c for c in declared if c.get("cells")] or declared
+        claims = []
+        for slot in range(max(len(c["claims"]) for c in members)):
+            props = [c["claims"][slot]["property"] for c in members if slot < len(c["claims"])]
+            pids, texts = {p["id"] for p in props}, list(dict.fromkeys(p["text"] for p in props))
+            pid = next(iter(pids)) if len(pids) == 1 and len(props) == len(members) else None
+            params = [p["param"] for p in props if p.get("param")]
+            rests: dict[str, dict[str, Any]] = {}
+            for c in members:
+                for a in (c["claims"][slot]["assumptions"] if slot < len(c["claims"]) else ()):
+                    if a["role"].startswith(_STMT):
+                        continue                      # the statement's (its scheme's hashes), not the backend's
+                    e = rests.setdefault(a["id"] or a["text"], {"id": a["id"], "roles": [], "texts": [], "unmapped": a["unmapped"],
+                                                                "implementations": [], "from": None})
+                    for key, v in (("roles", a["role"]), ("texts", a["text"]), ("implementations", c["variant"])):
+                        if v and v not in e[key]:
+                            e[key].append(v)
+            claims.append({"property": {"id": pid, "param": max(params, key=lambda t: float(t[2:].strip("{}"))) if params else None,
+                                        "texts": texts, "unmapped": pid is None},
+                           "assumptions": list(rests.values())})
+        fam = members[0]["backend_family"]
+        entry = {"id": bid, "display": bid, "backend_family": fam, "column": fam,
+                 "mode": "fs" if bid.endswith("-fs") else "interactive", "composed": bid in COMPOSED.values(), "components": [],
+                 "implementations": [c["variant"] for c in members],
+                 "declared_without_results": [c["variant"] for c in declared if c not in members], "claims": claims}
+        if entry["composed"]:
+            _compose(entry, members, configurations)
+        entry["properties"] = [c["property"]["id"] for c in claims if c["property"]["id"]]
+        entry["assumptions"] = list(dict.fromkeys(a["id"] for c in claims for a in c["assumptions"] if a["id"]))
+        out.append(entry)
+    return out
+
+
+def _compose(entry: dict[str, Any], members: Sequence[Mapping[str, Any]], configurations: Sequence[Mapping[str, Any]]) -> None:
+    """Route (a)'s profile: its soundness also rests on C-Flock's soundness assumptions and on the sigma link -- the link's
+    bound as its configuration states it, and the hash its code declares binding the live transcript and ``root_F``."""
+    sound = entry["claims"][0]["assumptions"]
+    for a in sound:
+        if any("root_f" in t.lower() for t in a["texts"]):
+            a["from"] = "link"
+    have = {a["id"] or a["texts"][0] for a in sound}
+    for c in configurations:
+        if c["backend_family"] == "C-Flock":
+            for a in c["claims"][0]["assumptions"]:
+                if (a["id"] or a["text"]) not in have and not a["role"].startswith(_STMT):
+                    sound.append({"id": a["id"], "roles": [a["role"]] if a["role"] else [], "texts": [a["text"]], "unmapped": a["unmapped"],
+                                  "implementations": [c["variant"]], "from": "C-Flock"})
+                    have.add(a["id"] or a["text"])
+    links = [m for c in members for m in re.findall(r"sigma link [^;,)]*", c["soundness"]["text"] + "; " + c["soundness"]["dominant_term"])]
+    for t in dict.fromkeys(x.strip() for x in links):
+        sound.append({"id": None, "roles": ["sigma link"], "texts": [t], "unmapped": True, "implementations": [c["variant"] for c in members], "from": "link"})
+    entry["components"] = ["C-Flock", "link"]
+
+
+def scheme_entities(configurations: Sequence[Configuration]) -> list[dict[str, Any]]:
+    """Each commitment scheme under its site id (:data:`SCHEME_IDS`; ``legacy_id`` the renderer's): ``name``, a one-line
+    ``description`` (the commitment text of the first full-relation configuration that binds it, up to its first ``;``), its
+    ``tree_hash`` and ``leaf_hashes`` (``verity.claims`` instances of the statement-commitment hashes its configurations declare:
+    the tree's role names the trees), ``algebraic`` when any of them is an algebraic instance, the ``assumptions`` those hashes
+    are (with the roles and configurations that declare them), and the ``leaf_circuits`` that commit its leaves."""
+    from verity.claims import INSTANCES  # noqa: PLC0415
+
+    out = []
+    for sch in SCHEMES:
+        binders = [c for c in configurations if c.scheme == sch.id]
+        rests: dict[str, dict[str, Any]] = {}
+        tree: list[str] = []
+        leaves: list[str] = []
+        for c in binders:
+            for h in c.hashes:
+                if h.role != _STMT:
+                    continue
+                prop = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
+                insts = HASH_INSTANCES.get(h.name, ())
+                (tree if "trees" in _role(h) else leaves).extend(i for i in insts if i not in (tree if "trees" in _role(h) else leaves))
+                for i in ([f"{prop}/{x}" for x in insts] if prop else []) or [None]:
+                    e = rests.setdefault(i or h.text(), {"id": i, "unmapped": i is None, "roles": [], "implementations": []})
+                    for key, v in (("roles", _role(h)), ("implementations", c.id)):
+                        if v not in e[key]:
+                            e[key].append(v)
+        full = next((c for c in binders if c.full_relation), binders[0] if binders else None)
+        sid = scheme_id(sch.id)
+        out.append({"id": sid, "legacy_id": sch.id, "name": sch.label, "description": full.commitment.split(";")[0] if full else None,
+                    "tree_hash": tree[0] if tree else None, "leaf_hashes": leaves,
+                    "algebraic": any(INSTANCES[i].algebraic for i in (*tree, *leaves) if i in INSTANCES),
+                    "leaf_circuits": list(LEAF_CIRCUITS.get(sid, ())),
+                    "assumptions": [e["id"] for e in rests.values() if e["id"]], "assumption_details": list(rests.values()),
+                    "admissible": sch.admissible, "standard": sch.standard, "core": sch.core, "implementations": [c.id for c in binders]})
+    return out
+
+
+def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Per backend family and subcircuit, the lowest-overhead cell whose commitment scheme is built on standard hashes only and whose
+    soundness argument uses no algebraic hash (ties to the lower artifact id)."""
+    best: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for r in results:
+        sch = _SCHEME.get(r["legacy_scheme"] or "")
+        if sch is None or not sch.standard or r["state"]["algebraic"]:
+            continue
+        k = (r["backend_family"], r["subcircuit"])
+        if k not in best or (r["overhead"]["value"], r["artifact"]) < (best[k]["overhead"]["value"], best[k]["artifact"]):
+            best[k] = r
+    return [{"backend_family": r["backend_family"], "subcircuit": r["subcircuit"], "result": r["id"], "backend": r["backend"],
+             "statement": r["statement"], "scheme": r["scheme"], "overhead": r["overhead"]}
+            for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
+
+
+#: How a live run measured its RTT, as published: the recorded ``rtt_method`` text names hosts and ports, so it stays in the
+#: evidence store (the result's own record) and the entities render carries only one of these.
+RTT_METHODS = ("tcp-connect", "open-connection-ping", "unclassified")
+
+
+def rtt_method_enum(text: str | None) -> str | None:
+    """The published RTT method of a recorded ``rtt_method`` text (:data:`RTT_METHODS`), ``None`` when none is recorded."""
+    if not text:
+        return None
+    t = text.lower()
+    if "ping" in t and "connection" in t:
+        return "open-connection-ping"
+    if "tcp connect" in t:
+        return "tcp-connect"
+    return "unclassified"
+
+
+def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
+    """A result's interaction record, enough to recompute its overhead at any network:
+    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / inputs``
+    (``inputs``: the inputs per timed run).
+    ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; for a file-verified result 0 under
+    Fiat–Shamir, else the protocol's sequential depth over its sequential sub-batch proofs), ``rounds_source`` says which;
+    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``);
+    ``measured_rtt.method`` is an :data:`RTT_METHODS` value, never the recorded text."""
+    num = lambda v: float(v) if _num(v) else None  # noqa: E731
+    return {
+        "live": ix["live"], "derived": ix["derived"], "rounds": ix["rounds"], "rounds_source": ix["rounds_source"],
+        "rounds_protocol": num(raw.get("rounds_protocol")), "sequential_depth": num(raw.get("sequential_depth")),
+        "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"], "proof_bytes": ix["proof_bytes"], "statement_bytes": ix["statement_bytes"],
+        "commit_s": P["commit_s"], "prover_compute_s": ix["prover_s"], "verifier_compute_s": ix["verifier_s"], "network_wait_s": ix["wait_s"],
+        "measured_rtt": {"ms": ix["rtt_ms"], "method": rtt_method_enum(ix["rtt_method"])} if ix["rtt_ms"] is not None else None,
+        "measured_bandwidth_bps": ix.get("bandwidth_bps"),
+        "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
+                               if num(raw.get("loopback_round_s")) is not None else None),
+        "loopback_moved_s": ix["loopback_s"], "inputs": P["instances"],
+        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / inputs",
+    }
+
+
+def best_per_key(cells: Sequence[ViewCell], key: Callable[[ViewCell], str]) -> list[ViewCell]:
+    """Every admissible result, one per key (backend x statement x input set x prover hardware): the highest ``P``, ties to
+    the lower artifact id.  Unlike Table 2's cell (each family's best), every backend's best is kept."""
+    best: dict[str, ViewCell] = {}
+    for c in cells:
+        k = key(c)
+        if k not in best or (-c.throughput["instances_per_second"], c.artifact) < (-best[k].throughput["instances_per_second"], best[k].artifact):
+            best[k] = c
+    return list(best.values())
+
+
+def configuration_records(V: Views) -> list[dict[str, Any]]:
+    """The renderer's configurations as records, the input of :func:`backends` (an implementation detail: the entities render
+    emits backends and statements, not configurations).  Each has its backend, variant, scheme, ZK class, soundness bits (the
+    weakest whole-cell bound at its cells), hashes, texts and ``claims`` (:func:`claims_of`)."""
+    cells_of: dict[str, list[ViewCell]] = {}
+    for c in V.cells:
+        cells_of.setdefault(c.configuration or "", []).append(c)
+    rows1 = table1_rows(V)
+    configurations = []
+    for (fid, row), cfg in zip(rows1, [c for fid in [*(f.id for f in FAMILIES), None]
+                                       for c in V.configurations if c.family == fid or (fid is None and c.family not in _FAMILY)]):
+        held = cells_of.get(cfg.id, [])
+        bits = [-c.bound_log2 for c in held if c.bound_log2 is not None]
+        fam = _FAMILY.get(cfg.family or "")
+        claims = claims_of(cfg, min(bits) if bits else None)
+        configurations.append({
+            "id": slug(cfg.id), "variant": cfg.id, "cells": len(held), "backend_family": _fam(cfg.family), "scheme": cfg.scheme,
+            "backend": backend_of(cfg),
+            "statement": {"full_relation": cfg.full_relation, "text": cfg.statement}, "ports": cfg.ports, "commitment": cfg.commitment,
+            "zk": {"class": zk_class(cfg), "text": cfg.zk},
+            "soundness": {"bits": min(bits) if bits else None, "text": cfg.soundness, "dominant_term": cfg.dominant_term},
+            "hashes": [{"name": h.name, "role": h.role, "property": h.prop, "class": "algebraic" if h.algebraic else "standard"} for h in cfg.hashes],
+            "hash_class": "algebraic" if cfg.algebraic() else "standard", "algebraic_flag": ALGEBRAIC_FLAG if cfg.algebraic() else None,
+            "proximity": [dataclasses.asdict(x) for x in cfg.proximity],
+            "interaction": split_list(cfg.interaction), "transferability": cfg.transferability, "assumptions_text": split_list(cfg.assumptions),
+            "claims": claims, "properties": [c["property"]["id"] for c in claims if c["property"]["id"]],
+            "assumptions": list(dict.fromkeys(a["id"] for c in claims for a in c["assumptions"] if a["id"])),
+            "models": ["fiat-shamir" if cfg.transferability.startswith("transferable") else "live-verifier"],
+            "params": {c["property"]["id"]: c["property"]["param"] for c in claims if c["property"]["id"] and c["property"]["param"]},
+            "unmapped": [x["text"] for c in claims for x in (c["property"], *c["assumptions"]) if x["unmapped"]],
+            "setup_text": fam.setup if fam else None, "pin": cfg.pin, "archived": cfg.archived, "unsupported": dict(cfg.unsupported),
+            "display": dict(zip(TABLE1_COLUMNS, row))})
+        assert row[0] == cfg.id
+    return configurations
+
+
+def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
+    """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
+
+    * ``subcircuits`` -- one per subcircuit, a fully bound subcircuit template: ``subcircuit_template`` (``gemm-coordinate``)
+      with its bound ``parameters`` (``K``; ``semantics``, the exact instruction), ``legacy_target`` (the target name), the
+      census hardware line (id, short name, full device, peak), datatype (id and display), tensor-core step, frozen instance
+      set and native N;
+    * ``backend_families`` -- A-GKR, B-Ligero, C-Flock, D-SP1, each with its markdown column header as ``column``;
+    * ``backends`` -- the primary shape of Table 1's claims (:func:`backends`): one per backend family and interaction mode
+      (``A-interactive``, ``A-fs``, ...), its claims written out in full;
+    * ``statements`` -- one per subcircuit and commitment scheme (``<subcircuit>+<scheme>``): the full committed relation a
+      backend lowers and proves, with its scheme's assumptions; a result's full assumption set is its backend's plus these;
+    * ``schemes`` -- each commitment scheme's id, name, one-line description and the hash assumptions it rests on, from the
+      configurations that bind it (:func:`scheme_entities`); a result's ``scheme`` is one of these ids;
+    * ``results`` -- every admissible backend's best result per subcircuit and scheme: its backend and backend family, its
+      row ``key`` (backend, statement, input set, prover hardware), ``hardware`` (the semantics chip, which
+      supplies N) and ``prover_hardware`` (where the prover ran, which supplies P), overhead, the phases
+      that sum to it, one-time setup apart, state (provisional, algebraic, verified, under re-verification), the artifact
+      and the render time;
+    * ``best_standard_hash`` -- per backend family and subcircuit, the lowest-overhead cell on standard hashes only;
+    * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
+    * ``claims`` -- the ``verity.claims`` entries cited (the site imports these); ``census`` -- the ``census/`` entries as read
+      at render time; ``provenance`` -- render time, verity commit, rules, banner.
+
+    Ids: subcircuits by their census id, backends ``<letter>-<mode>`` (or a composed backend's own id), statements
+    ``<subcircuit>+<scheme>``, results ``<backend>@<statement>@<input set>@<prover hardware>``, census entries by their
+    census id."""
+
+    rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    grid = table2_grid(V)
+    cfg_of = {c.id: c for c in V.configurations}
+    sets = {s.target: s.id for s in census.INPUT_SETS.values()}
+    circuits = []
+    for target in TARGETS.values():
+        N = native(target)
+        peak = contract.native_peak_of(target)
+        dt = census.DATATYPES[peak.dtype]
+        sub = census.subcircuit_of(target.name)
+        circuits.append({"id": sub.id, "display": sub.display, "subcircuit_template": sub.template, "parameters": vars(sub.parameters), "legacy_target": target.name,
+                         "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
+                         "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
+                         "dtype": peak.dtype, "dtype_display": dt.display, "hardware_display": f"{peak.name} · {dt.display}",
+                         "accumulate": census.SUBCIRCUIT_TEMPLATES[sub.template].accumulate, "step": target.transition_unit,
+                         "status": target.status, "input_set": sets.get(target.name),
+                         "input_set_provenance": census.INPUT_SETS[sets[target.name]].provenance if target.name in sets else None,
+                         "fidelity_notes": [{"note": n.note, "sources": [vars(x) for x in n.sources]} for n in sub.fidelity_notes],
+                         "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
+                                    "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
+                                    "work_model": N["work_model"]}})
+
+    configurations = configuration_records(V)
+
+    backend_by_cfg = {c.id: backend_of(c) for c in V.configurations}
+    sets_by_ref = {(x.dataset, x.tier): x for x in census.INPUT_SETS.values()}
+
+    backend_list = backends(configurations)
+    backend_assumptions = {b["id"]: b["assumptions"] for b in backend_list}
+    scheme_list = scheme_entities(V.configurations)
+    scheme_by_id = {x["id"]: x for x in scheme_list}
+
+    def statement_id(target_name: str, legacy_scheme: str | None) -> str:
+        return f"{subcircuit_id(target_name)}+{scheme_id(legacy_scheme)}"
+
+    def prover_of(c: ViewCell) -> str | None:
+        dtype = contract.native_peak_of(TARGETS[c.line]).dtype
+        return next((h.id for h in census.HARDWARE.values() if h.dtype == dtype and T.same_sku(V.prover_gpu.get(c.artifact), h.device)), None)
+
+    def key_of(target_name: str, legacy_scheme: str | None, prover: str | None) -> dict[str, Any]:
+        """A row key: the statement (subcircuit and scheme, with the subcircuit's template and bound parameters) and the
+        prover hardware."""
+        sub = census.subcircuit_of(target_name)
+        return {"statement": statement_id(target_name, legacy_scheme), "subcircuit": sub.id, "subcircuit_template": sub.template,
+                "parameters": vars(sub.parameters), "scheme": scheme_id(legacy_scheme), "prover_hardware": prover}
+
+    def input_set_id(c: ViewCell) -> str | None:
+        return (sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier"))) or SimpleNamespace(id=None)).id
+
+    def result_key(c: ViewCell) -> str:
+        """backend x statement x input set x prover hardware."""
+        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme)}"
+                f"@{input_set_id(c)}@{prover_of(c)}")
+
+    def input_set_of(c: ViewCell) -> dict[str, Any] | None:
+        x = sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier")))
+        if x is None:
+            return None
+        how, _ = instance_range(TARGETS[c.line], c.instances) if c.instances else (None, None)
+        return {"id": x.id, "provenance": x.provenance, "range": c.instances.get("range"), "how": how or "equivalent"}
+
+    def phases_of(c: ViewCell) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        st, r3 = stages(c), table3_row(c)
+        share = (lambda v: v / c.overhead) if c.overhead else (lambda v: None)  # noqa: E731
+        out = [{"id": "commitment", "kind": "stage", "value": st["commitment"], "share": share(st["commitment"]), "display": r3["commitment"]},
+               {"id": "interaction", "kind": "stage", "value": st["interaction"], "share": share(st["interaction"]), "display": r3["interaction"]}]
+        out += [{"id": b, "kind": "stage", "value": v, "share": share(v), "display": r3[b]} for b, v in st["buckets"].items() if v is not None]
+        out += [{"id": name, "kind": "span", "covers": list(j["covers"]), "from": j["covers"][0], "to": j["covers"][-1],
+                 "value": j["overhead"], "share": share(j["overhead"]), "display": r3[j["covers"][0]]} for name, j in st["joints"].items()]
+        other = {"value": st["other"], "share": share(st["other"]) if st["other"] is not None else None}
+        if st["other"] is not None:
+            sh = other["share"] or 0.0
+            clamped = -OTHER_CLAMP <= sh < 0
+            out.append({"id": "other", "kind": "stage", "value": 0.0 if clamped else st["other"], "share": 0.0 if clamped else sh,
+                        "display": r3["other"], "raw": st["other"], "clamped": clamped, "flagged": sh < -OTHER_CLAMP})
+        return out, other
+
+    def result_of(c: ViewCell) -> dict[str, Any]:
+        P, ix = c.throughput, c.throughput["interaction"]
+        su = stages(c)["setup"]
+        phases, other = phases_of(c)
+        cfg = cfg_of.get(c.configuration or "")
+        per_proof = V.security_of.get(c.artifact, {}).get("per_proof_total_log2")
+        peak = contract.native_peak_of(TARGETS[c.line])
+        prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme)
+        stmt_assumptions = scheme_by_id[scheme_id(c.scheme)]["assumptions"] if scheme_id(c.scheme) in scheme_by_id else []
+        return {
+            "id": result_key(c), "key": {"backend": backend, "statement": stmt, "input_set": input_set_id(c), "prover_hardware": prover},
+            "backend": backend, "backend_family": _fam(c.column), "statement": stmt, "implementation": c.configuration,
+            "subcircuit": subcircuit_id(c.line), "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
+            "hardware": peak.id, "prover_hardware": prover, "input_set": input_set_of(c),
+            "assumptions": {"backend": backend_assumptions.get(backend or "", []), "statement": stmt_assumptions,
+                            "all": list(dict.fromkeys([*backend_assumptions.get(backend or "", []), *stmt_assumptions]))},
+            "best": any(b.artifact == c.artifact and b.line == c.line and b.scheme == c.scheme for b in V.cells),
+            "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id,
+            "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
+            "N": {"value": c.native, "unit": "instances/s", "work_model": WORK_MODEL.split(":")[0], "peak": peak.id},
+            "P": {"value": P["instances_per_second"], "unit": "instances/s", "network": census.REFERENCE_NETWORK.id},
+            "phases": phases, "other_raw": other["value"], "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
+            "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"],
+                      "display": table3_row(c)["setup"]} if su else None,
+            "soundness": {"cell_log2": c.bound_log2, "cell_bits": -c.bound_log2 if c.bound_log2 is not None else None,
+                          "per_proof_log2": float(per_proof) if _num(per_proof) else None, "proofs": c.batching.get("proofs")},
+            "state": {"provisional": bool(c.provisional), "provisional_reason": c.provisional, "algebraic": bool(c.algebraic),
+                      "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
+                      "under_reverification": c.legacy.finding},
+            "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None,
+            "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
+            "batching": dict(c.batching), "instances": dict(c.instances),
+            "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
+            "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
+                            for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None}
+
+    results = [result_of(c) for c in best_per_key(V.admissible, result_key)]
+
+    table2_lines, footnotes = [], []
+
+    def footnote(text: str) -> int:
+        footnotes.append({"number": len(footnotes) + 1, "text": text})
+        return len(footnotes)
+
+    for g in grid:
+        ln = g["line"]
+        line_prover = contract.native_peak_of(TARGETS[ln["line"]]).id
+        line = {"statement": statement_id(ln["line"], ln["scheme"]), "subcircuit": subcircuit_id(ln["line"]), "scheme": scheme_id(ln["scheme"]),
+                "legacy_scheme": ln["scheme"], "key": key_of(ln["line"], ln["scheme"], line_prover), "label": g["label"],
+                "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"]),
+                           "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(TARGETS[ln["line"]]).id},
+                "cells": {}}
+        for col, gc in g["cells"].items():
+            c = gc["cell"]
+            line["cells"][_fam(col)] = {"display": gc["display"], "value": c.overhead if c else None, "marks": gc["marks"], "state": gc["state"],
+                                        "footnote": footnote(gc["note"]), "result": result_key(c) if c else None,
+                                        "backend": backend_by_cfg.get(c.configuration or "") if c else None}
+        table2_lines.append(line)
+
+    families = sorted(({**dataclasses.asdict(f), "id": _fam(f.id), "letter": _fam(f.id)[0], "column": f.id, "declared_classes": list(f.declared_classes),
+                        "display": _family_text(f)} for f in FAMILIES), key=lambda f: f["id"])
+    columns = sorted((_fam(c) for c in V.columns()), key=lambda c: (c.split(" ")[0], c))
+    def labels(ids: Sequence[str]) -> str:
+        return ", ".join(claims_registry.get(i).label for i in ids)
+
+    table1 = [{"backend": b["id"], "backend_family": b["backend_family"], "mode": b["mode"],
+               "cells": {"Backend": b["display"], "Backend family": b["backend_family"], "Mode": b["mode"], "Guarantees": labels(b["properties"]),
+                         "Assumptions": labels(b["assumptions"]),
+                         "Unmapped": "; ".join(t for c in b["claims"] for x in (c["property"], *c["assumptions"]) if x["unmapped"] for t in x["texts"])}}
+              for b in backend_list]
+    statements = {}
+    for ln in V.lines:
+        sid = statement_id(ln["line"], ln["scheme"])
+        sch = scheme_by_id.get(scheme_id(ln["scheme"]) or "")
+        statements[sid] = {"id": sid, "display": f"{census.subcircuit_of(ln['line']).display} · {sch['name'] if sch else 'no scheme'}",
+                           "subcircuit": subcircuit_id(ln["line"]), "scheme": scheme_id(ln["scheme"]),
+                           "assumptions": sch["assumptions"] if sch else [], "assumption_details": sch["assumption_details"] if sch else []}
+    phase_cols = [pid for pid, _ in PHASES]
+    return {
+        "schema": ENTITIES_SCHEMA,
+        "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
+                       "published": published, "banner": PUBLISHED if published else PREVIEW},
+        "axes": {"subcircuits": [c["id"] for c in circuits], "schemes": [scheme_id(s.id) for s in SCHEMES if s.admissible],
+                 "statements": list(statements), "backends": [b["id"] for b in backend_list], "backend_families": columns,
+                 "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets")},
+        "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({*(i for b in backend_list for k in ("properties", "assumptions")
+                                                                                     for i in b[k]),
+                                                                                   *(i for st in statements.values() for i in st["assumptions"])})},
+        "subcircuits": circuits,
+        "schemes": scheme_list,
+        "statements": list(statements.values()),
+        "backend_families": families,
+        "backends": backend_list,
+        "results": results,
+        "best_standard_hash": best_standard_hash(results),
+        "tables": {
+            "table1": {"columns": ["Backend", "Backend family", "Mode", "Guarantees", "Assumptions", "Unmapped"], "rows": table1},
+            "table2": {"columns": ["native", *columns], "column_labels": {_fam(c): c for c in V.columns()}, "lines": table2_lines,
+                       "footnotes": footnotes},
+            "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
+                       "rows": [{"result": result_key(c), "key": key_of(c.line, c.scheme, prover_of(c)), "backend_family": _fam(c.column),
+                                 "backend": backend_by_cfg.get(c.configuration or ""), "label": _cell_name(c), "cells": table3_row(c)}
+                                for c in V.cells]},
+        },
+        "rejected": [{"artifact": r["artifact"], "implementation": r["configuration"], "backend_family": _fam(r["family"]),
+                      "subcircuit": subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
+    }
+
+
 # --- CLI --------------------------------------------------------------------------------------------------------------------------
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=None, metavar="ROOT", help="store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--format", choices=("md", "json"), default="md")
+    ap.add_argument("--format", choices=("md", "json", "entities"), default="md",
+                    help="md; json (the raw views); entities (the docs site's render: subcircuits, statements, backends, results, the printed tables)")
     ap.add_argument("--rules", choices=tuple(RULES), default=SPEC.name)
     ap.add_argument("--security-bits", type=float, default=None, metavar="N", help="filter to a whole-proof bound of 2^-N or better")
     ap.add_argument("--include-archived", action="store_true")
-    ap.add_argument("--standard-hashes-only", action="store_true", help="drop configurations with an algebraic hash in the soundness argument")
+    ap.add_argument("--unvalidated-interaction", action="store_true",
+                    help="preview: do not require interactive results to carry the interaction record and meet the tolerance")
+    ap.add_argument("--standard-hashes-only", action="store_true", help="drop backends and statements with an algebraic hash in the soundness argument")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
+    ap.add_argument("--take-snapshot", action="store_true",
+                    help="with --parity: first take the `tables --snapshot` (tables-<UTC date>) to compare with")
+    ap.add_argument("--record", action="store_true", help=f"with --parity: store the parity render as a {PARITY_KIND} artifact (its id on stderr)")
+    ap.add_argument("--published", action="store_true", help="the published render (after the switch): the published banner, not the preview's")
     ns = ap.parse_args(argv)
     from research.store.local import LocalStore  # noqa: PLC0415  (only the CLI needs the store package)
 
     st = LocalStore(ns.root)
     if ns.parity:
-        members = None
-        if ns.snapshot:
+        frozen, snap = T.build(st), None
+        if ns.take_snapshot:
+            if not frozen.cells:
+                print("views: no populated tables cell, no snapshot to take", file=sys.stderr)
+                return 2
+            art = T.take_snapshot(st, frozen)
+            snap = (T.snapshot_name(), art, T.cell_artifacts(frozen))
+        elif ns.snapshot:
             rows = [r for r in st.index.select_artifacts(kind="dataset-snapshot/v1") if (D._doc(st, r).get("meta") or {}).get("name") == ns.snapshot]
             if not rows:
                 print(f"views: no dataset-snapshot/v1 named {ns.snapshot!r}", file=sys.stderr)
                 return 2
-            members = list((D._doc(st, rows[-1]).get("refs") or {}).get("members") or [])
-        diffs = parity(st, members=members)
+            snap = (ns.snapshot, rows[-1]["id"], list((D._doc(st, rows[-1]).get("refs") or {}).get("members") or []))
+        rec = parity_record(st, snap, frozen)
+        if ns.record:
+            refs = {k: v for k, v in (("snapshot", rec["snapshot_artifact"]), ("cells", sorted({c["artifact"] for c in rec["cells"]}))) if v}
+            rec["artifact"] = st.put_artifact(PARITY_KIND, {k: v for k, v in rec.items() if k != "snapshot_artifact"}, refs)
+            print(f"parity recorded as {rec['artifact']}" + (f" (snapshot {rec['snapshot']} {rec['snapshot_artifact']})" if snap else ""), file=sys.stderr)
         if ns.format == "json":
-            print(json.dumps({"schema": "verity/tables-parity/v1", "snapshot": ns.snapshot, "ok": not diffs, "differences": diffs}, indent=2))
+            print(json.dumps(rec, indent=2))
         else:
-            print("parity: ok (the legacy-rules views select exactly today's cells)" if not diffs else "\n".join(["parity: DIFFERENT", *diffs]))
-        return 0 if not diffs else 1
+            print("parity: ok (the legacy-rules views select exactly today's cells)" if rec["ok"] else "\n".join(["parity: DIFFERENT", *rec["differences"]]))
+            for c in rec["cells"]:
+                print(f"  {c['line']} · {c['column']}: {c['artifact']} {c['printed']}")
+        return 0 if rec["ok"] else 1
     rules = RULES[ns.rules]
     if ns.security_bits is not None:
         rules = dataclasses.replace(rules, name=f"{rules.name}@{ns.security_bits:g}", security_log2=-ns.security_bits)
     if ns.include_archived:
         rules = dataclasses.replace(rules, include_archived=True)
+    if ns.unvalidated_interaction:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+unvalidated-interaction", interaction_validated=False)
     if ns.standard_hashes_only:
         rules = dataclasses.replace(rules, name=f"{rules.name}+standard-hashes", standard_hashes=True)
     V = build(st, rules)
     if ns.format == "json":
-        print(json.dumps(render_json(V), indent=2, sort_keys=True, default=str))
+        print(json.dumps(render_json(V, ns.published), indent=2, sort_keys=True, default=str))
+    elif ns.format == "entities":
+        print(json.dumps(render_entities(V, ns.published), indent=2, default=str))
     else:
-        print(render_markdown(V), end="")
+        print(render_markdown(V, ns.published), end="")
     return 0
 
 
