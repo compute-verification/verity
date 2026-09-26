@@ -385,16 +385,17 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
-                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A}
+                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
+                    V.FLOCK_VLLM_CONFIG.id}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
-        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)"]
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -721,6 +722,13 @@ def test_the_published_rtt_method_is_an_enum_never_the_recorded_text() -> None:
         == "open-connection-ping"
     assert V.rtt_method_enum("iperf") == "unclassified" and V.rtt_method_enum(None) is None
     assert set(V.RTT_METHODS) == {"tcp-connect", "open-connection-ping", "unclassified"}
+
+
+def test_a_flock_vllm_v1_result_binds_the_vllm_v1_scheme_not_keyed_blake3() -> None:
+    meta = lambda name: {"workload_fingerprint": {"software": {"backend": {"name": name}}}}  # noqa: E731
+    assert V.configuration_of(meta("flock-vllm-v1")) is V._CONFIG[V.FLOCK_VLLM_CONFIG.id]
+    assert V.FLOCK_VLLM_CONFIG.scheme == "vllm-v1" and V.FLOCK_VLLM_CONFIG.family == "Flock"
+    assert V.configuration_of(meta("flock (flock-128-r2)")).id == V.FLOCK_CONFIG.id
 
 
 def test_flocks_declared_class_is_non_zk_proof() -> None:

@@ -376,9 +376,19 @@ FLOCK_CONFIG = Configuration(
     "Flock b684b12 profile params pinned (commitment.params == expected)",
     interaction="live verifier: coins for every squeeze of both reps (Fiat–Shamir cannot reach 2^-128 for this profile); the verifier "
                 "must be online for the whole proof")
-CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG)
+#: Pure Flock over vllm-v1 commitments (``software.backend.name`` ``flock-vllm-v1``, statement ``verity/flock-vllm-block/v1``).
+FLOCK_VLLM_CONFIG = dataclasses.replace(
+    FLOCK_CONFIG, id="Flock over vllm-v1 (flock-128-r2, live coins)", scheme="vllm-v1",
+    commitment="vllm-v1 SHA-256 trees over position leaves of every operand row, bound by step roots over the verifier's port "
+               "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
+               "(statement verity/flock-vllm-block/v1)",
+    hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"),
+            Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
+    soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
+              "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
+CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -394,7 +404,10 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     if v is not None:
         return cfgs.get(v.id)
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
-    return cfgs.get(FLOCK_CONFIG.id) if FLOCK.recognises(_get(fp, "software", "backend", "name")) else None
+    name = _get(fp, "software", "backend", "name")
+    if not FLOCK.recognises(name):
+        return None
+    return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
 
 
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
