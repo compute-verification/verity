@@ -141,7 +141,13 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     indices: dict[str, ProgramIndex] = {}
     by_inst: dict[int, ProgramIndex] = {}
     all_vus: list[dict] = []
-    for rid, inst in programs.items():
+    skipped: list[str] = []
+    for n_built, (rid, inst) in enumerate(programs.items()):
+        # the population build has its own budget, checked between request Programs (a B32 row's 33 Programs took > 18 min):
+        # the requests left are named, the draw runs over the ones built
+        if time.perf_counter() - t0 > float(limits.max_population_seconds):
+            skipped = [str(r) for r in list(programs)[n_built:]]
+            break
         pi = by_inst.get(id(inst)) or ProgramIndex(inst, program_dir=(program_dirs or {}).get(rid))
         by_inst[id(inst)] = indices[rid] = pi
         last = int(phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))["last_step"])
@@ -150,6 +156,9 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     pool, _not_exec = split_not_executed(all_vus, executed_prefix)
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
+    t_draw = time.perf_counter()                                             # the draw's budget starts here, never inside the build
+    print(f"[vu-export] population: {len(indices)}/{len(programs)} request Programs, {len(all_vus)} VUs, {len(picked)} drawn, "
+          f"{t_draw - t0:.0f} s" + (f"; {len(skipped)} Programs past the population budget" if skipped else ""), flush=True)
     _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
@@ -157,7 +166,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     fam_time: Counter = Counter()
     units: dict[str, list[dict]] = {}
     try:
-        for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t0)):
+        for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t_draw)):
             st = fam_stats.setdefault(picked[k]["family"], Counter())
             if res is None:
                 st["not_drawn_time_budget"] += 1
@@ -176,7 +185,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                     f.write_bytes(b)
             units.setdefault(digest_of[unit["request"]], []).append(unit)
             if k % 100 == 0:
-                print(f"[vu-export] {k}/{len(picked)} VUs, {time.perf_counter() - t0:.0f} s", flush=True)
+                print(f"[vu-export] {k}/{len(picked)} VUs, {time.perf_counter() - t_draw:.0f} s", flush=True)
     finally:
         _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
@@ -200,15 +209,19 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
             for u in units[d]:
                 f.write(json.dumps({x: u.get(x) for x in ("vu", "request", "i", "family", "spec", "stratum", "engine_step", "op_path", "row",
                                                           "phase", "result", "why", "inputs", "stored")}, separators=(",", ":"), default=str) + "\n")
+    t_extract = time.perf_counter()
     sets, inst_by_family = extract(root, out / "sets")
     for f, n in inst_by_family.items():
         fam_stats.setdefault(f, Counter())["instances"] += n
     summary = {"schema": VX.EXPORT_SCHEMA, "provenance": prov, "limits": dataclasses.asdict(limits),
                "population": {"vus": len(all_vus), "pool": len(pool), "not_executed": len(_not_exec),
+                              "programs": len(programs), "programs_built": len(indices), "programs_past_budget": skipped,
                               "pool_by_family": dict(Counter(v["family"] for v in pool)), "not_exported_families": VX.NOT_EXPORTED},
                "by_family": {f: dict(c) | {"seconds": round(fam_time[f], 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
-               "sets": sets, "wall_s": round(time.perf_counter() - t0, 3)}
+               "sets": sets, "wall_s": round(time.perf_counter() - t0, 3),
+               "timing": {"population_s": round(t_draw - t0, 3), "draw_s": round(t_extract - t_draw, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
+                          "rule": "max_seconds budgets the draw from after the population is built; max_population_seconds budgets the build"}}
     (out / "export.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
     return summary
 
