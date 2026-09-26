@@ -133,13 +133,16 @@ def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None,
     return x, w, accs
 
 
-def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> dict:
+SCHEMES = {"blake3": "blake3-keyed/row/v2", "sha256": "sha256/row/v1"}
+
+
+def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, scheme: str = "blake3") -> dict:
     """The three frame-v3 roots (and their domains) over the set's VUs ``[lo, lo + len(x))`` of a ``total``-VU batch (one
     sub-batch's trees, bound to that range)."""
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
 
     relation, hashauth, auth = _ligero()
     rel = relation(name)
@@ -149,19 +152,23 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> d
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
     manifest = instances_digest(name, total)
     counts = {"a": n, "b": n, "y": n}
-    schemas = {"a": "blake3-keyed/row/v2", "b": "blake3-keyed/row/v2", "y": ysch}
+    schemas = {"a": SCHEMES[scheme], "b": SCHEMES[scheme], "y": ysch}
     bind = {t: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
                                        lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
     dom = {n: CommitmentDomain(bind[n], auth.OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
-    fv = FrameV3({"a": Port(dom["a"], RowLeaf("blake3", ROLE_X, word_bits, K)),
-                  "b": Port(dom["b"], RowLeaf("blake3", ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
-    try:
+    fv = FrameV3({"a": Port(dom["a"], RowLeaf(scheme, ROLE_X, word_bits, K)),
+                  "b": Port(dom["b"], RowLeaf(scheme, ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
+    if scheme == "sha256":
+        def digest(row, role):
+            return sha256_row_digest(row, word_bits, role)
+    else:
+      try:
         import blake3
 
         def digest(row, role):
             from verity.commitments.rowleaf import blake3_row_key, row_bytes
             return blake3.blake3(row_bytes(row, word_bits), key=blake3_row_key(role)).digest()
-    except ImportError:
+      except ImportError:
         def digest(row, role):
             return blake3_row_digest(row, word_bits, role)
     y = [int(rel.y_public(int(a[-1]))) for a in accs]
@@ -175,7 +182,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> d
 
 
 def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0,
-          hi: int | None = None) -> dict:
+          hi: int | None = None, scheme: str = "blake3") -> dict:
     """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their statement as a ``flock-pure-instances/v1``
     file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range."""
     from verity.ml.tc.cast import f32_to_bf16_word
@@ -185,7 +192,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     pipe = PIPES[name]
     hi = total if hi is None else hi
     x, w, accs = draw(name, total, procs, cache, lo, hi)
-    st = statement(name, x, w, accs, total, lo)
+    st = statement(name, x, w, accs, total, lo, scheme)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
     ref = instances_ref(name, total)
     ref["range"] = [lo, hi]
@@ -211,7 +218,8 @@ if __name__ == "__main__":
     ap.add_argument("out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--cache")
+    ap.add_argument("--scheme", choices=sorted(SCHEMES), default="blake3")
     a = ap.parse_args()
-    h = write(a.out, a.relation, a.total, a.procs, a.cache)
+    h = write(a.out, a.relation, a.total, a.procs, a.cache, scheme=a.scheme)
     print(json.dumps({"relation": h["relation"], "vus": h["vus"], "roots": h["roots"],
                       "manifest_sha256": h["instances"]["manifest_sha256"]}))

@@ -41,9 +41,9 @@ B=/workspace/flock-gpu-link/flock/target/release/flock-pure-gpu; sha256sum $B | 
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
   python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER --runs $RUNS \
-    --procs $TH --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-backend-verifier-pod} 2>&1 | tee $O/serve-plan.log
+    --procs $TH --scheme ${SCHEME:-blake3} --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-backend-verifier-pod} 2>&1 | tee $O/serve-plan.log
 else
   python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/cell --points "$POINTS" --per-proof $PER --runs $RUNS \
-    --procs $TH --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-backend-verifier-pod} --prove-arg=--gpu ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
+    --procs $TH --scheme ${SCHEME:-blake3} --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-backend-verifier-pod} --prove-arg=--gpu ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
 fi
 true

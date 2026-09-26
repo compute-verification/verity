@@ -221,7 +221,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     headers, gen_s = [], 0.0
     for i, (lo, hi) in enumerate(subs):
         t0 = time.time()
-        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi))
+        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi, a.scheme))
         gen_s += time.time() - t0
     tg = _guard()
     guard = tg.Guard(sampler=_sampler).start()
@@ -318,7 +318,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme="frame-v3/blake3-keyed/row/v2", statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
+        scheme="frame-v3/" + instances.SCHEMES[a.scheme], statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"],
         rtt_method="net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
@@ -397,7 +397,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
         d = out / f"p{i}-{total}"
         d.mkdir(parents=True, exist_ok=True)
         for j, (lo, hi) in enumerate(subbatches(total, a.per_proof)):
-            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi)
+            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi, a.scheme)
             jobs.append((d, j))
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
@@ -428,6 +428,7 @@ def main(argv=None) -> int:
     ap.add_argument("--operator", default="")
     ap.add_argument("--rtt-target", default="", help="host:port on the verifier pod to time TCP connects to (its sshd)")
     ap.add_argument("--loopback", action="store_true", help="after the sweep, a loopback probe at the plateau point")
+    ap.add_argument("--scheme", default="blake3", choices=sorted(instances.SCHEMES), help="row-leaf schema of trees a and b")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)
