@@ -69,7 +69,7 @@ def test_other_reasons():
         C.split_statement("gemm-coordinate/k1536/sm80-mma-bf16")
     with pytest.raises(KeyError):
         C.family_of("E-new")
-    with pytest.raises(ValueError, match="not a census instance set"):
+    with pytest.raises(ValueError, match="not a census input set"):
         C.resolve_input_set("no-such-set")
 
 

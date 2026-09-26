@@ -175,7 +175,7 @@ def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
 def test_gemm_ids_fit_the_census_schema():
     import re
 
-    schema = json.loads((CENSUS / "schemas" / "instance_sets.schema.json").read_text())
+    schema = json.loads((CENSUS / "schemas" / "input_sets.schema.json").read_text())
     pattern = re.compile(schema["items"]["properties"]["subcircuit"]["pattern"])
     for sem in TM.GEMM_SEMANTICS:
         assert pattern.match(TM.subcircuit("gemm-coordinate", K=2048, semantics=sem).id)
