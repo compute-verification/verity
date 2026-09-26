@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -129,3 +129,33 @@ def test_native_seconds_per_instance() -> None:
     assert census.native_seconds_per_instance(h, 1536) == 2 * 1536 / 312e12
     with pytest.raises(ValueError):
         census.native_seconds_per_instance(h, 0)
+
+
+def test_workloads_are_the_regression_rows_template_mix() -> None:
+    """Each workload is a served vLLM configuration with its template mix: the verification units per VU family and bound
+    parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
+    to those expectations, and only families the census has a template for name one."""
+    import collections
+    import pathlib
+
+    repo = pathlib.Path(census.ROOT).parent
+    assert census.WORKLOADS, "no workloads"
+    for w in census.WORKLOADS.values():
+        x = json.loads((repo / w.source.expected).read_text(encoding="utf-8"))
+        rp = x["replay_partition"]
+        mix = collections.Counter()
+        for k, v in rp["strata"].items():
+            mix[k.split("|")[0]] += v["population"]
+        got = {e.vu_family + ("{" + ",".join(f"{k}={v}" for k, v in vars(e.parameters).items()) + "}" if vars(e.parameters) else ""): e.vus
+               for e in w.template_mix}
+        assert got == dict(mix) and w.vus == rp["population"]["vus"] == sum(e.vus for e in w.template_mix), w.id
+        assert x["row"] == w.source.row and (x.get("program_digest") or {}).get("program_digest_of_record") == w.source.program_digest
+        assert w.serving.datatype in census.DATATYPES and (w.serving.hardware is None or w.serving.hardware in census.HARDWARE)
+        for e in w.template_mix:
+            if e.subcircuit_template is not None:
+                t = census.SUBCIRCUIT_TEMPLATES[e.subcircuit_template]
+                assert set(vars(e.subcircuit_parameters)) == set(vars(t.parameters)) and e.subcircuit_parameters.K == e.parameters.K
+                assert e.subcircuits_per_vu == e.parameters.N
+    r101 = next(w for w in census.WORKLOADS.values() if w.source.row == 101)
+    gemm = sum(e.vus for e in r101.template_mix if e.vu_family == "Gemm_v1")
+    assert (r101.vus, gemm, r101.model.name, r101.serving.hardware_class) == (46558, 18400, "Llama-3.2-1B", "l40s")

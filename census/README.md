@@ -10,6 +10,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
 | `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") | `schemas/subcircuits.schema.json` |
+| `workloads.json` | served configurations: the model, the serving config (engine, batch, TP, datatype, hardware class) and the template mix, the verification units per subcircuit template and bound parameters, with the source run | `schemas/workloads.schema.json` |
 | `input_sets.json` | the frozen input set of each subcircuit (an input is one instance of the subcircuit): dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its inputs are of | `schemas/input_sets.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
@@ -35,6 +36,15 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 "Instance set" is now "input set", and a single instance is an "input". Recorded names keep the old word: the
 `instance-equiv/v1` artifact kind, a result's `instances` ref, and the `tier` field (`vu-k1536…`) are what fixtures and
 recorded results carry, so they are unchanged.
+
+## Workloads
+
+A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
+counts the verification units per VU family and bound parameters (`replay_partition.strata`). This is the mix that
+weights backend overheads into a per-workload headline. A family maps to a census subcircuit template only when the
+census has one: `Gemm_v1` is `gemm-coordinate` (N coordinates per VU); every other family's template is `null` until it
+is added. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
+that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing
 

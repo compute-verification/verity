@@ -1,0 +1,7184 @@
+[
+  {
+    "id": "vllm/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+    "display": "Gemma-2-2B · BF16 · L40S · TP1 · batch 8 (row #57)",
+    "model": {
+      "id": "gemma2-2b",
+      "name": "Gemma-2-2B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 8,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 656132,
+    "template_mix": [
+      {
+        "vu_family": "Bf16MulScalarTensor_v1",
+        "parameters": {
+          "N": 2304
+        },
+        "vus": 4150,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 256000,
+          "H": 2304
+        },
+        "vus": 4150,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 2304
+        },
+        "vus": 107900,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2304
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2304,
+          "N": 18432
+        },
+        "vus": 107900,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2304,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 18432
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2304,
+          "N": 4096
+        },
+        "vus": 107900,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2304,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 4096
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 9216,
+          "N": 2304
+        },
+        "vus": 107900,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 9216,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2304
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 4,
+          "D": 256
+        },
+        "vus": 107900,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 256
+        },
+        "vus": 107900,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 256000
+        },
+        "vus": 432,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 3744738,
+    "source": {
+      "row": 57,
+      "class": "FAIL",
+      "expected": "integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "records": "art:f6512887b6c0a9e88be9ef2dc5a31d0e35c16fb5aec11d6b4c2495bc87033645",
+      "programs": "art:5e925a59d73127305b8f6065c2ee519097c22b45c1e9d3452db338a39b65122d",
+      "program_digest": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53",
+      "reference": {
+        "branch": "lane/vllm-retire-v1",
+        "commit": "f0dea8e22ee8f7286f839824ae1bf0f7e46d4cf6",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "retire-v1",
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #57; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+    "display": "Llama-3.2-1B · BF16 · L40S · TP1 · batch 1 (row #101)",
+    "model": {
+      "id": "llama32-1b",
+      "name": "Llama-3.2-1B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 1,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 256,
+      "output_len": 32,
+      "arrivals": "mixed",
+      "sampling": "stoch-t0.8-p0.95",
+      "mode": "bi-eager"
+    },
+    "vus": 46558,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 496,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 128256,
+          "H": 2048
+        },
+        "vus": 287,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 128256
+        },
+        "vus": 32,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 128256
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 16384
+        },
+        "vus": 4592,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 16384
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 4592,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 3072
+        },
+        "vus": 4592,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 3072
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 8192,
+          "N": 2048
+        },
+        "vus": 4592,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 8192,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "GumbelTopPTokenSelect_v1",
+        "parameters": {
+          "V": 128256
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 9184,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 287,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 32,
+          "D": 64
+        },
+        "vus": 4592,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 64
+        },
+        "vus": 4592,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 8192
+        },
+        "vus": 4592,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 96,
+    "source": {
+      "row": 101,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+      "records": "art:a4ea1a18cfa0c841b77c9e05f98a22bc1fd20588c061005fb3244199bcc8e0e0",
+      "programs": "art:a9be8f7c514fc61cabcf913946a17f9d349a00ef3386fd33093ee186790b1802",
+      "program_digest": "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de",
+      "reference": {
+        "branch": "lane/vllm-integration",
+        "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+        "release": "r19-int-21",
+        "tag": "v1-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json, row #101; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager",
+    "display": "Llama-3.2-1B · BF16 · L40S · TP1 · batch 1 (row #11)",
+    "model": {
+      "id": "llama32-1b",
+      "name": "Llama-3.2-1B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 1,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 4096,
+      "output_len": 512,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 747358,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 18,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 18,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 19,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 19,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 20,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 20,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 21,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 21,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 22,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 22,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 23,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 23,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 24,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 24,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 25,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 25,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 26,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 26,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 27,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 27,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 28,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 28,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 29,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 29,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 30,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 30,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 31,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 31,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 32,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 32,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 33,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 33,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 34,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 34,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 35,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 35,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 36,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 64,
+          "BN": 128
+        },
+        "vus": 2032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 128256,
+          "H": 2048
+        },
+        "vus": 4607,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 128256
+        },
+        "vus": 512,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 128256
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 16384
+        },
+        "vus": 73712,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 16384
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 73712,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 3072
+        },
+        "vus": 73712,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 3072
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 8192,
+          "N": 2048
+        },
+        "vus": 73712,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 8192,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 147424,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 4607,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 32,
+          "D": 64
+        },
+        "vus": 73712,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 64
+        },
+        "vus": 73712,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 8192
+        },
+        "vus": 73712,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 128256
+        },
+        "vus": 512,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 0,
+    "source": {
+      "row": 11,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
+      "records": "art:bb37177f464bb0122c93724b13e91738fd5d19b24d0a84a5629c9e4e78894228",
+      "programs": "art:db4499e73020f5d761b55a801bc4d926eaad36c15099d90f170ffe00928aaaf7",
+      "program_digest": "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590",
+      "reference": {
+        "branch": "lane/vllm-cleanup-2",
+        "commit": "e15cb51291217963e6b3e3d39add496e6a5a5b05",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "cleanup2-pass5",
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #11; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+    "display": "Mistral-7B · BF16 · L40S · TP1 · batch 8 (row #60)",
+    "model": {
+      "id": "mistral-7b",
+      "name": "Mistral-7B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 8,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 1211108,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 16128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 5408,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 2112,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 18,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 704,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 192,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 13664,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 160,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 10720,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 8864,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 8064,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 8064,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6432,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 32768,
+          "H": 4096
+        },
+        "vus": 3758,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 14336,
+          "N": 4096
+        },
+        "vus": 120256,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 14336,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 4096
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 4096,
+          "N": 28672
+        },
+        "vus": 120256,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 28672
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 4096,
+          "N": 32768
+        },
+        "vus": 516,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 32768
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 4096,
+          "N": 4096
+        },
+        "vus": 120256,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 4096
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 4096,
+          "N": 6144
+        },
+        "vus": 120256,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 6144
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 4096,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 240512,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 4096,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 3758,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 32,
+          "D": 128
+        },
+        "vus": 120256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 128
+        },
+        "vus": 120256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 14336
+        },
+        "vus": 120256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 32768
+        },
+        "vus": 516,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 0,
+    "source": {
+      "row": 60,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "records": "art:a3c0e7c3063e3984320eae61c28fea17ccb22eb76888c2886c597c5f82511c04",
+      "programs": "art:7d8d822f5f033d24cdc4a4e3c5d960db3fd93e00cfa5161a04b209f5d27f2580",
+      "program_digest": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501",
+      "reference": {
+        "branch": "lane/vllm-v2-default",
+        "commit": "972893f636f3d61679e3645aaf46d032c07b827f",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "v2-flip",
+        "runs": [
+          "r20260923-174328-34d4"
+        ],
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #60; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager",
+    "display": "OLMoE-1B-7B · BF16 · L40S · TP1 · batch 32 (row #68)",
+    "model": {
+      "id": "olmoe-1b-7b",
+      "name": "OLMoE-1B-7B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 32,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed-arrivals",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 5830562,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 384,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 29616,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 80,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 5536,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 80,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 5040,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4336,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 64,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4032,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 2560,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 2016,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1760,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 384,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 288,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 21056,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 240,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 17216,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 240,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 15120,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 176,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 13264,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 160,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 10448,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 160,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 10080,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 9536,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 7088,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 50304,
+          "H": 2048
+        },
+        "vus": 10083,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 161328,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 50304
+        },
+        "vus": 1294,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 50304
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 6144
+        },
+        "vus": 161328,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 6144
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 64
+        },
+        "vus": 161328,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 64
+      },
+      {
+        "vu_family": "MoeExpertGemmW_v1",
+        "parameters": {
+          "E": 64,
+          "K": 1024,
+          "N": 2048
+        },
+        "vus": 1290624,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeExpertGemm_v1",
+        "parameters": {
+          "E": 64,
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 1290624,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeRouterTopK_v1",
+        "parameters": {
+          "E": 64,
+          "TOPK": 8,
+          "VPT": 8
+        },
+        "vus": 161328,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeSum_v1",
+        "parameters": {
+          "TOPK": 8,
+          "H": 2048
+        },
+        "vus": 161328,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 322656,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 332739,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 16,
+          "D": 128
+        },
+        "vus": 322656,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 1024
+        },
+        "vus": 1290624,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 50304
+        },
+        "vus": 1294,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 0,
+    "source": {
+      "row": 68,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json",
+      "records": "art:f17e1728043793540e35184977d16f501c9c69adf9516ea22dfe0ea20ae5fe4f",
+      "programs": "art:d3fa83361d58c702318733f7382fc41b47800ebe401c6d772e6caaad6ed72737",
+      "program_digest": "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf",
+      "reference": {
+        "branch": "lane/vllm-retire-v1",
+        "commit": "f0dea8e22ee8f7286f839824ae1bf0f7e46d4cf6",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "retire-v1",
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json, row #68; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager",
+    "display": "OLMoE-1B-7B · BF16 · L40S · TP1 · batch 32 (row #67)",
+    "model": {
+      "id": "olmoe-1b-7b",
+      "name": "OLMoE-1B-7B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 32,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 5745046,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 400,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 29632,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6352,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 96,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 80,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 48,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 4080,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 2608,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 32,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 2016,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 16,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1280,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 448,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 304,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 21344,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 16608,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 192,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 14368,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 176,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 12064,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 160,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 10768,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 112,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 8960,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 112,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 7056,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "full",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 112,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 16,
+          "KVH": 16,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 7056,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 50304,
+          "H": 2048
+        },
+        "vus": 9935,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 158960,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 2048
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 50304
+        },
+        "vus": 1308,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 50304
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 6144
+        },
+        "vus": 158960,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 6144
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 2048,
+          "N": 64
+        },
+        "vus": 158960,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 2048,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 64
+      },
+      {
+        "vu_family": "MoeExpertGemmW_v1",
+        "parameters": {
+          "E": 64,
+          "K": 1024,
+          "N": 2048
+        },
+        "vus": 1271680,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeExpertGemm_v1",
+        "parameters": {
+          "E": 64,
+          "K": 2048,
+          "N": 2048
+        },
+        "vus": 1271680,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeRouterTopK_v1",
+        "parameters": {
+          "E": 64,
+          "TOPK": 8,
+          "VPT": 8
+        },
+        "vus": 158960,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "MoeSum_v1",
+        "parameters": {
+          "TOPK": 8,
+          "H": 2048
+        },
+        "vus": 158960,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 317920,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2048,
+          "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}"
+        },
+        "vus": 327855,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 16,
+          "D": 128
+        },
+        "vus": 317920,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 1024
+        },
+        "vus": 1271680,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 50304
+        },
+        "vus": 1308,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 0,
+    "source": {
+      "row": 67,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json",
+      "records": "art:ca12debfd2b43a47f416f69e5539bb72f51a5b449745569faa53fe3164a7e8a2",
+      "programs": "art:a31f7b72eb62f9d66af6f4fc861b6b351f790ece9e730dd359c2a697898292b2",
+      "program_digest": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72",
+      "reference": {
+        "branch": "lane/vllm-retire-v1",
+        "commit": "f0dea8e22ee8f7286f839824ae1bf0f7e46d4cf6",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "retire-v1",
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json, row #67; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager",
+    "display": "Qwen2.5-1.5B · BF16 · L40S · TP1 · batch 1 (row #39)",
+    "model": {
+      "id": "qwen25-15b",
+      "name": "Qwen2.5-1.5B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 1,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "l40s",
+      "hardware": null,
+      "input_len": 4096,
+      "output_len": 512,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 1300198,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 10,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 11,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 12,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 13,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 14,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 15,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 16,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 17,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 18,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 18,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 19,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 19,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 20,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 20,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 21,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 21,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 22,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 22,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 23,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 23,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 24,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 24,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 25,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 25,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 26,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 26,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 27,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 27,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 28,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 28,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 29,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 29,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 30,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 30,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 31,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 31,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 32,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 32,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 33,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 33,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 34,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 34,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 35,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 35,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 36,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 36,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 37,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 37,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 38,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 38,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 39,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 39,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 40,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 40,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 41,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 41,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 42,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 42,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 43,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 43,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 44,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 44,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 45,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 45,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 46,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 46,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 47,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 47,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 48,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 48,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 49,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 49,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 50,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 50,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 51,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 51,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 52,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 52,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 53,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 53,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 54,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 54,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 55,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 55,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 56,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 56,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 57,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 57,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 58,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 58,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 59,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 59,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 60,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 60,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 61,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 61,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 62,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 62,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 63,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 63,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 64,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 64,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 65,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 65,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 66,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 66,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 67,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 67,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 68,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 68,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 69,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 69,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 70,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 70,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 71,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 71,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 72,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "full",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 28,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v3",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 12,
+          "KVH": 2,
+          "D": 128,
+          "BN": 64
+        },
+        "vus": 1764,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "BiasAdd_v1",
+        "parameters": {
+          "N": 2048
+        },
+        "vus": 128996,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 151936,
+          "H": 1536
+        },
+        "vus": 4607,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 1536,
+          "N": 151936
+        },
+        "vus": 512,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 1536,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 151936
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 1536,
+          "N": 1536
+        },
+        "vus": 128996,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 1536,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 1536
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 1536,
+          "N": 17920
+        },
+        "vus": 128996,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 1536,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 17920
+      },
+      {
+        "vu_family": "Gemm_v1",
+        "parameters": {
+          "K": 8960,
+          "N": 1536
+        },
+        "vus": 128996,
+        "subcircuit_template": "gemm-coordinate",
+        "subcircuit_parameters": {
+          "K": 8960,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "subcircuits_per_vu": 1536
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 1536,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 257992,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 1536,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 4607,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 12,
+          "D": 128
+        },
+        "vus": 128996,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 2,
+          "D": 128
+        },
+        "vus": 128996,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 8960
+        },
+        "vus": 128996,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 151936
+        },
+        "vus": 512,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 128996,
+    "source": {
+      "row": 39,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
+      "records": "art:38586a214c3026a002d6ee7eb5e0a0ae09668d2e6deb157676e4d8980158706c",
+      "programs": "art:37cd49bd1fd652447ac421ffc6967798f67fb9b1c2d9bd13aa0d3422d15cd905",
+      "program_digest": "fdb622a62644af5569b29096730aa26ddcb1b367de449d432b695ee7dd7eb443",
+      "reference": {
+        "branch": "lane/vllm-cleanup-2",
+        "commit": "e15cb51291217963e6b3e3d39add496e6a5a5b05",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "cleanup2-pass5",
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #39; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+    "display": "Qwen3-4B-FP8 · FP8 · H100 SXM5 · TP1 · batch 8 (row #74)",
+    "model": {
+      "id": "qwen3-4b-fp8",
+      "name": "Qwen3-4B-FP8"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 8,
+      "tp": 1,
+      "datatype": "e4m3",
+      "hardware_class": "h100",
+      "hardware": "h100-sxm5-80gb/e4m3",
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 7272082,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 216,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 33876,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 180,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 24480,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 180,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 22860,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 108,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 20016,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 108,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 13716,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 72,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 12924,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 72,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 9144,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 36,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 6048,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 1224,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 151936,
+          "H": 2560
+        },
+        "vus": 4035,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 2560,
+          "N": 151936,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 506,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2560,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 290520,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 128,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 5810400,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2560,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 4035,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 32,
+          "D": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "ScaledMmFp8Block_v1",
+        "parameters": {
+          "K": 2560,
+          "N": 19456,
+          "G": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "ScaledMmFp8Block_v1",
+        "parameters": {
+          "K": 2560,
+          "N": 6144,
+          "G": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "ScaledMmFp8Block_v1",
+        "parameters": {
+          "K": 4096,
+          "N": 2560,
+          "G": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "ScaledMmFp8Block_v1",
+        "parameters": {
+          "K": 9728,
+          "N": 2560,
+          "G": 128
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 9728
+        },
+        "vus": 145260,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 151936
+        },
+        "vus": 506,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 581040,
+    "source": {
+      "row": 74,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "records": "art:85924a1f3056537448b92cc012c7c3ea4721a82de3df90309cb47023ef26b627",
+      "programs": "art:9d14bd1194738e46c0c4e56b16ecb44187e19b77389f93fd19d7cb3f5d629eda",
+      "program_digest": "8159a2500a4a55b31912243e35d17d310d76496d3d160aca56e55e149f3b2ad7",
+      "reference": {
+        "branch": "lane/vllm-v2-default",
+        "commit": "972893f636f3d61679e3645aaf46d032c07b827f",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "v2-flip",
+        "runs": [
+          "r20260923-174328-34d4"
+        ],
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #74; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  },
+  {
+    "id": "vllm/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+    "display": "Qwen3-4B · BF16 · H100 SXM5 · TP1 · batch 8 (row #73)",
+    "model": {
+      "id": "qwen3-4b",
+      "name": "Qwen3-4B"
+    },
+    "serving": {
+      "engine": "vllm",
+      "batch": 8,
+      "tp": 1,
+      "datatype": "bf16",
+      "hardware_class": "h100",
+      "hardware": "h100-sxm5-80gb/bf16",
+      "input_len": 1024,
+      "output_len": 128,
+      "arrivals": "mixed",
+      "sampling": "greedy",
+      "mode": "bi-eager"
+    },
+    "vus": 6664748,
+    "template_mix": [
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 1,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 252,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 1,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 32652,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 2,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 180,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 2,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 24588,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 3,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 144,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 3,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 20664,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 4,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 108,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 4,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 13788,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 5,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 108,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 5,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 13716,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 6,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 72,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 6,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 12348,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 7,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 72,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 7,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 9144,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 8,
+          "last": "full",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 36,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 8,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 4680,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Attention_v2",
+        "parameters": {
+          "NB": 9,
+          "last": "partial",
+          "NH": 32,
+          "KVH": 8,
+          "D": 128,
+          "BN": 128,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+        },
+        "vus": 576,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Embedding_v1",
+        "parameters": {
+          "V": 151936,
+          "H": 2560
+        },
+        "vus": 3698,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 2560,
+          "N": 151936,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 476,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 2560,
+          "N": 19456,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 2560,
+          "N": 6144,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 4096,
+          "N": 2560,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "Gemm_v2",
+        "parameters": {
+          "K": 9728,
+          "N": 2560,
+          "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}"
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormFusedCuda_v2",
+        "parameters": {
+          "N": 2560,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 266256,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 128,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 5325120,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RMSNormTriton_v1",
+        "parameters": {
+          "N": 2560,
+          "EPS": "{\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}"
+        },
+        "vus": 3698,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 32,
+          "D": 128
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "RoPE_v1",
+        "parameters": {
+          "NHEADS": 8,
+          "D": 128
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "SiluMul_v1",
+        "parameters": {
+          "I": 9728
+        },
+        "vus": 133128,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      },
+      {
+        "vu_family": "TokenSelect_v1",
+        "parameters": {
+          "V": 151936
+        },
+        "vus": 476,
+        "subcircuit_template": null,
+        "subcircuit_parameters": null,
+        "subcircuits_per_vu": null
+      }
+    ],
+    "not_evaluable_vus": 0,
+    "source": {
+      "row": 73,
+      "class": "GREEN",
+      "expected": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "records": "art:1b095a95f751505055d184a1c9587c1700a8dda9e085b9b8aba0e7ccb4c19d0c",
+      "programs": "art:f94391548214af4edbea90da0bd676d46e853989454e0693e39499f8239e1289",
+      "program_digest": "fffc6132b225b712464ce16859b421d8c2602b9dee4d8fce351c33ed25351882",
+      "reference": {
+        "branch": "lane/vllm-v2-default",
+        "commit": "972893f636f3d61679e3645aaf46d032c07b827f",
+        "frozen": {
+          "branch": "lane/vllm-integration",
+          "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
+          "release": "r19-int-21",
+          "tag": "v1-reference"
+        },
+        "release": "v2-flip",
+        "runs": [
+          "r20260923-174328-34d4"
+        ],
+        "tag": "v2-reference"
+      },
+      "read_at_commit": "a57628fc0f75a37735c45c146ce5dfd831fd9a0a"
+    },
+    "sources": [
+      {
+        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #73; the counts docs/vllm-subcircuit-coverage.md cites"
+      }
+    ]
+  }
+]

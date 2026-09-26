@@ -1,5 +1,20 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: census workloads (served configurations and their template mix)
+
+- `census/workloads.json` and its schema hold the served configurations. There are nine vLLM regression rows with a
+  replay partition: #11, #39, #57, #60, #67, #68, #73, #74 and #101. Each entry records:
+  - the model;
+  - the serving config: engine, batch, TP, datatype, hardware class (`hardware` is null for L40S, which the census has no
+    line for), input and output lengths, arrivals, sampling and mode;
+  - the template mix: the verification units per VU family and bound parameters. `Gemm_v1{K,N}` maps to
+    `gemm-coordinate`, with N coordinates per VU;
+  - the source run: row, expected file, records and programs artifacts, program digest, reference, and the commit it
+    was read at.
+- The reader is `census.WORKLOADS`. A test keeps the file equal to the regression expectations (#101: 46,558 VUs, 18,400
+  of them `Gemm_v1`).
+- Nothing renders workloads yet. The per-workload headline (backend overheads weighted by the mix) is a later change.
+
 ## 2026-09-26: file-verified interactive results pay their protocol's rounds
 
 - Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round
