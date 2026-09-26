@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# flock-ir-lowering: a C-Flock cell of an IR template under frame-v3 (verity/flock-ir-frame/v1) through the bench spine
+# flock-ir-lowering: a C-Flock cell of an IR template under frame-v3 (verity/flock-ir-frame/v3) through the bench spine
 # (bench.drivers.c_interactive): the sweep verity_flock.ir_bench, prover on the line's GPU, verifier on a separate pod. The
 # cell's input set arrives as inputs/<content digest>.tar (research run --send); each pod stages its own instance files from it.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7400)
+# The prover builds Flock-CUDA for its own GPU's compute capability (SM, from nvidia-smi: 90 H100, 89 L40S / RTX 4090).
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${RESEARCH_RUN_DIR:-/tmp/flock-ir-cell}/out; W=/workspace/flock-ir; mkdir -p $O $W
 ROLE=${ROLE:-prover}; TEMPLATE=${TEMPLATE:?}; POINTS=${POINTS:?}; PER=${PER:-1073741824}; RUNS=${RUNS:-5}
 G=1; [ $ROLE = verifier ] && G=0
+SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-90}
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
-MODE=build GPU=$G bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+MODE=build GPU=$G SM=$SM bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=$TH

@@ -177,8 +177,51 @@ def test_gemm_ids_fit_the_census_schema():
 
     schema = json.loads((CENSUS / "schemas" / "input_sets.schema.json").read_text())
     pattern = re.compile(schema["items"]["properties"]["subcircuit"]["pattern"])
-    for sem in TM.GEMM_SEMANTICS:
+    for sem in [*TM.GEMM_SEMANTICS, *TM.GEMM_FP8]:
         assert pattern.match(TM.subcircuit("gemm-coordinate", K=2048, semantics=sem).id)
+
+
+FP8 = sorted(TM.GEMM_FP8)
+
+
+@pytest.mark.parametrize("sem", FP8)
+def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
+    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity.ml.tc model the backends chain with (ADA_E4M3_M16N8K32,
+    HOPPER_E4M3_K32), from the IR reference (verity.ml.kernels ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
+    from verity.ml.tc import models
+
+    sub = TM.subcircuit("gemm-coordinate", K=64, semantics=sem, tile=4)
+    s = IS.InputSet.open(G.generate(sub, 12, 5, tmp_path)["path"])
+    assert IS.verify(s.path)["ok"]
+    assert {k: (v["dtype"], v["words"]) for k, v in s.manifest["ports"].items()} == {"x": ("u8", 64), "w": ("u8", 64), "y": ("u32", 1)}
+    assert s.relation["definition"] == TM.FP8_DEFINITION and s.subcircuit.id == sub.id == TM.parse_subcircuit_id(sub.id).id
+    model = getattr(models, TM.GEMM_FP8[sem].model)
+    ins = s.instances()
+    for x, w, y in zip(ins["x"], ins["w"], ins["y"][:, 0]):
+        acc = 0
+        for c in range(0, 64, 32):
+            acc = model.step(acc, x[c:c + 32].tolist(), w[c:c + 32].tolist())
+        assert acc == int(y) and acc & 0x3FF == 0             # an FP8 accumulator word (B-Ligero's pack_public needs the low bits zero)
+    assert not ((ins["x"] & 0x7F) == 0x7F).any() and not ((ins["w"] & 0x7F) == 0x7F).any()
+    assert all(np.array_equal(ins["x"][i], ins["x"][4 * (i // 4)]) for i in range(12))
+    (ref_id, digest), = s.provenance["program_digests"].items()
+    assert ref_id == f'{sub.target().id}{{"K":64}}' and digest == TM.reference_digest(sub.target())
+
+
+def test_e4m3_words_are_pinned():
+    r = np.array([0, 126, 127, 253, 254, 0xFFFFFFFF], dtype=np.uint32)
+    assert TM.e4m3_finite_words(r).tolist() == [0, 126, 128, 254, 0, 15]
+    sub = TM.subcircuit("gemm-coordinate", K=64, semantics="sm89.mma.m16n8k32.e4m3")
+    assert sub.draw(G.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
+
+
+PINNED_ADA_X = [177, 191, 177, 63, 5, 227, 161, 160]
+
+
+def test_fp8_suite():
+    fp8 = G.SUITES["fp8"]
+    assert sorted((p["semantics"], p["K"], n) for _t, p, n in fp8) == sorted(
+        (s, K, n) for s in FP8 for K, ns in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in ns)
 
 
 def test_meta_and_ref(synthetic):

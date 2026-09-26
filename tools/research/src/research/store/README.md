@@ -426,7 +426,8 @@ prints the table; the groups are:
   `omitted` (list), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
-  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
+  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,

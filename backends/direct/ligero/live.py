@@ -70,7 +70,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .serialize import proof_bytes, read_proof, read_statement
+from .serialize import proof_buffers, proof_bytes, read_proof, read_proof_head, read_statement
 
 try:
     from . import protocol as pm
@@ -131,6 +131,11 @@ _TCP_CC_DATA = os.environ.get("LIVE_TCP_CC_DATA", "bbr")
 #: kernel enforces packet by packet (internal TCP pacing; no fq qdisc needed).  Measured: cubic + 400 Mbps cap on the
 #: 530 Mbps path did NOT avoid the loss state (a 57 s session); kept as a knob, not a fix.
 _PACING_MBPS = float(os.environ.get("LIVE_PACING_MBPS", "0") or 0)
+#: ``LIVE_DATA_CONNECTIONS`` (default 4): the prover's data connections per session, each with its own sender thread taking
+#: the next finished proof off one queue.  One flow from a pod reached ~1.7 Gb/s with a proof in flight against a probed
+#: 3.8-4.2 Gb/s (lane bligero-real-k, 2026-09-26): several flows keep the proof stream at the path's rate.  A verifier that
+#: does not advertise ``multi_data`` in its WELCOME gets one.
+_DATA_CONNECTIONS = max(1, int(os.environ.get("LIVE_DATA_CONNECTIONS", "4") or 1))
 _SO_MAX_PACING_RATE = getattr(socket, "SO_MAX_PACING_RATE", 47)     # Linux; ignored elsewhere
 
 
@@ -214,6 +219,18 @@ def send_frame(s: socket.socket, kind: bytes, payload: bytes = b"") -> int:
     data = _HDR.pack(len(payload), kind[0]) + payload
     s.sendall(data)
     return len(data)
+
+
+def send_frame_parts(s: socket.socket, kind: bytes, parts) -> int:
+    """``send_frame`` of the concatenation of ``parts`` (bytes / memoryviews) without building it: the header, then each part
+    written from its own memory."""
+    n = sum(len(p) if isinstance(p, (bytes, bytearray)) else p.nbytes for p in parts)
+    if n >= _MAX_FRAME:
+        raise ValueError("frame too large")
+    s.sendall(_HDR.pack(n, kind[0]))
+    for p in parts:
+        s.sendall(p)
+    return _HDR.size + n
 
 
 def recv_frame(s: socket.socket) -> tuple[bytes, bytes]:
@@ -461,21 +478,32 @@ class ProverSession:
             raise LiveError(f"expected WELCOME, got {_KIND_NAME.get(kind, kind)}")
         self.welcome = _json(payload)
         self.session_id = self.welcome["session_id"]
-        self.data = _connect(host, port, timeout, cc=_TCP_CC_DATA)       # the bulk proof stream: bbr by default (see _TCP_CC_DATA)
-        dj = json.dumps({"wire": WIRE_VERSION, "channel": "data", "session_id": self.session_id}).encode()
-        self._send(self.data, K_HELLO, struct.pack("<I", len(dj)) + dj)
-        kind, payload = self._recv(self.data)
-        if kind != K_WELCOME:
-            raise LiveError(f"data channel: expected WELCOME, got {_KIND_NAME.get(kind, kind)}: {payload[:200]!r}")
+        # the bulk proof stream: bbr by default (see _TCP_CC_DATA), on _DATA_CONNECTIONS flows when the verifier takes several
+        n_data = _DATA_CONNECTIONS if self.welcome.get("multi_data") else 1
+        self.datas: list[socket.socket] = []
+        for c in range(n_data):
+            d = _connect(host, port, timeout, cc=_TCP_CC_DATA)
+            dj = json.dumps({"wire": WIRE_VERSION, "channel": "data", "session_id": self.session_id, "index": c,
+                             "of": n_data}).encode()
+            self._send(d, K_HELLO, struct.pack("<I", len(dj)) + dj)
+            kind, payload = self._recv(d)
+            if kind != K_WELCOME:
+                raise LiveError(f"data channel {c}: expected WELCOME, got {_KIND_NAME.get(kind, kind)}: {payload[:200]!r}")
+            self.datas.append(d)
+        self.data = self.datas[0]
         self._commits: dict[int, tuple[bytes, bytes]] = {}
         self.rtts: list[float] = []                  # every open1 / open2 round trip of this session (seconds)
         self.wait = 0.0                              # seconds prove() was blocked on the network, summed over the sub-batches
         self._q: queue.Queue = queue.Queue()
         self._sender_error: BaseException | None = None
-        self._sender = threading.Thread(target=self._send_loop, name="live-proof-sender", daemon=True)
-        self._sender.start()
-        self.proof_send_seconds = 0.0
-        self.proof_serialize_seconds = 0.0           # proof_bytes() on the data-sender thread (off the prover's thread)
+        self._acct = threading.Lock()                # the senders' byte / time counters
+        self.proof_send_seconds = 0.0                # summed over the sender threads (they overlap)
+        self.proof_serialize_seconds = 0.0           # proof_buffers() on the sender threads (off the prover's thread)
+        self.proof_first_sent = self.proof_last_sent = None      # perf_counter of the first PROOF's start / the last one's end
+        self._senders = [threading.Thread(target=self._send_loop, args=(d,), name=f"live-proof-sender-{c}", daemon=True)
+                         for c, d in enumerate(self.datas)]
+        for t in self._senders:
+            t.start()
         self.ctrl_send_seconds = 0.0                 # the ctrl sender's sendall time (pipelined sessions)
         self.ctrl_queue_seconds = 0.0                # frames' wait in the ctrl queue before their sendall started
         self.sndbuf = _sockopt(self.ctrl, socket.SO_SNDBUF)    # the EFFECTIVE send buffer (the kernel caps _BUF at wmem_max)
@@ -494,27 +522,37 @@ class ProverSession:
         self.messages += 1
         return kind, payload
 
-    def _send_loop(self) -> None:
-        """The data-channel sender: serialises each queued proof (``proof_bytes``) and sends it -- both off the prover's
-        thread, so neither the 3.7-7.8 MB serialisation nor the transfer sits on the compute path."""
+    def _send_loop(self, sock: socket.socket) -> None:
+        """One data-channel sender: takes the next finished proof off the shared queue and writes it to its own connection
+        as a PROOF frame straight from the proof's arrays (``proof_buffers``: no copy of the opened columns) -- off the prover's
+        thread, so neither the framing nor the transfer sits on the compute path.  A ``None`` ends this connection with END
+        (the verifier's reader of it stops there)."""
         try:
             while True:
                 item = self._q.get()
                 if item is None:
+                    self.bytes_out += send_frame(sock, K_END, b"")
                     return
                 sub, meta, proof = item
                 t0 = time.perf_counter()
                 if hasattr(proof, "g") and hasattr(proof, "h"):          # a row-sharing pair: G's bytes then H's
                     gb, hb = proof_bytes(proof.g), proof_bytes(proof.h)
-                    pb, meta = gb + hb, {**(meta or {}), "pair_bytes": [len(gb), len(hb)]}
+                    parts, meta = [gb, hb], {**(meta or {}), "pair_bytes": [len(gb), len(hb)]}
                 else:
-                    pb = proof if isinstance(proof, (bytes, bytearray)) else proof_bytes(proof)
+                    parts = [proof] if isinstance(proof, (bytes, bytearray)) else proof_buffers(proof)
                 mj = json.dumps(meta or {}).encode()
-                payload = struct.pack("<II", sub, len(mj)) + mj + pb
+                parts = [struct.pack("<II", sub, len(mj)) + mj, *parts]
                 t1 = time.perf_counter()
-                self.proof_serialize_seconds += t1 - t0
-                self._send(self.data, K_PROOF, payload)
-                self.proof_send_seconds += time.perf_counter() - t1
+                n = send_frame_parts(sock, K_PROOF, parts)
+                t2 = time.perf_counter()
+                with self._acct:
+                    self.bytes_out += n
+                    self.messages += 1
+                    self.proof_serialize_seconds += t1 - t0
+                    self.proof_send_seconds += t2 - t1
+                    if self.proof_first_sent is None or t0 < self.proof_first_sent:
+                        self.proof_first_sent = t0
+                    self.proof_last_sent = t2 if self.proof_last_sent is None else max(self.proof_last_sent, t2)
         except BaseException as e:  # noqa: BLE001 -- reported at end()
             self._sender_error = e
 
@@ -722,15 +760,20 @@ class ProverSession:
         self._q.put((sub, meta, proof))
 
     def end(self, summary: dict | None = None) -> dict:
-        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification)."""
+        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification).  ``drain_seconds``:
+        how long the proofs still in flight took to leave after the prover's pass (the transfer tail the pass does not time)."""
+        t_drain = time.perf_counter()
         if self.pipelined and getattr(self, "_net", None) is not None:
             self._net.join(timeout=600.0)                    # the network thread owns ctrl until it has read the last OPEN2
             self._ctrl_q.put(None)
             self._ctrl_sender.join(timeout=600.0)            # every queued control frame is out before END
             if self._net_err is not None:
                 raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
-        self._q.put(None)
-        self._sender.join()
+        for _ in self._senders:
+            self._q.put(None)
+        for t in self._senders:
+            t.join()
+        self.drain_seconds = time.perf_counter() - t_drain
         if self._sender_error is not None:
             raise LiveError(f"proof sender failed: {self._sender_error!r}")
         self._send(self.ctrl, K_END, json.dumps(summary or {}).encode())
@@ -743,7 +786,7 @@ class ProverSession:
             break
         self.verdict = _json(payload)
         self.wall = time.perf_counter() - self.t_open
-        for s in (self.ctrl, self.data):
+        for s in (self.ctrl, *self.datas):
             try:
                 s.close()
             except OSError:
@@ -810,9 +853,18 @@ class BenchLive:
         # verifier then commits that many sub-batches ahead (HELLO "window"), so their openings can be in flight together
         self.window = 1
         self.per_rep: list[dict] = []        # one entry per live session: its own t.total / t.total_live / round-trip spread
+        self._streamed: set[int] = set()     # sub-batches of this rep whose PROOF already went out (``stream``)
         print(f"live verifier {args.verifier}: one session per recorded rep, {n_proofs} sub-batches each", flush=True)
 
+    def stream(self, si: int, proof) -> None:
+        """PROOF ``si`` onto the data connections the moment its sub-batch finishes (``pipeline.prove_many``'s ``on_done``),
+        while the prover works on the next ones; ``proved`` then does not queue it again."""
+        if self.sess is not None:
+            self.sess.submit(si, proof, {"prover_seconds": proof.timings.get("total")})
+            self._streamed.add(si)
+
     def begin_rep(self, rep: int) -> None:
+        self._streamed = set()
         extra = {"window": int(self.window)} if self.window > 1 else None
         self.sess = self.verifier.session(self.n_proofs, rep, extra) if rep > 0 else None
 
@@ -836,7 +888,8 @@ class BenchLive:
             return coins
         if self.pair and not isinstance(coins.h, LiveCoins):
             raise LiveError(f"sub-batch {si}: the hash side was not proved on the live verifier's coins")
-        self.sess.submit(si, proof, {"prover_seconds": proof.timings.get("total")})
+        if si not in self._streamed:
+            self.sess.submit(si, proof, {"prover_seconds": proof.timings.get("total")})
         adjust_timings(proof, coins)
         if coins.h is not None and coins.h.wait:
             t = proof.timings                               # the hash side's blocking waits (sequential path)
@@ -858,7 +911,11 @@ class BenchLive:
             "net_wait": agg.get("net_wait", 0.0), "t_total_live": total + agg.get("net_wait", 0.0),
             "rtt_ms_median": statistics.median(rtts) * 1e3 if rtts else None,
             "rtt_ms_p90": rtts[int(0.9 * (len(rtts) - 1))] * 1e3 if rtts else None, "rtt_ms_max": rtts[-1] * 1e3 if rtts else None,
-            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"]})
+            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"],
+            "drain_s": getattr(s, "drain_seconds", None), "bytes_out": s.bytes_out, "bytes_in": s.bytes_in, "round_trips": len(s.rtts),
+            "data_connections": len(s.datas), "proof_send_s": s.proof_send_seconds, "proof_serialize_s": s.proof_serialize_seconds,
+            "proof_stream_s": (s.proof_last_sent - s.proof_first_sent) if s.proof_first_sent is not None else None,
+            "streamed": len(self._streamed)})
         print(f"rep {rep}: live verifier {'ACCEPTED' if v['accepted'] else 'REJECTED'} {v['accepted_subbatches']}/{self.n_proofs} "
               f"({v['reason'][:160]}); net wait {s.wait:.3f}s over {len(s.rtts)} round trips (median rtt "
               f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms, p90 "
@@ -955,6 +1012,18 @@ def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> 
 # Verifier side: the server
 # ---------------------------------------------------------------------------------------------------------------------
 
+#: ``LIVE_VERIFY_NICE`` (default 10): the niceness of the verifier's ``ligero-verify`` children.  A session's Rust verifications
+#: (one per core) run while its later proofs and openings still arrive; at the default priority they starved the session's
+#: own receive and control threads (lane bligero-real-k: the proof stream reached ~2.5 Gb/s of a probed ~4 Gb/s and opening
+#: round trips reached 100-200 ms), so the network side keeps the CPU first.
+_VERIFY_NICE = int(os.environ.get("LIVE_VERIFY_NICE", "10") or 0)
+
+
+def _verify_nice() -> None:
+    if _VERIFY_NICE:
+        os.nice(_VERIFY_NICE)
+
+
 class RustVerifier:
     """``ligero-verify`` as a subprocess: ``verify`` per (statement, proof, coins) with the verifier's own coins, ``batch``
     on a session directory.  Wall and CPU time of the child are measured with ``wait4``."""
@@ -972,7 +1041,7 @@ class RustVerifier:
         """Run the child, read its output (stderr drained on a thread so neither pipe blocks), reap it with ``wait4`` for
         its own CPU time (user + system)."""
         t0 = time.perf_counter()
-        p = subprocess.Popen(argv, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(argv, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=_verify_nice)
         err_box: list[bytes] = []
         th = threading.Thread(target=lambda: err_box.append(p.stderr.read()), daemon=True)
         th.start()
@@ -1062,7 +1131,7 @@ class PythonVerifier:
 
 class Server:
     def __init__(self, listen: str, out: Path, rust: RustVerifier | PythonVerifier, jobs: int = 4, target_bits: float = 128.0,
-                 log=None, max_sessions: int = 64):
+                 log=None, max_sessions: int = 64, idle_exit: float | None = None, drop_files: bool = False):
         self.host, self.port = parse_url("tcp://" + listen) if not listen.startswith("tcp://") else parse_url(listen)
         self.out = Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
@@ -1078,6 +1147,9 @@ class Server:
         self._logf = (self.out / "serve.log").open("a")
         self.max_sessions = max_sessions
         self.stop = threading.Event()
+        self.idle_exit = idle_exit
+        self.drop_files = drop_files
+        self.last_activity = time.monotonic()
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}] {msg}"
@@ -1103,11 +1175,27 @@ class Server:
                 try:
                     conn, addr = srv.accept()
                 except socket.timeout:
+                    if self._idle():
+                        self.log(f"idle for {self.idle_exit:.0f}s after {len(self.sessions)} session(s): exiting (--idle-exit)")
+                        break
                     continue
+                self.last_activity = time.monotonic()
                 conn.settimeout(900.0)
                 threading.Thread(target=self._accept, args=(conn, addr), daemon=True).start()
         finally:
             srv.close()
+
+    def _idle(self) -> bool:
+        """``--idle-exit``: a session has finished, none is running, and nothing connected for ``idle_exit`` seconds."""
+        if self.idle_exit is None:
+            return False
+        with self.lock:
+            sessions = list(self.sessions.values())
+        if not any(x.done.is_set() for x in sessions) or not all(x.done.is_set() for x in sessions):
+            if sessions:
+                self.last_activity = time.monotonic()
+            return False
+        return time.monotonic() - self.last_activity > self.idle_exit
 
     def _accept(self, conn: socket.socket, addr) -> None:
         try:
@@ -1200,6 +1288,21 @@ def cmd_probe(args) -> int:
     out = {"verifier": _json(payload).get("verifier"), "verifier_dc": _json(payload).get("verifier_dc"), "prover_dc": pod_dc(),
            "connect_ms": (t_connected - t_conn) * 1e3,
            "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
+    # --pings N: the open-connection round trip -- an 8-byte NOP answered by the server's VERDICT on the connection the
+    # HELLO opened (no handshake, no slow start in it), N times back to back
+    pings = []
+    for _ in range(int(getattr(args, "pings", 0) or 0)):
+        t0 = time.perf_counter()
+        send_frame(s, K_NOP, b"\0" * 8)
+        kind, _payload = recv_frame(s)
+        pings.append((time.perf_counter() - t0) * 1e3)
+        if kind != K_VERDICT:
+            print(f"probe: ping answered by {_KIND_NAME.get(kind, kind)}", file=sys.stderr)
+            return 2
+    if pings:
+        out.update(ping_ms=pings, ping_ms_median=sorted(pings)[len(pings) // 2], ping_ms_min=min(pings),
+                   ping_method=f"ping over the open connection: {len(pings)} x (8-byte NOP -> VERDICT) on the live verifier's "
+                               f"probe channel after HELLO, median")
     blob = os.urandom(max(1, int(float(args.mb) * (1 << 20))))
     for i in range(int(args.repeat)):
         t0 = time.perf_counter()
@@ -1217,6 +1320,8 @@ def cmd_probe(args) -> int:
     if flows:
         out["mbps_median"] = sorted(f["mbps_to_ack"] for f in flows)[len(flows) // 2]
     print(json.dumps(out, indent=1))
+    if getattr(args, "out", None):
+        Path(args.out).write_text(json.dumps(out, indent=1))
     mbps = max(out.get("mbps_median", 1), 1)
     print(f"RTT {out['rtt_ms']:.1f} ms ({out['prover_dc']} -> {out['verifier_dc']}); one-flow throughput {mbps:.0f} Mbps "
           f"(median of {len(flows)} x {args.mb} MB; first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU session "
@@ -1250,6 +1355,7 @@ class Session(threading.Thread):
         self.sub: dict[int, dict] = {}                  # per sub-batch record (timestamps, bytes, verdict)
         self.futures: dict[int, Future] = {}
         self.data: socket.socket | None = None
+        self.datas: list[socket.socket] = []           # every data connection (a prover may open several: WELCOME multi_data)
         self.data_ready = threading.Event()
         self.proofs_done = threading.Event()
         self.done = threading.Event()
@@ -1259,6 +1365,9 @@ class Session(threading.Thread):
         self.errors: list[str] = []
         self.rejected_live: list[dict] = []
         self.n_proof_frames = 0
+        self.proofs_seen: set[int] = set()
+        self.check_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="live-check")
+        self.checks: list[Future] = []
 
     # -- io
     def _send(self, s: socket.socket, kind: bytes, payload: bytes) -> None:
@@ -1280,10 +1389,12 @@ class Session(threading.Thread):
         self.server.log(f"{self.id} {msg}")
 
     def attach_data(self, conn: socket.socket) -> None:
-        self.data = conn
+        with self.lock:
+            self.data = self.data or conn
+            self.datas.append(conn)
         self._send(conn, K_WELCOME, json.dumps({"session_id": self.id, "channel": "data"}).encode())
         self.data_ready.set()
-        threading.Thread(target=self._data_loop, name="live-data", daemon=True).start()
+        threading.Thread(target=self._data_loop, args=(conn,), name="live-data", daemon=True).start()
 
     def _fail(self, msg: str) -> None:
         self.errors.append(msg)
@@ -1318,7 +1429,7 @@ class Session(threading.Thread):
             except Exception as e:  # noqa: BLE001
                 self.log(f"finish failed: {type(e).__name__}: {e}")
             self.done.set()
-            for s in (self.conn, self.data):
+            for s in (self.conn, *self.datas):
                 if s is not None:
                     try:
                         s.close()
@@ -1344,7 +1455,7 @@ class Session(threading.Thread):
         self._send(self.conn, K_WELCOME, json.dumps({"session_id": self.id, "verifier": self.server.identity,
                                                      "verifier_host": socket.gethostname(), "verifier_dc": pod_dc(),
                                                      "verifier_core": "ligero-verify" if isinstance(self.server.rust, RustVerifier) else "python",
-                                                     "ligero_verify_sha256": self.server.rust.sha256}).encode())
+                                                     "ligero_verify_sha256": self.server.rust.sha256, "multi_data": True}).encode())
         # step 0: the coin commitments of the first ``window`` sub-batches, before anything from the prover.  ``window`` is the
         # prover's pipeline depth (HELLO "window"; 1 when absent = the strictly sequential session): with W sub-batches
         # committed ahead a pipelining prover has W of them in flight and their ROOT / TESTS arrive interleaved.  Each
@@ -1459,22 +1570,49 @@ class Session(threading.Thread):
         if not self.proofs_done.wait(timeout=600.0):
             raise LiveError(f"END received but only {self.n_proof_frames}/{self.n_proofs} PROOF frames arrived within 600 s")
 
-    def _data_loop(self) -> None:
+    def _data_loop(self, conn: socket.socket) -> None:
+        """One data connection's reader: PROOF frames until the prover's END on it (or, from a one-connection prover, until
+        every sub-batch's proof is in).  It only receives: each proof's live checks and files (``_on_proof``) run on the
+        session's check pool, so a connection is read at the path's rate however long a proof takes to check.  The frame
+        count is the session's, over all its data connections; ``proofs_done`` is set once every received proof is checked."""
         try:
-            while self.n_proof_frames < self.n_proofs:
-                kind, payload = self._recv(self.data)
+            last = False
+            while True:
+                with self.lock:
+                    if self.n_proof_frames >= self.n_proofs:
+                        break
+                kind, payload = self._recv(conn)
+                if kind == K_END:
+                    return
                 if kind != K_PROOF:
                     raise LiveError(f"data channel: expected PROOF, got {_KIND_NAME.get(kind, kind)}")
                 i, mlen = struct.unpack_from("<II", payload)
                 meta = json.loads(payload[8:8 + mlen].decode()) if mlen else {}
                 pb = payload[8 + mlen:]
-                self.n_proof_frames += 1
-                self._on_proof(i, meta, pb)
-            self.proofs_done.set()
+                with self.lock:
+                    if i in self.proofs_seen:
+                        raise LiveError(f"PROOF {i} twice")
+                    self.proofs_seen.add(i)
+                    self.n_proof_frames += 1
+                    last = self.n_proof_frames >= self.n_proofs
+                    self.checks.append(self.check_pool.submit(self._on_proof_checked, i, meta, pb))
+                if last:
+                    break
+            if last or self.n_proofs == 0:
+                for f in list(self.checks):
+                    f.result()
+                self.proofs_done.set()
         except (ConnectionError, OSError, LiveError, ValueError, struct.error) as e:
             self.errors.append(f"data channel: {type(e).__name__}: {e}")
             self.log(f"data channel aborted: {type(e).__name__}: {e}")
             self.proofs_done.set()
+
+    def _on_proof_checked(self, i: int, meta: dict, pb: bytes) -> None:
+        try:
+            self._on_proof(i, meta, pb)
+        except (LiveError, ValueError, OSError, struct.error) as e:
+            self.errors.append(f"PROOF {i}: {type(e).__name__}: {e}")
+            self.log(f"PROOF {i} refused: {type(e).__name__}: {e}")
 
     def _on_proof(self, i: int, meta: dict, pb: bytes) -> None:
         t_recv = time.time()
@@ -1511,7 +1649,8 @@ class Session(threading.Thread):
 
         def check(pf_bytes, cc, root, tests, fp_shape_=None, fp_sent=None):
             try:
-                pf = read_proof(pf_bytes, fp_shape=fp_shape_) if fp_shape_ is not None else read_proof(pf_bytes)
+                # the head is all these checks read (a pair's G carries its fingerprints behind the openings: read in full)
+                pf = read_proof(pf_bytes, fp_shape=fp_shape_) if fp_shape_ is not None else read_proof_head(pf_bytes)
             except ValueError as e:
                 return f"unreadable proof: {e}"
             if pf.coin_commit is None or pf.coins is None:
@@ -1572,6 +1711,12 @@ class Session(threading.Thread):
         return v
 
     def _finish(self) -> None:
+        for f in list(self.checks):                  # every received proof's live checks (they submit the Rust verifications)
+            try:
+                f.result(timeout=900.0)
+            except Exception:  # noqa: BLE001 -- recorded by _on_proof_checked
+                pass
+        self.check_pool.shutdown(wait=False)
         for i, f in sorted(self.futures.items()):
             try:
                 f.result(timeout=900.0)
@@ -1616,6 +1761,11 @@ class Session(threading.Thread):
         }
         (self.dir / "session.json").write_text(json.dumps({"verdict": verdict, "subbatches": subs}, indent=1, default=str))
         (self.dir / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str))
+        if self.server.drop_files:
+            # --drop-files: the session's statements and proofs (GBs per cell) leave the disk once the verdict is written
+            for f_ in self.dir.iterdir():
+                if f_.suffix in (".proof", ".hproof", ".stmt"):
+                    f_.unlink(missing_ok=True)
         with (self.server.out / "index.jsonl").open("a") as f:
             f.write(json.dumps({"session_id": self.id, "run_id": self.hello.get("run_id"), "lane": self.hello.get("lane"),
                                 "relation": self.hello.get("relation"), "rep": self.hello.get("rep"), "accepted": accepted,
@@ -1638,7 +1788,8 @@ def cmd_serve(args) -> int:
     core = rust if rust is not None else PythonVerifier(args.device)
     if rust is None:
         print("WARNING: --python-verifier: the Python file verifier shares code with the prover; verdicts are NOT independent", flush=True)
-    srv = Server(args.listen, Path(os.path.expandvars(args.out)), core, jobs=args.jobs, target_bits=args.target_bits)
+    srv = Server(args.listen, Path(os.path.expandvars(args.out)), core, jobs=args.jobs, target_bits=args.target_bits,
+                 idle_exit=getattr(args, "idle_exit", None), drop_files=bool(getattr(args, "drop_files", False)))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -2453,6 +2604,10 @@ def main(argv=None) -> int:
     s.add_argument("--jobs", type=int, default=max(1, min(8, (os.cpu_count() or 2) - 1)), help="concurrent ligero-verify processes")
     s.add_argument("--threads", type=int, default=1, help="--threads inside each ligero-verify")
     s.add_argument("--target-bits", type=float, default=128.0, help="default batch target when the prover's HELLO names none")
+    s.add_argument("--idle-exit", type=float, default=None, metavar="S",
+                   help="exit once a session has finished and none has run or connected for S seconds (a recorded verifier run)")
+    s.add_argument("--drop-files", action="store_true",
+                   help="delete a session's statements and proofs once its verdict is written (the verdicts and digests stay)")
     s.set_defaults(fn=cmd_serve)
     n = sub.add_parser("negatives", help="honest control + malicious provers against a live verifier")
     n.add_argument("--verifier", required=True)
@@ -2479,6 +2634,8 @@ def main(argv=None) -> int:
     p.add_argument("--mb", type=float, default=16, help="MB per NOP frame (0.5 mimics a test message, 3.7 a proof)")
     p.add_argument("--repeat", type=int, default=4)
     p.add_argument("--note", default=None, help="shows in the verifier's log line")
+    p.add_argument("--pings", type=int, default=0, help="open-connection round trips (8-byte NOP -> VERDICT) before the flows")
+    p.add_argument("--out", default=None, help="write the probe's JSON here")
     p.set_defaults(fn=cmd_probe)
     c = sub.add_parser("chalbench", help="the synthetic many-round challenge stream against a live verifier (lane live-2, for Ligerito)")
     c.add_argument("--verifier", required=True)

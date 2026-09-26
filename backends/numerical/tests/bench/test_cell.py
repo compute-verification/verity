@@ -49,8 +49,8 @@ def test_plan_wraps_the_flock_cell_script():
 
 
 @pytest.mark.parametrize("kw,why", [
-    (dict(statement="attention-head/d64-bn128/sm80-fa2-bf16+frame-v3/blake3-keyed"), "no lowering of AttentionHead_v3"),
-    (dict(statement="gemm-coordinate/k2048/sm90-mma-bf16+frame-v3/blake3-keyed"), "K = 2048"),
+    (dict(statement="gumbel-top-p-token-select/v128256/fp32+vllm-v1"), "binding its rows under vllm-v1 is not wired yet"),
+    (dict(statement="gemm-coordinate/k512/sm90-mma-bf16+frame-v3/blake3-keyed"), "CN3"),
     (dict(statement="gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/sha-256"), "keyed-BLAKE3"),
     (dict(input_set="bench-instances-fp8-ada-v1"), "is of gemm-coordinate/k1536/sm89-mma-e4m3"),
     (dict(verifier=None), "separate pod"),
@@ -79,11 +79,36 @@ def test_an_input_set_needs_the_lowerings_stage(monkeypatch):
     mod = C.LW.registry("C-Flock").module("gemm-coordinate")
     monkeypatch.setattr(mod, "supports", lambda s, c: None)
     monkeypatch.setattr(mod, "relation", lambda s, c: "bf16-ampere-k2048")
+    monkeypatch.delattr(mod, "stage", raising=False)
     with pytest.raises(C.NotSupported, match="no stage"):
         C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p", **FLOCK)
     monkeypatch.setattr(mod, "stage", lambda s, lo, hi, out: out, raising=False)
     cell = C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p", **FLOCK)
     assert cell.input_set["kind"] == "set" and cell.relation == "bf16-ampere-k2048"
+
+
+def test_plan_wraps_the_b_ligero_cell_script(tmp_path, monkeypatch):
+    """B-interactive on a captured #101 slice: the K = 2048 fold with the keyed-BLAKE3 xob circuit, the set shipped to the prover
+    as a tarball (--send), the verifier on its own pod, the loopback probe on."""
+    from verity_numerical.bench.drivers import b_interactive as B
+    monkeypatch.setattr(B, "STAGE_DIR", tmp_path)
+    kw = dict(verifier="vy-bl-verifier", verifier_addr="10.0.0.3:7000", campaign="c", lane="bligero-real-k", backend_args=["L=4096", "PP=4"])
+    cell = C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-bl-a100", **kw)
+    assert (cell.family, cell.relation, cell.input_set["kind"]) == ("B-Ligero", "bf16-ampere-x4-k2048+blake3-xob", "set")
+    v, p = cell.jobs
+    assert (v["pod"], p["pod"]) == ("vy-bl-verifier", "vy-bl-a100") and "ROLE=verifier" in v["command"]
+    tar = Path(p["send"][0])
+    assert tar.is_file() and p["argv"][p["argv"].index("--send") + 1] == str(tar)
+    assert {"ROLE=prover", "REL=bf16-ampere-x4-k2048+blake3-xob", "VERIFIER=10.0.0.3:7000", "LOOPBACK=1", "L=4096", f"SET={tar.name}",
+            "START=1024", "OPERATOR=bligero-real-k"} <= set(p["command"])
+    assert (Path(C.LW.REPO) / B.SCRIPT).is_file()
+    with pytest.raises(C.NotSupported, match="vllm-v1"):
+        C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+vllm-v1/sha-256", str(SLICE), "vy-bl-a100", **kw)
+    with pytest.raises(C.NotSupported, match="producing lane"):
+        C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/sha-256", str(SLICE), "vy-bl-a100", **{**kw, "lane": None})
+    doc = {"workload_fingerprint": {"relation": "GemmCoordinate<2048> over sm80.mma.m16n8k16.bf16 (4 steps per column)",
+                                    "statement_relation": "bf16-ampere-x4-k2048+blake3-xob"}}
+    assert not any("relation" in p_ for p_ in C.check(cell, doc))
 
 
 def test_input_set_directories_resolve():

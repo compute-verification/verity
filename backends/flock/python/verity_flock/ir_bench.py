@@ -28,7 +28,7 @@ from pathlib import Path
 from .bench import PER_PROOF_LOG2, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
-STATEMENT = "verity/flock-ir-frame/v2"
+STATEMENT = "verity/flock-ir-frame/v3"
 SCHEME = "frame-v3/blake3-keyed"
 
 
@@ -40,6 +40,8 @@ def _lowering(template: str, input_set):
     from verity_numerical.bench import lowerings
 
     mod = lowerings.registry("C-Flock").module(template)
+    if hasattr(mod, "lowering_for_set"):
+        return mod.lowering_for_set(input_set)
     return mod.frame_lowering(input_set.subcircuit)
 
 

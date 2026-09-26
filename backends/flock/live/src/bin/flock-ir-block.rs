@@ -431,7 +431,7 @@ fn load_case(ctx: &Ctx, name: &str) -> Option<Value> {
         })),
         "eps_forged_with_every_word_recomputed" => {
             let (f, tail) = forge_eps(&ctx.inst, &ctx.cm, &net, &ctx.tables);
-            let forged = CutMap { words: ctx.cm.words, tail, unit_in: ctx.cm.unit_in.clone(), unit_out: ctx.cm.unit_out.clone() };
+            let forged = CutMap { tail, ..ctx.cm.clone() };
             let consistent = check_cuts(&f, &forged, &ctx.tables).is_ok() && (0..f.units).all(|g| net.outputs(f.input(g)) == f.output(g));
             let r = verdict(&f);
             return Some(json!({"case": name, "expect": "refused at load (the pinned tail)", "consistent_under_forged_tail": consistent,

@@ -78,6 +78,7 @@ PIECES: dict[str, Callable] = {
     "RopeOut_v1": _rope_out,
     "RopeOutAdd_v1": _rope_out_add,
     "SiluMulBf16_v1": _silu_mul,
+    "AmpereBF16TcDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:])),
 }
 
 
@@ -179,6 +180,11 @@ class Units:
     ret_gates: list[int] = field(repr=False)
     cut: list[int] = field(default_factory=list)
     tail: list = field(default_factory=list, repr=False)
+    #: ``(cut word, input leaf)`` for input leaves the units read as public words (the verifier knows them)
+    public: list = field(default_factory=list)
+    #: per output leaf, the tail gate that computes it (the verifier's own), when the units return none
+    tail_rets: list = field(default_factory=list)
+    builder: Callable | None = field(default=None, repr=False)
 
     @property
     def n(self) -> int:
@@ -186,6 +192,8 @@ class Units:
 
     def circuit(self) -> Circuit:
         """The unit circuit: inputs ``in0 .. in{k-1}``, outputs ``out0 ..`` (one word per port)."""
+        if self.builder is not None:
+            return self.builder()
         C = Circuit()
         ins = [C.input(f"in{j}", w) for j, w in enumerate(self.in_widths)]
         wires = dict(zip(self.arg_gates, ins))
@@ -315,6 +323,61 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     in_widths = [_leaf_width(target, p) if k == "leaf" else width[K[p]] for k, p in ins[0]]
     ret_gates = [rets[p] if k == "ret" else K[p] for k, p in outs[0]]
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
+
+
+TC_PRIM = "AmpereBF16TcDot16_v1"
+
+
+def tc_units(target) -> Units:
+    """``target`` as tensor-core k-steps: every ``AmpereBF16TcDot16`` gate is one unit, ports in operand order: its 16 ``b``
+    operands from input leaves (``("leaf", p)``), or ``("zero", 0)`` where the IR pads with a constant zero word; its 16 ``a``
+    operands and its accumulator as cut words; its result a cut word. Input leaves read as ``a`` operands (the query) are public
+    words (:attr:`Units.public`); every other gate is the native tail, which computes the outputs (:attr:`Units.tail_rets`)."""
+    _prog, call = standalone(target)
+    args, rets = list(call.args), list(call.returns)
+    gates = live_gates(call)
+    by = {g.index: g for g in gates}
+    arg_pos = {g: i for i, g in enumerate(args)}
+    tcs = [g for g in gates if g.prim.id == TC_PRIM]
+    if not tcs:
+        raise ValueError(f"{getattr(target, 'id', target)}: no {TC_PRIM} gate")
+
+    def zero_word(o):
+        g = by.get(o)
+        return g is not None and getattr(g.prim, "family", None) == "Const" and int(g.prim.evaluate()) == 0
+
+    public_args: set[int] = set()
+    cut_set: set[int] = set()
+    for g in tcs:
+        acc, a, b = g.operands[0], g.operands[1:17], g.operands[17:33]
+        if any(o not in arg_pos and not zero_word(o) for o in b):
+            raise ValueError(f"tensor-core gate {g.index}: a b operand that is neither an input leaf nor a zero word")
+        for o in (acc, *a):
+            (public_args if o in arg_pos else cut_set).add(o)
+        cut_set.add(g.index)
+    tc_idx = {g.index for g in tcs}
+    tail = [g for g in gates if g.index not in tc_idx]
+    if any(o in arg_pos for g in tail for o in g.operands):
+        raise ValueError("a gate outside the tensor-core steps reads an input leaf")
+    if any(o in arg_pos or o in tc_idx for o in rets):
+        raise ValueError("an output leaf is not computed by the tail")
+    K = sorted(public_args, key=arg_pos.__getitem__) + sorted(cut_set)
+    kpos = {g: k for k, g in enumerate(K)}
+    ins = [[("leaf", arg_pos[o]) if o in arg_pos else ("zero", 0) for o in g.operands[17:33]] + [("cut", kpos[o]) for o in g.operands[:17][1:]]
+           + [("cut", kpos[g.operands[0]])] for g in tcs]
+    outs = [[("cut", kpos[g.index])] for g in tcs]
+
+    def builder() -> Circuit:
+        C = Circuit()
+        b = [C.input(f"in{j}", 16) for j in range(16)]
+        a = [C.input(f"in{16 + j}", 16) for j in range(16)]
+        acc = C.input("in32", 32)
+        C.output("out0", fp.tc_dot16(C, acc, a, b))
+        return C
+
+    return Units(target, [16] * 32 + [32], [32], ins, outs, (TC_PRIM,), [tcs[0]], [], [], K, tail,
+                 public=[(kpos[o], arg_pos[o]) for o in sorted(public_args, key=arg_pos.__getitem__)],
+                 tail_rets=list(rets), builder=builder)
 
 
 def _leaf_width(target, pos: int) -> int:
@@ -480,10 +543,11 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     return lay
 
 
-def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
+def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
-    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``; a cut lowering ends with one line
-    ``CUT <canonical JSON>`` (:attr:`Lowering.cut`), so the netlist's sha256 pins its cut structure (red-team-flock-2 IR4)."""
+    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
+    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
+    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -492,6 +556,8 @@ def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
+    if leaves is not None:
+        lines.append("LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")))
     if cut is not None:
         lines.append("CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines) + "\n"
@@ -499,6 +565,20 @@ def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
 
 def digest(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _flat_ports(t) -> list[list[int]]:
+    """``[leaves, bits]`` per port of a type: a Value or (nested) Array of Values is one port; a Tuple, one per field."""
+    from verity.ir.types import Array, Tuple, Value
+
+    if isinstance(t, Tuple):
+        return [x for f in t.fields for x in _flat_ports(f)]
+    n = 1
+    while isinstance(t, Array):
+        n, t = n * t.n, t.elem
+    if not isinstance(t, Value):
+        raise ValueError(f"a port of type {t} is not an array of words")
+    return [[n, t.w]]
 
 
 def slice_words(words, nbits: int) -> list[int]:
@@ -568,32 +648,52 @@ class Lowering:
     def cut(self) -> dict | None:
         """The cut structure, ``None`` without a cut: ``words`` (the cut word count), ``tail`` (:func:`tail_program`, its
         constants included) and, per instance-local unit, ``in`` / ``out`` its cut ports as ``[column, cut word]`` (input
-        columns; output columns from the first output word)."""
+        columns; output columns from the first output word); for a template whose units return no output leaf (tensor-core
+        steps), ``public`` the cut words that are input leaves as ``[cut word, leaf]`` and ``outputs`` each output leaf's tail
+        slot."""
         U, lay = self.units, self.layout
         if not U.cut:
             return None
-        return {"words": len(U.cut), "tail": tail_program(self),
-                "in": [[[lay.in_port_cols[j], p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.in_src],
-                "out": [[[lay.out_port_cols[j] - lay.out_col * WORD, p] for j, (k, p) in enumerate(src) if k == "cut"]
-                        for src in U.out_src]}
+        prog, slot = _tail(self)
+        cut = {"words": len(U.cut), "tail": prog,
+               "in": [[[lay.in_port_cols[j], p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.in_src],
+               "out": [[[lay.out_port_cols[j] - lay.out_col * WORD, p] for j, (k, p) in enumerate(src) if k == "cut"]
+                       for src in U.out_src]}
+        if U.tail_rets:
+            cut |= {"public": [list(x) for x in U.public], "outputs": [slot[g] for g in U.tail_rets]}
+        return cut
+
+    @property
+    def leaves(self) -> dict:
+        """The units' leaf maps: per instance-local unit, ``in`` its leaf input ports' and ``out`` its returned-output ports'
+        instance leaves (flat positions in parameter / return order), and ``in_ports`` / ``out_ports`` each parameter's and
+        return's ``[leaves, bits]``: what places every unit on its instance's rows and outputs."""
+        params, ret = self.definition.signature()
+        U = self.units
+        return {"in": [[p if k == "leaf" else -1 for k, p in s if k in ("leaf", "zero")] for s in U.in_src],
+                "out": [[p for k, p in s if k == "ret"] for s in U.out_src],
+                "in_ports": [x for _, t in params for x in _flat_ports(t)], "out_ports": _flat_ports(ret)}
 
     @property
     def text(self) -> str:
-        return netlist(self.layout, self.name, self.cut)
+        return netlist(self.layout, self.name, self.cut, self.leaves)
 
     @property
     def sha256(self) -> str:
         return digest(self.text)
 
     def _index(self, src: list[list[tuple]], n_leaf: int) -> np.ndarray:
-        """``(U, ports)`` column indices into ``[leaves | cut words]``."""
-        return np.asarray([[p if k in ("leaf", "ret") else n_leaf + p for k, p in u] for u in src], dtype=np.int64)
+        """``(U, ports)`` column indices into ``[leaves | cut words | 0]`` (a zero leaf reads the last, all-zero column)."""
+        zero = n_leaf + len(self.units.cut)
+        return np.asarray([[p if k in ("leaf", "ret") else zero if k == "zero" else n_leaf + p for k, p in u] for u in src], dtype=np.int64)
 
     def unit_inputs(self, flat_inputs: np.ndarray, cuts: np.ndarray | None = None) -> list[np.ndarray]:
         """Per unit port, the lane-major words of every (instance, unit) lane, instance-major: ``flat_inputs[i]`` is instance i's
         input leaves in parameter order, ``cuts[i]`` its cut words (``cut_words``)."""
         flat_inputs = np.asarray(flat_inputs, dtype=np.uint64)
-        both = flat_inputs if cuts is None else np.concatenate([flat_inputs, np.asarray(cuts, dtype=np.uint64)], axis=1)
+        n = flat_inputs.shape[0]
+        cuts = np.zeros((n, len(self.units.cut)), dtype=np.uint64) if cuts is None else np.asarray(cuts, dtype=np.uint64)
+        both = np.concatenate([flat_inputs, cuts, np.zeros((n, 1), dtype=np.uint64)], axis=1)
         idx = self._index(self.units.in_src, flat_inputs.shape[1])
         lanes = both[:, idx]                                              # (n, U, ports)
         return [lanes[:, :, j].reshape(-1) for j in range(idx.shape[1])]
@@ -612,7 +712,7 @@ class Lowering:
         n = flat_inputs.shape[0]
         U = self.units.n
         outs, ok = evaluate_layout(self.layout, self.unit_inputs(flat_inputs, cuts), n * U, flip)
-        n_ret = 1 + max(p for u in self.units.out_src for k, p in u if k == "ret")
+        n_ret = 1 + max((p for u in self.units.out_src for k, p in u if k == "ret"), default=-1)
         res = np.zeros((n, n_ret), dtype=np.uint64)
         cut_out = np.zeros((n, len(self.units.cut)), dtype=np.uint64) if cuts is None else np.array(cuts, dtype=np.uint64)
         for j, o in enumerate(outs):
@@ -623,12 +723,13 @@ class Lowering:
         return res, cut_out, ok
 
 
-def lowering(definition, name: str, cut: Callable | None = None, group: int = 1) -> Lowering:
-    """The template's units, their circuit and layout; cut words form their own port groups (after the leaf inputs and after
-    the returned outputs), so private inputs, public outputs and cut words are separate aligned regions."""
-    U = units(definition, cut, group)
+def lowering(definition, name: str, cut: Callable | None = None, group: int = 1, unit_fn: Callable | None = None) -> Lowering:
+    """The template's units (``units``, or ``unit_fn(definition)``), their circuit and layout; cut words form their own port
+    groups (after the leaf inputs and after the returned outputs), so private inputs, public outputs and cut words are separate
+    aligned regions."""
+    U = unit_fn(definition) if unit_fn else units(definition, cut, group)
     C = U.circuit()
-    n_leaf = sum(1 for k, _ in U.in_src[0] if k == "leaf")
+    n_leaf = sum(1 for k, _ in U.in_src[0] if k in ("leaf", "zero"))
     n_ret = sum(1 for k, _ in U.out_src[0] if k == "ret")
     lay = layout(C, [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))],
                  [n_leaf] if n_leaf < len(U.in_widths) else None, [n_ret] if n_ret < len(U.out_widths) else None)
@@ -656,14 +757,21 @@ def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
 #: module pins.
 TABLES = {"rsq": "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
           "sqrt": "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
-          "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55"}
+          "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55",
+          "ex2": "b2a42c4a626469c986e33e43f16f41bde9d84de94347cd9ceaa1bd68d36bcdf0"}
 #: The primitives the Rust tail interpreter implements.
-TAIL_PRIMS = ("F32Add_v1", "F32Mul_v1", "F32Fma_v1", "F32Div_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1", "DivFullRcp_v1", "DivFullScaleA_v1")
+TAIL_PRIMS = ("F32Add_v1", "F32Mul_v1", "F32Fma_v1", "F32Div_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1", "DivFullRcp_v1", "DivFullScaleA_v1",
+              "F32AddFtz_v1", "F32SubFtz_v1", "F32MulFtz_v1", "F32FmaFtz_v1", "F32FmaSubFtz_v1", "F32Max_v1", "GuardNegInfZero_v1",
+              "MufuEx2Ftz_v1", "Fa2InvSum_v1", "F2fpBf16_v1")
 
 
 def tail_program(low: Lowering) -> list[list]:
     """The native tail as ops ``[out slot, primitive id, operand slots...]`` in canonical order over slots ``[cut words |
     temporaries]`` (constants ``[slot, "Const", value]``): what the verifier evaluates on the units' cut words."""
+    return _tail(low)[0]
+
+
+def _tail(low: Lowering) -> tuple[list[list], dict[int, int]]:
     U = low.units
     slot = {g: k for k, g in enumerate(U.cut)}
     prog = []
@@ -676,20 +784,21 @@ def tail_program(low: Lowering) -> list[list]:
             prog.append([slot[g.index], g.prim.id, *[slot[o] for o in g.operands]])
         else:
             raise NoPiece(f"the native tail's primitive {g.prim.id} has no verifier implementation")
-    return prog
+    return prog, slot
 
 
 def write_tables(out_dir) -> dict:
-    """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``) for the verifier; checks :data:`TABLES`."""
+    """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``, ``ex2.u32``) for the verifier; checks
+    :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity_vllm.program.kernels import rms_relation
+    from verity_vllm.program.kernels import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    t = rms_relation.tables("cuda")
+    t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name, want in TABLES.items():
-        b = np.ascontiguousarray(getattr(t, name), dtype="<u4").tobytes()
+        b = np.ascontiguousarray(getattr(fa2 if name == "ex2" else t, name), dtype="<u4").tobytes()
         if hashlib.sha256(b).hexdigest() != want:
             raise ValueError(f"MUFU table {name}: sha256 differs from the pinned one")
         (out / f"{name}.u32").write_bytes(b)

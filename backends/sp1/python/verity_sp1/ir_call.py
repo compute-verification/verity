@@ -32,6 +32,7 @@ from verity.evaluation.reference import standalone_call
 from verity.ir.defs import SpecializedDefinition
 from verity.ir.evaluate import evaluate_call
 from verity.ir.types import Tuple as TupleT
+from verity.proofs.elem_bf16 import make_elem_bf16_gate_set
 from verity.proofs.families import make_tc_ampere_bf16_gate_set
 from verity.proofs.gateset import GateSet
 from verity.proofs.lowering import to_statement_v3
@@ -56,7 +57,7 @@ from verity.proofs.typed_obligation import (
 )
 from verity.proofs.wire import encode_statement_v3
 
-__all__ = ["FAMILIES", "OPS", "TABLE_GATES", "TC_OPS", "Instance", "Lowered", "Table", "lower_call"]
+__all__ = ["ELEM_OPS", "FAMILIES", "OPS", "TABLE_GATES", "TC_OPS", "Instance", "Lowered", "Table", "lower_call"]
 
 FAMILY_ID = f"{REDUCE_MUFU_NAME}@{REDUCE_MUFU_VERSION}"
 #: IR primitive (``name_vN``) -> the ``veritor.reduce-mufu@1`` gate with the same semantics.
@@ -89,10 +90,17 @@ TC_OPS: Mapping[str, str] = {
     "Bf16ToF32_v1": "bf16_to_f32",
     "F2fpBf16_v1": "f32_to_bf16",
 }
+#: IR primitive -> ``veritor.elem-bf16@1`` gate (the SiLU table is the guest's embedded one).
+ELEM_OPS: Mapping[str, str] = {
+    "Bf16AddF2fp_v1": "bf16_add_f2fp",
+    "Bf16ToF32_v1": "bf16_to_f32",
+    "SiluMulBf16_v1": "silu_mul_bf16",
+}
 #: Guest family -> (its gate set, the IR primitive -> gate map).
 FAMILIES: Mapping[str, tuple[Callable[[], GateSet], Mapping[str, str]]] = {
     FAMILY_ID: (make_reduce_mufu_gate_set, OPS),
     "veritor.tc-ampere-bf16@2": (lambda: make_tc_ampere_bf16_gate_set("2"), TC_OPS),
+    "veritor.elem-bf16@1": (make_elem_bf16_gate_set, ELEM_OPS),
 }
 #: Guest gate -> the name of the MUFU table whose row is its second argument.
 TABLE_GATES: Mapping[str, str] = {"rsqrt_approx": "rsq", "mufu_sqrt_tab": "sqrt", "div_full_rcp": "rcp"}

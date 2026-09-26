@@ -112,6 +112,10 @@ existing pod. `register` refuses a pod id the RunPod account doesn't know and
 a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
 or from `~/.research/notes/machines.d` on a machine without machines.toml.
 The two sources merge, and a name they bind to different pods is refused.
+`create` makes at most one live pod per `--name`, so a retry loop can't duplicate pods. It refuses when a live pod of that
+name exists (exit 4, `--allow-duplicate` overrides). After a failed create call it uses a pod that appeared under the name
+anyway. Only RunPod's explicit no-stock reply is exit 5, the one failure to answer with another spec; any other failure is
+exit 2.
 `research pods registry` lists the merged table, and `registry import
 --apply` seeds `machines.d` from machines.toml.
 

@@ -211,3 +211,39 @@ def test_gadget_torch_witness_path():
     car2 = leaf.carry_values(rows2, word_bits=word_bits, role=role, steps=steps)
     assert np.array_equal(carry_t.numpy()[:, :2 * steps], car2.reshape(2 * steps, -1).T) and not carry_t[:, 2 * steps:].any()
     assert np.array_equal(dg_t.numpy(), leaf.native(rows2, word_bits=word_bits, role=role))
+
+
+@pytest.mark.parametrize("word_bits,K", [(16, 2048), (8, 8192), (16, 8192)])
+def test_sized_frame_gadget_equals_native_on_real_k_rows(word_bits, K):
+    """A row of more than 3 chunks (``Blake3Leaf.for_row``): one CV slot per chunk, the header ``n_chunks + 64 role``; the x4
+    column (two blocks per operand) proves exactly the native digest along the row, which folds to the keyed BLAKE3 digest."""
+    role, nblk = 2, 2
+    leaf = L.Blake3Leaf().for_row(K, word_bits)
+    nch = L.n_chunks(word_bits, K)
+    assert leaf.n_chunks_max == nch > L.N_CHUNKS_MAX and leaf.digest_elems == 1 + 16 * nch and leaf.carry_elems == 16 * nch + 17
+    assert leaf.params_sha256 == L.params_sha256(nch) != L.params_sha256() and L.Blake3Leaf().for_row(1536, 16).n_chunks_max == 3
+    ctx = LigeroCtx(FP8_ADA_RELATION.params)
+    ctx.scope = "t"
+    k = nblk * 8 * L.BLOCK_LEN // word_bits
+    words = [ctx.hint(f"w[{i}]") for i in range(k)]
+    carry = [ctx.hint(f"carry[{i}]") for i in range(leaf.carry_elems)]
+    digest, carry_out = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=K, carry_in=carry)
+    assert len(digest) == leaf.digest_elems and len(carry_out) == leaf.carry_elems
+    sys, steps = ctx.sys, K // k
+    rows = np.random.default_rng(K + word_bits).integers(0, 1 << word_bits, size=(1, K), dtype=np.int64)
+    car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)
+    hints = {f"w[{i}]": rows[0].reshape(steps, k)[:, i] for i in range(k)}
+    hints.update({f"carry[{i}]": car[0, :, i] for i in range(leaf.carry_elems)})
+    W = run_program_np(sys, {}, hints)
+    assert failing_constraints(sys, W, {}) == []
+    outs = np.stack([_eval(e, W) for e in carry_out])
+    assert np.array_equal(outs[:, :-1], car[0, 1:, :].T)
+    dg = np.array([int(_eval(e, W)[steps - 1]) for e in digest])
+    native = leaf.native(rows, word_bits=word_bits, role=role)[0]
+    assert np.array_equal(dg, native) and dg[0] == nch + 64 * role
+    assert leaf.leaf_bytes(dg) == leaf.reference_digest(rows, word_bits=word_bits, role=role)[0]
+    with pytest.raises(ValueError):
+        L.Blake3Leaf().leaf_bytes(dg)                                  # a 3-slot frame refuses the longer row's digest
+    with pytest.raises(ValueError):
+        L.Blake3Leaf().gadget(LigeroCtx(FP8_ADA_RELATION.params), words, word_bits=word_bits, role=role, row_words=K,
+                              carry_in=[ctx.hint(f"c{i}") for i in range(L.CARRY_ELEMS)])

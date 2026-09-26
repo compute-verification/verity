@@ -1,5 +1,84 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: non-GEMM statement rows, with native N from a memory-bandwidth work model
+
+- **Statements:** a result whose subcircuit is another template (its `bench.cell` stamp, or the fingerprint's
+  `subcircuit`) is its own statement. This covers C-Flock's frame-v3 cells on #101's `rope-head/d64/neox-bf16`,
+  `silu-mul/i8192/bf16`, `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` and `rmsnorm-triton/n2048-eps1e-05/bf16` on the H100.
+  These rows follow the GEMM rows.
+- **Native N:** it comes from the template's memory-bandwidth work model, the line's memory bandwidth divided by
+  `work_model.bytes_per_input`:
+  - `rope-head` 6D;
+  - `silu-mul` 6I;
+  - `rmsnorm-fused-cuda` 10N;
+  - `rmsnorm-triton` 6N.
+
+  The bytes are counted from each template's ports, with every row read or written once per input. The row's footnote
+  states the basis. The census gains `bytes_per_input`, `bytes_basis` and `bytes_source` on those four templates, and
+  `memory_bytes_per_second` (3.35 TB/s, from the H100 datasheet) with `memory_sources` on the H100 lines. The four bound
+  subcircuits use bench-spine's ids and display names.
+- **Admission:** these statements are rejected until the result carries a red-team `proof_class` verdict, in addition to
+  a non-producer verification. They are rejected with reason U, not just marked provisional. Their inputs must be a
+  registered input set of that subcircuit (reason I).
+- **Entities:** the render has the statements, their subcircuits (template and parameters) and their results.
+- **Unchanged:** existing renders and parity.
+
+## 2026-09-26: real-K rows: a result at another K (or semantics) is its own statement
+
+- **Statements:** K and the semantics are part of the subcircuit (docs ontology, "A result"). A result whose GEMM
+  coordinate is not its target's own K = 1536 subcircuit is its own statement, with its own Table 2 rows after the
+  K = 1536 rows, one per scheme with a result. Native N is computed at that K. It is not a new column.
+- **Resolving a result's statement:** `views.result_subcircuit` takes:
+  - K from the fingerprint;
+  - the semantics from the `bench.cell` stamp's subcircuit, else the result's `relation` (`RELATION_SEMANTICS`), else the
+    target's instruction.
+
+  Semantics the census records as one (`stood_for_by`) are one statement: H100 BF16 `wgmma` stays on the `mma` row at
+  K = 1536, and at real K uses the `wgmma` subcircuit's id (root's ruling, 02:44Z).
+- **Census:** `census/subcircuits.json` gains the eight real-K bound subcircuits: `gemm-coordinate/k{2048,8192}/`
+  `{sm80-mma-bf16, sm90-wgmma-bf16, sm89-mma-e4m3, sm90-wgmma-e4m3}`.
+- **Inputs:** a real-K result's inputs must be a registered `input-set/v1` or `vllm-vu-set/v1` artifact of that K,
+  matched by the stamp's art or the set's content digest, over a range inside the set. Otherwise it gets reason I.
+  Red-team verdicts count per statement.
+- **Entities:** the render keys real-K results, rows and Table 3 by their statement, and lists the real-K subcircuits.
+- **Unchanged:** the legacy rules and parity (K != 1536 is still B). Existing rows, cells and the raw JSON are unchanged;
+  only the embedded census section gains the new subcircuits. `superseded_by` already rejected a result (above).
+
+## 2026-09-26: the below-bar drill-down
+
+- A result labelled `below_bar=true` (the vocabulary's verification key, added to the store contract with this change)
+  is no longer rejected. The entities render lists it under `below_bar` with:
+  - its backend family, IR Definition and gate family, B, input set and prover GPU;
+  - per proof mode (core, compressed): its own soundness bits, prove seconds, seconds per instance, proof bytes and verify
+    seconds;
+  - `bar_bits: 128`, and who verified it.
+
+  It is never a Table 2 cell. The first entries are sp1-evaluator's nine SP1 proofs (RMSNorm fused and Triton, RoPE,
+  GemmCoordinate at K = 2048 and 8192), at 2^-93.7 to 2^-100, verified by verify-night-3.
+
+## 2026-09-26: a `SUPERSEDED …` finding rejects a result
+
+- Any `superseded_by` label, the vocabulary's key naming the replacement, rejects the result the same way in `tables` and
+  the views. `store_tables` keeps its frozen rows and flags them "superseded by …".
+
+- A `finding` label starting with `SUPERSEDED` now rejects the result (reason D), as `PULLED` does. Its producer uses it when
+  a re-run replaces a cell, for example flock-backend's four FP8 real-K cells re-run on the spine's input sets. Without the
+  rejection, the old and new results would both publish, because their input sets differ.
+
+## 2026-09-26: FP8 GEMM coordinate input sets (fp8-ada, fp8-hopper)
+
+- `gemm-coordinate` generates the two FP8 lines, `sm89.mma.m16n8k32.e4m3` (RTX 4090) and `sm90.wgmma.m64n8k32.e4m3` (H100), at any
+  K that is a multiple of 32.
+  - Ports: `x` and `w` are E4M3 bytes (`u8`), uniform over the 254 finite codes; `y` is the FP32 accumulator word (`u32`). There is
+    no epilogue, as the backends' fp8 relations take it.
+  - The relation's `definition` is `GemmAccumulatorE4m3`, and its `dot` names the IR reference.
+  - Outputs come from `verity.ml.kernels.HOPPER_E4M3_DOT` and from the new `ADA_E4M3_DOT` (sm_89's step, finite domain, over
+    `models.ADA_E4M3_M16N8K32`). Both equal the `verity.ml.tc` chains the backends use.
+  - A scalar reference's provenance entry is `templates.reference_digest`: the sha256 of its id, bindings and core sources.
+- `generate --suite fp8` covers both lines at K = 2048 and 8192, at the captured #101 sizes (6,272 and 1,920) and at the RTX 4090's
+  largest batches (16,384 and 8,192). Each smaller set is the larger one's prefix.
+- `generate --suite` writes each set under `<out>/n<n>/sets/<name>/`, so a suite can hold one subcircuit at several sizes.
+
 ## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
 
 - The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family

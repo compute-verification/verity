@@ -2,10 +2,12 @@
 (gate[i], up[i]), lowered piece by piece (``verity_flock.ir_lower``): ``bf16(silu(g))`` is a 16-bit lookup enumerated from
 the primitive's own helpers, then an f32 multiply and the torch bf16 cast.
 
-The unit's ``flock-ir-unit/v1`` netlist does not depend on I and is pinned by :data:`PIN`."""
+The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the units on the row's words, is
+pinned per I by :data:`PINS` (the frame statement's two-element unit by :data:`FRAME_PINS`)."""
 TEMPLATE = "silu-mul"
 UNIT = "silu-mul/bf16/element"
-PIN = "3b1ed294ef438c1e4eb1b7d61eacd3b7a88ed78d1713e5a72752c35d6f5f96f7"
+PINS = {8192: "be5a090be33ef6ad7d8cc0242610d038c87adb11c93f4ba1328f19263a42f25b"}
+FRAME_PINS = {8192: "823415f4d07973827c800d8bb64baedaeab62ca240ff8a5569f28a1beea12282"}
 
 
 def definition(subcircuit):

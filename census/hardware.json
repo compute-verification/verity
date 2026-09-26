@@ -29,7 +29,13 @@
         "label": "NVIDIA Hopper whitepaper (BF16 1978.9 TFLOPS with sparsity)"
       }
     ],
-    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used",
+    "memory_bytes_per_second": 3.35e12,
+    "memory_sources": [
+      {
+        "label": "NVIDIA H100 Tensor Core GPU datasheet: H100 SXM GPU memory bandwidth 3.35 TB/s (HBM3, 80 GB)"
+      }
+    ]
   },
   {
     "id": "h100-sxm5-80gb/e4m3",
@@ -45,7 +51,13 @@
         "label": "NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)"
       }
     ],
-    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used",
+    "memory_bytes_per_second": 3.35e12,
+    "memory_sources": [
+      {
+        "label": "NVIDIA H100 Tensor Core GPU datasheet: H100 SXM GPU memory bandwidth 3.35 TB/s (HBM3, 80 GB)"
+      }
+    ]
   },
   {
     "id": "rtx-4090/e4m3",

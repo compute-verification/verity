@@ -6,11 +6,11 @@ summed from +0, ``fma(rcp(N), sum, eps)``, ``MufuSqrtFtz`` and ``div.full``, rea
 with the IR evaluator and supplies the cut words as public unit words.
 
 A warp's input leaves (:func:`width`): 32 threads x 8 columns of x, when every lane of every 1024-column chunk holds
-columns (N a multiple of 1024); otherwise the warps differ. The unit netlist is pinned per (N, EPS) by :data:`PINS`, its cut
-structure (the tail with N and eps, the cut ports) included."""
+columns (N a multiple of 1024); otherwise the warps differ. The unit netlist is pinned per (N, EPS) by :data:`PINS`, its leaf
+maps and cut structure (the tail with N and eps, the cut ports) included."""
 TEMPLATE = "rmsnorm-triton"
 UNIT = "rmsnorm-triton/bf16/warp"
-PINS = {(2048, 1e-05): "950d95a130531afb00951a53d64d45a4549933669029b155b237e21fc82014e6"}
+PINS = {(2048, 1e-05): "6490d5e81908bee4d2b3085c9148ee7da9c7fbe63d526a4b9129dc468af056e2"}
 
 
 def width(n: int) -> int | None:

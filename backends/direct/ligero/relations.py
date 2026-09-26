@@ -10,6 +10,9 @@ runs any of them: gate, bench, proof dumps, verification.
     fp8-hopper    GemmAccumulator<1536> over sm90.wgmma.m64n8k32.e4m3 HOPPER_E4M3_K32      (32,) / 14 bits / -139; bare FP32 word
     fp8-ada       GemmAccumulator<1536> over sm89.mma.m16n8k32.e4m3   ADA_E4M3_M16N8K32    (16, 16) / 14 bits / -139; bare FP32 word
 
+Every relation is at K = 1536 unless it says otherwise: the x4 folds are also registered at vLLM's reduction lengths
+:data:`REAL_KS` as ``<fold>-k<K>`` (``bf16-ampere-x4-k2048``; ``_at_k``), proved on input sets (``relchain.set_instances``).
+
 The Ampere BF16 relation (``--relation bf16``, the frozen target FIRST on the frozen input set) stays in ``vu.py``;
 ``REAL == Params.from_model(AMPERE_BF16_M16N8K16)`` is the same unit at the Ampere widths.
 
@@ -71,14 +74,19 @@ class Relation:
     #                                          the runner proves instead of synthetic instances (relchain.instances reads it from --root)
     fold: int = 1                            # instruction steps of the base model per column (``_folded``); 1 = one step per unit
     folded_from: str = ""                    # the base relation's name when ``fold > 1`` (its synthetic input set is this one's)
+    vu_k: int | None = None                  # the VU's K when it is not K_VU (``_at_k``); None reads K_VU when asked
 
     @property
     def k(self) -> int:
         return self.model.k
 
     @property
+    def K(self) -> int:
+        return self.vu_k or K_VU
+
+    @property
     def steps(self) -> int:
-        return K_VU // self.k
+        return self.K // self.k
 
     @property
     def hooks(self):
@@ -440,6 +448,32 @@ BF16_HOPPER_X4_RELATION = _register(_folded(BF16_HOPPER_RELATION, 4, name="bf16-
 BF16_AMPERE_X4_RELATION = _register(_folded(BF16_AMPERE_RELATION, 4, name="bf16-ampere-x4", rust_verifiable=True))
 FP8_HOPPER_X4_RELATION = _register(_folded(FP8_HOPPER_RELATION, 4, name="fp8-hopper-x4", rust_verifiable=True))
 FP8_ADA_X4_RELATION = _register(_folded(FP8_ADA_RELATION, 4, name="fp8-ada-x4", rust_verifiable=True))
+
+
+#: the reduction lengths of vLLM's GEMMs that the chain relations are also built at (#101: Llama-3.2-1B's hidden and MLP widths)
+REAL_KS = (2048, 8192)
+
+
+def _at_k(base: Relation, K: int) -> Relation:
+    """``base`` at reduction length ``K``: the same compiled column (a function of the params only, so the same bare system),
+    ``K / k`` columns per VU.  The name carries K (``bf16-ampere-x4-k2048``), and so does every statement: the BF16 relations
+    absorb their empty tag and ``steps``, the FP8 ones their name.  Instances come from an input set (``--input-set``) or the
+    relation's own synthetic recipe at K; there is no frozen tier."""
+    if K % base.k:
+        raise ValueError(f"{base.name}: K = {K} is not a multiple of the column's {base.k} products")
+    name = f"{base.name}-k{K}"
+    return replace(base, name=name, vu_k=K, tag=base.tag if base.tag == b"" else f"|rel={name}|v1".encode(),
+                   frozen_tier=None, folded_from="",
+                   instances_dataset=f"bench-instances-{name}/synthetic", instances_tier=f"vu-k{K}-{base.name}",
+                   instances_recipe=f"{name} synthetic ({base.operands.__name__}, model-recorded accumulators)",
+                   relation_name=base.relation_name.replace(f"<{K_VU}>", f"<{K}>"),
+                   backend_name=f"{base.backend_name}; K = {K} ({K // base.k} columns per VU)",
+                   claim_note=base.claim_note.replace(" (the frozen vu-k1536 y word)", ""))
+
+
+for _base in (BF16_AMPERE_X4_RELATION, BF16_HOPPER_X4_RELATION, FP8_ADA_X4_RELATION, FP8_HOPPER_X4_RELATION):
+    for _K in REAL_KS:
+        _register(_at_k(_base, _K))
 
 
 def relation(name: str) -> Relation:

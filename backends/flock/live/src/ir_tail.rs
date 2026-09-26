@@ -12,10 +12,13 @@ use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 
 /// sha256 of the raw u32 LE tables (`verity_flock.ir_lower.TABLES`, from `rms_relation.tables("cuda")`).
-pub const TABLE_SHA256: [(&str, &str, usize); 3] = [
+/// `ex2` is FA2's MUFU.EX2 table (`fa2_relation.tables().ex2`, hw ex2.approx.ftz of j / 2^23); its MUFU.RCP table is `rcp`, byte for
+/// byte.
+pub const TABLE_SHA256: [(&str, &str, usize); 4] = [
     ("rsq", "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246", 1 << 24),
     ("sqrt", "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f", 1 << 24),
     ("rcp", "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55", 1 << 23),
+    ("ex2", "b2a42c4a626469c986e33e43f16f41bde9d84de94347cd9ceaa1bd68d36bcdf0", 1 << 23),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -29,15 +32,25 @@ pub enum Prim {
     MufuSqrtFtz,
     DivFullRcp,
     DivFullScaleA,
+    F32AddFtz,
+    F32SubFtz,
+    F32MulFtz,
+    F32FmaFtz,
+    F32FmaSubFtz,
+    F32Max,
+    GuardNegInfZero,
+    MufuEx2Ftz,
+    Fa2InvSum,
+    F2fpBf16,
 }
 
 impl Prim {
     fn arity(self) -> usize {
         match self {
             Prim::Const(_) => 0,
-            Prim::RsqrtApprox | Prim::MufuSqrtFtz | Prim::DivFullRcp => 1,
-            Prim::F32Add | Prim::F32Mul | Prim::F32Div | Prim::DivFullScaleA => 2,
-            Prim::F32Fma => 3,
+            Prim::RsqrtApprox | Prim::MufuSqrtFtz | Prim::DivFullRcp | Prim::GuardNegInfZero | Prim::MufuEx2Ftz | Prim::Fa2InvSum | Prim::F2fpBf16 => 1,
+            Prim::F32Add | Prim::F32Mul | Prim::F32Div | Prim::DivFullScaleA | Prim::F32AddFtz | Prim::F32SubFtz | Prim::F32MulFtz | Prim::F32Max => 2,
+            Prim::F32Fma | Prim::F32FmaFtz | Prim::F32FmaSubFtz => 3,
         }
     }
 
@@ -45,7 +58,8 @@ impl Prim {
         match self {
             Prim::RsqrtApprox => Some("rsq"),
             Prim::MufuSqrtFtz => Some("sqrt"),
-            Prim::DivFullRcp => Some("rcp"),
+            Prim::DivFullRcp | Prim::Fa2InvSum => Some("rcp"),
+            Prim::MufuEx2Ftz => Some("ex2"),
             _ => None,
         }
     }
@@ -79,6 +93,16 @@ pub fn parse(tail: &serde_json::Value, cut_words: usize, produced: &BTreeSet<usi
             "MufuSqrtFtz_v1" => Prim::MufuSqrtFtz,
             "DivFullRcp_v1" => Prim::DivFullRcp,
             "DivFullScaleA_v1" => Prim::DivFullScaleA,
+            "F32AddFtz_v1" => Prim::F32AddFtz,
+            "F32SubFtz_v1" => Prim::F32SubFtz,
+            "F32MulFtz_v1" => Prim::F32MulFtz,
+            "F32FmaFtz_v1" => Prim::F32FmaFtz,
+            "F32FmaSubFtz_v1" => Prim::F32FmaSubFtz,
+            "F32Max_v1" => Prim::F32Max,
+            "GuardNegInfZero_v1" => Prim::GuardNegInfZero,
+            "MufuEx2Ftz_v1" => Prim::MufuEx2Ftz,
+            "Fa2InvSum_v1" => Prim::Fa2InvSum,
+            "F2fpBf16_v1" => Prim::F2fpBf16,
             other => return Err(format!("the tail primitive {other} has no verifier implementation")),
         };
         let args: Vec<usize> = if let Prim::Const(_) = prim { vec![] } else { rest.iter().map(|&x| x as usize).collect() };
@@ -108,6 +132,7 @@ pub struct Tables {
     pub rsq: Vec<u32>,
     pub sqrt: Vec<u32>,
     pub rcp: Vec<u32>,
+    pub ex2: Vec<u32>,
 }
 
 impl Tables {
@@ -127,6 +152,7 @@ impl Tables {
             match name {
                 "rsq" => t.rsq = v,
                 "sqrt" => t.sqrt = v,
+                "ex2" => t.ex2 = v,
                 _ => t.rcp = v,
             }
         }
@@ -225,6 +251,42 @@ fn div_full_parts(a: f32, b: f32, r: &[u32]) -> (f32, f32) {
     (a, f(mufu_rcp(u(b), r)))
 }
 
+/// FA2's MUFU.EX2 (`fa2_model.cpp` `mufu_ex2_bits`): K = floor(|x| 2^23); for x >= 0, n = K >> 23 and j = K mod 2^23; for x < 0,
+/// the ones' complement of the truncated magnitude (carry only when the fraction bits are zero); T[j] * 2^n, overflow +inf,
+/// underflow +0; ftz inputs give 1.0.
+fn mufu_ex2(xb: u32, t: &[u32]) -> u32 {
+    let ax = xb & 0x7FFF_FFFF;
+    let e = ((ax >> 23) & 0xFF) as i32;
+    if e == 0xFF {
+        return if ax & 0x7F_FFFF != 0 { 0x7FFF_FFFF } else if xb >> 31 != 0 { 0 } else { 0x7F80_0000 };
+    }
+    if e == 0 {
+        return 0x3F80_0000;
+    }
+    let unb = e - 127;
+    if unb >= 30 {
+        return if xb >> 31 != 0 { 0 } else { 0x7F80_0000 };
+    }
+    let mant = ((ax & 0x7F_FFFF) | 0x80_0000) as u64;
+    let k = if unb >= 0 { mant << unb } else { mant >> (-unb) };
+    let fixed: i64 = if xb >> 31 == 0 { k as i64 } else if k & 0x7F_FFFF == 0 { -(k as i64) } else { -(k as i64) - 1 };
+    let (n, j) = (fixed >> 23, (fixed & 0x7F_FFFF) as usize);
+    let tj = t[j];
+    let re = ((tj >> 23) & 0xFF) as i64 + n;
+    if re >= 255 {
+        0x7F80_0000
+    } else if re <= 0 {
+        0
+    } else {
+        ((re as u32) << 23) | (tj & 0x7F_FFFF)
+    }
+}
+
+/// Flush a subnormal to signed zero (the fast-math build's ftz).
+fn ftz(u: u32) -> u32 {
+    if u & 0x7F80_0000 == 0 && u & 0x7F_FFFF != 0 { u & 0x8000_0000 } else { u }
+}
+
 fn fma_bits(a: u32, b: u32, c: u32) -> u32 {
     let y = f(a).mul_add(f(b), f(c));
     if y.is_nan() { 0x7FC0_0000 } else { u(y) }
@@ -271,6 +333,20 @@ pub fn apply(p: Prim, a: &[u32], t: &Tables) -> u32 {
             let ab = f(a[1]).abs();
             if ab > BIG { u(f(a[0]) * 0.25) } else if ab < TINY { u(f(a[0]) * 16_777_216.0) } else { a[0] }
         }
+        Prim::F32AddFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), true, |x, y| x + y)),
+        Prim::F32SubFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), false, |x, y| x - y)),
+        Prim::F32MulFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), true, |x, y| x * y)),
+        Prim::F32FmaFtz => ftz(fma_bits(ftz(a[0]), ftz(a[1]), ftz(a[2]))),
+        Prim::F32FmaSubFtz => ftz(fma_bits(ftz(a[0]), ftz(a[1]), ftz(a[2]) ^ 0x8000_0000)),
+        // `x > y ? x : y` on the flushed words (FA2 MaxOp; a NaN compares false)
+        Prim::F32Max => {
+            let (x, y) = (ftz(a[0]), ftz(a[1]));
+            if f(x) > f(y) { x } else { y }
+        }
+        Prim::GuardNegInfZero => if a[0] == 0xFF80_0000 { 0 } else { a[0] },
+        Prim::MufuEx2Ftz => mufu_ex2(a[0], &t.ex2),
+        Prim::Fa2InvSum => if a[0] & 0x7FFF_FFFF == 0 || is_nan(a[0]) { 0x3F80_0000 } else { mufu_rcp(a[0], &t.rcp) },
+        Prim::F2fpBf16 => if is_nan(a[0]) { 0x7FFF } else { (a[0].wrapping_add(0x7FFF + ((a[0] >> 16) & 1)) >> 16) & 0xFFFF },
     }
 }
 
@@ -303,6 +379,35 @@ mod tests {
         (0x7F80_0000, 0xFF80_0000, 0xFFC0_0000, 0xFF80_0000, 0xFFC0_0000),
         (0x0000_0000, 0x7F80_0000, 0x7F80_0000, 0xFFC0_0000, 0x0000_0000),
     ];
+
+    /// Differential against the IR (`verity_flock.ir_lower` vectors): `IR_TAIL_VECTORS` = JSON `{prim id: [[args.., want]..]}`,
+    /// `IR_TAIL_TABLES` = a `write_tables` directory; skipped unless both are set.
+    #[test]
+    fn prims_match_ir_vectors() {
+        let (Ok(v), Ok(dir)) = (std::env::var("IR_TAIL_VECTORS"), std::env::var("IR_TAIL_TABLES")) else { return };
+        let all: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(v).unwrap()).unwrap();
+        let t = Tables::load(&dir, &TABLE_SHA256.iter().map(|x| x.0).collect()).unwrap();
+        let mut bad = Vec::new();
+        for (id, cases) in all.as_object().unwrap() {
+            let op: Vec<serde_json::Value> = [serde_json::json!(0), serde_json::json!(id)].into_iter().chain((1..=parse_arity(id)).map(|k| serde_json::json!(k))).collect();
+            let ops = parse(&serde_json::json!([op]), 0, &(1..4).collect()).unwrap();
+            for c in cases.as_array().unwrap() {
+                let c: Vec<u32> = c.as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as u32).collect();
+                let got = apply(ops[0].prim, &c[..c.len() - 1], &t);
+                if got != c[c.len() - 1] {
+                    bad.push(format!("{id} {:08x?} -> {got:08x}, want {:08x}", &c[..c.len() - 1], c[c.len() - 1]));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "{} mismatches, e.g. {:?}", bad.len(), &bad[..bad.len().min(5)]);
+    }
+
+    fn parse_arity(id: &str) -> usize {
+        parse(&serde_json::json!([[0, id, 1, 2, 3]]), 0, &(1..4).collect()).map(|o| o[0].args.len())
+            .or_else(|_| parse(&serde_json::json!([[0, id, 1, 2]]), 0, &(1..4).collect()).map(|o| o[0].args.len()))
+            .or_else(|_| parse(&serde_json::json!([[0, id, 1]]), 0, &(1..4).collect()).map(|o| o[0].args.len()))
+            .unwrap()
+    }
 
     #[test]
     fn nan_payloads_are_the_irs() {

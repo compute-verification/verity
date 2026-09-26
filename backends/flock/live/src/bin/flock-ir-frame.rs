@@ -8,7 +8,8 @@
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
 //! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
-//! and for a cut template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
+//! the wiring, output mapping, block assignment and row key against the netlist's pinned leaf maps (IR6), and for a cut
+//! template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
 //! `--tables`). Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's run output values)` (the
 //! verifier chains them into its regions and folds each row's chunk values into its digest), two verifier points (the
 //! regions' claims), `Link(y = 0, 0)`, Flock's coins.
@@ -37,8 +38,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const TABLE: &str = "irf";
-const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v2";
-const STATEMENT: &str = "verity/flock-ir-frame/v2";
+const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v3";
+const STATEMENT: &str = "verity/flock-ir-frame/v3";
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 
@@ -56,7 +57,7 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 }
 
 fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-ir-frame-v2/fast100x2/rep{rep}").into_bytes()
+    format!("flock-ir-frame-v3/fast100x2/rep{rep}").into_bytes()
 }
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
@@ -358,29 +359,42 @@ const CASES: &[(&str, bool, bool)] = &[
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("prover_file_differs_from_verifier_file", false, false),
+    ("wiring_swapped", false, false),
+    ("output_mapping_swapped", false, false),
+    ("units_swapped_between_slots", false, false),
+    ("row_key_changed", false, false),
     ("row_scalar_forged", false, false),
     ("eps_forged_tail_words", false, false),
     ("aggregate_forged_with_its_scalar", false, true),
     ("cut_input_differs_from_the_cut_word", false, true),
+    ("public_word_forged", false, false),
+    ("zero_leaf_rewired", false, false),
+    ("tail_output_forged", false, false),
 ];
 
 /// Cases that only a cut template has, and one that needs a chunk split into several runs.
 const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_tail_words", "aggregate_forged_with_its_scalar", "cut_input_differs_from_the_cut_word"];
 const RUNS_ONLY: &[&str] = &["chained_run_input_forged"];
+/// Cases of units that return output leaves, and of tensor-core templates (a public port, zero leaves, tail outputs).
+const RET_ONLY: &[&str] = &["output_claim_false", "output_mapping_swapped"];
+const TAIL_OUT_ONLY: &[&str] = &["public_word_forged", "zero_leaf_rewired", "tail_output_forged"];
 
-fn skipped(st: &FrameStmt, name: &str) -> bool {
-    (st.cm.words == 0 && CUT_ONLY.contains(&name)) || (st.lay.nb == st.lay.chunk_nb && RUNS_ONLY.contains(&name))
+fn skipped(st: &FrameStmt, inst: &FrameInstances, name: &str) -> bool {
+    let multi_run = inst.blocks.iter().any(|bl| bl.0.iter().flatten().any(|c| c.3 > 0));
+    (st.cm.words == 0 && CUT_ONLY.contains(&name)) || (!multi_run && RUNS_ONLY.contains(&name))
+        || (st.lay.ret_words == 0 && RET_ONLY.contains(&name)) || (st.cm.outputs.is_empty() && TAIL_OUT_ONLY.contains(&name))
 }
 
-/// The verifier's file with instance 0's cut word `flip.0` changed by `flip.1`, then every instance's tail words recomputed by
-/// `tail` from its units' words.
+/// The verifier's file with instance 0's cut word `flip.0` changed by `flip.1`, then every instance's tail words (and the
+/// outputs, when the tail computes them) recomputed by `tail` from its units' words and the public words.
 fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize, u32)>) -> FrameInstances {
     let mut v = load(&arg("--instances", ""));
     let kc = st.cm.words;
     if let Some((k, bit)) = flip {
         v.cuts[k] ^= bit;
     }
-    let produced: std::collections::BTreeSet<usize> = st.cm.unit_out.iter().flatten().map(|p| p.1).collect();
+    let produced: std::collections::BTreeSet<usize> = st.cm.unit_out.iter().flatten().map(|p| p.1).chain(st.cm.public.iter().map(|p| p.0)).collect();
+    let total: usize = v.out_ports.iter().map(|p| p.1).sum();
     for i in 0..v.n {
         let w = &mut v.cuts[i * kc..(i + 1) * kc];
         let mut slots: Vec<Option<u32>> = (0..kc).map(|k| produced.contains(&k).then_some(w[k])).collect();
@@ -388,28 +402,102 @@ fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize,
         for (k, x) in w.iter_mut().enumerate() {
             *x = slots[k].unwrap();
         }
+        for (l, &s) in st.cm.outputs.iter().enumerate() {
+            v.inst_outputs[i * total + l] = slots[s].unwrap() as u16;
+        }
     }
     v
 }
 
+/// An IR6 case: a structurally valid file (the block table and frame-v3 roots still check) whose leaf maps or key differ from
+/// the netlist's; pass iff `check_leaf_maps` refuses it.
+fn leaf_case(st: &FrameStmt, name: &str) -> Option<Value> {
+    let mut v = load(&arg("--instances", ""));
+    match name {
+        "wiring_swapped" => v.lay.wiring.iter_mut().for_each(|w| w.swap(0, 1)),
+        "output_mapping_swapped" => {
+            // every instance-local unit 0's first two returned words swapped with its mapping: the instance outputs (and roots) stay
+            v.lay.out_leaf[0].swap(0, 1);
+            let (c0, c1, rw) = (v.lay.ret_cols[0], v.lay.ret_cols[1], v.lay.ret_words);
+            let get = |w: &[F128], c: usize| ((if c % 128 < 64 { w[c / 128].lo >> (c % 128) } else { w[c / 128].hi >> (c % 128 - 64) }) & 0xFFFF) as u16;
+            let set = |w: &mut [F128], c: usize, x: u16| {
+                let t = c % 128;
+                let m = 0xFFFFu64;
+                if t < 64 { w[c / 128].lo = (w[c / 128].lo & !(m << t)) | ((x as u64) << t) } else { w[c / 128].hi = (w[c / 128].hi & !(m << (t - 64))) | ((x as u64) << (t - 64)) }
+            };
+            for g in (0..v.units).step_by(v.upi) {
+                let w = &mut v.outputs[g * rw..(g + 1) * rw];
+                let (a, b) = (get(w, c0), get(w, c1));
+                set(w, c0, b);
+                set(w, c1, a);
+            }
+        }
+        "units_swapped_between_slots" => {
+            let slots: Vec<(usize, usize)> = v.blocks.iter().enumerate()
+                .flat_map(|(b, bl)| bl.1.iter().enumerate().filter(|x| x.1.is_some()).map(move |(u, _)| (b, u))).take(2).collect();
+            let (x, y) = (v.blocks[slots[0].0].1[slots[0].1], v.blocks[slots[1].0].1[slots[1].1]);
+            v.blocks[slots[0].0].1[slots[0].1] = y;
+            v.blocks[slots[1].0].1[slots[1].1] = x;
+        }
+        "row_key_changed" => v.key = flock_live::chunk::row_key(b"w"),
+        // the first P.V step slot's last b port (a masked key's zero word in a boundary block) rewired to its first (a real key)
+        "zero_leaf_rewired" => {
+            let u = v.lay.units / 2;
+            v.lay.wiring[u][15] = v.lay.wiring[u][0];
+        }
+        _ => return None,
+    }
+    let shape = check_blocks(&v).and_then(|_| check_roots(&v));
+    let r = check_leaf_maps(&v, &st.net);
+    Some(json!({"case": name, "expect": "refused at load (the netlist's leaf maps)", "shape_checks_pass": shape.is_ok(), "refused": r.is_err(),
+                "pass": shape.is_ok() && r.is_err(), "why": r.err().or(shape.err())}))
+}
+
 /// A load-time case: pass iff the verifier's checks refuse the altered file.
 fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
+    if let Some(v) = leaf_case(st, name) {
+        return Some(v);
+    }
     let t = TABLES.get().unwrap();
     let (v, consistent) = match name {
-        "row_scalar_forged" => {
+        "public_word_forged" => {
             let mut v = load(&arg("--instances", ""));
-            v.cuts[st.cm.words - 1] ^= 1;
+            v.cuts[st.cm.public[0].0] ^= 1;
+            let r = check_public_ports(&v, &st.cm);
+            return Some(json!({"case": name, "expect": "refused at load (the public port's committed digest)", "refused": r.is_err(),
+                               "pass": r.is_err(), "why": r.err()}));
+        }
+        "tail_output_forged" => {
+            let mut v = load(&arg("--instances", ""));
+            v.inst_outputs[3] ^= 1;
+            let r = check_cut_words(&v, &st.cm, t);
+            return Some(json!({"case": name, "expect": "refused at load (the tail's outputs)", "refused": r.is_err(), "pass": r.is_err(),
+                               "why": r.err()}));
+        }
+        "row_scalar_forged" => {
+            // the last cut word the tail computes (RMSNorm's row scalar; attention's last P or rescale word)
+            let given: std::collections::BTreeSet<usize> = st.cm.unit_out.iter().flatten().map(|p| p.1).chain(st.cm.public.iter().map(|p| p.0)).collect();
+            let k = (0..st.cm.words).rev().find(|k| !given.contains(k)).expect("a tail-computed cut word");
+            let mut v = load(&arg("--instances", ""));
+            v.cuts[k] ^= 1;
             (v, true)
         }
         "eps_forged_tail_words" => {
+            // every positive tail constant x 100 (RMSNorm's N and eps; attention's per-block exp2 scale): a whole forged tail
             let mut tail = st.cm.tail.clone();
-            let eps = tail.iter_mut()
-                .filter_map(|o| match &mut o.prim { flock_live::ir_tail::Prim::Const(x) if f32::from_bits(*x) > 0.0 => Some(x), _ => None })
-                .min_by(|a, b| f32::from_bits(**a).total_cmp(&f32::from_bits(**b)))
-                .expect("a positive tail constant");
-            *eps = (f32::from_bits(*eps) * 100.0).to_bits();
+            let mut forged = 0;
+            for o in tail.iter_mut() {
+                if let flock_live::ir_tail::Prim::Const(x) = &mut o.prim
+                    && f32::from_bits(*x) > 0.0
+                    && f32::from_bits(*x).is_finite()
+                {
+                    *x = (f32::from_bits(*x) * 100.0).to_bits();
+                    forged += 1;
+                }
+            }
+            assert!(forged > 0, "a positive tail constant");
             let v = retail(st, &tail, None);
-            let forged = flock_live::ir_block::CutMap { words: st.cm.words, tail, unit_in: st.cm.unit_in.clone(), unit_out: st.cm.unit_out.clone() };
+            let forged = flock_live::ir_block::CutMap { tail, ..st.cm.clone() };
             let ok = check_cut_words(&v, &forged, t).is_ok();
             (v, ok)
         }
@@ -493,7 +581,7 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if skipped(st, name) {
+        if skipped(st, inst, name) {
             continue;
         }
         let v = if gpu && load_case(st, name).is_none() {
@@ -519,7 +607,7 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
         println!("NEG\t{v}");
     }
     println!("SELFTEST\t{}", json!({"statement": STATEMENT, "scheme": "frame-v3/blake3-keyed", "unit": inst.unit, "subcircuit": inst.header["subcircuit"],
-        "instances": inst.n, "units": inst.units, "run": [st.lay.nb, st.lay.chunk_nb], "k_log": st.lay.k_log, "m": st.m, "cut_words": st.cm.words,
+        "instances": inst.n, "units": inst.units, "run": st.lay.nb, "k_log": st.lay.k_log, "m": st.m, "cut_words": st.cm.words,
         "gpu": gpu, "all_pass": all}));
 }
 
@@ -592,18 +680,18 @@ fn main() {
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
         refuse("the instance file was staged for another unit netlist".into());
     }
-    for c in [check_order(&net), check_blocks(&inst), check_roots(&inst)] {
+    for c in [check_order(&net), check_blocks(&inst), check_roots(&inst), check_leaf_maps(&inst, &net)] {
         if let Err(e) = c {
             refuse(e);
         }
     }
     let st = Arc::new(FrameStmt::new(net, &inst).unwrap_or_else(|e| refuse(e)));
     let tables = TABLES.get_or_init(|| Tables::load(&arg("--tables", "tables"), &tables_needed(&st.cm.tail)).unwrap_or_else(|e| refuse(e)));
-    if let Err(e) = check_cut_words(&inst, &st.cm, tables) {
+    if let Err(e) = check_public_ports(&inst, &st.cm).and_then(|_| check_cut_words(&inst, &st.cm, tables)) {
         refuse(e);
     }
-    eprintln!("statement {} instances={} units={} blocks={} comp_slots={} run={}/{} units_per_block={} k_log={} nbl={} m={} cut_words={} built in {:.2}s",
-              inst.unit, inst.n, inst.units, st.blocks_real, st.lay.comp_slots, st.lay.nb, st.lay.chunk_nb, st.lay.units, st.lay.k_log, st.nbl, st.m,
+    eprintln!("statement {} instances={} units={} blocks={} comp_slots={} run={} units_per_block={} k_log={} nbl={} m={} cut_words={} built in {:.2}s",
+              inst.unit, inst.n, inst.units, st.blocks_real, st.lay.comp_slots, st.lay.nb, st.lay.units, st.lay.k_log, st.nbl, st.m,
               st.cm.words, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
