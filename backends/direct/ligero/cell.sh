@@ -101,7 +101,7 @@ if [ -n "${SCREEN:-}" ]; then
   [ "$best" = 0 ] && { echo "SCREEN: nothing ran"; exit 7; }
   say "screen chose l$L p$PP ($best VU/s)"
 fi
-say "sweep $REL l$L p$PP from ${START:-1024}${CAP:+, capped at the set's $CAP}"
+say "sweep $REL l$L p$PP from ${START:-1024}${CAP:+, capped at the set size $CAP}"
 $PY -m backends.direct.ligero.sweep_vu --relation $REL --out-dir $RD/sweep --start ${START:-1024} ${CAP:+--cap $CAP} --dump plateau -- \
     "${BENCH[@]}" --batch $L --pipeline $PP --reps $RUNS --verifier tcp://$VERIFIER --no-local-verify > $RD/sweep.log 2>&1
 src=$?; echo "sweep rc=$src"; grep -E "point|rc=|plateau|stopped" $RD/sweep.log | tail -n 14 | cut -c1-300
