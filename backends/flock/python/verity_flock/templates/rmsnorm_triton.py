@@ -28,16 +28,29 @@ def lowering(subcircuit):
     return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}/eps{eps:g}", ir_lower.reduction_cut(width(n)))
 
 
+FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
+
+
+def frame_lowering(subcircuit):
+    return lowering(subcircuit)
+
+
 def supports(subcircuit, scheme):
     n = int(subcircuit.params["N"])
     if width(n) is None:
         return f"C-Flock lowers RMSNormTriton_v1 when its warps are identical units (N a multiple of 1024), not N = {n}"
-    return (f"C-Flock lowers {subcircuit.id} exactly (verity_flock.templates.rmsnorm_triton: unit {UNIT}, the row tail "
-            f"evaluated by the verifier) and proves it with public unit words (verity/flock-ir-block/v1); binding its rows under "
-            f"{scheme} is not wired yet")
+    if scheme in FRAME_SCHEMES:
+        return None
+    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v2: unit {UNIT}, the row tail "
+            f"evaluated by the verifier); binding its rows under {scheme} is not wired yet")
+
+
+def relation(subcircuit, scheme):
+    return "irf:rmsnorm-triton"
 
 
 def stage(input_set, lo, hi, out_dir):
-    from verity_flock import ir_lower
+    """The frame-v3 instance file for ids [lo, hi) (``verity_flock.ir_frame.stage``): each pod stages its own."""
+    from verity_flock import ir_frame
 
-    return ir_lower.stage(lowering(input_set.subcircuit), input_set, lo, hi, out_dir)
+    return ir_frame.stage(frame_lowering(input_set.subcircuit), input_set, lo, hi, out_dir)

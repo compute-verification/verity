@@ -1,15 +1,17 @@
-//! flock-ir-frame: an IR template's units bound to their frame-v3 rows (`flock_live::ir_frame`, `verity/flock-ir-frame/v1`),
+//! flock-ir-frame: an IR template's units bound to their frame-v3 rows (`flock_live::ir_frame`, `verity/flock-ir-frame/v2`),
 //! proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a flock-128-r2 live session.
 //! Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu.
 //!
-//!   flock-ir-frame serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
-//!   flock-ir-frame selftest --instances FILE --netlist FILE [--gpu] [--only CASE]
+//!   flock-ir-frame serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
+//!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-ir-frame selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
-//! netlist's order, the block table against the plan, and the frame-v3 roots recomputed from its row digests and output
-//! words. Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's chunk values)` (the verifier folds
-//! each row's chunk values into its digest), two verifier points (the regions' claims), `Link(y = 0, 0)`, Flock's coins.
+//! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
+//! and for a cut template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
+//! `--tables`). Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's run output values)` (the
+//! verifier chains them into its regions and folds each row's chunk values into its digest), two verifier points (the
+//! regions' claims), `Link(y = 0, 0)`, Flock's coins.
 
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -27,6 +29,7 @@ use flock_field::F128;
 use flock_live::{
     ir_block::{IrUnitNet, check_order},
     ir_frame::*,
+    ir_tail::{Tables, tables_needed},
     *,
 };
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra, r1cs_hashes::blake3::Compression};
@@ -34,8 +37,10 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const TABLE: &str = "irf";
-const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v1";
-const STATEMENT: &str = "verity/flock-ir-frame/v1";
+const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v2";
+const STATEMENT: &str = "verity/flock-ir-frame/v2";
+
+static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -51,7 +56,7 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 }
 
 fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-ir-frame-v1/fast100x2/rep{rep}").into_bytes()
+    format!("flock-ir-frame-v2/fast100x2/rep{rep}").into_bytes()
 }
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
@@ -175,6 +180,9 @@ struct Plan {
     unit_flip: bool,
     cv_flip: bool,
     key_substituted: bool,
+    flags_forged: bool,
+    run_input_forged: bool,
+    cut_flip: bool,
     rep1_other_witness: bool,
     fast: bool,
     substitute: Option<Vec<Vec<u8>>>,
@@ -188,22 +196,27 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
     e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
-fn wit(st: &Arc<FrameStmt>, comps: &[Compression], plan: &Plan, zero: bool) -> Wit {
-    let (st2, c2) = (st.clone(), comps.to_vec());
-    let input_flip = plan.input_flip;
+fn wit(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, comps: &[Compression], plan: &Plan, zero: bool) -> Wit {
+    let (st2, i2, c2) = (st.clone(), inst.clone(), comps.to_vec());
+    let (input_flip, cut_flip) = (plan.input_flip, plan.cut_flip);
+    let cut_col = st.cm.unit_in.first().and_then(|p| p.first()).map(|p| p.0);
     Wit {
         comps: comps.to_vec(),
         inputs: Box::new(move |b, u| {
-            let mut r = st2.unit_inputs(&c2, b, u);
+            let mut r = st2.unit_inputs(&i2, &c2, b, u);
             if zero {
                 r.iter_mut().for_each(|w| *w = F128::ZERO);
             }
-            if input_flip && b == 0 && u == 3 {
+            if input_flip && b == 0 && u == st2.lay.units.min(4) - 1 {
                 r[0].lo ^= 1 << 2;
+            }
+            if let (true, 0, 0, Some(c)) = (cut_flip, b, u, cut_col) {
+                let t = c % 128 + 3;
+                if t < 64 { r[c / 128].lo ^= 1 << t } else { r[c / 128].hi ^= 1 << (t - 64) }
             }
             r
         }),
-        flip_z: plan.unit_flip.then_some(((st.lay.unit_pos0 + 5) << st.lay.unit_log) + st.net.in_words * 128 + 40),
+        flip_z: plan.unit_flip.then_some(((st.lay.unit_pos0 + (st.lay.units - 1).min(5)) << st.lay.unit_log) + st.net.in_words * 128 + 40),
     }
 }
 
@@ -212,9 +225,29 @@ fn session(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, t: SharedTransport, 
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
     let (mut comps, mut cvs) = st.compressions(inst);
+    let rechain = |comps: &mut Vec<Compression>, at: usize, nb: usize| -> [u32; 8] {
+        let mut cv = comps[at].0;
+        for c in &mut comps[at..at + nb] {
+            c.0 = cv;
+            cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
+        }
+        cv
+    };
+    if plan.flags_forged {
+        comps[0].4 ^= 1;
+        rechain(&mut comps, 0, st.lay.nb);
+    }
+    if plan.run_input_forged {
+        let (b, q) = inst.blocks.iter().enumerate()
+            .find_map(|(b, bl)| bl.0.iter().position(|c| c.is_some_and(|x| x.3 > 0)).map(|q| (b, q)))
+            .expect("a run past a chunk's first");
+        let at = b * st.lay.comp_slots + q * st.lay.nb;
+        comps[at].0[0] ^= 1;
+        rechain(&mut comps, at, st.lay.nb);
+    }
     if plan.message_flip {
         comps[1].1[3] ^= 1 << 7;
-        let (mut cv, lay) = (st.key, &st.lay);
+        let (mut cv, lay) = (comps[0].0, &st.lay);
         for j in 0..lay.nb {
             let c = &mut comps[j];
             c.0 = cv;
@@ -230,8 +263,8 @@ fn session(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, t: SharedTransport, 
     }
     let rows_s = t0.elapsed().as_secs_f64();
     let publics = FrameStmt::publics_bytes(&cvs);
-    let w0 = wit(st, &comps, plan, false);
-    let w1 = wit(st, &comps, plan, plan.rep1_other_witness);
+    let w0 = wit(st, inst, &comps, plan, false);
+    let w1 = wit(st, inst, &comps, plan, plan.rep1_other_witness);
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -318,12 +351,74 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_internal_bit_flipped", false, true),
     ("chunk_value_public_forged", false, false),
     ("key_substituted", false, true),
+    ("flags_forged", false, true),
+    ("chained_run_input_forged", false, true),
     ("coins_before_y", false, false),
     ("reps_with_different_witness", false, false),
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("prover_file_differs_from_verifier_file", false, false),
+    ("row_scalar_forged", false, false),
+    ("eps_forged_tail_words", false, false),
+    ("aggregate_forged_with_its_scalar", false, true),
+    ("cut_input_differs_from_the_cut_word", false, true),
 ];
+
+/// Cases that only a cut template has, and one that needs a chunk split into several runs.
+const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_tail_words", "aggregate_forged_with_its_scalar", "cut_input_differs_from_the_cut_word"];
+const RUNS_ONLY: &[&str] = &["chained_run_input_forged"];
+
+fn skipped(st: &FrameStmt, name: &str) -> bool {
+    (st.cm.words == 0 && CUT_ONLY.contains(&name)) || (st.lay.nb == st.lay.chunk_nb && RUNS_ONLY.contains(&name))
+}
+
+/// The verifier's file with instance 0's cut word `flip.0` changed by `flip.1`, then every instance's tail words recomputed by
+/// `tail` from its units' words.
+fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize, u32)>) -> FrameInstances {
+    let mut v = load(&arg("--instances", ""));
+    let kc = st.cm.words;
+    if let Some((k, bit)) = flip {
+        v.cuts[k] ^= bit;
+    }
+    let produced: std::collections::BTreeSet<usize> = st.cm.unit_out.iter().flatten().map(|p| p.1).collect();
+    for i in 0..v.n {
+        let w = &mut v.cuts[i * kc..(i + 1) * kc];
+        let mut slots: Vec<Option<u32>> = (0..kc).map(|k| produced.contains(&k).then_some(w[k])).collect();
+        flock_live::ir_tail::eval(tail, &mut slots, TABLES.get().unwrap());
+        for (k, x) in w.iter_mut().enumerate() {
+            *x = slots[k].unwrap();
+        }
+    }
+    v
+}
+
+/// A load-time case: pass iff the verifier's checks refuse the altered file.
+fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
+    let t = TABLES.get().unwrap();
+    let (v, consistent) = match name {
+        "row_scalar_forged" => {
+            let mut v = load(&arg("--instances", ""));
+            v.cuts[st.cm.words - 1] ^= 1;
+            (v, true)
+        }
+        "eps_forged_tail_words" => {
+            let mut tail = st.cm.tail.clone();
+            let eps = tail.iter_mut()
+                .filter_map(|o| match &mut o.prim { flock_live::ir_tail::Prim::Const(x) if f32::from_bits(*x) > 0.0 => Some(x), _ => None })
+                .min_by(|a, b| f32::from_bits(**a).total_cmp(&f32::from_bits(**b)))
+                .expect("a positive tail constant");
+            *eps = (f32::from_bits(*eps) * 100.0).to_bits();
+            let v = retail(st, &tail, None);
+            let forged = flock_live::ir_block::CutMap { words: st.cm.words, tail, unit_in: st.cm.unit_in.clone(), unit_out: st.cm.unit_out.clone() };
+            let ok = check_cut_words(&v, &forged, t).is_ok();
+            (v, ok)
+        }
+        _ => return None,
+    };
+    let r = check_cut_words(&v, &st.cm, t);
+    Some(json!({"case": name, "expect": "refused at load", "consistent_under_forged_tail": consistent, "refused": r.is_err(),
+                "pass": consistent && r.is_err(), "why": r.err()}))
+}
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
     let h = Plan { gpu, ..Plan::default() };
@@ -333,6 +428,9 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "unit_internal_bit_flipped" => Plan { unit_flip: true, ..h },
         "chunk_value_public_forged" => Plan { cv_flip: true, ..h },
         "key_substituted" => Plan { key_substituted: true, ..h },
+        "flags_forged" => Plan { flags_forged: true, ..h },
+        "chained_run_input_forged" => Plan { run_input_forged: true, ..h },
+        "cut_input_differs_from_the_cut_word" => Plan { cut_flip: true, ..h },
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { fast: true, ..h },
@@ -345,6 +443,9 @@ fn load(path: &str) -> FrameInstances {
 }
 
 fn run_case(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, name: &str, gpu: bool) -> Value {
+    if let Some(v) = load_case(st, name) {
+        return v;
+    }
     let want = CASES.iter().find(|c| c.0 == name).expect("case");
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
@@ -362,6 +463,14 @@ fn run_case(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, name: &str, gpu: bo
             let mut p = reload();
             p.public_sha256[0] ^= 1;
             (Arc::new(p), inst.clone())
+        }
+        "aggregate_forged_with_its_scalar" => {
+            let k0 = st.cm.unit_out[0][0].1;
+            let v = retail(st, &st.cm.tail, Some((k0, 1 << 12)));
+            if let Err(e) = check_cut_words(&v, &st.cm, TABLES.get().unwrap()) {
+                return json!({"case": name, "pass": false, "why": format!("the self-consistent forgery was refused at load: {e}")});
+            }
+            (inst.clone(), Arc::new(v))
         }
         _ => (inst.clone(), inst.clone()),
     };
@@ -384,9 +493,13 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        let v = if gpu {
+        if skipped(st, name) {
+            continue;
+        }
+        let v = if gpu && load_case(st, name).is_none() {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"),
+                       "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -406,7 +519,8 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
         println!("NEG\t{v}");
     }
     println!("SELFTEST\t{}", json!({"statement": STATEMENT, "scheme": "frame-v3/blake3-keyed", "unit": inst.unit, "subcircuit": inst.header["subcircuit"],
-        "instances": inst.n, "units": inst.units, "m": st.m, "gpu": gpu, "all_pass": all}));
+        "instances": inst.n, "units": inst.units, "run": [st.lay.nb, st.lay.chunk_nb], "k_log": st.lay.k_log, "m": st.m, "cut_words": st.cm.words,
+        "gpu": gpu, "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -478,17 +592,19 @@ fn main() {
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
         refuse("the instance file was staged for another unit netlist".into());
     }
-    if inst.header["cut_words"].as_u64().unwrap_or(0) != 0 || net.cut.is_some() {
-        refuse("verity/flock-ir-frame/v1 does not take cut words yet".into());
-    }
     for c in [check_order(&net), check_blocks(&inst), check_roots(&inst)] {
         if let Err(e) = c {
             refuse(e);
         }
     }
     let st = Arc::new(FrameStmt::new(net, &inst).unwrap_or_else(|e| refuse(e)));
-    eprintln!("statement {} instances={} units={} blocks={} comp_slots={} units_per_block={} k_log={} nbl={} m={} built in {:.2}s", inst.unit,
-              inst.n, inst.units, st.blocks_real, st.lay.comp_slots, st.lay.units, st.lay.k_log, st.nbl, st.m, tb.elapsed().as_secs_f64());
+    let tables = TABLES.get_or_init(|| Tables::load(&arg("--tables", "tables"), &tables_needed(&st.cm.tail)).unwrap_or_else(|e| refuse(e)));
+    if let Err(e) = check_cut_words(&inst, &st.cm, tables) {
+        refuse(e);
+    }
+    eprintln!("statement {} instances={} units={} blocks={} comp_slots={} run={}/{} units_per_block={} k_log={} nbl={} m={} cut_words={} built in {:.2}s",
+              inst.unit, inst.n, inst.units, st.blocks_real, st.lay.comp_slots, st.lay.nb, st.lay.chunk_nb, st.lay.units, st.lay.k_log, st.nbl, st.m,
+              st.cm.words, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "serve" => serve_loop(move || server(&st, &inst)),

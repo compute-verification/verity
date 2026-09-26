@@ -517,11 +517,15 @@ fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
 /// word (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
 /// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
 pub fn cut_map(inst: &IrInstances, net: &IrUnitNet) -> Result<CutMap, String> {
-    let h = &inst.header;
+    cut_map_of(net, &inst.header, inst.units)
+}
+
+/// [`cut_map`] for any instance file: its header (`instances`, `units_per_instance`, `cut_words`, no `cut`) and unit count.
+pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Result<CutMap, String> {
     let g = |k: &str| h[k].as_u64().map(|x| x as usize);
     let (n, upi) = (g("instances").ok_or("no instances count")?, g("units_per_instance").ok_or("no units_per_instance")?);
-    if inst.units != n * upi {
-        return Err(format!("{} units, but {n} instances x {upi} units each", inst.units));
+    if units != n * upi {
+        return Err(format!("{units} units, but {n} instances x {upi} units each"));
     }
     if h.get("cut").is_some() {
         return Err("the instance header carries a cut structure; the cut is the pinned netlist's".into());

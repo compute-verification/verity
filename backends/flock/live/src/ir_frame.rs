@@ -1,21 +1,27 @@
-//! `verity/flock-ir-frame/v1`: an IR template's units bound to their frame-v3 rows (lane flock-ir-lowering;
+//! `verity/flock-ir-frame/v2`: an IR template's units bound to their frame-v3 rows (lane flock-ir-lowering;
 //! `verity_flock.ir_frame` stages the instance file). One block R1CS for the CPU prover and Flock-CUDA's host-witness mode.
 //!
-//! Block `b` holds `G` components: their BLAKE3 chunks' compressions at 2^14-bit slots `0 .. C` (chunk slot `q` at slots
-//! `q nb .. q nb + nb`), then their units at 2^unit_log slots `unit_pos0 ..`. `A = I ⊗ circuit + Δ` (and B), where Δ makes,
-//! inside the block:
-//! - each chunk a chain (chaining input of compression `j ≥ 1` = `out_lo` of compression `j − 1`), its first chaining input
-//!   the x-row key, block_len 64, flags KEYED_HASH | CHUNK_START (j = 0) | CHUNK_END and, for a row of one chunk, ROOT
-//!   (j = nb − 1), all constants;
+//! A run is `nb` consecutive compressions of one BLAKE3 chunk (`chunk_nb` per chunk): run `r` hashes the chunk's blocks
+//! `r nb .. r nb + nb`. Block `b` holds `G` components: their runs at 2^14-bit slots `0 .. C` (run slot `q` at slots
+//! `q nb .. q nb + nb`; slots past the components' runs are empty), then their units at 2^unit_log slots `unit_pos0 ..`.
+//! `A = I ⊗ circuit + Δ` (and B), where Δ makes, inside the block:
+//! - each run a chain (chaining input of compression `j ≥ 1` = `out_lo` of compression `j − 1`);
 //! - every leaf input bit of every unit a copy of the message bit it hashes (the plan's wiring);
 //! - every sub-circuit's constant a copy of the pinned column (compression slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps): every compression's 64
-//! counter bits (the chunk's index in its row, verifier-known), every chunk's `out_lo` at its last compression (a
-//! prover-committed public: the chunk chaining value, or the row digest for a one-chunk row) and every unit's returned-output
-//! words (public, from the verifier's own instance file). The verifier folds each row's chunk values into its digest
-//! natively (BLAKE3's keyed parent tree) and checks the digests, and the output words, against the frame-v3 roots it
-//! recomputes. Padding (missing components of the last block, blocks up to a power of two) hashes zero messages at counter 0.
+//! Public regions, each opened at two verifier points drawn after the commitment (both reps), all values the verifier's:
+//! - every compression's counter, block_len and flags (bits 1024..1152: the chunk's index in its row, 64, KEYED_HASH |
+//!   CHUNK_START at the chunk's first block | CHUNK_END and, for a row of one chunk, ROOT at its last);
+//! - every run's chaining input (the x-row key for a chunk's first run, else the previous run's output value);
+//! - every run's `out_lo` at its last compression (a prover-committed public: the run's output value; a chunk's last run's is
+//!   the chunk chaining value, or the row digest for a one-chunk row);
+//! - every unit's returned-output words, and for a cut template every unit's cut input and cut output words (public, from
+//!   the verifier's own instance file, whose cut words the netlist's pinned tail relates).
+//!
+//! So a chunk's runs chain across blocks through their output values, and one circuit serves every block. The verifier folds
+//! each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
+//! words, against the frame-v3 roots it recomputes. An empty run slot (padding) hashes `nb` zero blocks from the key at
+//! counter 0, flags KEYED_HASH | CHUNK_START (first) | CHUNK_END (last).
 
 use std::{
     array::from_fn,
@@ -38,10 +44,11 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, ROOT, comp, key_words, log2ceil, tree},
-    ir_block::IrUnitNet,
+    ir_block::{CutMap, Group, IrUnitNet, cut_map_of},
+    ir_tail::Tables,
 };
 
-pub const TAG: &[u8] = b"verity/flock-ir-frame/v1";
+pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
 pub const PT_LOCAL: usize = 16;
 pub const PIN: usize = b3::Z_CONST_POS;
 const WORD: usize = 128;
@@ -59,15 +66,20 @@ fn usizes(v: &Value) -> Vec<usize> {
 #[derive(Clone, Debug)]
 pub struct Layout {
     pub comp_slots: usize,
+    /// compressions per run
     pub nb: usize,
+    /// compressions per chunk (every chunk of every row: one size)
+    pub chunk_nb: usize,
+    /// run slots per block
     pub chunks: usize,
     pub units: usize,
     pub unit_log: usize,
     pub unit_pos0: usize,
     pub k_log: usize,
+    /// components per block
+    pub g: usize,
     pub chunks_per_comp: usize,
     pub units_per_comp: usize,
-    pub single_chunk: Vec<bool>,
     pub wiring: Vec<Vec<(usize, usize)>>,
     pub leaf_cols: Vec<usize>,
     pub ret_col: usize,
@@ -76,10 +88,10 @@ pub struct Layout {
     pub out_leaf: Vec<Vec<usize>>,
 }
 
-/// A chunk slot's contents: (instance, input port, chunk index in the row).
-pub type ChunkRef = Option<(usize, usize, usize)>;
+/// A run slot's contents: (instance, input port, chunk index in the row, run index in the chunk).
+pub type ChunkRef = Option<(usize, usize, usize, usize)>;
 
-/// A `flock-ir-frame/v1` instance file.
+/// A `flock-ir-frame/v2` instance file.
 pub struct FrameInstances {
     pub header: Value,
     pub unit: String,
@@ -93,9 +105,10 @@ pub struct FrameInstances {
     pub rows: Vec<u8>,
     pub digests: Vec<[u8; 32]>,
     pub outputs: Vec<F128>,
+    /// every instance's cut words (`cut_words` each)
     pub cuts: Vec<u32>,
     pub key: [u8; 32],
-    /// sha256 of every public byte (header, row digests, output words): what Σ binds; the rows are not in it.
+    /// sha256 of every public byte (header, row digests, output words, cut words): what Σ binds; the rows are not in it.
     pub public_sha256: [u8; 32],
 }
 
@@ -104,8 +117,8 @@ impl FrameInstances {
         let b = std::fs::read(path).map_err(|e| format!("instances: {e}"))?;
         let nl = b.iter().position(|&c| c == b'\n').ok_or("no header line")?;
         let header: Value = serde_json::from_slice(&b[..nl]).map_err(|e| format!("header: {e}"))?;
-        if header["format"] != "flock-ir-frame/v1" {
-            return Err("not a flock-ir-frame/v1 instance file".into());
+        if header["format"] != "flock-ir-frame/v2" {
+            return Err("not a flock-ir-frame/v2 instance file".into());
         }
         let (n, upi, units) = (g_usize(&header, "instances")?, g_usize(&header, "units_per_instance")?, g_usize(&header, "units")?);
         if units != n * upi {
@@ -119,14 +132,15 @@ impl FrameInstances {
         let lay = Layout {
             comp_slots: g_usize(l, "comp_slots")?,
             nb: g_usize(l, "nb")?,
+            chunk_nb: g_usize(l, "chunk_nb")?,
             chunks: g_usize(l, "chunks_per_block")?,
             units: g_usize(l, "units_per_block")?,
             unit_log: g_usize(l, "unit_log")?,
             unit_pos0: g_usize(l, "unit_pos0")?,
             k_log: g_usize(l, "k_log")?,
+            g: g_usize(l, "G")?,
             chunks_per_comp: g_usize(l, "chunks_per_comp")?,
             units_per_comp: g_usize(l, "units_per_comp")?,
-            single_chunk: l["single_chunk"].as_array().map(|a| a.iter().map(|x| x.as_bool().unwrap_or(false)).collect()).unwrap_or_default(),
             wiring: l["wiring"].as_array().ok_or("no wiring")?.iter().map(|u| {
                 u.as_array().map(|a| a.iter().map(|p| (p[0].as_u64().unwrap_or(0) as usize, p[1].as_u64().unwrap_or(0) as usize)).collect()).unwrap_or_default()
             }).collect(),
@@ -137,7 +151,10 @@ impl FrameInstances {
             out_leaf: l["out_leaf"].as_array().ok_or("no out_leaf")?.iter().map(usizes).collect(),
         };
         let blocks = header["blocks"].as_array().ok_or("no blocks")?.iter().map(|bl| {
-            let chunks = bl[0].as_array().map(|a| a.iter().map(|c| c.as_array().map(|x| (x[0].as_u64().unwrap_or(0) as usize, x[1].as_u64().unwrap_or(0) as usize, x[2].as_u64().unwrap_or(0) as usize))).collect()).unwrap_or_default();
+            let chunks = bl[0].as_array().map(|a| a.iter().map(|c| c.as_array().map(|x| {
+                let f = |k: usize| x.get(k).and_then(|v| v.as_u64()).unwrap_or(u64::MAX) as usize;
+                (f(0), f(1), f(2), f(3))
+            })).collect()).unwrap_or_default();
             let us = bl[1].as_array().map(|a| a.iter().map(|u| u.as_u64().map(|x| x as usize)).collect()).unwrap_or_default();
             (chunks, us)
         }).collect();
@@ -161,7 +178,7 @@ impl FrameInstances {
         let key: [u8; 32] = hexb(header["frame_v3"]["key"].as_str().ok_or("no frame_v3 key")?)?.try_into().map_err(|_| "key length")?;
         let mut h = Sha256::new();
         h.update(&b[..nl]);
-        h.update(&b[pub_start..pub_start + 32 * n * in_ports.len() + 16 * units * lay.ret_words]);
+        h.update(&b[pub_start..]);
         let public_sha256: [u8; 32] = h.finalize().into();
         Ok(FrameInstances { unit: header["unit"].as_str().unwrap_or("").to_string(), header, n, upi, units, in_ports, out_ports, lay, blocks, rows,
                             digests, outputs, cuts, key, public_sha256 })
@@ -276,43 +293,72 @@ pub fn check_roots(inst: &FrameInstances) -> Result<(), String> {
     Ok(())
 }
 
-/// The block table against the plan: every row chunk in exactly one chunk slot, every unit in exactly one unit slot, and each
-/// unit slot's instance the instance of its component's chunks.
+/// The block table against the plan: every row's chunks `64 chunk_nb` bytes each; every run of every row chunk in exactly one
+/// run slot of the blocks' components, the slots past them empty; every unit in exactly one unit slot, beside its
+/// component's runs, which are its instance's.
 pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
     let lay = &inst.lay;
+    if lay.nb == 0 || lay.chunk_nb % lay.nb != 0 || lay.g * lay.chunks_per_comp > lay.chunks || lay.g * lay.units_per_comp != lay.units {
+        return Err("the run and component counts are not a flock-ir-frame/v2 layout".into());
+    }
+    for (p, (name, w)) in inst.in_ports.iter().enumerate() {
+        let full = if inst.chunks_of(p) == 1 { 2 * w == 64 * lay.chunk_nb } else { (2 * w) % 1024 == 0 && lay.chunk_nb == 16 };
+        if !full {
+            return Err(format!("input port {name}: its {}-byte rows are not whole chunks of {} blocks", 2 * w, lay.chunk_nb));
+        }
+    }
+    let runs = lay.chunk_nb / lay.nb;
     let mut seen_c = BTreeSet::new();
     let mut seen_u = BTreeSet::new();
     for (b, (chunks, units)) in inst.blocks.iter().enumerate() {
         if chunks.len() != lay.chunks || units.len() != lay.units {
-            return Err(format!("block {b}: {} chunk slots and {} unit slots, the layout has {} and {}", chunks.len(), units.len(), lay.chunks, lay.units));
+            return Err(format!("block {b}: {} run slots and {} unit slots, the layout has {} and {}", chunks.len(), units.len(), lay.chunks, lay.units));
+        }
+        if chunks[lay.g * lay.chunks_per_comp..].iter().any(|c| c.is_some()) {
+            return Err(format!("block {b}: a run past its components' slots"));
         }
         for (u, g) in units.iter().enumerate() {
             let k = u / lay.units_per_comp;
-            let insts: BTreeSet<usize> = chunks[k * lay.chunks_per_comp..(k + 1) * lay.chunks_per_comp].iter().map(|c| c.map(|x| x.0)).map(|x| x.unwrap_or(usize::MAX)).collect();
+            let insts: BTreeSet<usize> = chunks[k * lay.chunks_per_comp..(k + 1) * lay.chunks_per_comp].iter().map(|c| c.map_or(usize::MAX, |x| x.0)).collect();
             match g {
                 Some(g) => {
                     if !seen_u.insert(*g) || *g >= inst.units || insts != BTreeSet::from([g / inst.upi]) {
                         return Err(format!("block {b}: unit slot {u} holds unit {g}, not of its component's instance"));
                     }
                 }
-                None if insts != BTreeSet::from([usize::MAX]) => return Err(format!("block {b}: an empty unit slot beside real chunks")),
+                None if insts != BTreeSet::from([usize::MAX]) => return Err(format!("block {b}: an empty unit slot beside real runs")),
                 None => {}
             }
         }
         for (q, c) in chunks.iter().enumerate() {
-            if let Some((i, p, ci)) = c {
-                if *p >= inst.in_ports.len() || *ci >= inst.chunks_of(*p) || *i >= inst.n || !seen_c.insert((*i, *p, *ci)) {
-                    return Err(format!("block {b}: chunk slot {q} holds a chunk outside the rows or twice"));
-                }
-                if lay.single_chunk[q] != (inst.chunks_of(*p) == 1) {
-                    return Err(format!("block {b}: chunk slot {q}'s ROOT flag does not match its row"));
+            if let Some((i, p, ci, r)) = c {
+                if *p >= inst.in_ports.len() || *ci >= inst.chunks_of(*p) || *i >= inst.n || *r >= runs || !seen_c.insert((*i, *p, *ci, *r)) {
+                    return Err(format!("block {b}: run slot {q} holds a run outside the rows or twice"));
                 }
             }
         }
     }
-    let want_c: usize = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p)).sum::<usize>() * inst.n;
+    let want_c: usize = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p)).sum::<usize>() * inst.n * runs;
     if seen_c.len() != want_c || seen_u.len() != inst.units {
-        return Err("the blocks do not hold every row chunk and every unit".into());
+        return Err("the blocks do not hold every run of every row chunk and every unit".into());
+    }
+    Ok(())
+}
+
+/// Per instance, the netlist's pinned tail evaluated on the cut words its units compute: every other cut word in the file must
+/// be what it gives (the units' cut ports are region claims on these words).
+pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result<(), String> {
+    if cm.words == 0 {
+        return Ok(());
+    }
+    let produced: BTreeSet<usize> = cm.unit_out.iter().flatten().map(|p| p.1).collect();
+    for i in 0..inst.n {
+        let file = &inst.cuts[i * cm.words..(i + 1) * cm.words];
+        let mut slots: Vec<Option<u32>> = (0..cm.words).map(|k| produced.contains(&k).then_some(file[k])).collect();
+        crate::ir_tail::eval(&cm.tail, &mut slots, t);
+        if let Some(k) = (0..cm.words).find(|&k| slots[k] != Some(file[k])) {
+            return Err(format!("instance {i}: cut word {k} is not what the tail computes from the units' words"));
+        }
     }
     Ok(())
 }
@@ -321,9 +367,15 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Region {
-    Counter,
+    /// every compression's counter, block_len and flags
+    Params,
+    /// every run's chaining input
+    CvIn,
+    /// every run's output value
     Cv,
     Out,
+    CutIn,
+    CutOut,
 }
 
 pub struct RegionShape {
@@ -388,15 +440,19 @@ impl LincheckCircuit for FrameCircuit {
     }
 }
 
-pub fn flags_of(j: usize, nb: usize, single: bool) -> u32 {
-    KEYED_HASH | if j == 0 { CHUNK_START } else { 0 } | if j + 1 == nb { CHUNK_END | if single { ROOT } else { 0 } } else { 0 }
+/// Flags of block `j` of a chunk of `n` blocks (`single`: the row's only chunk).
+pub fn flags_of(j: usize, n: usize, single: bool) -> u32 {
+    KEYED_HASH | if j == 0 { CHUNK_START } else { 0 } | if j + 1 == n { CHUNK_END | if single { ROOT } else { 0 } } else { 0 }
 }
 
-fn delta(net: &IrUnitNet, lay: &Layout, key: &[u32; 8]) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
+fn delta(net: &IrUnitNet, lay: &Layout) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let c = comp();
     let (a, b) = (&c.a_0.rows, &c.b_0.rows);
     let z = b3::Z_CONST_POS;
     let input = |r: usize| assert!(a[r] == [r] && b[r] == [z], "compression row {r} is not an input row");
+    for r in (b3::CV_BASE..b3::CV_BASE + 256).chain(b3::T_LO_BASE..b3::FLAGS_BASE + 32) {
+        input(r);
+    }
     let (mut da, mut db) = (Vec::new(), Vec::new());
     let both = |da: &mut Vec<(u32, u32)>, db: &mut Vec<(u32, u32)>, i: usize, new: usize| {
         for d in [da, db] {
@@ -404,35 +460,17 @@ fn delta(net: &IrUnitNet, lay: &Layout, key: &[u32; 8]) -> (Vec<(u32, u32)>, Vec
             d.push((i as u32, new as u32));
         }
     };
-    let constant = |da: &mut Vec<(u32, u32)>, g: &dyn Fn(usize) -> usize, base: usize, val: u32| {
-        for bit in 0..32 {
-            let r = base + bit;
-            input(r);
-            da.push((g(r) as u32, g(r) as u32));
-            if (val >> bit) & 1 == 1 {
-                da.push((g(r) as u32, g(z) as u32));
-            }
-        }
-    };
     for s in 0..lay.comp_slots {
-        let (q, j) = (s / lay.nb, s % lay.nb);
         let g = |col: usize| (s << b3::K_LOG) + col;
         if s > 0 {
             both(&mut da, &mut db, g(z), PIN);
         }
-        if j > 0 {
+        if s % lay.nb > 0 {
             for r in 0..256 {
-                input(b3::CV_BASE + r);
                 da.push((g(b3::CV_BASE + r) as u32, g(b3::CV_BASE + r) as u32));
                 da.push((g(b3::CV_BASE + r) as u32, (((s - 1) << b3::K_LOG) + b3::OUT_LO_BASE + r) as u32));
             }
-        } else {
-            for (w, &kw) in key.iter().enumerate() {
-                constant(&mut da, &g, b3::CV_BASE + 32 * w, kw);
-            }
         }
-        constant(&mut da, &g, b3::BLEN_BASE, 64);
-        constant(&mut da, &g, b3::FLAGS_BASE, flags_of(j, lay.nb, lay.single_chunk[q]));
     }
     for u in 0..lay.units {
         let base = (lay.unit_pos0 + u) << lay.unit_log;
@@ -451,6 +489,8 @@ fn delta(net: &IrUnitNet, lay: &Layout, key: &[u32; 8]) -> (Vec<(u32, u32)>, Vec
 pub struct FrameStmt {
     pub lay: Layout,
     pub net: IrUnitNet,
+    /// the netlist's pinned cut structure (no cut words for a template without a cut)
+    pub cm: CutMap,
     pub blocks_real: usize,
     pub nbl: usize,
     pub m: usize,
@@ -460,9 +500,15 @@ pub struct FrameStmt {
     pub r1cs: BlockR1cs,
     pub digest: [u8; 32],
     pub key: [u32; 8],
-    /// A padding chunk's value per chunk slot (zero messages, counter 0).
-    pub dummy_cv: Vec<[u32; 8]>,
+    /// whether each input port's rows are one chunk (ROOT on its last block)
+    pub single: Vec<bool>,
+    /// where each run sits: (instance, port, chunk, run) -> (block, run slot)
+    pub run_at: BTreeMap<(usize, usize, usize, usize), (usize, usize)>,
+    /// an empty run slot's output value (`nb` zero blocks from the key, counter 0)
+    pub dummy_cv: [u32; 8],
+    /// an empty unit slot's returned-output words and cut output words (all-zero inputs)
     pub dummy_out: Vec<F128>,
+    pub dummy_cut_out: Vec<F128>,
 }
 
 impl FrameStmt {
@@ -470,66 +516,84 @@ impl FrameStmt {
         let lay = inst.lay.clone();
         let pow2 = |x: usize| x.is_power_of_two();
         if !(pow2(lay.nb) && pow2(lay.chunks) && lay.comp_slots == lay.chunks * lay.nb && pow2(lay.units) && lay.unit_pos0 % lay.units == 0
-            && lay.unit_log == net.unit_log && lay.comp_slots << b3::K_LOG <= lay.unit_pos0 << lay.unit_log
+            && lay.chunk_nb % lay.nb == 0 && lay.unit_log == net.unit_log && lay.comp_slots << b3::K_LOG <= lay.unit_pos0 << lay.unit_log
             && (lay.unit_pos0 + lay.units) << lay.unit_log <= 1 << lay.k_log && lay.wiring.len() == lay.units
-            && lay.wiring.iter().all(|w| w.len() == lay.leaf_cols.len()) && lay.single_chunk.len() == lay.chunks)
+            && lay.wiring.iter().all(|w| w.len() == lay.leaf_cols.len()))
         {
-            return Err("the block layout is not a valid flock-ir-frame/v1 layout".into());
+            return Err("the block layout is not a valid flock-ir-frame/v2 layout".into());
         }
         if lay.wiring.iter().flatten().any(|&(q, off)| q >= lay.chunks || off % 2 == 1 || off >= 64 * lay.nb) {
-            return Err("a unit reads outside its block's chunks".into());
+            return Err("a unit reads outside its block's runs".into());
         }
         if net.out_groups.is_empty() || net.out_groups[0].col != lay.ret_col || net.out_groups[0].words != lay.ret_words {
             return Err("the returned-output group is not the netlist's first output group".into());
         }
+        let cm = cut_map_of(&net, &inst.header, inst.units)?;
+        let groups = 1 + (cm.words > 0) as usize;
         let leaf_cols: Vec<usize> = {
             let g = &net.in_groups[0];
             g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some(c) }).collect()
         };
-        if leaf_cols != lay.leaf_cols || net.in_groups[0].bits.iter().any(|&w| w != 16) || net.in_groups.len() != 1 {
-            return Err("the unit's leaf ports are not the netlist's input group (16-bit ports)".into());
+        if leaf_cols != lay.leaf_cols || net.in_groups[0].bits.iter().any(|&w| w != 16) || net.in_groups.len() != groups || net.out_groups.len() != groups {
+            return Err("the unit's port groups are not a leaf input group of 16-bit ports and a returned-output group (and a cut group each)".into());
         }
         let blocks_real = inst.blocks.len();
         let nbl = log2ceil(blocks_real).max(3);
         let (kl, m) = (lay.k_log, lay.k_log + nbl);
         let key = key_words(&inst.key);
-        let (da, db) = delta(&net, &lay, &key);
+        let (da, db) = delta(&net, &lay);
         let bits = |lo: usize, n: usize| (lo..lo + n).collect::<Vec<usize>>();
         let lc = lay.comp_slots.trailing_zeros() as usize;
         let lnb = lay.nb.trailing_zeros() as usize;
         let lq = lay.chunks.trailing_zeros() as usize;
         let lu = lay.units.trailing_zeros() as usize;
-        let lw = lay.ret_words.trailing_zeros() as usize;
         let mk = |region: Region, free: Vec<usize>, fixed: u32| -> RegionShape {
             let mask = ((1u32 << kl) - 1) & !free.iter().fold(0u32, |mm, &b| mm | (1 << b));
             assert_eq!(fixed & !mask, 0, "{region:?}");
             assert!(free.len() <= PT_LOCAL, "{region:?}: {} free bits", free.len());
             RegionShape { region, free, mask, fixed }
         };
-        let regions = vec![
-            mk(Region::Counter, [bits(0, 6), bits(b3::K_LOG, lc)].concat(), (b3::T_LO_BASE as u32) & !63),
+        let unit_group = |region: Region, g: &Group| {
+            mk(region, [bits(0, 7 + g.words.trailing_zeros() as usize), bits(lay.unit_log, lu)].concat(),
+               ((g.col as u32) << 7) | (((lay.unit_pos0 >> lu) as u32) << (lay.unit_log + lu)))
+        };
+        assert!(b3::T_LO_BASE % 128 == 0 && b3::FLAGS_BASE + 32 == b3::T_LO_BASE + 128 && b3::CV_BASE % 256 == 0);
+        let mut regions = vec![
+            mk(Region::Params, [bits(0, 7), bits(b3::K_LOG, lc)].concat(), b3::T_LO_BASE as u32),
+            mk(Region::CvIn, [bits(0, 8), bits(b3::K_LOG + lnb, lq)].concat(), b3::CV_BASE as u32),
             mk(Region::Cv, [bits(0, 8), bits(b3::K_LOG + lnb, lq)].concat(), (b3::OUT_LO_BASE as u32) | (((lay.nb - 1) as u32) << b3::K_LOG)),
-            mk(Region::Out, [bits(0, 7 + lw), bits(lay.unit_log, lu)].concat(),
-               ((lay.ret_col as u32) << 7) | (((lay.unit_pos0 >> lu) as u32) << (lay.unit_log + lu))),
+            unit_group(Region::Out, &net.out_groups[0]),
         ];
-        assert_eq!(b3::T_HI_BASE, b3::T_LO_BASE + 32);
-        let dummy_cv: Vec<[u32; 8]> = (0..lay.chunks).map(|q| {
-            let mut cv = key;
-            for j in 0..lay.nb {
-                cv = blake3_compress(&cv, &[0u32; 16], 0, 64, flags_of(j, lay.nb, lay.single_chunk[q]))[..8].try_into().unwrap();
+        if cm.words > 0 {
+            regions.push(unit_group(Region::CutIn, &net.in_groups[1]));
+            regions.push(unit_group(Region::CutOut, &net.out_groups[1]));
+        }
+        let single: Vec<bool> = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p) == 1).collect();
+        let mut run_at = BTreeMap::new();
+        for (b, (chunks, _)) in inst.blocks.iter().enumerate() {
+            for (q, c) in chunks.iter().enumerate() {
+                if let Some(x) = c {
+                    run_at.insert(*x, (b, q));
+                }
             }
-            cv
-        }).collect();
-        let dummy_out = {
-            let o = net.outputs(&vec![F128::ZERO; net.in_words]);
-            o[..lay.ret_words].to_vec()
+        }
+        let mut dummy_cv = key;
+        for j in 0..lay.nb {
+            dummy_cv = blake3_compress(&dummy_cv, &[0u32; 16], 0, 64, flags_of(j, lay.nb, false))[..8].try_into().unwrap();
+        }
+        let o = net.outputs(&vec![F128::ZERO; net.in_words]);
+        let dummy_out = o[..lay.ret_words].to_vec();
+        let dummy_cut_out = match net.out_groups.get(1) {
+            Some(g) if cm.words > 0 => o[g.col - net.out_groups[0].col..g.col - net.out_groups[0].col + g.words].to_vec(),
+            _ => vec![],
         };
         let mut h = Sha256::new();
         h.update(TAG);
         h.update(comp().statement_digest());
         h.update(net.sha256);
         h.update(inst.key);
-        for x in [blocks_real, nbl, m, kl, lay.comp_slots, lay.nb, lay.chunks, lay.units, lay.unit_log, lay.unit_pos0, lay.ret_col, lay.ret_words] {
+        for x in [blocks_real, nbl, m, kl, lay.comp_slots, lay.nb, lay.chunk_nb, lay.chunks, lay.units, lay.unit_log, lay.unit_pos0, lay.ret_col,
+                  lay.ret_words, cm.words, regions.len()] {
             h.update((x as u64).to_le_bytes());
         }
         for d in [&da, &db] {
@@ -564,36 +628,60 @@ impl FrameStmt {
         let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(pad(&net.a))), Box::leak(Box::new(pad(&net.b))));
         let circuit = FrameCircuit { k_log: kl, comp_slots: lay.comp_slots, unit_log: lay.unit_log, unit_pos0: lay.unit_pos0, units: lay.units,
                                      unit: SparseMatrixCircuit::new(ua, ub), da, db };
-        Ok(FrameStmt { lay, net, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit, r1cs, digest, key, dummy_cv, dummy_out })
+        Ok(FrameStmt { lay, net, cm, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit, r1cs, digest, key, single, run_at, dummy_cv,
+                       dummy_out, dummy_cut_out })
     }
 
     pub fn blocks(&self) -> usize {
         1 << self.nbl
     }
 
-    /// Every compression, block-major (`comp_slots` per block), and each real block's chunk values (the publics).
+    /// Block `j` of chunk `c` of input port `p` of instance `i`, as 16 message words.
+    fn message(inst: &FrameInstances, i: usize, p: usize, c: usize, j: usize) -> [u32; 16] {
+        let row = inst.row(i, p);
+        let at = 1024 * c + 64 * j;
+        from_fn(|w| u32::from_le_bytes(row[at + 4 * w..at + 4 * w + 4].try_into().unwrap()))
+    }
+
+    /// A run slot's compressions (chaining input, message, counter, block_len, flags) from chaining input `cv`.
+    fn run(&self, inst: &FrameInstances, run: ChunkRef, cv: [u32; 8]) -> Vec<b3::Compression> {
+        let lay = &self.lay;
+        let mut cv = cv;
+        (0..lay.nb).map(|j| {
+            let (msg, ctr, f) = match run {
+                Some((i, p, c, r)) => (Self::message(inst, i, p, c, r * lay.nb + j), c as u64, flags_of(r * lay.nb + j, lay.chunk_nb, self.single[p])),
+                None => ([0; 16], 0, flags_of(j, lay.nb, false)),
+            };
+            let x = (cv, msg, ctr, 64, f);
+            cv = blake3_compress(&cv, &msg, ctr, 64, f)[..8].try_into().unwrap();
+            x
+        }).collect()
+    }
+
+    /// A run's honest chaining input: the key, hashed natively through the chunk's earlier blocks.
+    pub fn run_input(&self, inst: &FrameInstances, run: ChunkRef) -> [u32; 8] {
+        let mut cv = self.key;
+        if let Some((i, p, c, r)) = run {
+            for jj in 0..r * self.lay.nb {
+                let f = flags_of(jj, self.lay.chunk_nb, self.single[p]);
+                cv = blake3_compress(&cv, &Self::message(inst, i, p, c, jj), c as u64, 64, f)[..8].try_into().unwrap();
+            }
+        }
+        cv
+    }
+
+    /// Every compression, block-major (`comp_slots` per block), and each real block's run output values (the publics).
     pub fn compressions(&self, inst: &FrameInstances) -> (Vec<b3::Compression>, Vec<Vec<[u32; 8]>>) {
         let lay = &self.lay;
         let per: Vec<(Vec<b3::Compression>, Vec<[u32; 8]>)> = (0..self.blocks()).into_par_iter().map(|b| {
             let mut out = Vec::with_capacity(lay.comp_slots);
             let mut cvs = Vec::with_capacity(lay.chunks);
             for q in 0..lay.chunks {
-                let chunk = inst.blocks.get(b).and_then(|bl| bl.0[q]);
-                let (mut cv, ctr) = (self.key, chunk.map_or(0, |c| c.2 as u64));
-                for j in 0..lay.nb {
-                    let msg: [u32; 16] = match chunk {
-                        Some((i, p, c)) => {
-                            let row = inst.row(i, p);
-                            let at = 1024 * c + 64 * j;
-                            from_fn(|w| u32::from_le_bytes(row[at + 4 * w..at + 4 * w + 4].try_into().unwrap()))
-                        }
-                        None => [0; 16],
-                    };
-                    let f = flags_of(j, lay.nb, lay.single_chunk[q]);
-                    out.push((cv, msg, ctr, 64, f));
-                    cv = blake3_compress(&cv, &msg, ctr, 64, f)[..8].try_into().unwrap();
-                }
-                cvs.push(cv);
+                let run = inst.blocks.get(b).and_then(|bl| bl.0[q]);
+                let cs = self.run(inst, run, self.run_input(inst, run));
+                let last = cs.last().unwrap();
+                cvs.push(blake3_compress(&last.0, &last.1, last.2, last.3, last.4)[..8].try_into().unwrap());
+                out.extend(cs);
             }
             (out, cvs)
         }).collect();
@@ -601,16 +689,23 @@ impl FrameStmt {
         (per.into_iter().flat_map(|p| p.0).collect(), cvs)
     }
 
-    /// Unit slot `u` of block `b`'s input words: each leaf port the 16-bit word at its wired message bytes.
-    pub fn unit_inputs(&self, comps: &[b3::Compression], b: usize, u: usize) -> Vec<F128> {
+    /// Unit slot `u` of block `b`'s input words: each leaf port the 16-bit word at its wired message bytes, and each cut input
+    /// port the instance's cut word (the verifier's file).
+    pub fn unit_inputs(&self, inst: &FrameInstances, comps: &[b3::Compression], b: usize, u: usize) -> Vec<F128> {
         let lay = &self.lay;
         let mut w = vec![F128::ZERO; self.net.in_words];
+        let put = |w: &mut Vec<F128>, c: usize, v: u64| if c % WORD < 64 { w[c / WORD].lo |= v << (c % WORD) } else { w[c / WORD].hi |= v << (c % WORD - 64) };
         for (j, &(q, off)) in lay.wiring[u].iter().enumerate() {
             let msg = &comps[b * lay.comp_slots + q * lay.nb + off / 64].1;
             let byte = off % 64;
-            let v = ((msg[byte / 4] >> (8 * (byte % 4))) & 0xFFFF) as u64;
-            let c = lay.leaf_cols[j];
-            if c % WORD < 64 { w[c / WORD].lo |= v << (c % WORD) } else { w[c / WORD].hi |= v << (c % WORD - 64) }
+            put(&mut w, lay.leaf_cols[j], ((msg[byte / 4] >> (8 * (byte % 4))) & 0xFFFF) as u64);
+        }
+        if let Some(g) = inst.blocks.get(b).and_then(|bl| bl.1[u]) {
+            let (i, lu) = (g / inst.upi, g % inst.upi);
+            for &(c, k) in &self.cm.unit_in[lu] {
+                let v = inst.cuts[i * self.cm.words + k] as u64;
+                put(&mut w, c, v & 0xFFFF_FFFF);
+            }
         }
         w
     }
@@ -671,29 +766,62 @@ impl FrameStmt {
         (z, a, b, zl)
     }
 
+    /// A unit slot's words of a cut port group (`base`: the group's first bit in the ports' column numbering).
+    fn cut_group_words(&self, inst: &FrameInstances, g: usize, ports: &[(usize, usize)], words: usize, base: usize) -> Vec<F128> {
+        let mut w = vec![F128::ZERO; words];
+        let i = g / inst.upi;
+        for &(c, k) in ports {
+            let (v, t) = (inst.cuts[i * self.cm.words + k] as u64, c - base);
+            if t % WORD < 64 { w[t / WORD].lo |= v << (t % WORD) } else { w[t / WORD].hi |= v << (t % WORD - 64) }
+        }
+        w
+    }
+
     /// Block `b`'s bytes of a region, in free-assignment order.
     fn region_bytes(&self, reg: Region, inst: &FrameInstances, cvs: &[Vec<[u32; 8]>], b: usize) -> Vec<u8> {
         let lay = &self.lay;
         let bl = inst.blocks.get(b);
+        let words = |v: Vec<F128>| v.into_iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat()).collect::<Vec<u8>>();
+        let cv_bytes = |cv: [u32; 8]| cv.into_iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>();
         match reg {
-            Region::Counter => (0..lay.comp_slots).flat_map(|s| {
-                let c = bl.and_then(|x| x.0[s / lay.nb]).map_or(0u64, |c| c.2 as u64);
-                c.to_le_bytes()
+            Region::Params => (0..lay.comp_slots).flat_map(|s| {
+                let (q, j) = (s / lay.nb, s % lay.nb);
+                let (ctr, f) = match bl.and_then(|x| x.0[q]) {
+                    Some((_, p, c, r)) => (c as u64, flags_of(r * lay.nb + j, lay.chunk_nb, self.single[p])),
+                    None => (0, flags_of(j, lay.nb, false)),
+                };
+                [ctr.to_le_bytes().to_vec(), 64u32.to_le_bytes().to_vec(), f.to_le_bytes().to_vec()].concat()
             }).collect(),
-            Region::Cv => (0..lay.chunks).flat_map(|q| {
+            Region::CvIn => (0..lay.chunks).flat_map(|q| {
                 let cv = match bl.and_then(|x| x.0[q]) {
-                    Some(_) => cvs[b][q],
-                    None => self.dummy_cv[q],
+                    Some((i, p, c, r)) if r > 0 => {
+                        let (b0, q0) = self.run_at[&(i, p, c, r - 1)];
+                        cvs[b0][q0]
+                    }
+                    _ => self.key,
                 };
-                cv.into_iter().flat_map(|w| w.to_le_bytes())
+                cv_bytes(cv)
             }).collect(),
-            Region::Out => (0..lay.units).flat_map(|u| {
-                let words: Vec<F128> = match bl.and_then(|x| x.1[u]) {
-                    Some(g) => inst.output(g).to_vec(),
-                    None => self.dummy_out.clone(),
-                };
-                words.into_iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat())
-            }).collect(),
+            Region::Cv => (0..lay.chunks).flat_map(|q| cv_bytes(if bl.and_then(|x| x.0[q]).is_some() { cvs[b][q] } else { self.dummy_cv })).collect(),
+            Region::Out => (0..lay.units).flat_map(|u| words(match bl.and_then(|x| x.1[u]) {
+                Some(g) => inst.output(g).to_vec(),
+                None => self.dummy_out.clone(),
+            })).collect(),
+            Region::CutIn => {
+                let gr = &self.net.in_groups[1];
+                (0..lay.units).flat_map(|u| words(match bl.and_then(|x| x.1[u]) {
+                    Some(g) => self.cut_group_words(inst, g, &self.cm.unit_in[g % inst.upi], gr.words, gr.col * WORD),
+                    None => vec![F128::ZERO; gr.words],
+                })).collect()
+            }
+            Region::CutOut => {
+                let gr = &self.net.out_groups[1];
+                let base = (gr.col - self.net.out_groups[0].col) * WORD;
+                (0..lay.units).flat_map(|u| words(match bl.and_then(|x| x.1[u]) {
+                    Some(g) => self.cut_group_words(inst, g, &self.cm.unit_out[g % inst.upi], gr.words, base),
+                    None => self.dummy_cut_out.clone(),
+                })).collect()
+            }
         }
     }
 
@@ -742,7 +870,7 @@ impl FrameStmt {
             .collect()
     }
 
-    /// The prover's publics: every real block's chunk values, 32 bytes each (8 u32 LE).
+    /// The prover's publics: every real block's run output values, 32 bytes each (8 u32 LE).
     pub fn publics_bytes(cvs: &[Vec<[u32; 8]>]) -> Vec<u8> {
         cvs.iter().flatten().flatten().flat_map(|w| w.to_le_bytes()).collect()
     }
@@ -755,13 +883,16 @@ impl FrameStmt {
         Ok(b.chunks(per).map(|blk| blk.chunks(32).map(|c| from_fn(|w| u32::from_le_bytes(c[4 * w..4 * w + 4].try_into().unwrap()))).collect()).collect())
     }
 
-    /// C4: each row's chunk values fold (natively, BLAKE3's keyed parent tree; a one-chunk row's value is its ROOT output)
-    /// into the row digest the verifier's file commits under its frame-v3 root.
+    /// C4: each row's chunk values (each chunk's last run's output value) fold (natively, BLAKE3's keyed parent tree; a one-chunk
+    /// row's value is its ROOT output) into the row digest the verifier's file commits under its frame-v3 root.
     pub fn check_digests(&self, inst: &FrameInstances, cvs: &[Vec<[u32; 8]>]) -> Result<(), String> {
+        let last = self.lay.chunk_nb / self.lay.nb - 1;
         let mut rows: BTreeMap<(usize, usize), BTreeMap<usize, [u32; 8]>> = BTreeMap::new();
         for (b, (chunks, _)) in inst.blocks.iter().enumerate() {
             for (q, c) in chunks.iter().enumerate() {
-                if let Some((i, p, ci)) = c {
+                if let Some((i, p, ci, r)) = c
+                    && *r == last
+                {
                     rows.entry((*i, *p)).or_default().insert(*ci, cvs[b][q]);
                 }
             }

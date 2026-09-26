@@ -31,7 +31,7 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v1); binding its rows under "
+    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v2); binding its rows under "
             f"{scheme} is not wired yet")
 
 

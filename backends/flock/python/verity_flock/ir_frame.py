@@ -1,17 +1,22 @@
-"""frame-v3 binding of a lowered IR template: the statement ``verity/flock-ir-frame/v1`` (``live/src/ir_frame.rs``).
+"""frame-v3 binding of a lowered IR template: the statement ``verity/flock-ir-frame/v2`` (``live/src/ir_frame.rs``).
 
 Every input port of every instance is one frame-v3 row leaf, ``blake3-keyed/row/v2`` under the x-row key, one tree per port
 under its own domain; every output word is one ``u16`` word leaf, one tree per output port: the GEMM cells' x, W and y. The
 rows stay private: the proof hashes them with Flock's BLAKE3 compression circuit, and each unit's input bits are copies of
 the message bits they hash. The outputs are public, as GEMM's y is.
 
-Layout. A unit reads bytes of some 1024-byte BLAKE3 chunks of its instance's rows; units and the chunks they read form
-components, which must all have one shape. A block holds ``G`` components: their chunks' compressions at 2^14-bit slots
-``0 .. comp_slots`` (``nb`` per chunk, a power of two, chunk slots a power of two), then their units at 2^unit_log slots
-``unit_pos0 ..`` (``unit_pos0`` a multiple of the unit count, a power of two), so the counters, the chunk values and the unit
-outputs are each one aligned subcube. Each chunk's chaining value (for a one-chunk row, its ROOT output, the row digest) is
-a prover-committed public; the verifier folds every row's chunk values into its digest natively and checks the digests and
-the output words against the frame-v3 roots it recomputes.
+Layout. A run is ``nb`` consecutive compressions of a 1024-byte BLAKE3 chunk (a whole chunk when that fits, else a half,
+...); units and the runs they read form components, which must all have one shape. A block holds ``G`` components: their
+runs' compressions at 2^14-bit slots ``0 .. comp_slots`` (run slots padded with empty ones to a power of two), then their
+units at 2^unit_log slots ``unit_pos0 ..`` (``unit_pos0`` a multiple of the unit count, a power of two), so each region is one
+aligned subcube. Every compression's counter, block length and flags, and every run's input chaining value (the key for a
+chunk's first run, else the previous run's output), are verifier-fixed region claims, so a chunk's runs may sit in different
+blocks with one circuit for all. Each run's output chaining value (for a one-chunk row, its ROOT output, the row digest) is a
+prover-committed public; the verifier chains a chunk's runs through them, folds every row's chunk values into its digest
+natively and checks the digests and the output words against the frame-v3 roots it recomputes.
+
+A cut template's cut words (``ir_lower.cut_words``) follow in the file: public words of the units that read or compute them,
+each unit's cut ports a region claim; the verifier evaluates the netlist's pinned tail on them before any session.
 """
 from __future__ import annotations
 
@@ -23,8 +28,8 @@ import numpy as np
 
 from . import ir_lower as IL
 
-FORMAT = "flock-ir-frame/v1"
-STATEMENT = "verity/flock-ir-frame/v1"
+FORMAT = "flock-ir-frame/v2"
+STATEMENT = "verity/flock-ir-frame/v2"
 SCHEME = "frame-v3/blake3-keyed"
 BINDING_TAG = "verity/flock-ir-frame/binding/v1"
 CHUNK = 1024
@@ -41,9 +46,10 @@ def _pow2(x: int) -> bool:
 
 @dataclass
 class Plan:
-    """How a template's instances fill blocks. ``comps[c]`` = (its chunks as (input port, chunk index, bytes), its
-    instance-local units); ``wiring[k][j]`` = (local chunk slot, byte offset in the chunk) of leaf input port j of a component's
-    unit k (the same for every component)."""
+    """How a template's instances fill blocks. A run is ``nb`` consecutive compressions of one chunk (``chunk_nb`` per chunk,
+    ``nb`` dividing it): run ``r`` of chunk ``c`` of an input port hashes its bytes ``1024 c + 64 nb r ..`` (``64 nb`` of them).
+    ``comps[c]`` = (its runs as (input port, chunk index, run index), its instance-local units); ``wiring[k][j]`` = (local run
+    slot, byte offset in the run) of leaf input port j of a component's unit k (the same for every component)."""
 
     low: IL.Lowering
     in_ports: list[tuple[str, int]]
@@ -52,6 +58,7 @@ class Plan:
     wiring: list[list[tuple[int, int]]]
     G: int
     nb: int
+    chunk_nb: int
     comp_slots: int
     unit_log: int
     unit_pos0: int
@@ -66,23 +73,18 @@ class Plan:
     def units_per_comp(self) -> int:
         return len(self.comps[0][1])
 
+    @property
+    def chunk_slots(self) -> int:
+        """Run slots per block: the ``G`` components' runs, then empty slots up to a power of two."""
+        return self.comp_slots // self.nb
+
     def blocks(self, n: int) -> int:
         return -(-n * len(self.comps) // self.G)
 
 
-def plan(low: IL.Lowering, sub, k_max: int = K_MAX) -> Plan:
-    if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
-        raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
-    in_ports = [(p.name, p.words) for p in sub.inputs]
-    out_ports = [(p.name, p.words) for p in sub.outputs]
-    starts = np.cumsum([0] + [w for _, w in in_ports])
-    row_bytes = [2 * w for _, w in in_ports]
-
-    def chunk_of(pos: int) -> tuple[int, int, int]:
-        p = int(np.searchsorted(starts, pos, side="right") - 1)
-        byte = 2 * (pos - int(starts[p]))
-        return p, byte // CHUNK, byte % CHUNK
-
+def _components(U, reads, run_bytes: int):
+    """Units and the runs of ``run_bytes`` they read, joined into components: ``(comps, wiring)``, or ``None`` when the
+    components are not all one shape."""
     parent: dict = {}
 
     def find(x):
@@ -91,55 +93,76 @@ def plan(low: IL.Lowering, sub, k_max: int = K_MAX) -> Plan:
             x = parent[x]
         return x
 
-    U = low.units
-    reads = []
+    runs = [[(p, byte // CHUNK, byte % CHUNK // run_bytes, byte % run_bytes) for p, byte in reads[u]] for u in range(U.n)]
     for u in range(U.n):
-        cs = [chunk_of(p) for k, p in U.in_src[u] if k == "leaf"]
-        reads.append(cs)
         find(("u", u))
-        for p, c, _ in cs:
-            parent[find(("c", p, c))] = find(("u", u))
+        for p, c, r, _ in runs[u]:
+            parent[find(("r", p, c, r))] = find(("u", u))
     groups: dict = {}
     for u in range(U.n):
         groups.setdefault(find(("u", u)), []).append(u)
     comps, shapes = [], []
     for units in sorted(groups.values(), key=min):
-        chunks = sorted({(p, c) for u in units for p, c, _ in reads[u]})
-        slot = {pc: i for i, pc in enumerate(chunks)}
-        sizes = tuple(min(CHUNK, row_bytes[p] - CHUNK * c) for p, c in chunks)
-        wiring = tuple(tuple((slot[(p, c)], off) for p, c, off in reads[u]) for u in units)
-        shapes.append((tuple(p for p, _ in chunks), tuple(row_bytes[p] <= CHUNK for p, _ in chunks), sizes, wiring))
-        comps.append(([(p, c, s) for (p, c), s in zip(chunks, sizes)], units))
+        rs = sorted({(p, c, r) for u in units for p, c, r, _ in runs[u]})
+        slot = {x: i for i, x in enumerate(rs)}
+        shapes.append((tuple(p for p, _, _ in rs), tuple(tuple((slot[(p, c, r)], off) for p, c, r, off in runs[u]) for u in units)))
+        comps.append((rs, units))
     if any(s != shapes[0] for s in shapes):
-        raise ValueError(f"{low.name}: its unit-and-chunk components are not all one shape ({len(set(shapes))} shapes)")
-    sizes = set(shapes[0][2])
-    if len(sizes) != 1 or next(iter(sizes)) % BLOCK or not _pow2(next(iter(sizes)) // BLOCK):
+        return None
+    return comps, [list(w) for w in shapes[0][1]]
+
+
+def plan(low: IL.Lowering, sub, k_max: int = K_MAX) -> Plan:
+    """The largest run (a whole chunk, then halves, ...) whose components fit a block of at most 2^k_max bits, and the block
+    packing with the best fill for it."""
+    if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
+        raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
+    in_ports = [(p.name, p.words) for p in sub.inputs]
+    out_ports = [(p.name, p.words) for p in sub.outputs]
+    starts = np.cumsum([0] + [w for _, w in in_ports])
+    row_bytes = [2 * w for _, w in in_ports]
+    sizes = {min(CHUNK, rb - CHUNK * c) for rb in row_bytes for c in range(-(-rb // CHUNK))}
+    size = next(iter(sizes))
+    if len(sizes) != 1 or size % BLOCK or not _pow2(size // BLOCK):
         raise ValueError(f"{low.name}: chunks of {sorted(sizes)} bytes (need one size, a power-of-two multiple of {BLOCK})")
-    nb = next(iter(sizes)) // BLOCK
+    chunk_nb = size // BLOCK
+    U = low.units
+
+    def at(pos: int) -> tuple[int, int]:
+        p = int(np.searchsorted(starts, pos, side="right") - 1)
+        return p, 2 * (pos - int(starts[p]))
+
+    reads = [[at(p) for k, p in U.in_src[u] if k == "leaf"] for u in range(U.n)]
     useful = low.layout.useful
     ul = max(7, (useful - 1).bit_length())
-    cpc, upc = len(comps[0][0]), len(comps[0][1])
-    best = None
-    for G in range(1, MAX_SLOTS + 1):
-        Q, units = G * cpc, G * upc
-        C = Q * nb
-        if C > MAX_SLOTS or units > MAX_SLOTS:
-            break
-        if not (_pow2(Q) and _pow2(units)):
-            continue
-        pos0 = -(-(C << SUB_LOG) // (1 << ul))
-        pos0 = -(-pos0 // units) * units
-        k_log = max(K_MIN, (((pos0 + units) << ul) - 1).bit_length())
-        if k_log > k_max:
-            continue
-        fill = ((C << SUB_LOG) + units * useful) / (1 << k_log)
-        if best is None or fill > best[0] + 1e-9:
-            best = (fill, G, C, pos0, units, k_log)
-    if best is None:
-        raise ValueError(f"{low.name}: no block of at most 2^{k_max} bits holds whole components ({cpc} chunks x {nb} compressions, "
-                         f"{upc} units of 2^{ul}) with power-of-two chunk and unit counts")
-    _, G, C, pos0, units, k_log = best
-    return Plan(low, in_ports, out_ports, comps, [list(w) for w in shapes[0][3]], G, nb, C, ul, pos0, units, k_log)
+    nb = chunk_nb
+    while nb >= 1:
+        found = _components(U, reads, BLOCK * nb)
+        if found is not None:
+            comps, wiring = found
+            cpc, upc = len(comps[0][0]), len(comps[0][1])
+            best = None
+            for G in range(1, MAX_SLOTS + 1):
+                Q, units = 1 << (G * cpc - 1).bit_length(), G * upc
+                C = Q * nb
+                if C > MAX_SLOTS or units > MAX_SLOTS:
+                    break
+                if not _pow2(units):
+                    continue
+                pos0 = -(-(C << SUB_LOG) // (1 << ul))
+                pos0 = -(-pos0 // units) * units
+                k_log = max(K_MIN, (((pos0 + units) << ul) - 1).bit_length())
+                if k_log > k_max:
+                    continue
+                fill = ((C << SUB_LOG) + units * useful) / (1 << k_log)
+                if best is None or fill > best[0] + 1e-9:
+                    best = (fill, G, C, pos0, units, k_log)
+            if best is not None:
+                _, G, C, pos0, units, k_log = best
+                return Plan(low, in_ports, out_ports, comps, wiring, G, nb, chunk_nb, C, ul, pos0, units, k_log)
+        nb //= 2
+    raise ValueError(f"{low.name}: no run of a chunk's compressions gives components of one shape that fit a block of at most "
+                     f"2^{k_max} bits (units of 2^{ul}, a power-of-two unit count)")
 
 
 # --- frame-v3 statement commitments ------------------------------------------------------------------------------------------
@@ -183,10 +206,10 @@ def statement(pl: Plan, input_set, lo: int, hi: int, rows: dict[str, np.ndarray]
 # --- the instance file -------------------------------------------------------------------------------------------------------
 
 def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None = None) -> dict:
-    """``flock-ir-frame/v1``: one JSON header line (the plan, every block's chunks and units, the frame-v3 statement), then every
-    instance's input rows (ports in order, words little-endian), every instance's row digests (32 bytes per input port), every
-    unit's returned-output words (``ret_words`` x 16 bytes, units instance-major) and, for a cut template, every instance's cut
-    words (u32 LE; the prover's: the verifier takes them from the proof's publics)."""
+    """``flock-ir-frame/v2``: one JSON header line (the plan, every block's runs as ``[instance, port, chunk, run]`` and units, the
+    frame-v3 statement), then every instance's input rows (ports in order, words little-endian), every instance's row digests
+    (32 bytes per input port), every unit's returned-output words (``ret_words`` x 16 bytes, units instance-major) and, for a
+    cut template, every instance's cut words (u32 LE)."""
     low, sub, n = pl.low, input_set.subcircuit, hi - lo
     U, lay = low.units, low.layout
     rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
@@ -203,9 +226,9 @@ def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None =
                 continue
             i, c = divmod(gi, len(pl.comps))
             cs, us = pl.comps[c]
-            chunks += [[i, p, ci] for p, ci, _ in cs]
+            chunks += [[i, p, ci, r] for p, ci, r in cs]
             units += [i * U.n + u for u in us]
-        blocks.append([chunks, units])
+        blocks.append([chunks + [None] * (pl.chunk_slots - len(chunks)), units])
     ret = lay.out_groups[0]
     n_ret = len(ret[2])
     fout = IL.flat_ports(input_set, sub.outputs, lo, hi)
@@ -216,11 +239,9 @@ def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None =
             "set": input_set.name, "subcircuit": sub.id, "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n,
             "units_per_instance": U.n, "units": n * U.n,
             "in_ports": [[nm, w] for nm, w in pl.in_ports], "out_ports": [[nm, w] for nm, w in pl.out_ports],
-            "layout": {"sub_log": SUB_LOG, "comp_slots": pl.comp_slots, "nb": pl.nb, "chunks_per_block": pl.G * pl.chunks_per_comp,
+            "layout": {"sub_log": SUB_LOG, "comp_slots": pl.comp_slots, "nb": pl.nb, "chunk_nb": pl.chunk_nb, "chunks_per_block": pl.chunk_slots,
                        "units_per_block": pl.units_per_block, "unit_log": pl.unit_log, "unit_pos0": pl.unit_pos0, "k_log": pl.k_log,
                        "G": pl.G, "chunks_per_comp": pl.chunks_per_comp, "units_per_comp": pl.units_per_comp,
-                       "chunk_ports": [p for p, _, _ in pl.comps[0][0]] * pl.G,
-                       "single_chunk": [2 * pl.in_ports[p][1] <= CHUNK for p, _, _ in pl.comps[0][0]] * pl.G,
                        "wiring": [[[q + pl.chunks_per_comp * (k // pl.units_per_comp), off] for q, off in pl.wiring[k % pl.units_per_comp]]
                                   for k in range(pl.units_per_block)],
                        "leaf_cols": [lay.in_port_cols[j] for j in leaf_ports],
@@ -247,7 +268,6 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, k_max: int = K
     sub = input_set.subcircuit
     pl = plan(low, sub, k_max)
     path = out / f"frame-{hi - lo}.bin"
-    if low.units.cut:
-        raise NotImplementedError(f"{low.name}: the frame statement's cut words (committed publics + native tail) are not wired yet")
-    write(pl, input_set, lo, hi, path)
+    cuts = IL.cut_words(low, IL.flat_ports(input_set, sub.inputs, lo, hi)) if low.units.cut else None
+    write(pl, input_set, lo, hi, path, cuts)
     return path

@@ -181,8 +181,9 @@ def test_supports_says_what_is_missing():
         assert REG.supports(sub, "frame-v3/blake3-keyed") is None and REG.relation(sub, "frame-v3/blake3-keyed") == f"irf:{template}"
         assert "not wired yet" in REG.supports(sub, "vllm-v1")
     for template in ("rmsnorm-fused-cuda", "rmsnorm-triton"):
-        why = REG.supports(TM.subcircuit(template, N=2048, EPS=1e-5), "frame-v3/blake3-keyed")
-        assert "C-Flock lowers" in why and "not wired yet" in why
+        sub = TM.subcircuit(template, N=2048, EPS=1e-5)
+        assert REG.supports(sub, "frame-v3/blake3-keyed") is None and REG.relation(sub, "frame-v3/blake3-keyed") == f"irf:{template}"
+        assert "not wired yet" in REG.supports(sub, "vllm-v1")
 
 
 def test_stage_writes_the_instance_file(tmp_path):
@@ -409,20 +410,29 @@ def test_piece_counts_are_what_the_design_says():
     assert narrow * 3 < general
 
 
-# --- verity/flock-ir-frame/v1: the frame-v3 binding --------------------------------------------------------------------------
+# --- verity/flock-ir-frame/v2: the frame-v3 binding --------------------------------------------------------------------------
 
-def test_frame_plans_hold_whole_chunks():
+def test_frame_plans_take_the_largest_run_that_fits():
+    """RoPE and SiLU·mul read whole chunks; an RMSNorm block holds runs of its chunks' compressions (fused: 4 of 16, its four
+    warps' elements; Triton: 8 of 16, one warp's), within 2^22 bits."""
     from verity_flock import ir_frame as F
 
     rope = TM.subcircuit("rope-head", D=64)
     pl = F.plan(REG.module("rope-head").frame_lowering(rope), rope)
-    assert (pl.G, pl.nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (2, 2, 8, 64, 64, 20)
+    assert (pl.G, pl.nb, pl.chunk_nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (2, 2, 2, 8, 64, 64, 20)
     assert pl.wiring[0] == [(0, 0), (0, 64), (1, 0), (1, 64)]
     silu = TM.subcircuit("silu-mul", I=8192)
     low = REG.module("silu-mul").frame_lowering(silu)
     pl = F.plan(low, silu)
-    assert low.units.n == 4096 and (pl.G, pl.nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (1, 16, 32, 256, 256, 22)
-    assert pl.comps[3][0] == [(0, 3, 1024), (0, 19, 1024)]
+    assert low.units.n == 4096 and (pl.G, pl.nb, pl.chunk_nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (1, 16, 16, 32, 256, 256, 22)
+    assert pl.comps[3][0] == [(0, 3, 0), (0, 19, 0)]
+    fused = TM.subcircuit("rmsnorm-fused-cuda", N=2048, EPS=1e-5)
+    pl = F.plan(REG.module("rmsnorm-fused-cuda").lowering(fused), fused)
+    assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.chunks_per_comp, pl.units_per_block, pl.k_log) == (4, 16, 1, 8, 6, 4, 22)
+    assert pl.comps[1] == ([(p, c, 1) for p in range(3) for c in (0, 2)], [4, 5, 6, 7])
+    triton = TM.subcircuit("rmsnorm-triton", N=2048, EPS=1e-5)
+    pl = F.plan(REG.module("rmsnorm-triton").lowering(triton), triton)
+    assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (8, 16, 1, 2, 1, 1, 22)
 
 
 def test_frame_staging_commits_rows_and_outputs(tmp_path):
@@ -435,13 +445,30 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
     head, body = path.read_bytes().split(b"\n", 1)
     h = json.loads(head)
-    assert h["format"] == "flock-ir-frame/v1" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
+    assert h["format"] == "flock-ir-frame/v2" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
     assert sorted(h["frame_v3"]["roots"]) == ["cs", "out", "x"] and h["frame_v3"]["schemas"]["x"] == "blake3-keyed/row/v2"
     x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)
     row0 = x[0, :64].astype("<u2").tobytes()
     assert body[:128] == row0
     assert body[256:256 + 32] == blake3.blake3(row0, key=blake3_row_key(ROLE_X)).digest()
-    assert h["blocks"] == [[[[0, 0, 0], [0, 1, 0], None, None], list(range(32)) + [None] * 32]]
+    assert h["blocks"] == [[[[0, 0, 0, 0], [0, 1, 0, 0], None, None], list(range(32)) + [None] * 32]]
+
+
+def test_frame_staging_carries_the_cut_words(tmp_path):
+    """A cut template's frame file ends with every instance's cut words (the IR's), which the verifier checks against the
+    netlist's pinned tail; the empty run slot of a three-port component block is padding."""
+    import json
+
+    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
+    s = InputSet.open(generate(sub, 3, 5, tmp_path / "set")["path"])
+    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
+    path = REG.module("rmsnorm-fused-cuda").stage(s, 0, 3, tmp_path / "st")
+    head, body = path.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    assert h["cut_words"] == 3 and "cut" not in h and h["layout"]["chunks_per_block"] == 4
+    assert h["blocks"][0][0] == [[0, 0, 0, 0], [0, 1, 0, 0], [0, 2, 0, 0], None]
+    cuts = np.frombuffer(body[-3 * 3 * 4:], dtype="<u4").reshape(3, 3)
+    assert (cuts == IL.cut_words(low, IL.flat_ports(s, sub.inputs, 0, 3))).all()
 
 
 def test_non_gemm_results_carry_no_gemm_target():
