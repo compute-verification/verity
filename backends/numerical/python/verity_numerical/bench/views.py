@@ -1643,6 +1643,10 @@ def render_markdown(V: Views, published: bool = False) -> str:
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
                              "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",
                              "At 1 ms, 10 Gb/s"), rowsi), ""]
+    if not rules.legacy:
+        from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
+
+        out += H.render_markdown(H.headline(V))
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "
@@ -2117,6 +2121,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       and the render time;
     * ``best_standard_hash`` -- per backend family and subcircuit, the lowest-overhead cell on standard hashes only;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
+    * ``workload_headline`` -- per census workload and backend, the share of the served run's native work its cleared cells
+      cover and the work-weighted overhead over that share, in both bases, uncovered subcircuits listed with why
+      (:mod:`verity_numerical.bench.headline`); ``None`` under the legacy rules;
     * ``claims`` -- the ``verity.claims`` entries cited (the site imports these); ``census`` -- the ``census/`` entries as read
       at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
@@ -2318,6 +2325,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                            "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
                            "assumptions": sch["assumptions"] if sch else [], "assumption_details": sch["assumption_details"] if sch else []}
     phase_cols = [pid for pid, _ in PHASES]
+    from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
+
+    workload_headline = None if V.rules.legacy else H.to_json(H.headline(V), {r["artifact"]: r["id"] for r in results})
     return {
         "schema": ENTITIES_SCHEMA,
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
@@ -2325,7 +2335,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "axes": {"subcircuits": [c["id"] for c in circuits], "schemes": [scheme_id(s.id) for s in SCHEMES if s.admissible],
                  "statements": list(statements), "backends": [b["id"] for b in backend_list], "backend_families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
-        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets")},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({*(i for b in backend_list for k in ("properties", "assumptions")
                                                                                      for i in b[k]),
                                                                                    *(i for st in statements.values() for i in st["assumptions"])})},
@@ -2345,6 +2355,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                  "backend": backend_by_cfg.get(c.configuration or ""), "label": _cell_name(c), "cells": table3_row(c)}
                                 for c in V.cells]},
         },
+        "workload_headline": workload_headline,
         "below_bar": sorted(V.below_bar, key=lambda e: (e["backend_family"] or "", str(e["definition"]), e["B"] or 0, e["artifact"])),
         "rejected": [{"artifact": r["artifact"], "implementation": r["configuration"], "backend_family": _fam(r["family"]),
                       "subcircuit": r.get("subcircuit") or subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],

@@ -51,12 +51,17 @@ Weighting a workload's template mix by these counts gives its real work. Countin
 A memory-bound template also carries `bytes_per_input`, the bytes read and written per input over its ports, with
 `bytes_basis` and `bytes_source`. Together with a hardware line's `memory_bytes_per_second` (cited in `memory_sources`),
 this is its memory-bandwidth work model: the renderer's native N for its statements is bandwidth ÷ bytes per input.
+`BITS` in an expression is the bit width of the bound `datatype`. A GEMM-like template's bytes count its weight row only
+(the activation row is shared by the row's coordinates): the batch-1 decode reading. `variable_bounds` bounds a per-input
+variable from the parameters of the verification unit it serves in; attention's `T` is `NB*BN` when the VU's last key
+block is full, and between `(NB - 1)*BN + 1` and `NB*BN - 1` when it is partial.
 
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
 counts the verification units per VU family and bound parameters (`replay_partition.strata`), the complete counts of
-the run. This is the mix that weights backend overheads into a per-workload headline. Every family maps to a census
+the run. This is the mix that weights backend overheads into a per-workload headline (the renderer's "Workload headline",
+`verity_numerical.bench.headline`). Every family maps to a census
 subcircuit template bound from its IR Definition, with the number of the template's subcircuits one VU holds:
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
 - `Attention_v3` and `Attention_v2` are NH `attention-head` (FA2 or FA3);

@@ -299,7 +299,33 @@
           "bytes_per_input": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_ +*/()-]+$",
-            "description": "bytes read and written per input, an integer expression over the parameters: the memory-bandwidth work model"
+            "description": "bytes read and written per input, an integer expression over the parameters (and variables; BITS is the bit width of the bound datatype): the memory-bandwidth work model"
+          },
+          "variable_bounds": {
+            "type": "object",
+            "description": "for a variable that varies per input, its bounds from the parameters of the verification unit it serves in: the VU parameter named by `by` selects a case, whose min and max are integer expressions over the VU parameters",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["by", "cases", "source"],
+              "properties": {
+                "by": {"type": "string"},
+                "cases": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["min", "max"],
+                    "properties": {
+                      "min": {"type": "string", "pattern": "^[A-Za-z0-9_ +*/()-]+$"},
+                      "max": {"type": "string", "pattern": "^[A-Za-z0-9_ +*/()-]+$"}
+                    }
+                  }
+                },
+                "source": {"type": "string", "minLength": 1}
+              }
+            }
           },
           "bytes_basis": {
             "type": "string",
