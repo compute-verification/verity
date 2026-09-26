@@ -21,7 +21,7 @@ inputs to the committed outputs.  Two stages, because the IR definition and its 
         --send /tmp/b1/bundle.tar --env VERITY_SP1_HOST=/workspace/bin/veritor-zk-host-cuda --env SP1_PROVER=cuda \\
         --env PYTHONPATH=packages/verity/src:backends/sp1/python:backends/numerical/python --require-result -- \\
         /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/ir_call/sp1_ir_call.py run \\
-        --bundle inputs/bundle.tar --prove core
+        --bundle '$RESEARCH_RUN_DIR/inputs/bundle.tar' --prove core
 
 Labels: ``proof_class = NON_ZK_PROOF`` (SP1 core/compressed), ``authentication = included`` (every boundary word is
 opened against the roots in the statement).  The inputs/outputs roots are over the exported words, not the serving
@@ -219,7 +219,7 @@ def run(a) -> int:
 
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
-    bundle_path = Path(a.bundle)
+    bundle_path = Path(os.path.expandvars(a.bundle))
     meta, bundles = _read_bundle(bundle_path)
     host = Host(timeout=None)
     m = contract.measurement
@@ -351,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hi", type=int, default=None)
     p.add_argument("--out", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--bundle", required=True)
+    r.add_argument("--bundle", required=True, help="bundle.tar from prepare; $VARS expand (research ships it to $RESEARCH_RUN_DIR/inputs/)")
     r.add_argument("--prove", nargs="*", default=[], choices=("core", "compressed"))
     r.add_argument("--out", default=None)
     a = ap.parse_args(argv)
