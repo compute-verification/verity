@@ -515,7 +515,7 @@ class S3Remote:
                 if isinstance(body, Path):
                     data.seek(0)
                 signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
-                conn = self.pool.acquire(fresh=conn_failed)
+                conn = self.pool.acquire(fresh=True) if conn_failed else self.pool.acquire()
                 dog = _Watchdog(conn, deadline)
                 try:
                     with self._stats_lock:
