@@ -489,6 +489,233 @@ def _check(gl, node, val, T: int = 64):
         raise AssertionError(f"gate list of {node.fn} disagrees with the circuit")
 
 
+# --- the definition walker (templates without a C-Flock unit lowering, attention per T, GEMM coordinates) ---------------
+
+def _split_params(s: str) -> dict:
+    out, depth, cur, key = {}, 0, "", None
+    for ch in s:
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+        if ch == "=" and depth == 0 and key is None:
+            key, cur = cur, ""
+            continue
+        if ch == "," and depth == 0:
+            out[key] = cur
+            key, cur = None, ""
+            continue
+        cur += ch
+    if key is not None:
+        out[key] = cur
+    return out
+
+
+def parse_id(did: str) -> tuple[str, dict]:
+    if "{" not in did:
+        return did, {}
+    name, rest = did.split("{", 1)
+    return name, _split_params(rest[:-1])
+
+
+class DefStore:
+    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id."""
+
+    def __init__(self, pg_dir: Path):
+        self.dir = Path(pg_dir) / "definitions"
+        self.ix = json.loads((self.dir / "index.json").read_text())["definitions"]
+        self.shards: dict[str, dict] = {}
+        self.by_name: dict[str, list] = {}
+        for did in self.ix:
+            name, ps = parse_id(did)
+            self.by_name.setdefault(name, []).append((did, ps))
+
+    def get(self, did: str):
+        e = self.ix.get(did)
+        if e is None:
+            return None
+        d = e["digest"]
+        if d[:2] not in self.shards:
+            self.shards[d[:2]] = json.loads(gzip.decompress((self.dir / f"{d[:2]}.json.gz").read_bytes()))
+        return self.shards[d[:2]][d]["definition"]
+
+    def find(self, name: str, **want) -> dict:
+        """``{T: id}`` (or ``{None: id}``) of ``name``'s definitions whose statics include ``want`` (string compare)."""
+        out = {}
+        for did, ps in self.by_name.get(name, []):
+            if all(ps.get(k) == v for k, v in want.items()):
+                out[int(ps["T"]) if "T" in ps else None] = did
+        return out
+
+
+_PRIMS: dict | None = None
+
+
+def prims() -> dict:
+    """Every registered PrimitiveDefinition by id (verity.ml and the vLLM registry modules)."""
+    global _PRIMS
+    if _PRIMS is None:
+        import importlib
+        import pkgutil
+
+        from verity.ir.defs import PrimitiveDefinition
+
+        mods = ["verity.ml.prims"]
+        import verity_vllm.program.registry as R
+        mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
+        _PRIMS = {}
+        for m in mods:
+            try:
+                mod = importlib.import_module(m)
+            except Exception:  # noqa: BLE001  (a registry module that needs a GPU stack or data)
+                continue
+            for v in vars(mod).values():
+                if isinstance(v, PrimitiveDefinition):
+                    _PRIMS.setdefault(v.id, v)
+    return _PRIMS
+
+
+def _words(t) -> list[int]:
+    k = t[0]
+    if k == "Value":
+        return [t[1]]
+    if k == "Array":
+        return _words(t[2]) * t[1]
+    if k == "Tuple":
+        return [w for x in t[1] for w in _words(x)]
+    raise ValueError(f"type {t!r}")
+
+
+def _const_value(fn: str):
+    if fn.startswith("Const") and "[" in fn:
+        return int(fn.split("[", 1)[1].split("]", 1)[0], 16)
+    return None
+
+
+class Walker:
+    """Definitions as trees: children are sub-definitions (``call`` x1, ``batch`` / ``scan`` x n) and primitive leaves; a
+    tensor-core step is the proof unit; another primitive is its ir_lower piece (lowered once per operand signature, constant
+    operands a Const node gives propagated) or not yet lowered."""
+
+    def __init__(self, reg: Registry, store: DefStore, cache: dict):
+        self.reg, self.store, self.cache = reg, store, cache
+        self.defs: dict[str, dict] = {}
+
+    def tc_unit(self, pid: str) -> str:
+        key = ("tc", pid)
+        if key not in self.cache:
+            groups, W, F = IL.TC_STEPS[pid]
+
+            def build():
+                C = Circuit()
+                b = [C.input(f"in{j}", 16) for j in range(16)]
+                a = [C.input(f"in{16 + j}", 16) for j in range(16)]
+                acc = C.input("in32", 32)
+                C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
+                return C
+            C, root = trace(build)
+            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "proof-unit")
+        return self.cache[key]
+
+    def prim(self, pid: str, consts: tuple):
+        """(child entry without count) for primitive ``pid`` with operand constants ``consts`` (None = free)."""
+        if pid in IL.TC_STEPS:
+            return {"ref": self.tc_unit(pid), "proof_unit": True}
+        p = prims().get(pid)
+        if p is None:
+            return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
+        widths = [w for _, t in p.params for w in t.leaf_widths()]
+        consts = consts if len(consts) == len(widths) else (None,) * len(widths)
+        free = [w for c, w in zip(consts, widths) if c is None]
+        if pid in IL.PIECES and free:
+            ck = ("prim", pid, consts, tuple(widths))
+            if ck not in self.cache:
+                def build():
+                    C = Circuit()
+                    ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
+                    C.output("out0", IL.PIECES[pid](C, *ops))
+                    return C
+                try:
+                    C, root = trace(build)
+                    self.cache[ck] = self.reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
+                    self.cache[ck] = str(e)
+            got = self.cache[ck]
+            if not got.startswith("sc-"):
+                return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()), "reason": got}
+            return {"ref": got, "proof_unit": False, "placement": "outside the committed units"}
+        if not free:
+            return None
+        return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()),
+                "reason": "ir_lower has no piece for this primitive yet"}
+
+    def walk(self, did: str) -> str:
+        rid = "def-" + hashlib.sha256(did.encode()).hexdigest()[:16]
+        if rid in self.defs:
+            return rid
+        d = self.store.get(did)
+        rec = {"id": rid, "name": did, "kind": "definition", "children": []}
+        self.defs[rid] = rec
+        if d is None:
+            rec.update(kind="not-yet-lowered", reason="definition not in the program graphs' store")
+            return rid
+        if d.get("form") != "composite":
+            rec["children"] = [self._leaf(did, (), 1)] if self._leaf(did, (), 1) else []
+            self._total(rec)
+            return rid
+        nodes = d["body"]["nodes"]
+        rec["in_bits"] = sum(w for prm in d["body"]["params"] for w in _words(prm[1]))
+        rec["out_bits"] = sum(_words(d["body"]["ret_type"]))
+        agg: dict = {}
+        for n in nodes:
+            fn, form = n["fn"], n["form"]
+            count = n.get("n", 1) if form in ("batch", "scan") else 1
+            if _const_value(fn) is not None:
+                continue
+            if fn in self.store.ix and (self.store.get(fn) or {}).get("form") == "composite":
+                key = ("def", fn)
+                agg.setdefault(key, [{"def": self.walk(fn)}, 0])[1] += count
+                continue
+            consts = []
+            for a in n.get("args", []):
+                ref = (a.get("refs") or {}).get("affine")
+                c = None
+                if form == "primitive" and ref and ref[0] == "n" and ref[3] == 1:
+                    src = nodes[ref[1]]
+                    c = _const_value(src["fn"]) if src.get("form") == "primitive" else None
+                consts.extend([c] * (len(_words(a["type"])) if form == "primitive" else 1))
+            key = ("prim", fn, tuple(consts) if form == "primitive" else ())
+            if key not in agg:
+                e = self._leaf(fn, key[2], count)
+                if e is None:
+                    continue
+                agg[key] = [e, 0]
+            agg[key][1] += count
+        rec["children"] = [dict(e, count=c) for e, c in agg.values()]
+        self._total(rec)
+        return rid
+
+    def _leaf(self, pid, consts, count):
+        return self.prim(pid, consts)
+
+    def _total(self, rec):
+        t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
+        for c in rec["children"]:
+            if "def" in c:
+                s = self.defs[c["def"]]
+                for k in t:
+                    t[k] += s.get(k, 0) * c["count"]
+                if s["kind"] == "not-yet-lowered":
+                    t["not_yet_lowered"] += c["count"]
+            elif "ref" in c:
+                n = self.reg.nodes[c["ref"]]
+                for k in ("and", "xor", "not"):
+                    t[k] += n[k] * c["count"]
+            else:
+                t["not_yet_lowered"] += c["count"]
+        rec.update(t)
+
+
 # --- templates and rows -------------------------------------------------------------------------------------------------
 
 #: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
@@ -496,6 +723,7 @@ SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED = {
     "Embedding_v1": "a row gather by token id (data movement from the committed table); no Boolean lowering yet",
+    "EmbeddingShard_v1": "a row gather by token id from a tensor-parallel shard of the table; no Boolean lowering yet",
     "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
 }
 DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
@@ -543,8 +771,14 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
-                C, root = trace(build)
-                cache[ck] = reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                try:
+                    C, root = trace(build)
+                    cache[ck] = reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
+                    cache[ck] = str(e)
+            if not cache[ck].startswith("sc-"):
+                out.append({"not_yet_lowered": pid, "count": n, "in_bits": sum(free), "out_bits": prim.ret.w, "reason": cache[ck]})
+                continue
             out.append({"ref": cache[ck], "count": n, "proof_unit": False, "placement": "outside the committed units (the template's tail)"})
         elif free:
             prev = next((e for e in out if e.get("not_yet_lowered") == pid and e["in_bits"] == sum(free)), None)
@@ -572,57 +806,84 @@ def _unit(reg: Registry, units, name: str, cache: dict) -> str:
     return cache[key]
 
 
-def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None) -> dict:
-    """A leaf template's record: its units (proof units under the committed cut) and its tail."""
+SPINE_UNITS = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
+               "RMSNormTriton_v1": "rmsnorm-triton"}
+HOPPER_DOT = '{"fn":"HopperBF16WgmmaDot16_v1"}'
+
+
+def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict:
+    if tname == "AttentionSoftcap_v1":
+        return store.find("AttentionSoftcap_v1", NH=str(tp["NH"]), KVH=str(tp["KVH"]), D=str(tp["D"]), BN=str(tp["BN"]), CAP=tp["CAP"])
+    if tp.get("dot") == "HopperBF16WgmmaDot16_v1":
+        return store.find("AttentionHead_v2", D=str(tp["D"]), BN=str(tp["BN"]), DOT=HOPPER_DOT, INV='{"fn":"%s"}' % tp["inv"])
+    return store.find("AttentionHead_v3", D=str(tp["D"]), BN=str(tp["BN"]))
+
+
+def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
+             spec: str | None = None) -> dict:
+    """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
+    Definition tree (the walker: attention per T, GEMM coordinates, every other template)."""
     cache = {} if cache is None else cache
     rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range], sort_keys=True).encode()).hexdigest()[:16]
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
         return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
-    if tname in NOT_LOWERED or tname not in SPINE:
-        return dict(base, name=tname, kind="not-yet-lowered", reason=NOT_LOWERED.get(tname, "no C-Flock lowering yet"), children=[])
-    from verity_numerical.bench import lowerings, templates as TM
-
-    spine = SPINE[tname]
-    params = _params(tname, tp)
-    if tname == "AttentionHead":
-        from .templates import attention_head as A
-
-        sub = TM.subcircuit(spine, **{k: v for k, v in params.items() if k in ("D", "BN")})
-        per_t, uid, D = {}, None, int(params["D"])
+    if tname in NOT_LOWERED:
+        return dict(base, name=tname, kind="not-yet-lowered", reason=NOT_LOWERED[tname], children=[])
+    if tname in ("AttentionHead", "AttentionSoftcap_v1"):
+        ids = _attention_ids(walker.store, tname, tp, {})
+        per_t = {}
         for T in range(T_range[0], T_range[1] + 1):
-            low = A.lowering(sub, T)  # not cached: 287 lowerings do not fit beside the export
-            uid = uid or _unit(reg, low.units, TC_UNIT_NAME, cache)
-            per_t[str(T)] = {"children": [{"ref": uid, "count": low.units.n, "proof_unit": True}] + _tail(reg, low.units, low.definition, cache)}
-            per_t[str(T)]["in_bits"], per_t[str(T)]["out_bits"] = 16 * (D + 2 * D * T), 16 * D  # q, k, v -> out (bf16 words)
-            del low
+            if T not in ids:
+                per_t[str(T)] = {"not_yet_lowered": f"T={T}", "reason": "this key count's Definition is not in the program graphs' store"}
+                continue
+            d = walker.defs[walker.walk(ids[T])]
+            per_t[str(T)] = {"definition": d["id"], "name": d["name"], "children": [{"def": d["id"], "count": 1}],
+                             **{k: d.get(k) for k in ("and", "xor", "not", "not_yet_lowered", "in_bits", "out_bits")}}
         top = per_t[str(T_range[1])]
-        return dict(base, name=f"{tname}{{D={params['D']},BN={params['BN']}}} T∈[{T_range[0]},{T_range[1]}]", kind="template",
-                    subcircuit=sub.id, children=top["children"], children_at=f"T={T_range[1]}", per_key_count=per_t, unit=uid,
-                    in_bits=top["in_bits"], out_bits=top["out_bits"])
-    sub = TM.subcircuit(spine, **params)
+        return dict(base, name=f"{tname}{json.dumps(tp, sort_keys=True)} T∈[{T_range[0]},{T_range[1]}]", kind="template",
+                    children=top.get("children", []), children_at=f"T={T_range[1]}", per_key_count=per_t,
+                    in_bits=top.get("in_bits"), out_bits=top.get("out_bits"))
     if tname == "GemmCoordinate":
-        from verity.ir.defs import bind
-        from verity_vllm.program.registry import b1
+        ids = (walker.store.find("GemmCoordinate_v2", K=str(tp["K"]), DOT=HOPPER_DOT) if tp.get("dot") == "HopperBF16WgmmaDot16_v1"
+               else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
+        return _walked(base, walker, ids.get(None), f"GemmCoordinate{json.dumps(tp, sort_keys=True)}")
+    if tname in SPINE_UNITS:
+        from verity_numerical.bench import lowerings, templates as TM
 
-        target = bind(b1.GemmCoordinate, K=int(params["K"]))  # the program graph's GemmCoordinate_v1 (AmpereBF16TcDot16_v1)
-        units = IL.tc_units(target)
-        name = TC_UNIT_NAME
-    else:
+        spine = SPINE_UNITS[tname]
+        sub = TM.subcircuit(spine, **_params(tname, tp))
         mod = lowerings.registry("C-Flock").module(spine)
+        if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
+            rec = _walked(base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}")
+            rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
+                           f"({mod.__name__}.width); its Definition is walked instead, every primitive with its piece, none in a proof unit")
+            return rec
         low = mod.lowering(sub)
-        target, units, name = low.definition, low.units, f"{mod.UNIT} unit"
-    uid = _unit(reg, units, name, cache)
-    children = [{"ref": uid, "count": units.n, "proof_unit": True}] + _tail(reg, units, target, cache)
-    ib, ob = _io_bits(target)
-    return dict(base, name=f"{tname}{json.dumps(params, sort_keys=True)}", kind="template", subcircuit=sub.id, children=children, unit=uid,
-                in_bits=ib, out_bits=ob)
+        uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
+        children = [{"ref": uid, "count": low.units.n, "proof_unit": True}] + _tail(reg, low.units, low.definition, cache)
+        ib, ob = _io_bits(low.definition)
+        return dict(base, name=f"{tname}{json.dumps(_params(tname, tp), sort_keys=True)}", kind="template", subcircuit=sub.id,
+                    children=children, unit=uid, in_bits=ib, out_bits=ob)
+    return _walked(base, walker, spec, spec or tname)
 
 
-def _totals(reg: Registry, children: list[dict]) -> dict:
+def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
+    if did is None:
+        return dict(base, name=name, kind="not-yet-lowered", reason="its Definition is not in the program graphs' store", children=[])
+    d = walker.defs[walker.walk(did)]
+    return dict(base, name=name, kind="template", definition=d["id"], children=[{"def": d["id"], "count": 1}],
+                in_bits=d.get("in_bits"), out_bits=d.get("out_bits"))
+
+
+def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> dict:
     t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
     for c in children:
-        if "ref" in c:
+        if "def" in c:
+            d = defs[c["def"]]
+            for k in t:
+                t[k] += (d.get(k) or 0) * c["count"]
+        elif "ref" in c:
             n = reg.nodes[c["ref"]]
             for k in ("and", "xor", "not"):
                 t[k] += n[k] * c["count"]
@@ -631,22 +892,19 @@ def _totals(reg: Registry, children: list[dict]) -> dict:
     return t
 
 
-def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict) -> dict:
+def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker") -> dict:
     p = json.loads(Path(pg_path).read_text())
     row = p["row"]
     nodes, used = [], []
     for g in p["groups"]:
         tname, tp = g["template"], g.get("template_params") or {}
-        T_range = g.get("varying", {}).get("T") if tname == "AttentionHead" else None
+        T_range = g.get("varying", {}).get("T") if tname in ("AttentionHead", "AttentionSoftcap_v1") else None
         key = json.dumps([tname, tp, T_range], sort_keys=True)
         if key not in tpl_cache:
             t0 = time.time()
-            rec = template(reg, tname, tp, T_range, cache)
-            if rec.get("per_key_count"):
-                for v in rec["per_key_count"].values():
-                    v.update(_totals(reg, v["children"]))
+            rec = template(reg, tname, tp, T_range, cache, walker, g.get("spec"))
             if rec["kind"] == "template":
-                rec.update(_totals(reg, rec["children"]))
+                rec.update(_totals(reg, rec["children"], walker.defs))
             tpl_cache[key] = rec
             print(f"  template {rec['name'][:80]}: {rec['kind']} {time.time() - t0:.1f}s", flush=True)
         rec = tpl_cache[key]
@@ -665,7 +923,7 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
             "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
 
 
-def _membership(reg: Registry, templates) -> None:
+def _membership(reg: Registry, templates, defs: dict | None = None) -> None:
     """Every subcircuit's proof-unit membership under the committed cut: the unit roots whose trees contain it, and whether it
     also appears outside the units (a template's lowered tail)."""
     for n in reg.nodes.values():
@@ -685,11 +943,15 @@ def _membership(reg: Registry, templates) -> None:
         for c in n["children"]:
             mark(c["ref"], unit)
     for t in templates:
-        variants = [t["children"]] + [v["children"] for v in (t.get("per_key_count") or {}).values()]
+        variants = [t["children"]] + [v["children"] for v in (t.get("per_key_count") or {}).values() if "children" in v]
         for ch in variants:
             for c in ch:
                 if "ref" in c:
                     mark(c["ref"], c["ref"] if c.get("proof_unit") else None)
+    for d in (defs or {}).values():
+        for c in d["children"]:
+            if "ref" in c:
+                mark(c["ref"], c["ref"] if c.get("proof_unit") else None)
 
 
 def main(argv=None) -> int:
@@ -702,17 +964,19 @@ def main(argv=None) -> int:
     reg = Registry(out)
     ntpl = out / "templates.json"
     tpl_cache, cache = {}, {}
+    walker = Walker(reg, DefStore(Path(a.program_graph[0]).parent), cache)
     rows = []
     for pg in a.program_graph:
         t0 = time.time()
-        doc = export_row(Path(pg), out, reg, tpl_cache, cache)
+        doc = export_row(Path(pg), out, reg, tpl_cache, cache, walker)
         f = out / (doc["row_key"] + ".boolean.json")
         f.write_text(json.dumps(doc, separators=(",", ":")))
         rows.append({"row": doc["row"], "row_key": doc["row_key"], "file": f.name, "bytes": f.stat().st_size, "nodes": len(doc["nodes"]),
                      "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1)})
         print(f"row {doc['row']}: {len(doc['nodes'])} nodes, {len(doc['templates'])} templates, {time.time() - t0:.0f}s", flush=True)
-    _membership(reg, tpl_cache.values())
-    ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()}}, separators=(",", ":")))
+    _membership(reg, tpl_cache.values(), walker.defs)
+    ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()},
+                                "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "gate_limit": GATE_LIMIT, "nodes": reg.nodes},
                                                      separators=(",", ":")))
     nyl: dict[str, dict] = {}
@@ -725,6 +989,13 @@ def main(argv=None) -> int:
                     nyl.setdefault(c["not_yet_lowered"], {"what": "primitive (outside the units)", "reason": c["reason"], "in": []})
                     if t["template"] not in nyl[c["not_yet_lowered"]]["in"]:
                         nyl[c["not_yet_lowered"]]["in"].append(t["template"])
+    for d in walker.defs.values():
+        for c in d["children"]:
+            if "not_yet_lowered" in c:
+                e = nyl.setdefault(c["not_yet_lowered"], {"what": "primitive (outside the units)", "reason": c["reason"], "in": []})
+                fam = d["name"].split("{")[0]
+                if fam not in e.setdefault("in", []):
+                    e["in"].append(fam)
     gates = sorted(reg.gates_dir.glob("*.json.gz"))
     index = {"schema": SCHEMA + "/index", "generator": "verity_flock.boolean_export (lane flock-ir-lowering)",
              "source": "internal/datasets/program-graphs/<row>.program.json (its groups' templates)",
