@@ -135,7 +135,8 @@ def test_plan_wraps_the_route_a_cell_script(tmp_path, monkeypatch):
         C.plan("A-route-a", "gemm-coordinate/k4096/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
     assert not any(q.startswith("relation") for q in C.check(cell, {"workload_fingerprint": {"relation": "bf16-ampere-k2048+blake3"}}))
     reg = A.register(cell, Path("/runs/p"), Path("/runs/v"), Path("/tmp/meta.json"))[0]
-    assert reg[1].endswith("backends/gkr/tools/cell.py") and reg[2:] == ["register", "--prover-run", "/runs/p", "--lane", "agkr-real-k",
+    assert Path(reg[1]) == Path(C.LW.REPO) / "backends/gkr/tools/cell.py" and Path(reg[1]).is_file()
+    assert reg[2:] == ["register", "--prover-run", "/runs/p", "--lane", "agkr-real-k",
                                                                          "--out", "/tmp/meta.json", "--verifier-run", "/runs/v"]
 
 

@@ -21,7 +21,7 @@ INTERACTIVE = True
 RESULT = "result.json"
 SCRIPT = "backends/gkr/cell.sh"
 STAGE_DIR = Path(".bench-cell/sets")
-REPO = Path(__file__).resolve().parents[5]
+REPO = Path(__file__).resolve().parents[6]
 
 
 def unmet(cell) -> str | None:
