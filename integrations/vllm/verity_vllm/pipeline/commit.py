@@ -255,7 +255,7 @@ COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(r
 
 
 def admission_lag(wl: dict) -> int:
-    """[moe R17-1] The lag rows the host admission counts: the declared LAG of the manifest target (`global_program.workload_target`)."""
+    """The lag rows the host admission counts: the declared LAG of the manifest target (`global_program.workload_target`)."""
     from verity_vllm.pipeline import global_program as _GP
     return int(_GP.workload_target(wl).lag())
 
