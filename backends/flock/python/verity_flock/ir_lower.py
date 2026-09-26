@@ -467,12 +467,14 @@ def flat_ports(input_set, ports, lo: int, hi: int) -> np.ndarray:
     return np.concatenate([np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint64).reshape(hi - lo, -1) for p in ports], axis=1)
 
 
-def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int) -> bytes:
-    """Per lane, the ports' bits packed LSB first (port j from bit sum(widths[:j])) into ``words`` 128-bit little-endian words."""
+def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, starts: Sequence[int] | None = None) -> bytes:
+    """Per lane, the ports' bits packed LSB first into ``words`` 128-bit little-endian words: port j from bit ``starts[j]``
+    (default: consecutive, ``sum(widths[:j])``)."""
     T = len(ports[0])
     buf = np.zeros((T, words * WORD), dtype=np.uint8)
     at = 0
-    for p, w in zip(ports, widths):
+    for j, (p, w) in enumerate(zip(ports, widths)):
+        at = at if starts is None else starts[j]
         p = np.asarray(p, dtype=np.uint64)
         for b in range(w):
             buf[:, at + b] = ((p >> np.uint64(b)) & np.uint64(1)).astype(np.uint8)
@@ -482,8 +484,8 @@ def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int) 
 
 def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, path, meta: dict) -> dict:
     """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes each, the netlist's
-    input columns), then every unit's output words (one 128-bit word per output port, the word in its low bits); units are
-    instance-major."""
+    input columns), then every unit's output words (one 128-bit word per output port, the word in its low bits, ports in
+    order); units are instance-major."""
     n = flat_in.shape[0]
     lay, U = low.layout, low.units
     ins = low.unit_inputs(np.asarray(flat_in, dtype=np.uint64))
@@ -493,8 +495,7 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
             "units": n * U.n, "in_words": lay.in_words, "in_bits": lay.in_bits, "out_words": len(lay.out_cols), "out_bits": lay.out_bits,
             **meta}
     body = _pack_words(ins, lay.in_bits, lay.in_words)
-    for o, w in zip(outs, lay.out_bits):
-        body += _pack_words([o], [w], 1)
+    body += _pack_words(outs, lay.out_bits, len(outs), [WORD * j for j in range(len(outs))])
     with open(path, "wb") as f:
         f.write(json.dumps(head, sort_keys=True).encode() + b"\n")
         f.write(body)

@@ -189,6 +189,9 @@ def test_stage_writes_the_instance_file(tmp_path):
     first = int.from_bytes(body[:16], "little")
     x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)[0]
     assert first == int(x[0]) | int(x[32]) << 16 | int(x[64]) << 32 | int(x[96]) << 48
+    y = IL.flat_ports(s, s.subcircuit.outputs, 0, 1)[0]
+    outs = body[64 * 16:]
+    assert [int.from_bytes(outs[16 * k:16 * k + 16], "little") for k in range(4)] == [int(y[0]), int(y[32]), int(y[1]), int(y[33])]
 
 
 # --- negatives ---------------------------------------------------------------------------------------------------------------
