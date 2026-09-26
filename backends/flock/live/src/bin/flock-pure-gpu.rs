@@ -166,9 +166,10 @@ impl StatementVerifier for PureVerifier {
         }
         let (lay, st) = (self.st.lay, &self.st);
         let p = Publics::parse(publics, st.blocks_real, lay.n_cv())?;
-        if lay == Layout::Bf16 && !st.net.epilogue() {
+        if let (Layout::Chunk(n), false) = (lay, st.net.epilogue()) {
+            let n = n as usize;
             for v in 0..self.inst.vus {
-                if p.acc[3 * v + 2] != self.inst.out[v] {
+                if p.acc[n * v + n - 1] != self.inst.out[v] {
                     return Err(format!("C4: VU {v}'s committed final accumulator is not its output word"));
                 }
             }
@@ -598,7 +599,10 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if st.lay != Layout::Bf16 && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+        if !matches!(st.lay, Layout::Chunk(_)) && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+            continue;
+        }
+        if !st.net.epilogue() && name == "y16_public_forged" {
             continue;
         }
         if st.lay.is_sha() && matches!(name, "chunk_end_flag_dropped" | "wrong_counter" | "chunk_value_forged") {
