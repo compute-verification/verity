@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,7 @@ def test_plan_wraps_the_flock_cell_script():
     (dict(verifier=None), "separate pod"),
     (dict(verifier="vy-flock-h100"), "other than the prover's"),
     (dict(rtt_target=None), "--rtt-target"),
+    (dict(lane=None), "producing lane"),
 ])
 def test_cells_that_cannot_run_say_why(kw, why):
     with pytest.raises(C.NotSupported, match=why):
@@ -133,27 +135,57 @@ def _run(d: Path, host: str, result: dict | None) -> Path:
     return d
 
 
+RUNS = DATA / "flock-runs"
+PROVER_RUN, VERIFIER_RUN = "r20260925-220115-3522", "r20260925-220103-b7c0"
+
+
+def _real_runs(tmp_path: Path, mutate=None) -> tuple[Path, Path]:
+    """art:6d1295ed's prover and verifier runs as ``verity_flock.register`` reads them: job.json, out/binary.sha256, the prover's
+    result.json (artifacts naming its plateau point) and that point's session logs (prove-s0 and loopback-prove-s0)."""
+    shutil.copytree(RUNS, tmp_path / "runs")
+    p, v = tmp_path / "runs" / PROVER_RUN, tmp_path / "runs" / VERIFIER_RUN
+    if mutate is not None:
+        doc = json.loads((p / "result.json").read_text())
+        mutate(doc)
+        (p / "result.json").write_text(json.dumps(doc))
+    return p, v
+
+
 def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
-    p = _run(tmp_path / "r20260926-010000-aaaa", "prover-host", _doc("6d1295ed"))
-    v = _run(tmp_path / "r20260926-010000-bbbb", "verifier-host", None)
+    p, v = _real_runs(tmp_path)
     res = C.register(_cell(), str(p), str(v), tmp_path / "work", dry_run=True)
-    assert res["problems"] == [] and "refused" not in res
     doc = json.loads(Path(res["meta"]).read_text())
+    assert res["problems"] == C.check(_cell(), doc, p, v) == doc["validation"]["cell_problems"]
+    assert ("refused" in res) is bool(res["problems"])
     assert doc["cell"]["backend"] == "C-interactive" and doc["cell"]["statement"] == BF16[0]
     assert doc["cell"]["input_set"]["id"] == BF16[1]
     assert (doc["lane"], doc["registered_by"]) == ("bench-spine", "bench-spine")                # the lane that ran it is the producer
-    assert doc["cell"]["script_lane"] == {"lane": "flock-backend", "registered_by": "flock-backend"}
-    assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "verifier-host"   # verity_flock.register's patch
+    assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after flock-backend's --lane
+    assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "55aa071446d4"        # verity_flock.register's patch
+    assert doc["workload_fingerprint"]["software"]["verifier"]["run"] == VERIFIER_RUN
     put = res["put"]
     assert put[:5] == ["research", "data", "put", "--kind", "bench-result/v1"] and put[-1] == "--preserve"
-    assert "run_files=<run_files of r20260926-010000-aaaa>" in put
+    assert f"run_files=<run_files of {PROVER_RUN}>" in put
+
+
+@pytest.mark.parametrize("takes", [True, False])
+def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch, takes):
+    """flock-backend a9d13f68 (PR #34) requires ``--lane``; the register before it rejects the flag."""
+    drv = drivers.driver("C-interactive")
+    monkeypatch.setattr(drv, "takes_lane", lambda: takes)
+    (cmd,) = drv.register(_cell(), tmp_path / "p", tmp_path / "v", tmp_path / "m.json")
+    assert cmd[1:3] == ["-m", "verity_flock.register"]
+    assert (cmd[-2:] == ["--lane", "bench-spine"]) is takes and ("--lane" in cmd) is takes
+
+
+def test_takes_lane_reads_the_installed_script():
+    from verity_flock import register as FR
+
+    assert drivers.driver("C-interactive").takes_lane() is ("--lane" in Path(FR.__file__).read_text())
 
 
 def test_register_refuses_a_result_off_protocol(tmp_path):
-    doc = _doc("6d1295ed")
-    doc["protocol"]["runs"] = 2
-    p = _run(tmp_path / "p", "prover-host", doc)
-    v = _run(tmp_path / "v", "verifier-host", None)
+    p, v = _real_runs(tmp_path, lambda d: d["protocol"].update(runs=2))
     res = C.register(_cell(), str(p), str(v), tmp_path / "work", dry_run=True)
     assert res["refused"] and any("runs 2" in x for x in res["problems"])
 
@@ -161,7 +193,8 @@ def test_register_refuses_a_result_off_protocol(tmp_path):
 def test_cli(tmp_path, capsys):
     out = tmp_path / "cell.json"
     assert C.main(["plan", "--backend", "C-interactive", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p",
-                   "--verifier", "vy-v", "--verifier-addr", "h:7400", "--rtt-target", "h:22", "--out", str(out)]) == 0
+                   "--verifier", "vy-v", "--verifier-addr", "h:7400", "--rtt-target", "h:22", "--lane", "bench-spine",
+                   "--out", str(out)]) == 0
     assert "research run --on vy-v" in capsys.readouterr().out
     assert C.main(["run", "--cell", str(out), "--dry-run"]) == 0
     assert C.main(["plan", "--backend", "B-fs", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p"]) == 3
