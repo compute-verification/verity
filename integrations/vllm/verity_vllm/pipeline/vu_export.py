@@ -273,17 +273,32 @@ DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose
                                                            "RoPE_v1": _decompose_rope}
 
 
+def _gemm_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
+
+
+def _attention_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    dot, inv = _attn_prims(fam, st)
+    return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
+
+
+def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+
+
+#: beside `DECOMPOSE`, keyed alike: the template a Definition's Calls are cut into (every other Definition: the row itself)
+TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
+    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "Attention_v3": _attention_template, "Attention_v2": _attention_template,
+    "RoPE_v1": _rope_template}
+
+
 def template_of(spec: str) -> tuple[str, dict[str, Any], int]:
     """A Call's Definition spec -> (subcircuit template, bound parameters, instances per Call): `decompose`'s cut, read off the spec."""
     fam, st = RM.spec_family(spec), RM.spec_statics(spec)
+    t = TEMPLATE_OF.get(fam)
     try:
-        if fam in ("Gemm_v1", "Gemm_v2"):
-            return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
-        if fam in ("Attention_v3", "Attention_v2"):
-            dot, inv = _attn_prims(fam, st)
-            return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
-        if fam == "RoPE_v1":
-            return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+        if t is not None:
+            return t(fam, st)
     except (KeyError, RK.Declined):
         pass
     return fam, st, 1
@@ -370,6 +385,31 @@ def _read_port(d: Path, p: dict[str, Any], n: int) -> list[np.ndarray]:
     return [arr[offs[i]:offs[i + 1]] for i in range(n)]
 
 
+def _check_gemm(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    y, _nf = gemm_coordinate(rel["dot"], P["x"][i], P["w"][i][None, :])
+    return int(y[0]) == int(P["y"][i][0])
+
+
+def _check_attention(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    got, _nf = attention_head(rel["dot"], rel["inv"], int(rel["statics"]["BN"]), P["q"][i], P["k"][i], P["v"][i], int(rel["statics"]["D"]))
+    return bool(np.array_equal(got, P["out"][i]))
+
+
+def _check_rope(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    return bool(np.array_equal(D.rope_rows(P["x"][i][None, :], P["cs"][i]).reshape(-1), P["out"][i]))
+
+
+def _check_row(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    ins = sorted((k for k in P if k.startswith("in")), key=lambda k: int(k[2:]))
+    got = _outputs(EV.evaluate(rel["definition"], rel["statics"], [[P[k][i]] for k in ins], [None] * len(ins)))
+    return all(k[4:] in got and np.array_equal(got[k[4:]].astype(P[k][i].dtype), P[k][i]) for k in P if k.startswith("out."))
+
+
+#: a set's relation check, by the ports its decomposer declared (the set's own layout, never its Definition's name)
+_CHECK_BY_PORTS: dict[frozenset[str], Callable[[dict[str, Any], dict[str, list[np.ndarray]], int], bool]] = {
+    frozenset({"x", "w", "y"}): _check_gemm, frozenset({"q", "k", "v", "out"}): _check_attention, frozenset({"x", "cs", "out"}): _check_rope}
+
+
 def verify_set(d: Path) -> dict[str, Any]:
     """Every file digest against the manifest, then every instance re-evaluated under the set's relation."""
     man = json.loads((d / "manifest.json").read_text())
@@ -379,23 +419,8 @@ def verify_set(d: Path) -> dict[str, Any]:
     n, rel = int(man["n"]), man["relation"]
     P = {k: _read_port(d, p, n) for k, p in man["ports"].items()}
     idx = json.loads((d / "index.json").read_text())["rows"]
-    bad = []
-    for i in range(n):
-        fam = rel["definition"]
-        if fam in ("Gemm_v1", "Gemm_v2"):
-            y, _nf = gemm_coordinate(rel["dot"], P["x"][i], P["w"][i][None, :])
-            ok = int(y[0]) == int(P["y"][i][0])
-        elif fam in ("Attention_v3", "Attention_v2"):
-            got, _nf = attention_head(rel["dot"], rel["inv"], int(rel["statics"]["BN"]), P["q"][i], P["k"][i], P["v"][i], int(rel["statics"]["D"]))
-            ok = np.array_equal(got, P["out"][i])
-        elif fam == "RoPE_v1":
-            ok = np.array_equal(D.rope_rows(P["x"][i][None, :], P["cs"][i]).reshape(-1), P["out"][i])
-        else:
-            ins = sorted((k for k in P if k.startswith("in")), key=lambda k: int(k[2:]))
-            got = _outputs(EV.evaluate(fam, rel["statics"], [[P[k][i]] for k in ins], [None] * len(ins)))
-            ok = all(k[4:] in got and np.array_equal(got[k[4:]].astype(P[k][i].dtype), P[k][i]) for k in P if k.startswith("out."))
-        if not ok:
-            bad.append(idx[i][0])
+    check = _CHECK_BY_PORTS.get(frozenset(P), _check_row)
+    bad = [idx[i][0] for i in range(n) if not check(rel, P, i)]
     return {"set": man["set"], "ok": not bad, "n": n, "bad": bad[:16], "bad_n": len(bad)}
 
 
