@@ -111,6 +111,35 @@ def test_plan_wraps_the_b_ligero_cell_script(tmp_path, monkeypatch):
     assert not any("relation" in p_ for p_ in C.check(cell, doc))
 
 
+def test_plan_wraps_the_route_a_cell_script(tmp_path, monkeypatch):
+    """A-route-a on a captured #101 slice: bf16-ampere-k2048+blake3, the set shipped to both pods (each builds its own statement),
+    the verifier on its own pod listening on VPORT, the gate and the loopback probe on the prover."""
+    from verity_numerical.bench.drivers import a_route_a as A
+    monkeypatch.setattr(A, "STAGE_DIR", tmp_path)
+    kw = dict(verifier="vy-ar-ver", verifier_addr="10.0.0.4:15678", rtt_target="10.0.0.4:15677", campaign="c", lane="agkr-real-k",
+              points="1024 2048", backend_args=["VPORT=7300"])
+    cell = C.plan("A-route-a", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
+    assert (cell.family, cell.relation, cell.input_set["kind"]) == ("A-GKR", "bf16-ampere-k2048+blake3", "set")
+    v, p = cell.jobs
+    tar = Path(p["send"][0])
+    assert tar.is_file() and v["send"] == p["send"] and (v["pod"], p["pod"]) == ("vy-ar-ver", "vy-ar-a100")
+    common = {"REL=bf16-ampere-k2048+blake3", "POINTS=1024 2048", "RUNS=5", "OPERATOR=agkr-real-k", f"SET={tar.name}"}
+    assert common | {"ROLE=verifier", "PORT=7300"} <= set(v["command"])
+    assert common | {"ROLE=prover", "VERIFIER=10.0.0.4:15678", "RTT_TARGET=10.0.0.4:15677", "LOOPBACK=1"} <= set(p["command"])
+    assert not any(a.startswith("VPORT=") for a in p["command"]) and (Path(C.LW.REPO) / A.SCRIPT).is_file()
+    with pytest.raises(C.NotSupported, match="--rtt-target"):
+        C.plan("A-route-a", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **{**kw, "rtt_target": None})
+    with pytest.raises(C.NotSupported, match="builds its own statement from an input set"):
+        C.plan("A-route-a", "gemm-coordinate/k1536/sm80-mma-bf16+frame-v3/blake3-keyed", "bench-instances-v1", "vy-ar-a100", **kw)
+    with pytest.raises(C.NotSupported, match="pinned at K"):
+        C.plan("A-route-a", "gemm-coordinate/k4096/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
+    assert not any(q.startswith("relation") for q in C.check(cell, {"workload_fingerprint": {"relation": "bf16-ampere-k2048+blake3"}}))
+    reg = A.register(cell, Path("/runs/p"), Path("/runs/v"), Path("/tmp/meta.json"))[0]
+    assert Path(reg[1]) == Path(C.LW.REPO) / "backends/gkr/tools/cell.py" and Path(reg[1]).is_file()
+    assert reg[2:] == ["register", "--prover-run", "/runs/p", "--lane", "agkr-real-k",
+                                                                         "--out", "/tmp/meta.json", "--verifier-run", "/runs/v"]
+
+
 def test_input_set_directories_resolve():
     ref = C.resolve_input_set(str(SLICE))
     assert (ref["kind"], ref["subcircuit"], ref["source"], ref["n"]) == ("set", "gemm-coordinate/k2048/sm80-mma-bf16", "captured", 2)

@@ -47,6 +47,8 @@ CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-key
          ("B-Ligero", "gemm-coordinate/k1536/sm90-wgmma-e4m3", "frame-v3/blake3-keyed", "fp8-hopper+blake3"),
          ("B-Ligero", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+sha256"),
          ("A-GKR", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere+blake3"),
+         ("A-GKR", "gemm-coordinate/k2048/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere-k2048+blake3"),
+         ("A-GKR", "gemm-coordinate/k8192/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere-k8192+blake3"),
          ("D-SP1", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+frame-v3"),
          ("B-Ligero", "gemm-coordinate/k2048/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere-x4-k2048+blake3-xob"),
          ("B-Ligero", "gemm-coordinate/k8192/sm90-wgmma-bf16", "frame-v3/sha-256", "bf16-hopper-x4-k8192+sha256"),

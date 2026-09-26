@@ -25,6 +25,7 @@ binding of the unpadded fold, and ``commitment.txt`` names each port's ``domain_
 layout digests of those domains (``vllm_domain``) are this backend's provisional mapping; the integration owns them.
 
     python -m gpu.commit pin RELATION --leaf sha256|blake3|vllm-v1 [--lo 0] [--vus 4096] [--instances DIR]
+    python -m gpu.commit pin bf16-ampere-k2048 --leaf blake3 --input-set SET --vus 4096     # VUs [0, 4096) of an input set
 """
 from __future__ import annotations
 
@@ -84,6 +85,24 @@ def instance_set(relation: str, lo: int, vus: int, src: Path, frozen_manifest: P
         digest = relchain.instances_digest(rel, lo + vus)
     bits = {"<u2": 16, "<u1": 8}[rel.word_dtype]
     return InstanceSet(rel.instances_dataset, rel.instances_tier, digest, int(getattr(rel, "vu_words", relchain.K_VU)), bits)
+
+
+def input_set(path, n: int, word_bits: int = 16):
+    """``(x, w, y, iset, ref)``: VUs ``[0, n)`` of an input set (``verity_numerical.bench.input_sets``; a set is never recycled) as
+    ``(n, K)`` rows and ``(n,)`` words, with the identity B-Ligero's ``commit_vus`` binds for a set (``relchain.set_ref``: dataset
+    ``<schema>:<set>``, tier ``<set>``, the manifest's SHA-256), so the roots are B-Ligero's for the same set and leaf schema, and
+    the fingerprint's ``instances`` entry."""
+    from verity_numerical.bench.input_sets import InputSet
+
+    s = InputSet.open(path)
+    if not 0 < n <= s.n:
+        raise ValueError(f"commit: input set {s.name} holds {s.n} VUs, not {n} (a set is not recycled)")
+    ins = s.instances(0, n)
+    dt = {8: np.uint8, 16: np.uint16}[word_bits]
+    x, w = (np.ascontiguousarray(ins[p], dtype=dt) for p in ("x", "w"))
+    y = np.asarray(ins["y"]).reshape(n, -1)[:, 0]
+    ref = s.ref(0, n)
+    return x, w, y, InstanceSet(ref["dataset"], ref["tier"], ref["manifest_sha256"], int(s.subcircuit.params["K"]), word_bits), ref
 
 
 def binding(iset: InstanceSet, lo: int, hi: int, tree: str, schema: str) -> bytes:
@@ -261,12 +280,19 @@ def main(argv: list[str] | None = None) -> int:
     pn.add_argument("--lo", type=int, default=0)
     pn.add_argument("--vus", type=int, default=4096)
     pn.add_argument("--instances", type=Path, default=None)
+    pn.add_argument("--input-set", type=Path, default=None, help="an input set directory: VUs [0, --vus) of it (--lo must be 0)")
     pn.add_argument("--procs", type=int, default=16)
     args = ap.parse_args(argv)
     import bench_result as br
 
     src = Path(br.__file__).resolve().parents[2]
-    if args.relation == br.AMPERE_RELATION:
+    if args.input_set is not None:
+        if args.lo:
+            raise SystemExit("gpu.commit pin --input-set: a cell commits ids [0, --vus) of its set")
+        x, w, y, iset, ref = input_set(args.input_set, args.vus)
+        source = (f"input set {ref['tier']} ({ref['source']}; content digest {ref['content_digest'][:16]}...) "
+                  f"(python -m gpu.commit pin {args.relation} --leaf {args.leaf} --input-set ... --vus {args.vus})")
+    elif args.relation == br.AMPERE_RELATION:
         if args.instances is None:
             raise SystemExit(f"gpu.commit pin {args.relation}: --instances (the {br.TIER} tier's data directory)")
         frozen = src / "fixtures" / "bench-instances" / "v1" / "manifest.json"
@@ -277,7 +303,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         x, w, y, rel = br.load_relation(args.relation, src, args.lo, args.vus, args.procs)
         source = f"backends/direct/ligero/relchain.py instances() seed {rel.instance_seed} (python -m gpu.commit pin {args.relation} --leaf {args.leaf})"
-    iset = instance_set(args.relation, args.lo, args.vus, src)
+    if args.input_set is None:
+        iset = instance_set(args.relation, args.lo, args.vus, src)
     yw = 4 if np.asarray(y).dtype == np.uint32 else 2
     c = commit(args.leaf, args.relation, iset, args.lo, x, w, y, yw)
     e = c.info()

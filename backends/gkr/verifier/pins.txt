@@ -23,3 +23,9 @@ fp4-nvf4 24 e091a4c0ade053545ea723571196cedf1d53de5ad5d8849c5d0744f471e20122 382
 # bf16-ampere+blake3 (A100 BF16, operands committed under blake3-keyed/row/v2): the route (a) linked unit (the in-unit bits of
 # every operand word, tools/link_stub.extend_unit) with the digest-limb epilogue; verifies only with the session's link.txt
 bf16-ampere+blake3 96 c0a6809d777d274918fec6b174a07e2f3fe57c302f034af010243d7c8a14098b 187b9395a3a8d273e2bf3031a511806c2d08cf27b4d6523dd114f9cf30dd5a78 f09b30874ed5db322c063c674ca23673ec7245b619db93c9161bf25e9879c9d8 python -m tools.cell circuits
+# bf16-ampere at vLLM's reduction lengths (gemm-coordinate/k2048, k8192): the same circuit files, steps = K / 16; the relation
+# names K, so a K = 2048 statement is never accepted as the K = 1536 one or the reverse
+bf16-ampere-k2048 128 afefd92fc17282ae280eef80b1b331b49340ffbbed88a1d8a7f3dac3cc45f1c7 90001e98ad752110e825f9f8a938a2731fea597727921f9af4acc6cd4561359c 08025221bde2efaf108dd32f6d5bf1b4a977695716d39466d6ed3e6d1fa42a47 python -m gpu.v2.export circuits --model ampere_bf16_m16n8k16 --k 2048
+bf16-ampere-k8192 512 afefd92fc17282ae280eef80b1b331b49340ffbbed88a1d8a7f3dac3cc45f1c7 90001e98ad752110e825f9f8a938a2731fea597727921f9af4acc6cd4561359c 08025221bde2efaf108dd32f6d5bf1b4a977695716d39466d6ed3e6d1fa42a47 python -m gpu.v2.export circuits --model ampere_bf16_m16n8k16 --k 8192
+bf16-ampere-k2048+blake3 128 c0a6809d777d274918fec6b174a07e2f3fe57c302f034af010243d7c8a14098b 187b9395a3a8d273e2bf3031a511806c2d08cf27b4d6523dd114f9cf30dd5a78 f09b30874ed5db322c063c674ca23673ec7245b619db93c9161bf25e9879c9d8 python -m tools.cell circuits --k 2048
+bf16-ampere-k8192+blake3 512 c0a6809d777d274918fec6b174a07e2f3fe57c302f034af010243d7c8a14098b 187b9395a3a8d273e2bf3031a511806c2d08cf27b4d6523dd114f9cf30dd5a78 f09b30874ed5db322c063c674ca23673ec7245b619db93c9161bf25e9879c9d8 python -m tools.cell circuits --k 8192

@@ -1,5 +1,17 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: an A-route-a bench.cell driver; A-GKR's route (a) at K = 2048 and 8192
+
+- **Driver:** `bench/drivers/a_route_a.py` runs route (a) (A-GKR + C-Flock's keyed-BLAKE3 rows + the sigma link) through
+  `backends/gkr/cell.sh`. The verifier pod builds its own statement of every sweep size from the shipped input set and serves
+  them in order on one port. The prover pod runs the correctness gate, the RTT probe, and per size a warm-up session against a
+  loopback verifier followed by the timed live sessions. `tools/cell.py finish` then writes the plateau's result with the sweep,
+  protocol, loopback, commit and placement blocks, and `tools/cell.py register` stamps the lane. The driver takes input sets only.
+- **Lowering:** A-GKR lowers `gemm-coordinate/k2048` and `k8192` on sm80 BF16 with `frame-v3/blake3-keyed` to
+  `bf16-ampere-k<K>+blake3`. These are the K = 1536 circuit files at `steps` = K / 16, pinned in `backends/gkr/verifier/pins.txt`,
+  and the lowering has a `stage()`.
+- **Unchanged:** the renderers and their rules.
+
 ## 2026-09-26: the spine generates every served template
 
 - `bench.templates` binds and generates every template of every census workload. `test_headline.NO_SPINE_GENERATOR` is empty.
