@@ -595,9 +595,7 @@ def _gate_intervals(gates: Any, size: int) -> Intervals:
 
 def _sweep(program: "Program", fam, limits: Limits, within: Intervals | None = None) -> PartitionVerdict:
     size = program.gates
-    target = ((0, size),) if size else ()
-    if within is not None:
-        target = within
+    target = within if within is not None else ((0, size),) if size else ()
     ivs: list[tuple[int, int, int]] = []
     n_sets = 0
     empty: list[int] = []
