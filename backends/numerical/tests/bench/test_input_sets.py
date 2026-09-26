@@ -25,7 +25,10 @@ CENSUS = Path(__file__).resolve().parents[4] / "census"
 #: Small bindings of every template (fast under the gate reference too).
 SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1:40"), "rope-head": dict(D=8),
          "rmsnorm-fused-cuda": dict(N=64, EPS=1e-5), "rmsnorm-triton": dict(N=64, EPS=1e-6), "silu-mul": dict(I=32),
-         "gumbel-top-p-token-select": dict(V=16)}
+         "gumbel-top-p-token-select": dict(V=16), "token-select-greedy": dict(V=64), "moe-router-topk": dict(E=16, TOPK=4, VPT=8),
+         "moe-router-topk-norm": dict(E=16, TOPK=4, VPT=8), "moe-sum": dict(TOPK=4, H=16), "bias-add": dict(N=16),
+         "bf16-mul-scalar": dict(N=16), "embedding-row": dict(V=50, H=8), "moe-expert-coordinate": dict(E=4, K=64),
+         "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128)}
 
 
 def test_catalogue_covers_the_101_templates():
@@ -165,8 +168,6 @@ def test_evaluation_targets_equal_the_definitions():
 def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
     ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) if t["id"] in TM.TEMPLATES for s in t["subcircuits"]]
     for sid in ids:
-        if sid.startswith("attention-head/") and not sid.endswith("/sm80-fa2-bf16"):
-            continue                                            # FA3: the spine binds FA2 only (test_headline.NO_SPINE_GENERATOR)
         sub = TM.parse_subcircuit_id(sid)
         assert sub.id == sid
     sub = TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16")
