@@ -350,7 +350,8 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
 )
 _B_LIVE_MODEL = ("interactive protocol: 3 round trips with a live verifier (the step-0 coin commitment, then the column and opening "
                  "challenges), the verifier online for the whole proof; results verified from files (the runner's coins replayed) are "
-                 "recorded as non-interactive: rounds = 0, network time = (proof + statement bytes) ÷ bandwidth")
+                 "charged the protocol's sequential depth (3 per proof x the sub-batch proofs run one after another; derived: file-verified, no "
+                 "measured RTT), network time = (proof + statement bytes) ÷ bandwidth")
 _INTERACTION = {
     **{c.id: _B_LIVE_MODEL for c in CONFIGURATIONS if c.family == "B-Ligero"},
     "B-Ligero Fiat–Shamir (HVZK)": "non-interactive (Fiat–Shamir): rounds = 0, no one online",
@@ -375,9 +376,19 @@ FLOCK_CONFIG = Configuration(
     "Flock b684b12 profile params pinned (commitment.params == expected)",
     interaction="live verifier: coins for every squeeze of both reps (Fiat–Shamir cannot reach 2^-128 for this profile); the verifier "
                 "must be online for the whole proof")
-CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG)
+#: Pure Flock over vllm-v1 commitments (``software.backend.name`` ``flock-vllm-v1``, statement ``verity/flock-vllm-block/v1``).
+FLOCK_VLLM_CONFIG = dataclasses.replace(
+    FLOCK_CONFIG, id="Flock over vllm-v1 (flock-128-r2, live coins)", scheme="vllm-v1",
+    commitment="vllm-v1 SHA-256 trees over position leaves of every operand row, bound by step roots over the verifier's port "
+               "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
+               "(statement verity/flock-vllm-block/v1)",
+    hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"),
+            Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
+    soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
+              "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
+CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -393,7 +404,10 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     if v is not None:
         return cfgs.get(v.id)
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
-    return cfgs.get(FLOCK_CONFIG.id) if FLOCK.recognises(_get(fp, "software", "backend", "name")) else None
+    name = _get(fp, "software", "backend", "name")
+    if not FLOCK.recognises(name):
+        return None
+    return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
 
 
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
@@ -470,7 +484,7 @@ INTERACTION_TOLERANCE = 0.10
 STATEMENT_BYTES = ("relation.statement_bytes_total", "relation.hash.statement_bytes_total")
 
 
-def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
+def interaction(meta: Mapping[str, Any], interactive: bool = False) -> dict[str, Any]:
     """The interaction record of a result.  ``live``: it ran against a live verifier (live-verifier evidence, or a measured RTT,
     network wait or ``t.total_live``).
 
@@ -484,10 +498,13 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     (``live.loopback_round_seconds``), is prover compute: rounds x that (at most the measured wait) moves from the wait into
     ``prover_s``, and only the excess over loopback counts as network wait (``loopback_s`` records the amount moved).
 
-    Any other result (a proof verified from its files: the Fiat–Shamir or file-replayed transcript every B-Ligero cell has today)
-    is **non-interactive** for this purpose and its record is derived (``derived``): rounds = 0 whatever the protocol's round
-    count, bytes up = the proof bytes (``proof_bytes``, else ``transcript.bytes``) plus the statement bytes (:data:`STATEMENT_BYTES`),
-    so its network time is bytes ÷ bandwidth."""
+    Any other result is a proof verified from its files and its record is derived (``derived``): bytes up = the proof bytes
+    (``proof_bytes``, else ``transcript.bytes``) plus the statement bytes (:data:`STATEMENT_BYTES`), no measured RTT.  Its
+    rounds (``rounds_source``): a Fiat–Shamir proof has none (0); an ``interactive`` protocol's file-replayed transcript (every
+    B-interactive cell today) pays the protocol's sequential depth, ``"derived: file-verified"``: the per-proof depth
+    (``rounds.sequential_depth``, else ``rounds.protocol``) x the proofs that run one after another -- ``N_subbatches``
+    sub-batch proofs, ``software.backend.pipeline`` of them in flight at once, so ceil(N_subbatches / pipeline) waves (root's
+    ruling 2026-09-26)."""
 
     m = T._measurements(meta)
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -500,7 +517,14 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     live = bool(lv) or any(num(k) is not None for k in ("net.rtt_ms", "net.wait_seconds", contract.T_TOTAL_LIVE))
     if not live:
         stmt = next((v for v in (num(k) for k in STATEMENT_BYTES) if v is not None), 0.0)
-        return {"live": False, "derived": True, "rounds": 0.0, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
+        rounds, source = 0.0, "fiat-shamir"
+        if interactive:
+            depth = next((v for v in (num("rounds.sequential_depth"), num("rounds.protocol")) if v is not None), 0.0)
+            proofs, flight = fp.get("N_subbatches"), _get(fp, "software", "backend", "pipeline")
+            proofs = proofs if _num(proofs) and proofs >= 1 else 1
+            waves = math.ceil(proofs / flight) if _num(flight) and flight >= 1 else proofs
+            rounds, source = depth * waves, "derived: file-verified"
+        return {"live": False, "derived": True, "rounds": rounds, "rounds_source": source, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
                 "proof_bytes": proof, "statement_bytes": stmt, "rtt_ms": None, "rtt_method": None,
                 "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0,
                 "loopback_round_s": None, "loopback_method": None}
@@ -517,7 +541,7 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     if loop is not None and rounds and wait is not None and compute is not None:
         moved = min(wait, rounds * loop)
         compute, wait = compute + moved, wait - moved
-    return {"live": True, "derived": False, "rounds": rounds, "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
+    return {"live": True, "derived": False, "rounds": rounds, "rounds_source": "measured", "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
             "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
             "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "bandwidth_bps": num("net.bandwidth_bps"), "prover_s": compute,
             "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved,
@@ -554,10 +578,10 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     return None
 
 
-def throughput(meta: Mapping[str, Any], rules: Rules) -> dict[str, Any] | None:
+def throughput(meta: Mapping[str, Any], rules: Rules, interactive: bool = False) -> dict[str, Any] | None:
     """``P``: instances per timed run over its end-to-end seconds (committing the batch, :data:`COMMIT`, then the interaction
-    formula at the reference profile: prover compute + rounds x 1 ms + bytes / 100 Gb/s); under the legacy rules proving only.
-    ``None`` without a positive ``t.total`` and batch."""
+    formula at the reference profile: prover compute + rounds x 1 ms + bytes / 100 Gb/s; ``interactive``: the configuration's
+    protocol is interactive, :func:`interaction`); under the legacy rules proving only.  ``None`` without a positive ``t.total`` and batch."""
 
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
     m = T._measurements(meta)
@@ -565,7 +589,7 @@ def throughput(meta: Mapping[str, Any], rules: Rules) -> dict[str, Any] | None:
     if not (_num(t) and t > 0 and _num(n) and n > 0):
         return None
     commit = 0.0 if rules.legacy else (float(m[COMMIT]) if _num(m.get(COMMIT)) else 0.0)
-    ix = interaction(meta)
+    ix = interaction(meta, interactive)
     net = 0.0 if rules.legacy else interaction_time(ix) - float(t)
     e2e = float(t) + net + commit
     return {"instances": n, "proving_s": float(t), "commit_s": commit, "interaction_s": net, "end_to_end_s": e2e,
@@ -972,7 +996,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
         codes = reject_codes(store, c, rules, equivs)
-        P = throughput(c.meta, rules)
+        P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
         key = (c.target.name, scheme_of(c), _column(c, rules))
         if not codes and P is not None:
             pools.setdefault(key, []).append((c, P))
@@ -1360,8 +1384,9 @@ def render_markdown(V: Views, published: bool = False) -> str:
     if derived:
         shares = [100 * stages(c)["interaction"] / c.overhead for c in derived]
         out += [f"Interaction note: {len(derived)} of {len(V.cells)} cells are verified from files, so their interaction is derived "
-                f"(rounds = 0; network time = (proof + statement bytes) ÷ 100 Gb/s). Moving the proof alone is {min(shares):.0f}–"
-                f"{max(shares):.0f}% of those cells at the reference network: proof size is a real cost.", ""]
+                f"(no measured RTT; rounds = 0 under Fiat–Shamir, else the protocol's sequential depth; network time = rounds × 1 ms + "
+                f"(proof + statement bytes) ÷ 100 Gb/s). That interaction is {min(shares):.0f}–{max(shares):.0f}% of those cells at the "
+                f"reference network: proof size is a real cost.", ""]
     if rows3s:
         out += ["### Table 3 drill-down — seconds per instance (share of end to end)", "",
                 T._md_table((*head, "End to end", "Setup, one-time (s)"), rows3s), ""]
@@ -1371,7 +1396,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
             at = lambda rtt, bw=REF_BANDWIDTH_BPS: c.native * (P["commit_s"] + interaction_time(ix, rtt, bw)) / P["instances"]  # noqa: E731
             rtt = (f"{ix['rtt_ms']:.3g} ms ({ix['rtt_method'] or 'method not recorded'})" if ix["rtt_ms"] is not None
                    else "— (file-verified)" if ix["derived"] else T.EMPTY)
-            rounds = "0 (derived)" if ix["derived"] else f"{ix['rounds']:.0f}" if ix["rounds"] is not None else T.UNMEASURED
+            rounds = f"{ix['rounds']:.0f} (derived)" if ix["derived"] else f"{ix['rounds']:.0f}" if ix["rounds"] is not None else T.UNMEASURED
             rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
                           D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
                           T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
@@ -1728,19 +1753,38 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
             for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
 
 
+#: How a live run measured its RTT, as published: the recorded ``rtt_method`` text names hosts and ports, so it stays in the
+#: evidence store (the result's own record) and the entities render carries only one of these.
+RTT_METHODS = ("tcp-connect", "open-connection-ping", "unclassified")
+
+
+def rtt_method_enum(text: str | None) -> str | None:
+    """The published RTT method of a recorded ``rtt_method`` text (:data:`RTT_METHODS`), ``None`` when none is recorded."""
+    if not text:
+        return None
+    t = text.lower()
+    if "ping" in t and "connection" in t:
+        return "open-connection-ping"
+    if "tcp connect" in t:
+        return "tcp-connect"
+    return "unclassified"
+
+
 def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
     """A result's interaction record, enough to recompute its overhead at any network:
     ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / inputs``
     (``inputs``: the inputs per timed run).
-    ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; 0 for a file-verified result);
-    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``)."""
+    ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; for a file-verified result 0 under
+    Fiat–Shamir, else the protocol's sequential depth over its sequential sub-batch proofs), ``rounds_source`` says which;
+    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``);
+    ``measured_rtt.method`` is an :data:`RTT_METHODS` value, never the recorded text."""
     num = lambda v: float(v) if _num(v) else None  # noqa: E731
     return {
-        "live": ix["live"], "derived": ix["derived"], "rounds": ix["rounds"],
+        "live": ix["live"], "derived": ix["derived"], "rounds": ix["rounds"], "rounds_source": ix["rounds_source"],
         "rounds_protocol": num(raw.get("rounds_protocol")), "sequential_depth": num(raw.get("sequential_depth")),
         "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"], "proof_bytes": ix["proof_bytes"], "statement_bytes": ix["statement_bytes"],
         "commit_s": P["commit_s"], "prover_compute_s": ix["prover_s"], "verifier_compute_s": ix["verifier_s"], "network_wait_s": ix["wait_s"],
-        "measured_rtt": {"ms": ix["rtt_ms"], "method": ix["rtt_method"]} if ix["rtt_ms"] is not None else None,
+        "measured_rtt": {"ms": ix["rtt_ms"], "method": rtt_method_enum(ix["rtt_method"])} if ix["rtt_ms"] is not None else None,
         "measured_bandwidth_bps": ix.get("bandwidth_bps"),
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),
@@ -1931,7 +1975,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                       "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
                       "under_reverification": c.legacy.finding},
             "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None,
-            "throughput": {k: P[k] for k in ("instances", "instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")},
+            "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
             "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]

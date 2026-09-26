@@ -149,10 +149,42 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> d
             "y_bytes": ybytes, "y": y}
 
 
+def statement_vllm_v1(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> dict:
+    """The three ``vllm-v1`` roots over the set's VUs ``[lo, lo + len(x))``: position-leaf trees of the x rows, the W
+    columns and the output words' ``y_bytes`` little-endian bytes, each root the step-root binding of its port's
+    ``StepDomain`` (PROTOCOL.md §4, §5). The domains are B-Ligero's (``ligero.vllm_tree``: ctx = the set and range per
+    port), so a Flock cell and a B-Ligero ``+vllm-v1`` cell on the same line bind the same three roots."""
+    from verity.commitments import vllm_v1 as core
+
+    relation, _, _ = _ligero()
+    from ligero import vllm_tree
+    rel = relation(name)
+    n = len(x)
+    total = n if total is None else total
+    word_bits = 16 if rel.word_dtype == "<u2" else 8
+    yb = vllm_tree.y_bytes_of(rel.y_bits)
+    manifest = instances_digest(name, total)
+    y = [int(rel.y_public(int(a[-1]))) for a in accs]
+    rb = "<u2" if word_bits == 16 else "u1"
+    values = {"a": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in x],
+              "b": [np.ascontiguousarray(r.astype(rb)).tobytes() for r in w],
+              "y": [v.to_bytes(yb, "little") for v in y]}
+    roots, digests, ctx = {}, {}, {}
+    for t in "aby":
+        ctx[t] = vllm_tree.ctx_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest, lo=lo,
+                                      hi=lo + n, tree=t)
+        dom = vllm_tree.domain(t, ctx[t], n, K=K, word_bits=word_bits, y_bytes=yb)
+        roots[t] = dom.bind(core.fold([core.pos_leaf(v) for v in values[t]]))
+        digests[t] = core.domain_digest(dom)
+    return {"scheme": core.NAME, "roots": {t: roots[t].hex() for t in "aby"}, "domain_digests": {t: digests[t].hex() for t in "aby"},
+            "ctx": {t: ctx[t].hex() for t in "aby"}, "leaf": "pos-leaf", "y_bytes": yb, "y": y}
+
+
 def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0,
-          hi: int | None = None) -> dict:
+          hi: int | None = None, scheme: str = "frame-v3") -> dict:
     """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their statement as a ``flock-pure-instances/v1``
-    file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range."""
+    file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range.
+    ``scheme`` is the commitment scheme the header's roots are under: ``frame-v3`` or ``vllm-v1``."""
     from verity.ml.tc.cast import f32_to_bf16_word
 
     relation, _, _ = _ligero()
@@ -160,7 +192,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     pipe = PIPES[name]
     hi = total if hi is None else hi
     x, w, accs = draw(name, total, procs, cache, lo, hi)
-    st = statement(name, x, w, accs, total, lo)
+    st = {"frame-v3": statement, "vllm-v1": statement_vllm_v1}[scheme](name, x, w, accs, total, lo)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
     ref = instances_ref(name, total)
     ref["range"] = [lo, hi]
@@ -186,7 +218,8 @@ if __name__ == "__main__":
     ap.add_argument("out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--cache")
+    ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3")
     a = ap.parse_args()
-    h = write(a.out, a.relation, a.total, a.procs, a.cache)
+    h = write(a.out, a.relation, a.total, a.procs, a.cache, scheme=a.scheme)
     print(json.dumps({"relation": h["relation"], "vus": h["vus"], "roots": h["roots"],
                       "manifest_sha256": h["instances"]["manifest_sha256"]}))

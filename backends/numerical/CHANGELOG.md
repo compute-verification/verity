@@ -6,6 +6,26 @@
   configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
   `instances`) and the frozen tables' headers keep their names, mapped in the Glossary.
 
+## 2026-09-26: file-verified interactive results pay their protocol's rounds
+
+- Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round
+  interactive protocol, verified from its replayed transcript) were modelled as non-interactive. The reference network
+  undercharged them and RTT sweeps left them flat.
+- Root's ruling (2026-09-26): a file-verified result of an interactive protocol (its configuration is not transferable) uses the
+  protocol's sequential depth as its rounds: the per-proof depth (`rounds.sequential_depth`, else `rounds.protocol`) times the
+  sub-batch proofs that run one after another. With `software.backend.pipeline` proofs in flight, that is
+  ceil(`N_subbatches` / pipeline) waves; without a pipeline, all `N_subbatches`. The measured RTT stays null. Fiat–Shamir
+  results (A-GKR, SP1, B-Ligero FS) keep 0.
+- The interaction record, and the entities render's `interaction`, gain `rounds_source`: `measured`,
+  `derived: file-verified` or `fiat-shamir`. Markdown shows `<rounds> (derived)`, and the Table 3 interaction note now
+  counts rounds × 1 ms.
+- Effect at the reference network: the 14 B-interactive results rise by 0.9–5.5% (12 to 147 rounds each). The legacy
+  parity is unchanged.
+- Entities: `throughput.instances` is now `throughput.inputs`, following `interaction.inputs`.
+- Entities: `interaction.measured_rtt.method` is now an enum (`views.RTT_METHODS`: `tcp-connect`,
+  `open-connection-ping`, `unclassified`). The recorded `rtt_method` text names hosts and ports, so it stays in the result's
+  own record in the evidence store. The markdown still prints the recorded text and is byte-identical.
+
 ## 2026-09-26: "instance set" becomes "input set"
 
 - `census/instance_sets.json` and its schema are now `census/input_sets.json` and `schemas/input_sets.schema.json`. The

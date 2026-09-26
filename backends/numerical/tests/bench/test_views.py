@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import random
 from typing import Any
 
@@ -384,16 +385,17 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
-                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A}
+                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
+                    V.FLOCK_VLLM_CONFIG.id}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
-        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)"]
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -682,21 +684,51 @@ def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(sto
     assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 100e9)
 
 
-def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
-    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
-    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 100 Gb/s -- and Table 3 keeps that transfer
-    as the interaction stage, footnoted."""
+def test_a_file_verified_interactive_result_pays_its_protocols_sequential_depth_and_its_bytes(store: LocalStore) -> None:
+    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = the
+    protocol's sequential depth (3 per proof x the sub-batch proofs run one after another: ceil(N_subbatches / pipeline) waves),
+    bytes = proof + statement bytes, network time = rounds x 1 ms + bytes / 100 Gb/s -- and Table 3 keeps it as the interaction
+    stage, footnoted (root's ruling 2026-09-26)."""
     art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
                                                                  "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
+    fp = store.get_manifest(art).meta["workload_fingerprint"]
+    waves = math.ceil(fp.get("N_subbatches", 1) / (fp["software"]["backend"].get("pipeline") or fp.get("N_subbatches", 1)))
     views = V.build(store)
     cell = line(views)["cells"]["B-Ligero"]
     assert cell is not None and cell.artifact == art
     ix = cell.throughput["interaction"]
-    assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
-    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 100e9)
+    assert ix["derived"] and not ix["live"] and ix["rounds"] == 3 * waves and ix["rounds_source"] == "derived: file-verified"
+    assert ix["rtt_ms"] is None and ix["bytes_up"] == 1.255e9
+    assert cell.throughput["interaction_s"] == pytest.approx(3 * waves * 0.001 + 1.255e9 * 8 / 100e9)
     md = V.render_markdown(views)
     share = 100 * V.stages(cell)["interaction"] / cell.overhead
-    assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
+    assert f"That interaction is {share:.0f}–{share:.0f}% of those cells" in md and f"{3 * waves} (derived)" in md and "— (file-verified)" in md
+
+
+def test_file_verified_rounds_multiply_by_the_sequential_sub_batch_waves() -> None:
+    fp = {"B": 32768, "N_subbatches": 193, "software": {"backend": {"name": "ligero", "pipeline": 4}}}
+    meta = {"workload_fingerprint": fp, "measurements": [{"name": "t.total", "value": 7.0, "unit": "s"},
+                                                         {"name": "rounds.sequential_depth", "value": 3, "unit": "count"}]}
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 49
+    fp["software"]["backend"].pop("pipeline")
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 193
+    fs = V.interaction(meta)
+    assert fs["rounds"] == 0 and fs["rounds_source"] == "fiat-shamir" and fs["derived"]
+
+
+def test_the_published_rtt_method_is_an_enum_never_the_recorded_text() -> None:
+    assert V.rtt_method_enum("median of 20 TCP connects to the verifier pod's ssh port (10.0.0.1:2222)") == "tcp-connect"
+    assert V.rtt_method_enum("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the verifier") \
+        == "open-connection-ping"
+    assert V.rtt_method_enum("iperf") == "unclassified" and V.rtt_method_enum(None) is None
+    assert set(V.RTT_METHODS) == {"tcp-connect", "open-connection-ping", "unclassified"}
+
+
+def test_a_flock_vllm_v1_result_binds_the_vllm_v1_scheme_not_keyed_blake3() -> None:
+    meta = lambda name: {"workload_fingerprint": {"software": {"backend": {"name": name}}}}  # noqa: E731
+    assert V.configuration_of(meta("flock-vllm-v1")) is V._CONFIG[V.FLOCK_VLLM_CONFIG.id]
+    assert V.FLOCK_VLLM_CONFIG.scheme == "vllm-v1" and V.FLOCK_VLLM_CONFIG.family == "Flock"
+    assert V.configuration_of(meta("flock (flock-128-r2)")).id == V.FLOCK_CONFIG.id
 
 
 def test_flocks_declared_class_is_non_zk_proof() -> None:
@@ -1112,10 +1144,10 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     ix = by_art[live]["interaction"]
     assert ix["live"] and ix["rounds"] == ix["sequential_depth"] == rounds and ix["rounds_protocol"] == 2 * rounds
     assert (ix["bytes_up"], ix["bytes_down"]) == (2_058_029, 165_825)
-    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "median of 20 TCP connects"}
+    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "tcp-connect"}
     assert ix["loopback_per_round"] == {"s": 0.0001, "method": "measured on loopback, this run"}
     assert ix["loopback_moved_s"] == pytest.approx(rounds * 0.0001)
     assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0
     assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
-    assert fx["derived"] and fx["rounds"] == 0 and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
+    assert fx["derived"] and fx["rounds_source"] == "derived: file-verified" and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
