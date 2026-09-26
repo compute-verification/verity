@@ -30,7 +30,13 @@
     - the instance set with its provenance;
     - its soundness: the whole-cell bound, a union over the sub-batch proofs, plus the backend's per-proof bound where the
       result records it;
-    - native N as a work-model version plus a census peak id;
+    - `N` (the native peak: a work-model version plus a census peak id) and `P` (instances per second at the reference
+      network) beside the overhead;
+    - its `interaction` record, enough to recompute the overhead at any network (`formula`):
+      - `rounds`, `rounds_protocol` and `sequential_depth`;
+      - `bytes_up` and `bytes_down`;
+      - `commit_s`, `prover_compute_s` and `verifier_compute_s`;
+      - `measured_rtt` and `loopback_per_round`, each with its method;
     - its phases: stages, fused stages as one span, "Other" clamped to 0 in [−0.5%, 0) and flagged when it is more
       negative, with the raw value kept as `other_raw`, and one-time setup in its own field;
     - its state, artifact and render time;

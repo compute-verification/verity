@@ -901,6 +901,7 @@ class Views:
     admissible: list[ViewCell] = field(default_factory=list)  #: every admissible result as a cell (``cells`` holds each family's best)
     security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
+    interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
 
     def columns(self) -> list[str]:
         if not self.rules.legacy:
@@ -998,6 +999,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     def make_cell(c: Ctx, P: dict[str, Any], target: Target, scheme: str | None, col: str, N: Mapping[str, Any]) -> ViewCell:
         vb = T.independent_verification(c.meta, c.labels, c.attempt)
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
+        m = T._measurements(c.meta)
+        block = c.meta.get("interaction") if isinstance(c.meta.get("interaction"), Mapping) else c.meta["workload_fingerprint"].get("interaction")
+        V.interaction_raw[c.art] = {"rounds_protocol": m.get("rounds.protocol"), "sequential_depth": m.get("rounds.sequential_depth"),
+                                    "loopback_round_s": m.get("live.loopback_round_seconds"),
+                                    "loopback_method": block.get("loopback_method") if isinstance(block, Mapping) else None}
         gpu = _get(c.meta["workload_fingerprint"], "hardware", "gpu")
         V.prover_gpu[c.art] = gpu.get("name") if isinstance(gpu, Mapping) else None
         return ViewCell(line=target.name, column=col, artifact=c.art, configuration=c.config.id if c.config else None,
@@ -1722,6 +1728,26 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
             for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
 
 
+def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
+    """A result's interaction record, enough to recompute its overhead at any network:
+    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / instances``.
+    ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; 0 for a file-verified result);
+    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``)."""
+    num = lambda v: float(v) if _num(v) else None  # noqa: E731
+    return {
+        "live": ix["live"], "derived": ix["derived"], "rounds": ix["rounds"],
+        "rounds_protocol": num(raw.get("rounds_protocol")), "sequential_depth": num(raw.get("sequential_depth")),
+        "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"], "proof_bytes": ix["proof_bytes"], "statement_bytes": ix["statement_bytes"],
+        "commit_s": P["commit_s"], "prover_compute_s": ix["prover_s"], "verifier_compute_s": ix["verifier_s"], "network_wait_s": ix["wait_s"],
+        "measured_rtt": {"ms": ix["rtt_ms"], "method": ix["rtt_method"]} if ix["rtt_ms"] is not None else None,
+        "measured_bandwidth_bps": ix.get("bandwidth_bps"),
+        "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
+                               if num(raw.get("loopback_round_s")) is not None else None),
+        "loopback_moved_s": ix["loopback_s"], "instances": P["instances"],
+        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / instances",
+    }
+
+
 def best_per_key(cells: Sequence[ViewCell], key: Callable[[ViewCell], str]) -> list[ViewCell]:
     """Every admissible result, one per key (backend x statement x instance set x prover hardware): the highest ``P``, ties to
     the lower artifact id.  Unlike Table 2's cell (each family's best), every backend's best is kept."""
@@ -1893,7 +1919,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "best": any(b.artifact == c.artifact and b.line == c.line and b.scheme == c.scheme for b in V.cells),
             "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id,
             "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
-            "native": {"value": c.native, "unit": "instances/s", "work_model": WORK_MODEL.split(":")[0], "peak": peak.id},
+            "N": {"value": c.native, "unit": "instances/s", "work_model": WORK_MODEL.split(":")[0], "peak": peak.id},
+            "P": {"value": P["instances_per_second"], "unit": "instances/s", "network": census.REFERENCE_NETWORK.id},
             "phases": phases, "other_raw": other["value"], "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
             "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"],
                       "display": table3_row(c)["setup"]} if su else None,
@@ -1905,7 +1932,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None,
             "throughput": {k: P[k] for k in ("instances", "instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")},
             "batching": dict(c.batching), "instances": dict(c.instances),
-            "interaction": {"live": ix["live"], "rounds": ix["rounds"], "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"]},
+            "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
             "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
                             for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None}
 

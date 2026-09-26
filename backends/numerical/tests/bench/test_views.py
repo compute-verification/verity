@@ -806,7 +806,7 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
                          "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
     assert b3["implementation"] == "B-Ligero + BLAKE3 in circuit" and b3["backend"] == "B-interactive" and b3["best"]
     assert "configuration" not in b3 and "configurations" not in ent
-    assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"]["value"] / 4096)
+    assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["N"]["value"] / 4096)
     assert all(p["id"] != "setup" for p in b3["phases"])
     assert b3["state"] == {"provisional": True, "provisional_reason": b3["state"]["provisional_reason"], "algebraic": False, "algebraic_hashes": [],
                            "verified": True, "verified_by": VERIFIER, "under_reverification": None}
@@ -1012,8 +1012,9 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert b3["assumptions"]["backend"] == backend["assumptions"]
     assert b3["assumptions"]["all"] == list(dict.fromkeys([*backend["assumptions"], "cr/sha-256", "cr/blake3"]))
     assert set(ent["axes"]["statements"]) == set(st) and all(x["id"] == f"{x['subcircuit']}+{x['scheme']}" for x in st.values())
-    assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["native"]["peak"] == "rtx-4090/e4m3"
-    assert b3["native"]["work_model"] == "work-model/v0"
+    assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["N"]["peak"] == "rtx-4090/e4m3"
+    assert b3["N"]["work_model"] == "work-model/v0" and b3["P"]["value"] == b3["throughput"]["instances_per_second"]
+    assert b3["overhead"]["value"] == pytest.approx(b3["N"]["value"] / b3["P"]["value"])
     assert b3["instance_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
     assert b3["soundness"]["cell_log2"] == b3["soundness"]["cell_bits"] * -1 and b3["soundness"]["proofs"] == b3["batching"]["proofs"]
     assert "per_proof_log2" in b3["soundness"]
@@ -1086,3 +1087,34 @@ def test_every_backends_best_is_kept_not_only_the_familys(store: LocalStore) -> 
     one = V.best_per_key(views.admissible, lambda c: "B-interactive")
     two = V.best_per_key(views.admissible, lambda c: "B-interactive" if c.artifact == fast else "B-other")
     assert [c.artifact for c in one] == [fast] and sorted(c.artifact for c in two) == sorted([fast, slow])
+
+
+def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(store: LocalStore) -> None:
+    rtt, rounds = 0.000356, 4076
+    live = committed(store, "blake3", t_total=16.0, commit=0.6, proof_class="NON_ZK_PROOF", backend="flock (flock-128-r2)",
+                     interaction={"rounds.sequential_depth": rounds, "rounds.protocol": 2 * rounds, "net.rtt_ms": rtt * 1e3,
+                                  "rtt_method": "median of 20 TCP connects", "net.bytes_out": 2_058_029, "net.bytes_in": 165_825,
+                                  "net.wait_seconds": rounds * rtt + (2_058_029 + 165_825) * 8 / 100e9 + rounds * 0.0001,
+                                  "live.loopback_round_seconds": 0.0001, "loopback_method": "measured on loopback, this run"})
+    filed = committed(store, "poseidon2", t_total=0.5, commit=0.3)
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    ent = V.render_entities(views, rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    by_art = {r["artifact"]: r for r in ent["results"]}
+    for art in (live, filed):
+        r = by_art[art]
+        ix = r["interaction"]
+        at = lambda rtt_s, bw: r["N"]["value"] * (ix["commit_s"] + ix["prover_compute_s"] + ix["verifier_compute_s"] + ix["rounds"] * rtt_s  # noqa: E731
+                                                   + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bw) / ix["instances"]
+        assert at(0.001, 100e9) == pytest.approx(r["overhead"]["value"], rel=1e-9)
+        for n in ("rtt-20ms-100gbps", "dc-1ms-10gbps"):
+            prof = ent["census"]["networks"][n]
+            assert at(prof["rtt_s"], prof["bandwidth_bps"]) == pytest.approx(r["overhead_at"][n], rel=1e-9)
+    ix = by_art[live]["interaction"]
+    assert ix["live"] and ix["rounds"] == ix["sequential_depth"] == rounds and ix["rounds_protocol"] == 2 * rounds
+    assert (ix["bytes_up"], ix["bytes_down"]) == (2_058_029, 165_825)
+    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "median of 20 TCP connects"}
+    assert ix["loopback_per_round"] == {"s": 0.0001, "method": "measured on loopback, this run"}
+    assert ix["loopback_moved_s"] == pytest.approx(rounds * 0.0001)
+    assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0
+    fx = by_art[filed]["interaction"]
+    assert fx["derived"] and fx["rounds"] == 0 and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
