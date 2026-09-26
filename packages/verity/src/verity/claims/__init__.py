@@ -87,6 +87,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(its hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
+    Entry("hash-derived-key", "assumption",
+          "A fixed public key derived as counter-mode hash output over a public label is a typical draw of its family: hm96's "
+          "pinned keys are H(label || u32be i) with H the instance's hash (SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)",
+          "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
 )}

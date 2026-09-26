@@ -1,31 +1,35 @@
-"""``hm96-sha256/v1``: Halevi–Micali hiding leaves on SHA-256, a leaf rule that wraps any SHA-256 leaf digest.
+"""Halevi–Micali hiding leaves: ``hm96-sha256/v1`` and ``hm96-sha512/v1``, leaf rules that wrap a SHA-256 or SHA-512 leaf digest.
 
-Spec: ``PROTOCOL.md`` beside this file (the construction, the hiding bound, binding, what a circuit proves and what it
-costs).  Conformance vectors: ``vectors.json`` beside it, written by ``python -m verity.commitments.hm96.vectors``.  This
-module is the plain reference, stdlib only; fast committers live with their producers and match its bytes.
+Spec: ``PROTOCOL.md`` beside this file (the construction, the hiding bound, binding, the pinned keys, what a circuit proves and
+what it costs).  Conformance vectors: ``vectors.json`` (SHA-256) and ``vectors_sha512.json`` beside it, written by
+``python -m verity.commitments.hm96.vectors``.  This module is the plain reference, stdlib only; fast committers live with
+their producers and match its bytes.
 
-A leaf commits a value under an *inner* layout, any :class:`~verity.commitments.scheme.LeafLayout` with hash SHA-256: the
-unsalted leaf digest the port already defines (a vllm-v1 position leaf, a ``sha256/row/v1`` row digest)::
+A leaf commits a value under an *inner* layout, any :class:`~verity.commitments.scheme.LeafLayout` with the instance's hash:
+the unsalted leaf digest the port already defines (a vllm-v1 position leaf, a ``sha256/row/v1`` or ``sha512/row/v1`` row
+digest).  With H the instance's hash, n its output bits and l = n + n + 512 the salt bits::
 
-    x    = SHA-256(inner.prefix || value || inner.suffix)       the unsalted digest; private
-    y    = 128 fresh bytes from the OS generator (the salt)      private; stored with the value
-    c    = SHA-256(SALT_PREFIX || y)
-    b    = x XOR (M_key * y)                                     M_key: the 256 x 1024 Hankel matrix of the key over GF(2)
-    leaf = SHA-256(leaf_prefix(key) || b || c)
+    x    = H(inner.prefix || value || inner.suffix)             the unsalted digest; private
+    y    = l / 8 fresh bytes from the OS generator (the salt)   private; stored with the value
+    c    = H(salt_prefix || y)
+    b    = x XOR (M_key * y)                                     M_key: the n x l Hankel matrix of the key over GF(2)
+    leaf = H(leaf_prefix(key) || b || c)
 
 ``b || c`` is the Halevi–Micali commit string: their first scheme with the affine universal family ``y -> M y + b``,
 applied to the digest ``x`` (their O(k) variant).  A backend proves ``b || c`` from the private value and salt and
 publishes it; the verifier computes the leaf natively.  In a circuit only ``c`` costs AND gates beyond the unsalted
 digest: ``M_key * y`` is XOR-only, and the key is a circuit constant or a public input, never a witness.  Binding rests on
-SHA-256's collision resistance alone, for any key.  Hiding is statistical given uniform salts: at most ``N * 2^-256`` for N
-leaves under a uniform key, and under the pinned :data:`DEFAULT_KEY` ``N * 2^-192`` except for a ``2^-64`` fraction of keys,
-a common-reference-string step (:func:`statistical_distance_log2`; claims ``statistical-hiding``, ``common-reference-string``).
+H's collision resistance alone, for any key.  Hiding is statistical given uniform salts, with the same bound in both
+instances: at most ``N * 2^-256`` for N leaves under a uniform key, and under the pinned key ``N * 2^-192`` except for a
+``2^-64`` fraction of keys, a common-reference-string step (:meth:`Instance.statistical_distance_log2`; claims
+``statistical-hiding``, ``common-reference-string``, ``hash-derived-key``).
+
+The module-level names are ``hm96-sha256/v1``'s (:data:`SHA256`); :data:`SHA512` is ``hm96-sha512/v1``.
 """
 
 from __future__ import annotations
 
 import functools
-import hashlib
 import math
 import os
 from collections.abc import Sequence
@@ -33,8 +37,9 @@ from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
 
-from ..identity import identity_digest
-from ..scheme import LeafLayout, Path
+from ..identity import canonical_json_bytes, identity_digest
+from ..scheme import DIGEST_BYTES as _DIGEST_BYTES
+from ..scheme import LeafLayout, Path, sha
 from ..vllm_v1 import VllmV1
 
 __all__ = [
@@ -42,7 +47,10 @@ __all__ = [
     "DEFAULT_KEY",
     "DIGEST_BYTES",
     "HidingLayout",
+    "Hm96",
     "Hm96Sha256",
+    "Hm96Sha512",
+    "Instance",
     "KEY_BITS",
     "KEY_BYTES",
     "KEY_LABEL",
@@ -53,6 +61,8 @@ __all__ = [
     "SALT_BYTES",
     "SALT_PREFIX",
     "SALT_TAG",
+    "SHA256",
+    "SHA512",
     "byte_tables",
     "check_key",
     "columns",
@@ -70,87 +80,201 @@ __all__ = [
     "xor_count",
 ]
 
-NAME = "hm96-sha256/v1"
-
-DIGEST_BYTES = 32
-ROWS = 8 * DIGEST_BYTES              # L: the bits of x and b
-SALT_BYTES = 128
-COLS = 8 * SALT_BYTES                # l: the bits of y
-KEY_BITS = ROWS + COLS - 1           # 1279 bits define M
-KEY_BYTES = -(-KEY_BITS // 8)        # 160; bit 1279 (the top bit of byte 159) is zero
-PROVEN_BYTES = 2 * DIGEST_BYTES      # b || c
-
-SALT_TAG = b"verity/hm96-sha256/salt/v1\0"
-LEAF_TAG = b"verity/hm96-sha256/leaf/v1\0"
-KEY_LABEL = b"verity/hm96-sha256/key/v1\0"
-SALT_PREFIX = SALT_TAG.ljust(64, b"\0")
-SCHEME_DIGEST_TAG = "verity/hm96-sha256/scheme/v1"
+_BLOCK_BYTES = {"sha256": 64, "sha512": 128}
+#: Bits of hiding margin in the salt beyond ``|x| + |c|``: per-leaf distance 2^-257 under a uniform key (PROTOCOL.md section 3).
+MARGIN_BITS = 512
 
 
 def _bit(data: bytes, t: int) -> int:
     return (data[t >> 3] >> (t & 7)) & 1
 
 
-def check_key(key: bytes) -> bytes:
-    """``key`` as bytes, refused unless it is 160 bytes with bit 1279 zero (one encoding per matrix)."""
+@dataclass(frozen=True, slots=True)
+class Instance:
+    """One hm96 leaf rule: the hash, the salt size and the domain-separation strings; every other size follows from them."""
 
-    key = bytes(key)
-    if len(key) != KEY_BYTES or _bit(key, KEY_BITS):
-        raise InvalidArtifact(f"an {NAME} key is {KEY_BYTES} bytes with bit {KEY_BITS} zero")
-    return key
+    name: str
+    hash: str
+    salt_bytes: int
+    salt_tag: bytes
+    leaf_tag: bytes
+    key_label: bytes
+    scheme_tag: str
+
+    def __post_init__(self) -> None:
+        if 8 * self.salt_bytes != 2 * self.rows + MARGIN_BITS:
+            raise ValueError(f"{self.name}: the salt must be |x| + |c| + {MARGIN_BITS} bits")
+
+    @property
+    def digest_bytes(self) -> int:
+        return _DIGEST_BYTES[self.hash]
+
+    @property
+    def rows(self) -> int:
+        """L = n: the bits of x and b (and of c)."""
+        return 8 * self.digest_bytes
+
+    @property
+    def cols(self) -> int:
+        """l: the bits of y."""
+        return 8 * self.salt_bytes
+
+    @property
+    def key_bits(self) -> int:
+        return self.rows + self.cols - 1
+
+    @property
+    def key_bytes(self) -> int:
+        return -(-self.key_bits // 8)
+
+    @property
+    def proven_bytes(self) -> int:
+        return 2 * self.digest_bytes
+
+    @property
+    def salt_prefix(self) -> bytes:
+        return self.salt_tag.ljust(_BLOCK_BYTES[self.hash], b"\0")
+
+    @property
+    def default_key(self) -> bytes:
+        """The pinned key: a circuit constant, re-derivable from :attr:`key_label`."""
+        return _default_key(self)
+
+    def _h(self, data: bytes) -> bytes:
+        return sha(self.hash)(data).digest()
+
+    def _top_mask(self) -> int:
+        return (1 << (self.key_bits - 8 * (self.key_bytes - 1))) - 1
+
+    def _clear_top(self, raw: bytes) -> bytes:
+        out = bytearray(raw[:self.key_bytes])
+        out[-1] &= self._top_mask()
+        return bytes(out)
+
+    def check_key(self, key: bytes) -> bytes:
+        """``key`` as bytes, refused unless it has :attr:`key_bytes` bytes with the bits above :attr:`key_bits` zero."""
+
+        key = bytes(key)
+        if len(key) != self.key_bytes or key[-1] & ~self._top_mask():
+            raise InvalidArtifact(f"an {self.name} key is {self.key_bytes} bytes with bit {self.key_bits} and above zero")
+        return key
+
+    def key_from_label(self, label: bytes) -> bytes:
+        """``H(label || u32be(i))`` for i = 0, 1, ..., concatenated to :attr:`key_bytes`, the top bits cleared: anyone re-derives it."""
+
+        blocks = -(-self.key_bytes // self.digest_bytes)
+        return self._clear_top(b"".join(self._h(bytes(label) + i.to_bytes(4, "big")) for i in range(blocks)))
+
+    def fresh_key(self) -> bytes:
+        """A key from the operating system's generator."""
+        return self._clear_top(os.urandom(self.key_bytes))
+
+    def fresh_salt(self) -> bytes:
+        """One leaf's salt from the operating system's generator, never reused."""
+        return os.urandom(self.salt_bytes)
+
+    def rows_of(self, key: bytes) -> tuple[int, ...]:
+        """Row i of M as an l-bit integer (bit j is ``M[i][j] = key bit i + j``)."""
+        return _rows(self, self.check_key(key))
+
+    def columns(self, key: bytes) -> tuple[int, ...]:
+        """Column j of M as an n-bit integer (bit i is ``M[i][j]``)."""
+        return _columns(self, self.check_key(key))
+
+    def byte_tables(self, key: bytes) -> tuple[tuple[int, ...], ...]:
+        """Per salt byte position p and byte value v, the XOR of the columns ``8p + s`` over the set bits s of v."""
+        return _byte_tables(self, self.check_key(key))
+
+    def _salt(self, salt: bytes) -> bytes:
+        salt = bytes(salt)
+        if len(salt) != self.salt_bytes:
+            raise InvalidArtifact(f"an {self.name} salt is {self.salt_bytes} bytes")
+        return salt
+
+    def mask(self, key: bytes, salt: bytes) -> bytes:
+        """``M_key * y`` over GF(2) (bit i of the result is byte ``i >> 3``, bit ``i & 7``)."""
+
+        acc = 0
+        for table, v in zip(self.byte_tables(key), self._salt(salt), strict=True):
+            acc ^= table[v]
+        return acc.to_bytes(self.digest_bytes, "little")
+
+    def salt_digest(self, salt: bytes) -> bytes:
+        """``c = H(salt_prefix || y)``; the prefix is one block, so a gadget starts from a constant midstate."""
+        return self._h(self.salt_prefix + self._salt(salt))
+
+    def commit_string(self, key: bytes, inner_digest: bytes, salt: bytes) -> bytes:
+        """``b || c`` for the unsalted digest ``x`` and salt ``y``: what a backend proves and publishes."""
+
+        x = bytes(inner_digest)
+        if len(x) != self.digest_bytes:
+            raise InvalidArtifact(f"the inner digest is {self.digest_bytes} bytes")
+        return bytes(p ^ q for p, q in zip(x, self.mask(key, salt), strict=True)) + self.salt_digest(salt)
+
+    def leaf_prefix(self, key: bytes) -> bytes:
+        """``(leaf_tag || H(key))`` zero-padded to one block: the leaf binds its key, at the cost of a constant midstate."""
+        return (self.leaf_tag + self._h(self.check_key(key))).ljust(_BLOCK_BYTES[self.hash], b"\0")
+
+    def tree_leaf(self, key: bytes, proven: bytes) -> bytes:
+        """``H(leaf_prefix(key) || b || c)``: the tree leaf a published commit string stands for (the verifier's native step)."""
+
+        proven = bytes(proven)
+        if len(proven) != self.proven_bytes:
+            raise InvalidArtifact(f"an {self.name} commit string b || c is {self.proven_bytes} bytes")
+        return self._h(self.leaf_prefix(key) + proven)
+
+    def scheme_digest(self, key: bytes) -> bytes:
+        """The configured rule's identity, for a root binding or statement to absorb: name, salt size and the key's digest.
+
+        SHA-256: ``identity_digest(scheme_tag, doc)``.  SHA-512: ``SHA-512(u32be(len tag) || tag || u64be(len doc) || doc)`` over
+        the same canonical JSON, whose key digest is SHA-512.
+        """
+
+        doc = {"name": self.name, "salt_bytes": self.salt_bytes, f"key_{self.hash}": self._h(self.check_key(key)).hex()}
+        if self.hash == "sha256":
+            return bytes.fromhex(identity_digest(self.scheme_tag, doc))
+        tag, payload = self.scheme_tag.encode("utf-8"), canonical_json_bytes(doc)
+        return self._h(len(tag).to_bytes(4, "big") + tag + len(payload).to_bytes(8, "big") + payload)
+
+    def xor_count(self, key: bytes) -> int:
+        """Two-input XOR gates of ``b = x XOR M y`` in a circuit: row i takes ``weight(row i) - 1`` XORs, plus one for ``x_i``."""
+        return sum(r.bit_count() for r in self.rows_of(key))
+
+    def statistical_distance_log2(self, leaves: int, *, key_failure_log2: int | None = None) -> float:
+        """log2 of the hiding bound for ``leaves`` commitments under one key (PROTOCOL.md section 3).
+
+        A fresh uniform key: any two vectors of ``leaves`` inner digests give commit strings within ``leaves * 2^-256``.
+        A pinned key (``key_failure_log2 = t``): the same holds within ``leaves * 2^(t - 256)`` for all but a ``2^-t`` fraction
+        of keys (Markov over the key).
+        """
+
+        if leaves < 1:
+            raise ValueError("at least one leaf")
+        return math.log2(leaves) + (2 * self.rows - self.cols) / 2 + (key_failure_log2 or 0)
 
 
-def _clear_top(raw: bytes) -> bytes:
-    out = bytearray(raw[:KEY_BYTES])
-    out[-1] &= 0x7F
-    return bytes(out)
+@functools.lru_cache(maxsize=4)
+def _default_key(inst: Instance) -> bytes:
+    return inst.key_from_label(inst.key_label)
 
 
-def key_from_label(label: bytes) -> bytes:
-    """``SHA-256(label || u32be(i))`` for i = 0..4, concatenated, bit 1279 cleared: a key anyone can re-derive."""
-
-    return _clear_top(b"".join(hashlib.sha256(bytes(label) + i.to_bytes(4, "big")).digest() for i in range(5)))
-
-
-def fresh_key() -> bytes:
-    """A key from the operating system's generator (a committer's own per-run key, PROTOCOL.md section 3)."""
-
-    return _clear_top(os.urandom(KEY_BYTES))
+@functools.lru_cache(maxsize=16)
+def _rows(inst: Instance, key: bytes) -> tuple[int, ...]:
+    k = int.from_bytes(key, "little")
+    return tuple((k >> i) & ((1 << inst.cols) - 1) for i in range(inst.rows))
 
 
-def fresh_salt() -> bytes:
-    """One leaf's salt: 128 bytes from the operating system's generator, never reused."""
-
-    return os.urandom(SALT_BYTES)
-
-
-#: The pinned key of v1: a circuit constant, re-derivable from :data:`KEY_LABEL`.
-DEFAULT_KEY = key_from_label(KEY_LABEL)
+@functools.lru_cache(maxsize=16)
+def _columns(inst: Instance, key: bytes) -> tuple[int, ...]:
+    k = int.from_bytes(key, "little")
+    return tuple((k >> j) & ((1 << inst.rows) - 1) for j in range(inst.cols))
 
 
-@functools.lru_cache(maxsize=8)
-def rows(key: bytes) -> tuple[int, ...]:
-    """Row i of M as a 1024-bit integer (bit j is ``M[i][j] = key bit i + j``)."""
-
-    k = int.from_bytes(check_key(key), "little")
-    return tuple((k >> i) & ((1 << COLS) - 1) for i in range(ROWS))
-
-
-@functools.lru_cache(maxsize=8)
-def columns(key: bytes) -> tuple[int, ...]:
-    """Column j of M as a 256-bit integer (bit i is ``M[i][j]``)."""
-
-    k = int.from_bytes(check_key(key), "little")
-    return tuple((k >> j) & ((1 << ROWS) - 1) for j in range(COLS))
-
-
-@functools.lru_cache(maxsize=8)
-def byte_tables(key: bytes) -> tuple[tuple[int, ...], ...]:
-    """Per salt byte position p and byte value v, the XOR of the columns ``8p + s`` over the set bits s of v."""
-
-    cols = columns(key)
+@functools.lru_cache(maxsize=16)
+def _byte_tables(inst: Instance, key: bytes) -> tuple[tuple[int, ...], ...]:
+    cols = _columns(inst, key)
     out = []
-    for p in range(SALT_BYTES):
+    for p in range(inst.salt_bytes):
         t = [0] * 256
         for v in range(1, 256):
             t[v] = t[v & (v - 1)] ^ cols[8 * p + (v & -v).bit_length() - 1]
@@ -158,139 +282,107 @@ def byte_tables(key: bytes) -> tuple[tuple[int, ...], ...]:
     return tuple(out)
 
 
-def mask(key: bytes, salt: bytes) -> bytes:
-    """``M_key * y`` over GF(2), 32 bytes (bit i of the result is byte ``i >> 3``, bit ``i & 7``)."""
+SHA256 = Instance("hm96-sha256/v1", "sha256", 128, b"verity/hm96-sha256/salt/v1\0", b"verity/hm96-sha256/leaf/v1\0",
+                  b"verity/hm96-sha256/key/v1\0", "verity/hm96-sha256/scheme/v1")
+SHA512 = Instance("hm96-sha512/v1", "sha512", 192, b"verity/hm96-sha512/salt/v1\0", b"verity/hm96-sha512/leaf/v1\0",
+                  b"verity/hm96-sha512/key/v1\0", "verity/hm96-sha512/scheme/v1")
+INSTANCES = {i.name: i for i in (SHA256, SHA512)}
 
-    salt = bytes(salt)
-    if len(salt) != SALT_BYTES:
-        raise InvalidArtifact(f"a salt is {SALT_BYTES} bytes")
-    acc = 0
-    for table, v in zip(byte_tables(check_key(key)), salt, strict=True):
-        acc ^= table[v]
-    return acc.to_bytes(DIGEST_BYTES, "little")
-
-
-def salt_digest(salt: bytes) -> bytes:
-    """``c = SHA-256(SALT_PREFIX || y)``; the prefix is one block, so a gadget starts from a constant midstate."""
-
-    salt = bytes(salt)
-    if len(salt) != SALT_BYTES:
-        raise InvalidArtifact(f"a salt is {SALT_BYTES} bytes")
-    return hashlib.sha256(SALT_PREFIX + salt).digest()
-
-
-def commit_string(key: bytes, inner_digest: bytes, salt: bytes) -> bytes:
-    """``b || c`` for the unsalted digest ``x`` and salt ``y``: what a backend proves and publishes (64 bytes)."""
-
-    x = bytes(inner_digest)
-    if len(x) != DIGEST_BYTES:
-        raise InvalidArtifact("the inner digest is 32 bytes")
-    b = bytes(p ^ q for p, q in zip(x, mask(key, salt), strict=True))
-    return b + salt_digest(salt)
-
-
-def leaf_prefix(key: bytes) -> bytes:
-    """``(LEAF_TAG || SHA-256(key))`` zero-padded to 64 bytes: the leaf binds its key, at the cost of a constant midstate."""
-
-    return (LEAF_TAG + hashlib.sha256(check_key(key)).digest()).ljust(64, b"\0")
-
-
-def tree_leaf(key: bytes, proven: bytes) -> bytes:
-    """``SHA-256(leaf_prefix(key) || b || c)``: the tree leaf a published commit string stands for (the verifier's native step)."""
-
-    proven = bytes(proven)
-    if len(proven) != PROVEN_BYTES:
-        raise InvalidArtifact(f"a commit string b || c is {PROVEN_BYTES} bytes")
-    return hashlib.sha256(leaf_prefix(key) + proven).digest()
+# hm96-sha256/v1's names, as PR #88 published them.
+NAME = SHA256.name
+DIGEST_BYTES = SHA256.digest_bytes
+ROWS = SHA256.rows
+SALT_BYTES = SHA256.salt_bytes
+COLS = SHA256.cols
+KEY_BITS = SHA256.key_bits
+KEY_BYTES = SHA256.key_bytes
+PROVEN_BYTES = SHA256.proven_bytes
+SALT_TAG = SHA256.salt_tag
+LEAF_TAG = SHA256.leaf_tag
+KEY_LABEL = SHA256.key_label
+SALT_PREFIX = SHA256.salt_prefix
+SCHEME_DIGEST_TAG = SHA256.scheme_tag
+DEFAULT_KEY = SHA256.default_key
+check_key = SHA256.check_key
+key_from_label = SHA256.key_from_label
+fresh_key = SHA256.fresh_key
+fresh_salt = SHA256.fresh_salt
+rows = SHA256.rows_of
+columns = SHA256.columns
+byte_tables = SHA256.byte_tables
+mask = SHA256.mask
+salt_digest = SHA256.salt_digest
+commit_string = SHA256.commit_string
+leaf_prefix = SHA256.leaf_prefix
+tree_leaf = SHA256.tree_leaf
+scheme_digest = SHA256.scheme_digest
+xor_count = SHA256.xor_count
+statistical_distance_log2 = SHA256.statistical_distance_log2
 
 
-def scheme_digest(key: bytes) -> bytes:
-    """The configured leaf rule's identity, for a root binding or statement to absorb: name, sizes, and the key's digest."""
-
-    doc = {"name": NAME, "salt_bytes": SALT_BYTES, "key_sha256": hashlib.sha256(check_key(key)).hexdigest()}
-    return bytes.fromhex(identity_digest(SCHEME_DIGEST_TAG, doc))
-
-
-def xor_count(key: bytes) -> int:
-    """Two-input XOR gates of ``b = x XOR M y`` in a circuit: row i takes ``weight(row i) - 1`` XORs, plus one for ``x_i``."""
-
-    return sum(r.bit_count() for r in rows(key))
-
-
-def statistical_distance_log2(leaves: int, *, key_failure_log2: int | None = None) -> float:
-    """log2 of the hiding bound for ``leaves`` commitments under one key (PROTOCOL.md section 3).
-
-    A fresh uniform key: any two vectors of ``leaves`` inner digests give commit strings within ``leaves * 2^-256``.
-    A pinned key (``key_failure_log2 = t``): the same holds within ``leaves * 2^(t - 256)`` for all but a ``2^-t`` fraction
-    of keys (Markov over the key).
-    """
-
-    if leaves < 1:
-        raise ValueError("at least one leaf")
-    lhl = (ROWS + DIGEST_BYTES * 8 - COLS) / 2                     # -256: per-leaf 2^-257, doubled for two message vectors
-    return math.log2(leaves) + lhl + (key_failure_log2 or 0)
-
-
-# --- the layout a backend proves, and the configured scheme ------------------------------------------------------
+# --- the layout a backend proves, and the configured schemes -----------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class HidingLayout:
     """What a backend proves for one leaf: ``b || c`` from the private value (under ``inner``) and the private salt.
 
-    ``inner`` is the unsalted SHA-256 leaf layout of the port; ``salt_layout`` is ``c``'s; the XOR-only ``b = x XOR M y``
-    reads :func:`rows` of ``key``.  The verifier turns the published ``b || c`` into the tree leaf with :meth:`tree_leaf`.
+    ``inner`` is the unsalted leaf layout of the port, with the instance's hash; ``salt_layout`` is ``c``'s; the XOR-only
+    ``b = x XOR M y`` reads ``instance.rows_of(key)``.  The verifier turns the published ``b || c`` into the tree leaf with
+    :meth:`tree_leaf`.
     """
 
     inner: LeafLayout
     key: bytes
+    instance: Instance = SHA256
 
     def __post_init__(self) -> None:
-        if self.inner.hash != "sha256":
-            raise InvalidArtifact(f"{NAME} wraps a SHA-256 leaf layout, not {self.inner.hash!r}")
-        check_key(self.key)
+        if self.inner.hash != self.instance.hash:
+            raise InvalidArtifact(f"{self.instance.name} wraps a {self.instance.hash} leaf layout, not {self.inner.hash!r}")
+        self.instance.check_key(self.key)
 
     @property
     def salt_layout(self) -> LeafLayout:
-        return LeafLayout("sha256", SALT_PREFIX, SALT_BYTES)
+        return LeafLayout(self.instance.hash, self.instance.salt_prefix, self.instance.salt_bytes)
 
     def commit(self, value: bytes, salt: bytes) -> bytes:
-        return commit_string(self.key, self.inner.digest(value), salt)
+        return self.instance.commit_string(self.key, self.inner.digest(value), salt)
 
     def tree_leaf(self, proven: bytes) -> bytes:
-        return tree_leaf(self.key, proven)
+        return self.instance.tree_leaf(self.key, proven)
 
     def leaf(self, value: bytes, salt: bytes) -> bytes:
         return self.tree_leaf(self.commit(value, salt))
 
 
-class Hm96Sha256:
-    """``hm96-sha256/v1`` leaves over a ``vllm-v1`` configuration: its ports, domains, trees and root bindings, with each
-    position's unsalted leaf layout wrapped in a :class:`HidingLayout` under ``key``.
+class Hm96:
+    """hm96 leaves over a ``vllm-v1`` configuration of the same hash (``vllm-v1`` for SHA-256, ``vllm-v1-sha512`` for SHA-512): its
+    ports, domains, trees and root bindings, with each position's unsalted leaf layout wrapped in a :class:`HidingLayout`.
 
-    ``leaf_layout`` returns a :class:`HidingLayout` (the proven digest is ``b || c``, 64 bytes) and ``tree_leaf`` takes it.
-    The key must be bound where the verifier reads the roots from: :func:`scheme_digest` names it, and every leaf binds
-    its digest too.
+    ``leaf_layout`` returns a :class:`HidingLayout` (the proven digest is ``b || c``) and ``tree_leaf`` takes it.  The key must be
+    bound where the verifier reads the roots from: :meth:`Instance.scheme_digest` names it, and every leaf binds its digest too.
     """
 
-    name = NAME
-    hashes = ("sha256",)
-
-    def __init__(self, base: VllmV1, key: bytes = DEFAULT_KEY) -> None:
+    def __init__(self, base: VllmV1, key: bytes | None = None, instance: Instance = SHA256) -> None:
         if not isinstance(base, VllmV1):
-            raise TypeError(f"{NAME} wraps a vllm-v1 configuration, whose tree leaf is the leaf digest itself")
+            raise TypeError(f"{instance.name} wraps a vllm-v1 configuration, whose tree leaf is the leaf digest itself")
+        if base.hash != instance.hash:
+            raise TypeError(f"{instance.name} wraps a {instance.hash} vllm-v1 configuration, not {base.name}")
         self.base = base
-        self.key = check_key(key)
+        self.instance = instance
+        self.key = instance.check_key(instance.default_key if key is None else key)
+        self.name = instance.name
+        self.hashes = (instance.hash,)
 
     @property
     def digest(self) -> bytes:
-        return scheme_digest(self.key)
+        return self.instance.scheme_digest(self.key)
 
     def leaf_layout(self, port: str, position: int) -> HidingLayout:
-        return HidingLayout(self.base.leaf_layout(port, position), self.key)
+        return HidingLayout(self.base.leaf_layout(port, position), self.key, self.instance)
 
     def tree_leaf(self, port: str, position: int, digest: bytes) -> bytes:
-        return self.base.tree_leaf(port, position, tree_leaf(self.key, digest))
+        return self.base.tree_leaf(port, position, self.instance.tree_leaf(self.key, digest))
 
     def root(self, port: str, leaves: Sequence[bytes]) -> bytes:
         return self.base.root(port, leaves)
@@ -300,3 +392,17 @@ class Hm96Sha256:
 
     def verify_path(self, port: str, root: bytes, leaf_count: int, index: int, leaf: bytes, path: Sequence[bytes | None]) -> bool:
         return self.base.verify_path(port, root, leaf_count, index, leaf, path)
+
+
+class Hm96Sha256(Hm96):
+    """``hm96-sha256/v1`` over a ``vllm-v1`` configuration."""
+
+    def __init__(self, base: VllmV1, key: bytes = DEFAULT_KEY) -> None:
+        super().__init__(base, key, SHA256)
+
+
+class Hm96Sha512(Hm96):
+    """``hm96-sha512/v1`` over a ``vllm-v1-sha512`` configuration."""
+
+    def __init__(self, base: VllmV1, key: bytes | None = None) -> None:
+        super().__init__(base, key, SHA512)
