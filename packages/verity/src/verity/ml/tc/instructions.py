@@ -249,8 +249,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(64, 8, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_WGMMA_K16,
-            status="pinned",
-            dossier=None,
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5, Ta) on 2026-09-26 before this entry was added
+            dossier="art:50508ab77719ba3d93bd2985416eba0029116f313304a4632e67ad0dd28579d9",
             evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
