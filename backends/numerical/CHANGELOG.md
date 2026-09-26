@@ -1,5 +1,31 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the spine generates every served template
+
+- `bench.templates` binds and generates every template of every census workload. `test_headline.NO_SPINE_GENERATOR` is empty.
+  The new templates:
+  - **FA3 attention heads:** `attention-head` with semantics `sm90.fa3.bf16`, that is `AttentionHead_v2` on the H100's wgmma step,
+    evaluated as `Attention_v2{NH=1, KVH=1}`. The set name and relation are the vLLM exporter's.
+  - **Row-shaped templates:** `token-select-greedy` (`TokenSelect_v1`), `moe-router-topk` and `moe-router-topk-norm`
+    (`MoeRouterTopK(Norm)_v1`), `moe-sum` (`MoeSum_v1`), `bias-add` (`BiasAdd_v1`) and `bf16-mul-scalar`
+    (`Bf16MulScalarTensor_v1`). Their ports are the exporter's `in<g>` / `out.<member>`.
+  - **Templates whose Definition takes a table or slab, of which an input reads one row:**
+    - `embedding-row` (`Embedding_v1{V, H}`) stores the token id and the row it opens.
+    - `moe-expert-coordinate` and `moe-expert-coordinate-weighted` (`MoeExpertCoordinate(W)_v1{E, K}`) store the expert id and its
+      row (plus the routing weight for the weighted form).
+    - The other rows are +0. Embedding is evaluated one input at a time through its registered row kernel; the experts go through
+      `MoeExpertGemm(W)_v1{N=1}`. Tests check both against their coordinate Definitions.
+  - **The FP8 block-scaled GEMM:** `scaled-mm-fp8-block-coordinate` (`ScaledMmFp8BlockCoordinate_v1{K, G}`). Its operands are E4M3
+    codes and its block scales positive normal f32.
+- `gemm-coordinate` generates NVFP4 at `sm120.mma.m16n8k64.e2m1.nvf4`.
+  - Ports: `x` and `w` are E2M1 codes (`u8`, one per byte); `sx` and `sw` are UE4M3 scale bytes per block of 16; `y` is the FP32
+    accumulator word of `verity.ml.kernels.SM120_NVF4_DOT` (`models.BLACKWELL_SM120_NVF4`).
+  - `generate --suite nvfp4` covers K = 1536 at 8,192 and 16,384 VUs.
+- `generate --suite workloads` makes one set per census-bound subcircuit of vLLM rows #39, #57, #60, #67, #73 and #74, 45 in all.
+  Each attention head uses its census `T` range.
+- `bench.lowerings`: a template without a module in a family is `n/s`, and its reason names the file to create. It is no longer a
+  registry problem.
+
 ## 2026-09-26: every served workload's subcircuits bound
 
 - **Census:** every (template, parameters) in every census workload now has a bound subcircuit. That adds 42 subcircuits

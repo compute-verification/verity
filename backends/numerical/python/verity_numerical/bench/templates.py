@@ -38,6 +38,7 @@ share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` 
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
@@ -173,6 +174,9 @@ class Subcircuit:
     output_words: Callable[[Port, Mapping[str, int]], int] | None = field(default=None, repr=False)
     admit: Callable[[Mapping[str, np.ndarray]], np.ndarray] | None = field(default=None, repr=False)
     recipe: dict[str, Any] = field(default_factory=dict)
+    #: (subcircuit, the input ports' stacked words in port order, instance statics) -> the outputs' flat words: for a Definition
+    #: whose arguments are not the stored ports (a table or slab of which an input stores the one row it reads).
+    evaluator: Callable[["Subcircuit", list[np.ndarray], dict[str, int]], np.ndarray] | None = field(default=None, repr=False)
 
     @property
     def ports(self) -> tuple[Port, ...]:
@@ -206,7 +210,8 @@ class Subcircuit:
         for key, idx in groups.items():
             st = dict(key)
             arrays = [np.stack([np.asarray(inputs[p.name][i]).reshape(-1) for i in idx]) for p in self.inputs]
-            flat = np.asarray(evaluate_batch(self.target(**st), *arrays)).reshape(len(idx), -1)
+            res = self.evaluator(self, arrays, st) if self.evaluator else evaluate_batch(self.target(**st), *arrays)
+            flat = np.asarray(res).reshape(len(idx), -1)
             off = 0
             for p in self.outputs:
                 w = self._out_words(p, st)
@@ -319,8 +324,14 @@ FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) fro
 #: Census GEMM semantics with a ``verity.ml.tc`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
-    "sm120.mma.m16n8k64.e2m1.nvf4": ("sm120-mma-e2m1-nvf4", "sm120 mma · FP4 (NVFP4, E2M1)", "e2m1"),
 }
+#: NVFP4 on sm_120 (RTX 5090): E2M1 codes with UE4M3 scales per block of 16; y the FP32 accumulator of
+#: ``verity.ml.kernels.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
+NVFP4_SEMANTICS = "sm120.mma.m16n8k64.e2m1.nvf4"
+NVFP4_DEFINITION = "GemmAccumulatorNvfp4"
+NVFP4_BLOCK = 16
+NVFP4_RECIPE = {"codes": "E2M1 codes uniform over all 16: r & 0xF for a 32-bit stream word r",
+                "scales": "UE4M3 scale bytes uniform over the 127 valid codes 0x00..0x7E: r mod 127"}
 GEMM_RULE = "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)"
 GEMM_X, GEMM_W = Bf16Window(127, (4, 16, 40)), Bf16Window(127, (4, 16, 40))
 
@@ -372,6 +383,34 @@ def _fp8_coordinate(K: int, s: _Fp8Semantics, tile: int) -> Subcircuit:
                       admit=_finite_f32, recipe={"tile": int(tile), "x": E4M3_RECIPE + "; one row per tile of `tile` draws", "w": E4M3_RECIPE})
 
 
+def _nvfp4_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    K, tile = sub.params["K"], int(sub.recipe.get("tile", 32))
+    t, nb = j // tile, sub.params["K"] // NVFP4_BLOCK
+    codes = lambda idx: (stream_u32(key, idx, K) & 0xF).astype(np.uint8)  # noqa: E731
+    scales = lambda idx: (stream_u32(key, idx, nb) % np.uint32(127)).astype(np.uint8)  # noqa: E731
+    return Draw({"x": codes(("x", t)), "w": codes(("w", j)), "sx": scales(("sx", t)), "sw": scales(("sw", j))}, {}, {"tile": t})
+
+
+def _nvfp4_coordinate(K: int, tile: int) -> Subcircuit:
+    if K % 64:
+        raise ValueError(f"gemm-coordinate {NVFP4_SEMANTICS}: K = {K} is not a multiple of 64")
+
+    def target(**_st: int) -> Any:
+        from verity.ml import kernels
+
+        return kernels.SM120_NVF4_DOT.bind(K=K)
+
+    rel = {"subcircuit": f"GemmCoordinate<{K}>", "definition": NVFP4_DEFINITION, "dot": target().id, "model": "BLACKWELL_SM120_NVF4",
+           "statics": {"K": K, "block": NVFP4_BLOCK},
+           "rule": "y = the FP32 accumulator of K/64 ascending DOT steps over (x, w) with UE4M3 block scales (sx, sw) from +0 (no epilogue)"}
+    return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": "e2m1", "semantics": NVFP4_SEMANTICS},
+                      f"gemm-coordinate/k{K}/sm120-mma-e2m1-nvf4", f"GemmCoordinate<{K}> · sm120 mma · FP4 (NVFP4, E2M1)",
+                      f"gemm-coordinate-sm120-nvf4-k{K}", rel,
+                      (Port("x", "u8", K), Port("w", "u8", K), Port("sx", "u8", K // NVFP4_BLOCK), Port("sw", "u8", K // NVFP4_BLOCK)),
+                      (Port("y", "u32", 1),), target, target, sampler=_nvfp4_sample, admit=_finite_f32,
+                      recipe={"tile": int(tile), "x, sx": "one row and its scales per tile of `tile` draws", **NVFP4_RECIPE})
+
+
 def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype: str | None = None, tile: int = 32) -> Subcircuit:
     K = int(K)
     if K <= 0 or K % 16:
@@ -381,6 +420,10 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         if datatype not in (None, "e4m3"):
             raise ValueError(f"gemm-coordinate {semantics}: datatype is e4m3, not {datatype!r}")
         return _fp8_coordinate(K, GEMM_FP8[semantics], tile)
+    if semantics == NVFP4_SEMANTICS:
+        if datatype not in (None, "e2m1"):
+            raise ValueError(f"gemm-coordinate {semantics}: datatype is e2m1, not {datatype!r}")
+        return _nvfp4_coordinate(K, tile)
     if semantics in GEMM_MODEL_ONLY:
         slug, disp, dt = GEMM_MODEL_ONLY[semantics]
 
@@ -391,7 +434,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
                           f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
     if semantics not in GEMM_SEMANTICS:
         raise ValueError(f"gemm-coordinate: unknown semantics {semantics!r} "
-                         f"(one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_FP8) + sorted(GEMM_MODEL_ONLY)})")
+                         f"(one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_FP8) + [NVFP4_SEMANTICS] + sorted(GEMM_MODEL_ONLY)})")
     s = GEMM_SEMANTICS[semantics]
     if datatype not in (None, "bf16"):
         raise ValueError(f"gemm-coordinate {semantics}: datatype is bf16, not {datatype!r}")
@@ -417,6 +460,8 @@ def _gemm_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
             if rel.get("dot") == sub.relation["dot"]:
                 return sub
         raise KeyError(f"gemm-coordinate: no FP8 semantics for DOT {rel.get('dot')!r}")
+    if rel.get("definition") == NVFP4_DEFINITION:
+        return _nvfp4_coordinate(int(rel["statics"]["K"]), 32)
     if rel.get("definition") not in ("Gemm_v1", "Gemm_v2"):
         return None
     for s in GEMM_SEMANTICS.values():
@@ -457,32 +502,52 @@ def _attn_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
     return Draw({"q": q, "k": k, "v": v}, {"T": int(T)}, {"T": int(T), "h": h})
 
 
+#: The attention heads by semantics: (the row family the exporter names, DOT id, INV id, set-name stem, id tail, display tail).
+ATTN_SEMANTICS = {
+    "sm80.fa2.bf16": ("Attention_v3", "AmpereBF16TcDot16_v1", "Fa2InvSum_v1", "attention-head-fa2", "sm80-fa2-bf16", "FA2", "sm80 mma"),
+    "sm90.fa3.bf16": ("Attention_v2", "HopperBF16WgmmaDot16_v1", "Fa3InvSum_v1", "attention-head-hopper-bf16-wgmma-fa3invsum_v1",
+                      "sm90-fa3-bf16", "FA3", "sm90 wgmma"),
+}
+
+
 def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2.bf16") -> Subcircuit:
-    """FA2's head (``AttentionHead_v3``): ``T`` is per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic
-    draw's range ``lo:hi`` (uniform per draw)."""
+    """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic draw's range
+    ``lo:hi`` (uniform per draw).  ``sm80.fa2.bf16``: FA2 (``AttentionHead_v3``, evaluated as ``Attention_v3{NH=1, KVH=1}``);
+    ``sm90.fa3.bf16``: FA3 on the H100's wgmma step (``AttentionHead_v2{DOT=HopperBF16WgmmaDot16, INV=Fa3InvSum}``, evaluated as
+    ``Attention_v2{NH=1, KVH=1}``)."""
     D, BN = int(D), int(BN)
-    if semantics != "sm80.fa2.bf16":
-        raise ValueError(f"attention-head: semantics {semantics!r} (only FA2 on the Ampere BF16 step: sm80.fa2.bf16)")
+    if semantics not in ATTN_SEMANTICS:
+        raise ValueError(f"attention-head: semantics {semantics!r} (one of {sorted(ATTN_SEMANTICS)})")
+    family, dot, inv, stem, tail, kind, step = ATTN_SEMANTICS[semantics]
     lo, hi = _parse_range(T)
     if not 1 <= lo <= hi:
         raise ValueError(f"attention-head: T range {T!r}")
+
+    def _v2() -> dict[str, Any]:
+        from verity_vllm.program.registry import hopper
+
+        return {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 
     def target(T: int) -> Any:
         from verity.ir.defs import bind
         from verity_vllm.program.registry import b1
 
-        return bind(b1.AttentionV3, T=int(T), NH=1, KVH=1, D=D, BN=BN)
+        if family == "Attention_v3":
+            return bind(b1.AttentionV3, T=int(T), NH=1, KVH=1, D=D, BN=BN)
+        return bind(b1.AttentionV2, T=int(T), NH=1, KVH=1, D=D, BN=BN, **_v2())
 
     def definition(T: int) -> Any:
         from verity.ir.defs import bind
         from verity_vllm.program.registry import b1
 
-        return bind(b1.AttentionHeadV3, T=int(T), D=D, BN=BN)
+        if family == "Attention_v3":
+            return bind(b1.AttentionHeadV3, T=int(T), D=D, BN=BN)
+        return bind(b1.AttentionHeadV2, T=int(T), D=D, BN=BN, **_v2())
 
-    rel = {"subcircuit": f"AttentionHead<T,{D}>", "definition": "Attention_v3", "dot": "AmpereBF16TcDot16_v1", "inv": "Fa2InvSum_v1",
-           "statics": {"D": D, "BN": BN}, "rule": ATTN_RULE}
-    return Subcircuit(TEMPLATES["attention-head"], {"D": D, "BN": BN, "semantics": semantics}, f"attention-head/d{D}-bn{BN}/sm80-fa2-bf16",
-                      f"AttentionHead<T,{D}> · FA2 BN={BN} · sm80 mma · BF16", f"attention-head-fa2-d{D}-bn{BN}", rel,
+    rel = {"subcircuit": f"AttentionHead<T,{D}>", "definition": family, "dot": dot, "inv": inv, "statics": {"D": D, "BN": BN},
+           "rule": ATTN_RULE}
+    return Subcircuit(TEMPLATES["attention-head"], {"D": D, "BN": BN, "semantics": semantics}, f"attention-head/d{D}-bn{BN}/{tail}",
+                      f"AttentionHead<T,{D}> · {kind} BN={BN} · {step} · BF16", f"{stem}-d{D}-bn{BN}", rel,
                       (Port("q", "u16", D), Port("k", "u16", None), Port("v", "u16", None)), (Port("out", "u16", D),),
                       target, definition, sampler=_attn_sample,
                       instance_statics_of=lambda p: {"T": int(np.asarray(p["k"]).size) // D},
@@ -491,9 +556,10 @@ def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2
 
 
 def _attn_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
-    if rel.get("definition") != "Attention_v3":
-        return None
-    return attention_head(int(rel["statics"]["D"]), int(rel["statics"]["BN"]))
+    for sem, (family, dot, inv, *_rest) in ATTN_SEMANTICS.items():
+        if rel.get("definition") == family and (family == "Attention_v3" or (rel.get("dot"), rel.get("inv")) == (dot, inv)):
+            return attention_head(int(rel["statics"]["D"]), int(rel["statics"]["BN"]), semantics=sem)
+    return None
 
 
 # --- rope-head ------------------------------------------------------------------------------------------------------------------
@@ -552,6 +618,8 @@ class _Row:
     display: Callable[[Mapping[str, Any]], str]
     recipe: dict[str, str]
     admit: Callable[[Mapping[str, np.ndarray]], np.ndarray] | None = None
+    pattern: str = ""                              # the id's parameter segment as a regex, one named group per static
+    example: dict[str, Any] = field(default_factory=dict)
 
 
 def _composite(path: str) -> Any:
@@ -634,18 +702,54 @@ def _u16(n: int, *names: str) -> tuple[Port, ...]:
     return tuple(Port(nm, "u16", n) for nm in names)
 
 
+TOKEN_LOGITS = Bf16Window(127, (8, 16))
+ROUTER_LOGITS = Bf16Window(127, (2, 4))
+MOE_Y = Bf16Window(127, (4, 8))
+BIAS_Y, BIAS_B = Bf16Window(127, (4, 12)), Bf16Window(127, (2, 4))
+SCALAR_X, SCALAR_S = Bf16Window(127, (4, 12)), Bf16Window(127, (2,))
+
+
+def _one(window: Bf16Window, port: str, n: Callable[[Mapping[str, Any]], int]):
+    def sample(st: Mapping[str, Any], key: Key, j: int):
+        w, h = window.words(key, (port, j), n(st), (port, j))
+        return {port: w}, {"h": h}
+    return sample
+
+
+def _two(first: Bf16Window, second: Bf16Window, n0: Callable[[Mapping[str, Any]], int], n1: Callable[[Mapping[str, Any]], int]):
+    def sample(st: Mapping[str, Any], key: Key, j: int):
+        a, h = first.words(key, ("in0", j), n0(st), ("in0", j))
+        b, _ = second.words(key, ("in1", j), n1(st), ("in1", j))
+        return {"in0": a, "in1": b}, {"h": h}
+    return sample
+
+
+def _all(outs: Mapping[str, Sequence[np.ndarray]]) -> np.ndarray:
+    return np.ones(len(next(iter(outs.values()))), dtype=bool)
+
+
+def _router(template: str, family: str, attr: str, what: str) -> _Row:
+    return _Row(template, family, f"verity_vllm.program.registry.moe:{attr}", ("E", "TOPK", "VPT"),
+                lambda s: (Port("in0", "u16", s["E"]),), lambda s: (Port("out.router_w", "u32", s["TOPK"]), Port("out.router_ids", "u32", s["TOPK"])),
+                _one(ROUTER_LOGITS, "in0", lambda s: s["E"]), lambda s: f"e{s['E']}-topk{s['TOPK']}-vpt{s['VPT']}/bf16",
+                lambda s: f"{family}<E={s['E']}, TOPK={s['TOPK']}> · {what} · BF16 logits", {"in0 (logits)": ROUTER_LOGITS.describe()},
+                pattern=r"e(?P<E>\d+)-topk(?P<TOPK>\d+)-vpt(?P<VPT>\d+)", example={"E": 64, "TOPK": 8, "VPT": 8})
+
+
 ROWS: dict[str, _Row] = {r.template: r for r in (
     _Row("rmsnorm-fused-cuda", "RMSNormFusedCuda_v2", "verity_vllm.program.registry.b1:RMSNormFusedCuda", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormFusedCuda_v2<{s['N']}> · eps {s['EPS']:g} · BF16",
-         {"in0/in1 (x, res)": RMS_X.describe() + "; one h per draw for both", "in2 (w)": RMS_W.describe()}),
+         {"in0/in1 (x, res)": RMS_X.describe() + "; one h per draw for both", "in2 (w)": RMS_W.describe()},
+         pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
     _Row("rmsnorm-triton", "RMSNormTriton_v1", "verity_vllm.program.registry.b1:RMSNormTriton", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v1<{s['N']}> · eps {s['EPS']:g} · BF16",
-         {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}),
+         {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}, pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
     _Row("silu-mul", "SiluMul_v1", "verity_vllm.program.registry.b1:SiluMul", ("I",),
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
-         lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v1<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()}),
+         lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v1<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
+         pattern=r"i(?P<I>\d+)", example={"I": 8192}),
     _Row("gumbel-top-p-token-select", "GumbelTopPTokenSelect_v1", "verity_vllm.program.registry.sampling:GumbelTopPTokenSelect", ("V",),
          lambda s: (Port("in0", "u16", s["V"]), Port("in1", "u32", 1), Port("in2", "u64", 1), Port("in3", "u64", 1),
                     Port("in4", "u32", 1), Port("in5", "u32", 1)),
@@ -653,8 +757,195 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
          lambda s: f"v{s['V']}/fp32", lambda s: f"GumbelTopPTokenSelect_v1<{s['V']}> · temperature + top-p · FP32",
          {"in0 (logits)": LOGITS.describe(), "in1 (top_p)": "f32 of 0.05 + 0.95 u / 2^32", "in2 (seed)": "u64 stream word",
           "in3 (pos)": "key.uniform(2^20)", "in4 (temp)": "f32 of 0.3 + 1.7 u / 2^32", "in5 (splits)": "1 << key.uniform(4)"},
-         admit=lambda outs: np.ones(len(next(iter(outs.values()))), dtype=bool)),
+         admit=_all, pattern=r"v(?P<V>\d+)", example={"V": 128256}),
+    _Row("token-select-greedy", "TokenSelect_v1", "verity_vllm.program.registry.b1:TokenSelect", ("V",),
+         lambda s: (Port("in0", "u16", s["V"]),), lambda s: (Port("out.sampled_token_ids", "u64", 1),),
+         _one(TOKEN_LOGITS, "in0", lambda s: s["V"]), lambda s: f"v{s['V']}/bf16", lambda s: f"TokenSelect_v1<{s['V']}> · greedy argmax · BF16",
+         {"in0 (logits)": TOKEN_LOGITS.describe()}, admit=_all, pattern=r"v(?P<V>\d+)", example={"V": 151936}),
+    _router("moe-router-topk", "MoeRouterTopK_v1", "MoeRouterTopK", "softmax top-k"),
+    _router("moe-router-topk-norm", "MoeRouterTopKNorm_v1", "MoeRouterTopKNorm", "softmax top-k, renormalised"),
+    _Row("moe-sum", "MoeSum_v1", "verity_vllm.program.registry.moe:MoeSum", ("TOPK", "H"),
+         lambda s: (Port("in0", "u16", s["TOPK"] * s["H"]),), lambda s: (Port("out.sum", "u16", s["H"]),),
+         _one(MOE_Y, "in0", lambda s: s["TOPK"] * s["H"]), lambda s: f"topk{s['TOPK']}-h{s['H']}/bf16",
+         lambda s: f"MoeSum_v1<TOPK={s['TOPK']}, H={s['H']}> · BF16", {"in0 (the TOPK expert rows)": MOE_Y.describe()},
+         pattern=r"topk(?P<TOPK>\d+)-h(?P<H>\d+)", example={"TOPK": 8, "H": 2048}),
+    _Row("bias-add", "BiasAdd_v1", "verity_vllm.program.registry.b1:BiasAdd", ("N",),
+         lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.0"), _two(BIAS_Y, BIAS_B, lambda s: s["N"], lambda s: s["N"]),
+         lambda s: f"n{s['N']}/bf16", lambda s: f"BiasAdd_v1<{s['N']}> · BF16", {"in0 (y)": BIAS_Y.describe(), "in1 (b)": BIAS_B.describe()},
+         pattern=r"n(?P<N>\d+)", example={"N": 2048}),
+    _Row("bf16-mul-scalar", "Bf16MulScalarTensor_v1", "verity_vllm.program.registry.b1:Bf16MulScalarTensor", ("N",),
+         lambda s: (Port("in0", "u16", s["N"]), Port("in1", "u16", 1)), lambda s: _u16(s["N"], "out.out"),
+         _two(SCALAR_X, SCALAR_S, lambda s: s["N"], lambda s: 1), lambda s: f"n{s['N']}/bf16", lambda s: f"Bf16MulScalarTensor_v1<{s['N']}> · BF16",
+         {"in0 (x)": SCALAR_X.describe(), "in1 (the scalar)": SCALAR_S.describe()}, pattern=r"n(?P<N>\d+)", example={"N": 2304}),
 )}
+
+
+# --- a table or slab of which an input reads one row: embedding-row, moe-expert-coordinate(-weighted) ---------------------------
+
+EMB_ROW = Bf16Window(127, (2, 4))
+
+
+def _embedding_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    V, H = sub.params["V"], sub.params["H"]
+    row, h = EMB_ROW.words(key, ("row", j), H, ("row", j))
+    return Draw({"tok": np.asarray([key.uniform(V, ("tok", j))], dtype=np.uint32), "row": row}, {}, {"h": h})
+
+
+def _embedding_eval(sub: Subcircuit, arrays: list[np.ndarray], _st: Mapping[str, int]) -> np.ndarray:
+    """``Embedding_v1{V, H}`` on each input: its registered row kernel (the one ``evaluate_batch`` dispatches) over a V x H table of
+    +0 holding the input's row at ``tok``.  One instance at a time, so the table is materialised once rather than per instance
+    (at V x H = 5.9e8 words the batch path runs out of memory)."""
+    from verity_vllm.program.kernels import kernel_registry as KR
+
+    V, H = sub.params["V"], sub.params["H"]
+    fn = KR.instance(sub.target(), "rows")
+    tok, rows = arrays
+    table = np.zeros((V, H), dtype=np.uint16)
+    out = np.empty((len(tok), H), dtype=np.uint64)
+    for i in range(len(tok)):
+        t = int(tok[i, 0])
+        table[t] = rows[i]
+        out[i] = fn(tok[i], table, V=V, H=H)
+        table[t] = 0
+    return out
+
+
+def embedding_row(V: int, H: int) -> Subcircuit:
+    V, H = int(V), int(H)
+
+    def target(**_s: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import b1
+
+        import verity_vllm.program.kernels.rows  # noqa: F401
+        return bind(b1.Embedding, V=V, H=H)
+
+    rel = {"subcircuit": "Embedding_v1", "definition": "Embedding_v1", "statics": {"V": V, "H": H},
+           "rule": "out = table[tok]: an input stores tok and the row it opens, table[tok]; every other table row is +0"}
+    return Subcircuit(TEMPLATES["embedding-row"], {"V": V, "H": H}, f"embedding-row/v{V}-h{H}/bf16", f"Embedding_v1<{V}, {H}> · BF16",
+                      row_set_name("Embedding_v1", {"V": V, "H": H}), rel, (Port("tok", "u32", 1), Port("row", "u16", H)),
+                      (Port("out", "u16", H),), target, target, sampler=_embedding_sample, evaluator=_embedding_eval,
+                      recipe={"tok": "key.uniform(V, ('tok', j))", "row": EMB_ROW.describe(), "table": "+0 but for row tok"})
+
+
+def _embedding_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    return embedding_row(rel["statics"]["V"], rel["statics"]["H"]) if rel.get("definition") == "Embedding_v1" else None
+
+
+def _expert_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    E, K, tile = sub.params["E"], sub.params["K"], int(sub.recipe.get("tile", 32))
+    t = j // tile
+    x, hx = GEMM_X.words(key, ("x", t), K, ("x", t))
+    w, hw = GEMM_W.words(key, ("w", j), K, ("w", j))
+    ins = {"x": x, "e": np.asarray([key.uniform(E, ("e", j))], dtype=np.uint32), "w": w}
+    if sub.relation["definition"] == "MoeExpertGemmW_v1":
+        ins["g"] = np.asarray([f32_uniform(key, ("g", j), 2.0 ** -10, 1.0)], dtype=np.uint32)
+    return Draw(ins, {}, {"tile": t, "hx": hx, "hw": hw})
+
+
+def _expert_eval(sub: Subcircuit, arrays: list[np.ndarray], _st: Mapping[str, int]) -> np.ndarray:
+    """``MoeExpertGemm(W)_v1{E, K, N=1}`` (its registered row kernel) on the input's x, e (and g) and a slab of +0 holding the
+    input's row at expert e: the coordinate Definition's value (``test_templates``)."""
+    from verity.evaluation import evaluate_batch
+
+    E, K = sub.params["E"], sub.params["K"]
+    x, e, *rest = arrays
+    w = rest[-1]
+    slab = np.zeros((len(x), E, 1, K), dtype=np.uint16)
+    slab[np.arange(len(x)), e[:, 0].astype(np.int64), 0] = w
+    return evaluate_batch(sub.target(), x, e, *rest[:-1], slab)
+
+
+def moe_expert_coordinate(E: int, K: int, weighted: bool = False, tile: int = 32) -> Subcircuit:
+    E, K = int(E), int(K)
+    tid = "moe-expert-coordinate-weighted" if weighted else "moe-expert-coordinate"
+    fam, coord, gemm = (("MoeExpertGemmW_v1", "MoeExpertCoordinateW", "MoeExpertGemmW") if weighted
+                        else ("MoeExpertGemm_v1", "MoeExpertCoordinate", "MoeExpertGemm"))
+
+    def target(**_s: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import moe
+
+        import verity_vllm.program.kernels.rows  # noqa: F401
+        return bind(getattr(moe, gemm), E=E, K=K, N=1)
+
+    def definition(**_s: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import moe
+
+        return bind(getattr(moe, coord), E=E, K=K)
+
+    ins = (Port("x", "u16", K), Port("e", "u32", 1), *((Port("g", "u32", 1),) if weighted else ()), Port("w", "u16", K))
+    name = f"MoeExpertCoordinate{'W' if weighted else ''}_v1"
+    rel = {"subcircuit": f"MoeExpertCoordinate{'W' if weighted else ''}<{K}>", "definition": fam, "dot": "AmpereBF16TcDot16_v1",
+           "statics": {"E": E, "K": K},
+           "rule": f"y = {name}{{E, K}}(x, e{', g' if weighted else ''}, slab): an input stores e and the routed expert's row w = slab[e]; "
+                   "every other expert's row is +0"}
+    return Subcircuit(TEMPLATES[tid], {"E": E, "K": K}, f"{tid}/e{E}-k{K}/bf16",
+                      f"{name}<E={E}, K={K}> ·{' routed weight ·' if weighted else ''} BF16", f"{tid}-e{E}-k{K}", rel, ins,
+                      (Port("y", "u16", 1),), target, definition, sampler=_expert_sample, evaluator=_expert_eval,
+                      recipe={"tile": int(tile), "x": GEMM_X.describe() + "; one row per tile of `tile` draws", "w": GEMM_W.describe(),
+                              "e": "key.uniform(E, ('e', j))", "slab": "+0 but for row e",
+                              **({"g": "f32 of 2^-10 + (1 - 2^-10) u / 2^32"} if weighted else {})})
+
+
+def _expert_identify(weighted: bool) -> Callable[[Mapping[str, Any]], Subcircuit | None]:
+    fam = "MoeExpertGemmW_v1" if weighted else "MoeExpertGemm_v1"
+    return lambda rel: moe_expert_coordinate(rel["statics"]["E"], rel["statics"]["K"], weighted) if rel.get("definition") == fam else None
+
+
+# --- scaled-mm-fp8-block-coordinate ----------------------------------------------------------------------------------------------
+
+SCALE_EXP = (107, 125)                             # block scales: positive normal f32 words, exponent field in this range
+
+
+def scale_words(r: np.ndarray) -> np.ndarray:
+    """Positive normal f32 words from 32 random bits each: mantissa ``r & 0x7FFFFF``, exponent field
+    ``lo + (r >> 23) mod (hi - lo + 1)`` over :data:`SCALE_EXP`."""
+    lo, hi = SCALE_EXP
+    r = np.asarray(r, dtype=np.uint32)
+    return (((lo + (r >> 23) % np.uint32(hi - lo + 1)) << 23) | (r & 0x7FFFFF)).astype(np.uint32)
+
+
+def _fp8_block_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    K, G, tile = sub.params["K"], sub.params["G"], int(sub.recipe.get("tile", 32))
+    t = j // tile
+    return Draw({"xq": e4m3_finite_words(stream_u32(key, ("xq", t), K)), "sx": scale_words(stream_u32(key, ("sx", t), K // G)),
+                 "wrow": e4m3_finite_words(stream_u32(key, ("wrow", j), K)), "sw": scale_words(stream_u32(key, ("sw", j), K // G))},
+                {}, {"tile": t})
+
+
+def scaled_mm_fp8_block_coordinate(K: int, G: int = 128, semantics: str = "sm90.wgmma.m64n8k32.e4m3", tile: int = 32) -> Subcircuit:
+    K, G = int(K), int(G)
+    if semantics != "sm90.wgmma.m64n8k32.e4m3":
+        raise ValueError(f"scaled-mm-fp8-block-coordinate: semantics {semantics!r} (the H100's wgmma E4M3 step only)")
+    if K % G or G % 32:
+        raise ValueError(f"scaled-mm-fp8-block-coordinate: K = {K}, G = {G} (K a multiple of G, G of 32)")
+
+    def target(**_s: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import fp8
+
+        return bind(fp8.ScaledMmFp8BlockCoordinate, K=K, G=G)
+
+    rel = {"subcircuit": f"ScaledMmFp8BlockCoordinate<{K},{G}>", "definition": "ScaledMmFp8Block_v1", "dot": "HopperE4m3QgmmaDot32_v1",
+           "statics": {"K": K, "G": G},
+           "rule": "y = ScaledMmFp8BlockCoordinate_v1{K, G}(xq, sx, wrow, sw): per G-wide k block the E4M3 wgmma chain from +0, "
+                   "acc = FFMA(block, sx[b] * sw[b], acc) from +0, then cvt.rn.bf16.f32"}
+    return Subcircuit(TEMPLATES["scaled-mm-fp8-block-coordinate"], {"K": K, "G": G, "semantics": semantics},
+                      f"scaled-mm-fp8-block-coordinate/k{K}-g{G}/sm90-wgmma-e4m3",
+                      f"ScaledMmFp8BlockCoordinate_v1<K={K}, G={G}> · sm90 wgmma · FP8 (E4M3), block scales",
+                      f"scaled-mm-fp8-block-coordinate-k{K}-g{G}", rel,
+                      (Port("xq", "u8", K), Port("sx", "u32", K // G), Port("wrow", "u8", K), Port("sw", "u32", K // G)),
+                      (Port("y", "u16", 1),), target, target, sampler=_fp8_block_sample,
+                      recipe={"tile": int(tile), "xq": E4M3_RECIPE + "; xq and sx one per tile of `tile` draws", "wrow": E4M3_RECIPE,
+                              "sx, sw": f"positive normal f32, exponent field in {list(SCALE_EXP)}, mantissa uniform"})
+
+
+def _fp8_block_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "ScaledMmFp8Block_v1":
+        return None
+    return scaled_mm_fp8_block_coordinate(rel["statics"]["K"], rel["statics"]["G"])
 
 
 # --- the catalogue -------------------------------------------------------------------------------------------------------------
@@ -672,16 +963,27 @@ _add(Template("gemm-coordinate", "GemmCoordinate<K>",
                                          "datatype": "operand datatype (bf16)"},
               gemm_coordinate, _gemm_identify, {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}))
 _add(Template("attention-head", "AttentionHead<T,D>",
-              "FlashAttention-2 forward, one query head at position T-1 over its KV head (AttentionHead_v3); T varies per instance",
+              "FlashAttention forward, one query head at position T-1 over its KV head: FA2 (AttentionHead_v3) or FA3 on the H100 "
+              "(AttentionHead_v2); T varies per instance",
               {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
-               "semantics": "sm80.fa2.bf16"}, attention_head, _attn_identify, {"D": 64, "BN": 128, "T": "1:512"}))
+               "semantics": "sm80.fa2.bf16 or sm90.fa3.bf16"}, attention_head, _attn_identify, {"D": 64, "BN": 128, "T": "1:512"}))
 _add(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
               rope_head, _rope_identify, {"D": 64}))
 for _r in ROWS.values():
     _add(Template(_r.template, _r.family, f"{_r.family} (verity_vllm.program.registry), one row", {k: "static" for k in _r.statics},
-                  (lambda r: lambda **p: _row_subcircuit(r, **p))(_r), _row_identify(_r),
-                  {"rmsnorm-fused-cuda": {"N": 2048, "EPS": 1e-5}, "rmsnorm-triton": {"N": 2048, "EPS": 1e-5}, "silu-mul": {"I": 8192},
-                   "gumbel-top-p-token-select": {"V": 128256}}[_r.template]))
+                  (lambda r: lambda **p: _row_subcircuit(r, **p))(_r), _row_identify(_r), dict(_r.example)))
+_add(Template("embedding-row", "Embedding_v1", "one row of the token embedding table, gathered by token id (Embedding_v1): an input "
+              "stores the id and the row it opens", {"V": "int, vocabulary", "H": "int, hidden size"}, embedding_row, _embedding_identify,
+              {"V": 32768, "H": 4096}))
+_add(Template("moe-expert-coordinate", "MoeExpertCoordinate<K>", "one output word of the routed expert's GEMM (MoeExpertCoordinate_v1): "
+              "GemmCoordinate_v1 on expert e's row", {"E": "int, experts", "K": "int, a multiple of 16"},
+              lambda **p: moe_expert_coordinate(**p), _expert_identify(False), {"E": 64, "K": 2048}))
+_add(Template("moe-expert-coordinate-weighted", "MoeExpertCoordinateW<K>", "the routed expert's GEMM coordinate scaled by its routing "
+              "weight (MoeExpertCoordinateW_v1)", {"E": "int, experts", "K": "int, a multiple of 16"},
+              lambda **p: moe_expert_coordinate(**p, weighted=True), _expert_identify(True), {"E": 64, "K": 1024}))
+_add(Template("scaled-mm-fp8-block-coordinate", "ScaledMmFp8BlockCoordinate<K,G>", "one bf16 output word of the block-scaled FP8 GEMM "
+              "(ScaledMmFp8BlockCoordinate_v1): E4M3 wgmma per G-wide block, fp32 block scales", {"K": "int", "G": "int, the block (128)",
+              "semantics": "sm90.wgmma.m64n8k32.e4m3"}, scaled_mm_fp8_block_coordinate, _fp8_block_identify, {"K": 2560, "G": 128}))
 
 
 def get(template_id: str) -> Template:
@@ -715,22 +1017,27 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
         for s, (slug, _d, _t) in GEMM_MODEL_ONLY.items():
             if slug == sem:
                 return gemm_coordinate(K, s)
+        if sem == "sm120-mma-e2m1-nvf4":
+            return gemm_coordinate(K, NVFP4_SEMANTICS)
     elif tid == "attention-head":
         d, _, bn = params.partition("-")
-        return attention_head(int(d.lstrip("d")), int(bn.lstrip("bn")))
+        for s, (*_head, tail, _kind, _step) in ATTN_SEMANTICS.items():
+            if tail == sem:
+                return attention_head(int(d.lstrip("d")), int(bn.lstrip("bn")), semantics=s)
     elif tid == "rope-head":
         return rope_head(int(params.lstrip("d")))
     elif tid in ROWS:
-        row = ROWS[tid]
-        vals: dict[str, Any] = {}
-        for part in params.split("-eps"):
-            if part.startswith(("n", "i", "v")) and part[1:].isdigit():
-                vals[part[0].upper()] = int(part[1:])
-            elif vals:
-                vals["EPS"] = float(part)
-        sub = _row_subcircuit(row, **vals)
-        if sub.id == sid:
-            return sub
+        m = re.fullmatch(ROWS[tid].pattern, params)
+        if m:
+            sub = _row_subcircuit(ROWS[tid], **{k: (float(v) if k == "EPS" else int(v)) for k, v in m.groupdict().items()})
+            if sub.id == sid:
+                return sub
+    elif tid == "embedding-row" and (m := re.fullmatch(r"v(\d+)-h(\d+)", params)):
+        return embedding_row(int(m[1]), int(m[2]))
+    elif tid in ("moe-expert-coordinate", "moe-expert-coordinate-weighted") and (m := re.fullmatch(r"e(\d+)-k(\d+)", params)):
+        return moe_expert_coordinate(int(m[1]), int(m[2]), weighted=tid.endswith("weighted"))
+    elif tid == "scaled-mm-fp8-block-coordinate" and (m := re.fullmatch(r"k(\d+)-g(\d+)", params)) and sem == "sm90-wgmma-e4m3":
+        return scaled_mm_fp8_block_coordinate(int(m[1]), int(m[2]))
     raise KeyError(f"not a subcircuit id this catalogue binds: {sid!r}")
 
 

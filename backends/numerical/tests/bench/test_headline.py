@@ -320,8 +320,7 @@ def test_an_l40s_cell_is_still_red_team_gated_and_an_h100_profile_does_not_pull_
 
 #: Templates (and attention semantics) the bench spine binds but cannot generate synthetic sets for yet, or does not bind at all:
 #: the census binds them in the spine's id form.  A change here is a spine change (a new generator) or a new served template.
-NO_SPINE_GENERATOR = {"attention-head/sm90-fa3-bf16", "token-select-greedy", "embedding-row", "moe-router-topk", "moe-expert-coordinate",
-                      "moe-expert-coordinate-weighted", "moe-sum", "scaled-mm-fp8-block-coordinate", "bias-add", "bf16-mul-scalar"}
+NO_SPINE_GENERATOR: set[str] = set()
 
 
 def _spine_key(sid: str) -> str:
