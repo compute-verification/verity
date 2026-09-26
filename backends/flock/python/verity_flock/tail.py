@@ -1,11 +1,11 @@
-"""A template's tail in the circuit (lane flock-netlist, ``verity/flock-netlist/v1``): the verifier evaluates no part of the
+"""A template's tail in the circuit (lane flock-circuit, ``verity/flock-circuit``): the verifier evaluates no part of the
 computation, so the gates a cut lowering left to the verifier (``ir_lower.tail_program``: RMSNorm's row tail, attention's
-softmax) become netlists here.
+softmax) become circuits here.
 
 The tail program is split into **stages** at its MUFU operations. A MUFU operation is a table lookup inside exponent and
 special-case logic (``live/src/ir_tail.rs``, the IR's own model): its stage computes the table index and passes the operand on
 (``pre``); a **lookup slot** (a shared slot type per table, built from the pinned table by the statement, ``LOOKUP`` in the
-composite netlist) maps the index to the table word; the next stage finishes it (``post``). Every value a later stage reads
+composite circuit) maps the index to the table word; the next stage finishes it (``post``). Every value a later stage reads
 is passed from stage to stage as a port. So each stage and each lookup is an ordinary slot of the block, and the wires
 between them, the units and the cut words are copy constraints.
 
@@ -179,7 +179,7 @@ OPS = {"F32Add_v1": fp.f32_add, "F32Mul_v1": fp.f32_mul, "F32Fma_v1": fp.f32_fma
 
 @dataclass
 class Stage:
-    """One stage netlist: its input ports (``("cut", k)`` a cut word, ``("pass", slot)`` a value the previous stage hands on,
+    """One stage circuits: its input ports (``("cut", k)`` a cut word, ``("pass", slot)`` a value the previous stage hands on,
     ``("lookup", j)`` lookup j's table word) and its output ports (``("pass", slot)``, ``("index", j)``, ``("cut", k)``)."""
 
     circuit: Circuit

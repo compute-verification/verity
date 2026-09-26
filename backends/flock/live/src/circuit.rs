@@ -1,11 +1,11 @@
-//! `verity/flock-netlist/v1` (lane flock-netlist): any lowered IR template, its frame-v3 rows hashed in the circuit, and
+//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its frame-v3 rows hashed in the circuit, and
 //! nothing public but the frame-v3 roots, the row digests they are built from, the declared outputs and the pinned layout.
-//! `verity_flock.netlist` composes the pinned netlist (`flock-netlist/v1`) and stages the instance files.
+//! `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance files.
 //!
 //! A block holds whole instances (VUs) in aligned ranges of slots: BLAKE3 compressions (2^14 bits; per input port a range of
 //! chunk runs and, for a port of several chunks, a range of its parent-tree compressions, the root first), the template's
 //! units (2^unit_log bits) and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0 places each slot
-//! type's circuit on its ranges and Δ, derived here from the pinned netlist alone, makes inside the block:
+//! type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
 //! - every compression after a chunk's first read the previous compression's output value as its chaining value;
 //! - every parent compression's message the output values of its two children;
 //! - every unit's leaf input bits copies of the message bits they hash, and a zero leaf a copy of a forced-zero row;
@@ -18,7 +18,7 @@
 //! here: keyed BLAKE3 of zero rows) and outputs (forced by its circuit) are pinned.
 //!
 //! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3 roots against the
-//! public digests and outputs, and nothing else. A netlist carrying a verifier-evaluated tail (a `CUT` line, or a tail,
+//! public digests and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
 //! public cut words or native words in META) is refused at parse; a template's tail is a slot type of the circuit or the
 //! template has no statement here.
 
@@ -43,15 +43,15 @@ use crate::{
     lookup::LookupNet,
 };
 
-pub const TAG: &[u8] = b"verity/flock-netlist/v1";
-pub const FORMAT: &str = "flock-netlist/v1";
-pub const INST_FORMAT: &str = "flock-netlist-inst/v1";
-pub const STATEMENT: &str = "verity/flock-netlist/v1";
+pub const TAG: &[u8] = b"verity/flock-circuit";
+pub const FORMAT: &str = "flock-circuit";
+pub const INST_FORMAT: &str = "flock-circuit-inputs";
+pub const STATEMENT: &str = "verity/flock-circuit";
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees (swappable: the salted
-/// leaf and HM96 are separate ids, and the netlist reserves their room).
-pub const LEAF_SCHEME: &str = "flock-leaf/sha256-unsalted/v0";
+/// leaf and HM96 are separate ids, and the circuit reserves their room).
+pub const LEAF_SCHEME: &str = "flock-leaf/sha256-unsalted";
 const WORD: usize = 128;
 const SUB_LOG: usize = b3::K_LOG;
 const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
@@ -61,10 +61,10 @@ pub fn hexb(s: &str) -> Result<Vec<u8>, String> {
 }
 
 fn us(v: &Value, k: &str) -> Result<usize, String> {
-    v[k].as_u64().map(|x| x as usize).ok_or(format!("netlist META: {k} missing"))
+    v[k].as_u64().map(|x| x as usize).ok_or(format!("circuit META: {k} missing"))
 }
 
-// --- the pinned netlist ------------------------------------------------------------------------------------------------
+// --- the pinned circuit ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
@@ -144,10 +144,10 @@ pub struct Composite {
     pub dummy_digests: Vec<[u8; 32]>,
     pub dummy_outputs: Vec<u16>,
     pub leaf_scheme: String,
-    /// slots per VU of each netlist
+    /// slots per VU of each circuit
     pub per_vu: Vec<usize>,
     pub wires: Vec<Wire>,
-    /// the lookup slot types' fast witnesses, by netlist index
+    /// the lookup slot types' fast witnesses, by circuit index
     pub lookups: BTreeMap<usize, LookupNet>,
 }
 
@@ -160,35 +160,35 @@ fn table_of<'a>(t: &'a crate::ir_tail::Tables, name: &str) -> &'a [u32] {
     }
 }
 
-/// Every input (output) port of a netlist: its first column in the slot and its width, groups in order.
+/// Every input (output) port of a circuit: its first column in the slot and its width, groups in order.
 pub fn port_cols(groups: &[crate::ir_block::Group]) -> Vec<(usize, usize)> {
     groups.iter().flat_map(|g| g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some((c, w)) }).collect::<Vec<_>>()).collect()
 }
 
 impl Composite {
-    /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the netlist has lookups.
+    /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the circuit has lookups.
     pub fn parse(text: &str, tables: Option<&str>) -> Result<Self, String> {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
-        let head = lines.next().ok_or("empty netlist")?.trim_end();
-        let name = head.strip_prefix("flock-netlist/v1 ").ok_or("not a flock-netlist/v1 netlist")?.to_string();
+        let head = lines.next().ok_or("empty circuit")?.trim_end();
+        let name = head.strip_prefix("flock-circuit ").ok_or("not a flock-circuit circuit")?.to_string();
         let meta: Value = serde_json::from_str(lines.next().and_then(|l| l.trim_end().strip_prefix("META ")).ok_or("no META line")?)
             .map_err(|e| format!("META: {e}"))?;
         if meta["format"] != FORMAT || meta["statement"] != STATEMENT {
-            return Err("META: not verity/flock-netlist/v1".into());
+            return Err("META: not verity/flock-circuit".into());
         }
         let mut nets = Vec::new();
         let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
             let h: Vec<&str> = l.split_whitespace().collect();
-            if h.len() != 3 || h[0] != "NET" {
-                return Err(format!("netlist: expected a NET line, found {:?}", l.chars().take(40).collect::<String>()));
+            if h.len() != 3 || h[0] != "CIRCUIT" {
+                return Err(format!("circuit: expected a CIRCUIT line, found {:?}", l.chars().take(40).collect::<String>()));
             }
-            let n: usize = h[2].parse().map_err(|_| "NET line count")?;
+            let n: usize = h[2].parse().map_err(|_| "CIRCUIT sections count")?;
             let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
-            let net = std::panic::catch_unwind(|| IrUnitNet::parse(&body)).map_err(|_| format!("NET {}: not a flock-ir-unit/v2 netlist", h[1]))?;
+            let net = std::panic::catch_unwind(|| IrUnitNet::parse(&body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 expanded circuits", h[1]))?;
             if net.cut.is_some() {
-                return Err(format!("NET {}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation", h[1]));
+                return Err(format!("CIRCUIT {}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation", h[1]));
             }
             nets.push((h[1].to_string(), net));
         }
@@ -203,7 +203,7 @@ impl Composite {
             if need.len() != lk.len() {
                 return Err("META: a lookup of a table the statement does not pin".into());
             }
-            let t = crate::ir_tail::Tables::load(tables.ok_or("the netlist has lookups: pass --tables DIR")?, &need)?;
+            let t = crate::ir_tail::Tables::load(tables.ok_or("the circuit has lookups: pass --tables DIR")?, &need)?;
             for (name, spec) in &lk {
                 let pinned = crate::ir_tail::TABLE_SHA256.iter().find(|x| x.0 == name).unwrap();
                 if spec["sha256"].as_str() != Some(pinned.1) || spec["table"].as_str() != Some(name.as_str()) || spec["out_bits"] != 31 {
@@ -234,13 +234,13 @@ impl Composite {
         }
         let g = us(&meta, "vus_per_block")?;
         let upv = us(&meta, "units_per_vu")?;
-        let unit_net = nets.iter().position(|n| n.0 == "unit").ok_or("no unit netlist")?;
+        let unit_net = nets.iter().position(|n| n.0 == "unit").ok_or("no unit's expanded circuit")?;
         let mut ranges = Vec::new();
         for r in meta["ranges"].as_array().ok_or("META: ranges")? {
             let kind = match r["type"].as_str() {
                 Some("comp") => Kind::Comp,
                 Some("mask") => Kind::Mask,
-                Some("unit") => Kind::Net(nets.iter().position(|n| Some(n.0.as_str()) == r["net"].as_str()).ok_or("a range of an unknown netlist")?),
+                Some("unit") => Kind::Net(nets.iter().position(|n| Some(n.0.as_str()) == r["net"].as_str()).ok_or("a range of an unknown circuit")?),
                 _ => return Err("a range of an unknown type".into()),
             };
             let p = r["port"].as_u64().map(|x| x as usize);
@@ -261,7 +261,7 @@ impl Composite {
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "digest length".to_string()))).collect::<Result<Vec<[u8; 32]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
         let out_words = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
-        let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown netlist {nm}"));
+        let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown circuit {nm}"));
         let mut per_vu = vec![0usize; nets.len()];
         per_vu[unit_net] = upv;
         if let Some(m) = meta["per_vu"].as_object() {
@@ -271,7 +271,7 @@ impl Composite {
         }
         let mut wires = Vec::new();
         for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
-            let n = |i: usize| w[i].as_str().ok_or("a wire's netlist".to_string()).and_then(net_of);
+            let n = |i: usize| w[i].as_str().ok_or("a wire's circuit".to_string()).and_then(net_of);
             let u = |i: usize| w[i].as_u64().map(|x| x as usize).ok_or("a wire's index".to_string());
             wires.push(Wire { dst: (n(0)?, u(1)?, u(2)?), src: (n(3)?, u(4)?, u(5)?) });
         }
@@ -285,7 +285,7 @@ impl Composite {
     }
 
     /// The layout's shape: aligned, disjoint ranges inside the block; the comp ranges' roles cover every run and parent of
-    /// every VU exactly once; the unit ranges hold `g x units_per_vu` units whose leaf maps are the unit netlist's ports.
+    /// every VU exactly once; the unit ranges hold `g x units_per_vu` units whose leaf maps are the unit's expanded circuit's ports.
     fn check(&self) -> Result<(), String> {
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
@@ -296,7 +296,7 @@ impl Composite {
             if let Kind::Net(i) = r.kind
                 && self.nets[i].1.unit_log != r.slot_log
             {
-                return Err("a unit range's slot size is not its netlist's".into());
+                return Err("a unit range's slot size is not its circuit's".into());
             }
             if (r.kind == Kind::Comp) != (r.slot_log == SUB_LOG && !matches!(r.role, Role::None)) || (r.kind == Kind::Mask && r.count != 1) {
                 return Err("a range's type, role and slot size disagree".into());
@@ -355,7 +355,7 @@ impl Composite {
         for (n, (nm, _)) in self.nets.iter().enumerate() {
             let ranges = self.ranges.iter().filter(|r| r.kind == Kind::Net(n)).count();
             if ranges != 1 {
-                return Err(format!("netlist {nm} has {ranges} ranges, not one"));
+                return Err(format!("circuit {nm} has {ranges} ranges, not one"));
             }
         }
         // every input port of every slot is wired exactly once: the unit's leaf ports by its leaf map, the rest by a wire
@@ -392,7 +392,7 @@ impl Composite {
             if self.leaves_in[u].len() != unit.in_groups[0].bits.len() || self.leaves_in[u].iter().any(|&x| x < -1 || x >= n_in as i64)
                 || self.leaves_out[u].len() != unit.out_groups[0].bits.len()
             {
-                return Err(format!("unit {u}'s leaf maps are not its netlist's ports"));
+                return Err(format!("unit {u}'s leaf maps are not its circuit's ports"));
             }
             for &o in &self.leaves_out[u] {
                 if o >= n_out || std::mem::replace(&mut seen_out[o], true) {
@@ -419,7 +419,7 @@ impl Composite {
         self.ranges.iter().find(|r| r.kind == Kind::Net(n)).unwrap()
     }
 
-    /// Block-local column of slot `i` (of VU `g`) of netlist `n`.
+    /// Block-local column of slot `i` (of VU `g`) of circuit `n`.
     pub fn slot_col(&self, n: usize, g: usize, i: usize) -> usize {
         self.range_of(n).slot(g * self.per_vu[n] + i)
     }
@@ -505,7 +505,7 @@ pub fn pin_of(c: &Composite) -> usize {
     }
 }
 
-/// Δ (A and B), derived from the pinned netlist: chaining, parent messages, unit leaf wiring, constants.
+/// Δ (A and B), derived from the pinned circuit: chaining, parent messages, unit leaf wiring, constants.
 pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let cc = comp();
     let (a0, b0) = (&cc.a_0.rows, &cc.b_0.rows);
@@ -597,7 +597,7 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 
 // --- the instance files ------------------------------------------------------------------------------------------------
 
-/// A `flock-netlist-inst/v1` file: the prover's has the rows, the verifier's (`rows: false`) only the public part.
+/// A `flock-circuit-inputs` file: the prover's has the rows, the verifier's (`rows: false`) only the public part.
 pub struct Instances {
     pub header: Value,
     pub n: usize,
@@ -614,10 +614,10 @@ impl Instances {
         let nl = b.iter().position(|&x| x == b'\n').ok_or("no header line")?;
         let mut header: Value = serde_json::from_slice(&b[..nl]).map_err(|e| format!("header: {e}"))?;
         if header["format"] != INST_FORMAT || header["statement"] != STATEMENT {
-            return Err("not a flock-netlist-inst/v1 file".into());
+            return Err("not a flock-circuit-inputs file".into());
         }
-        if header["netlist_sha256"].as_str() != Some(crate::hex(&c.sha256).as_str()) {
-            return Err("the instance file was staged for another netlist".into());
+        if header["circuit_sha256"].as_str() != Some(crate::hex(&c.sha256).as_str()) {
+            return Err("the instance file was staged for another circuit".into());
         }
         let n = header["instances"].as_u64().ok_or("header: instances")? as usize;
         let has_rows = header["rows"].as_bool().ok_or("header: rows")?;
@@ -747,7 +747,7 @@ pub struct RegionShape {
     pub fixed: u32,
 }
 
-pub struct NetlistCircuit {
+pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
     /// per slot type: its log size and its circuit (the compression circuit's CSC fold is `comp()`'s)
@@ -758,7 +758,7 @@ pub struct NetlistCircuit {
     pub db: Vec<(u32, u32)>,
 }
 
-impl LincheckCircuit for NetlistCircuit {
+impl LincheckCircuit for BlockCircuit {
     fn n_cols(&self) -> usize {
         1 << self.k_log
     }
@@ -807,7 +807,7 @@ pub struct Stmt {
     pub m_pts: usize,
     pub pin: usize,
     pub regions: Vec<RegionShape>,
-    pub circuit: NetlistCircuit,
+    pub circuit: BlockCircuit,
     pub r1cs: BlockR1cs,
     pub digest: [u8; 32],
     pub key: [u32; 8],
@@ -908,7 +908,7 @@ impl Stmt {
             digest_cache: OnceLock::from(digest),
             csc_cache: OnceLock::new(),
         };
-        let circuit = NetlistCircuit { k_log, pin, types, ranges, da, db };
+        let circuit = BlockCircuit { k_log, pin, types, ranges, da, db };
         Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, key, dummy_run_cv, identity })
     }
 
@@ -1065,7 +1065,7 @@ impl Stmt {
 
     /// Every slot's input words, converged: the units' leaf words from `unit_inputs(b, k)`, then every wire copied from the
     /// slot that computes it, re-evaluating each slot type whose inputs changed until none do (the tail and the lookups
-    /// between the units' two passes). `nets` overrides a netlist's evaluation (a tampered witness).
+    /// between the units' two passes). `nets` overrides a circuit's evaluation (a tampered witness).
     pub fn converge(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> Vec<Vec<Vec<F128>>> {
         self.converge_with(unit_inputs, nets, None)
     }
@@ -1134,8 +1134,8 @@ impl Stmt {
         panic!("the slots' wires did not converge in 64 rounds (a cycle through a slot's own output?)")
     }
 
-    /// `(z, a, b, z_lincheck)`: every block's compressions (`comps(b)`), every slot of every netlist from its input words `ins`
-    /// (`converge`; a lookup by its fast witness), the mask slot from `mask`. `nets` overrides a netlist's evaluation.
+    /// `(z, a, b, z_lincheck)`: every block's compressions (`comps(b)`), every slot of every circuit from its input words `ins`
+    /// (`converge`; a lookup by its fast witness), the mask slot from `mask`. `nets` overrides a circuit's evaluation.
     #[allow(clippy::type_complexity)]
     pub fn witness(&self, comps: &(dyn Fn(usize) -> Vec<b3::Compression> + Sync), ins: &[Vec<Vec<F128>>],
                    mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
@@ -1180,7 +1180,7 @@ impl Stmt {
         (z, a, bb, zl)
     }
 
-    /// Every slot of netlist `ni`'s `(instance, z, a, b)` words from its input words (a lookup: its fast witness).
+    /// Every slot of circuit `ni`'s `(instance, z, a, b)` words from its input words (a lookup: its fast witness).
     #[allow(clippy::type_complexity)]
     pub fn slot_zab(&self, ni: usize, net: &IrUnitNet, ins: &[Vec<F128>]) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
         let c = &self.c;

@@ -1,4 +1,4 @@
-//! Live coins from a seed the verifier commits at step 0 (lane flock-netlist; the malicious-verifier ZK groundwork of
+//! Live coins from a seed the verifier commits at step 0 (lane flock-circuit; the malicious-verifier ZK groundwork of
 //! B-Ligero PROTOCOL §5.3): the verifier draws a 256-bit seed and nonce from the OS before anything else, sends the commitment
 //! `SHA-256(TAG || nonce || seed)` in answer to `Hello`, derives every coin from the seed with `verity.randomness.derive`
 //! (byte-compatible: `tests/randomness/vectors.json`'s formats) and reveals seed and nonce in its verdict, so the prover can
@@ -7,9 +7,9 @@
 
 use sha2::{Digest, Sha256};
 
-pub const SCHEME: &str = "coin-commit/sha256/v1";
-pub const TAG: &[u8] = b"verity/flock-netlist/coin-commit/v1\0";
-pub const DOMAIN: &str = "verity/flock-netlist/coins/v1";
+pub const SCHEME: &str = "coin-commit/sha256";
+pub const TAG: &[u8] = b"verity/flock-circuit/coin-commit\0";
+pub const DOMAIN: &str = "verity/flock-circuit/coins/v1";
 const DERIVE: &[u8] = b"verity/randomness/derive/v1\0";
 const STREAM: &[u8] = b"verity/randomness/stream/v1\0";
 
@@ -91,7 +91,7 @@ pub fn coins(key: &[u8; 32], k: u64, n: usize) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    /// verity.randomness: derive(bytes(range(32)), "verity/flock-netlist/coins/v1", {"sigma": bytes(32), "statement": b"\x01\x02"})
+    /// verity.randomness: derive(bytes(range(32)), "verity/flock-circuit/coins/v1", {"sigma": bytes(32), "statement": b"\x01\x02"})
     /// and its stream(("coins", 3), 48), from the Python.
     #[test]
     fn matches_verity_randomness() {

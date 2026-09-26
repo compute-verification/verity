@@ -1,13 +1,13 @@
-"""The TABLES sweep for ``flock-netlist`` (``verity/flock-netlist/v1``): one ``result.json`` per point, as ``verity_flock.ir_bench``
+"""The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``): one ``result.json`` per point, as ``verity_flock.ir_bench``
 does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity_flock.bench``, this reuses).
 
-    python -m verity_flock.netlist_bench --template rope-head --input-set DIR --bin target/release/flock-netlist --out-dir D \\
+    python -m verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
         --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback]
-    python -m verity_flock.netlist_bench ... --serve-plan --listen 0.0.0.0:7501        the verifier pod's side
+    python -m verity_flock.circuit_bench ... --serve-plan --listen 0.0.0.0:7501        the verifier pod's side
 
 A point is the first ``total`` instances of the input set, proved in sequential sub-batches of ``--per-proof``. The prover stages
 its instance files (rows included); the verifier stages only its own public files (roots, row digests, outputs; no row) from its
-own copy of the input set, and the composite netlist, whose sha256 is the pin, from the lowering. The plateau is the point with
+own copy of the input set, and the composite circuit, whose sha256 is the pin, from the lowering. The plateau is the point with
 the highest median throughput over the planned points; ``--loopback`` re-runs it against a verifier on 127.0.0.1.
 """
 from __future__ import annotations
@@ -24,14 +24,14 @@ import sys
 import time
 from pathlib import Path
 
-from . import netlist as NL
+from . import circuit as FC
 from .bench import PER_PROOF_LOG2, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
 
 
 def relation(template: str) -> str:
-    return f"nl:{template}"
+    return f"circuit:{template}"
 
 
 def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[list[tuple[int, int]], float]:
@@ -39,13 +39,13 @@ def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[l
     subs = subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
-        p = NL.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public)
+        p = FC.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public)
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
 
 def ands(low) -> int:
-    """AND gates per instance: the unit netlist's ANDs times the units per instance."""
+    """AND gates per instance: the unit's expanded circuit's ANDs times the units per instance."""
     return low.layout.counts["ands"] * low.units.n
 
 
@@ -58,7 +58,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "netlist_sha256", "public_sha256", "open_rtt_ms", "identity"):
+        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "circuit_sha256", "public_sha256", "open_rtt_ms", "identity"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["instances"] = sum(r.get("instances") or 0 for r in runs)
         b = {"t.witness": 0.0, "t.encoding_commitment": 0.0, "t.arithmetic": 0.0}
@@ -89,13 +89,13 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             addr = "127.0.0.1:%d" % (7500 + total.bit_length())
             log = d / f"serve-s{i}.log"
             srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
-                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
+                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
                                    stdout=open(log, "w"), stderr=subprocess.STDOUT)
             _wait_serving(log, srv)
         try:
             timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
             pr = subprocess.Popen([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs), "--dump", str(d / f"proofs-s{i}"),
-                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
+                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
                                   stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"))
             _OURS.add(pr.pid)
             try:
@@ -134,12 +134,12 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     for i, _ in enumerate(q["subbatches"]):
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
-                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
+                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
                                stdout=open(log, "w"), stderr=subprocess.STDOUT)
         try:
             _wait_serving(log, srv)
             subprocess.call([a.bin, "prove", "--verifier", "127.0.0.1:7591", "--warm", "1", "--runs", str(a.runs), *a.prove_arg,
-                             "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
+                             "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
                             stdout=open(d / f"loopback-prove-s{i}.txt", "w"), stderr=open(d / f"loopback-prove-s{i}.err", "w"))
         finally:
             srv.terminate()
@@ -175,15 +175,15 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                   "coins": "live verifier (flock-live R1-R8)"},
         hardware=contract.probe_hardware(),
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
-                              "statement": NL.STATEMENT, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
-                              "netlist_format": NL.FORMAT, "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
-                              "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch + cuda_netlist_patch.py"},
+                              "statement": FC.STATEMENT, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
+                              "circuit_format": FC.FORMAT, "unit": low.name, "unit_sha256": low.sha256, "identity": first.get("identity"),
+                              "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch + cuda_circuit_patch.py"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
-        preprocessing="none: the circuit shape and the composite netlist are built once per process (fixed.setup_seconds: staging); every "
+        preprocessing="none: the circuit shape and the composite circuit are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its rows and evaluates every unit afresh (the witness bucket) before proving",
         retention="retained", instances=input_set.ref(0, n, a.art), N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=NL.SCHEME, statement=NL.STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
+        scheme=FC.SCHEME, statement=FC.STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n, ands_per_instance=ands(low),
         private="every word but the frame-v3 roots, the row digests, the declared outputs and the pinned layout",
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
@@ -252,7 +252,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
-                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
+                              "--instances", str(d / f"instances-s{j}.bin"), "--circuit", str(net), "--sessions", str(a.runs + 2),
                               "--operator", a.operator, *a.tables], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
     return 0
@@ -261,7 +261,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
 def main(argv=None) -> int:
     from verity_numerical.bench.input_sets import InputSet
 
-    ap = argparse.ArgumentParser(prog="verity_flock.netlist_bench")
+    ap = argparse.ArgumentParser(prog="verity_flock.circuit_bench")
     ap.add_argument("--template", required=True)
     ap.add_argument("--input-set", required=True)
     ap.add_argument("--art", default=None, help="the input set's art: id, recorded in the fingerprint")
@@ -285,12 +285,12 @@ def main(argv=None) -> int:
     if input_set.subcircuit.template.id != a.template:
         print(f"input set {input_set.name} is not a {a.template} set", file=sys.stderr)
         return 2
-    low = NL.lowering_for_set(input_set)
+    low = FC.lowering_for_set(input_set)
     a.low, a.input_set = low, input_set
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    net = out / "net.txt"
-    net.write_text(NL.compose(low, input_set.subcircuit))
+    net = out / "circuit.txt"
+    net.write_text(FC.compose(low, input_set.subcircuit))
     pin = hashlib.sha256(net.read_bytes()).hexdigest()
     a.tables = []
     if low.units.cut:

@@ -1,5 +1,5 @@
-"""``verity/flock-netlist/v1``: any lowered IR template (``flock-ir-unit/v2`` netlists, :mod:`ir_lower`) proved with its
-frame-v3 rows hashed in the circuit and nothing else public (``live/src/netlist.rs`` is the statement).
+"""``verity/flock-circuit``: any lowered IR template (``flock-ir-unit/v2`` circuits, :mod:`ir_lower`) proved with its
+frame-v3 rows hashed in the circuit and nothing else public (``live/src/circuit.rs`` is the statement).
 
 Private by default. The public data are the frame-v3 roots, the row digests they are built from (the serving tree's
 leaves), the declared outputs and the layout below. Every other word (every compression's chaining value, every chunk
@@ -20,9 +20,9 @@ aligned ranges of slots of a few types:
 A padding instance (the block's unused instances and every block past the last) is the all-zero instance; its digests and
 outputs are pinned here (``dummy``), so the verifier knows every public value of every block.
 
-The composite netlist (``flock-netlist/v1``) is the statement's meaning: a ``META`` line (ports, ranges, the compression
+The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, the compression
 slots' roles, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme), then each slot type's
-``flock-ir-unit/v2`` netlist. Its sha256 is the pin. The verifier derives Δ, the public regions and their values from it
+``flock-ir-unit/v2`` circuit. Its sha256 is the pin. The verifier derives Δ, the public regions and their values from it
 and from its own public instance file (no rows), never from the prover's.
 """
 from __future__ import annotations
@@ -36,16 +36,16 @@ import numpy as np
 
 from . import ir_lower as IL
 
-FORMAT = "flock-netlist/v1"
-STATEMENT = "verity/flock-netlist/v1"
+FORMAT = "flock-circuit"
+STATEMENT = "verity/flock-circuit"
 SCHEME = "frame-v3/blake3-keyed"
-INST_FORMAT = "flock-netlist-inst/v1"
+INST_FORMAT = "flock-circuit-inputs"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity and swappable: ``flock-leaf/sha256-unsalted/v0`` is Flock's own leaf (SHA-256 of the opened row) until the salted
-#: leaf (``flock-leaf/salted-sha256/v1``: H(salt || row), salt from the prover's OS-seeded randomness) lands; the target is
+#: identity and swappable: ``flock-leaf/sha256-unsalted`` is Flock's own leaf (SHA-256 of the opened row) until the salted
+#: leaf (``flock-leaf/salted-sha256``: H(salt || row), salt from the prover's OS-seeded randomness) lands; the target is
 #: Halevi–Micali (HM96, the O(k) variant as in B-Ligero's leaves). The reserved sizes are what HM96 needs, so it drops in without
 #: changing the layout: randomness x of 6k + 4 bits at k = 160 (121 bytes), a universal hash key of (|x| + 256) bits (160 bytes).
-LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted/v0", "salt_bytes": 0, "reserved_salt_bytes": 128, "reserved_key_bytes": 160}
+LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0, "reserved_salt_bytes": 128, "reserved_key_bytes": 160}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14
@@ -158,8 +158,8 @@ def _wires(low: IL.Lowering, tail) -> list:
 
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False) -> str:
-    """The ``flock-netlist/v1`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
-    (:mod:`tail`: stage netlists and MUFU lookup slots, wired to the units' cut ports)."""
+    """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
+    (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports)."""
     from . import tail as TL
 
     U = low.units
@@ -223,9 +223,14 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "dummy": dummy, "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _wires(low, tail) if tail else []}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
-    texts = [("unit", IL.netlist(low.layout, low.name, None, None))]
-    texts += [(f"stage{i}", IL.netlist(lay, f"{low.name}/tail/stage{i}", None, None)) for i, lay in enumerate(stages)]
-    return head + "".join(f"NET {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
+    texts = [("unit", _expanded(low.layout, low.name))]
+    texts += [(f"stage{i}", _expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)]
+    return head + "".join(f"CIRCUIT {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
+
+
+def _expanded(lay: IL.Layout, name: str) -> str:
+    """A slot type's expanded circuit as ``flock-ir-unit/v2`` text (``ir_lower``'s writer)."""
+    return IL.netlist(lay, name, None, None)
 
 
 def _row_key() -> bytes:
@@ -253,7 +258,7 @@ def digest(text: str) -> str:
 # --- instance files -----------------------------------------------------------------------------------------------------------
 
 def write(text: str, input_set, lo: int, hi: int, path, public_only: bool) -> dict:
-    """``flock-netlist-inst/v1``: one JSON header line (the set, the range, the composite netlist's sha256, the frame-v3
+    """``flock-circuit-inputs``: one JSON header line (the set, the range, the composite circuit's sha256, the frame-v3
     statement: roots, domains, bindings), then, for the prover only, every instance's input rows (ports in order, u16 LE),
     then every instance's row digests (32 bytes per port) and output words (u16 LE, output leaves in order). The verifier's
     own file (``public_only``) has no rows: it never holds a private word."""
@@ -271,7 +276,7 @@ def write(text: str, input_set, lo: int, hi: int, path, public_only: bool) -> di
 
     fv, digests = ir_frame.statement(_Plan, input_set, lo, hi, rows, outs)
     head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
-            "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "netlist_sha256": digest(text),
+            "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha256": digest(text),
             "frame_v3": fv, "rows": not public_only}
     body = b""
     if not public_only:
@@ -285,15 +290,15 @@ def write(text: str, input_set, lo: int, hi: int, path, public_only: bool) -> di
 
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False) -> Path:
-    """``<out_dir>/net.txt`` (the composite netlist) and ``<out_dir>/inst-<n>.bin`` (``pub-<n>.bin`` for the verifier)."""
+    """``<out_dir>/circuit.txt`` (the composite circuit) and ``<out_dir>/inst-<n>.bin`` (``pub-<n>.bin`` for the verifier)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     text = compose(low, input_set.subcircuit)
-    (out / "net.txt").write_text(text)
+    (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
-        if not (out / "net-forged.txt").exists():
-            (out / "net-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
+        if not (out / "circuit-forged.txt").exists():
+            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
     path = out / f"{'pub' if public_only else 'inst'}-{hi - lo}.bin"
     write(text, input_set, lo, hi, path, public_only)
     return path
@@ -308,8 +313,8 @@ def lowering_for_set(input_set) -> IL.Lowering:
 
 
 def main(argv=None) -> int:
-    """``python -m verity_flock.netlist --input-set DIR --n N [N ...] --out DIR``: the composite netlist, then for each N the
-    prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N)); prints the netlist's sha256 (the pin)."""
+    """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR``: the composite circuit, then for each N the
+    prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N)); prints the circuit's sha256 (the pin)."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
@@ -324,7 +329,7 @@ def main(argv=None) -> int:
     for n in a.n:
         stage(low, s, 0, n, a.out)
         stage(low, s, 0, n, a.out, public_only=True)
-    print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest((Path(a.out) / "net.txt").read_text()), "n": a.n}))
+    print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest((Path(a.out) / "circuit.txt").read_text()), "n": a.n}))
     return 0
 
 

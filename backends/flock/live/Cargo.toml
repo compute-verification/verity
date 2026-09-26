@@ -8,11 +8,14 @@ license.workspace = true
 description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover challenger, a verifier coin server, and the replaying session verifier"
 
 [features]
-# GPU tables built from the binary-census unit netlist (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which
+# GPU tables built from the binary-census unit's expanded circuit (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which
 # flock-bench's 22-gpu-unit.sh installs into the checkout).
 verity-unit = []
 # Flock-CUDA for the chunk statement (backends/flock/cuda_chunk_patch.py must have been applied to the checkout).
 gpu = ["dep:flock-cuda-ffi", "flock-cuda-ffi/gpu"]
+# Test harnesses only (selftests): inject the prover's seed and the verifier's step-0 seed. A proving build never enables it, so
+# no fixed seed is reachable from its entry points.
+seed-injection = []
 
 [dependencies]
 flock-core = { path = "../flock-core" }

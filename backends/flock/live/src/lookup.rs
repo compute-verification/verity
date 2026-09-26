@@ -1,6 +1,6 @@
-//! A table-lookup slot of `verity/flock-netlist/v1` (lane flock-netlist): `value = table[index]` for a pinned MUFU table
+//! A table-lookup slot of `verity/flock-circuit` (lane flock-circuit): `value = table[index]` for a pinned MUFU table
 //! (`ir_tail::TABLE_SHA256`), built here from the table itself, the same on the prover's and the verifier's side, as an
-//! ordinary unit netlist (`IrUnitNet`): so the fold, Δ and the regions treat it like any other slot type.
+//! ordinary unit's expanded circuit (`IrUnitNet`): so the fold, Δ and the regions treat it like any other slot type.
 //!
 //! Rows: the index bits (the input group, one 128-bit word); the one-hot decoders of its low `lo` and high `n - lo` bits
 //! (recursively, each minterm the AND of two half minterms); per output bit j and high minterm h one product row
@@ -100,7 +100,7 @@ impl LookupNet {
         fix(&mut bd.b);
         let useful = bd.a.len();
         let mut h = Sha256::new();
-        h.update(format!("verity/flock-netlist/lookup/v1 {name} n={n} lo={lo} bits={bits}\n").as_bytes());
+        h.update(format!("verity/flock-circuit/lookup {name} n={n} lo={lo} bits={bits}\n").as_bytes());
         for w in table {
             h.update(w.to_le_bytes());
         }

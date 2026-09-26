@@ -31,14 +31,14 @@ pub mod ir_frame;
 pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
-pub mod netlist;
+pub mod circuit;
 pub mod pure_block;
 pub mod vllm_block;
 pub mod zk_hooks;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 #[cfg(feature = "gpu")]
-pub mod gpu_netlist;
+pub mod gpu_circuit;
 
 use std::{
     collections::BTreeMap,
@@ -109,6 +109,61 @@ pub fn hex(b: &[u8]) -> String {
 
 fn f128_hex(v: &F128) -> String {
     format!("{:016x}{:016x}", v.hi, v.lo)
+}
+
+/// Step 0 replayed from a session record alone: the recorded seed opens the recorded commitment, and every coin request of the
+/// session (each stream round and the link points, by their session-wide index `g`, however the reps interleave) is
+/// `coin_seed::coins(coin_key(seed, hello), g, n)`, the indices `0 .. requests` each exactly once. Returns the request count.
+pub fn replay_coin_seed(rec: &Value) -> Result<u64, String> {
+    let cs = &rec["coin_seed"];
+    if cs.is_null() {
+        return Err("the record has no step-0 seed".into());
+    }
+    let h32 = |k: &str| -> Result<[u8; 32], String> {
+        let s = cs[k].as_str().ok_or(format!("coin_seed.{k} missing (the verdict was never issued?)"))?;
+        let b: Vec<u8> = (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16)).collect::<Result<_, _>>().map_err(|e| e.to_string())?;
+        b.try_into().map_err(|_| format!("coin_seed.{k} is not 32 bytes"))
+    };
+    let (seed, nonce, commit) = (h32("seed")?, h32("nonce")?, h32("commitment")?);
+    if cs["scheme"] != coin_seed::SCHEME || cs["domain"] != coin_seed::DOMAIN || coin_seed::commitment(&seed, &nonce) != commit {
+        return Err("the recorded seed does not open the recorded commitment under the pinned scheme".into());
+    }
+    let hello = cs["context"]["hello"].as_str().ok_or("coin_seed.context.hello missing")?;
+    if rec["hello"].as_str() != Some(hello) {
+        return Err("the derivation context is not the session's hello".into());
+    }
+    let key = coin_seed::coin_key(&seed, hello);
+    let mut got: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+    let mut put = |g: Option<u64>, coins: Vec<String>, what: String| -> Result<(), String> {
+        let g = g.ok_or(format!("{what}: no coin-request index"))?;
+        if got.insert(g, coins).is_some() {
+            return Err(format!("coin request {g} recorded twice"));
+        }
+        Ok(())
+    };
+    for st in rec["streams"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        for r in st["rounds"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+            let coins = r["coins"].as_array().map(|a| a.iter().filter_map(|c| c.as_str().map(String::from)).collect()).unwrap_or_default();
+            put(r["g"].as_u64(), coins, format!("{} round {}", st["stream"], r["k"]))?;
+        }
+    }
+    if !rec["link"].is_null() {
+        let pts: Vec<String> = rec["link"]["points"].as_array().map(|a| a.iter().flat_map(|p| p.as_array().cloned().unwrap_or_default())
+            .filter_map(|c| c.as_str().map(String::from)).collect()).unwrap_or_default();
+        put(rec["link"]["points_g"].as_u64(), pts, "the link points".into())?;
+    }
+    let requests = cs["requests"].as_u64().ok_or("coin_seed.requests missing")?;
+    if got.keys().copied().ne(0..requests) {
+        return Err(format!("the recorded coin requests are not exactly 0..{requests}"));
+    }
+    for (g, coins) in &got {
+        let want: Vec<String> = coin_seed::coins(&key, *g, coins.len()).chunks(16)
+            .map(|c| f128_hex(&F128 { lo: u64::from_le_bytes(c[..8].try_into().unwrap()), hi: u64::from_le_bytes(c[8..].try_into().unwrap()) })).collect();
+        if &want != coins {
+            return Err(format!("coin request {g} is not the seed's derivation"));
+        }
+    }
+    Ok(requests)
 }
 
 /// Stream names: rep roots are `<table>/rep<r>`, children `<parent>/f<i>`.
@@ -659,7 +714,7 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-netlist). Off for every statement that does not ask for it.
+    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
     pub coin_seed: bool,
 }
 
@@ -713,6 +768,9 @@ pub struct RoundRec {
     pub len: usize,
     pub n: u32,
     pub coins: Vec<F128>,
+    /// with a step-0 seed: the session-wide index of the coin request that answered this round (`coin_seed::coins(key, g, n)`),
+    /// so the derivation replays from the record however the reps' rounds interleave
+    pub g: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -771,6 +829,11 @@ pub struct Server {
     urandom: Option<File>,
     /// step 0: (seed, nonce, commitment, the coin key once `Hello` is accepted, coin requests issued)
     seed: Option<([u8; 32], [u8; 32], [u8; 32], Option<[u8; 32]>, u64)>,
+    /// the global index of the last seed-derived coin request, and of the link points' request
+    last_g: Option<u64>,
+    points_g: Option<u64>,
+    /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
+    seed_inject: Option<([u8; 32], [u8; 32])>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
     handle_s: f64,
@@ -811,9 +874,18 @@ impl Server {
             verdict: None,
             urandom: Some(File::open("/dev/urandom").expect("/dev/urandom")),
             seed: None,
+            last_g: None,
+            points_g: None,
+            seed_inject: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
         })
+    }
+
+    /// A test harness's step-0 seed (deterministic verifier coins for transcript comparisons).
+    #[cfg(feature = "seed-injection")]
+    pub fn inject_coin_seed(&mut self, seed: [u8; 32], nonce: [u8; 32]) {
+        self.seed_inject = Some((seed, nonce));
     }
 
     /// The live prime rounds, and how many preceded `Commit`.
@@ -863,9 +935,13 @@ impl Server {
         match self.seed.as_mut() {
             Some((_, _, _, Some(key), k)) => {
                 b = coin_seed::coins(key, *k, n);
+                self.last_g = Some(*k);
                 *k += 1;
             }
-            _ => self.urandom(&mut b),
+            _ => {
+                self.last_g = None;
+                self.urandom(&mut b);
+            }
         }
         b.chunks(16)
             .map(|c| F128 {
@@ -944,8 +1020,13 @@ impl Server {
                 }
                 if self.cfg.coin_seed && self.urandom.is_some() {
                     let (mut seed, mut nonce) = ([0u8; 32], [0u8; 32]);
-                    self.urandom(&mut seed);
-                    self.urandom(&mut nonce);
+                    match self.seed_inject.take() {
+                        Some((s, n)) => (seed, nonce) = (s, n),
+                        None => {
+                            self.urandom(&mut seed);
+                            self.urandom(&mut nonce);
+                        }
+                    }
                     let c = coin_seed::commitment(&seed, &nonce);
                     self.seed = Some((seed, nonce, c, Some(coin_seed::coin_key(&seed, &h)), 0));
                     self.hello = Some(h);
@@ -1014,6 +1095,7 @@ impl Server {
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
                 let pts: Vec<Vec<F128>> = self.coins(spec.points * spec.m).chunks(spec.m).map(|p| p.to_vec()).collect();
+                self.points_g = self.last_g;
                 self.points = pts;
                 Resp::Coins(self.points.concat())
             }
@@ -1093,7 +1175,7 @@ impl Server {
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
                 }
                 let coins = self.coins(n as usize);
-                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
+                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone(), g: self.last_g });
                 Resp::Coins(coins)
             }
             Req::Proof { table, rep, bytes } => {
@@ -1214,7 +1296,7 @@ impl Server {
                     "stream": name, "parent": s.parent, "label": String::from_utf8_lossy(&s.label), "at": s.at,
                     "root_sha256": s.cap.as_ref().map(|c| hex(&sha256(c))),
                     "rounds": s.rounds.iter().enumerate().map(|(k, r)| json!({
-                        "k": k, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
+                        "k": k, "g": r.g, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
                         "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
                     })).collect::<Vec<_>>(),
                 })
@@ -1227,6 +1309,7 @@ impl Server {
             "root_b_sha256": c.roots.iter().map(|(t, r)| (t.clone(), json!(hex(&sha256(r))))).collect::<serde_json::Map<_, _>>(),
             "publics_sha256": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(&sha256(p))))).collect::<serde_json::Map<_, _>>(),
             "points": self.points.iter().map(|p| p.iter().map(f128_hex).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "points_g": self.points_g,
             "y": self.y.iter().map(f128_hex).collect::<Vec<_>>(),
             // G2: the committed words themselves, so the Flock side replays from the record alone
             "root_f": hex(&c.root_f),
@@ -1258,6 +1341,16 @@ impl Server {
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},
             "proof_sha256": self.proofs.iter().map(|((t, r), b)| json!({"stream": rep_stream(t, *r), "sha256": hex(&sha256(b)), "bytes": b.len()})).collect::<Vec<_>>(),
             "aborted": self.aborted, "verdict": self.verdict, "streams": streams, "prime": prime,
+            "coin_seed": self.seed.as_ref().map(|(seed, nonce, c, _, k)| {
+                let mut v = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "context": {"hello": self.hello}, "commitment": hex(c),
+                                   "requests": k});
+                // the opening only once the verdict is issued: until then the seed is the verifier's secret
+                if self.verdict.is_some() {
+                    v["seed"] = json!(hex(seed));
+                    v["nonce"] = json!(hex(nonce));
+                }
+                v
+            }),
         })
     }
 
@@ -1393,7 +1486,7 @@ impl Server {
                 if sha.len() != 32 || coins.len() != n as usize {
                     return Err(bad(&format!("{name} round {k}: malformed")));
                 }
-                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
+                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins, g: r["g"].as_u64() });
             }
             if sr.parent.is_empty() {
                 let Some((table, rep)) = s.root_of(&name) else { return Err(bad(&format!("unknown root stream {name}"))) };

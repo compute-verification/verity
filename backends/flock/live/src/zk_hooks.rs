@@ -1,5 +1,10 @@
-//! Zero-knowledge readiness for `verity/flock-netlist/v1` (lane flock-netlist, M0): the masking hooks the prover API
+//! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
+//!
+//! The prover is a deterministic function of (statement, witness, [`ProverSeed`], verifier coins): the seed is an explicit input,
+//! drawn from `getrandom` in a proving build and injectable only by a test harness (feature `seed-injection`), and no message byte
+//! depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on unseeded device state; the selftest
+//! `prover_is_deterministic` checks proofs and transcript byte for byte.
 //!
 //! [`ProverRng`] is the only source of the prover's masking randomness (masks, salts, Reed–Solomon padding): a fresh 256-bit
 //! seed per proof from the operating system (`getrandom`), expanded with ChaCha20 as independent streams addressed by
@@ -23,21 +28,36 @@ pub const STREAM_MASK: u64 = 1;
 pub const STREAM_SALT: u64 = 2;
 pub const STREAM_PAD: u64 = 3;
 
+/// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
+/// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
+#[derive(Clone, Copy)]
+pub struct ProverSeed([u8; 32]);
+
+impl ProverSeed {
+    pub fn from_os() -> Self {
+        let mut seed = [0u8; 32];
+        getrandom::fill(&mut seed).expect("the OS random generator failed: refusing to prove without prover randomness");
+        ProverSeed(seed)
+    }
+
+    #[cfg(any(test, feature = "seed-injection"))]
+    pub fn injected(seed: [u8; 32]) -> Self {
+        ProverSeed(seed)
+    }
+}
+
 pub struct ProverRng {
     rng: ChaCha20Rng,
 }
 
 impl ProverRng {
-    /// A fresh proof's randomness: 32 bytes from the OS, never from the transcript.
-    pub fn from_os() -> Self {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed).expect("the OS random generator failed: refusing to prove without prover randomness");
-        ProverRng { rng: ChaCha20Rng::from_seed(seed) }
+    pub fn from_seed(seed: ProverSeed) -> Self {
+        ProverRng { rng: ChaCha20Rng::from_seed(seed.0) }
     }
 
-    #[cfg(test)]
-    fn from_seed(seed: [u8; 32]) -> Self {
-        ProverRng { rng: ChaCha20Rng::from_seed(seed) }
+    /// A fresh proof's randomness from the OS, never from the transcript.
+    pub fn from_os() -> Self {
+        Self::from_seed(ProverSeed::from_os())
     }
 
     /// Bytes `[32 index, 32 index + out.len())` of stream `purpose` (independent of every other `(purpose, index)`).
@@ -92,14 +112,8 @@ pub struct NoMask {
 }
 
 impl NoMask {
-    pub fn new() -> Self {
-        NoMask { rng: ProverRng::from_os() }
-    }
-}
-
-impl Default for NoMask {
-    fn default() -> Self {
-        Self::new()
+    pub fn new(seed: ProverSeed) -> Self {
+        NoMask { rng: ProverRng::from_seed(seed) }
     }
 }
 
@@ -111,7 +125,7 @@ mod tests {
 
     #[test]
     fn streams_are_addressed_and_independent() {
-        let mut r = ProverRng::from_seed([7; 32]);
+        let mut r = ProverRng::from_seed(ProverSeed::injected([7; 32]));
         let a = r.salt(0, 5);
         let _ = r.salt(1, 0);
         assert_eq!(r.salt(0, 5), a, "a salt is a function of the seed and its address");

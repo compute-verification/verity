@@ -3,8 +3,8 @@
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
 writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
 
-The netlist statement (``nl:<template>``, ``verity/flock-netlist/v1``, planned with ``--relation nl:<template>``) runs
-``backends/flock/pod/61-netlist-cell.sh`` the same way (``verity_flock.netlist_bench``; the verifier stages only its public files).
+The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
+``backends/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
 
 An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``backends/flock/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
@@ -28,10 +28,10 @@ RESULT = "result.json"
 SCRIPT = "backends/flock/pod/30-cell.sh"
 IR_SCRIPT = "backends/flock/pod/33-ir-cell.sh"
 IR_PREFIX = "irf:"
-NL_SCRIPT = "backends/flock/pod/61-netlist-cell.sh"
-NL_PREFIX = "nl:"
+CIRCUIT_SCRIPT = "backends/flock/pod/61-circuit-cell.sh"
+CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
-RELATIONS = (NL_PREFIX,)
+RELATIONS = (CIRCUIT_PREFIX,)
 
 
 def set_tarball(cell) -> str:
@@ -73,8 +73,8 @@ def unmet(cell) -> str | None:
 
 
 def jobs(cell) -> list[dict]:
-    if cell.relation.startswith(NL_PREFIX):
-        return ir_jobs(cell, NL_SCRIPT)
+    if cell.relation.startswith(CIRCUIT_PREFIX):
+        return ir_jobs(cell, CIRCUIT_SCRIPT)
     if cell.relation.startswith(IR_PREFIX):
         return ir_jobs(cell)
     send = [set_tarball(cell)] if cell.input_set.get("kind") == "set" else []
@@ -97,7 +97,7 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
         raise ValueError("C-interactive registers under the producing lane: the cell has no lane")
     cmd = [sys.executable, "-m", "verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
            "--out", str(out)]
-    if cell.relation.startswith(IR_PREFIX) or cell.relation.startswith(NL_PREFIX):
+    if cell.relation.startswith(IR_PREFIX) or cell.relation.startswith(CIRCUIT_PREFIX):
         cmd += ["--verifier-binary", ir_binary(prover_run)]
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
 

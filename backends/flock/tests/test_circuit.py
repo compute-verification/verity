@@ -1,5 +1,5 @@
-"""verity/flock-netlist/v1's Python side (lane flock-netlist): the composite netlist, its instance files, and the tail pieces in
-the circuit. The Rust statement's own tests are ``flock-netlist selftest`` on a pod (every negative) and the crate's unit tests."""
+"""verity/flock-circuit's Python side (lane flock-circuit): the composite circuit, its instance files, and the tail pieces in
+the circuit. The Rust statement's own tests are ``flock-circuit selftest`` on a pod (every negative) and the crate's unit tests."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from verity_flock import ir_lower as IL
-from verity_flock import netlist as NL
+from verity_flock import circuit as FC
 from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit
 
@@ -25,23 +25,23 @@ def _set(sid: str, n: int, tmp_path):
 
 def test_rope_composes_private_by_default(tmp_path):
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
-    low = NL.lowering_for_set(s)
-    text = NL.compose(low, s.subcircuit)
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
     meta = json.loads(text.split("\n", 2)[1][5:])
-    assert meta["statement"] == NL.STATEMENT and meta["leaf_scheme"] == NL.LEAF_SCHEME
+    assert meta["statement"] == FC.STATEMENT and meta["leaf_scheme"] == FC.LEAF_SCHEME
     assert not any(k in meta for k in ("tail", "cut", "public_ports", "native")), "no verifier-evaluated part"
     kinds = {r["type"] for r in meta["ranges"]}
     assert kinds == {"comp", "unit", "mask"}
-    spans = sorted(((r["pos0"] << r["slot_log"]), ((r["pos0"] + NL._pow2(r["count"])) << r["slot_log"])) for r in meta["ranges"])
+    spans = sorted(((r["pos0"] << r["slot_log"]), ((r["pos0"] + FC._pow2(r["count"])) << r["slot_log"])) for r in meta["ranges"])
     assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])), "ranges are disjoint"
     assert all(start % (end - start) == 0 for start, end in spans), "ranges are aligned to their spans"
-    NL.stage(low, s, 0, 4, tmp_path / "st")
-    NL.stage(low, s, 0, 4, tmp_path / "st", public_only=True)
+    FC.stage(low, s, 0, 4, tmp_path / "st")
+    FC.stage(low, s, 0, 4, tmp_path / "st", public_only=True)
     prover, verifier = (tmp_path / "st" / "inst-4.bin").read_bytes(), (tmp_path / "st" / "pub-4.bin").read_bytes()
     hp, hv = (json.loads(b.split(b"\n", 1)[0]) for b in (prover, verifier))
     assert hp["rows"] and not hv["rows"], "the verifier's file holds no row"
     assert prover.split(b"\n", 1)[1].endswith(verifier.split(b"\n", 1)[1]), "the public part is the same bytes"
-    assert hp["netlist_sha256"] == NL.digest(text)
+    assert hp["circuit_sha256"] == FC.digest(text)
 
 
 def test_attention_has_no_verifier_evaluated_form():
@@ -52,7 +52,7 @@ def test_attention_has_no_verifier_evaluated_form():
         units, name = U(), "attention"
 
     with pytest.raises(NotImplementedError, match="no verifier-evaluated form"):
-        NL.compose(Low(), None)
+        FC.compose(Low(), None)
 
 
 @pytest.mark.parametrize("prim", sorted(TL.MUFU))
@@ -87,5 +87,5 @@ def test_mufu_pieces_match_the_ir(prim):
 
 def test_lookup_rows_match_the_rust_layout():
     # 128 input rows, decoders of 13 + 10 bits, 31 * 2^10 products, output word, constant (lookup.rs)
-    assert NL.lookup_rows(23, 13, 31) == -(-(128 + NL._decode_rows(13) + NL._decode_rows(10) + 31 * 1024) // 128) * 128 + 129
-    assert NL._decode_rows(2) == 4 and NL._decode_rows(3) == 8 + 4
+    assert FC.lookup_rows(23, 13, 31) == -(-(128 + FC._decode_rows(13) + FC._decode_rows(10) + 31 * 1024) // 128) * 128 + 129
+    assert FC._decode_rows(2) == 4 and FC._decode_rows(3) == 8 + 4

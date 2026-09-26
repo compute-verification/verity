@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# flock-netlist: verity/flock-netlist/v1 on a pod. Builds flock-gpu-link's checkout (20-gpu-link.sh MODE=build), installs the
-# netlist prover (cuda_netlist_patch.py) and builds flock-netlist; stages each input set (inputs/*.tar, research run --send)
-# with verity_flock.netlist (the prover's inst-N.bin, the verifier's own pub-N.bin); then per set:
+# flock-circuit: verity/flock-circuit on a pod. Builds flock-gpu-link's checkout (20-gpu-link.sh MODE=build), installs the
+# circuit prover (cuda_circuit_patch.py) and builds flock-circuit; stages each input set (inputs/*.tar, research run --send)
+# with verity_flock.circuit (the prover's inst-N.bin, the verifier's own pub-N.bin); then per set:
 #   MODE=selftest   CPU and GPU selftests at SELF_N instances
 #   MODE=bench      loopback sessions (a verifier process on 127.0.0.1 serving its own public file) at each of POINTS
 #   MODE=build      nothing more
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/nl}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/nl}/out; W=/workspace/flock-netlist; mkdir -p $O $W
+REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=/workspace/flock-circuit; mkdir -p $O $W
 MODE=${MODE:-selftest}; G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-90}
 MODE=build GPU=$G SM=$SM bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
@@ -16,9 +16,11 @@ source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }
 TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) / PER_ )) ); export RAYON_NUM_THREADS=$TH
 F=/workspace/flock-gpu-link/flock; FEAT=
-if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_netlist_patch.py) || exit 1; FEAT="--features gpu"; fi
-(cd $F && cargo build --release -p flock-live $FEAT --bin flock-netlist -j $TH) > $O/build-nl.txt 2>&1 || { tail -40 $O/build-nl.txt; exit 1; }
-B=$F/target/release/flock-netlist; sha256sum $B | tee $O/binary.sha256
+if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_circuit_patch.py) || exit 1; FEAT="--features gpu"; fi
+# the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
+[ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
+(cd $F && cargo build --release -p flock-live $FEAT --bin flock-circuit -j $TH) > $O/build-circuit.txt 2>&1 || { tail -40 $O/build-circuit.txt; exit 1; }
+B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
@@ -29,23 +31,23 @@ for tarf in $I/*.tar; do
   SET=$(dirname $(find $S -name manifest.json | head -1)); D=$O/$t; mkdir -p $D
   if [ "$MODE" = selftest ]; then
     N=${SELF_N:-4}
-    python3 -m verity_flock.netlist --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
+    python3 -m verity_flock.circuit --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
     if [ "${CPU_SELF:-1}" = 1 ]; then
-      $B selftest --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt --tables $D/stage/tables --forged $D/stage/net-forged.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
+      $B selftest --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
       grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
     fi
-    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt --tables $D/stage/tables --forged $D/stage/net-forged.txt > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
+    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
                     grep SELFTEST $D/selftest-gpu.txt; grep '"pass":false' $D/selftest-gpu.txt | cut -c1-300; grep -h GPUPHASE $D/selftest-gpu.err | head -2 | cut -c1-600; }
   fi
   if [ "$MODE" = bench ]; then
-    python3 -m verity_flock.netlist --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
-    PIN=$(sha256sum $D/stage/net.txt | cut -d' ' -f1)
+    python3 -m verity_flock.circuit --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
+    PIN=$(sha256sum $D/stage/circuit.txt | cut -d' ' -f1)
     for n in ${POINTS:-64}; do
-      $B serve --listen 127.0.0.1:7501 --out $D/sessions-$n --instances $D/stage/pub-$n.bin --netlist $D/stage/net.txt --tables $D/stage/tables --pin $PIN --operator loopback > $D/serve-$n.log 2>&1 &
+      $B serve --listen 127.0.0.1:7501 --out $D/sessions-$n --instances $D/stage/pub-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --pin $PIN --operator loopback > $D/serve-$n.log 2>&1 &
       SP=$!
       for i in $(seq 900); do grep -q SERVING $D/serve-$n.log && break; sleep 1; done
       G_=; [ $G = 1 ] && G_=--gpu
-      $B prove --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --netlist $D/stage/net.txt --tables $D/stage/tables $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n.txt 2> $D/prove-$n.err
+      $B prove --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n.txt 2> $D/prove-$n.err
       grep -h "^LIVE" $D/prove-$n.txt | python3 -c "
 import json, sys
 for l in sys.stdin:

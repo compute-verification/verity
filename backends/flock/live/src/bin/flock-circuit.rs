@@ -1,12 +1,12 @@
-//! flock-netlist: `verity/flock-netlist/v1` (`flock_live::netlist`), proved by the CPU prover or by Flock-CUDA (`--gpu`,
-//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-netlist.
+//! flock-circuit: `verity/flock-circuit` (`flock_live::circuit`), proved by the CPU prover or by Flock-CUDA (`--gpu`,
+//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
 //!
-//!   flock-netlist serve    --listen ADDR --out DIR --instances PUB --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-netlist prove    --verifier ADDR --instances INST --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
-//!   flock-netlist selftest --instances INST --netlist FILE [--gpu] [--only CASE]
+//!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE]
+//!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!
-//! The verifier loads only its own public file (`verity_flock.netlist.stage(..., public_only=True)`: roots, row digests,
-//! outputs; no row) and the pinned netlist, from which it derives Δ, the regions and their values; it checks the frame-v3
+//! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, row digests,
+//! outputs; no row) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the frame-v3
 //! roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
 //! points (the regions' claims), `Link(y = 0, 0)` (nothing is prover-supplied), Flock's coins.
 
@@ -25,16 +25,16 @@ use flock_core::{
 };
 use flock_field::F128;
 use flock_live::{
-    netlist::*,
-    zk_hooks::{Hooks, NoMask},
+    circuit::*,
+    zk_hooks::{Hooks, NoMask, ProverSeed},
     *,
 };
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra, r1cs_hashes::blake3::Compression};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-const TABLE: &str = "nl";
-const SIGMA_TAG: &[u8] = b"verity/flock-netlist/sigma/v1";
+const TABLE: &str = "circuit";
+const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -50,7 +50,7 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 }
 
 fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-netlist-v1/fast100x2/rep{rep}").into_bytes()
+    format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
 }
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
@@ -61,7 +61,7 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "merkle_hash": "sha256", "leaf_scheme": c.leaf_scheme,
-           "hooks": NoMask::new().identity()})
+           "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 
 fn sigma(st: &Stmt, inst: &Instances) -> [u8; 32] {
@@ -73,12 +73,12 @@ fn sigma(st: &Stmt, inst: &Instances) -> [u8; 32] {
     h.finalize().into()
 }
 
-struct NlVerifier {
+struct CircuitVerifier {
     st: Arc<Stmt>,
     inst: Arc<Instances>,
 }
 
-impl StatementVerifier for NlVerifier {
+impl StatementVerifier for CircuitVerifier {
     fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
         domain(rep)
     }
@@ -152,7 +152,7 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
     use flock_live::coin_seed;
     let cs = &verdict["coin_seed"];
     let h32 = |k: &str| -> Result<[u8; 32], String> {
-        flock_live::netlist::hexb(cs[k].as_str().ok_or(format!("verdict: coin_seed.{k} missing"))?)?.try_into().map_err(|_| format!("coin_seed.{k} length"))
+        flock_live::circuit::hexb(cs[k].as_str().ok_or(format!("verdict: coin_seed.{k} missing"))?)?.try_into().map_err(|_| format!("coin_seed.{k} length"))
     };
     let (seed, nonce) = (h32("seed")?, h32("nonce")?);
     let c: Vec<u8> = commit.iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat()).collect();
@@ -171,7 +171,7 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
 }
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
-    Server::new(config(st, sigma(st, inst)), Box::new(NlVerifier { st: st.clone(), inst: inst.clone() }))
+    Server::new(config(st, sigma(st, inst)), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }))
 }
 
 type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
@@ -184,7 +184,7 @@ struct Wit {
     flip_z: Option<usize>,
     /// after the inputs converge: flip this bit of a unit's cut input (net, instance, column) — a tampered private cut word
     cut_flip: Option<(usize, usize, usize)>,
-    /// evaluate these netlists instead of the pinned ones (a swapped tail)
+    /// evaluate these circuits instead of the pinned ones (a swapped tail)
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
 }
 
@@ -239,19 +239,19 @@ fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: 
 
 #[cfg(feature = "gpu")]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    use flock_live::gpu_netlist::{NlSrc, prove_netlist};
-    let sched = flock_live::gpu_netlist::schedule(st.c.unit());
+    use flock_live::gpu_circuit::{CircuitSrc, prove_circuit};
+    let sched = flock_live::gpu_circuit::schedule(st.c.unit());
     let (cut_rows, late_rows): (Vec<usize>, Vec<usize>) = (sched.cut_rows.iter().map(|&r| r as usize).collect(), sched.late_rows.iter().map(|&r| r as usize).collect());
     let mut mid_fn;
     let src = match wt {
-        WitData::Host((z, a, b, _)) => NlSrc::Host { z, a, b },
-        WitData::Dev(c, i) => NlSrc::Device { comps: c, inputs: i },
+        WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
+        WitData::Dev(c, i) => CircuitSrc::Device { comps: c, inputs: i },
         WitData::DevCut(c, i, ui) => {
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
-            NlSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
+            CircuitSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
         }
     };
-    let (proof, commitment, ph, wph) = prove_netlist(st, src, &params(st.m, lig), &domain(rep), hook, ch);
+    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch);
     let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
                     "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
@@ -299,7 +299,7 @@ fn rechain(cs: &mut [Compression], at: usize, len: usize) {
     }
 }
 
-fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool) -> Wit {
+fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed) -> Wit {
     let mut rows = inst.rows.clone().expect("the prover's instance file has the rows");
     if plan.message_flip {
         rows[3] ^= 0x10;
@@ -346,7 +346,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool) -> Wit {
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
     let random = plan.mask_random;
-    let hooks = Arc::new(Mutex::new(NoMask::new()));
+    let hooks = Arc::new(Mutex::new(NoMask::new(seed)));
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
         let mut h = hooks.lock().unwrap();
         if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
@@ -359,10 +359,10 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool) -> Wit {
           nets: Arc::new(nets) }
 }
 
-/// The tail stages of the forged netlist (`--forged`: the same template with every positive tail constant x 4, staged by
-/// `verity_flock.netlist`), evaluated in place of the pinned stages: a swapped tail.
+/// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
+/// `verity_flock.circuit`), evaluated in place of the pinned stages: a swapped tail.
 fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet> {
-    let text = std::fs::read_to_string(arg("--forged", "net-forged.txt")).expect("--forged netlist");
+    let text = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).expect("--forged circuit");
     let f: &'static Composite = Box::leak(Box::new(Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))));
     st.c.nets.iter().enumerate().filter(|(_, n)| n.0.starts_with("stage")).filter_map(|(i, n)| {
         let g = &f.nets.iter().find(|m| m.0 == n.0)?.1;
@@ -370,17 +370,17 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
     }).collect()
 }
 
-fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
+fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
     let log = Arc::new(Mutex::new(Vec::new()));
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
     let mut commit: Vec<F128> = Vec::new();
-    let device = plan.gpu && !plan.mask_random && std::env::var("NL_HOST_WITNESS").is_err();
-    let w0 = wit(st, inst, plan, false);
+    let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
+    let w0 = wit(st, inst, plan, false, seed);
     let (wt0, tw0) = witness(st, &w0, device);
-    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true), device) } else { (wt0.clone(), 0.0) };
+    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed), device) } else { (wt0.clone(), 0.0) };
     let witness_s = tw0 + tw1;
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
@@ -449,12 +449,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
     (
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": "frame-v3/blake3-keyed",
-               "prover": if plan.gpu {"flock-cuda-netlist"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
+               "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
                "buckets": buckets, "wait_s": wait_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
-               "netlist_sha256": hex(&c.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
+               "circuit_sha256": hex(&c.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
                "step0_checked": step0.is_ok() && v["accepted"] == true}),
         proofs,
@@ -480,13 +480,15 @@ const CASES: &[(&str, bool, bool)] = &[
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("prover_file_differs_from_verifier_file", false, false),
-    ("relabelled_netlist", false, false),
-    ("relabelled_netlist_refused_at_load", false, false),
+    ("relabelled_circuit", false, false),
+    ("relabelled_circuit_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
-    ("tail_swapped_netlist_refused", false, false),
+    ("tail_swapped_circuit_refused", false, false),
     ("coin_seed_opening_forged", false, false),
+    ("coin_seed_record_replays", true, false),
+    ("prover_is_deterministic", true, false),
 ];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
@@ -494,7 +496,7 @@ fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.nb > 1);
     let cut = !st.c.wires.is_empty();
     (name == "parent_message_forged" && !multi_chunk) || (name == "chaining_value_forged" && !multi_block)
-        || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_netlist_refused"].contains(&name))
+        || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -518,7 +520,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 }
 
 fn load_composite(path: &str) -> Composite {
-    Composite::parse(&std::fs::read_to_string(path).expect("netlist"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
+    Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
 }
 
 /// The verifier's file with one public word changed and its frame-v3 roots recomputed: a self-consistent, false statement.
@@ -561,8 +563,8 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
 
 fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Value {
     let want = CASES.iter().find(|c| c.0 == name).expect("case");
-    if name == "relabelled_netlist_refused_at_load" {
-        let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
+    if name == "relabelled_circuit_refused_at_load" {
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let other = relabel(&text);
         let c2 = Composite::parse(&other, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
         let refused_pin = hex(&c2.sha256) != hex(&st.c.sha256);
@@ -570,36 +572,53 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
                       "pin_differs": refused_pin, "file_refused": refused_file});
     }
+    if name == "prover_is_deterministic" {
+        return determinism_case(st, inst, gpu);
+    }
+    if name == "coin_seed_record_replays" {
+        // step 0 replayed from the verifier's record alone; the same record with two rounds' coin-request indices swapped is refused
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        let (v, _) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+        let rec = s0.lock().unwrap().record_json();
+        let honest = flock_live::replay_coin_seed(&rec);
+        let mut bad = rec.clone();
+        let (a, b) = (bad["streams"][0]["rounds"][1]["g"].clone(), bad["streams"][1]["rounds"][1]["g"].clone());
+        bad["streams"][0]["rounds"][1]["g"] = b;
+        bad["streams"][1]["rounds"][1]["g"] = a;
+        let tampered = flock_live::replay_coin_seed(&bad);
+        return json!({"case": name, "expect": "the record replays; swapped indices do not", "accepted": v["accepted"], "requests": honest.as_ref().ok(),
+                      "pass": v["accepted"] == true && honest.is_ok() && tampered.is_err(), "why": honest.err().or(tampered.err())});
+    }
     if name == "coin_seed_opening_forged" {
         // an honest session, then its verdict with the revealed seed changed: the prover's step-0 check must refuse it
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         let log = Arc::new(Mutex::new(Vec::new()));
         let t: SharedTransport = shared(Logged { inner: InProc(s0.clone()), coins: log.clone() });
-        let (v, _) = session(st, inst, t, &Plan { gpu, ..Plan::default() });
+        let (v, _) = session(st, inst, t, &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
         let mut verdict = v["verdict"].clone();
         let seed = verdict["coin_seed"]["seed"].as_str().unwrap_or("").to_string();
         let forged = format!("{}{}", if seed.starts_with('0') { "1" } else { "0" }, &seed[1..]);
         verdict["coin_seed"]["seed"] = json!(forged);
         let c = &v["coin_seed"]["commitment"];
         let honest_ok = v["step0_checked"] == true;
-        let commit: Vec<F128> = flock_live::netlist::hexb(c.as_str().unwrap_or("")).map(|b| b.chunks(16).map(|x| F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..].try_into().unwrap()))).collect()).unwrap_or_default();
+        let commit: Vec<F128> = flock_live::circuit::hexb(c.as_str().unwrap_or("")).map(|b| b.chunks(16).map(|x| F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..].try_into().unwrap()))).collect()).unwrap_or_default();
         let hello = config(st, sigma(st, inst)).hello();
         let r = check_coin_seed(&commit, &hello, &verdict, &[]);
         return json!({"case": name, "expect": "the prover refuses a revealed seed that does not open the step-0 commitment", "honest_checked": honest_ok,
                       "pass": honest_ok && r.is_err(), "why": r.err()});
     }
     if name == "verifier_evaluated_tail_refused" {
-        let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let (cut_line, meta_tail) = with_tail(&text);
         let r1 = Composite::parse(&cut_line, Some(&arg("--tables", "tables"))).err();
         let r2 = Composite::parse(&meta_tail, Some(&arg("--tables", "tables"))).err();
-        return json!({"case": name, "expect": "refused at parse (a CUT line in a NET; a tail in META)", "pass": r1.is_some() && r2.is_some(),
+        return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
-        plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }).1);
+        plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os()).1);
     }
     let (pst, pinst, vinst) = match name {
         "output_claim_false" | "digest_claim_false" => {
@@ -613,22 +632,22 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             p.public_sha256[0] ^= 1;
             (st.clone(), Arc::new(p), inst.clone())
         }
-        "tail_swapped_netlist_refused" => {
-            let text = std::fs::read_to_string(arg("--forged", "net-forged.txt")).unwrap();
+        "tail_swapped_circuit_refused" => {
+            let text = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).unwrap();
             let c2 = Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
             let st2 = Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e)));
             (st2, inst.clone(), inst.clone())
         }
-        "relabelled_netlist" => {
-            let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
+        "relabelled_circuit" => {
+            let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
             let c2 = Composite::parse(&relabel(&text), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
             let st2 = Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e)));
             (st2, inst.clone(), inst.clone())
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(NlVerifier { st: st.clone(), inst: vinst.clone() }))));
-    let (v, _) = session(&pst, &pinst, shared(InProc(s.clone())), &plan);
+    let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
+    let (v, _) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap().record_json();
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
@@ -639,15 +658,15 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
            "witness_s": v["witness_s"]})
 }
 
-/// Two forms of the netlist that hand the verifier part of the computation: the unit NET with a `CUT` line (the flock-ir-frame
+/// Two forms of the circuit that hand the verifier part of the computation: the unit NET with a `CUT` line (the flock-ir-frame
 /// native tail: the 36-op RMSNorm row tail's shape, one F32Add over two cut words), and META with a `tail` program.
 fn with_tail(text: &str) -> (String, String) {
     let lines: Vec<&str> = text.split('\n').collect();
-    let at = lines.iter().position(|l| l.starts_with("NET unit ")).unwrap();
+    let at = lines.iter().position(|l| l.starts_with("CIRCUIT unit ")).unwrap();
     let n: usize = lines[at].split_whitespace().nth(2).unwrap().parse().unwrap();
     let cut = r#"CUT {"in":[],"out":[],"tail":[[2,"F32Add_v1",0,1]],"words":2}"#;
     let mut a: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
-    a[at] = format!("NET unit {}", n + 1);
+    a[at] = format!("CIRCUIT unit {}", n + 1);
     a.insert(at + 1 + n, cut.to_string());
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
     meta["tail"] = json!([[2, "F32Add_v1", 0, 1]]);
@@ -656,7 +675,33 @@ fn with_tail(text: &str) -> (String, String) {
     (a.join("\n"), b.join("\n"))
 }
 
-/// The same netlist with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
+/// The prover as a function of (statement, witness, prover seed, verifier coins): two sessions with the same injected prover seed
+/// and the same injected verifier seed give byte-identical proofs (both reps) and transcripts (every round's message and coins,
+/// the link exchange); a third, with another prover seed, is recorded (identical in M0, whose proofs use no prover randomness;
+/// M1's masks make it differ). Needs the test harness's `seed-injection` feature.
+#[cfg(feature = "seed-injection")]
+fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    let run = |pseed: [u8; 32]| {
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        s0.lock().unwrap().inject_coin_seed([9; 32], [8; 32]);
+        let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected(pseed));
+        let rec = s0.lock().unwrap().record_json();
+        let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha256"]});
+        (v["accepted"] == true, proofs, Sha256::digest(t.to_string().as_bytes()).to_vec())
+    };
+    let (a, b, c) = (run([1; 32]), run([1; 32]), run([2; 32]));
+    let same = a.1 == b.1 && a.2 == b.2;
+    json!({"case": "prover_is_deterministic", "expect": "equal seeds and coins give byte-identical proofs and transcripts", "gpu": gpu,
+           "accepted": a.0 && b.0, "proofs_equal": a.1 == b.1, "transcripts_equal": a.2 == b.2, "other_seed_equal_in_m0": a.1 == c.1 && a.2 == c.2,
+           "transcript_sha256": hex(&a.2), "pass": a.0 && b.0 && c.0 && same})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn determinism_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
+    json!({"case": "prover_is_deterministic", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
+/// The same circuit with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
     let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
@@ -679,8 +724,8 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"),
-                       "--forged", &arg("--forged", "net-forged.txt"), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
+                       "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -700,7 +745,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         println!("NEG\t{v}");
     }
     println!("SELFTEST\t{}", json!({"statement": STATEMENT, "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
-        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "netlist_sha256": hex(&st.c.sha256), "all_pass": all}));
+        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha256": hex(&st.c.sha256), "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -759,14 +804,22 @@ fn refuse(why: String) -> ! {
 
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
+    if cmd == "replay-coins" {
+        let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
+        match flock_live::replay_coin_seed(&rec) {
+            Ok(n) => println!("COINS\t{}", json!({"replayed": true, "requests": n})),
+            Err(e) => { println!("COINS\t{}", json!({"replayed": false, "why": e})); std::process::exit(1) }
+        }
+        return;
+    }
     let tb = Instant::now();
-    let c = load_composite(&arg("--netlist", "net.txt"));
+    let c = load_composite(&arg("--circuit", "circuit.txt"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
-        refuse("serve needs --pin (the pinned netlist's sha256)".into());
+        refuse("serve needs --pin (the pinned circuit's sha256)".into());
     }
     if !pin.is_empty() && hex(&c.sha256) != pin {
-        refuse(format!("the netlist's sha256 {} is not the pinned netlist {pin}", hex(&c.sha256)));
+        refuse(format!("the circuit's sha256 {} is not the pinned circuit {pin}", hex(&c.sha256)));
     }
     let inst = Arc::new(Instances::load(&arg("--instances", "inst.bin"), &c).unwrap_or_else(|e| refuse(e)));
     if cmd == "serve" && inst.rows.is_some() {
@@ -791,7 +844,7 @@ fn main() {
                 let mut tcp = TcpTransport::connect(&arg("--verifier", "127.0.0.1:7500")).unwrap();
                 let (rtt, rtt_min, rtt_n) = tcp.ping_rtt(30);
                 let t = shared(tcp);
-                let (mut v, proofs) = session(&st, &inst, t, &plan);
+                let (mut v, proofs) = session(&st, &inst, t, &plan, ProverSeed::from_os());
                 v["run"] = json!(run);
                 v["warm"] = json!(run < warm);
                 v["open_rtt_ms"] = json!(rtt);
@@ -806,6 +859,6 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-netlist serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }

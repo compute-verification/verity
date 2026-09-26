@@ -848,7 +848,7 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
 
 /// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it (lane flock-ir-lowering's
 /// `crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
-/// netlist at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
+/// circuit at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
 pub struct SlotStmt<'a> {
     pub digest: [u8; 32],
     pub k_log: usize,

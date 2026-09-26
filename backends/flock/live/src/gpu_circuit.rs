@@ -1,5 +1,5 @@
-//! Flock-CUDA for `verity/flock-netlist/v1` (feature `gpu`): `flock_cuda_prove_netlist` (backends/flock/cuda/prove_netlist.cuh,
-//! installed by backends/flock/cuda_netlist_patch.py). The honest witness is built on the device from the compressions'
+//! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (backends/flock/cuda/prove_circuit.cuh,
+//! installed by backends/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
 //! inputs and every unit's input words (both computed here from the rows, a few MB); a tampered witness is uploaded whole.
 
 use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock};
@@ -18,27 +18,27 @@ use crate::{
     chunk::comp,
     gpu::{ChunkParams, ProveParams, csc_from_rows, decode, link_cb, prove_params, sched, statics_for},
     ir_block::IrUnitNet,
-    netlist::{Kind, Stmt},
+    circuit::{Kind, Stmt},
 };
 
-const NL_MAX_TYPES: usize = 8;
-const NL_MAX_RANGES: usize = 32;
+const FC_MAX_TYPES: usize = 8;
+const FC_MAX_RANGES: usize = 32;
 
 #[repr(C)]
-struct NetlistParams {
+struct CircuitParams {
     c: ChunkParams,
     n_types: i32,
-    type_log: [i32; NL_MAX_TYPES],
-    t_a_col_ptr: [*const u32; NL_MAX_TYPES],
-    t_a_rows: [*const u32; NL_MAX_TYPES],
-    t_a_nnz: [u32; NL_MAX_TYPES],
-    t_b_col_ptr: [*const u32; NL_MAX_TYPES],
-    t_b_rows: [*const u32; NL_MAX_TYPES],
-    t_b_nnz: [u32; NL_MAX_TYPES],
+    type_log: [i32; FC_MAX_TYPES],
+    t_a_col_ptr: [*const u32; FC_MAX_TYPES],
+    t_a_rows: [*const u32; FC_MAX_TYPES],
+    t_a_nnz: [u32; FC_MAX_TYPES],
+    t_b_col_ptr: [*const u32; FC_MAX_TYPES],
+    t_b_rows: [*const u32; FC_MAX_TYPES],
+    t_b_nnz: [u32; FC_MAX_TYPES],
     n_ranges: i32,
-    r_type: [i32; NL_MAX_RANGES],
-    r_pos0: [i32; NL_MAX_RANGES],
-    r_count: [i32; NL_MAX_RANGES],
+    r_type: [i32; FC_MAX_RANGES],
+    r_pos0: [i32; FC_MAX_RANGES],
+    r_count: [i32; FC_MAX_RANGES],
     n_comp: i64,
     comp_per_block: i32,
     comp_slot: *const u32,
@@ -118,12 +118,12 @@ unsafe extern "C" fn mid_cb(ctx: *mut c_void, cut: *const u32, groups: i64, late
 
 
 unsafe extern "C" {
-    fn flock_cuda_prove_netlist(p: *const ProveParams, n: *const NetlistParams, out: *mut *mut u8, out_len: *mut usize) -> i32;
+    fn flock_cuda_prove_circuit(p: *const ProveParams, n: *const CircuitParams, out: *mut *mut u8, out_len: *mut usize) -> i32;
     fn flock_cuda_free(p: *mut u8);
 }
 
 /// Where a rep's witness comes from.
-pub enum NlSrc<'a> {
+pub enum CircuitSrc<'a> {
     /// The whole packed `(z, a, b)` from the host (any witness, a tampered one included).
     Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
     /// A cut template: the compressions and the units' leaf words as `Device`, the units in two passes around `mid`.
@@ -133,7 +133,7 @@ pub enum NlSrc<'a> {
     Device { comps: &'a [Compression], inputs: &'a [F128] },
 }
 
-/// The unit netlist's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
+/// The unit's expanded circuit's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
 /// deepest operand (itself, in an assertion row, excluded).
 pub struct UnitSched {
     /// levels [0, levels0) read no late input row; the rest do
@@ -250,7 +250,7 @@ fn types(st: &Stmt) -> &'static Types {
             };
             ranges.push((t as i32, r.pos0 as i32, r.count as i32));
         }
-        assert!(logs.len() <= NL_MAX_TYPES && ranges.len() <= NL_MAX_RANGES, "too many slot types or ranges for the FFI");
+        assert!(logs.len() <= FC_MAX_TYPES && ranges.len() <= FC_MAX_RANGES, "too many slot types or ranges for the FFI");
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
         let comp_slot: Vec<u32> = c.ranges.iter().filter(|r| r.kind == Kind::Comp).flat_map(|r| (0..r.count).map(|s| (r.slot(s) >> 14) as u32))
             .collect::<std::collections::BTreeSet<_>>().into_iter().collect();
@@ -269,9 +269,9 @@ pub fn device_inputs(st: &Stmt, rows: &[u8]) -> (Vec<Compression>, Vec<F128>) {
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
 /// ligerito, total; seconds), plus the device witness's own split (compressions, units).
 #[allow(clippy::too_many_arguments)]
-pub fn prove_netlist(
+pub fn prove_circuit(
     st: &Stmt,
-    src: NlSrc<'_>,
+    src: CircuitSrc<'_>,
     pcs: &PcsParams,
     domain: &[u8],
     mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
@@ -291,17 +291,17 @@ pub fn prove_netlist(
     let (mut cv, mut msg, mut ctr, mut blen, mut flags, mut n_comp, mut uin) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), 0usize, null());
     let mut src = src;
     let mut mctx: Option<MidCtx<'_>> = None;
-    if let NlSrc::DeviceCut { comps, inputs, mid } = src {
+    if let CircuitSrc::DeviceCut { comps, inputs, mid } = src {
         mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
-        src = NlSrc::Device { comps, inputs };
+        src = CircuitSrc::Device { comps, inputs };
     }
     match &src {
-        NlSrc::Host { z, a, b } => {
+        CircuitSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
         }
-        NlSrc::DeviceCut { .. } => unreachable!(),
-        NlSrc::Device { comps, inputs } => {
+        CircuitSrc::DeviceCut { .. } => unreachable!(),
+        CircuitSrc::Device { comps, inputs } => {
             assert_eq!(comps.len(), st.blocks() * t.comp_slot.len());
             assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
             cv = comps.iter().flat_map(|c| c.0).collect();
@@ -329,20 +329,20 @@ pub fn prove_netlist(
         host_b: hb,
         ..ChunkParams::none()
     };
-    let mut p = NetlistParams {
+    let mut p = CircuitParams {
         c,
         n_types: t.logs.len() as i32,
-        type_log: [0; NL_MAX_TYPES],
-        t_a_col_ptr: [null(); NL_MAX_TYPES],
-        t_a_rows: [null(); NL_MAX_TYPES],
-        t_a_nnz: [0; NL_MAX_TYPES],
-        t_b_col_ptr: [null(); NL_MAX_TYPES],
-        t_b_rows: [null(); NL_MAX_TYPES],
-        t_b_nnz: [0; NL_MAX_TYPES],
+        type_log: [0; FC_MAX_TYPES],
+        t_a_col_ptr: [null(); FC_MAX_TYPES],
+        t_a_rows: [null(); FC_MAX_TYPES],
+        t_a_nnz: [0; FC_MAX_TYPES],
+        t_b_col_ptr: [null(); FC_MAX_TYPES],
+        t_b_rows: [null(); FC_MAX_TYPES],
+        t_b_nnz: [0; FC_MAX_TYPES],
         n_ranges: t.ranges.len() as i32,
-        r_type: [0; NL_MAX_RANGES],
-        r_pos0: [0; NL_MAX_RANGES],
-        r_count: [0; NL_MAX_RANGES],
+        r_type: [0; FC_MAX_RANGES],
+        r_pos0: [0; FC_MAX_RANGES],
+        r_count: [0; FC_MAX_RANGES],
         n_comp: n_comp as i64,
         comp_per_block: t.comp_slot.len() as i32,
         comp_slot: t.comp_slot.as_ptr(),
@@ -363,7 +363,7 @@ pub fn prove_netlist(
         u_level_off: t.sched.level_off.as_ptr(),
         u_order: t.sched.order.as_ptr(),
         u_inputs: uin,
-        u_warps: std::env::var("NL_WARPS").ok().and_then(|x| x.parse().ok()).unwrap_or(if unit.useful > 65536 { 8 } else { 1 }),
+        u_warps: std::env::var("FC_WARPS").ok().and_then(|x| x.parse().ok()).unwrap_or(if unit.useful > 65536 { 8 } else { 1 }),
         witness_s: wphase.as_mut_ptr(),
         u_levels0: if mctx.is_some() { t.sched.levels0 as i32 } else { (t.sched.level_off.len() - 1) as i32 },
         u_n_late: if mctx.is_some() { t.sched.late_rows.len() as i32 } else { 0 },
@@ -389,9 +389,9 @@ pub fn prove_netlist(
     }
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
-    let rc = unsafe { flock_cuda_prove_netlist(&params, &p, &mut out, &mut out_len) };
+    let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
     drop(mctx);
-    assert_eq!(rc, 0, "CUDA netlist prover returned error {rc} at m={m}");
+    assert_eq!(rc, 0, "CUDA circuit prover returned error {rc} at m={m}");
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
     let (proof, commitment) = decode(&bytes, pcs);
