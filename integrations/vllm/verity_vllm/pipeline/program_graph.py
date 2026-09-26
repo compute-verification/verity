@@ -492,14 +492,19 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
     return g
 
 
-#: a varying group with more values than this is partitioned at WORD_SAMPLES values across its range, the rest interpolated
-WORD_EXACT = 48
+#: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
+#: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
+#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count on #101) -- else at WORD_SAMPLES values; the rest
+#: are interpolated
+WORD_EXACT = 320
 WORD_SAMPLES = 12
 
 
-def _word_values(vals: list[int]) -> list[int]:
+def _word_values(vals: list[int], block: int | None = None) -> list[int]:
     if len(vals) <= WORD_EXACT:
         return vals
+    if block:
+        return sorted(set(vals[:4]) | {vals[-1]} | {v for v in vals if v % block in (block - 1, 0, 1, 2, 3)})
     return sorted({vals[round(i * (len(vals) - 1) / (WORD_SAMPLES - 1))] for i in range(WORD_SAMPLES)})
 
 
@@ -527,13 +532,16 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             (a,) = x["varying"]
             calls = {int(v): k for v, k in x["varying_calls"].items()}
             vals = sorted(calls)
-            pts = _word_values(vals)
+            bn = x["statics"].get("BN") if a == "T" else None
+            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
             rules = {v: word_query.unit_rule(_specialization(x["definition"], dict(x["statics"], **{a: v})), X, W, extras, memo=memo) for v in pts}
             per = {f: [float(rules[v][f]) for v in pts] for f in ("units_per_call", "gates", "committed_interior_words")}
             total = {f: int(round(sum(_interp(pts, per[f], v) * calls[v] for v in vals))) for f in per}
             rep, lo = rules[pts[-1]], rules[pts[0]]
             entry = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
-                     "interpolated": len(pts) < len(vals)}
+                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
+                     if len(pts) < len(vals) else False,
+                     "partitioned_at": len(pts)}
         else:
             try:
                 rep = word_query.unit_rule(_specialization(x["definition"], x["statics"]), X, W, extras, memo=memo)
