@@ -1179,7 +1179,7 @@ def table1_rows(V: Views) -> list[tuple[str, list[str]]]:
 
 
 def _cell_name(c: ViewCell) -> str:
-    return f"{c.line}{' · ' + _SCHEME[c.scheme].label if c.scheme else ''} · {c.column}"
+    return f"{c.line}{' · ' + _SCHEME[c.scheme].label if c.scheme else ''} · {column_header(c.column)}"
 
 
 def overheads(c: ViewCell) -> tuple[float, float]:
@@ -1302,7 +1302,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
             desc = _family_text(fam) if fam else "not a Table 2 column"
-            rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
+            rows1.append([f"**{column_header(fid) if fid else fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
     out += [T._md_table(TABLE1_COLUMNS, rows1), "",
@@ -1327,7 +1327,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
     cols = V.columns()
     rows2 = [[g["label"], g["native"]["display"] + " " + note(g["native"]["note"]),
               *[g["cells"][col]["display"] + " " + note(g["cells"][col]["note"]) for col in cols]] for g in table2_grid(V)]
-    out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
+    out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *map(column_header, cols)), rows2), ""]
 
     out += ["## Table 3 — Where the overhead comes from (each stage × N, share of the cell)", "",
             "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + interaction + the six "
@@ -1563,13 +1563,19 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     return claims
 
 
-#: The families' names in the entities render (Daniel, 2026-09-25): a letter, then the family.  The markdown keeps its column
-#: headers (``FAMILIES``); each family entity carries its header as ``column``.
+#: The families' Glossary names (Daniel, 2026-09-25): a letter, then the family.  Column ids (``FAMILIES``) stay the cell keys
+#: the parity gate compares with the frozen tables; the markdown prints the names (:func:`column_header`).
 FAMILY_NAMES = {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "Flock": "C-Flock", "SP1": "D-SP1"}
 
 
 def _fam(fid: str | None) -> str | None:
     return FAMILY_NAMES.get(fid, fid) if fid else fid
+
+
+def column_header(col: str) -> str:
+    """A Table 2 column's printed header: its family's name (``SP1`` -> ``D-SP1``), then any authentication suffix."""
+    fid = next((f for f in FAMILY_NAMES if col == f or col.startswith(f + " ")), None)
+    return FAMILY_NAMES[fid] + col[len(fid):] if fid else col
 
 
 #: Composed backends with their own id (docs ontology, "Presentation rules"): route (a) renders in the A-GKR column, and its
@@ -1960,7 +1966,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                         "backend": backend_by_cfg.get(c.configuration or "") if c else None}
         table2_lines.append(line)
 
-    families = sorted(({**dataclasses.asdict(f), "id": _fam(f.id), "letter": _fam(f.id)[0], "column": f.id, "declared_classes": list(f.declared_classes),
+    families = sorted(({**dataclasses.asdict(f), "id": _fam(f.id), "letter": _fam(f.id)[0], "column": column_header(f.id), "declared_classes": list(f.declared_classes),
                         "display": _family_text(f)} for f in FAMILIES), key=lambda f: f["id"])
     columns = sorted((_fam(c) for c in V.columns()), key=lambda c: (c.split(" ")[0], c))
     def labels(ids: Sequence[str]) -> str:
@@ -1999,7 +2005,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "best_standard_hash": best_standard_hash(results),
         "tables": {
             "table1": {"columns": ["Backend", "Backend family", "Mode", "Guarantees", "Assumptions", "Unmapped"], "rows": table1},
-            "table2": {"columns": ["native", *columns], "column_labels": {_fam(c): c for c in V.columns()}, "lines": table2_lines,
+            "table2": {"columns": ["native", *columns], "column_labels": {_fam(c): column_header(c) for c in V.columns()}, "lines": table2_lines,
                        "footnotes": footnotes},
             "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
                        "rows": [{"result": result_key(c), "key": key_of(c.line, c.scheme, prover_of(c)), "backend_family": _fam(c.column),
