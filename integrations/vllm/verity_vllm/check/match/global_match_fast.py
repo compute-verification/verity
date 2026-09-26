@@ -35,6 +35,7 @@ from collections.abc import Callable
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.program_ops import Ops
+from verity_vllm.check.replay.fork import die_with_parent
 
 FLAG = "MATCH_IMPL"
 
@@ -622,6 +623,7 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
     gc.collect()
     gc.freeze()
     children = []
+    parent = os.getpid()
     try:
         for idxs in parts:
             if not idxs:
@@ -632,6 +634,7 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
             if pid == 0:   # worker
                 code = 0
                 try:
+                    die_with_parent(parent)
                     out = {j: fn(items[j]) for j in idxs}
                     with open(path, "wb") as f:
                         pickle.dump({"ok": True, "results": out, "stats": dict(stats)}, f, protocol=pickle.HIGHEST_PROTOCOL)
