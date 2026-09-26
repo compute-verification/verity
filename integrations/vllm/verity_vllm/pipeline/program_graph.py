@@ -363,55 +363,69 @@ def _specialization(fam: str, statics: dict[str, Any]):
     return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
 
 
-def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> dict[str, dict[str, Any]]:
-    """Every specialization the roots use, down to primitives, in the codec's v0 node form (`verity.ir.codec._encode_definition`),
-    each composite with its fold hints: {spec id: definition}.  A root the registry cannot bind is recorded with its error."""
-    from verity.ir.codec import _encode_definition, _spec_id
-    from verity.ir.defs import PrimitiveDefinition
+def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
+    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ir.codec.encode_program` of a one-node
+    Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
+    from verity.ir.codec import SCHEMA_V0, encode_program
+    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ir.program import Program
+    if isinstance(fn, PrimitiveDefinition):
+        return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
+    params, ret = fn.signature()
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
+    desc = encode_program(Program(shell), schema=SCHEMA_V0)
+    defs = desc["definitions"]
+    top = next(n["fn"] for n in defs[desc["root"]]["body"]["nodes"] if n["form"] != "primitive" and n["fn"] in defs
+               and defs[n["fn"]].get("form") == "composite")
+    keep, todo = {}, [top]
+    while todo:
+        k = todo.pop()
+        if k in keep or k not in defs:
+            continue
+        keep[k] = defs[k]
+        todo += [n["fn"] for n in (defs[k].get("body") or {}).get("nodes", [])]
+    return top, keep
+
+
+def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:
+    """Every specialization the roots use, down to primitives, in the codec's v0 node form, each composite with its fold hints, and
+    each root's specialization id (None when the registry cannot bind it; recorded as `unresolved` with the reason)."""
     out: dict[str, dict[str, Any]] = {}
-
-    def visit(fn) -> str:
-        fid = _spec_id(fn)
-        if fid in out:
-            return fid
-        out[fid] = {}
-        if not isinstance(fn, PrimitiveDefinition):
-            for n in fn.body.nodes:
-                visit(n.fn)
-        enc = _encode_definition(fn)
-        if enc.get("form") == "composite":
-            enc["fold"] = fold_hints(enc["body"]["nodes"])
-        out[fid] = enc
-        return fid
-
+    ids: list[str | None] = []
     for fam, st in roots:
         try:
-            visit(_specialization(fam, st))
+            fid, defs = _encoded(_specialization(fam, st))
         except (KeyError, TypeError, ValueError, AttributeError) as e:
-            out[f"{fam}{json.dumps(st, sort_keys=True, default=str)}"] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
-    return out
+            key = f"{fam}{json.dumps(st, sort_keys=True, default=str)}"
+            out[key] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
+            ids.append(None)
+            continue
+        for k, v in defs.items():
+            if k not in out:
+                if v.get("form") == "composite":
+                    v = dict(v, fold=fold_hints(v["body"]["nodes"]))
+                out[k] = v
+        ids.append(fid)
+    return out, ids
 
 
 def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
-    """`g` with a `definitions` section and each group's `definition` (its specialization id): a group of one spec names that spec;
-    a group whose statics vary (attention's T) names two representatives, the smallest and the largest value of each varying static."""
-    from verity.ir.codec import _spec_id
+    """`g` with a `definitions` section and each group's `definition_ids` (its specialization ids): a group of one spec names that
+    spec; a group whose statics vary (attention's T) names two representatives, the smallest and the largest value of each."""
     roots: list[tuple[str, dict[str, Any]]] = []
+    spans = []
     for x in g["groups"]:
         reps = [dict(x["statics"])]
         if x.get("varying"):
             reps = [dict(x["statics"], **{a: v[0] for a, v in x["varying"].items()}), dict(x["statics"], **{a: v[1] for a, v in x["varying"].items()})]
-        ids = []
-        for st in reps:
-            roots.append((x["definition"], st))
-            try:
-                ids.append(_spec_id(_specialization(x["definition"], st)))
-            except (KeyError, TypeError, ValueError, AttributeError):
-                ids.append(None)
-        x["definition_ids"] = ids
-    g["definitions"] = definitions(roots)
+        spans.append((x, len(roots), len(reps)))
+        roots += [(x["definition"], st) for st in reps]
+    defs, ids = definitions(roots)
+    for x, lo, n in spans:
+        x["definition_ids"] = ids[lo:lo + n]
+    g["definitions"] = defs
     g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
-                                                 "(verity.ir.codec._encode_definition) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "(verity.ir.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
                                                  "chained when each reads the one before; a varying group names its smallest and largest representative")
     return g
 
