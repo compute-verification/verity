@@ -51,12 +51,8 @@ def test_program_domain_and_epilogue_are_firsts() -> None:
     assert BF16_HOPPER.family != FIRST.family and BF16_HOPPER.family_digest != FIRST.family_digest
 
 
-def test_the_native_peak_is_the_h100_dense_bf16_rate_at_fp32_accumulate() -> None:
-    p = BF16_HOPPER.native_peak
-    assert "H100" in p.device and p.flop_per_second == 989.4e12 and p.accumulate == "fp32"
-    assert "bf16" in p.rate and "dense" in p.rate and "fp32 accumulate" in p.rate
-    assert "1978.9" in p.source and "sparsity" in p.source
-    assert p.seconds_per_vu(1536) == 2 * 1536 / 989.4e12
+def test_the_anchor_is_the_h100() -> None:
+    assert BF16_HOPPER.anchor_device == "NVIDIA H100 SXM5 80GB"
 
 
 def test_the_family_is_firsts_vocabulary_on_the_hopper_pipeline() -> None:

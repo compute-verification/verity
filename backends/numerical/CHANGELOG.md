@@ -1,5 +1,24 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: peaks, networks and instance sets come from the census (`census/`, data only)
+
+- The renderers read these values from `census/` at the repository root:
+  - the native peaks;
+  - the reference network (1 ms, 100 Gb/s) and the interaction drill-down's sensitivity profiles;
+  - K and B;
+  - the frozen instance sets.
+
+  `census/` is data only: five JSON files, each with a JSON Schema, and a README. Each entry has a stable id, such as
+  `a100-sxm4-80gb/bf16`, `dc-1ms-100gbps` or the subcircuit template `gemm_coordinate` with its bound subcircuits, and
+  its sources.
+- `verity_numerical.bench.census` reads the files directly (`$VERITY_CENSUS` overrides the location), and
+  `tests/bench/test_census_data.py` validates them against their schemas.
+- No value changed. Renders are byte-identical, and `--parity` is unchanged.
+- Core holds no peak. `verity.proofs.target.Target` names only its `anchor_device`; `native_peak` and `NativePeak`
+  are gone.
+- `contract.native_peak_of(target)` returns the census line for the target's anchor device and operand dtype.
+- `latency.pipeline` takes `native_s_per_vu` as a parameter.
+
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 
 - Route (a) (A-GKR's prime proof, the operands as keyed-BLAKE3 rows proved in Flock flock-128-r2 with live coins, joined by the
