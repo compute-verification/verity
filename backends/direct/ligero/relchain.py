@@ -106,7 +106,8 @@ def set_instances(rel: Relation, path, n: int, lo: int = 0):
     """VUs ``[lo, lo + n)`` of an input set (``verity_numerical.bench.input_sets``: a captured ``vllm-vu-set/v1`` or a generated
     ``input-set/v1`` of ``gemm-coordinate``) in the runner's shape ``(a, b, accs, y_final)``.  The operands are the set's
     ``x`` / ``w`` rows; the column-end accumulators are recorded from the relation's model (``group_sum_total_batch``, the
-    batch form of ``tc_dot``) and every final word must cast to the output word the set recorded, else the set is refused.
+    batch form of ``tc_dot``) and every final word must be what the set recorded (its stored word, or the FP32 accumulator
+    a ``u32`` port holds), else the set is refused.
     A set is never recycled: ``lo + n`` beyond its size is an error."""
     from verity.ml.kernels import group_sum_total_batch
     from verity_numerical.bench.input_sets import InputSet
@@ -124,10 +125,15 @@ def set_instances(rel: Relation, path, n: int, lo: int = 0):
     for c in range(rel.steps):
         acc, _ = group_sum_total_batch(rel.model, acc, x[:, k * c:k * c + k], w[:, k * c:k * c + k])
         accs[:, c] = acc
-    bad = [i for i in range(n) if rel.y_public(int(accs[i, -1])) != int(y[i])]
-    if bad:
-        raise ValueError(f"input set {s.name}: {len(bad)} of {n} instances' recorded outputs are not {rel.name}'s "
-                         f"(first: instance {lo + bad[0]}, model {rel.y_public(int(accs[bad[0], -1])):#x}, set {int(y[bad[0]]):#x})")
+    # the set records either the stored output word (BF16: the epilogue's word, rel.y_public) or the FP32 accumulator itself
+    # (a u32 port, the E4M3 sets: no epilogue) -- compared word for word in the set's own form
+    raw = s.manifest["ports"]["y"]["dtype"] == "u32"
+    model = accs[:, -1] if raw else np.asarray([rel.y_public(int(a)) for a in accs[:, -1]], dtype=np.int64)
+    bad = np.nonzero(model != y)[0]
+    if bad.size:
+        raise ValueError(f"input set {s.name}: {bad.size} of {n} instances' recorded outputs are not {rel.name}'s "
+                         f"(first: instance {lo + int(bad[0])}, model {int(model[bad[0]]):#x}, set {int(y[bad[0]]):#x}, "
+                         f"{'FP32 accumulator' if raw else 'stored word'})")
     return _with_rows([(x[i].tolist(), w[i].tolist(), accs[i].tolist(), int(accs[i, -1])) for i in range(n)], x, w)
 
 
