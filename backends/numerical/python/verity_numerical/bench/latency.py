@@ -46,6 +46,8 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity_numerical.bench import census
+
 __all__ = [
     "BANDWIDTHS_GBPS",
     "CATALOG",
@@ -68,7 +70,8 @@ BANDWIDTHS_GBPS: tuple[float, ...] = (10.0, 25.0, 100.0)
 GIB = 1 << 30
 GB = 1e9
 MB = 1e6
-NATIVE_S_PER_VU = 2 * 1536 / 312e12  # contract.NATIVE_REFERENCE at K = 1536 (9.85 ps)
+#: The default native seconds per VU (``pipeline``'s ``native_s_per_vu``): FIRST's census line at K = 1536 (9.85 ps).
+NATIVE_S_PER_VU = census.native_seconds_per_instance(census.HARDWARE["a100-sxm4-80gb/bf16"], 1536)
 
 
 @dataclass(frozen=True)
@@ -125,7 +128,8 @@ def n_saturate(d: Design, rtt_ms: float, bw_gbps: float | None = None) -> int:
     return max(1, math.ceil(e2e(d, rtt_ms, bw_gbps)["total"] / d.prove_s - 1e-12))
 
 
-def pipeline(d: Design, rtt_ms: float, bw_gbps: float | None = None, n_inflight: int | None = None) -> dict[str, Any]:
+def pipeline(d: Design, rtt_ms: float, bw_gbps: float | None = None, n_inflight: int | None = None,
+             native_s_per_vu: float = NATIVE_S_PER_VU) -> dict[str, Any]:
     """Throughput with ``n_inflight`` batches interleaved (default: the saturating N, capped by memory)."""
 
     t = e2e(d, rtt_ms, bw_gbps)["total"]
@@ -147,7 +151,7 @@ def pipeline(d: Design, rtt_ms: float, bw_gbps: float | None = None, n_inflight:
         "memory_fits": n * d.mem_per_batch_bytes <= d.mem_capacity_bytes if d.mem_per_batch_bytes > 0 else True,
         "batches_per_s": batches_per_s, "vu_per_s": vu_per_s,
         "seconds_per_vu": 1.0 / vu_per_s if vu_per_s else math.inf,
-        "overhead_vs_native_peak": (1.0 / vu_per_s) / NATIVE_S_PER_VU if vu_per_s else math.inf,
+        "overhead_vs_native_peak": (1.0 / vu_per_s) / native_s_per_vu if vu_per_s else math.inf,
         "prover_utilisation": min(1.0, n * d.prove_s / t),
         "binding": binding,
     }

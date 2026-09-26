@@ -44,8 +44,8 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.4e12                # the campaign's H100_BF16_PEAK
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12               # H100_FP8_PEAK
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.4e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
     assert m.spec_peak("NVIDIA L40S", "bf16") == (None, None)
@@ -134,3 +134,13 @@ def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
     doc = json.loads((tmp_path / "result.json").read_text())
     assert R.check_doc(tmp_path, doc, "r20260922-000000-cuda").valid and doc["validation"]["status"] == "passed"
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
+
+
+def test_spec_peaks_agree_with_every_census_line():
+    """The pod-side table stays standalone (nothing to read on a pod); it must quote census/hardware.json's peak for every line."""
+    m = _measure()
+    hardware = json.loads((REPO / "census" / "hardware.json").read_text(encoding="utf-8"))
+    smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3"}
+    dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
+    for h in hardware:
+        assert m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])[0] == h["flop_per_second"], h["id"]

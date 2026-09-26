@@ -128,7 +128,8 @@ security, Table 2 end-to-end N ÷ P per subcircuit, hardware class and
 commitment scheme over the full committed relation on a core-defined scheme,
 algebraic-hash configurations flagged and marked `(alg.)`, Table 3 with
 serving and proving overhead) render as a labelled preview with
-`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
+`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`
+(`--format entities`: the docs site's JSON, with ids from `verity.census` and `verity.claims`);
 `--parity` checks that the legacy-rules views select exactly today's cells
 (the switch's gate; `--take-snapshot --record` stores the check as a
 `tables-parity/v1` artifact). The steward renders it as a preview for a

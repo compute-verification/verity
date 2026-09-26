@@ -890,12 +890,15 @@ def test_a_render_entry_publishes_the_views_and_keeps_the_frozen_tables_as_a_dri
         return 0, f"# {cmd[2]}\n", ""
 
     lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
-    assert calls[1][-1] == "--published" and "--published" not in calls[2] + calls[3]
+    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views", "verity_numerical.bench.tables",
+                                     "verity_numerical.bench.drilldown"]
+    assert calls[1][-1] == calls[2][-1] == "--published" and "--published" not in calls[3] + calls[4]
+    assert calls[1][calls[1].index("--format") + 1] == "md" and calls[2][calls[2].index("--format") + 1] == "entities"
     r = tmp_path / "r"
     assert (r / "20260923T2100Z-tables.md").read_text() == "# verity_numerical.bench.views\n"
     assert (r / "20260923T2100Z-tables-frozen.md").read_text() == "# verity_numerical.bench.tables\n"
-    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.md"]
+    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.json",
+                                                   "20260923T2100Z-tables.md"]
     assert "21:00Z RENDER-FAILED typo@20:30Z: published = 'view': \"tables\" or \"views\"" in lines
     assert not (tmp_path / "typo").exists()
 

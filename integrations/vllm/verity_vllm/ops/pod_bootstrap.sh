@@ -170,12 +170,14 @@ check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", roo
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity_sampled_proofs.law", sampled))   # verity_vllm.commit.challenge imports it
 def sampled_without_pythonpath():
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    # drop only protocols/sampled_proofs from PYTHONPATH: the .pth must supply it; verity (its dependency) stays on the path
+    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(sampled)]
+    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}
     r = subprocess.run([sys.executable, "-c", "import verity_sampled_proofs.law as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
     if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(sampled) + os.sep):
-        raise RuntimeError(f"without PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
+        raise RuntimeError(f"without protocols/sampled_proofs on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
     return r.stdout.strip()
-check("sampled_proofs_via_pth", sampled_without_pythonpath)   # the venv's verity-sampled-proofs.pth, for scripts that reset PYTHONPATH
+check("sampled_proofs_via_pth", sampled_without_pythonpath)   # the venv's verity-sampled-proofs.pth, for scripts whose PYTHONPATH omits it
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:

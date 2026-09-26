@@ -35,6 +35,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  it with their own utilities; their readers stay out of core. Its tests live
  in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
+ - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
+ such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
+ entities render. Stdlib only; imports no other core module.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
@@ -42,6 +45,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. Applications (vLLM) compose protocols.
+- `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
+ `subcircuits.json`, `instance_sets.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
+ and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
+ read it with `verity_numerical.bench.census` (a few lines), the docs site reads the same files, and
+ core never reads it (`test_boundaries.py`): core takes such numbers as parameters.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test

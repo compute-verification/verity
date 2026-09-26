@@ -171,7 +171,7 @@ def test_normalise_sku_values() -> None:
     assert T.normalise_sku("NVIDIA A100") == "a100-unknown-unknown"
     assert T.normalise_sku("") is None and T.normalise_sku(None) is None and not T.same_sku(None, None)
     for target in TARGETS.values():
-        assert T.normalise_sku(target.native_peak.device) is not None and "unknown" not in T.normalise_sku(target.native_peak.device)
+        assert T.normalise_sku(contract.native_peak_of(target).device) is not None and "unknown" not in T.normalise_sku(contract.native_peak_of(target).device)
 
 
 # --- the frozen instance refs ------------------------------------------------------------------------------------------------------------
@@ -216,10 +216,10 @@ def test_valid_a100_bf16_agkr_populates_its_cell(store: LocalStore) -> None:
     c = cell(tab)
     assert c is not None and c.artifact == art and tab.rejected == [] and tab.not_candidates == {}
     r_proved = 2 * T.K * T.B / 4.0
-    assert c.r_proved == pytest.approx(r_proved) and c.overhead == pytest.approx(FIRST.native_peak.flop_per_second / r_proved)
+    assert c.r_proved == pytest.approx(r_proved) and c.overhead == pytest.approx(contract.native_peak_of(FIRST).flop_per_second / r_proved)
     assert c.proof_class == "NON_ZK_PROOF" and c.attempt == store.get_manifest(art).meta["run_id"]
     md = T.render_markdown(tab)
-    row = next(l for l in md.splitlines() if l.startswith(f"| {FIRST.native_peak.device} |"))
+    row = next(l for l in md.splitlines() if l.startswith(f"| {contract.native_peak_of(FIRST).device} |"))
     assert T.fmt_overhead(c.overhead) in row and row.count(T.EMPTY) == 2, row     # B-Ligero and SP1 empty
     assert f"[1] {art}" in md, "each populated cell is a numbered footnote carrying its artifact id"
     assert re.fullmatch(r"\d\.\de\d+×", T.fmt_overhead(c.overhead)) and T.fmt_overhead(2.6e7) == "2.6e7×"
@@ -231,7 +231,7 @@ def test_other_device_never_populates_the_row(store: LocalStore) -> None:
     tab = T.build(store)
     assert cell(tab) is None
     reasons = rejected(tab, art)
-    assert len(reasons) == 1 and reasons[0].startswith("same-SKU:") and "NVIDIA H100 80GB HBM3" in reasons[0] and FIRST.native_peak.device in reasons[0]
+    assert len(reasons) == 1 and reasons[0].startswith("same-SKU:") and "NVIDIA H100 80GB HBM3" in reasons[0] and contract.native_peak_of(FIRST).device in reasons[0]
 
 
 def test_diagnostic_class_is_rejected(store: LocalStore) -> None:
@@ -377,7 +377,7 @@ def test_hopper_rows_need_the_frozen_synthetic_set(store: LocalStore) -> None:
     # ... and, accepted by a non-producer, it populates the Hopper BF16 x B-Ligero cell
     art4 = put(store, result(target=BF16_HOPPER, gpu="NVIDIA H100 80GB HBM3", candidate="B-Ligero", proof_class="COMPLETE_ZK_BACKEND", t_total=1.6))
     c = cell(T.build(store), BF16_HOPPER, "B-Ligero")
-    assert c is not None and c.artifact == art4 and c.overhead == pytest.approx(BF16_HOPPER.native_peak.flop_per_second / (2 * T.K * T.B / 1.6))
+    assert c is not None and c.artifact == art4 and c.overhead == pytest.approx(contract.native_peak_of(BF16_HOPPER).flop_per_second / (2 * T.K * T.B / 1.6))
     # a target with no frozen set at all still says so (the predicate's own wording, on a target outside FROZEN_INSTANCES)
     unfrozen = dataclasses.replace(FP8_HOPPER_WGMMA, name="no-frozen-set/2026-09-23")
     assert T.frozen_instances(unfrozen) is None
@@ -608,12 +608,12 @@ def test_fp8_ada_row_and_hvzk_drilldown(store: LocalStore) -> None:
     put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=A100, proof_class="COMPLETE_ZK_BACKEND", t_total=1.0))   # wrong SKU
     tab = T.build(store)
     c = cell(tab, FP8_ADA_MMA, "B-Ligero")
-    assert c.artifact == zk and c.overhead == pytest.approx(FP8_ADA_MMA.native_peak.flop_per_second / (2 * T.K * T.B / 8.0))
+    assert c.artifact == zk and c.overhead == pytest.approx(contract.native_peak_of(FP8_ADA_MMA).flop_per_second / (2 * T.K * T.B / 8.0))
     assert [(d["candidate"], d["proof_class"], d["artifact"]) for d in tab.drilldown] == [("B-Ligero", "COMPLETE_HVZK_BACKEND", hv)]
     assert len(tab.rejected) == 2 and all(r["candidate"] == "B-Ligero" for r in tab.rejected)
     md = T.render_markdown(tab)
     assert "drill-down B-Ligero COMPLETE_HVZK_BACKEND" in md
-    row = next(l for l in md.splitlines() if l.startswith(f"| {FP8_ADA_MMA.native_peak.device} |"))
+    row = next(l for l in md.splitlines() if l.startswith(f"| {contract.native_peak_of(FP8_ADA_MMA).device} |"))
     assert "E4M3" in row and FP8_ADA_MMA.instruction in row
 
 
@@ -635,11 +635,11 @@ def test_component_benchmarks_are_not_candidates(store: LocalStore) -> None:
 
 
 def test_native_measured_column(store: LocalStore) -> None:
-    spec = FIRST.native_peak.flop_per_second
+    spec = contract.native_peak_of(FIRST).flop_per_second
     slow = native_peak(store, "NVIDIA A100-SXM4-80GB", "bf16", 0.90 * spec, spec)
     best = native_peak(store, "NVIDIA A100 SXM4 80GB", "bf16", 0.94 * spec, spec)
     native_peak(store, "NVIDIA A100-SXM4-80GB", "e4m3", 0.99 * spec, spec)     # another dtype: not this row
-    hspec = BF16_HOPPER.native_peak.flop_per_second
+    hspec = contract.native_peak_of(BF16_HOPPER).flop_per_second
     h100 = native_peak(store, "NVIDIA H100 80GB HBM3", "bf16", 0.95 * hspec, hspec)   # another device: the Hopper BF16 row's, not FIRST's
     tab = T.build(store)
     row = next(r for r in tab.rows if r["target"] == FIRST.name)
@@ -648,7 +648,7 @@ def test_native_measured_column(store: LocalStore) -> None:
     assert hopper["native_measured"]["artifact"] == h100 and hopper["native_measured"]["fraction_of_spec"] == pytest.approx(0.95)
     assert all(r["native_measured"] is None for r in tab.rows if r["target"] not in (FIRST.name, BF16_HOPPER.name))
     md = T.render_markdown(tab)
-    line = next(l for l in md.splitlines() if l.startswith(f"| {FIRST.native_peak.device} |"))
+    line = next(l for l in md.splitlines() if l.startswith(f"| {contract.native_peak_of(FIRST).device} |"))
     assert f"| {0.94 * spec / 1e12:.0f} T (0.94) [1] |" in line and T.UNMEASURED in md
     assert T.cell_artifacts(tab) == sorted([best, h100]) and slow not in T.cell_artifacts(tab)
 
@@ -658,7 +658,7 @@ def test_native_measured_block_scaled_format_names_its_operand_dtype(store: Loca
     peak of the ``e2m1`` NVFP4 target (``NATIVE_DTYPE_ALIASES``), and of no other row."""
     from verity.proofs.target import NVFP4_SM120
 
-    spec = NVFP4_SM120.native_peak.flop_per_second
+    spec = contract.native_peak_of(NVFP4_SM120).flop_per_second
     assert T.dtype_of(NVFP4_SM120) == "e2m1" and T.native_dtype({"dtype": "nvfp4"}) == "e2m1" and T.native_dtype({"dtype": "bf16"}) == "bf16"
     art = native_peak(store, "NVIDIA GeForce RTX 5090", "nvfp4", 1.12 * spec, spec)
     native_peak(store, "NVIDIA GeForce RTX 5090", "e4m3", 0.5 * spec, spec)     # another dtype: not this row
@@ -675,7 +675,7 @@ def test_native_measured_prefers_the_gemm_over_an_instruction_microbenchmark(sto
     the cell only when no GEMM exists, and its footnote says so."""
     from verity.proofs.target import NVFP4_SM120
 
-    spec = NVFP4_SM120.native_peak.flop_per_second
+    spec = contract.native_peak_of(NVFP4_SM120).flop_per_second
     method = ("instruction microbenchmark: mma.sync.aligned.kind::mxf4nvf4 issued back to back from 2720 warps; "
               "no memory traffic -- an upper bound on any GEMM built from it")     # mentions GEMMs without being one
     mma = store.put_artifact(T.NATIVE_PEAK_KIND, {"device": "NVIDIA GeForce RTX 5090", "dtype": "nvfp4", "accumulate": "fp32",
@@ -716,8 +716,8 @@ def test_table3_percentages_and_other(store: LocalStore) -> None:
     assert ph["total"] == 4.0 and ph["buckets"] == buckets and ph["joints"] == {} and ph["other"] == pytest.approx(0.4)
     assert sum(ph["buckets"].values()) + ph["other"] == pytest.approx(ph["total"]), "T_total = Σ buckets + other"
     md = T.render_markdown(tab)
-    row = next(l for l in md.splitlines() if l.startswith(f"| {FIRST.native_peak.device} / {FIRST.name} |"))
-    assert row == (f"| {FIRST.native_peak.device} / {FIRST.name} | A-GKR | 4 s | 1 s (25%) | 1.5 s (38%) | 0.6 s (15%) | 0.4 s (10%) | 0 s (0%) "
+    row = next(l for l in md.splitlines() if l.startswith(f"| {contract.native_peak_of(FIRST).device} / {FIRST.name} |"))
+    assert row == (f"| {contract.native_peak_of(FIRST).device} / {FIRST.name} | A-GKR | 4 s | 1 s (25%) | 1.5 s (38%) | 0.6 s (15%) | 0.4 s (10%) | 0 s (0%) "
                    f"| 0.1 s (2%) | 0.4 s (10%) |"), row
     assert T.TABLE3_COLUMNS == ("Device / target", "Candidate", "Total prover time", "Witness", "Encoding + commitment", "Arithmetic", "Lookup",
                                 "ZK additional", "Serialization", "Other")
@@ -732,7 +732,7 @@ def test_joint_stage_renders_once(store: LocalStore) -> None:
     assert ph["joints"] == {"t.joint.encoding_commitment+arithmetic": {"covers": ["encoding_commitment", "arithmetic"], "seconds": 2.0}}
     assert ph["buckets"]["encoding_commitment"] is None and ph["buckets"]["arithmetic"] is None and ph["other"] == pytest.approx(0.25)
     md = T.render_markdown(tab)
-    row = next(l for l in md.splitlines() if l.startswith(f"| {FIRST.native_peak.device} / {FIRST.name} |"))
+    row = next(l for l in md.splitlines() if l.startswith(f"| {contract.native_peak_of(FIRST).device} / {FIRST.name} |"))
     cells = [c.strip() for c in row.strip("|").split("|")]
     assert cells[3:] == ["1 s (25%)", "encoding_commitment+arithmetic: 2 s (50%)", T.JOINT_CONTINUATION, "0.5 s (12%)", "0 s (0%)", "0.25 s (6%)",
                          "0.25 s (6%)"], cells
@@ -763,7 +763,7 @@ def test_snapshot_freezes_exactly_the_cell_artifacts(store: LocalStore, capsys: 
     put(store, result(t_total=6.0))                                            # valid, not the best: not a member
     put(store, result(gpu=H100))                                               # rejected: not a member
     sp1 = put(store, result(candidate="SP1", proof_class="NON_ZK_PROOF", t_total=40.0))
-    spec = FIRST.native_peak.flop_per_second
+    spec = contract.native_peak_of(FIRST).flop_per_second
     peak = native_peak(store, "NVIDIA A100-SXM4-80GB", "bf16", 0.94 * spec, spec)
     assert T.main(["--root", str(store.root), "--snapshot"]) == 0
     out, err = capsys.readouterr()
@@ -858,7 +858,7 @@ def test_a_rememoried_board_of_the_same_name_is_not_a_cell(store: LocalStore) ->
     assert f"on {A100} (host AMD EPYC 7763 64-Core Processor x256); attempt" in T.render_markdown(tab)
     assert T.device_variant({"name": A100}, FIRST) is None                  # no memory reported: unchecked
     assert T.device_variant({"name": A100, "memory_total_bytes": 0}, FIRST) is None
-    assert FIRST.native_peak.memory_bytes == 80 * 2**30 and FP8_ADA_MMA.native_peak.memory_bytes == 24 * 2**30
+    assert contract.native_peak_of(FIRST).memory_bytes == 80 * 2**30 and contract.native_peak_of(FP8_ADA_MMA).memory_bytes == 24 * 2**30
     assert "device_variant" in T.CAPTION
 
 
