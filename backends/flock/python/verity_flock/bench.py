@@ -59,11 +59,20 @@ def _sampler():
 
 
 def _quota() -> int:
+    """The cgroup's CPU quota in whole cores (v2 ``cpu.max``, else v1 ``cpu.cfs_quota_us`` / ``cpu.cfs_period_us``), else the
+    host's CPU count."""
+    cg = Path("/sys/fs/cgroup")
     try:
-        q, p = Path("/sys/fs/cgroup/cpu.max").read_text().split()
-        if q != "max":
-            return max(1, int(int(q) / int(p)))
+        q, p = (cg / "cpu.max").read_text().split()
     except (OSError, ValueError):
+        try:
+            q, p = ((cg / "cpu" / f).read_text().strip() for f in ("cpu.cfs_quota_us", "cpu.cfs_period_us"))
+        except OSError:
+            q = p = "max"
+    try:
+        if q not in ("max", "-1"):
+            return max(1, int(int(q) / int(p)))
+    except ValueError:
         pass
     return os.cpu_count() or 1
 
