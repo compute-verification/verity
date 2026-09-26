@@ -13,6 +13,20 @@
     was read at.
 - The reader is `census.WORKLOADS`. A test keeps the file equal to the regression expectations (#101: 46,558 VUs, 18,400
   of them `Gemm_v1`).
+- Every VU family in the mix maps to a census subcircuit template. `subcircuits.json` adds 15 templates beside
+  `gemm-coordinate`, each with typed parameters, a one-line definition and its IR Definitions:
+  - `attention-head` (FA2 and FA3), `rope-head`, `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and
+    `gumbel-top-p-token-select`, the ids bench-spine's generator keys on (PR #47);
+  - `token-select-greedy`, `moe-router-topk`, `moe-expert-coordinate`, `moe-expert-coordinate-weighted`, `moe-sum`,
+    `scaled-mm-fp8-block-coordinate`, `bias-add`, `bf16-mul-scalar` and `embedding-row`.
+
+  Hopper `Gemm_v2` binds `gemm-coordinate` with semantics `sm90.wgmma.m64n8k16.bf16`.
+- Bound subcircuit ids validate as `<template>/<params>/<semantics>` for every template, not only GEMM (e.g.
+  `attention-head/d64-bn128/sm80-fa2-bf16`). `input_sets.json`'s subcircuit field uses the same pattern.
+- `hardware.json` adds the L40S 48GB lines from NVIDIA's datasheet, with dense figures: BF16 362.05 TFLOPS and FP8 733
+  TFLOPS. The datasheet does not state the accumulate width; its methodology records full-rate FP32 accumulate as an
+  assumption, to be confirmed by a measurement. The L40S workloads carry `l40s-48gb/bf16`. `tools/native_peak` quotes the
+  same figures.
 - Nothing renders workloads yet. The per-workload headline (backend overheads weighted by the mix) is a later change.
 
 ## 2026-09-26: file-verified interactive results pay their protocol's rounds

@@ -19,6 +19,9 @@
     },
     "accumulate": "fp32",
     "reference_batch": 4096,
+    "ir_definitions": [
+      "GemmCoordinate_v2{K, DOT} (verity.ml.gemm); vLLM Gemm_v1 (N per token row, Ampere mma) and Gemm_v2 (Hopper wgmma) are N of them"
+    ],
     "sources": [
       {
         "label": "verity.proofs.target (GemmCoordinate<K>); backends/AGENTS.md: the decision workload, B = 4096 K = 1536 (frozen 2026-09-22)"
@@ -90,5 +93,384 @@
         "legacy_target": "nvfp4-sm120-mma-draft/2026-09-22"
       }
     ]
+  },
+  {
+    "id": "attention-head",
+    "name": "AttentionHead<T,D>",
+    "description": "FlashAttention forward, one query head at the last position over its KV head (FA2 on sm80-class mma, FA3 on Hopper wgmma); the key count T varies per input",
+    "parameters": {
+      "D": {
+        "type": "integer",
+        "description": "head dimension"
+      },
+      "BN": {
+        "type": "integer",
+        "description": "the kernel's key block (kBlockN)"
+      },
+      "semantics": {
+        "type": "string",
+        "description": "sm80.fa2.bf16 (Attention_v3) or sm90.fa3.bf16 (Attention_v2)"
+      }
+    },
+    "accumulate": "fp32",
+    "reference_batch": null,
+    "ir_definitions": [
+      "AttentionHead_v3{T, D, BN} (FA2; vLLM Attention_v3 is NH of them)",
+      "AttentionHead_v2{T, D, BN, DOT, INV} (FA3; vLLM Attention_v2 is NH of them)"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: Attention_v3, Attention_v2 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "rope-head",
+    "name": "RoPEHead<D>",
+    "description": "NeoX rotary embedding of one head with its bf16 cos/sin row",
+    "parameters": {
+      "D": {
+        "type": "integer",
+        "description": "head dimension, even"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "RoPEHead_v1{D} (vLLM RoPE_v1 is NHEADS of them)"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: RoPE_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "rmsnorm-fused-cuda",
+    "name": "RMSNormFusedCuda_v2",
+    "description": "vLLM's fused residual-add + RMSNorm CUDA kernel on one row",
+    "parameters": {
+      "N": {
+        "type": "integer",
+        "description": "hidden size"
+      },
+      "EPS": {
+        "type": "number",
+        "description": "epsilon"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "RMSNormFusedCuda_v2{N, EPS}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: RMSNormFusedCuda_v2 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "rmsnorm-triton",
+    "name": "RMSNormTriton_v1",
+    "description": "RMSNorm on one row, the Triton kernel",
+    "parameters": {
+      "N": {
+        "type": "integer",
+        "description": "hidden size"
+      },
+      "EPS": {
+        "type": "number",
+        "description": "epsilon"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "RMSNormTriton_v1{N, EPS}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: RMSNormTriton_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "silu-mul",
+    "name": "SiluMul_v1",
+    "description": "SiLU(gate) * up on one row of the fused gate|up projection",
+    "parameters": {
+      "I": {
+        "type": "integer",
+        "description": "intermediate size"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "SiluMul_v1{I}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: SiluMul_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "gumbel-top-p-token-select",
+    "name": "GumbelTopPTokenSelect_v1",
+    "description": "temperature + top-p sampling of one token: Philox Gumbel noise, top-p mask, argmax over V logits",
+    "parameters": {
+      "V": {
+        "type": "integer",
+        "description": "vocabulary size"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "GumbelTopPTokenSelect_v1{V}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.sampling: GumbelTopPTokenSelect_v1 (integrations/vllm/verity_vllm/program/registry/sampling.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "token-select-greedy",
+    "name": "TokenSelect_v1",
+    "description": "greedy sampling (temperature 0): argmax over V bf16 logits, lowest index on ties",
+    "parameters": {
+      "V": {
+        "type": "integer",
+        "description": "vocabulary size"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "TokenSelect_v1{V}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: TokenSelect_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "moe-router-topk",
+    "name": "MoeRouterTopK_v1",
+    "description": "topk_softmax for one token row: f32 softmax over E expert logits with the kernel's reduction geometry, then TOPK lowest-index argmax rounds",
+    "parameters": {
+      "E": {
+        "type": "integer",
+        "description": "experts"
+      },
+      "TOPK": {
+        "type": "integer",
+        "description": "experts per token"
+      },
+      "VPT": {
+        "type": "integer",
+        "description": "values per thread"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "MoeRouterTopK_v1{E, TOPK, VPT}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.moe: MoeRouterTopK_v1 (integrations/vllm/verity_vllm/program/registry/moe.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "moe-expert-coordinate",
+    "name": "MoeExpertCoordinate<K>",
+    "description": "one output word of x @ W[e]^T for a (token, slot) pair (fused_moe_kernel, the w13 launch)",
+    "parameters": {
+      "E": {
+        "type": "integer",
+        "description": "experts"
+      },
+      "K": {
+        "type": "integer",
+        "description": "reduction length"
+      }
+    },
+    "accumulate": "fp32",
+    "reference_batch": null,
+    "ir_definitions": [
+      "MoeExpertCoordinate_v1{E, K} (vLLM MoeExpertGemm_v1 is N of them)"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.moe: MoeExpertGemm_v1 (integrations/vllm/verity_vllm/program/registry/moe.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "moe-expert-coordinate-weighted",
+    "name": "MoeExpertCoordinateW<K>",
+    "description": "one output word of g * (x @ W[e]^T) for a (token, slot) pair (fused_moe_kernel with MUL_ROUTED_WEIGHT, the w2 launch)",
+    "parameters": {
+      "E": {
+        "type": "integer",
+        "description": "experts"
+      },
+      "K": {
+        "type": "integer",
+        "description": "reduction length"
+      }
+    },
+    "accumulate": "fp32",
+    "reference_batch": null,
+    "ir_definitions": [
+      "MoeExpertCoordinateW_v1{E, K} (vLLM MoeExpertGemmW_v1 is N of them)"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.moe: MoeExpertGemmW_v1 (integrations/vllm/verity_vllm/program/registry/moe.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "moe-sum",
+    "name": "MoeSum_v1",
+    "description": "the sum of a token's TOPK weighted expert outputs over H hidden columns",
+    "parameters": {
+      "TOPK": {
+        "type": "integer",
+        "description": "experts per token"
+      },
+      "H": {
+        "type": "integer",
+        "description": "hidden size"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "MoeSum_v1{TOPK, H}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.moe: MoeSum_v1 (integrations/vllm/verity_vllm/program/registry/moe.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "scaled-mm-fp8-block-coordinate",
+    "name": "ScaledMmFp8BlockCoordinate<K,G>",
+    "description": "one bf16 output word of the blockwise FP8 CUTLASS GEMM: per K/G tile, G/32 Hopper e4m3 QGMMA steps from +0, scaled by the tile's two f32 scales and accumulated by FFMA",
+    "parameters": {
+      "K": {
+        "type": "integer",
+        "description": "reduction length"
+      },
+      "G": {
+        "type": "integer",
+        "description": "scale group size, a multiple of 32"
+      },
+      "semantics": {
+        "type": "string",
+        "description": "the tensor-core instruction (sm90.wgmma.m64n8k32.e4m3)"
+      }
+    },
+    "accumulate": "fp32",
+    "reference_batch": null,
+    "ir_definitions": [
+      "ScaledMmFp8BlockCoordinate_v1{K, G} (vLLM ScaledMmFp8Block_v1 is N of them)"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.fp8: ScaledMmFp8Block_v1 (integrations/vllm/verity_vllm/program/registry/fp8.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "bias-add",
+    "name": "BiasAdd_v1",
+    "description": "element-wise bf16 add of a bias row (one f32 add, RNE) over N columns",
+    "parameters": {
+      "N": {
+        "type": "integer",
+        "description": "columns"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "BiasAdd_v1{N}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: BiasAdd_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "bf16-mul-scalar",
+    "name": "Bf16MulScalarTensor_v1",
+    "description": "bf16 row times a 0-d bf16 tensor: f32(x) * f32(s), one RN multiply, stored as bf16 (Gemma's embedding normalizer)",
+    "parameters": {
+      "N": {
+        "type": "integer",
+        "description": "columns"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "Bf16MulScalarTensor_v1{N}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: Bf16MulScalarTensor_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
+  },
+  {
+    "id": "embedding-row",
+    "name": "Embedding_v1",
+    "description": "h[j] = table[tok][j]: one gathered table row (the spec treats it as a commitment opening, not arithmetic)",
+    "parameters": {
+      "V": {
+        "type": "integer",
+        "description": "vocabulary size"
+      },
+      "H": {
+        "type": "integer",
+        "description": "hidden size"
+      }
+    },
+    "accumulate": null,
+    "reference_batch": null,
+    "ir_definitions": [
+      "Embedding_v1{V, H}"
+    ],
+    "sources": [
+      {
+        "label": "verity_vllm.program.registry.b1: Embedding_v1 (integrations/vllm/verity_vllm/program/registry/b1.py)"
+      }
+    ],
+    "subcircuits": []
   }
 ]

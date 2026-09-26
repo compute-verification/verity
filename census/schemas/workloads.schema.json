@@ -154,7 +154,8 @@
               "additionalProperties": {
                 "type": [
                   "integer",
-                  "string"
+                  "string",
+                  "number"
                 ]
               }
             },

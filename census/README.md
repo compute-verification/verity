@@ -22,7 +22,9 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 - A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`. The dtype is named as
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
-  `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`: the semantics are the exact
+  `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`,
+  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms bench-spine's generator writes). The
+  params and semantics segments are lowercase and may contain `.`, `_` and `-`. For GEMM, the semantics are the exact
   instruction's architecture, operation and types without its shape, and the full instruction is its `semantics` parameter; `legacy_target` keeps the
   target name it was known by, and `fidelity_notes` record known gaps from what production runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
@@ -40,10 +42,17 @@ recorded results carry, so they are unchanged.
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
-counts the verification units per VU family and bound parameters (`replay_partition.strata`). This is the mix that
-weights backend overheads into a per-workload headline. A family maps to a census subcircuit template only when the
-census has one: `Gemm_v1` is `gemm-coordinate` (N coordinates per VU); every other family's template is `null` until it
-is added. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
+counts the verification units per VU family and bound parameters (`replay_partition.strata`), the complete counts of
+the run. This is the mix that weights backend overheads into a per-workload headline. Every family maps to a census
+subcircuit template bound from its IR Definition, with the number of the template's subcircuits one VU holds:
+- `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
+- `Attention_v3` and `Attention_v2` are NH `attention-head` (FA2 or FA3);
+- `RoPE_v1` is NHEADS `rope-head`;
+- the MoE expert GEMMs and the FP8 block-scaled GEMM are N coordinates;
+- the other families are one row each.
+
+The captured input sets (vllm-vu-export) sample these counts. They cross-check the mix and are linked to their workload
+once registered; they don't replace the counts. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
 that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing

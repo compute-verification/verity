@@ -26,7 +26,7 @@
       },
       "subcircuit": {
         "type": "string",
-        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/k[0-9]+/[a-z0-9]+(-[a-z0-9]+)*$",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",
         "description": "the bound subcircuit its inputs are of (census/subcircuits.json)"
       },
       "target": {
