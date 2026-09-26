@@ -489,6 +489,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("relabelled_circuit", false, false),
     ("relabelled_circuit_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
+    ("leaf_scheme_seeded_salts_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
     ("tail_swapped_circuit_refused", false, false),
@@ -620,6 +621,15 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let r2 = Composite::parse(&meta_tail, Some(&arg("--tables", "tables"))).err();
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
+    }
+    if name == "leaf_scheme_seeded_salts_refused" {
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
+        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        meta["leaf_scheme"]["target"]["salt_source"] = json!("chacha20 stream of the prover seed");
+        lines[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
+        let r = Composite::parse(&lines.join("\n"), Some(&arg("--tables", "tables"))).err();
+        return json!({"case": name, "expect": "refused at parse (not the pinned leaf-commitment scheme)", "pass": r.is_some(), "why": r});
     }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {

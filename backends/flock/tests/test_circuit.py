@@ -44,6 +44,12 @@ def test_rope_composes_private_by_default(tmp_path):
     assert hp["circuit_sha256"] == FC.digest(text)
 
 
+def test_leaf_scheme_reserves_what_hm96_needs():
+    hm96 = pytest.importorskip("verity.commitments.hm96")
+    t = FC.LEAF_SCHEME["target"]
+    assert (t["scheme"], t["salt_bytes_per_leaf"], t["key_bytes_per_proof"]) == (hm96.NAME, hm96.SALT_BYTES, hm96.KEY_BYTES)
+
+
 def test_attention_has_no_verifier_evaluated_form():
     class U:
         cut, tail_rets = [0], [0]

@@ -41,12 +41,15 @@ STATEMENT = "verity/flock-circuit"
 SCHEME = "frame-v3/blake3-keyed"
 INST_FORMAT = "flock-circuit-inputs"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity and swappable. All commitment hashing is SHA-256: ``flock-leaf/sha256-unsalted`` is Flock's own leaf (SHA-256 of the
-#: opened row) until ``flock-leaf/hm96-sha256`` lands: Halevi–Micali on SHA-256 (the O(k) variant, as B-Ligero's leaves and the
-#: serving leaves): s = SHA-256(row), x random, h universal with h(x) = s, leaf = (h, SHA-256(x)), x from the prover's seed. The
-#: reserved sizes are what it needs, so it drops in without changing the layout: x of 6k + 4 bits at k = 160 (121 bytes), a
-#: universal hash key of (|x| + 256) bits (160 bytes).
-LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0, "reserved_salt_bytes": 128, "reserved_key_bytes": 160}
+#: identity and swappable. ``flock-leaf/sha256-unsalted`` is Flock's own leaf, the SHA-256 digest of the opened column, until
+#: ``target`` lands: ``hm96-sha256/v1`` (``verity.commitments.hm96``, its PROTOCOL.md section 7) over that digest, leaf =
+#: ``tree_leaf(key, b || c)``, an opening = the column and its salt. Salts: 128 bytes per leaf straight from the OS generator,
+#: never expanded from a seed, so the hiding stays statistical; the level-0 salts are shared by both reps (one root). Key: one per
+#: proof, from the OS, bound in the hello before the root, so no pinned-key step is needed (hm96 section 3).
+LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
+               "target": {"scheme": "hm96-sha256/v1", "inner": "sha256 column digest", "salt_bytes_per_leaf": 128,
+                          "salt_source": "os generator, one draw per leaf", "key_bytes_per_proof": 160,
+                          "key": "per proof from the os generator, in the hello before the root"}}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14

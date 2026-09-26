@@ -34,7 +34,7 @@ use flock_field::F128;
 use flock_hash::blake3_compress;
 use flock_prover::r1cs_hashes::blake3 as b3;
 use rayon::prelude::*;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -49,9 +49,14 @@ pub const INST_FORMAT: &str = "flock-circuit-inputs";
 pub const STATEMENT: &str = "verity/flock-circuit";
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
-/// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees (swappable: the salted
-/// leaf and HM96 are separate ids, and the circuit reserves their room).
-pub const LEAF_SCHEME: &str = "flock-leaf/sha256-unsalted";
+/// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
+/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
+pub fn leaf_scheme() -> Value {
+    json!({"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
+           "target": {"scheme": "hm96-sha256/v1", "inner": "sha256 column digest", "salt_bytes_per_leaf": 128,
+                      "salt_source": "os generator, one draw per leaf", "key_bytes_per_proof": 160,
+                      "key": "per proof from the os generator, in the hello before the root"}})
+}
 const WORD: usize = 128;
 const SUB_LOG: usize = b3::K_LOG;
 const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
@@ -143,7 +148,7 @@ pub struct Composite {
     pub key: [u8; 32],
     pub dummy_digests: Vec<[u8; 32]>,
     pub dummy_outputs: Vec<u16>,
-    pub leaf_scheme: String,
+    pub leaf_scheme: Value,
     /// slots per VU of each circuit
     pub per_vu: Vec<usize>,
     pub wires: Vec<Wire>,
@@ -276,7 +281,7 @@ impl Composite {
             wires.push(Wire { dst: (n(0)?, u(1)?, u(2)?), src: (n(3)?, u(4)?, u(5)?) });
         }
         let c = Composite {
-            name, sha256, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"]["id"].as_str().unwrap_or("").into(), meta, nets, ranges, ports,
+            name, sha256, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
             out_words, g, upv, unit_net, leaves_in, leaves_out, key, dummy_digests, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
@@ -409,8 +414,8 @@ impl Composite {
         if self.dummy_digests.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
-        if self.leaf_scheme != LEAF_SCHEME {
-            return Err(format!("leaf-commitment scheme {:?} is not one this verifier implements", self.leaf_scheme));
+        if self.leaf_scheme != leaf_scheme() {
+            return Err(format!("leaf-commitment scheme {} is not the one this verifier implements", self.leaf_scheme));
         }
         Ok(())
     }

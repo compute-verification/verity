@@ -6,11 +6,14 @@
 //! depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on unseeded device state; the selftest
 //! `prover_is_deterministic` checks proofs and transcript byte for byte.
 //!
-//! [`ProverRng`] is the only source of the prover's masking randomness (masks, salts, Reed–Solomon padding): a fresh 256-bit
-//! seed per proof from the operating system (`getrandom`), expanded with ChaCha20 as independent streams addressed by
-//! `(purpose, index)` (`set_stream` / `set_word_pos`), so a device kernel can expand the same words later. It never reads the
-//! transcript, and the only constructor outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a
-//! production build.
+//! [`ProverRng`] is the source of the masks and the Reed–Solomon padding: a fresh 256-bit seed per proof from the operating
+//! system (`getrandom`), expanded with ChaCha20 as independent streams addressed by `(purpose, index)` (`set_stream` /
+//! `set_word_pos`), so a device kernel can expand the same words later. It never reads the transcript, and the only constructor
+//! outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a production build.
+//!
+//! The Merkle leaf salts of `hm96-sha256/v1` (and its per-proof key) are NOT drawn from it: each salt is 128 bytes straight from
+//! `getrandom`, so the leaves hide statistically rather than under ChaCha20 (hm96 PROTOCOL.md section 3). They will be a second
+//! explicit input beside the seed, injectable the same way, so the prover stays a function of its inputs. M0's leaf is unsalted.
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
@@ -25,8 +28,7 @@ use serde_json::{Value, json};
 
 /// ChaCha20 stream numbers, one per purpose.
 pub const STREAM_MASK: u64 = 1;
-pub const STREAM_SALT: u64 = 2;
-pub const STREAM_PAD: u64 = 3;
+pub const STREAM_PAD: u64 = 2;
 
 /// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
 /// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
@@ -67,13 +69,6 @@ impl ProverRng {
         self.rng.fill_bytes(out);
     }
 
-    /// A 32-byte leaf salt (leaf `i` of Merkle tree `tree`).
-    pub fn salt(&mut self, tree: u32, i: u64) -> [u8; 32] {
-        let mut s = [0u8; 32];
-        self.fill_at(STREAM_SALT, ((tree as u64) << 40) | i, &mut s);
-        s
-    }
-
     pub fn f128s(&mut self, purpose: u64, index: u64, n: usize) -> Vec<F128> {
         let mut b = vec![0u8; 16 * n];
         self.fill_at(purpose, index, &mut b);
@@ -106,7 +101,7 @@ pub trait Hooks {
     }
 }
 
-/// M0: every hook the identity; the prover randomness drawn per proof all the same (it salts the proof's Merkle leaves).
+/// M0: every hook the identity; the prover randomness drawn per proof all the same (the selftests fill the mask slot from it).
 pub struct NoMask {
     pub rng: ProverRng,
 }
@@ -126,16 +121,16 @@ mod tests {
     #[test]
     fn streams_are_addressed_and_independent() {
         let mut r = ProverRng::from_seed(ProverSeed::injected([7; 32]));
-        let a = r.salt(0, 5);
-        let _ = r.salt(1, 0);
-        assert_eq!(r.salt(0, 5), a, "a salt is a function of the seed and its address");
-        assert_ne!(r.salt(0, 6), a);
-        assert_ne!(r.salt(1, 5), a);
+        let a = r.f128s(STREAM_MASK, 5, 2);
+        let _ = r.f128s(STREAM_PAD, 0, 2);
+        assert_eq!(r.f128s(STREAM_MASK, 5, 2), a, "the words are a function of the seed and their address");
+        assert_ne!(r.f128s(STREAM_MASK, 6, 2), a);
+        assert_ne!(r.f128s(STREAM_PAD, 5, 2), a);
     }
 
     #[test]
     fn two_os_seeds_differ() {
-        assert_ne!(ProverRng::from_os().salt(0, 0), ProverRng::from_os().salt(0, 0));
+        assert_ne!(ProverRng::from_os().f128s(STREAM_MASK, 0, 2), ProverRng::from_os().f128s(STREAM_MASK, 0, 2));
     }
 
     /// TODO(M1): two proofs of the same statement share no mask bit: prove one statement twice with masking on, take every
