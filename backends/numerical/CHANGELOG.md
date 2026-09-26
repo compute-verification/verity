@@ -21,6 +21,10 @@
     `scaled-mm-fp8-block-coordinate`, `bias-add`, `bf16-mul-scalar` and `embedding-row`.
 
   Hopper `Gemm_v2` binds `gemm-coordinate` with semantics `sm90.wgmma.m64n8k16.bf16`.
+- Each template carries a `work_model`: ops per input as an expression over its bound parameters (`gemm-coordinate` 2K;
+  `rmsnorm-triton` 3N plus one rsqrt), with special functions apart. Its version, `work-model/v0`, is the one the
+  tables' N uses, and it cites its IR definition. A test evaluates every mix's parameters and checks GEMM against N
+  (3,072 ops at K = 1536).
 - Bound subcircuit ids validate as `<template>/<params>/<semantics>` for every template, not only GEMM (e.g.
   `attention-head/d64-bn128/sm80-fa2-bf16`). `input_sets.json`'s subcircuit field uses the same pattern.
 - `hardware.json` adds the L40S 48GB lines from NVIDIA's datasheet, with dense figures: BF16 362.05 TFLOPS and FP8 733

@@ -217,3 +217,47 @@ def test_every_templates_bound_ids_validate() -> None:
         assert not re.fullmatch(pat, bad), bad
     for t in census.SUBCIRCUIT_TEMPLATES.values():                       # a bound id names its own template
         assert all(s.id.startswith(t.id + "/") for s in t.subcircuits)
+
+
+def _ops(expr: str, env: dict) -> int:
+    """An integer work-model expression (+ - * // and parentheses over names) evaluated without eval."""
+    import ast
+    import operator
+
+    ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
+
+    def ev(n: ast.AST) -> int:
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.Constant) and isinstance(n.value, int):
+            return n.value
+        if isinstance(n, ast.Name):
+            return int(env[n.id])
+        raise ValueError(f"not a work-model expression: {ast.dump(n)}")
+
+    return ev(ast.parse(expr, mode="eval"))
+
+
+def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
+    from verity.proofs.target import FIRST
+    from verity_numerical.bench import views
+
+    version = views.WORK_MODEL.split(":")[0]
+    for t in census.SUBCIRCUIT_TEMPLATES.values():
+        wm = t.work_model
+        assert wm.version == version and wm.basis and wm.source
+        assert set(vars(wm.variables)) <= {"T"} and ("T" in wm.ops_per_input) == ("T" in vars(wm.variables))
+    gemm = census.SUBCIRCUIT_TEMPLATES["gemm-coordinate"].work_model
+    assert _ops(gemm.ops_per_input, {"K": 1536}) == views.native(FIRST)["ops_per_instance"] == 3072
+    for w in census.WORKLOADS.values():                                  # every bound parameter set in a mix evaluates
+        for e in w.template_mix:
+            wm = census.SUBCIRCUIT_TEMPLATES[e.subcircuit_template].work_model
+            env = {**{k: v for k, v in vars(e.subcircuit_parameters).items() if isinstance(v, int)}, "T": 1}
+            assert _ops(wm.ops_per_input, env) >= 0, (w.id, e.vu_family)
+            assert all(_ops(x, env) >= 0 for x in vars(wm.special_per_input).values())
+    rms = census.SUBCIRCUIT_TEMPLATES["rmsnorm-triton"].work_model
+    assert _ops(rms.ops_per_input, {"N": 2048}) == 3 * 2048 and vars(rms.special_per_input) == {"rsqrt": "1"}
+    fp8 = census.SUBCIRCUIT_TEMPLATES["scaled-mm-fp8-block-coordinate"].work_model
+    assert _ops(fp8.ops_per_input, {"K": 2560, "G": 128}) == 2 * 2560 + 3 * 20

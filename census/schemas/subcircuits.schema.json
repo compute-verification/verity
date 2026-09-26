@@ -15,6 +15,7 @@
       "reference_batch",
       "ir_definitions",
       "sources",
+      "work_model",
       "subcircuits"
     ],
     "properties": {
@@ -175,6 +176,55 @@
           "minLength": 1
         },
         "description": "the IR Definitions the template is bound to"
+      },
+      "work_model": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "ops_per_input",
+          "special_per_input",
+          "basis",
+          "variables",
+          "source"
+        ],
+        "description": "arithmetic operations per input (one subcircuit instance) as a function of the bound parameters; an FMA counts as 2 ops, special functions apart",
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^work-model/v[0-9]+$",
+            "description": "the work-model version the tables' native N uses"
+          },
+          "ops_per_input": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_ +*/()-]+$",
+            "description": "an integer expression over the parameters (and variables): + - * // and parentheses"
+          },
+          "special_per_input": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_ +*/()-]+$"
+            },
+            "description": "special-function calls per input (rsqrt, exp, log, ...)"
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "per-input quantities that are not parameters"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "the IR definition or kernel the count is read from"
+          }
+        }
       }
     }
   }

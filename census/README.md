@@ -39,6 +39,15 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 `instance-equiv/v1` artifact kind, a result's `instances` ref, and the `tier` field (`vu-k1536…`) are what fixtures and
 recorded results carry, so they are unchanged.
 
+## Work models
+
+Each subcircuit template carries a `work_model`: the arithmetic operations per input (one subcircuit instance) as an
+integer expression over its bound parameters, for example `2*K` for `gemm-coordinate` and `3*N` plus one rsqrt for
+`rmsnorm-triton`. An FMA counts as 2 ops, and special functions are counted apart in `special_per_input`. `variables`
+names per-input quantities that are not parameters, such as an attention head's key count `T`. `version` is the one the
+tables' native N uses (`work-model/v0`), `source` cites the IR definition or kernel, and `basis` says what is counted.
+Weighting a workload's template mix by these counts gives its real work. Counting verification units or inputs does not.
+
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
