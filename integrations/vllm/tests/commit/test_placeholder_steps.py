@@ -64,3 +64,19 @@ def test_a_run_without_a_run_root_verifies_no_opening():
     whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
     full = whole.commit_offline(stream())
     assert all(whole.verify(full, o) for o in whole.open([(0, 0), (2, 1)]))
+
+
+def test_a_run_without_a_run_root_verifies_no_range_opening():
+    """The range verifier (`verify_range`) is held to the same run root: a placeholder run's recomputed run root is None, never the empty
+    root, so no range of a real step passes -- with or without a forged run root, and not through the per-step roots cache either."""
+    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    run = c.commit_offline(stream())
+    ros = [c.open_range(0, 0, 3), c.open_range(2, 16, 20)]
+    assert all(ro is not None for ro in ros)
+    forged = dataclasses.replace(run, run_root=scheme.run_root(PROGRAM, c._geo_digest, [s.root or b"\0" * 32 for s in run.steps]))
+    for r in (run, forged):
+        cache: dict[int, bytes] = {}
+        assert not any(c.verify_range(r, ro) for ro in ros) and not any(c.verify_range(r, ro, cache) for ro in ros) and cache == {}
+    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    full = whole.commit_offline(stream())
+    assert all(whole.verify_range(full, whole.open_range(s, lo, hi)) for s, lo, hi in ((0, 0, 3), (2, 16, 20)))

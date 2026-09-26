@@ -47,9 +47,9 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
 class NativeRangeOpenings:
     """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
 
-    def _run_root(self, run: Any) -> bytes:
-        roots = [s.root for s in run.steps]                     # a placeholder step root (b"") has no run root to recompute
-        return scheme.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == 32 for r in roots) else b""
+    def _run_root(self, run: Any) -> bytes | None:
+        roots = [s.root for s in run.steps]                     # None over a placeholder step root (b""): equal to no run root, the empty one included
+        return scheme.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == 32 for r in roots) else None
 
     def leaf_span(self, step: int, m: Any, lo: int, hi: int) -> tuple[int, int, int]:
         """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""
@@ -176,7 +176,7 @@ class NativeRangeOpenings:
             return merkle == roots[ro.step]
         root = scheme.step_root(self.program_digest, self._ctx_digest(ro.step), self._geo_digest,
                              self.layout_digest(self._layouts[ro.step]), sc.n_leaves, merkle)
-        if root != sc.root or self._run_root(run) != run.run_root:
+        if root != sc.root or len(run.run_root) != 32 or self._run_root(run) != run.run_root:
             return False
         if roots is not None:
             roots[ro.step] = merkle
