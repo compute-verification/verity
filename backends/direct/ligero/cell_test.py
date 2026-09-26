@@ -38,7 +38,7 @@ def test_finish_assembles_the_interaction_record(tmp_path) -> None:
     doc = CL.finish(sweep, probe, loop, "10.0.0.3:7000", tmp_path, operator="lane-x")
     m = CL._meas(doc)
     assert m["net.rtt_ms"] == 0.9 and m["live.opening_rtt_ms_median"] == 3.5 and m["net.bandwidth_bps"] == 9e9
-    assert m["rounds.sequential_depth"] == 3 * 2 and m["rounds.per_proof_depth"] == 3            # ceil(7 proofs / 4 in flight) = 2 waves
+    assert m["rounds.sequential_depth"] == 3 * 2 and m["live.per_proof_depth"] == 3            # ceil(7 proofs / 4 in flight) = 2 waves
     assert m["net.bytes_out"] == 2e7 and m["net.bytes_in"] == 900 and m["live.transfer_tail_seconds"] == 0.25
     assert m["net.pass_wait_seconds"] == 0.04 and abs(m["net.wait_seconds"] - 0.29) < 1e-12 and abs(m["t.total_live"] - 2.29) < 1e-12
     assert abs(m["live.loopback_round_seconds"] - 0.012 / 14) < 1e-12

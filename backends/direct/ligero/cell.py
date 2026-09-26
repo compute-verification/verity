@@ -107,7 +107,7 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
     _set(doc, "net.rtt_ms", float(probe["ping_ms_median"]), "ms")
     if isinstance(probe.get("mbps_median"), (int, float)):
         _set(doc, "net.bandwidth_bps", float(probe["mbps_median"]) * 1e6, "b/s")
-    _set(doc, "rounds.per_proof_depth", PER_PROOF_DEPTH, "count")
+    _set(doc, "live.per_proof_depth", PER_PROOF_DEPTH, "count")
     _set(doc, "rounds.sequential_depth", rounds, "count")
     inter: dict[str, Any] = {
         "rtt_method": f"net.rtt_ms = {probe['ping_method']}, prover pod -> verifier pod, measured in this run before the sweep; the "
@@ -151,6 +151,9 @@ def _tree_sha(run: Path) -> str | None:
 def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict[str, Any]:
     doc = json.loads((prover_run / "result.json").read_text())
     doc["lane"] = doc["registered_by"] = lane
+    for x in doc.get("measurements") or []:
+        if x.get("name") == "rounds.per_proof_depth":         # not a contract name (finish wrote it before fadc2b9b)
+            x["name"] = "live.per_proof_depth"
     session_bytes(doc)
     # a tree shipped by `research run --source` has no git: its commit is the runner's record of what it shipped
     fp, sha = doc.get("workload_fingerprint") or {}, _tree_sha(prover_run)
