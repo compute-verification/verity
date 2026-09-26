@@ -230,13 +230,32 @@ fn fma_bits(a: u32, b: u32, c: u32) -> u32 {
     if y.is_nan() { 0x7FC0_0000 } else { u(y) }
 }
 
+fn is_nan(x: u32) -> bool {
+    x & 0x7FFF_FFFF > 0x7F80_0000
+}
+
+/// IEEE f32 with the IR's NaN choice (numpy float32 on x86-64, red-team-flock-2 IR5), fixed here rather than left to the
+/// compiler's operand order: a NaN operand comes back quieted, `b` when both are NaN if `second` (add, mul) else `a` (div); an
+/// invalid operation gives 0xFFC00000.
+fn ieee(a: u32, b: u32, second: bool, op: fn(f32, f32) -> f32) -> u32 {
+    match (is_nan(a), is_nan(b)) {
+        (true, true) => (if second { b } else { a }) | 0x40_0000,
+        (true, false) => a | 0x40_0000,
+        (false, true) => b | 0x40_0000,
+        _ => {
+            let y = op(f(a), f(b));
+            if y.is_nan() { 0xFFC0_0000 } else { u(y) }
+        }
+    }
+}
+
 /// One primitive on encodings.
 pub fn apply(p: Prim, a: &[u32], t: &Tables) -> u32 {
     match p {
         Prim::Const(v) => v,
-        Prim::F32Add => u(f(a[0]) + f(a[1])),
-        Prim::F32Mul => u(f(a[0]) * f(a[1])),
-        Prim::F32Div => u(f(a[0]) / f(a[1])),
+        Prim::F32Add => ieee(a[0], a[1], true, |x, y| x + y),
+        Prim::F32Mul => ieee(a[0], a[1], true, |x, y| x * y),
+        Prim::F32Div => ieee(a[0], a[1], false, |x, y| x / y),
         Prim::F32Fma => fma_bits(a[0], a[1], a[2]),
         Prim::RsqrtApprox => u(rsqrt_nonftz(f(a[0]), &t.rsq)),
         Prim::MufuSqrtFtz => mufu_sqrt(a[0], &t.sqrt),
@@ -263,5 +282,35 @@ pub fn eval(ops: &[Op], slots: &mut Vec<Option<u32>>, t: &Tables) {
             slots.resize(op.out + 1, None);
         }
         slots[op.out] = Some(apply(op.prim, &args, t));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `(a, b, add, mul, div)` from `verity_vllm.program.registry.prims` (numpy float32, x86-64): quiet and signaling NaNs of
+    /// both signs, one or both operands, and invalid operations.
+    const VECTORS: [(u32, u32, u32, u32, u32); 10] = [
+        (0x7FC0_0001, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7F80_0001, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7FC0_0001, 0x7F80_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7F80_0001, 0x7F80_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0xFFC0_0003, 0x7FC0_0004, 0x7FC0_0004, 0x7FC0_0004, 0xFFC0_0003),
+        (0x7FA0_0005, 0xFF90_0006, 0xFFD0_0006, 0xFFD0_0006, 0x7FE0_0005),
+        (0x7FC0_0001, 0x3F80_0000, 0x7FC0_0001, 0x7FC0_0001, 0x7FC0_0001),
+        (0x3F80_0000, 0x7F80_0009, 0x7FC0_0009, 0x7FC0_0009, 0x7FC0_0009),
+        (0x7F80_0000, 0xFF80_0000, 0xFFC0_0000, 0xFF80_0000, 0xFFC0_0000),
+        (0x0000_0000, 0x7F80_0000, 0x7F80_0000, 0xFFC0_0000, 0x0000_0000),
+    ];
+
+    #[test]
+    fn nan_payloads_are_the_irs() {
+        let t = Tables::default();
+        for (a, b, add, mul, div) in VECTORS {
+            assert_eq!(apply(Prim::F32Add, &[a, b], &t), add, "add {a:08x} {b:08x}");
+            assert_eq!(apply(Prim::F32Mul, &[a, b], &t), mul, "mul {a:08x} {b:08x}");
+            assert_eq!(apply(Prim::F32Div, &[a, b], &t), div, "div {a:08x} {b:08x}");
+        }
     }
 }

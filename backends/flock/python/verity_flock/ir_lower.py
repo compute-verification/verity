@@ -479,9 +479,10 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     return lay
 
 
-def netlist(lay: Layout, name: str) -> str:
+def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
-    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``."""
+    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``; a cut lowering ends with one line
+    ``CUT <canonical JSON>`` (:attr:`Lowering.cut`), so the netlist's sha256 pins its cut structure (red-team-flock-2 IR4)."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -490,6 +491,8 @@ def netlist(lay: Layout, name: str) -> str:
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
+    if cut is not None:
+        lines.append("CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines) + "\n"
 
 
@@ -561,8 +564,21 @@ class Lowering:
     layout: Layout
 
     @property
+    def cut(self) -> dict | None:
+        """The cut structure, ``None`` without a cut: ``words`` (the cut word count), ``tail`` (:func:`tail_program`, its
+        constants included) and, per instance-local unit, ``in`` / ``out`` its cut ports as ``[column, cut word]`` (input
+        columns; output columns from the first output word)."""
+        U, lay = self.units, self.layout
+        if not U.cut:
+            return None
+        return {"words": len(U.cut), "tail": tail_program(self),
+                "in": [[[lay.in_port_cols[j], p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.in_src],
+                "out": [[[lay.out_port_cols[j] - lay.out_col * WORD, p] for j, (k, p) in enumerate(src) if k == "cut"]
+                        for src in U.out_src]}
+
+    @property
     def text(self) -> str:
-        return netlist(self.layout, self.name)
+        return netlist(self.layout, self.name, self.cut)
 
     @property
     def sha256(self) -> str:
@@ -707,17 +723,15 @@ def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, 
 def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, path, meta: dict, cuts: np.ndarray | None = None) -> dict:
     """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the netlist's
     input columns), then every unit's output words (``out_words`` x 16 bytes, the netlist's output columns); units are
-    instance-major. Cut words (``cut_words``) are public words of the units that read or compute them."""
+    instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which ports hold them
+    and the tail that relates them are the netlist's (:attr:`Lowering.cut`), never the header's."""
     n = flat_in.shape[0]
     lay, U = low.layout, low.units
     if U.cut and cuts is None:
         raise ValueError(f"{low.name}: the units read or compute cut words; pass cuts=cut_words(...)")
-    cut = {"words": len(U.cut), "tail": tail_program(low) if U.cut else [],
-           "in": [[[lay.in_port_cols[j], p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.in_src],
-           "out": [[[lay.out_port_cols[j] - lay.out_col * WORD, p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.out_src]}
     head = {"format": INSTANCES_FORMAT, "unit": low.name, "unit_sha256": low.sha256, "instances": n, "units_per_instance": U.n,
             "units": n * U.n, "in_words": lay.in_words, "in_bits": lay.in_bits, "out_words": lay.out_words, "out_bits": lay.out_bits,
-            "cut_words": len(U.cut), "cut": cut, **meta}
+            "cut_words": len(U.cut), **meta}
     body = _pack_words(low.unit_inputs(flat_in, cuts), lay.in_bits, lay.in_words, lay.in_port_cols)
     body += _pack_words(low.unit_outputs(flat_out, cuts), lay.out_bits, lay.out_words, [c - lay.out_col * WORD for c in lay.out_port_cols])
     with open(path, "wb") as f:

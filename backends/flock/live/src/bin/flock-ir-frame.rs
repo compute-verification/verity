@@ -478,7 +478,7 @@ fn main() {
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
         refuse("the instance file was staged for another unit netlist".into());
     }
-    if inst.header["cut_words"].as_u64().unwrap_or(0) != 0 {
+    if inst.header["cut_words"].as_u64().unwrap_or(0) != 0 || net.cut.is_some() {
         refuse("verity/flock-ir-frame/v1 does not take cut words yet".into());
     }
     for c in [check_order(&net), check_blocks(&inst), check_roots(&inst)] {

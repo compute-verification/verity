@@ -28,7 +28,7 @@ use flock_core::{
     verifier::verify_ligerito_extra,
 };
 use flock_field::F128;
-use flock_live::{ir_block::*, ir_tail::{Tables, tables_needed}, *};
+use flock_live::{ir_block::*, ir_tail::{Op, Prim, Tables, tables_needed}, *};
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -294,13 +294,15 @@ const CASES: &[(&str, bool, bool)] = &[
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("cut_claimed_without_its_tail", false, false),
+    ("header_carries_its_own_cut", false, false),
     ("row_scalar_forged", false, false),
+    ("eps_forged_with_every_word_recomputed", false, false),
     ("aggregate_forged_with_its_scalar", false, true),
     ("prover_file_differs_from_verifier_file", false, false),
 ];
 
 /// Cases that only a cut template has.
-const CUT_ONLY: &[&str] = &["row_scalar_forged", "aggregate_forged_with_its_scalar"];
+const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_with_every_word_recomputed", "aggregate_forged_with_its_scalar"];
 
 /// A copy of the file with different bytes (its sha256 changes with them).
 fn altered(inst: &IrInstances, f: impl FnOnce(&mut IrInstances)) -> IrInstances {
@@ -348,6 +350,42 @@ fn forge_aggregate(inst: &IrInstances, cm: &CutMap, t: &Tables) -> IrInstances {
     })
 }
 
+/// Red-team-flock-2's IR4 file: the tail's eps (its smallest positive constant) x 100, every instance's cut words recomputed
+/// with that tail and every unit's outputs recomputed from its inputs. Returns the file and the forged tail.
+fn forge_eps(inst: &IrInstances, cm: &CutMap, net: &IrUnitNet, t: &Tables) -> (IrInstances, Vec<Op>) {
+    let mut tail = cm.tail.clone();
+    let eps = tail
+        .iter_mut()
+        .filter_map(|o| match &mut o.prim {
+            Prim::Const(v) if f32::from_bits(*v) > 0.0 => Some(v),
+            _ => None,
+        })
+        .min_by(|a, b| f32::from_bits(**a).total_cmp(&f32::from_bits(**b)))
+        .expect("a positive tail constant");
+    *eps = (f32::from_bits(*eps) * 100.0).to_bits();
+    let (upi, iw, ow) = (cm.unit_in.len(), inst.in_words, inst.out_words);
+    let x = altered(inst, |x| {
+        for i in 0..x.units / upi {
+            let mut slots: Vec<Option<u32>> = vec![None; cm.words];
+            for u in 0..upi {
+                for &(c, k) in &cm.unit_out[u] {
+                    slots[k] = Some(get_word32(x.output(i * upi + u), c));
+                }
+            }
+            flock_live::ir_tail::eval(&tail, &mut slots, t);
+            for u in 0..upi {
+                let g = i * upi + u;
+                for &(c, k) in &cm.unit_in[u] {
+                    set_word32(&mut x.inputs[g * iw..(g + 1) * iw], c, slots[k].unwrap());
+                }
+                let o = net.outputs(x.input(g));
+                x.outputs[g * ow..(g + 1) * ow].copy_from_slice(&o);
+            }
+        }
+    });
+    (x, tail)
+}
+
 fn plan_of(name: &str, gpu: bool) -> Plan {
     let h = Plan::honest(gpu);
     match name {
@@ -383,9 +421,22 @@ fn load_case(ctx: &Ctx, name: &str) -> Option<Value> {
         check_cuts(x, &cm, &ctx.tables)
     };
     let r = match name {
-        "cut_claimed_without_its_tail" => verdict(&altered(&ctx.inst, |x| {
-            if ctx.cm.words == 0 { x.header["cut_words"] = json!(1) } else { x.header["cut"]["tail"] = json!([]) }
+        "cut_claimed_without_its_tail" => verdict(&altered(&ctx.inst, |x| x.header["cut_words"] = json!(ctx.cm.words + 1))),
+        "header_carries_its_own_cut" => verdict(&altered(&ctx.inst, |x| {
+            let mut cut = net.cut.clone().unwrap_or(json!({"words": 0, "tail": [], "in": [], "out": []}));
+            if let Some(op) = cut["tail"].as_array_mut().and_then(|t| t.iter_mut().find(|o| o[1] == "Const")) {
+                op[2] = json!((f32::from_bits(op[2].as_u64().unwrap() as u32) * 100.0).to_bits());
+            }
+            x.header["cut"] = cut;
         })),
+        "eps_forged_with_every_word_recomputed" => {
+            let (f, tail) = forge_eps(&ctx.inst, &ctx.cm, &net, &ctx.tables);
+            let forged = CutMap { words: ctx.cm.words, tail, unit_in: ctx.cm.unit_in.clone(), unit_out: ctx.cm.unit_out.clone() };
+            let consistent = check_cuts(&f, &forged, &ctx.tables).is_ok() && (0..f.units).all(|g| net.outputs(f.input(g)) == f.output(g));
+            let r = verdict(&f);
+            return Some(json!({"case": name, "expect": "refused at load (the pinned tail)", "consistent_under_forged_tail": consistent,
+                               "refused": r.is_err(), "pass": consistent && r.is_err(), "why": r.err()}));
+        }
         "row_scalar_forged" => verdict(&altered(&ctx.inst, |x| {
             let (c, _) = ctx.cm.unit_in[0][0];
             let iw = x.in_words;

@@ -6,10 +6,10 @@ reads no input word: the verifier evaluates it with the IR evaluator and supplie
 
 A warp's input leaves (:func:`width`): 32 threads, each reading x and res at every position it owns (threads hold elements
 t, t + T, ... with T = min(N, 1024) threads); when T does not divide N the warps differ and there is no single unit. The
-unit netlist is pinned per N by :data:`PINS`."""
+unit netlist is pinned per (N, EPS) by :data:`PINS`, its cut structure (the tail with N and eps, the cut ports) included."""
 TEMPLATE = "rmsnorm-fused-cuda"
 UNIT = "rmsnorm-fused-cuda/bf16/warp"
-PINS = {2048: "9dbeb747d8a9f3afbabc4dbb990818adc45a1bbc363c298d04b9dbd1d3e1cf32"}
+PINS = {(2048, 1e-05): "47d753967af84bf44a05fbd6d8fdae2d8ff9c4fba6117043b9fd6f4c1a7f4111"}
 
 
 def width(n: int) -> int | None:
@@ -24,8 +24,8 @@ def definition(subcircuit):
 def lowering(subcircuit):
     from verity_flock import ir_lower
 
-    n = int(subcircuit.params["N"])
-    return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}", ir_lower.reduction_cut(width(n)))
+    n, eps = int(subcircuit.params["N"]), float(subcircuit.params["EPS"])
+    return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}/eps{eps:g}", ir_lower.reduction_cut(width(n)))
 
 
 def supports(subcircuit, scheme):

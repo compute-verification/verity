@@ -307,28 +307,46 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
     assert (good != bad).any(axis=1).all()
 
 
-def test_the_instance_file_accounts_for_every_cut_word(tmp_path):
-    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the header lists each unit's cut
-    ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined before."""
+def test_the_netlist_accounts_for_every_cut_word(tmp_path):
+    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the netlist's CUT line lists each
+    unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined
+    before. The instance header only counts them."""
     import json
 
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
     s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
     low = REG.module("rmsnorm-fused-cuda").lowering(sub)
     head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
-    cut = head["cut"]
-    assert head["cut_words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
+    cut = json.loads((tmp_path / "st" / "net.txt").read_text().splitlines()[-1].removeprefix("CUT "))
+    assert cut == low.cut and "cut" not in head
+    assert head["cut_words"] == cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
     produced = [k for unit in cut["out"] for _, k in unit]
-    tail_out = [op[0] for op in cut["tail"] if op[0] < head["cut_words"]]
-    assert sorted(produced + tail_out) == list(range(head["cut_words"]))
+    tail_out = [op[0] for op in cut["tail"] if op[0] < cut["words"]]
+    assert sorted(produced + tail_out) == list(range(cut["words"]))
     defined = set(produced)
     for op in cut["tail"]:
         assert set(op[2:] if op[1] != "Const" else []) <= defined
         defined.add(op[0])
     assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
     rs = InputSet.open(SLICES / "rope-head-d64")
-    rope = json.loads(IL.stage(REG.module("rope-head").lowering(rs.subcircuit), rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
-    assert rope["cut_words"] == 0 and rope["cut"]["tail"] == [] and all(not u for u in rope["cut"]["in"] + rope["cut"]["out"])
+    rope = REG.module("rope-head").lowering(rs.subcircuit)
+    head = json.loads(IL.stage(rope, rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
+    assert rope.cut is None and head["cut_words"] == 0 and not rope.text.splitlines()[-1].startswith("CUT")
+
+
+def test_the_pin_covers_the_cut_structure():
+    """IR4: N and eps are tail constants in the netlist's CUT line, so another eps is another pin; the unit rows do not
+    depend on eps (the row scalar is a cut word)."""
+    import struct
+
+    f32 = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
+    mod = REG.module("rmsnorm-fused-cuda")
+    a = mod.lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5))
+    b = mod.lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-3))
+    consts = {op[2] for op in a.cut["tail"] if op[1] == "Const"}
+    assert {f32(1e-5), f32(64.0)} <= consts and f32(1e-3) not in consts
+    assert a.sha256 != b.sha256 and a.text.splitlines()[1:-1] == b.text.splitlines()[1:-1]
+    assert a.text.splitlines()[-1] != b.text.splitlines()[-1]
 
 
 def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
@@ -353,7 +371,8 @@ def test_the_tables_are_the_pinned_ones(tmp_path):
 def test_rmsnorm_captured_slices_and_pins(template):
     s = InputSet.open(SLICES / RMS[template])
     assert _check_set(s) == 0
-    assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[2048]
+    p = s.subcircuit.params
+    assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[(int(p["N"]), float(p["EPS"]))]
 
 
 def test_units_refuse_components_of_different_shapes():

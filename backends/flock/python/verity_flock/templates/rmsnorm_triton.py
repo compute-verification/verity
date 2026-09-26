@@ -6,10 +6,11 @@ summed from +0, ``fma(rcp(N), sum, eps)``, ``MufuSqrtFtz`` and ``div.full``, rea
 with the IR evaluator and supplies the cut words as public unit words.
 
 A warp's input leaves (:func:`width`): 32 threads x 8 columns of x, when every lane of every 1024-column chunk holds
-columns (N a multiple of 1024); otherwise the warps differ. The unit netlist is pinned per N by :data:`PINS`."""
+columns (N a multiple of 1024); otherwise the warps differ. The unit netlist is pinned per (N, EPS) by :data:`PINS`, its cut
+structure (the tail with N and eps, the cut ports) included."""
 TEMPLATE = "rmsnorm-triton"
 UNIT = "rmsnorm-triton/bf16/warp"
-PINS = {2048: "b2155f3f16b2de341d5fc6c22359fe357a4de0f2883b18aec79e02ee7c4d9c66"}
+PINS = {(2048, 1e-05): "950d95a130531afb00951a53d64d45a4549933669029b155b237e21fc82014e6"}
 
 
 def width(n: int) -> int | None:
@@ -23,8 +24,8 @@ def definition(subcircuit):
 def lowering(subcircuit):
     from verity_flock import ir_lower
 
-    n = int(subcircuit.params["N"])
-    return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}", ir_lower.reduction_cut(width(n)))
+    n, eps = int(subcircuit.params["N"]), float(subcircuit.params["EPS"])
+    return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}/eps{eps:g}", ir_lower.reduction_cut(width(n)))
 
 
 def supports(subcircuit, scheme):
