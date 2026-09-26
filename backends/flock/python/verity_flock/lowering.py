@@ -61,6 +61,9 @@ PIPES = {
     "fp8-hopper": Pipe("fp8-hopper", U.E4M3, (32,), 14, -139, False, "HOPPER_E4M3_K32"),
     "bf16-ampere": Pipe("bf16-ampere", U.BF16, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16"),
     # BlockScaledAlignAdd (unit_fp4): groups, width and floor are the model's own (frac_bits 27, acc_window 36).
+    # sm90.wgmma.m64n8k16.bf16 (prims.HopperBF16WgmmaDot16 = tc_dot_total(HOPPER_BF16_WGMMA_K16), epilogue F2fpBf16): on the
+    # finite domain the same unit as bf16-hopper (16 : 26 : -133; F2fpBf16 differs from f32_to_bf16 only on NaN)
+    "bf16-hopper-wgmma": Pipe("bf16-hopper-wgmma", U.BF16, (16,), 26, -133, True, "HOPPER_BF16_WGMMA_K16"),
     "fp4-nvf4": Pipe("fp4-nvf4", U.E2M1, (16, 16, 16, 16), 27, -174, False, "BLACKWELL_SM120_NVF4"),
 }
 
@@ -70,6 +73,7 @@ PINS = {
     "fp8-ada": "e66262a08816f03d7dba67860c68b3993adc9ca83f1746d15137b0b757599a7c",
     "fp8-hopper": "904ca664958e3144ec0af862eea3d2124898289f23ea1d065271a27a00539654",
     "bf16-ampere": "e97ecb9ef01d653b550ebe947cc12d92c60392613457b560246b99aff4922247",
+    "bf16-hopper-wgmma": "12c3c8d382330788d4f85cc7132d4bf2d4a95886efe71fb4494cf9eaeaef74ad",
     "fp4-nvf4": "fb52a87c01a8a41f0e3460a10c62dcac4c346eb0c4540a86e0921845738666b3",
 }
 
@@ -184,6 +188,11 @@ def evaluate(relation: str, x: list[int], w: list[int], c: int, sx: list[int] = 
     return word(outs[0], 32), (word(outs[1], 16) if len(outs) > 1 else None), ok
 
 
+def _model(name: str):
+    from verity.ml.tc import models, total
+    return getattr(models, name) if hasattr(models, name) else getattr(total, name)
+
+
 def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     """Mismatches of the lowered unit against ``verity.ml.tc`` (``tc_dot`` and the ``f32_to_bf16`` epilogue) on ``n``
     random units over the whole finite domain: operand words uniform over every finite encoding (all exponent fields,
@@ -195,7 +204,7 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     from verity.ml.tc.silicon import tc_dot
 
     pipe = PIPES[relation]
-    model = getattr(models, pipe.model)
+    model = _model(pipe.model)
     rng = random.Random(seed)
     if pipe.fmt is U.E2M1:
         from .unit_fp4_check import cases
