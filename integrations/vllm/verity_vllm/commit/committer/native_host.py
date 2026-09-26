@@ -49,8 +49,8 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import scheme
-from verity_vllm.commit.native_ranges import NativeRangeOpenings
+from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline.spans import Spans
@@ -403,20 +403,6 @@ def value_family(name: str) -> str:
         if sub in name:
             return fam
     return "other"
-
-
-def _open_levels(levels: list, index: int) -> tuple:
-    """Sibling path from level tensors (int32 [n, 8], leaves first) -- the same rule as CMT-2's `hidden_gpu.gpu_open`, device or host."""
-    path: list = []
-    cursor = index
-    for lv in levels[:-1]:
-        n = int(lv.shape[0])
-        if cursor == n - 1 and n % 2 == 1:
-            path.append(None)
-        else:
-            path.append(lv[cursor ^ 1].cpu().numpy().astype("uint32").tobytes())
-        cursor //= 2
-    return tuple(path)
 
 
 class _Footprint:
@@ -829,14 +815,14 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings):
+class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -904,6 +890,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         if gpu_tree:
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
+        self._init_leaf_scheme(leaf_scheme, gpu_tree)
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
@@ -1082,7 +1069,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode()).digest()
+        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx()).digest()
 
     def _select_modules(self) -> list[tuple[str, Any]]:
         out = []
@@ -1300,6 +1287,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self._levels = {}
         self._layouts = {}
         self._streams = {}
+        self._salts = {}
         self._gpu_blocks = {}
         self._gpu_levels = {}
         self._padding = {}
@@ -1540,7 +1528,7 @@ class NativeHostCommitter(NativeRangeOpenings):
 
     def _levels_to_host(self, levels: list) -> list:
         """Move the tree levels (int32 [n, 8], leaves first) to ONE pinned host block with async copies on the current (side) stream; the
-        caller synchronises.  Same rows, same order, so `gpu_open` / `_open_levels` read them unchanged."""
+        caller synchronises.  Same rows, same order, so `gpu_open` / `open_levels` read them unchanged."""
         total = sum(int(lv.numel()) for lv in levels)
         flat = self.pool.take(total * 4).view(torch.int32)
         out, off = [], 0
@@ -1929,6 +1917,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         else:
             for m in job.metas:
                 leaves.extend(self._hash_leaves(m.host))
+        leaves = self._salted(job.step, leaves)
         levels = scheme.fold_levels(leaves) if leaves else [[scheme.empty_root()]]
         t1 = time.perf_counter()
         n = len(leaves)
@@ -1959,6 +1948,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         run id, geo digest and layout) before `finalize()`.  A step nobody executed becomes a step of its own; a MIXED step (index below the
         executed count; B > 1) is refolded from this committer's retained leaf digests + the padding leaves (`refold_step`) -- no active
         byte is re-read.  The padding must be laid out after the executed leaves (`leaf_base == n_leaves` of the step), else refused."""
+        self._refuse_padding(padding)
         for ps in padding:
             if ps.step in self._padding:
                 raise ValueError(f"padding step {ps.step} registered twice")
@@ -2054,7 +2044,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
-        persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(
+        persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
             len(json.dumps([[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
@@ -2066,7 +2056,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
-                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules),
+                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_extra(),
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
                                     "host_retained_bytes": sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
@@ -2414,7 +2404,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                                 raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
                             levels = values_from._gpu_levels[step]
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
-                    path = self._HG.gpu_open(levels, index) if self._HG is not None else _open_levels(levels, index)
+                    path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
                     out.append(Opening(step, index, value, tuple(path), ident))
                     continue
                 if ident.get("packed"):
@@ -2423,7 +2413,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                     m = metas[ident["tensor"]]
                     value = bytes(m.host[ident["byte_lo"]:ident["byte_hi"]])
                 path = scheme.path_in_levels(self._levels[step], index)
-                out.append(Opening(step, index, value, path, ident))
+                out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
         return out
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
@@ -2442,7 +2432,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         if len(opening.path) != len(shape) or any((p is None) == has for p, has in zip(opening.path, shape, strict=True)):
             return False
         ident = self.identity_of(opening.step, opening.index)
-        if ident != opening.identity:
+        if ident != opening.identity or (self.hiding is None and opening.salt):
             return False
         ps = self._padding_leaf(opening.step, opening.index)
         if ps is not None:                                           # [B9.1] a padding leaf: the padding block's leaf rule (NB = 1 header, or pos_leaf)
@@ -2461,9 +2451,10 @@ class NativeHostCommitter(NativeRangeOpenings):
                                                         self.GPU_TREE_SRC), opening.value)
             merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
         else:
-            if len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:
+            leaves = self._leaf_rule([scheme.pos_leaf(opening.value)], opening.salt)
+            if leaves is None or len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:
                 return False
-            merkle = scheme.fold_path(scheme.pos_leaf(opening.value), opening.index, list(opening.path))
+            merkle = scheme.fold_path(leaves[0], opening.index, list(opening.path))
         root = scheme.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
