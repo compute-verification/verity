@@ -1,4 +1,4 @@
-"""Re-price Candidates B and A with the MEASURED encoder (this lane) and the MEASURED SHA-256 Merkle rate (hash-gpu lane).
+"""Re-price B-Ligero and A-GKR with the MEASURED encoder (this lane) and the MEASURED SHA-256 Merkle rate (hash-gpu lane).
 
     uv run --frozen --package verity-numerical python backends/direct/encode/reprice.py \
         --bench backends/direct/encode/results_<run>.json --run-id <run> --out backends/numerical/reports/encode_gpu.json

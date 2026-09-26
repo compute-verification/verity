@@ -1,6 +1,6 @@
 """Measure the INT8 tensor-core GKR round (``sumcheck_int8``) on one GPU and write ``bench.json`` + the
 ``research/result/v0.1`` envelope; ``--reprice`` (laptop side, needs ``verity_numerical``) turns a fetched ``bench.json``
-into the re-priced Candidate A overheads.
+into the re-priced A-GKR overheads.
 
 Pod::
 
@@ -47,7 +47,7 @@ GPU_PEAKS = {
 PROFILE = "first-campaign-target/2026-09-21"
 DOMAIN = "finite"
 K_TARGET, B_TARGET, UNITS = 1536, 4096, 4096
-#: Candidate A's checker layers (``accounting.CHECKER_LAYER_WIDTHS_A``, output layer first): carried width per unit.
+#: A-GKR's checker layers (``accounting.CHECKER_LAYER_WIDTHS_A``, output layer first): carried width per unit.
 LAYER_WIDTHS = (137, 679, 673, 669, 647, 533)
 DL = 24  # limbs of a BabyBear^6 challenge element
 

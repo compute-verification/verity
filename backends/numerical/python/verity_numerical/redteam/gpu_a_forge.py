@@ -1,4 +1,4 @@
-"""Red-team 3: forged proofs against the GPU Candidate A *Python verifier* (``backends/gkr/gpu/prover.py::verify``).
+"""Red-team 3: forged proofs against the GPU A-GKR *Python verifier* (``backends/gkr/gpu/prover.py::verify``).
 
 Wave 2 (``vu_forge_a``) attacked the Rust prover/verifier over Goldilocks; the GPU port (BabyBear^6, Ligero
 ``k=4096, n=16384, t=192``, SHA-256 Merkle) has its own verifier, a Python port, which is what accepts the

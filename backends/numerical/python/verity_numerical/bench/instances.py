@@ -1,4 +1,4 @@
-"""``bench-instances/v1``: the frozen, hash-pinned instance set every Candidate A/B number at K=1536 is measured on.
+"""``bench-instances/v1``: the frozen, hash-pinned instance set every A-GKR/B-Ligero number at K=1536 is measured on.
 
 Why: two proof backends are compared at the decision workload (K=1536 ``GemmCoordinate`` dot products, B=4096).  Without
 a shared instance set each would benchmark on its own inputs -- the quiet non-comparability ``contract.py`` exists to

@@ -1,4 +1,4 @@
-# Candidate A on the GPU (torch + Triton, BabyBear^6)
+# A-GKR on the GPU (torch + Triton, BabyBear^6)
 
 Track A's prover (GKR + LogUp + Ligero, `../PROTOCOL.md`) for the **full K=1536 VU** (96 chained units + epilogue,
 PROTOCOL §12) at **batch 4096 on one H100**, in Python/torch with fused Triton kernels, over `F_{p^6}`,

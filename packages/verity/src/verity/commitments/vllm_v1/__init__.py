@@ -1,6 +1,6 @@
 """``vllm-v1``: the commitment framing vLLM's production Commit path emits, as a named scheme.
 
-A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by configured backends.  Spec: ``PROTOCOL.md``
+A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, written by
 ``python -m verity.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.

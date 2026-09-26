@@ -1,7 +1,7 @@
 # `vllm-v1`: vLLM's production commitment framing
 
 This is the commitment framing vLLM's production Commit path emits, as a named scheme. It is permanent and sits
-beside frame-v3 (`verity.commitments.frame_v3`). Configured backends select one or the other, and both are
+beside frame-v3 (`verity.commitments.frame_v3`). Backends select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes no
 production root.
 

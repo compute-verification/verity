@@ -1,4 +1,4 @@
-"""Candidate A's GKR c-round over BabyBear^6 as INT8 tensor-core matrix multiplications (TensorZKP's layout).
+"""A-GKR's GKR c-round over BabyBear^6 as INT8 tensor-core matrix multiplications (TensorZKP's layout).
 
 Layout (TensorZKP 4.1, adapted to signed INT8).  A field element is ``deg`` BabyBear coefficients, each 4 signed
 8-bit limbs in balanced form ``l_j in [-128, 128)`` with ``a = sum l_j 2^(8j)`` (``reference.limbs_balanced``): cuBLAS /

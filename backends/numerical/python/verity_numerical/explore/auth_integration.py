@@ -108,9 +108,9 @@ CITATIONS: dict[str, str] = {
 class Gadget:
     """One hash invocation (a SHA-256 compression or a Poseidon2 permutation) as proof work.
 
-    ``gates_a``: sumcheck elements Candidate A's GKR sweeps per invocation (one per constraint / trace cell);
+    ``gates_a``: sumcheck elements A-GKR's GKR sweeps per invocation (one per constraint / trace cell);
     ``lookups_a``: logUp leaves (fractional-GKR) per invocation; ``committed_a``: elements A commits (hints);
-    ``committed_b``: elements Candidate B's Ligero commits (trace cells, helper columns x extension degree for lookups);
+    ``committed_b``: elements B-Ligero's Ligero commits (trace cells, helper columns x extension degree for lookups);
     ``products_b``: quadratic rows' worth of products; ``payload_bytes``: message bytes absorbed per invocation;
     ``layers``: multiplicative depth per invocation (A's sequential depth if the chain is not hinted)."""
 

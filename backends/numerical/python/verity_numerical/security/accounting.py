@@ -546,7 +546,7 @@ def ligero_error(p: LigeroParams, F_code: Field, F_challenge: Field, analysis: s
     ``combination``: how the verifier's combination vectors for the *linear* and *quadratic* tests are drawn.
     ``"uniform"``: independent uniform coefficients (the paper).  ``"powers"``: ``1, rho, rho^2, ...`` of one uniform
     ``rho`` per test, so the challenge is one field element (needed when the constraint count is in the 10^8 range,
-    Candidate B); *derivation*: a failing constraint makes the combined polynomial in ``rho`` nonzero of degree below
+    B-Ligero); *derivation*: a failing constraint makes the combined polynomial in ``rho`` nonzero of degree below
     the count, so the field terms become ``(n_linear - 1)/|F|^sigma`` and ``(n_quadratic_rows - 1)/|F|^sigma``
     (Schwartz-Zippel).  The IRS test keeps uniform row coefficients in both modes (no geometric-sequence proximity
     statement is relied on).
@@ -696,7 +696,7 @@ CHECKER_LAYER_WIDTHS_A: tuple[int, ...] = tuple(L["width"] for L in CHECKER_SHAP
 #: Alias kept for the protocol documents: the tables every candidate's lookups go through (16-bit range table
 #: consolidated: a w-bit check is ``x 2^(16-w)`` in the one table) and the four fixed tables of the checker.
 CENSUS_TABLES = CHECKER_TABLES
-#: Candidate A's layered checker from the census (output layer first): the assertion layer, then one layer per
+#: A-GKR's layered checker from the census (output layer first): the assertion layer, then one layer per
 #: multiplicative depth with every lower-depth value carried (upper-bound widths; see ``census.layer_shape``).
 DEFAULT_LAYERS_A = CHECKER_LAYERS_A
 
@@ -1034,7 +1034,7 @@ def _fractional_chain(n_dim: int, c: int) -> tuple[int, int]:
 
 
 def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
-    """Protocol rounds and sequential challenge depth of Candidate A (PROTOCOL.md A 5.4).
+    """Protocol rounds and sequential challenge depth of A-GKR (PROTOCOL.md A 5.4).
 
     depth = [1 step-0 message] + 1 (all z_T, beta_T, z_0 in one message)
             + max(longest fractional-GKR chain, checker chain)  [+ the query-holding checker layers + gamma when
@@ -1073,7 +1073,7 @@ def rounds_and_depth_a(p: CandidateA) -> dict[str, int]:
 
 
 def rounds_and_depth_b(p: CandidateB) -> dict[str, int]:
-    """Candidate B: ``helper_columns``: z (one message for all tables), r, Q -> depth 3; ``gkr``: 1 + longest
+    """B-Ligero: ``helper_columns``: z (one message for all tables), r, Q -> depth 3; ``gkr``: 1 + longest
     fractional chain + 2.  Plus one for step 0."""
     p.depth.validate()
     step0 = 1 if p.coin_commitment_bits is not None else 0
