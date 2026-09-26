@@ -1404,3 +1404,10 @@ def test_the_entities_render_has_the_non_gemm_statements(store: LocalStore) -> N
     sub = next(x for x in ent["subcircuits"] if x["id"] == NONGEMM[0])
     assert sub["subcircuit_template"] == "rope-head" and sub["parameters"] == {"D": 64} and sub["native"]["value"] == pytest.approx(3.35e12 / 384)
     assert stmt in ent["axes"]["statements"] and next(x for x in ent["statements"] if x["id"] == stmt)["display"].startswith("RoPEHead<64>")
+
+
+def test_a_non_gemm_cell_without_a_profile_takes_its_prover_gpus_hardware_line() -> None:
+    meta = {"workload_fingerprint": {"profile": None, "subcircuit": "rope-head/d64/neox-bf16",
+                                     "hardware": {"gpu": {"name": "NVIDIA H100 80GB HBM3"}}}}
+    assert V.hardware_target(meta, "rope-head/d64/neox-bf16") is BF16_HOPPER
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is None

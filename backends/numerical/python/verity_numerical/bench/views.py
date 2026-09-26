@@ -840,6 +840,24 @@ def stamped_subcircuit(meta: Mapping[str, Any]) -> str | None:
     return next((v for v in (cell.get("subcircuit"), fp.get("subcircuit"), meta.get("subcircuit")) if isinstance(v, str)), None)
 
 
+#: GPU model tokens a prover's ``hardware.gpu.name`` carries, as the census hardware lines' devices spell them.
+_GPU_TOKENS = ("A100", "H100", "4090", "5090")
+_DTYPE_TOKENS = (("bf16", "bf16"), ("e4m3", "e4m3"), ("fp8", "e4m3"), ("e2m1", "e2m1"), ("nvf4", "e2m1"))
+
+
+def hardware_target(meta: Mapping[str, Any], sub: str | None) -> Target | None:
+    """The target whose census hardware line a non-GEMM result ran on, for a result with no ``profile`` (a ``bench.cell`` cell
+    on a subcircuit of another template): the prover GPU's model and the subcircuit's datatype pick the line; ``None`` when none
+    matches (then the result is rejected X as before)."""
+    gpu = str(_get(meta.get("workload_fingerprint") or {}, "hardware", "gpu", "name") or "")
+    token = next((t for t in _GPU_TOKENS if t in gpu), None)
+    tail = (sub or "").rsplit("/", 1)[-1].lower()
+    dtype = next((d for key, d in _DTYPE_TOKENS if key in tail), None)
+    if token is None or dtype is None:
+        return None
+    return next((t for t in TARGETS.values() if token in contract.native_peak_of(t).device and contract.native_peak_of(t).dtype == dtype), None)
+
+
 def is_gemm(sub: str | None) -> bool:
     return sub is None or sub.split("/")[0] == "gemm-coordinate"
 
@@ -1161,6 +1179,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             V.below_bar.append(below_bar_entry(art, meta, labels, cand))
             continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
+        if target is None and not rules.legacy and not is_gemm(stamped_subcircuit(meta)):
+            target = hardware_target(meta, stamped_subcircuit(meta))
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
