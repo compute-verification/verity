@@ -14,7 +14,7 @@ ROLE=${ROLE:-prover}; REL=${REL:-bf16-hopper}; POINTS=${POINTS:-1024 2048 4096 8
 G=1; [ $ROLE = verifier ] && G=0
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
 MODE=build GPU=$G bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
-source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgroup/cpu/cpu.cfs_quota_us && read -r PER_ < /sys/fs/cgroup/cpu/cpu.cfs_period_us; } 2>/dev/null || { Q=max; PER_=100000; }; [ "$Q" = -1 ] && Q=max
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); TH=${THREADS:-$TH}; export RAYON_NUM_THREADS=$TH
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1

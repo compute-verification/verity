@@ -10,7 +10,7 @@ nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null; free -g | head -2
 read -r Q PER < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgroup/cpu/cpu.cfs_quota_us && read -r PER < /sys/fs/cgroup/cpu/cpu.cfs_period_us; } 2>/dev/null || { Q=max; PER=100000; }; [ "$Q" = -1 ] && Q=max
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER ))); export RAYON_NUM_THREADS=$TH
 export DEBIAN_FRONTEND=noninteractive
-C13=/usr/local/cuda-13.3
+C13=${CUDA_TK:-/usr/local/cuda-13.3}   # CUDA_TK: a toolkit the pod's driver runs natively (no compat), e.g. an R550 host's 12.4
 if [ "$GPU" = 1 ]; then
   nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv | tee $O/gpu.txt
   if [ ! -x $C13/bin/nvcc ]; then
@@ -20,7 +20,7 @@ if [ "$GPU" = 1 ]; then
     apt-get install -y -qq --no-install-recommends cuda-nvcc-13-3 cuda-cudart-dev-13-3 >/dev/null || exit 1
   fi
   DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
-  [ "$DRV" -lt 580 ] && { apt-get install -y -qq cuda-compat-13-3 >/dev/null || exit 1; }
+  [ "$DRV" -lt 580 ] && [ -z "${CUDA_TK:-}" ] && { apt-get install -y -qq cuda-compat-13-3 >/dev/null || exit 1; }
   export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
 command -v cargo >/dev/null || [ -x $HOME/.cargo/bin/cargo ] || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
