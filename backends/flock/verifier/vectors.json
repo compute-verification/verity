@@ -3981,7 +3981,11 @@
     "agreement": "art:78ef0a6e (27/27)",
     "lean_statement": "verity/flock-circuit",
     "forgeries": "art:d306dfbd",
-    "forgeries_note": "PR #83 selftest forgeries that run a session (prover-side witness attacks, false output/digest statements with their own pub.bin, coins before y, fast profile, cross-session replay, relabelled circuit, prover file differs): 14 on RoPE, expectations in each case.json; Lean and upstream agree 14/14"
+    "forgeries_note": "PR #83 selftest forgeries that run a session (prover-side witness attacks, false output/digest statements with their own pub.bin, coins before y, fast profile, cross-session replay, relabelled circuit, prover file differs): 14 on RoPE, expectations in each case.json; Lean and upstream agree 14/14",
+    "fuzz": {
+     "tool": "fuzz.py art:bd9f7efb/honest OUT --seed S --n N",
+     "first_run": "art:c2662de3 (seed 20260926, 40 cases: 43/43 with D3 declared)"
+    }
    },
    {
     "tags": "verity/flock-circuit (final format)",
@@ -4016,7 +4020,8 @@
      "tool": "redigest.py art:77cb4bec/honest OUT",
      "cases": "as in the first set"
     },
-    "lean_statement": "verity/flock-circuit"
+    "lean_statement": "verity/flock-circuit",
+    "agreement": "art:f1fd1488 (27/27)"
    }
   ]
  }

@@ -139,7 +139,7 @@ def retain(src, out):
     write("retained-not-digest", bad2)
     manifest = [{"name": "retained", "rep": 0, "expect": ACCEPT},
                 {"name": "retained-edited", "rep": 0, "expect": reject("R2: round 0: the proof's messages are not the bytes")},
-                {"name": "retained-not-digest", "rep": 0, "expect": reject("S12:")}]
+                {"name": "retained-not-digest", "rep": 0, "expect": {**reject("S12:"), "upstream_accepted": True}}]
     (out / "retained.json").write_text(json.dumps(manifest, indent=1))
     print(f"retained-bytes sessions in {out}")
 

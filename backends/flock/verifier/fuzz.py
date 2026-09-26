@@ -10,7 +10,8 @@ Each case edits one thing, chosen with `random.Random(seed)`:
 - `coin`: one bit of one recorded coin. No expectation: an unused coin (§19 A1) or the high bits of a query coin (§13.5)
   leave the verdict unchanged; the verifiers must only agree.
 - `digest`: one bit of one round's `msg_sha256`. Must be rejected (R2).
-- `record`: one bit of `root_b`, `sigma`, a link point, `y`, `link_sha256` or a proof's `sha256`. Must be rejected.
+- `record`: one bit of `root_b`, `sigma`, a link point, `y`, `link_sha256` or a proof's `sha256`. Must be rejected (a
+  flipped `sigma` by the Lean verifier only: intended divergence D3, upstream accepts).
 
 Writes OUT_DIR/<case>/ and OUT_DIR/fuzz.json (the `--expect` form of `agree.py`; cases without an expectation are omitted).
 Use a fixed seed per CI run and a rolling seed for nightly runs.
@@ -81,6 +82,8 @@ def main():
                 l["root_b"][table] = flip_hex(l["root_b"][table], rng.randrange(256))
             elif which == "sigma":
                 l["sigma"] = flip_hex(l["sigma"], rng.randrange(256))
+                # D3: upstream's from_record ignores link.sigma (Σ is bound by Hello and root_F); S4 rejects it here
+                want = {"accepted": False, "why": "S4", "upstream_accepted": True}
             elif which == "point":
                 p = rng.randrange(len(l["points"]))
                 j = rng.randrange(len(l["points"][p]))

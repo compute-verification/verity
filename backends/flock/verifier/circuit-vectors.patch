@@ -1,6 +1,6 @@
 --- a/backends/flock/live/src/bin/flock-circuit.rs
 +++ b/backends/flock/live/src/bin/flock-circuit.rs
-@@ -844,6 +844,280 @@
+@@ -844,6 +844,284 @@
      }
  }
  
@@ -184,7 +184,7 @@
 +    std::fs::write(out, b).unwrap();
 +}
 +
-+/// `forgeries --instances INST --pub PUB --circuit FILE [--forged FILE] [--tables DIR] --out DIR`: every selftest forgery that
++/// `forgeries --instances INST --pub PUB --circuit FILE [--forged FILE] [--tables DIR] [--only CASE] --out DIR`: every selftest forgery that
 +/// runs a session, recorded by the verifier's own server as a replayable set: `session.json`, `circuit.rep0.bin`,
 +/// `circuit.rep1.bin`, `case.json` (the expected verdict, the live and offline verdicts, which public file the verifier
 +/// read), and `pub.bin` when it is not the stage's.
@@ -195,8 +195,9 @@
 +        "key_substituted", "flags_forged", "coins_before_y", "fast_profile_proofs", "cross_session_replay_both_reps",
 +        "prover_file_differs_from_verifier_file", "relabelled_circuit", "private_cut_word_tampered", "tail_swapped",
 +        "tail_swapped_circuit_refused"];
++    let only = arg("--only", "");
 +    for &(name, accept, _) in CASES {
-+        if !GENERIC.contains(&name) || skipped(st, name) {
++        if !GENERIC.contains(&name) || skipped(st, name) || (!only.is_empty() && only != name) {
 +            continue;
 +        }
 +        let d = out.join(name);
@@ -235,9 +236,12 @@
 +            _ => (st.clone(), inst.clone(), pubi.clone()),
 +        };
 +        let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
-+        let (v, _) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
++        // a prover the server refuses may panic mid-session; the server's record up to the refusal is still the forgery
++        let t = shared(InProc(s.clone()));
++        let v = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| session(&pst, &pinst, t, &plan, ProverSeed::from_os()).0))
++            .unwrap_or_else(|_| json!({"accepted": false, "why": "the prover stopped (the server refused the session)"}));
 +        let (rec, proofs) = {
-+            let s = s.lock().unwrap();
++            let s = s.lock().unwrap_or_else(|e| e.into_inner());
 +            (s.record_json(), (0..2).map(|r| s.proofs().get(&(TABLE.to_string(), r)).cloned().unwrap_or_default()).collect::<Vec<_>>())
 +        };
 +        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
@@ -281,7 +285,7 @@
  fn refuse(why: String) -> ! {
      println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
      std::process::exit(2);
-@@ -851,6 +1125,9 @@
+@@ -851,6 +1129,9 @@
  
  fn main() {
      let cmd = std::env::args().nth(1).unwrap_or_default();
@@ -291,7 +295,7 @@
      if cmd == "replay-coins" {
          let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
          match flock_live::replay_coin_seed(&rec) {
-@@ -906,6 +1183,23 @@
+@@ -906,6 +1187,23 @@
                  println!("LIVE\t{v}");
              }
          }

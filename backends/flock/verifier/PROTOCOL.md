@@ -999,13 +999,17 @@ Lean verifier without a spec change. After the gate passes, production runs only
 stays in CI as a regression oracle.
 
 "Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
-(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in two
-places, and the corpus marks the vectors that exercise them with the upstream verdict they expect:
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in four
+places, and the corpus marks the vectors that exercise them with the upstream verdict they expect
+(`upstream_accepted` in an expectation):
 
 - **D1:** `root_F = Σ` (S6). Upstream's server checks it only for statements without link points; the statement replay tools
   check it.
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
+- **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignores the field; Σ is bound there through `Hello` (S2) and
+  `root_F` (S6). Found by fuzzing (seed 20260926).
+- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignores the retained bytes.
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at

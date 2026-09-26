@@ -6,7 +6,9 @@
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
-is its directory's basename, and `why` is a prefix of the Lean verifier's reason. A session directory may carry its own
+is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
+`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
+of the Lean verifier's. A session directory may carry its own
 public file (`pub.bin`, a forgery's false statement) and its expected verdict (`case.json`, from the vectors patch's
 `forgeries` subcommand). Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
@@ -98,7 +100,8 @@ def main():
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
-        ok = L is not None and U is not None and L["accepted"] == U["accepted"]
+        up_want = e.get("upstream_accepted", L["accepted"] if L else None) if e else (L["accepted"] if L else None)
+        ok = L is not None and U is not None and U["accepted"] == up_want
         if e is not None:
             ok = ok and L["accepted"] == e["accepted"] and L["why"].startswith(e["why"])
         if not ok:
