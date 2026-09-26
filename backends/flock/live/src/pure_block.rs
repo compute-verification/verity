@@ -40,6 +40,8 @@ use crate::chunk::{key_words, row_key, comp, log2ceil};
 
 pub const K_LOG: usize = 20;
 pub const UNIT_LOG: usize = 13;
+/// The largest unit slot: a netlist of more than 2^13 rows (a total unit) takes 2^14-row slots (`UnitNet::unit_log`).
+pub const UNIT_LOG_MAX: usize = 14;
 pub const COMP_SLOTS: usize = 32;
 pub const UNITS: usize = 32;
 pub const UNIT_POS0: usize = 64;
@@ -131,7 +133,9 @@ impl Layout {
     pub fn per_role(self) -> usize { self.comp_slots() / 2 }
     pub fn units(self) -> usize { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96, Layout::Fp4 | Layout::ShaFp4 => 24 } }
     /// The first unit's 2^13 position: right after the compressions.
-    pub fn unit_pos0(self) -> usize { self.comp_slots() << (self.comp_log() - 13) }
+    pub fn unit_pos0(self, unit_log: usize) -> usize { self.comp_slots() << (self.comp_log() - unit_log) }
+    /// Whether `units` slots of 2^unit_log bits fit after the compressions in the 2^k_log block.
+    pub fn fits(self, unit_log: usize) -> bool { self.unit_pos0(unit_log) + self.units() <= 1 << (self.k_log() - unit_log) }
     pub fn blocks_per_vu(self) -> usize { match self { Layout::Chunk(n) => n as usize, Layout::ChunkTail(n) => n as usize + 1, _ => 1 } }
     /// Compressions per chunk of a block, in order (SHA: one chain per role, its padding block included).
     pub fn chunks(self) -> &'static [usize] { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25], Layout::Fp4 | Layout::ShaFp4 => &[14] } }
@@ -224,6 +228,7 @@ pub fn chunk_flags(j: usize, nb: usize) -> u32 {
     crate::chunk::KEYED_HASH | if j == 0 { crate::chunk::CHUNK_START } else { 0 } | if j + 1 == nb { crate::chunk::CHUNK_END } else { 0 }
 }
 
+#[derive(Clone)]
 pub struct UnitNet {
     pub relation: String,
     pub useful: usize,
@@ -247,7 +252,7 @@ impl UnitNet {
         assert_eq!((0..ni).map(|i| n(6 + i)).collect::<Vec<_>>(), vec![0, 1, 2, 3, 4]);
         let no = n(6 + ni);
         let out_cols: Vec<usize> = (0..no).map(|i| n(7 + ni + i)).collect();
-        assert!(useful <= 1 << UNIT_LOG && const_pos == useful - 1 && (n_in == 544 || n_in == 608));
+        assert!(useful <= 1 << UNIT_LOG_MAX && const_pos == useful - 1 && (n_in == 544 || n_in == 608));
         let (mut a, mut b) = (Vec::with_capacity(useful), Vec::with_capacity(useful));
         for _ in 0..useful {
             let v: Vec<usize> = lines.next().expect("row").split_whitespace().map(|t| t.parse().unwrap()).collect();
@@ -267,12 +272,17 @@ impl UnitNet {
         Self::parse(&std::fs::read_to_string(path).expect("netlist"))
     }
 
+    /// log2 of the unit's slot: 13, or 14 for a netlist past 2^13 rows. Statements of 2^13-row units are unchanged.
+    pub fn unit_log(&self) -> usize {
+        if self.useful <= 1 << UNIT_LOG { UNIT_LOG } else { UNIT_LOG_MAX }
+    }
+
     pub fn epilogue(&self) -> bool {
         self.out_cols.len() > 1
     }
 
     fn matrices(&self) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
-        let k = 1usize << UNIT_LOG;
+        let k = 1usize << self.unit_log();
         let pad = |rows: &Vec<Vec<usize>>| {
             let mut r = rows.clone();
             r.resize(k, Vec::new());
@@ -393,6 +403,9 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
     if lay == Layout::Chunk(1) || lay == Layout::ChunkTail(0) {
         return Err(format!("CN3: a {}-byte row is one BLAKE3 chunk, whose last block is the ROOT, and {lay:?} never sets ROOT", lay.row_bytes()));
     }
+    if !lay.fits(net.unit_log()) {
+        return Err(format!("UL1: {} units of 2^{} bits (a {}-row netlist) do not fit layout {lay:?}", lay.units(), net.unit_log(), net.useful));
+    }
     let blocks = lay.blocks_per_vu() * inst.vus;
     if lay.k_log() + log2ceil(blocks).max(3) > MAX_M {
         return Err(format!("CN2: {} VUs × {} blocks per VU need m = {} > {MAX_M} (Chunk(n): n × VUs ≤ 32,768)", inst.vus,
@@ -452,6 +465,7 @@ pub struct RegionShape {
 }
 
 fn shape(region: Region, net: &UnitNet, lay: Layout) -> RegionShape {
+    let ul = net.unit_log();
     let bits = |lo: usize, n: usize| (lo..lo + n).collect::<Vec<_>>();
     // (free bits, fixed value) in the 20 in-block bits
     let (free, fixed): (Vec<usize>, u32) = match region {
@@ -460,13 +474,13 @@ fn shape(region: Region, net: &UnitNet, lay: Layout) -> RegionShape {
         Region::Key => ([bits(0, 8), vec![18]].concat(), 0),
         Region::Counter => ([bits(0, 6), bits(14, 5)].concat(), 1 << 10),
         Region::Cv => ([bits(0, 8), vec![18]].concat(), (1 << 8) | (0xF << 14)),
-        Region::AccIn => (bits(0, 5), (1 << 9) | ((lay.unit_pos0() as u32) << UNIT_LOG)),
-        Region::AccOut => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
-        Region::Y => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
+        Region::AccIn => (bits(0, 5), (1 << 9) | ((lay.unit_pos0(ul) as u32) << ul)),
+        Region::AccOut => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0(ul) + lay.units() - 1) as u32) << ul)),
+        Region::Y => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0(ul) + lay.units() - 1) as u32) << ul)),
         Region::Flags => ([bits(0, 5), bits(14, 5)].concat(), b3::FLAGS_BASE as u32),
         Region::CvMid => ([bits(0, 8), vec![18]].concat(), (1 << 8) | (0x7 << 14)),
-        Region::AccMid => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0() + 15) as u32) << UNIT_LOG)),
-        Region::YMid => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0() + 15) as u32) << UNIT_LOG)),
+        Region::AccMid => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0(ul) + 15) as u32) << ul)),
+        Region::YMid => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0(ul) + 15) as u32) << ul)),
     };
     let mask = ((1u32 << lay.k_log()) - 1) & !free.iter().fold(0u32, |m, &b| m | (1 << b));
     assert_eq!(fixed & !mask, 0);
@@ -518,6 +532,8 @@ impl Publics {
 
 pub struct PureCircuit {
     pub lay: Layout,
+    /// log2 of the unit slot (`UnitNet::unit_log`).
+    pub ul: usize,
     pub unit: SparseMatrixCircuit<'static>,
     pub da: Vec<(u32, u32)>,
     pub db: Vec<(u32, u32)>,
@@ -529,10 +545,11 @@ impl LincheckCircuit for PureCircuit {
     }
 
     fn fold_alpha_batched(&self, alpha: F128, eq: &[F128]) -> Vec<F128> {
-        let (cl, us) = (self.lay.comp_log(), 1usize << UNIT_LOG);
+        let (cl, ul) = (self.lay.comp_log(), self.ul);
+        let us = 1usize << ul;
         let cs = 1usize << cl;
-        let per = 1usize << (cl - UNIT_LOG);
-        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
+        let per = 1usize << (cl - ul);
+        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0(self.ul));
         assert_eq!(eq.len(), 1 << kl);
         let c0 = eq[..us].iter().position(|e| *e != F128::ZERO).expect("eq tensor vanishes on the first unit slot");
         let inv = eq[c0].inv();
@@ -547,7 +564,7 @@ impl LincheckCircuit for PureCircuit {
                     *x = s * *y;
                 }
             } else if (p0..p0 + units).contains(&p) {
-                let s = eq[(p << UNIT_LOG) | c0] * inv;
+                let s = eq[(p << ul) | c0] * inv;
                 for (x, y) in o.iter_mut().zip(&base_u) {
                     *x = s * *y;
                 }
@@ -571,6 +588,7 @@ impl LincheckCircuit for PureCircuit {
 /// constants, the unit operands as copies of the big-endian message bits, the accumulator chain (c_in(0) = +0), and every
 /// sub-circuit's constant a copy of the pinned one.
 fn delta_sha(net: &UnitNet, lay: Layout, row_bytes: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
+    let ul = net.unit_log();
     let c = lay.comp();
     let (a, b) = (&c.a_0.rows, &c.b_0.rows);
     let (z, pin, cl) = (sha2c::Z_CONST_POS, lay.pin(), lay.comp_log());
@@ -616,9 +634,9 @@ fn delta_sha(net: &UnitNet, lay: Layout, row_bytes: usize) -> (Vec<(u32, u32)>, 
             }
         }
     }
-    let p0 = lay.unit_pos0();
+    let p0 = lay.unit_pos0(ul);
     for u in 0..lay.units() {
-        let base = (p0 + u) << UNIT_LOG;
+        let base = (p0 + u) << ul;
         both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, pin);
         for role in 0..2 {
             let slot = role * lay.per_role() + u / 2;
@@ -637,7 +655,7 @@ fn delta_sha(net: &UnitNet, lay: Layout, row_bytes: usize) -> (Vec<(u32, u32)>, 
             }
         }
         if u > 0 {
-            let prev = ((p0 + u - 1) << UNIT_LOG) + net.out_cols[0] * 128;
+            let prev = ((p0 + u - 1) << ul) + net.out_cols[0] * 128;
             for t in 0..32 {
                 both(&mut da, &mut db, base + 512 + t, base + 512 + t, prev + t);
             }
@@ -652,6 +670,7 @@ fn delta_sha(net: &UnitNet, lay: Layout, row_bytes: usize) -> (Vec<(u32, u32)>, 
 }
 
 fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
+    let ul = net.unit_log();
     let c = comp();
     let (a, b) = (&c.a_0.rows, &c.b_0.rows);
     let z = b3::Z_CONST_POS;
@@ -706,9 +725,9 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
             constant(&mut da, &g, b3::T_HI_BASE, 0);
         }
     }
-    let p0 = lay.unit_pos0();
+    let p0 = lay.unit_pos0(ul);
     for u in 0..lay.units() {
-        let base = (p0 + u) << UNIT_LOG;
+        let base = (p0 + u) << ul;
         both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, lay.pin());
         for role in 0..2 {
             let slot = role * lay.per_role() + u / 2;
@@ -725,7 +744,7 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
             }
         }
         if u > 0 {
-            let prev = ((p0 + u - 1) << UNIT_LOG) + net.out_cols[0] * 128;
+            let prev = ((p0 + u - 1) << ul) + net.out_cols[0] * 128;
             for t in 0..32 {
                 both(&mut da, &mut db, base + 512 + t, base + 512 + t, prev + t);
             }
@@ -762,6 +781,8 @@ pub struct PureStmt {
     /// A dummy block's chunk chaining values (x chunks, then W chunks).
     pub dummy_cv: Vec<[u32; 8]>,
     pub dummy_unit: (u32, u32),
+    /// log2 of the unit slot (`UnitNet::unit_log`).
+    pub ul: usize,
     /// `ChunkTail`: per real VU, the accumulator into units 16..32 of its partial-chunk block (the continuation's units
     /// read zero operands; each one's input is the previous one's evaluated output).
     tail_cin: OnceLock<Vec<[u32; 16]>>,
@@ -772,7 +793,9 @@ impl PureStmt {
         assert_eq!(net.n_in == 608, lay.is_fp4(), "NV2: {}-bit unit inputs under layout {lay:?}", net.n_in);
         let blocks_real = lay.blocks_per_vu() * vus;
         let nbl = log2ceil(blocks_real).max(3);
-        let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units(), lay.unit_pos0());
+        let ul = net.unit_log();
+        assert!(lay.fits(ul), "UL1: {} units of 2^{ul} bits do not fit layout {lay:?}", lay.units());
+        let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units(), lay.unit_pos0(ul));
         let m = kl + nbl;
         let keys = [key_words(&row_key(b"x")), key_words(&row_key(b"w"))];
         let (da, db) = if lay.is_sha() { delta_sha(&net, lay, lay.row_bytes()) } else { delta(&net, lay, &keys) };
@@ -838,7 +861,7 @@ impl PureStmt {
         h.update(TAG);
         h.update(comp().statement_digest());
         h.update(net.sha256);
-        for x in [vus, blocks_real, nbl, m, kl, UNIT_LOG, slots, units, p0] {
+        for x in [vus, blocks_real, nbl, m, kl, ul, slots, units, p0] {
             h.update((x as u64).to_le_bytes());
         }
         if let Layout::ChunkTail(n) = lay {
@@ -886,8 +909,8 @@ impl PureStmt {
         let (ua, ub) = net.matrices();
         let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(ua)), Box::leak(Box::new(ub)));
         let unit = SparseMatrixCircuit::new(ua, ub);
-        PureStmt { lay, net, vus, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit: PureCircuit { lay, unit, da, db }, r1cs, digest,
-                   keys, dummy_cv, dummy_unit, tail_cin: OnceLock::new() }
+        PureStmt { lay, net, vus, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit: PureCircuit { lay, ul, unit, da, db }, r1cs, digest,
+                   keys, dummy_cv, dummy_unit, ul, tail_cin: OnceLock::new() }
     }
 
     pub fn blocks(&self) -> usize {
@@ -1087,7 +1110,7 @@ impl PureStmt {
 
     /// `(z, a, b, z_lincheck)` of the block witness: compressions, then units evaluated from `inputs(b, u)`.
     pub fn witness(&self, comps: &Comps, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
-        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
+        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0(self.ul));
         let n = 1usize << (self.m - 7);
         let (cz, ca, cb) = match comps {
             Comps::B3(c) => b3::generate_witness_with_ab_packed(c, log2ceil(c.len())),
@@ -1108,7 +1131,7 @@ impl PureStmt {
             });
         }
         drop((cz, ca, cb));
-        let uw = 1usize << (UNIT_LOG - 7);
+        let uw = 1usize << (self.ul - 7);
         let total = self.blocks() * units;
         let groups: Vec<Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>> = (0..total.div_ceil(64))
             .into_par_iter()
@@ -1292,6 +1315,33 @@ mod tests {
             assert!(2 * st.regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?}");
         }
         assert_eq!(PureStmt::new(shape_net(544, true), 8, Layout::ChunkTail(4)).regions.len(), 9);
+    }
+
+    /// A unit past 2^13 rows takes 2^14-row slots: the Chunk / ChunkTail / Fp8 / Fp4 / ShaFp4 blocks keep their k_log
+    /// (their spare room holds the doubled units), the ShaBf16 / ShaFp8 blocks refuse it (UL1).
+    #[test]
+    fn total_unit_slots() {
+        let mut big = shape_net(544, true);
+        let useful = 8449;
+        big.a.resize(useful, vec![]);
+        big.b.resize(useful, vec![]);
+        big.a[1023] = vec![];
+        big.b[1023] = vec![];
+        big.a[useful - 1] = vec![useful - 1];
+        big.b[useful - 1] = vec![useful - 1];
+        big.useful = useful;
+        big.const_pos = useful - 1;
+        assert_eq!(big.unit_log(), 14);
+        for lay in [Layout::Chunk(4), Layout::Chunk(16), Layout::ChunkTail(17), Layout::Fp8] {
+            assert!(lay.fits(14), "{lay:?}");
+            let st = PureStmt::new(big.clone(), 8, lay);
+            assert_eq!((st.ul, st.lay.k_log()), (14, lay.k_log()));
+        }
+        assert_eq!(Layout::Chunk(4).unit_pos0(14), 32);
+        for lay in [Layout::ShaBf16, Layout::ShaFp8] {
+            assert!(!lay.fits(14), "{lay:?}");
+        }
+        assert!(Layout::Fp4.fits(14) && Layout::ShaFp4.fits(14));
     }
 
     /// ChunkTail's continuation accumulators, first reached from rayon workers (as the witness builders reach them) and
