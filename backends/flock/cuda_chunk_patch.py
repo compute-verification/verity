@@ -22,7 +22,7 @@ except AssertionError as e:
     print("cuda_live_patch.py: CUDA half applied, harness half skipped")
 
 assert "live_cb" in pathlib.Path("cuda-ghash/challenger.hpp").read_text(), "live hook missing"
-for f in ("prove_chunk.cuh", "sha_witness.cuh"):
+for f in ("prove_chunk.cuh", "pure_sha256.cuh"):
     shutil.copy(here / "cuda" / f, f"cuda-ghash/{f}")
 pf = pathlib.Path("cuda-ghash/prove_ffi.cu")
 s = pf.read_text()

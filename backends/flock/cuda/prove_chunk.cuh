@@ -11,7 +11,7 @@
 // - the ring-switch batch opens ab, c and every extra claim.
 
 #include <chrono>
-#include "sha_witness.cuh"
+#include "pure_sha256.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -276,19 +276,8 @@ __global__ void pure_sha_chain(const uint8_t* __restrict__ rx, const uint8_t* __
     }
 }
 
-// One thread per SHA-256 compression: its (z, a, b) into block ci / slots, 2^15-bit slot ci % slots (zeroed).
-__global__ void pure_sha_witness(const uint32_t* __restrict__ hin, const uint32_t* __restrict__ msg, long long n_comp, int slots,
-                                 int k_log, F128* __restrict__ z, F128* __restrict__ a, F128* __restrict__ b) {
-    long long ci = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-    if (ci >= n_comp) return;
-    long long at = ((ci / slots) << (k_log - 7)) + (ci % slots) * 256;
-    uint32_t h[8], m[16];
-    for (int i = 0; i < 8; i++) h[i] = hin[ci * 8 + i];
-    for (int i = 0; i < 16; i++) m[i] = msg[ci * 16 + i];
-    psh_witness(h, m, (uint32_t*)(z + at), (uint32_t*)(a + at), (uint32_t*)(b + at));
-}
-
-// flock-vllm-v1's pure_sha256_witness (cursor/flock-vllm-v1-4cdd ff1c1e3f, verbatim), timed against pure_sha_witness.
+// flock-vllm-v1's pure_sha256_witness (cursor/flock-vllm-v1-4cdd ff1c1e3f, verbatim): one thread per SHA-256 compression writes
+// its (z, a, b) into block ci / slots, 2^15-bit slot ci % slots (zeroed), Flock's build_block_ab_packed_into.
 namespace vsha {
 __device__ __constant__ uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
@@ -592,12 +581,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
             if (C->sha) {
                 if (!dev_in) { printf("FFI chunk: SHA-256 layouts take device inputs or a host witness\n"); return 206; }
-                static const bool vllm_kernel = getenv("FLOCK_SHA_KERNEL") && !strcmp(getenv("FLOCK_SHA_KERNEL"), "vllm");
-                if (vllm_kernel)
-                    pure_sha256_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log, (uint64_t*)df,
-                                                                                   (uint64_t*)d_a, (uint64_t*)d_b);
-                else
-                    pure_sha_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log, df, d_a, d_b);
+                pure_sha256_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log, (uint64_t*)df,
+                                                                               (uint64_t*)d_a, (uint64_t*)d_b);
                 CK(cudaGetLastError());
             } else {
             F128 *tz, *ta, *tb;
