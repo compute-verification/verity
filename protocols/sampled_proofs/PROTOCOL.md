@@ -28,8 +28,8 @@ population draws its own RUs.
 
 ## The law
 
-The law is `TwoStageLaw({class: Stage(p, k)})` (decision 43). A Bernoulli law over single units is the special case
-where every unit is its own RU with `k = 1` (`TwoStageLaw.bernoulli`). A gate-level `plan.VerificationPlan` is that
+The law is `TwoStageLaw({class: Stage(p, k)})` (decision 43). A Bernoulli law over single VUs is the special case
+where every VU is its own RU with `k = 1` (`TwoStageLaw.bernoulli`). A gate-level `plan.VerificationPlan` is that
 case: every gate is its own RU.
 
 An RU with `m` incorrect VUs out of `n_v` passes with probability
