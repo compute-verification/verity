@@ -1,13 +1,13 @@
 //! Live coins from a seed the verifier commits at step 0 (lane flock-circuit; the malicious-verifier ZK groundwork of
 //! B-Ligero PROTOCOL §5.3): the verifier draws a 256-bit seed and nonce from the OS before anything else, sends the commitment
-//! `SHA-256(TAG || nonce || seed)` in answer to `Hello`, derives every coin from the seed with `verity.randomness.derive`
+//! `SHA-512(TAG || nonce || seed)` in answer to `Hello`, derives every coin from the seed with `verity.randomness.derive`
 //! (byte-compatible: `tests/randomness/vectors.json`'s formats) and reveals seed and nonce in its verdict, so the prover can
 //! check that every coin it was sent was fixed before it committed. The commitment scheme is named (`SCHEME`) and swappable:
 //! HM96, as B-Ligero's coin commitment, is the target.
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 
-pub const SCHEME: &str = "coin-commit/sha256";
+pub const SCHEME: &str = "coin-commit/sha512";
 pub const TAG: &[u8] = b"verity/flock-circuit/coin-commit\0";
 pub const DOMAIN: &str = "verity/flock-circuit/coins/v1";
 const DERIVE: &[u8] = b"verity/randomness/derive/v1\0";
@@ -69,8 +69,8 @@ pub fn stream(key: &[u8; 32], index: &[Part<'_>], n: usize) -> Vec<u8> {
     out
 }
 
-pub fn commitment(seed: &[u8; 32], nonce: &[u8; 32]) -> [u8; 32] {
-    let mut h = Sha256::new();
+pub fn commitment(seed: &[u8; 32], nonce: &[u8; 32]) -> [u8; 64] {
+    let mut h = Sha512::new();
     h.update(TAG);
     h.update(nonce);
     h.update(seed);

@@ -39,9 +39,8 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, PARENT, ROOT, comp, key_words, log2ceil},
-    hex, ir_block::IrUnitNet,
+    ir_block::IrUnitNet,
     lookup::LookupNet,
-    sha256,
 };
 
 pub const TAG: &[u8] = b"verity/flock-circuit";
@@ -54,19 +53,9 @@ pub const PT_LOCAL: usize = 24;
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
     json!({"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
-           "target": {"scheme": "hm96-sha256/v1", "inner": "sha256 column digest", "salt_bytes_per_leaf": 128,
-                      "salt_source": "os generator, one draw per leaf", "key": "DEFAULT_KEY, a statement constant for every tree",
-                      "key_sha256": hex(&sha256(&hm96_default_key()))}})
-}
-
-/// `hm96-sha256/v1`'s pinned key: `SHA-256("verity/hm96-sha256/key/v1\0" || u32be(i))` for i = 0..4, bit 1279 cleared.
-pub fn hm96_default_key() -> [u8; 160] {
-    let mut k = [0u8; 160];
-    for (i, c) in k.chunks_mut(32).enumerate() {
-        c.copy_from_slice(&sha256(&[b"verity/hm96-sha256/key/v1\0".as_slice(), &(i as u32).to_be_bytes()].concat()));
-    }
-    k[159] &= 0x7f;
-    k
+           "target": {"scheme": "hm96 on sha-512 (core scheme pending)", "inner": "sha512 column digest",
+                      "salt_bytes_per_leaf": 192, "salt_source": "os generator, one draw per leaf", "key_bits": 2047,
+                      "key": "the scheme's pinned constant, one per statement for every tree"}})
 }
 const WORD: usize = 128;
 const SUB_LOG: usize = b3::K_LOG;
@@ -1367,14 +1356,5 @@ impl Stmt {
     /// Words per block the device witness needs for the unit slots: every unit's input words, block-major.
     pub fn region_bytes_len(&self, reg: &RegionShape) -> usize {
         (1usize << reg.free.len()) / 8
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn hm96_default_key_is_core_s() {
-        // hashlib.sha256(verity.commitments.hm96.DEFAULT_KEY).hexdigest()
-        assert_eq!(crate::hex(&crate::sha256(&super::hm96_default_key())), "57b257a0ff12797c57aca8b55685dbbc0729c0de17c9a93ea8565fc19e3df6e0");
     }
 }

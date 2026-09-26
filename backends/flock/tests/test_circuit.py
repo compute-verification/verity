@@ -45,12 +45,12 @@ def test_rope_composes_private_by_default(tmp_path):
 
 
 def test_leaf_scheme_reserves_what_hm96_needs():
-    import hashlib
-
     hm96 = pytest.importorskip("verity.commitments.hm96")
     t = FC.LEAF_SCHEME["target"]
-    assert (t["scheme"], t["salt_bytes_per_leaf"]) == (hm96.NAME, hm96.SALT_BYTES)
-    assert t["key_sha256"] == hashlib.sha256(hm96.DEFAULT_KEY).hexdigest(), "the key is hm96's pinned constant"
+    assert hm96.COLS == hm96.ROWS + 8 * hm96.DIGEST_BYTES + 512 and hm96.KEY_BITS == hm96.ROWS + hm96.COLS - 1, "hm96's sizing rule"
+    x = 512
+    assert 8 * t["salt_bytes_per_leaf"] == x + x + 512 and t["key_bits"] == x + 8 * t["salt_bytes_per_leaf"] - 1
+    assert "witness" not in t["key"] and "constant" in t["key"]
 
 
 def test_attention_has_no_verifier_evaluated_form():

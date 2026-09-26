@@ -42,15 +42,16 @@ SCHEME = "frame-v3/blake3-keyed"
 INST_FORMAT = "flock-circuit-inputs"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable. ``flock-leaf/sha256-unsalted`` is Flock's own leaf, the SHA-256 digest of the opened column, until
-#: ``target`` lands: ``hm96-sha256/v1`` (``verity.commitments.hm96``, its PROTOCOL.md section 7) over that digest, leaf =
-#: ``tree_leaf(key, b || c)``, an opening = the column and its salt. Salts: 128 bytes per leaf straight from the OS generator,
+#: ``target`` lands: Halevi–Micali on SHA-512 (``verity.commitments.hm96``'s construction, its PROTOCOL.md section 7, over a
+#: SHA-512 column digest), leaf = ``tree_leaf(key, b || c)``, an opening = the column and its salt. Sizes by hm96's rule
+#: |y| = |x| + |c| + 512 at |x| = |c| = 512: a 192-byte salt, a 2047-bit key. Salts straight from the OS generator, one per leaf,
 #: never expanded from a seed (statistical hiding given uniform salts); the level-0 salts are shared by both reps (one root).
-#: Key: hm96's ``DEFAULT_KEY``, one constant of the statement for every tree and for the serving-row gadget, pinned by its
-#: SHA-256. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to any value.
+#: Key: the scheme's pinned constant, one per statement for every tree (pinned here by digest once core defines the scheme).
+#: Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to any value.
 LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
-               "target": {"scheme": "hm96-sha256/v1", "inner": "sha256 column digest", "salt_bytes_per_leaf": 128,
-                          "salt_source": "os generator, one draw per leaf", "key": "DEFAULT_KEY, a statement constant for every tree",
-                          "key_sha256": "57b257a0ff12797c57aca8b55685dbbc0729c0de17c9a93ea8565fc19e3df6e0"}}
+               "target": {"scheme": "hm96 on sha-512 (core scheme pending)", "inner": "sha512 column digest",
+                          "salt_bytes_per_leaf": 192, "salt_source": "os generator, one draw per leaf", "key_bits": 2047,
+                          "key": "the scheme's pinned constant, one per statement for every tree"}}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14

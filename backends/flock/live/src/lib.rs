@@ -119,13 +119,13 @@ pub fn replay_coin_seed(rec: &Value) -> Result<u64, String> {
     if cs.is_null() {
         return Err("the record has no step-0 seed".into());
     }
-    let h32 = |k: &str| -> Result<[u8; 32], String> {
+    let hb = |k: &str| -> Result<Vec<u8>, String> {
         let s = cs[k].as_str().ok_or(format!("coin_seed.{k} missing (the verdict was never issued?)"))?;
-        let b: Vec<u8> = (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16)).collect::<Result<_, _>>().map_err(|e| e.to_string())?;
-        b.try_into().map_err(|_| format!("coin_seed.{k} is not 32 bytes"))
+        (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16)).collect::<Result<_, _>>().map_err(|e| e.to_string())
     };
-    let (seed, nonce, commit) = (h32("seed")?, h32("nonce")?, h32("commitment")?);
-    if cs["scheme"] != coin_seed::SCHEME || cs["domain"] != coin_seed::DOMAIN || coin_seed::commitment(&seed, &nonce) != commit {
+    let h32 = |k: &str| -> Result<[u8; 32], String> { hb(k)?.try_into().map_err(|_| format!("coin_seed.{k} is not 32 bytes")) };
+    let (seed, nonce, commit) = (h32("seed")?, h32("nonce")?, hb("commitment")?);
+    if cs["scheme"] != coin_seed::SCHEME || cs["domain"] != coin_seed::DOMAIN || coin_seed::commitment(&seed, &nonce)[..] != commit[..] {
         return Err("the recorded seed does not open the recorded commitment under the pinned scheme".into());
     }
     let hello = cs["context"]["hello"].as_str().ok_or("coin_seed.context.hello missing")?;
@@ -716,11 +716,14 @@ pub struct SessionConfig {
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
     /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
     pub coin_seed: bool,
+    /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
+    /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
+    pub retain_rounds: bool,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
-        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false }
+        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false, retain_rounds: false }
     }
 
     /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
@@ -749,6 +752,9 @@ impl SessionConfig {
         }
         if self.coin_seed {
             h["coins"] = json!(coin_seed::SCHEME);
+        }
+        if self.retain_rounds {
+            h["rounds"] = json!("bytes retained");
         }
         h.to_string()
     }
@@ -825,13 +831,15 @@ pub struct Server {
     verdict: Option<Value>,
     urandom: Option<File>,
     /// step 0: (seed, nonce, commitment, the coin key once `Hello` is accepted, coin requests issued)
-    seed: Option<([u8; 32], [u8; 32], [u8; 32], Option<[u8; 32]>, u64)>,
+    seed: Option<([u8; 32], [u8; 32], [u8; 64], Option<[u8; 32]>, u64)>,
     /// the global index of the last seed-derived coin request, and of the link points' request
     last_g: Option<u64>,
     points_g: Option<u64>,
     /// with a step-0 seed: (stream, round) -> the session-wide index of the coin request that answered it
     /// (`coin_seed::coins(key, g, n)`), so the derivation replays from the record however the reps' rounds interleave
     round_g: BTreeMap<(String, usize), u64>,
+    /// with `retain_rounds`: (stream, round) -> the round's bytes as received
+    round_msg: BTreeMap<(String, usize), Vec<u8>>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
     t0: std::time::Instant,
@@ -877,6 +885,7 @@ impl Server {
             last_g: None,
             points_g: None,
             round_g: BTreeMap::new(),
+            round_msg: BTreeMap::new(),
             seed_inject: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
@@ -1032,7 +1041,7 @@ impl Server {
                     self.seed = Some((seed, nonce, c, Some(coin_seed::coin_key(&seed, &h)), 0));
                     self.hello = Some(h);
                     let w = |i: usize| u64::from_le_bytes(c[8 * i..8 * i + 8].try_into().unwrap());
-                    return Resp::Coins(vec![F128 { lo: w(0), hi: w(1) }, F128 { lo: w(2), hi: w(3) }]);
+                    return Resp::Coins((0..4).map(|i| F128 { lo: w(2 * i), hi: w(2 * i + 1) }).collect());
                 }
                 self.hello = Some(h);
                 Resp::Ok
@@ -1181,6 +1190,9 @@ impl Server {
                     self.round_g.insert((stream.clone(), at), g);
                 }
                 self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
+                if self.cfg.retain_rounds {
+                    self.round_msg.insert((stream, at), content);
+                }
                 Resp::Coins(coins)
             }
             Req::Proof { table, rep, bytes } => {
@@ -1222,6 +1234,7 @@ impl Server {
         let mut why = self.aborted.clone().unwrap_or_default();
         let t = std::time::Instant::now();
         let record = Arc::new(self.streams.clone());
+        let msgs = Arc::new(self.round_msg.clone());
         let n_pts = self.cfg.link.as_ref().map(|l| l.points).unwrap_or(0);
         for (ti, table) in self.cfg.tables.clone().into_iter().enumerate() {
             let publics = self.commit.as_ref().and_then(|c| c.publics.get(&table.name).cloned()).unwrap_or_default();
@@ -1231,7 +1244,7 @@ impl Server {
                 let res: Result<(), String> = (|| {
                     let bytes = self.proofs.get(&(table.name.clone(), rep)).ok_or(format!("R7: no proof for {root} (lone rep)"))?;
                     let rec = record.get(&root).ok_or(format!("no live session stream for {root}"))?;
-                    let mut ch = ReplayChallenger::new(record.clone(), &root, &self.verifier.domain(&table.name, rep));
+                    let mut ch = ReplayChallenger::with_messages(record.clone(), msgs.clone(), &root, &self.verifier.domain(&table.name, rep));
                     // A replay failure is the primary reason: the verifier's own error on a proof whose messages
                     // were not the committed ones is a consequence of it.
                     if self.cfg.link.is_some() && (self.points.len() != n_pts || y.len() != n_pts) {
@@ -1300,10 +1313,16 @@ impl Server {
                 json!({
                     "stream": name, "parent": s.parent, "label": String::from_utf8_lossy(&s.label), "at": s.at,
                     "root_sha256": s.cap.as_ref().map(|c| hex(&sha256(c))),
-                    "rounds": s.rounds.iter().enumerate().map(|(k, r)| json!({
-                        "k": k, "g": self.round_g.get(&(name.clone(), k)), "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
-                        "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
-                    })).collect::<Vec<_>>(),
+                    "rounds": s.rounds.iter().enumerate().map(|(k, r)| {
+                        let mut v = json!({
+                            "k": k, "g": self.round_g.get(&(name.clone(), k)), "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
+                            "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
+                        });
+                        if let Some(m) = self.round_msg.get(&(name.clone(), k)) {
+                            v["msg"] = json!(hex(m));
+                        }
+                        v
+                    }).collect::<Vec<_>>(),
                 })
             })
             .collect();
@@ -1495,6 +1514,13 @@ impl Server {
                 if let Some(g) = r["g"].as_u64() {
                     s.round_g.insert((name.to_string(), sr.rounds.len()), g);
                 }
+                if s.cfg.retain_rounds {
+                    let m = hx(&r["msg"], "a retained round's bytes")?;
+                    if sha256(&m)[..] != sha[..] || Some(m.len() as u64) != r["msg_len"].as_u64() {
+                        return Err(bad(&format!("{name} round {k}: the retained bytes are not the round's msg_sha256 / msg_len")));
+                    }
+                    s.round_msg.insert((name.to_string(), sr.rounds.len()), m);
+                }
                 sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
             }
             if sr.parent.is_empty() {
@@ -1538,6 +1564,8 @@ impl Server {
 
 struct ReplayState {
     record: Arc<BTreeMap<String, StreamRec>>,
+    /// the rounds' bytes where the coin server retained them (`SessionConfig::retain_rounds`): compared byte for byte
+    msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>,
     used: BTreeMap<String, usize>,
     failures: Vec<String>,
 }
@@ -1553,7 +1581,11 @@ pub struct ReplayChallenger {
 
 impl ReplayChallenger {
     pub fn new(record: Arc<BTreeMap<String, StreamRec>>, root: &str, domain: &[u8]) -> Self {
-        let st = Arc::new(Mutex::new(ReplayState { record, used: BTreeMap::new(), failures: Vec::new() }));
+        Self::with_messages(record, Arc::new(BTreeMap::new()), root, domain)
+    }
+
+    pub fn with_messages(record: Arc<BTreeMap<String, StreamRec>>, msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>, root: &str, domain: &[u8]) -> Self {
+        let st = Arc::new(Mutex::new(ReplayState { record, msgs, used: BTreeMap::new(), failures: Vec::new() }));
         Self::stream(st, root.to_string(), frame_domain(domain))
     }
 
@@ -1583,9 +1615,12 @@ impl ReplayChallenger {
                 vec![F128::default(); n]
             }
             Some(r) => {
+                let kept = st.msgs.get(&(self.stream.clone(), k)).map(|m| *m == content);
                 if r.n as usize != n {
                     st.failures.push(format!("R2: {} round {k}: {n} coins requested, {} issued", self.stream, r.n));
-                } else if r.sha != sha256(&content) {
+                } else if kept == Some(false) {
+                    st.failures.push(format!("R2: {} round {k}: the proof's messages differ from the bytes the verifier kept before the coin", self.stream));
+                } else if kept.is_none() && r.sha != sha256(&content) {
                     st.failures.push(format!(
                         "R2: {} round {k}: the proof's messages differ from those committed before the coin",
                         self.stream

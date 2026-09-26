@@ -61,10 +61,11 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
-           // every commitment hash of the statement is SHA-256; the serving row leaf is the one path left (its format is the
-           // serving side's, blake3-keyed/row/v2 until the Halevi-Micali-on-SHA-256 row leaf replaces it)
-           "hashes": {"merkle": "sha256", "round_digest": "sha256", "statement_digest": "sha256", "sigma": "sha256",
-                      "coin_commitment": "sha256", "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
+           // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
+           "hashes": {"merkle": "sha256", "merkle_target": "sha512 (leaves and nodes, every Ligerito level)",
+                      "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
+                      "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
+                      "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "blake3-keyed/row/v2"},
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
@@ -110,6 +111,7 @@ fn config(st: &Stmt, sigma: [u8; 32]) -> SessionConfig {
     let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
     cfg.link = Some(LinkSpec { sigma, m: st.m_pts, points: 2 });
     cfg.coin_seed = true;
+    cfg.retain_rounds = true;
     cfg
 }
 
@@ -161,7 +163,7 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
     };
     let (seed, nonce) = (h32("seed")?, h32("nonce")?);
     let c: Vec<u8> = commit.iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat()).collect();
-    if commit.len() != 2 || coin_seed::commitment(&seed, &nonce).to_vec() != c {
+    if commit.len() != 4 || coin_seed::commitment(&seed, &nonce).to_vec() != c {
         return Err("step 0: the revealed seed does not open the commitment sent at Hello".into());
     }
     let key = coin_seed::coin_key(&seed, hello);
@@ -394,7 +396,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
-            Resp::Coins(c) if c.len() == 2 => commit = c,
+            Resp::Coins(c) if c.len() == 4 => commit = c,
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
         for rep in 0..2 {
@@ -611,8 +613,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         };
         let (honest, swapped) = (replay([&proofs[0], &proofs[1]]), replay([&proofs[1], &proofs[0]]));
         let accepted = |r: &Result<Value, String>| matches!(r, Ok(x) if x["accepted"] == true);
-        return json!({"case": name, "expect": "the honest record replays offline; swapped proofs do not", "accepted": v["accepted"],
-                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped),
+        // a retained round's bytes altered in the record: refused (they no longer hash to the round's msg_sha256)
+        let mut bad = rec.clone();
+        let m = bad["streams"][0]["rounds"][0]["msg"].as_str().unwrap_or("").to_string();
+        bad["streams"][0]["rounds"][0]["msg"] = json!(format!("{}{}", if m.starts_with('0') { "1" } else { "0" }, m.get(1..).unwrap_or("")));
+        let v2: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+        let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
+        let altered = Server::from_record(config(st, sigma(st, inst)), v2, &bad, map).err();
+        return json!({"case": name, "expect": "the honest record replays offline; swapped proofs and altered round bytes do not",
+                      "accepted": v["accepted"], "altered_bytes_refused": altered,
+                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some(),
                       "why": honest.as_ref().map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e)),
                       "why_swapped": swapped.map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e))});
     }
@@ -644,12 +654,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "leaf_scheme_seeded_salts_refused" || name == "leaf_key_witness_refused" {
         // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (red-team-hm96 F6: a
-        // key chosen after commitment opens a leaf to any value), or another key than the statement's constant
+        // key chosen after commitment opens a leaf to any value), or chosen by the prover rather than the statement's constant
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
         let meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
         let edits: Vec<(&str, Value)> = if name == "leaf_key_witness_refused" {
-            vec![("key", json!("a witness: the prover's choice")), ("key_sha256", json!(hex(&sha256(&[1u8; 160]))))]
+            vec![("key", json!("a witness: the prover's choice")), ("key", json!("per proof, drawn by the prover"))]
         } else {
             vec![("salt_source", json!("chacha20 stream of the prover seed"))]
         };
