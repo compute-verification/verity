@@ -43,7 +43,7 @@ DISPLAY = {
     "bf16_to_f32": "bf16→f32", "f32_to_bf16": "f32→bf16 (round)", "unpack": "unpack f32", "round_f32": "round",
     "specials": "specials (NaN/Inf)", "f32_mul": "f32 multiply", "f32_add": "f32 add", "f32_sub": "f32 subtract",
     "f32_fma": "f32 fused multiply-add", "f32_div_const": "f32 divide by constant", "f32_neg": "f32 negate",
-    "tc_dot16": "tensor-core k-step (AmpereBF16TcDot16, total)", "_tc_operand": "tensor-core operand decode",
+    "tc_dot16": "tensor-core k-step (total)", "_tc_operand": "tensor-core operand decode",
     "_classes": "classify (NaN/Inf)", "_finite_or_zero": "finite stand-in", "decode": "one-hot decode",
     "lookup": "table lookup", "_normalize_sig": "normalize", "shl": "shift left", "shr_sticky": "align (shift right, sticky)",
     "min_u": "min", "neg_if": "conditional negate", "select": "select", "is_zero": "zero test", "add": "integer add",
@@ -60,12 +60,13 @@ KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "a
 # --- tracing -----------------------------------------------------------------------------------------------------------
 
 class _Call:
-    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports")
+    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports", "label")
 
     def __init__(self, fn, start):
         self.fn, self.start, self.end, self.ins, self.outs, self.kids = fn, start, start, [], [], []
         self.seq0 = self.seq1 = _SEQ[0]
         self.iports = self.oports = ()
+        self.label = None
 
 
 _T: dict = {"C": None, "stack": None}
@@ -129,6 +130,16 @@ def _bits(x, out):
 _SIG: dict = {}
 
 
+def _tc_label(fn, a, k) -> str:
+    """A tensor-core k-step's display name from its parameters: the IR step whose (groups, W, F) they are."""
+    ba = inspect.signature(fn).bind(*a, **k)
+    ba.apply_defaults()
+    got = (tuple(ba.arguments["groups"]), ba.arguments["W"], ba.arguments["F"])
+    step = next((pid.removesuffix("_v1") for pid, (g, W, F) in IL.TC_STEPS.items() if (tuple(g), W, F) == got),
+                f"groups {got[0]}, W {got[1]}, F {got[2]}")
+    return f"tensor-core k-step ({step}, total)"
+
+
 def _arg_names(fn) -> tuple[list[str], str | None]:
     if fn not in _SIG:
         try:
@@ -179,6 +190,8 @@ def _wrap(name, fn):
         else:
             outs = [("out", r)]
         node.oports = _ports(outs, node.outs)
+        if name == "tc_dot16":
+            node.label = _tc_label(fn, a, k)
         return r
 
     w.__wrapped__ = fn
@@ -351,7 +364,7 @@ class Registry:
                 self.wiring_compared += 1
                 rec = self.nodes[hid]
                 if rec["wiring"] != wires:
-                    merged = _merge_wiring(rec["wiring"], wires)
+                    merged = _merge_wiring(rec["wiring"], wires, _cuts(node))
                     if merged is None:
                         self.wiring_differs += 1
                     else:
@@ -504,19 +517,36 @@ def _wiring(node: _Call, data, is_and) -> list[list[int]]:
         resolve(f, -1, i)
     for sp, sport in sorted(own_reads):
         edge(sp, sport, -3, -1)
-    return _runs(bits)
+    return _runs(bits, _cuts(node))
 
 
-def _runs(bits) -> list[list[int]]:
+def _cuts(node: _Call) -> tuple[dict, dict]:
+    """The first bit of every port, per part as a source (its outputs; the node's inputs for part -1) and as a destination (its
+    inputs; the node's outputs for part -1)."""
+    def starts(ports):
+        out, o = set(), 0
+        for _, w in ports:
+            out.add(o)
+            o += w
+        return out
+    src = {m: starts(k.oports) for m, k in enumerate(node.kids)}
+    dst = {m: starts(k.iports) for m, k in enumerate(node.kids)}
+    src[-1], dst[-1] = starts(node.iports), starts(node.oports)
+    return src, dst
+
+
+def _runs(bits, cuts) -> list[list[int]]:
     """Bit edges ``(src_part, src_port, dst_part, dst_port)`` as runs ``[..., width]`` (a constant's or an unnumbered port
-    does not advance)."""
+    does not advance), none spanning two ports on either side."""
+    src, dst = cuts
     edges: list[list[int]] = []
     for sp, sport, dp, dport in bits:
         if edges:
             e = edges[-1]
             n = e[4]
             if (e[0] == sp and e[2] == dp and e[1] + (0 if sp == -2 or sport < 0 else n) == sport
-                    and e[3] + (0 if dport < 0 else n) == dport):
+                    and e[3] + (0 if dport < 0 else n) == dport
+                    and not (sp != -2 and sport > 0 and sport in src.get(sp, ())) and not (dport > 0 and dport in dst.get(dp, ()))):
                 e[4] += 1
                 continue
         edges.append([sp, sport, dp, dport, 1])
@@ -528,16 +558,16 @@ def _bitwise(edges) -> list[tuple]:
             for sp, sport, dp, dport, w in edges for i in range(w)]
 
 
-def _merge_wiring(old, new):
+def _merge_wiring(old, new, cuts):
     """``old`` with the constants whose value differs in ``new`` as port -1, if that is the only difference; else None."""
     a, b = _bitwise(old), _bitwise(new)
     if len(a) != len(b) or any(x[2:] != y[2:] or (x[:2] != y[:2] and not x[0] == y[0] == -2) for x, y in zip(a, b)):
         return None
-    return _runs([x if x[:2] == y[:2] else (-2, -1) + x[2:] for x, y in zip(a, b)])
+    return _runs([x if x[:2] == y[:2] else (-2, -1) + x[2:] for x, y in zip(a, b)], cuts)
 
 
 def _display(fn, node) -> str:
-    base = DISPLAY.get(fn, fn)
+    base = node.label or DISPLAY.get(fn, fn)
     return f"{base} [{len(node.ins)}→{len(node.outs)} bits]"
 
 
@@ -944,7 +974,6 @@ NOT_LOWERED = {
     "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
 }
 DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
-TC_UNIT_NAME = "tensor-core k-step unit (AmpereBF16TcDot16, total)"
 
 
 def _params(tname: str, tp: dict) -> dict:
@@ -1136,9 +1165,53 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
             if g.get("instances") and g["instances"] % n_t == 0:
                 node["instances_per_T"] = g["instances"] // n_t
                 node["instances_per_T_rule"] = "instances / (T range size): the program graph gives the range, not the histogram"
+        node.update(_roles(g, p, walker.store))
         nodes.append(node)
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
             "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
+
+
+def _input_role(name: str) -> str:
+    role = name.split(":", 1)[0]
+    return "peers" if role.startswith("peers_") else role
+
+
+def _roles(g: dict, p: dict, store: DefStore) -> dict:
+    """A Call's parameters with their roles, as far as the program graph records them: a parameter another Call's output feeds
+    (``edges[].ports``) is ``activations`` (``constant`` from a constant Call); one a prescribed input feeds (``param_inputs``)
+    takes the input's group (``weights``, ``prompt``, ``seed``, ``splits``, ``peers``). The Call's prescribed inputs are listed
+    in ``inputs`` whether or not the graph says which parameter reads them."""
+    tpl = {x["id"]: x["template"] for x in p["groups"]}
+    dids = [g["spec"]] if g.get("spec") else list(g.get("definition_ids") or [])
+    widths: dict[str, list[int]] = {}
+    names: list[str] = []
+    for did in dids:
+        d = store.get(did)
+        if d is None:
+            continue
+        for name, t in (d.get("body") or {}).get("params") or d.get("params") or []:
+            if name not in widths:
+                names.append(name)
+            widths.setdefault(name, []).append(sum(_words(t)))
+    from_calls: dict[str, dict[str, int]] = {}
+    for e in p.get("edges", []):
+        if e["to"] == g["id"]:
+            for x in e.get("ports") or []:
+                from_calls.setdefault(x["param"], {})
+                from_calls[x["param"]][e["from"]] = from_calls[x["param"]].get(e["from"], 0) + x["words"]
+    pin = g.get("param_inputs")
+    params = []
+    for name in names:
+        w = widths[name]
+        roles = sorted({"constant" if tpl.get(src, "").startswith("Const") else "activations" for src in from_calls.get(name, {})}
+                       | {_input_role(i) for i in (pin or {}).get(name, {})})
+        params.append({"name": name, "bits": w[0] if min(w) == max(w) else [min(w), max(w)], "roles": roles or None,
+                       "from_calls": from_calls.get(name, {}), "from_inputs": (pin or {}).get(name, {}) if pin is not None else None})
+    inputs = [{"input": k, "role": _input_role(k), "reads": v} for k, v in sorted((g.get("prescribed_reads") or {}).items())]
+    return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
+            "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
+                           "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
+                           "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
 
 
 def _membership(reg: Registry, templates, defs: dict | None = None) -> None:
