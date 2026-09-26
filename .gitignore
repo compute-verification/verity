@@ -49,3 +49,4 @@ runs/
 !backends/gkr/packed/results/r20260922-073439-1f15/
 !backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json
 !backends/shared/anchor_a100/results/**
+.bench-cell/
