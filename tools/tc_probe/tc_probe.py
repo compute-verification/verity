@@ -1029,9 +1029,10 @@ _MODELS: list[Model] = []
 
 
 def family_asserted(ins: Instruction, name: str) -> bool:
-    """Whether a family's mismatches count for validation: every family, except ``specials`` for a finite declared model."""
+    """Whether a family's mismatches count for validation: every family, except ``specials`` unless every declared model is total
+    (a hypothesis's counts are recorded per family either way)."""
 
-    return name not in UNASSERTED_FAMILIES or ins.models[0].total
+    return name not in UNASSERTED_FAMILIES or all(m.total for m in ins.models if m.declared)
 
 
 def model_descs(ins: Instruction) -> list[tuple]:
@@ -1668,6 +1669,9 @@ def main() -> int:
     ap.add_argument("--replay-special", default=None, metavar="JSON.GZ", help="mma_special.reduced.json.gz: its all-finite records (BF16)")
     ap.add_argument("--replay-capture", default=None, metavar="JSON.GZ", help="tc-hopper-2026-09-07/special.reduced.json.gz: every record (all 14 "
                     "families, non-finite included) against its recorded word and the declared model")
+    ap.add_argument("--also-model", action="append", default=[], metavar="NAME[:total]",
+                    help="compare a further verity.ml.tc.models model as a HYPOTHESIS (':total': its total semantics, which also asserts the "
+                         "specials family and serves --replay-capture); repeatable")
     ap.add_argument("--a-source", default=None, choices=("smem", "registers"), help="the A operand path where the instruction has both (BF16 wgmma: "
                     "smem = SS, the GEMM form, default; registers = RS, FA3's P.V form)")
     ap.add_argument("--replay-instances", default=None, metavar="DIR", help="bench-instances/v1 directory with the built arrays: replay tu-k16 and vu-k1536 (BF16)")
@@ -1704,6 +1708,16 @@ def main() -> int:
         ap.error("one instruction per capture run")
     ins = INSTRUCTIONS[ids[0]]
     arch = args.arch or ins.arch
+    if args.also_model:
+        import dataclasses
+
+        extra = []
+        for spec in args.also_model:
+            name, _, mode = spec.partition(":")
+            if name not in TCM.MODELS or mode not in ("", "total"):
+                ap.error(f"--also-model {spec!r}: a verity.ml.tc.models name, optionally ':total'")
+            extra.append(Model(TCM.MODELS[name], declared=False, total=mode == "total"))
+        ins = dataclasses.replace(ins, models=ins.models + tuple(extra))
 
     so, nvcc = build(ins.tu, arch, out)
     results: dict = {"schema": "wp1/tc-probe/v0", "instruction": ins.describe()}
@@ -1733,7 +1747,8 @@ def main() -> int:
 
     if args.replay_capture:
         path = Path(args.replay_capture)
-        results["capture_replay"] = replay_golden(probe, path, hopper_capture_records(path), "veritor tc-hopper-2026-09-07", ins.models[0])
+        replay_model = next((m for m in ins.models if m.total), ins.models[0])  # the non-finite records need a total model
+        results["capture_replay"] = replay_golden(probe, path, hopper_capture_records(path), "veritor tc-hopper-2026-09-07", replay_model)
         print("capture_replay", json.dumps({k: v for k, v in results["capture_replay"].items() if not k.startswith("first_")}), flush=True)
 
     if args.replay_instances:
