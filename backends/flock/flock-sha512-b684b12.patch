@@ -1,0 +1,900 @@
+diff --git a/crates/flock-core/src/element_r1cs.rs b/crates/flock-core/src/element_r1cs.rs
+index 590a6bf..818ab49 100644
+--- a/crates/flock-core/src/element_r1cs.rs
++++ b/crates/flock-core/src/element_r1cs.rs
+@@ -650,7 +650,7 @@ impl ElementStatement<'_> {
+         ch.observe_bytes(&self.ty.digest());
+         ch.observe_bytes(&(self.n_log as u64).to_le_bytes());
+         ch.observe_bytes(&(self.n as u64).to_le_bytes());
+-        ch.observe_bytes(cap.as_flattened());
++        ch.observe_bytes(cap.as_flattened().as_flattened());
+     }
+ }
+ 
+diff --git a/crates/flock-core/src/genus95_curve_code/rng.rs b/crates/flock-core/src/genus95_curve_code/rng.rs
+index f594dd8..621c009 100644
+--- a/crates/flock-core/src/genus95_curve_code/rng.rs
++++ b/crates/flock-core/src/genus95_curve_code/rng.rs
+@@ -128,6 +128,7 @@ impl FsRng {
+         match kind {
+             HashKind::Sha256 => FsRng::Sha256(Sha256Rng::new(seed)),
+             HashKind::Blake3 => FsRng::Blake3(Blake3Rng::new(seed)),
++            HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
+         }
+     }
+ }
+diff --git a/crates/flock-core/src/genus95_curve_code/sampling.rs b/crates/flock-core/src/genus95_curve_code/sampling.rs
+index ce547fd..a8ffd56 100644
+--- a/crates/flock-core/src/genus95_curve_code/sampling.rs
++++ b/crates/flock-core/src/genus95_curve_code/sampling.rs
+@@ -50,6 +50,7 @@ fn nonce_seed(seed: &[u8; 32], nonce: u32, kind: HashKind) -> [u8; 32] {
+             h.update(nonce.to_le_bytes());
+             nonce_seed.copy_from_slice(&h.finalize());
+         }
++        HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
+         HashKind::Blake3 => {
+             let mut h = Hasher::new();
+             h.update(seed);
+diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
+index 60314c3..b229c59 100644
+--- a/crates/flock-core/src/pcs/ligerito.rs
++++ b/crates/flock-core/src/pcs/ligerito.rs
+@@ -2203,13 +2203,13 @@ impl LigeritoProof {
+     pub fn size_bytes(&self) -> usize {
+         const ELEM: usize = size_of::<F128>();
+         let level_bytes = |p: &RecursiveProof| -> usize {
+-            p.opened_rows.iter().map(|r| r.len() * ELEM).sum::<usize>() + p.merkle_proof.len() * 32
++            p.opened_rows.iter().map(|r| r.len() * ELEM).sum::<usize>() + p.merkle_proof.len() * core::mem::size_of::<Hash>()
+         };
+-        let mut total = self.initial_cap.len() * 32;
++        let mut total = self.initial_cap.len() * core::mem::size_of::<Hash>();
+         total += self
+             .recursive_caps
+             .iter()
+-            .map(|c| c.len() * 32)
++            .map(|c| c.len() * core::mem::size_of::<Hash>())
+             .sum::<usize>();
+         total += level_bytes(&self.initial_proof);
+         for p in &self.recursive_proofs {
+@@ -2222,7 +2222,7 @@ impl LigeritoProof {
+                 .iter()
+                 .map(|r| r.len() * ELEM)
+                 .sum::<usize>()
+-            + self.final_proof.merkle_proof.len() * 32;
++            + self.final_proof.merkle_proof.len() * core::mem::size_of::<Hash>();
+         total += self.sumcheck_transcript.len() * 2 * ELEM;
+         total += self.sumcheck_transcript_f256.len() * 4 * ELEM;
+         total += self.ood_values.len() * ELEM;
+@@ -2255,7 +2255,7 @@ impl LigeritoProof {
+             .iter()
+             .map(|r| r.len() * ELEM)
+             .sum();
+-        let init_merkle: usize = self.initial_proof.merkle_proof.len() * 32;
++        let init_merkle: usize = self.initial_proof.merkle_proof.len() * core::mem::size_of::<Hash>();
+         eprintln!(
+             "  L0 (initial): opened={} ({}q × {}lanes × {}B)  merkle={}",
+             kb(init_opened),
+@@ -2271,7 +2271,7 @@ impl LigeritoProof {
+         let mut total_merkle = init_merkle;
+         for (i, rp) in self.recursive_proofs.iter().enumerate() {
+             let opened: usize = rp.opened_rows.iter().map(|r| r.len() * ELEM).sum();
+-            let merkle: usize = rp.merkle_proof.len() * 32;
++            let merkle: usize = rp.merkle_proof.len() * core::mem::size_of::<Hash>();
+             eprintln!(
+                 "  L{} (recursive): opened={} ({}q × {}lanes × {}B)  merkle={}",
+                 i + 1,
+@@ -2290,7 +2290,7 @@ impl LigeritoProof {
+             .iter()
+             .map(|r| r.len() * ELEM)
+             .sum();
+-        let final_merkle: usize = self.final_proof.merkle_proof.len() * 32;
++        let final_merkle: usize = self.final_proof.merkle_proof.len() * core::mem::size_of::<Hash>();
+         let yr_b = self.final_proof.yr.len() * ELEM;
+         eprintln!(
+             "  L{} (final):  opened={} ({}q × {}lanes × {}B)  merkle={}  yr={} ({}×{}B)",
+@@ -4895,7 +4895,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+         .expect("stratified schedules invalid (prover entry)");
+     let c_0 = cap_depth_of(0);
+     let initial_cap: Vec<Hash> = wtns_0.cap(c_0).to_vec();
+-    challenger.observe_bytes(initial_cap.as_flattened());
++    challenger.observe_bytes(initial_cap.as_flattened().as_flattened());
+ 
+     // ---- Partial-eval at z[0..initial_k] and commit f¹ (wtns_1) ----
+     let v_challenges_0 = eval_point[..initial_k].to_vec();
+@@ -4918,7 +4918,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+     let t_l1 = t.elapsed();
+     t_commits += t_l1;
+     tlog!("  [ligerito]   L1 commit: {:.2?}", t_l1);
+-    challenger.observe_bytes(wtns_1.cap(cap_depth_of(1)).as_flattened());
++    challenger.observe_bytes(wtns_1.cap(cap_depth_of(1)).as_flattened().as_flattened());
+ 
+     // ---- Queries + open wtns_0 ----
+     let num_queries_0 = udr_queries(log_inv_rate_0);
+@@ -5058,7 +5058,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+         t_commits += t_li;
+         tlog!("  [ligerito]   L{} commit: {:.2?}", i + 2, t_li);
+         let cap_next = wtns_next.cap(cap_depth_of(i + 2)).to_vec();
+-        challenger.observe_bytes(cap_next.as_flattened());
++        challenger.observe_bytes(cap_next.as_flattened().as_flattened());
+         recursive_caps.push(cap_next);
+ 
+         // Open wtns_prev. wtns_prev = wtns_{i+1} uses log_inv_rates[i+1].
+@@ -5201,12 +5201,12 @@ pub fn recursive_verifier<Ch: Challenger>(
+     challenger.observe_f128_slice(eval_point);
+ 
+     // ---- Roots ----
+-    challenger.observe_bytes(proof.initial_cap.as_flattened());
++    challenger.observe_bytes(proof.initial_cap.as_flattened().as_flattened());
+     if proof.recursive_caps.len() != r {
+         return false;
+     }
+     let cap_1: &[Hash] = &proof.recursive_caps[0];
+-    challenger.observe_bytes(cap_1.as_flattened());
++    challenger.observe_bytes(cap_1.as_flattened().as_flattened());
+ 
+     // ---- Open wtns_0 + α₀ ----
+     let log_inv_rate_0 = config.log_inv_rates[0];
+@@ -5396,7 +5396,7 @@ pub fn recursive_verifier<Ch: Challenger>(
+         }
+         let cap_next: &[Hash] = &proof.recursive_caps[next_root_idx];
+         next_root_idx += 1;
+-        challenger.observe_bytes(cap_next.as_flattened());
++        challenger.observe_bytes(cap_next.as_flattened().as_flattened());
+ 
+         let prev_block_len = 1usize << (prev_log_msg_cols + prev_log_inv_rate);
+         let prev_num_interleaved = 1usize << prev_log_num_interleaved;
+diff --git a/crates/flock-core/src/pcs/ligerito/extension.rs b/crates/flock-core/src/pcs/ligerito/extension.rs
+index cd4a118..0bc5cf9 100644
+--- a/crates/flock-core/src/pcs/ligerito/extension.rs
++++ b/crates/flock-core/src/pcs/ligerito/extension.rs
+@@ -2116,7 +2116,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     let strat = |level: usize| &config.stratified[level];
+     let cap_depth = |level: usize| config.stratified[level].cap_depth();
+     let initial_cap = cap_layer(l0_tree, block_len_0, cap_depth(0)).to_vec();
+-    challenger.observe_bytes(initial_cap.as_flattened());
++    challenger.observe_bytes(initial_cap.as_flattened().as_flattened());
+ 
+     let claim_bits = |level: usize| config.claim_batch_grinding_bits[level] as u32;
+     let consistency_bits = |level: usize| config.consistency_batch_grinding_bits[level] as u32;
+@@ -2445,7 +2445,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     let _t = Instant::now();
+     let mut previous = commit_split(sumcheck.f(), 1, current_split_dim);
+     let mut recursive_caps = vec![previous.cap(cap_depth(1)).to_vec()];
+-    challenger.observe_bytes(recursive_caps[0].as_flattened());
++    challenger.observe_bytes(recursive_caps[0].as_flattened().as_flattened());
+     if trace {
+         t_commits += _t.elapsed();
+     }
+@@ -2667,7 +2667,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+         let _t = Instant::now();
+         let next = commit_split(sumcheck.f(), next_level, current_split_dim);
+         let cap = next.cap(cap_depth(next_level)).to_vec();
+-        challenger.observe_bytes(cap.as_flattened());
++        challenger.observe_bytes(cap.as_flattened().as_flattened());
+         recursive_caps.push(cap);
+         if trace {
+             t_commits += _t.elapsed();
+@@ -2884,7 +2884,7 @@ where
+ 
+     challenger.observe_label(b"flock-ligerito-basis-f256-split-v0");
+     challenger.observe_f128(target);
+-    challenger.observe_bytes(proof.initial_cap.as_flattened());
++    challenger.observe_bytes(proof.initial_cap.as_flattened().as_flattened());
+     let log_cols_0 = log_n - initial_k;
+     let block_len_0 = 1usize << (log_cols_0 + config.log_inv_rates[0]);
+     let strat = |level: usize| &config.stratified[level];
+@@ -2953,7 +2953,7 @@ where
+     let Some(cap_1) = proof.recursive_caps.first() else {
+         return false;
+     };
+-    challenger.observe_bytes(cap_1.as_flattened());
++    challenger.observe_bytes(cap_1.as_flattened().as_flattened());
+     for _ in 0..ood_count(1) {
+         let point = challenger.sample_f128_vec(current_split_dim);
+         let Some(&y) = proof.ood_values.get(ood_index) else {
+@@ -3226,7 +3226,7 @@ where
+             return false;
+         };
+         cap_index += 1;
+-        challenger.observe_bytes(cap.as_flattened());
++        challenger.observe_bytes(cap.as_flattened().as_flattened());
+         for _ in 0..ood_count(level + 1) {
+             let point = challenger.sample_f128_vec(current_split_dim);
+             let Some(&y) = proof.ood_values.get(ood_index) else {
+diff --git a/crates/flock-core/src/proof.rs b/crates/flock-core/src/proof.rs
+index 3719295..ce1394d 100644
+--- a/crates/flock-core/src/proof.rs
++++ b/crates/flock-core/src/proof.rs
+@@ -204,5 +204,5 @@ pub fn bind_statement<Ch: Challenger>(
+ ) {
+     challenger.observe_label(b"flock-r1cs-v0");
+     challenger.observe_bytes(&r1cs.statement_digest());
+-    challenger.observe_bytes(commitment.cap.as_flattened());
++    challenger.observe_bytes(commitment.cap.as_flattened().as_flattened());
+ }
+diff --git a/crates/flock-core/src/union.rs b/crates/flock-core/src/union.rs
+index 1f37cba..b579555 100644
+--- a/crates/flock-core/src/union.rs
++++ b/crates/flock-core/src/union.rs
+@@ -629,7 +629,7 @@ impl<'r> UnionInstance<'r> {
+             counts_le.extend_from_slice(&(n_t as u64).to_le_bytes());
+         }
+         challenger.observe_bytes(&counts_le);
+-        challenger.observe_bytes(commitment.cap.as_flattened());
++        challenger.observe_bytes(commitment.cap.as_flattened().as_flattened());
+     }
+ 
+     /// [`Self::bind_statement`] plus the CIRCUIT half of the statement: the
+@@ -1064,7 +1064,7 @@ pub fn publics_digest(public: &[F128]) -> [u8; 32] {
+     for chunk in chunks {
+         cv = hash_pair(&cv, &hash_leaf(chunk, HashKind::Blake3), HashKind::Blake3);
+     }
+-    cv
++    cv[0]
+ }
+ 
+ /// A per-slot destination view into the padded union witness buffers: the
+diff --git a/crates/flock-hash/src/lib.rs b/crates/flock-hash/src/lib.rs
+index 6705e80..6be76f1 100644
+--- a/crates/flock-hash/src/lib.rs
++++ b/crates/flock-hash/src/lib.rs
+@@ -7,7 +7,23 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
+ 
+ use serde::{Deserialize, Serialize};
+ 
+-pub type Digest = [u8; 32];
++/// A Merkle digest: 64 bytes, SHA-512 (verity's patch: every Merkle tree of this build is SHA-512, leaves and nodes; the
++/// two halves keep serde's array support).
++pub type Digest = [[u8; 32]; 2];
++
++/// A digest's bytes.
++#[inline]
++pub fn digest_bytes(d: &Digest) -> &[u8] {
++    d.as_flattened()
++}
++
++/// A digest from 64 bytes.
++#[inline]
++pub fn digest_from(b: &[u8]) -> Digest {
++    let mut d = [[0u8; 32]; 2];
++    d.as_flattened_mut().copy_from_slice(&b[..64]);
++    d
++}
+ 
+ /// A supported hash function.
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+@@ -16,6 +32,7 @@ pub enum HashKind {
+     Sha256,
+     #[default]
+     Blake3,
++    Sha512,
+ }
+ 
+ impl HashKind {
+@@ -25,6 +42,7 @@ impl HashKind {
+         match self {
+             HashKind::Sha256 => "sha256",
+             HashKind::Blake3 => "blake3",
++            HashKind::Sha512 => "sha512",
+         }
+     }
+ 
+@@ -36,6 +54,7 @@ impl HashKind {
+         match s.trim().to_ascii_lowercase().as_str() {
+             "sha256" | "sha-256" => Ok(HashKind::Sha256),
+             "blake3" => Ok(HashKind::Blake3),
++            "sha512" | "sha-512" => Ok(HashKind::Sha512),
+             other => Err(format!(
+                 "unknown hash {other:?}: expected \"sha256\" or \"blake3\""
+             )),
+@@ -131,7 +150,7 @@ mod tests {
+     use crate::HashKind;
+ 
+     /// Every variant, for tests that sweep both.
+-    pub(crate) const ALL: [HashKind; 2] = [HashKind::Sha256, HashKind::Blake3];
++    pub(crate) const ALL: [HashKind; 3] = [HashKind::Sha256, HashKind::Blake3, HashKind::Sha512];
+ 
+     #[test]
+     fn parses_and_round_trips() {
+diff --git a/crates/flock-merkle/src/hashing.rs b/crates/flock-merkle/src/hashing.rs
+index 7f40cbf..cccf29f 100644
+--- a/crates/flock-merkle/src/hashing.rs
++++ b/crates/flock-merkle/src/hashing.rs
+@@ -17,7 +17,7 @@ use rayon::prelude::{
+     IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator, ParallelSlice,
+     ParallelSliceMut,
+ };
+-use sha2::{Digest, Sha256};
++use sha2::{Digest, Sha256, Sha512};
+ #[cfg(feature = "hash-count")]
+ use {
+     crate::hashing::hash_count::{LEAF_CALLS, LEAF_COMPRESSIONS, PAIR_CALLS, blocks},
+@@ -30,6 +30,27 @@ use {
+ ))]
+ use crate::hashing::sha256x4::hash4_equal_len;
+ pub type Hash = HashDigest;
++/// A 32-byte digest (SHA-256, a BLAKE3 chaining value): the helpers below that compute one.
++pub(crate) type H32 = [u8; 32];
++
++/// This build's Merkle digests are SHA-512: a 32-byte hash would silently misalign every tree.
++#[cold]
++fn narrow(kind: HashKind) -> ! {
++    panic!("{kind}: this Flock build commits with SHA-512 Merkle trees only (64-byte digests)")
++}
++
++#[inline]
++fn sha512_leaf(data: &[u8]) -> Hash {
++    flock_hash::digest_from(&Sha512::digest(data))
++}
++
++#[inline]
++fn sha512_pair(left: &Hash, right: &Hash) -> Hash {
++    let mut h = Sha512::new();
++    h.update(left.as_flattened());
++    h.update(right.as_flattened());
++    flock_hash::digest_from(&h.finalize())
++}
+ 
+ pub trait MerkleHash: Send + Sync + 'static {
+     fn hash_leaf(data: &[u8]) -> Hash;
+@@ -53,6 +74,9 @@ pub struct Sha256MerkleHash;
+ 
+ pub struct Blake3MerkleHash;
+ 
++/// SHA-512 leaves and nodes (verity's patch): `leaf = SHA-512(bytes)`, `node = SHA-512(left || right)`.
++pub struct Sha512MerkleHash;
++
+ #[cfg(any(
+     all(target_arch = "aarch64", target_feature = "sha2"),
+     all(target_arch = "x86_64", target_feature = "sha")
+@@ -143,6 +167,7 @@ pub mod hash_count {
+         match kind {
+             HashKind::Sha256 => sha256_blocks(len),
+             HashKind::Blake3 => blake3_blocks(len),
++            HashKind::Sha512 => (len as u64 + 17).div_ceil(128),
+         }
+     }
+ 
+@@ -197,13 +222,13 @@ pub mod hash_count {
+ 
+ /// Non-root chaining value of one BLAKE3 leaf, of any length.
+ #[inline]
+-pub(crate) fn blake3_leaf_chaining_value(data: &[u8]) -> Hash {
++pub(crate) fn blake3_leaf_chaining_value(data: &[u8]) -> H32 {
+     Hasher::new().update(data).finalize_non_root()
+ }
+ 
+ /// BLAKE3 parent-node chaining value of two children.
+ #[inline]
+-pub(crate) fn blake3_parent_chaining_value(left: &Hash, right: &Hash) -> Hash {
++pub(crate) fn blake3_parent_chaining_value(left: &H32, right: &H32) -> H32 {
+     merge_subtrees_non_root(left, right, Mode::Hash)
+ }
+ 
+@@ -216,24 +241,19 @@ pub fn hash_leaf(data: &[u8], kind: HashKind) -> Hash {
+         LEAF_COMPRESSIONS.fetch_add(blocks(kind, data.len()), Relaxed);
+     }
+     match kind {
+-        HashKind::Sha256 => Sha256::digest(data).into(),
+-        HashKind::Blake3 => blake3_leaf_chaining_value(data),
++        HashKind::Sha512 => sha512_leaf(data),
++        k => narrow(k),
+     }
+ }
+ 
+-/// Hash a pair of children into a parent node (64 B → 32 B).
++/// Hash a pair of children into a parent node (128 B -> 64 B).
+ #[inline]
+ pub fn hash_pair(left: &Hash, right: &Hash, kind: HashKind) -> Hash {
+     #[cfg(feature = "hash-count")]
+     PAIR_CALLS.fetch_add(1, Relaxed);
+     match kind {
+-        HashKind::Sha256 => {
+-            let mut h = Sha256::new();
+-            h.update(left);
+-            h.update(right);
+-            h.finalize().into()
+-        }
+-        HashKind::Blake3 => blake3_parent_chaining_value(left, right),
++        HashKind::Sha512 => sha512_pair(left, right),
++        k => narrow(k),
+     }
+ }
+ 
+@@ -247,7 +267,7 @@ pub fn hash_pair(left: &Hash, right: &Hash, kind: HashKind) -> Hash {
+     all(target_arch = "x86_64", target_feature = "sha")
+ ))]
+ #[inline]
+-fn sha256_hash4(inputs: [&[u8]; 4], outs: &mut [Hash]) {
++fn sha256_hash4(inputs: [&[u8]; 4], outs: &mut [H32]) {
+     hash4_equal_len(inputs, outs);
+ }
+ 
+@@ -256,7 +276,7 @@ fn sha256_hash4(inputs: [&[u8]; 4], outs: &mut [Hash]) {
+     all(target_arch = "x86_64", target_feature = "sha")
+ )))]
+ #[inline]
+-fn sha256_hash4(inputs: [&[u8]; 4], outs: &mut [Hash]) {
++fn sha256_hash4(inputs: [&[u8]; 4], outs: &mut [H32]) {
+     for (out, input) in outs.iter_mut().zip(inputs) {
+         *out = Sha256::digest(input).into();
+     }
+@@ -319,7 +339,7 @@ const BLAKE3_BATCH: usize = 16;
+ #[inline]
+ fn blake3_hash_many<const N: usize>(
+     data: &[u8],
+-    out: &mut [Hash],
++    out: &mut [H32],
+     flags: u8,
+     flags_start: u8,
+     flags_end: u8,
+@@ -390,7 +410,7 @@ fn blake3_hash_many<const N: usize>(
+ /// the old power-of-two-only dispatch sent every one of them to the generic
+ /// per-leaf hasher at half the hash roofline. Tail leaves (fewer than
+ /// eight) take the generic path, which computes the same chunk CV.
+-pub(crate) fn blake3_hash_many_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash]) -> bool {
++pub(crate) fn blake3_hash_many_leaves(data: &[u8], leaf_size: usize, out: &mut [H32]) -> bool {
+     if !blake3_leaf_size_is_batchable(leaf_size) {
+         return false;
+     }
+@@ -434,7 +454,7 @@ pub(crate) fn blake3_leaf_size_is_batchable(leaf_size: usize) -> bool {
+ /// Batched BLAKE3 parent nodes: `data` is `out.len()` contiguous 64-byte
+ /// (left ‖ right) child pairs. Equivalent to [`blake3_parent_chaining_value`] per node.
+ #[inline]
+-pub(crate) fn blake3_hash_many_parents(data: &[u8], out: &mut [Hash]) {
++pub(crate) fn blake3_hash_many_parents(data: &[u8], out: &mut [H32]) {
+     blake3_hash_many::<64>(data, out, BLAKE3_PARENT, 0, 0);
+ }
+ 
+@@ -459,46 +479,18 @@ pub fn hash_leaves_serial(data: &[u8], leaf_size: usize, out: &mut [Hash], kind:
+         );
+     }
+     match kind {
+-        HashKind::Blake3 if blake3_leaf_size_is_batchable(leaf_size) => {
+-            for (outs, leaves) in out
+-                .chunks_mut(BLAKE3_GROUP)
+-                .zip(data.chunks(BLAKE3_GROUP * leaf_size))
+-            {
+-                blake3_hash_many_leaves(leaves, leaf_size, outs);
+-            }
+-        }
+-        HashKind::Blake3 => {
++        HashKind::Sha512 => {
+             for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
+-                *o = blake3_leaf_chaining_value(leaf);
+-            }
+-        }
+-        HashKind::Sha256 => {
+-            for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
+-                *o = Sha256::digest(leaf).into();
++                *o = sha512_leaf(leaf);
+             }
+         }
++        k => narrow(k),
+     }
+ }
+ 
+-/// Serial BLAKE3 parent-chunk hashing: `read` holds `2·out.len()` child
+-/// hashes (contiguous left‖right pairs); each pair hashes to one parent.
+-/// No-rayon sibling of [`hash_pairs_level`]'s BLAKE3 arm, for the commit's
+-/// leaf pipeline (the helper thread is the parallelism).
+-pub fn hash_parents_serial(read: &[Hash], out: &mut [Hash]) {
+-    debug_assert_eq!(read.len(), 2 * out.len());
+-    #[cfg(feature = "hash-count")]
+-    {
+-        use std::sync::atomic::Ordering::Relaxed;
+-        hash_count::PAIR_CALLS.fetch_add(out.len() as u64, Relaxed);
+-    }
+-    let bytes: &[u8] =
+-        unsafe { core::slice::from_raw_parts(read.as_ptr() as *const u8, read.len() * 32) };
+-    for (outs, pairs) in out
+-        .chunks_mut(BLAKE3_GROUP)
+-        .zip(bytes.chunks(BLAKE3_GROUP * 64))
+-    {
+-        blake3_hash_many_parents(pairs, outs);
+-    }
++/// Serial BLAKE3 parent-chunk hashing (the commit's BLAKE3 leaf pipeline): not in a SHA-512 build.
++pub fn hash_parents_serial(_read: &[Hash], _out: &mut [Hash]) {
++    narrow(HashKind::Blake3)
+ }
+ 
+ /// Finish a Merkle tree whose leaf level `tree[..num_leaves]` — and, when
+@@ -537,38 +529,8 @@ fn hash_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash], kind: HashKind)
+         LEAF_COMPRESSIONS.fetch_add(out.len() as u64 * blocks(kind, leaf_size), Relaxed);
+     }
+     match kind {
+-        HashKind::Blake3 if blake3_leaf_size_is_batchable(leaf_size) => {
+-            out.par_chunks_mut(BLAKE3_GROUP)
+-                .zip(data.par_chunks(BLAKE3_GROUP * leaf_size))
+-                .for_each(|(outs, leaves)| {
+-                    blake3_hash_many_leaves(leaves, leaf_size, outs);
+-                });
+-        }
+-        HashKind::Blake3 => out
+-            .par_iter_mut()
+-            .zip(data.par_chunks(leaf_size))
+-            .for_each(|(o, leaf)| *o = blake3_leaf_chaining_value(leaf)),
+-        HashKind::Sha256 => {
+-            out.par_chunks_mut(4)
+-                .zip(data.par_chunks(4 * leaf_size))
+-                .for_each(|(outs, leaves)| {
+-                    if outs.len() == 4 {
+-                        sha256_hash4(
+-                            [
+-                                &leaves[..leaf_size],
+-                                &leaves[leaf_size..2 * leaf_size],
+-                                &leaves[2 * leaf_size..3 * leaf_size],
+-                                &leaves[3 * leaf_size..],
+-                            ],
+-                            outs,
+-                        );
+-                    } else {
+-                        for (out, leaf) in outs.iter_mut().zip(leaves.chunks(leaf_size)) {
+-                            *out = Sha256::digest(leaf).into();
+-                        }
+-                    }
+-                });
+-        }
++        HashKind::Sha512 => out.par_iter_mut().zip(data.par_chunks(leaf_size)).for_each(|(o, leaf)| *o = sha512_leaf(leaf)),
++        k => narrow(k),
+     }
+ }
+ 
+@@ -576,67 +538,20 @@ fn hash_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash], kind: HashKind)
+ /// dispatch over many `hash_many` calls, small enough to stay cache-resident.
+ const BLAKE3_GROUP: usize = 1024;
+ 
+-/// Hash one internal level: `write[i] = hash_pair(read[2i], read[2i+1])`.
+-///
+-/// Children are contiguous 64-byte spans of the level below, so both hashes
+-/// read them zero-copy. Small upper levels can't fill the cores, so a rayon
+-/// dispatch per level costs more than the hashing itself (~3× at the top of a
+-/// 2^18 tree); those are hashed serially — still SIMD-batched — and only the
+-/// wide lower levels fan out.
++/// Hash one internal level: `write[i] = hash_pair(read[2i], read[2i+1])`. Small upper levels are hashed serially.
+ fn hash_pairs_level(read: &[Hash], write: &mut [Hash], kind: HashKind) {
+     #[cfg(feature = "hash-count")]
+     PAIR_CALLS.fetch_add(write.len() as u64, Relaxed);
+-    // SAFETY: `Hash` is `[u8; 32]`, so a slice of `n` hashes is exactly `32n`
+-    // initialized bytes with no padding.
+-    let read_bytes: &[u8] = unsafe { from_raw_parts(read.as_ptr() as *const u8, read.len() * 32) };
+     const SERIAL_LEVEL_NODES: usize = 1024;
+-    let serial = write.len() <= SERIAL_LEVEL_NODES;
+-
+-    match kind {
+-        HashKind::Blake3 => {
+-            if serial {
+-                blake3_hash_many_parents(read_bytes, write);
+-            } else {
+-                write
+-                    .par_chunks_mut(BLAKE3_GROUP)
+-                    .zip(read_bytes.par_chunks(BLAKE3_GROUP * 64))
+-                    .for_each(|(outs, children)| blake3_hash_many_parents(children, outs));
+-            }
+-        }
+-        HashKind::Sha256 => {
+-            let hash_quad = |outs: &mut [Hash], children: &[u8]| {
+-                if outs.len() == 4 {
+-                    sha256_hash4(
+-                        [
+-                            &children[..64],
+-                            &children[64..128],
+-                            &children[128..192],
+-                            &children[192..256],
+-                        ],
+-                        outs,
+-                    );
+-                } else {
+-                    for (i, out) in outs.iter_mut().enumerate() {
+-                        let l: &Hash = children[i * 64..i * 64 + 32].try_into().unwrap();
+-                        let r: &Hash = children[i * 64 + 32..i * 64 + 64].try_into().unwrap();
+-                        let mut h = Sha256::new();
+-                        h.update(l);
+-                        h.update(r);
+-                        *out = h.finalize().into();
+-                    }
+-                }
+-            };
+-            if serial {
+-                for (outs, children) in write.chunks_mut(4).zip(read_bytes.chunks(256)) {
+-                    hash_quad(outs, children);
+-                }
+-            } else {
+-                write
+-                    .par_chunks_mut(4)
+-                    .zip(read_bytes.par_chunks(256))
+-                    .for_each(|(outs, children)| hash_quad(outs, children));
+-            }
++    if kind != HashKind::Sha512 {
++        narrow(kind);
++    }
++    if write.len() <= SERIAL_LEVEL_NODES {
++        for (o, pair) in write.iter_mut().zip(read.chunks_exact(2)) {
++            *o = sha512_pair(&pair[0], &pair[1]);
+         }
++    } else {
++        write.par_iter_mut().zip(read.par_chunks_exact(2)).for_each(|(o, pair)| *o = sha512_pair(&pair[0], &pair[1]));
+     }
+ }
+ 
+@@ -660,6 +575,26 @@ impl MerkleHash for Sha256MerkleHash {
+     }
+ }
+ 
++impl MerkleHash for Sha512MerkleHash {
++    #[inline]
++    fn hash_leaf(data: &[u8]) -> Hash {
++        hash_leaf(data, HashKind::Sha512)
++    }
++
++    #[inline]
++    fn hash_pair(left: &Hash, right: &Hash) -> Hash {
++        hash_pair(left, right, HashKind::Sha512)
++    }
++
++    fn hash_leaves(data: &[u8], leaf_size: usize, output: &mut [Hash]) {
++        hash_leaves(data, leaf_size, output, HashKind::Sha512);
++    }
++
++    fn hash_pairs(children: &[Hash], parents: &mut [Hash]) {
++        hash_pairs_level(children, parents, HashKind::Sha512);
++    }
++}
++
+ impl MerkleHash for Blake3MerkleHash {
+     #[inline]
+     fn hash_leaf(data: &[u8]) -> Hash {
+diff --git a/crates/flock-merkle/src/lib.rs b/crates/flock-merkle/src/lib.rs
+index 5cb3f05..2df6c78 100644
+--- a/crates/flock-merkle/src/lib.rs
++++ b/crates/flock-merkle/src/lib.rs
+@@ -10,7 +10,7 @@ use rayon::current_num_threads;
+ #[cfg(feature = "hash-count")]
+ pub use crate::hashing::hash_count;
+ pub use crate::hashing::{
+-    Blake3MerkleHash, Hash, HashKind, MerkleHash, Sha256MerkleHash, hash_leaf, hash_leaves_serial,
++    Blake3MerkleHash, Hash, HashKind, MerkleHash, Sha256MerkleHash, Sha512MerkleHash, hash_leaf, hash_leaves_serial,
+     hash_pair, hash_parents_serial, merkle_tree_from_prehashed_level,
+ };
+ #[cfg(test)]
+@@ -29,6 +29,7 @@ pub fn merkle_root(data: &[u8], num_leaves: usize, kind: HashKind) -> Hash {
+     match kind {
+         HashKind::Sha256 => merkle_root_with::<Sha256MerkleHash>(data, num_leaves),
+         HashKind::Blake3 => merkle_root_with::<Blake3MerkleHash>(data, num_leaves),
++        HashKind::Sha512 => merkle_root_with::<Sha512MerkleHash>(data, num_leaves),
+     }
+ }
+ 
+@@ -62,6 +63,7 @@ pub fn merkle_tree(data: &[u8], num_leaves: usize, kind: HashKind) -> Vec<Hash>
+     match kind {
+         HashKind::Sha256 => merkle_tree_with::<Sha256MerkleHash>(data, num_leaves),
+         HashKind::Blake3 => merkle_tree_with::<Blake3MerkleHash>(data, num_leaves),
++        HashKind::Sha512 => merkle_tree_with::<Sha512MerkleHash>(data, num_leaves),
+     }
+ }
+ 
+@@ -129,6 +131,7 @@ pub fn merkle_tree_sequential(data: &[u8], num_leaves: usize, kind: HashKind) ->
+     match kind {
+         HashKind::Sha256 => merkle_tree_sequential_with::<Sha256MerkleHash>(data, num_leaves),
+         HashKind::Blake3 => merkle_tree_sequential_with::<Blake3MerkleHash>(data, num_leaves),
++        HashKind::Sha512 => merkle_tree_sequential_with::<Sha512MerkleHash>(data, num_leaves),
+     }
+ }
+ 
+@@ -252,6 +255,9 @@ pub fn verify_merkle_proof_capped(
+         HashKind::Blake3 => verify_merkle_proof_capped_with::<Blake3MerkleHash>(
+             cap, num_leaves, leaf_hash, index, path,
+         ),
++        HashKind::Sha512 => verify_merkle_proof_capped_with::<Sha512MerkleHash>(
++            cap, num_leaves, leaf_hash, index, path,
++        ),
+     }
+ }
+ 
+@@ -307,6 +313,9 @@ pub fn verify_merkle_proof(
+         HashKind::Blake3 => {
+             verify_merkle_proof_with::<Blake3MerkleHash>(root, leaf_hash, index, proof)
+         }
++        HashKind::Sha512 => {
++            verify_merkle_proof_with::<Sha512MerkleHash>(root, leaf_hash, index, proof)
++        }
+     }
+ }
+ 
+diff --git a/crates/flock-merkle/src/merkle/aarch64.rs b/crates/flock-merkle/src/merkle/aarch64.rs
+index 99f9fd4..b973084 100644
+--- a/crates/flock-merkle/src/merkle/aarch64.rs
++++ b/crates/flock-merkle/src/merkle/aarch64.rs
+@@ -4,7 +4,7 @@ use core::arch::aarch64::{
+     vsha256su1q_u32, vst1q_u8,
+ };
+ 
+-use crate::hashing::{Hash, SHA256_IV, SHA256_K};
++use crate::hashing::{H32 as Hash, SHA256_IV, SHA256_K};
+ 
+ /// One interleaved compression round over 4 independent states.
+ /// `blocks[i]` must be ≥ 64 bytes; only the first 64 are consumed.
+diff --git a/crates/flock-merkle/src/merkle/x86_64.rs b/crates/flock-merkle/src/merkle/x86_64.rs
+index 0a92d73..65b6628 100644
+--- a/crates/flock-merkle/src/merkle/x86_64.rs
++++ b/crates/flock-merkle/src/merkle/x86_64.rs
+@@ -4,7 +4,7 @@ use core::arch::x86_64::{
+     _mm_sha256rnds2_epu32, _mm_shuffle_epi8, _mm_shuffle_epi32, _mm_storeu_si128,
+ };
+ 
+-use crate::hashing::{Hash, SHA256_IV, SHA256_K};
++use crate::hashing::{H32 as Hash, SHA256_IV, SHA256_K};
+ 
+ #[inline(always)]
+ unsafe fn schedule(v0: __m128i, v1: __m128i, v2: __m128i, v3: __m128i) -> __m128i {
+diff --git a/crates/flock-prover/src/tower/child_walker.rs b/crates/flock-prover/src/tower/child_walker.rs
+index e3fc92d..9fb8a1e 100644
+--- a/crates/flock-prover/src/tower/child_walker.rs
++++ b/crates/flock-prover/src/tower/child_walker.rs
+@@ -95,7 +95,7 @@ pub(super) struct ChildTape<'p> {
+     yr_v2: usize,
+     pub(super) yr_len: usize,
+     pub(super) levels: Vec<OpenLevel>,
+-    pub(super) lvl_src: Vec<(&'p [[u8; 32]], &'p Vec<Vec<F128>>, &'p Vec<[u8; 32]>)>,
++    pub(super) lvl_src: Vec<(&'p [flock_merkle::Hash], &'p Vec<Vec<F128>>, &'p Vec<flock_merkle::Hash>)>,
+     pub(super) geo: Vec<Lvl>,
+     pub(super) native_sums: Vec<F256>,
+     pub(super) n_pd: usize,
+@@ -206,7 +206,7 @@ struct ChainOpenParse<'p> {
+     bytes: Vec<u8>,
+     trace: FsChainTrace,
+     cross: Vec<Option<(usize, usize)>>,
+-    lvl_src: Vec<(&'p [[u8; 32]], &'p Vec<Vec<F128>>, &'p Vec<[u8; 32]>)>,
++    lvl_src: Vec<(&'p [flock_merkle::Hash], &'p Vec<Vec<F128>>, &'p Vec<flock_merkle::Hash>)>,
+     start_v: usize,
+     gammas_o: Vec<PdRec>,
+     w_rounds: Vec<RoundRec>,
+diff --git a/crates/flock-prover/src/tower/geometry.rs b/crates/flock-prover/src/tower/geometry.rs
+index 4a21598..0b2a3ef 100644
+--- a/crates/flock-prover/src/tower/geometry.rs
++++ b/crates/flock-prover/src/tower/geometry.rs
+@@ -59,7 +59,7 @@ pub(super) struct Lvl {
+     /// The tree's layers from the cap upward, folded natively by
+     /// `level_geometry`: entry `i` is the depth-`(c − i)` layer, entry 0
+     /// the cap itself — [`Self::full_path`]'s sibling sources.
+-    cap_layers: Vec<Vec<[u8; 32]>>,
++    cap_layers: Vec<Vec<flock_merkle::Hash>>,
+ }
+ 
+ /// Map actual sumcheck-fold order back to the transcript point's natural
+@@ -108,9 +108,9 @@ impl Lvl {
+     /// `level_geometry`). Advice either way: the synthesized entries feed
+     /// the same hint stream, and the constant-stratum terminal connect is
+     /// what binds the climb.
+-    pub(super) fn full_path(&self, k: usize, pos: usize, paths: &[[u8; 32]]) -> Vec<[u8; 32]> {
++    pub(super) fn full_path(&self, k: usize, pos: usize, paths: &[flock_merkle::Hash]) -> Vec<flock_merkle::Hash> {
+         let (ck, _) = self.q_stratum(k);
+-        let mut sibs: Vec<[u8; 32]> = paths[self.path_range(k)].to_vec();
++        let mut sibs: Vec<flock_merkle::Hash> = paths[self.path_range(k)].to_vec();
+         // Path entry j is the sibling at depth d − j; the proof stops at
+         // the cap (j < d − c), the tail (depths c down to c_k + 1) folds
+         // out of the cap. Its indices carry SQUEEZED bits below the
+@@ -174,13 +174,13 @@ pub(super) fn balance_extra_rows(a: usize, b: usize, extra: usize) -> (usize, us
+ /// least 1 so entry 0 exists even for a single-summand schedule (which
+ /// never indexes past it).
+ pub(super) fn native_cap_layers(
+-    cap: &[[u8; 32]],
++    cap: &[flock_merkle::Hash],
+     n_layers: usize,
+     hash: HashKind,
+-) -> Vec<Vec<[u8; 32]>> {
+-    let mut layers: Vec<Vec<[u8; 32]>> = vec![cap.to_vec()];
++) -> Vec<Vec<flock_merkle::Hash>> {
++    let mut layers: Vec<Vec<flock_merkle::Hash>> = vec![cap.to_vec()];
+     for _ in 1..n_layers.max(1) {
+-        let next: Vec<[u8; 32]> = layers
++        let next: Vec<flock_merkle::Hash> = layers
+             .last()
+             .unwrap()
+             .as_chunks::<2>()
+@@ -211,7 +211,7 @@ pub(super) fn strat_scheds(params: &PcsParams) -> Vec<LevelSchedule> {
+ /// carries it, so no prover data is ever plumbed through.
+ pub(super) fn level_sources(
+     lig: &LigeritoProof,
+-) -> Vec<(&[[u8; 32]], &Vec<Vec<F128>>, &Vec<[u8; 32]>)> {
++) -> Vec<(&[flock_merkle::Hash], &Vec<Vec<F128>>, &Vec<flock_merkle::Hash>)> {
+     let r = lig.recursive_caps.len();
+     (0..=r)
+         .map(|li| {
+@@ -246,7 +246,7 @@ pub(super) fn level_sources(
+ /// are what the in-circuit leaf-eval accumulators must equal.
+ pub(super) fn level_geometry(
+     levels: &[OpenLevel],
+-    lvl_src: &[(&[[u8; 32]], &Vec<Vec<F128>>, &Vec<[u8; 32]>)],
++    lvl_src: &[(&[flock_merkle::Hash], &Vec<Vec<F128>>, &Vec<flock_merkle::Hash>)],
+     chals: &[F128],
+     hash: HashKind,
+     scheds: &[LevelSchedule],
+@@ -428,13 +428,13 @@ pub(super) fn payload_words(stream: &Stream) -> Vec<Vec<usize>> {
+ pub(super) fn cap_payloads(
+     stream: &Stream,
+     bytes: &[u8],
+-    lvl_src: &[(&[[u8; 32]], &Vec<Vec<F128>>, &Vec<[u8; 32]>)],
++    lvl_src: &[(&[flock_merkle::Hash], &Vec<Vec<F128>>, &Vec<flock_merkle::Hash>)],
+ ) -> Vec<usize> {
+     let pay_words = payload_words(stream);
+     let mut out = Vec::with_capacity(lvl_src.len());
+     let mut from = 0usize;
+     for (li, (cap, _, _)) in lvl_src.iter().enumerate() {
+-        let flat: Vec<u8> = cap.iter().flatten().copied().collect();
++        let flat: Vec<u8> = cap.iter().flatten().flatten().copied().collect();
+         let words = flat.len() / 16;
+         let p = (from..pay_words.len())
+             .find(|&p| {
+diff --git a/crates/flock-prover/src/tower/query.rs b/crates/flock-prover/src/tower/query.rs
+index 699b355..7af18e7 100644
+--- a/crates/flock-prover/src/tower/query.rs
++++ b/crates/flock-prover/src/tower/query.rs
+@@ -69,7 +69,7 @@ pub(super) fn emit_query_phase(
+     leafeval: &[SlotId],
+     levels: &[OpenLevel],
+     geo: &[Lvl],
+-    lvl_src: &[(&[[u8; 32]], &Vec<Vec<F128>>, &Vec<[u8; 32]>)],
++    lvl_src: &[(&[flock_merkle::Hash], &Vec<Vec<F128>>, &Vec<flock_merkle::Hash>)],
+     trace: &FsChainTrace,
+     outs: &[Vec<Wire>],
+     chals: &[F128],
+@@ -180,7 +180,7 @@ pub(super) fn emit_query_phase(
+             // stratum terminal still runs the full `d − c_k` rows, so
+             // witgen reconstitutes the cap-fold tail as extra hints.
+             let pos = g.q_pos(k, chals[lvl.q_ch + k].lo);
+-            hints.extend(g.full_path(k, pos, paths).iter().map(hash_to_digest));
++            hints.extend(g.full_path(k, pos, paths).iter().map(|h| hash_to_digest(&h[0])));
+             // Output-output connects: a multi-producer class with no gate
+             // consumers — witgen asserts agreement, no dataflow cycle.
+             let (bind, term) = if ck == g.c {
+diff --git a/crates/flock-prover/src/tower/real_walker.rs b/crates/flock-prover/src/tower/real_walker.rs
+index 1da2c13..a564c48 100644
+--- a/crates/flock-prover/src/tower/real_walker.rs
++++ b/crates/flock-prover/src/tower/real_walker.rs
+@@ -78,7 +78,7 @@ pub(super) struct RealTape<'p> {
+     yr_v_i: usize,
+     pub(super) yr_len: usize,
+     pub(super) levels: Vec<OpenLevel>,
+-    pub(super) lvl_src: Vec<(&'p [[u8; 32]], &'p Vec<Vec<F128>>, &'p Vec<[u8; 32]>)>,
++    pub(super) lvl_src: Vec<(&'p [flock_merkle::Hash], &'p Vec<Vec<F128>>, &'p Vec<flock_merkle::Hash>)>,
+     pub(super) geo: Vec<Lvl>,
+     pub(super) native_sums: Vec<F256>,
+     /// The grinding ops: (fin ordinal, payload ordinal, bits).
+@@ -565,7 +565,7 @@ fn parse_chain_materials(
+     chals: &[F128],
+     h_rows: usize,
+     geo: &[Lvl],
+-    lvl_src: &[(&[[u8; 32]], &Vec<Vec<F128>>, &Vec<[u8; 32]>)],
++    lvl_src: &[(&[flock_merkle::Hash], &Vec<Vec<F128>>, &Vec<flock_merkle::Hash>)],
+     pub_payloads: &mut [bool],
+ ) -> ChainMaterials {
+     let MergedChain {
+diff --git a/crates/flock-transcript/src/challenger.rs b/crates/flock-transcript/src/challenger.rs
+index 0b80c6c..22c006d 100644
+--- a/crates/flock-transcript/src/challenger.rs
++++ b/crates/flock-transcript/src/challenger.rs
+@@ -618,6 +618,7 @@ impl FsChallenger {
+             state: match kind {
+                 HashKind::Sha256 => FsState::Sha256(Sha256::new()),
+                 HashKind::Blake3 => FsState::Blake3(Box::new(Hasher::new())),
++                HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir transcript (SHA-512 is a Merkle hash in this build)"),
+             },
+             #[cfg(feature = "hash-count")]
+             n_absorbed: 0,
+@@ -1118,6 +1119,7 @@ pub fn pow_has_leading_zero_bits(
+             let h: [u8; 32] = Sha256::digest(pre).into();
+             has_leading_zero_bits(&h, bits)
+         }
++        HashKind::Sha512 => panic!("no SHA-512 proof of work"),
+         HashKind::Blake3 => {
+             let h = hash(&blake3_pow_preimage(state_digest, nonce));
+             has_leading_zero_bits(h.as_bytes(), bits)
+@@ -1256,6 +1258,7 @@ fn pow_scan(
+         HashKind::Blake3 => blake3_pow_scan(state_digest, start, len, bits),
+         HashKind::Sha256 => (start..start.saturating_add(len))
+             .find(|&n| pow_has_leading_zero_bits(state_digest, n, bits, kind)),
++        HashKind::Sha512 => panic!("no SHA-512 proof of work"),
+     }
+ }
+ 

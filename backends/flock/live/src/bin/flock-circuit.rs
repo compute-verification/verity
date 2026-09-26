@@ -53,8 +53,14 @@ fn domain(rep: usize) -> Vec<u8> {
     format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
 }
 
+/// The Merkle hash of every Ligerito level: SHA-512 in a production build (feature `sha512`, verity's Flock patch).
+#[cfg(feature = "sha512")]
+const MERKLE: HashKind = HashKind::Sha512;
+#[cfg(not(feature = "sha512"))]
+const MERKLE: HashKind = HashKind::Sha256;
+
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
-    PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: HashKind::Sha256 }
+    PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: MERKLE }
 }
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
@@ -62,7 +68,7 @@ fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
-           "hashes": {"merkle": "sha256", "merkle_target": "sha512 (leaves and nodes, every Ligerito level)",
+           "hashes": {"merkle": format!("{} (leaves and nodes, every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
@@ -103,7 +109,7 @@ impl StatementVerifier for CircuitVerifier {
         catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
-        Ok(commitment.cap.as_flattened().to_vec())
+        Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
 
@@ -238,7 +244,7 @@ fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: 
     let tp = Instant::now();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
         &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
-        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(cm.cap.as_flattened()).into_iter().map(|p| p[6..].to_vec()).collect() },
+        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
         ch,
     );
     (bincode::serialize(&(commitment, proof)).unwrap(), json!({"t.prove": tp.elapsed().as_secs_f64()}))

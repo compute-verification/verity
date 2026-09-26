@@ -286,12 +286,12 @@ impl Reader<'_> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.f128()).collect()
     }
-    fn hash(&mut self) -> [u8; 32] {
-        let h: [u8; 32] = self.b[self.o..self.o + 32].try_into().unwrap();
-        self.o += 32;
+    fn hash(&mut self) -> flock_hash::Digest {
+        let h = crate::merkle_digest_read(&self.b[self.o..]);
+        self.o += std::mem::size_of::<flock_hash::Digest>();
         h
     }
-    fn hashes(&mut self) -> Vec<[u8; 32]> {
+    fn hashes(&mut self) -> Vec<flock_hash::Digest> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.hash()).collect()
     }
@@ -806,9 +806,9 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
         (0..n_cl).map(|_| RingSwitchProof { s_hat_v: r.f128s(), grinding_nonce: r.u64() }).collect();
     let batching_nonces = r.u64s();
     let n_rcaps = r.u64() as usize;
-    let recursive_caps: Vec<Vec<[u8; 32]>> = (0..n_rcaps).map(|_| r.hashes()).collect();
+    let recursive_caps: Vec<Vec<flock_hash::Digest>> = (0..n_rcaps).map(|_| r.hashes()).collect();
     let n_opens = r.u64() as usize;
-    let mut opens: Vec<(Vec<Vec<F128>>, Vec<[u8; 32]>)> = (0..n_opens).map(|_| (r.rows(), r.hashes())).collect();
+    let mut opens: Vec<(Vec<Vec<F128>>, Vec<flock_hash::Digest>)> = (0..n_opens).map(|_| (r.rows(), r.hashes())).collect();
     let yr = r.f128s();
     let n_sc = r.u64() as usize;
     let sumcheck_transcript_f256: Vec<SumcheckMessage256> = (0..n_sc).map(|_| SumcheckMessage256 { u_0: r.f256(), u_2: r.f256() }).collect();

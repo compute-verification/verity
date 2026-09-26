@@ -103,6 +103,21 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
+/// The bytes of Flock Merkle digests, whatever width the linked Flock commits with (32, or 64 under verity's SHA-512 patch).
+pub fn merkle_digest_bytes(d: &[flock_hash::Digest]) -> &[u8] {
+    // SAFETY: a digest is a plain byte array (`[u8; 32]` or `[[u8; 32]; 2]`): no padding, every byte initialized.
+    unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, std::mem::size_of_val(d)) }
+}
+
+/// One Flock Merkle digest from the first `size_of::<Digest>()` bytes of `b`.
+pub fn merkle_digest_read(b: &[u8]) -> flock_hash::Digest {
+    let mut d = flock_hash::Digest::default();
+    let n = std::mem::size_of::<flock_hash::Digest>();
+    // SAFETY: as in `merkle_digest_bytes`; `b` holds at least `n` bytes (the slice index panics otherwise).
+    unsafe { std::ptr::copy_nonoverlapping(b[..n].as_ptr(), &mut d as *mut _ as *mut u8, n) };
+    d
+}
+
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
