@@ -471,20 +471,26 @@ def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = R
 
 #: The research coordinator's cell marks (``lanes/coordinator/evidence/marked-cells.py``): the LATEST ``finding`` label on a
 #: result, by ts, decides.  ``UNDER RE-VERIFICATION ...`` marks its cell with a footnote while it stands; a later ``CLEARED ...``
-#: drops the mark; ``PULLED ...`` rejects the result like a red-team downgrade.  Any other latest finding changes nothing.
-FINDING_OPEN, FINDING_CLEARED, FINDING_PULLED = "UNDER RE-VERIFICATION", "CLEARED", "PULLED"
+#: drops the mark; ``PULLED ...`` rejects the result like a red-team downgrade, and so does ``SUPERSEDED ...`` (its producer re-ran
+#: the cell, e.g. on the spine's input sets), and so does any ``superseded_by`` label (the vocabulary's key, naming the
+#: replacement).  Any other latest finding changes nothing.
+FINDING_OPEN, FINDING_CLEARED, FINDING_PULLED, FINDING_SUPERSEDED = "UNDER RE-VERIFICATION", "CLEARED", "PULLED", "SUPERSEDED"
 UNDER_REVERIFICATION = "under re-verification"
 
 
 def cell_finding(labels: Iterable[Any]) -> tuple[str | None, _Label | None]:
     """``("open" | "cleared" | "pulled" | None, the latest finding label)`` of a result (``(None, None)`` without one)."""
 
-    found = [lab for lab in _labels(labels) if lab.key == _FINDING]
+    labs = _labels(labels)
+    superseded = [lab for lab in labs if lab.key == "superseded_by" and str(lab.value).strip()]
+    if superseded:                                          # the vocabulary's key: a replacement exists, whatever the findings say
+        return "pulled", superseded[-1]
+    found = [lab for lab in labs if lab.key == _FINDING]
     if not found:
         return None, None
     latest = max(found, key=lambda lab: (lab.ts, str(lab.value)))
     value = str(latest.value)
-    for state, prefix in (("open", FINDING_OPEN), ("cleared", FINDING_CLEARED), ("pulled", FINDING_PULLED)):
+    for state, prefix in (("open", FINDING_OPEN), ("cleared", FINDING_CLEARED), ("pulled", FINDING_PULLED), ("pulled", FINDING_SUPERSEDED)):
         if value.startswith(prefix):
             return state, latest
     return None, latest

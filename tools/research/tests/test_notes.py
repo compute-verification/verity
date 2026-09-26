@@ -36,6 +36,36 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
+    # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
+    p = _report(tmp_path, "lane-e", "# lane-e\n", 5)
+    real, calls = Path.write_text, []
+
+    def flaky(self, data, *a, **kw):
+        calls.append(self.name)
+        if len(calls) == 1:
+            real(self, data, *a, **kw)
+            raise BlockingIOError(11, "Resource temporarily unavailable")
+        return real(self, data, *a, **kw)
+    monkeypatch.setattr(Path, "write_text", flaky)
+    monkeypatch.setattr(notes.time, "sleep", lambda s: None)
+    notes.checkpoint(tmp_path, "lane-e", "open", "after eagain", commit="abc1234", now=NOW)
+    assert len(calls) == 2 and p.read_text().count("after eagain") == 1
+
+
+@pytest.mark.parametrize("text, delay", [
+    ("WAIT moe67 r20260925-175229-a415 check-back 21:45Z agent bc-1: #4 Match", 45 * 60),
+    ("WAITING r1 on pod, check after 22:30Z; agent bc-1; next: fetch", 90 * 60),
+    ("WAIT a check-back 23:00Z, b check-back 21:20Z", 20 * 60),
+    ("WAIT r1 check-back 00:15Z", (3 * 60 + 15) * 60),
+    ("WAIT r1 check-back 20:50Z", 60),
+])
+def test_a_wait_checkpoint_names_the_one_shot_timer_that_wakes_the_lane(text, delay):
+    hint = notes.wake_hint(text, NOW)
+    assert f"subscribe_timer once=true delaySeconds={delay})" in hint and "not a cron timer" in hint
+    assert notes.wake_hint("done #101, next #4 check-back 21:45Z", NOW) is None and notes.wake_hint("WAIT r1, no time", NOW) is None
+
+
 def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
     p = notes.checkpoint(tmp_path, "fresh", "open", "started", commit="none", now=NOW)
     assert p.name == "20260923T2100Z-report-fresh.md"
@@ -63,6 +93,17 @@ def test_newest_checkpoint_wins_wherever_it_sits_and_times_before_midnight_are_y
     assert notes.lane_status(_report(tmp_path, "l", body, 30), NOW, 45)["commit"] == "bbbbbbb"
     late = _report(tmp_path, "m", "CHECKPOINT ccccccc (23:50Z) last night\nCHECKPOINT ddddddd (20:10Z) stamped ahead\n", 60)
     assert notes.lane_status(late, NOW, 45)["commit"] == "ddddddd"     # mtime 20:00Z: 20:10Z is today, 23:50Z the day before
+
+
+def test_a_newer_open_checkpoint_after_a_final_one_reopens_the_lane_despite_its_final_section(tmp_path):
+    # verify-night-3 2026-09-26: "## FINAL" from an earlier round made the reopened lane final, done at the report's mtime, and
+    # the reaper took the pod the reopened lane had just created
+    body = ("CHECKPOINT 7585828 (20:40Z) [open] reopened for another round: NOT final\n"
+            "CHECKPOINT 906255b (18:49Z) [final] round done\n\n## FINAL\n\nround done, pods terminated\n")
+    row = notes.lane_status(_report(tmp_path, "l", body, 10), NOW, 45)
+    assert (row["state"], row["done_ts"], row["commit"]) == ("open", None, "7585828")
+    done = notes.lane_status(_report(tmp_path, "m", "CHECKPOINT 1111111 (19:00Z) [open] working\n\n## FINAL\n\ndone\n", 10), NOW, 45)
+    assert done["state"] == "final"                     # a FINAL section with no final checkpoint still finishes the lane
 
 
 def test_stale_means_not_final_and_silent_past_the_threshold(tmp_path):
@@ -437,6 +478,17 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
         "21:00Z RESUMED-POD red-team-flock vy-red-team-flock fzs8 (created 20:58Z, after FINAL 19:56Z): not reaped",
         "21:00Z RESUMED-POD red-team-flock vy-red-team-flock nots (created unknown, after FINAL 19:56Z): not reaped"]
     assert notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state) == []
+    assert killed == [] and not (tmp_path / "reaper.log").exists()
+
+
+def test_the_reaper_says_nothing_about_a_pod_runpod_no_longer_knows(tmp_path):
+    pod = {"id": "gone", "name": "vy-done", "usd_h": 0.48, "started_ts": NOW.timestamp() - 3600, "idle": True, "idle_min": 60}
+    gone = lambda lane, p: (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
+    final = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
+    stale = [{"lane": "slow", "state": "open", "stale": True, "age_min": 90, "pods": [pod]}]
+    killed: list = []
+    assert notes.reap_lines(tmp_path, final, NOW, 10, set(), reap=True, terminate=killed.append, custody=gone, state={}) == []
+    assert notes.stale_reap_lines(tmp_path, stale, NOW, 30, {}, reap=True, custody=gone, terminate=killed.append) == []
     assert killed == [] and not (tmp_path / "reaper.log").exists()
 
 

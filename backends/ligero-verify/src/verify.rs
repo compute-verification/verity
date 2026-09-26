@@ -524,11 +524,11 @@ fn check_vu_shape(st: &Statement, rel: &Relation, leaf: Option<&LeafScheme>, pin
             st.steps, rel.name, rel.steps, rel.k_ops
         ));
     }
-    if leaf.is_some() && st.steps * st.k_ops != crate::relation::HASHED_ROW_K {
+    if leaf.is_some() && st.steps * st.k_ops != rel.vu_k() {
         return Err(format!(
             "statement: K = {} words per row, a hashed statement's row is K = {}",
             st.steps * st.k_ops,
-            crate::relation::HASHED_ROW_K
+            rel.vu_k()
         ));
     }
     Ok(())

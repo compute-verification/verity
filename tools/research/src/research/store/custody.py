@@ -26,6 +26,7 @@ custody RUN` answer the same everywhere.  Waivers and never-ran verdicts for the
 """
 from __future__ import annotations
 
+import calendar
 import contextlib
 import json
 import os
@@ -254,20 +255,75 @@ def forget_credential(custody_dir: Path) -> None:
         (Path(custody_dir) / CRED_FILE).unlink()
 
 
+PUBLISH_LOG = "publish.log"
+
+
+def divert_output(run_dir: Path, custody_dir: Path) -> bool:
+    """When this process's stderr is the run dir's launcher.log (the machine-side runner), point fds 1 and 2 at <custody dir>/publish.log
+    for the rest of the process.  The run record is taken next, and any line printed into launcher.log after it (an S3 retry notice, the
+    failure line) makes the run dir differ from its record, so custody could never be verified, not even after a repair push."""
+    try:
+        if not os.path.samestat(os.fstat(2), os.stat(Path(run_dir) / "launcher.log")):
+            return False
+        fd = os.open(Path(custody_dir) / PUBLISH_LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    except OSError:
+        return False
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.dup2(fd, 1)
+    os.dup2(fd, 2)
+    os.close(fd)
+    return True
+
+
+def _key_expiry(custody_dir: Path) -> str | None:
+    try:
+        return json.loads((Path(custody_dir) / CRED_FILE).read_text()).get("expires_utc")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _expired(expires_utc: str | None, now: float | None = None) -> bool:
+    try:
+        exp = calendar.timegm(time.strptime(expires_utc or "", "%Y-%m-%dT%H:%M:%SZ"))
+    except (ValueError, OverflowError):
+        return False
+    return (time.time() if now is None else now) >= exp
+
+
 # ---- the runner -------------------------------------------------------------------------------------------------------------------------
+
+#: A run bigger than this uploads without resume (a failed upload starts over), so custody warns (``size_warning``) before pushing it.
+SIZE_WARN_BYTES = 4 << 30
+
+
+def size_warning(run_dir: Path) -> str | None:
+    """A warning when the run's files exceed :data:`SIZE_WARN_BYTES`, or ``None``."""
+    d = Path(run_dir)
+    total = sum((d / r).stat().st_size for r in run_files(d))
+    if total <= SIZE_WARN_BYTES:
+        return None
+    return (f"run files are {total / (1 << 30):.1f} GiB (over {SIZE_WARN_BYTES >> 30} GiB): the custody upload has no resume, so a dropped "
+            f"connection restarts it; keep big outputs out of the run dir or give --custody-ttl room")
+
 
 def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, conditions: dict[str, Any] | None = None,
                    store_root: str | None = None, sleep: Callable[[float], None] = time.sleep, tries: int = PUSH_TRIES) -> dict[str, Any]:
     """What `research run --custody-dir` does after the workload: publish the attempt with its run record, push and verify it (retrying),
-    delete the key, and leave the verdict in <run>/.custody.  Never raises.  Prints only on failure: after the marker nothing may touch the
-    run dir, launcher.log included."""
+    delete the key, and leave the verdict in <run>/.custody.  Never raises.  Prints only on failure, and on the machine into
+    <custody dir>/publish.log (`divert_output`): once the record is taken nothing may touch the run dir, launcher.log included."""
     from . import attempt as A
     from .local import LocalStore
 
     d = Path(run_dir)
     sys.stdout.flush()
     sys.stderr.flush()
+    divert_output(d, custody_dir)
+    expires = _key_expiry(custody_dir)
     rep: dict[str, Any] = {"schema": SCHEMA, "run_id": d.name, "preserved": False, "error": None}
+    warn = size_warning(d)
+    if warn:
+        print(f"research: custody: {warn}", file=sys.stderr)
     try:
         with custody_env(custody_dir):
             st = LocalStore(A.store_root(store_root))
@@ -287,6 +343,11 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
         rep.update(preserved=False, error=f"{type(e).__name__}: {e}")
     finally:
         forget_credential(custody_dir)
+    if not rep.get("preserved") and _expired(expires):
+        rep["error"] = (f"the custody key expired at {expires}: the run outlived --custody-ttl (launch the next one with a longer ttl; repair "
+                        f"this one with a fresh key); {rep['error']}")
+    if warn:
+        rep["size_warning"] = warn
     if rep.get("preserved"):
         write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
     else:
@@ -368,5 +429,5 @@ def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False) -> list[dict
     return [triage_row(st, d, verify_remote=verify_remote) for d in dirs]
 
 
-__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "SCHEMA", "custody_env", "has_custody", "marker_problem", "mint_for_machine", "push_run",
-           "put_run_record", "run_files", "runner_publish", "triage", "triage_row", "verify"]
+__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "has_custody", "marker_problem",
+           "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "triage", "triage_row", "verify"]

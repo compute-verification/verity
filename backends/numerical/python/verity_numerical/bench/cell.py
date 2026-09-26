@@ -8,7 +8,7 @@
     python -m verity_numerical.bench.cell check    --cell cell.json --prover-run RUN [--verifier-run RUN] [--result FILE]
     python -m verity_numerical.bench.cell register --cell cell.json --prover-run RUN [--verifier-run RUN] [--dry-run]
 
-``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census instance set id (a
+``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census input set id (a
 backend's frozen set), an input-set directory, or an ``art:`` id of one (``input_sets``).  ``plan`` resolves the cell: the
 backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``bench.lowerings``: why
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the
@@ -149,6 +149,8 @@ def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
             "--custody-ttl", job.get("ttl", "8h"), "--stage", job["stage"], "--exclusive"]
     if cell.campaign:
         argv += ["--campaign", cell.campaign]
+    for f in job.get("send") or []:
+        argv += ["--send", str(f)]
     for k, v in sorted((job.get("env") or {}).items()):
         argv += ["--env", f"{k}={v}"]
     for f in job.get("send") or []:
@@ -211,7 +213,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
             out.append("no loopback probe (live.loopback_round_seconds with interaction.loopback_method)")
         if not isinstance(m.get("net.rtt_ms"), (int, float)) or not inter.get("rtt_method"):
             out.append("no open-connection RTT probe (net.rtt_ms with interaction.rtt_method)")
-    rel = fp.get("relation")
+    rel = fp.get("statement_relation", fp.get("relation"))      # B-Ligero: the statement's "<rel>+<leaf>" beside its relation name
     if rel is not None and rel != cell.relation:
         out.append(f"relation {rel!r}, the cell's is {cell.relation!r}")
     inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}

@@ -14,18 +14,23 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
     "hardware": {"a100-sxm4-80gb/bf16": 312e12, "h100-sxm5-80gb/bf16": 989.4e12, "h100-sxm5-80gb/e4m3": 1978.9e12,
-                 "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12},
+                 "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "l40s-48gb/bf16": 362.05e12, "l40s-48gb/e4m3": 733e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
-    "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics")},
+    "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics"), "attention-head": ("D", "BN", "semantics"), "rope-head": ("D",),
+                             "rmsnorm-fused-cuda": ("N", "EPS"), "rmsnorm-triton": ("N", "EPS"), "silu-mul": ("I",),
+                             "gumbel-top-p-token-select": ("V",), "token-select-greedy": ("V",), "moe-router-topk": ("E", "TOPK", "VPT"),
+                             "moe-expert-coordinate": ("E", "K"), "moe-expert-coordinate-weighted": ("E", "K"), "moe-sum": ("TOPK", "H"),
+                             "scaled-mm-fp8-block-coordinate": ("K", "G", "semantics"), "bias-add": ("N",), "bf16-mul-scalar": ("N",),
+                             "embedding-row": ("V", "H")},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
-              "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
+              "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090", "l40s-48gb/bf16": "L40S", "l40s-48gb/e4m3": "L40S"},
     "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
 }
@@ -91,13 +96,14 @@ def test_the_reference_network_is_the_same_datacenter_and_the_sensitivity_profil
         assert (n.rtt_s == ref.rtt_s) != (n.bandwidth_bps == ref.bandwidth_bps), n.id
 
 
-def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> None:
+def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or_a_workload() -> None:
     """The overhead denominator: the census line of the target's anchor device and operand dtype (core names only the device)."""
     lines = {t.name: contract.native_peak_of(t) for t in TARGETS.values()}
     for name, h in lines.items():
         t = TARGETS[name]
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
-    assert {h.id for h in lines.values()} == set(census.HARDWARE)
+    used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
+    assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"}    # the L40S FP8 line serves no row yet
     sets = [s.target for s in census.INPUT_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
     assert all(s.size == census.SUBCIRCUIT_TEMPLATES[census.SUBCIRCUITS[s.subcircuit].template].reference_batch
@@ -129,14 +135,19 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
 def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
     """Every subcircuit's semantics is an exact instruction of the registry, with its operand datatype and a stable id; a
     subcircuit need not have a (legacy) target: the H100 BF16 wgmma one (lane wgmma-bf16) came after the targets froze."""
-    for s in census.SUBCIRCUITS.values():
+    gemm = [s for s in census.SUBCIRCUITS.values() if s.template == "gemm-coordinate"]
+    for s in gemm:
         ins = INSTRUCTIONS[s.parameters.semantics]
         sem = "-".join(x for x in ins.id.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
         assert s.id == f"{s.template}/k{s.parameters.K}/{sem}" and s.parameters.datatype == ins.a_dtype and ins.model is not None
         assert s.display == f"GemmCoordinate<{s.parameters.K}> · {sem.split('-')[0]} {sem.split('-')[1]} · {census.DATATYPES[ins.a_dtype].display}"
-    untargeted = {s.id for s in census.SUBCIRCUITS.values() if getattr(s, "legacy_target", None) is None}
-    assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"}
-    assert len(census.SUBCIRCUITS) == len(TARGETS) + len(untargeted)
+    untargeted = {s.id for s in gemm if getattr(s, "legacy_target", None) is None}
+    real_k = {f"gemm-coordinate/k{k}/{sem}" for k in (2048, 8192) for sem in ("sm80-mma-bf16", "sm90-wgmma-bf16", "sm89-mma-e4m3", "sm90-wgmma-e4m3")}
+    served = {f"gemm-coordinate/k{m['subcircuit_parameters']['K']}/{'-'.join(x for x in m['subcircuit_parameters']['semantics'].split('.') if not re.fullmatch(r'm[0-9]+n[0-9]+k[0-9]+', x))}"
+              for w in census.raw("workloads") for m in w["template_mix"] if m["subcircuit_template"] == "gemm-coordinate"}
+    assert untargeted == ({"gemm-coordinate/k1536/sm90-wgmma-bf16"} | real_k | served) - {s.id for s in gemm if getattr(s, "legacy_target", None)}
+    assert served <= {s.id for s in gemm}                                                  # every served workload's GEMM is bound
+    assert len(gemm) == len(TARGETS) + len(untargeted)
     wgmma = census.SUBCIRCUITS["gemm-coordinate/k1536/sm90-wgmma-bf16"]
     assert INSTRUCTIONS[wgmma.parameters.semantics].status == "pinned" and wgmma.fidelity_notes == []
 
@@ -155,3 +166,148 @@ def test_the_h100_bf16_cells_and_input_set_stand_for_the_wgmma_bf16_subcircuit()
     assert "r20260926-023321-ecb5" in census.source(e) and "bench-instances-bf16-hopper-v1" in e.covers
     assert census.INPUT_SETS["bench-instances-bf16-hopper-v1"].subcircuit == mma
     assert all(census.stood_for_by(s) in (None, *census.SUBCIRCUITS) for s in census.SUBCIRCUITS)
+
+
+def test_workloads_are_the_regression_rows_template_mix() -> None:
+    """Each workload is a served vLLM configuration with its template mix: the verification units per VU family and bound
+    parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
+    to those expectations, and only families the census has a template for name one."""
+    import collections
+    import pathlib
+
+    repo = pathlib.Path(census.ROOT).parent
+    assert census.WORKLOADS, "no workloads"
+    for w in census.WORKLOADS.values():
+        x = json.loads((repo / w.source.expected).read_text(encoding="utf-8"))
+        rp = x["replay_partition"]
+        mix = collections.Counter()
+        for k, v in rp["strata"].items():
+            mix[k.split("|")[0]] += v["population"]
+        got = {e.vu_family + ("{" + ",".join(f"{k}={v}" for k, v in vars(e.parameters).items()) + "}" if vars(e.parameters) else ""): e.vus
+               for e in w.template_mix}
+        assert got == dict(mix) and w.vus == rp["population"]["vus"] == sum(e.vus for e in w.template_mix), w.id
+        assert x["row"] == w.source.row and (x.get("program_digest") or {}).get("program_digest_of_record") == w.source.program_digest
+        assert w.serving.datatype in census.DATATYPES and (w.serving.hardware is None or w.serving.hardware in census.HARDWARE)
+        for e in w.template_mix:
+            t = census.SUBCIRCUIT_TEMPLATES[e.subcircuit_template]              # every family maps to a template
+            assert set(vars(e.subcircuit_parameters)) == set(vars(t.parameters)) and e.subcircuits_per_vu >= 1
+            if e.vu_family.startswith(("Gemm_", "MoeExpertGemm", "ScaledMm")):
+                assert e.subcircuits_per_vu == e.parameters.N and e.subcircuit_parameters.K == e.parameters.K
+            if e.vu_family.startswith("Attention_"):
+                assert e.subcircuits_per_vu == e.parameters.NH and e.subcircuit_parameters.D == e.parameters.D
+        if w.serving.hardware_class == "l40s":
+            assert w.serving.hardware == f"l40s-48gb/{w.serving.datatype}"
+    r101 = next(w for w in census.WORKLOADS.values() if w.source.row == 101)
+    gemm = sum(e.vus for e in r101.template_mix if e.vu_family == "Gemm_v1")
+    assert (r101.vus, gemm, r101.model.name, r101.serving.hardware_class) == (46558, 18400, "Llama-3.2-1B", "l40s")
+
+
+#: bench-spine's input-set generator keys on these template ids (cursor/bench-spine-5777, bench/templates.py); the census must
+#: name them alike.
+BENCH_SPINE_TEMPLATES = {"gemm-coordinate", "attention-head", "rope-head", "rmsnorm-fused-cuda", "rmsnorm-triton", "silu-mul",
+                         "gumbel-top-p-token-select"}
+
+
+def test_subcircuit_templates_cover_every_mixed_family_with_ir_definitions() -> None:
+    templates = census.SUBCIRCUIT_TEMPLATES
+    assert BENCH_SPINE_TEMPLATES <= set(templates)
+    for t in templates.values():
+        assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", t.id) and t.ir_definitions and t.description and vars(t.parameters)
+        assert all(p.type in ("integer", "string", "number") for p in vars(t.parameters).values())
+    mixed = {e.subcircuit_template for w in census.WORKLOADS.values() for e in w.template_mix}
+    assert mixed <= set(templates) and len(mixed) == len(templates)                     # each template serves a family in a mix
+
+
+def test_the_l40s_line_is_the_datasheets_dense_peak() -> None:
+    bf16, fp8 = census.HARDWARE["l40s-48gb/bf16"], census.HARDWARE["l40s-48gb/e4m3"]
+    assert (bf16.flop_per_second, fp8.flop_per_second) == (362.05e12, 733e12) and bf16.memory_bytes == 48 * 2**30
+    assert "733*" in census.source(bf16) and "1,466*" in census.source(fp8) and "sparsity" in census.source(bf16)
+    assert "accumulate" in bf16.methodology and bf16.name == "L40S"
+
+
+#: Bound subcircuit ids as bench-spine's generator writes them (bench/templates.py: GEMM, FA2 head, RoPE, the row templates with
+#: a float EPS slug) and as the other census templates bind: every one must validate.
+BOUND_ID_EXAMPLES = (
+    "gemm-coordinate/k1536/sm90-wgmma-e4m3", "gemm-coordinate/k2048/sm80-mma-bf16", "gemm-coordinate/k2560/sm90-wgmma-bf16",
+    "attention-head/d64-bn128/sm80-fa2-bf16", "attention-head/d128-bn128/sm90-fa3-bf16", "rope-head/d64/neox-bf16",
+    "rmsnorm-fused-cuda/n2048-eps1e-05/bf16", "rmsnorm-triton/n2048-eps9.999999747378752e-06/bf16", "silu-mul/i8192/bf16",
+    "gumbel-top-p-token-select/v128256/fp32", "token-select-greedy/v256000/fp32", "moe-router-topk/e64-topk8-vpt8/fp32",
+    "moe-expert-coordinate/e64-k2048/sm80-mma-bf16", "moe-sum/topk8-h2048/bf16", "scaled-mm-fp8-block-coordinate/k2560-g128/sm90-wgmma-e4m3",
+)
+
+
+def test_every_templates_bound_ids_validate() -> None:
+    subs = json.loads((census.ROOT / "schemas" / "subcircuits.schema.json").read_text(encoding="utf-8"))
+    sets = json.loads((census.ROOT / "schemas" / "input_sets.schema.json").read_text(encoding="utf-8"))
+    pat = subs["items"]["properties"]["subcircuits"]["items"]["properties"]["id"]["pattern"]
+    assert sets["items"]["properties"]["subcircuit"]["pattern"] == pat
+    for i in BOUND_ID_EXAMPLES:
+        assert re.fullmatch(pat, i), i
+        assert i.split("/")[0] in census.SUBCIRCUIT_TEMPLATES, i
+    for bad in ("gemm-coordinate/k1536", "GEMM/k1536/x", "gemm-coordinate//x", "attention-head/d64/sm80 fa2"):
+        assert not re.fullmatch(pat, bad), bad
+    for t in census.SUBCIRCUIT_TEMPLATES.values():                       # a bound id names its own template
+        assert all(s.id.startswith(t.id + "/") for s in t.subcircuits)
+
+
+def _ops(expr: str, env: dict) -> int:
+    """An integer work-model expression (+ - * // and parentheses over names) evaluated without eval."""
+    import ast
+    import operator
+
+    ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
+
+    def ev(n: ast.AST) -> int:
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.Constant) and isinstance(n.value, int):
+            return n.value
+        if isinstance(n, ast.Name):
+            return int(env[n.id])
+        raise ValueError(f"not a work-model expression: {ast.dump(n)}")
+
+    return ev(ast.parse(expr, mode="eval"))
+
+
+def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
+    from verity.proofs.target import FIRST
+    from verity_numerical.bench import views
+
+    version = views.WORK_MODEL.split(":")[0]
+    for t in census.SUBCIRCUIT_TEMPLATES.values():
+        wm = t.work_model
+        assert wm.version == version and wm.basis and wm.source
+        assert set(vars(wm.variables)) <= {"T"} and ("T" in wm.ops_per_input) == ("T" in vars(wm.variables))
+    gemm = census.SUBCIRCUIT_TEMPLATES["gemm-coordinate"].work_model
+    assert _ops(gemm.ops_per_input, {"K": 1536}) == views.native(FIRST)["ops_per_instance"] == 3072
+    for w in census.WORKLOADS.values():                                  # every bound parameter set in a mix evaluates
+        for e in w.template_mix:
+            wm = census.SUBCIRCUIT_TEMPLATES[e.subcircuit_template].work_model
+            env = {**{k: v for k, v in vars(e.subcircuit_parameters).items() if isinstance(v, int)}, "T": 1}
+            assert _ops(wm.ops_per_input, env) >= 0, (w.id, e.vu_family)
+            assert all(_ops(x, env) >= 0 for x in vars(wm.special_per_input).values())
+    rms = census.SUBCIRCUIT_TEMPLATES["rmsnorm-triton"].work_model
+    assert _ops(rms.ops_per_input, {"N": 2048}) == 3 * 2048 and vars(rms.special_per_input) == {"rsqrt": "1"}
+    fp8 = census.SUBCIRCUIT_TEMPLATES["scaled-mm-fp8-block-coordinate"].work_model
+    assert _ops(fp8.ops_per_input, {"K": 2560, "G": 128}) == 2 * 2560 + 3 * 20
+
+
+
+def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
+    """The four non-GEMM templates C-Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
+    their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
+    want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
+            "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}
+    for sid, nbytes in want.items():
+        s = census.SUBCIRCUITS[sid]
+        wm = census.SUBCIRCUIT_TEMPLATES[s.template].work_model
+        env = {k: v for k, v in vars(s.parameters).items() if isinstance(v, int)}
+        assert census.evaluate(wm.bytes_per_input, env) == nbytes and wm.bytes_basis and wm.bytes_source
+        assert s.id.startswith(s.template + "/") and s.display
+    for hid in ("h100-sxm5-80gb/bf16", "h100-sxm5-80gb/e4m3"):
+        h = census.HARDWARE[hid]
+        assert h.memory_bytes_per_second == 3.35e12 and "3.35 TB/s" in h.memory_sources[0].label and "3.35 TB/s" not in census.source(h)
+    with pytest.raises(ValueError):
+        census.evaluate("__import__('os')", {})

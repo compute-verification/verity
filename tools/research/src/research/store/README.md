@@ -426,7 +426,8 @@ prints the table; the groups are:
   `omitted` (list), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
-  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
+  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
@@ -504,17 +505,20 @@ status.json is missing or not terminal (`--force` overrides, for the CLI only).
 `research fetch RUN --all` continues to work as before; `research data pull` complements it by moving store objects.
 Active run state stays in the run registry; the store only ever sees completed/failed attempts.
 
-### 10.1 Run custody on the remote — `research run --on M --custody-r2` (`custody.py`)
+### 10.1 Run custody on the remote — `research run --on M` (`--custody-r2`, the default; `custody.py`)
 
-With `--custody-r2` the run's custody does not depend on the launcher's disk: the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, must outlast the run; no `DeleteObject`/`CopyObject`) and stages it with a
+With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
+the launcher mints an action-scoped temporary key
+(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
 attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,
 launcher.log, job.json, status.json, outputs; markers excluded), pushes and verifies it (`preserved.check`, head; retried), deletes
 the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
-The marker is written only when every file now in the run dir is in the record by content; after it the runner writes nothing more
-there. Without the flag attempts are unchanged (no `run_record`).
+The marker is written only when every file now in the run dir is in the record by content; from the record on, the runner's own
+output goes to `<root>/requests/<run id>/custody/publish.log`, not launcher.log, so nothing it prints can make the run dir differ
+from its record. A failure whose key had expired says so in the marker's `error`. With `--no-custody-r2` attempts are unchanged
+(no `run_record`).
 
 - The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
 - `research data custody RUN [--publish]` checks the same predicate from any machine (and rewrites the marker); `--publish` puts a

@@ -319,10 +319,13 @@ class _Pool:
             self.opened += 1
         return conn
 
-    def acquire(self) -> http.client.HTTPConnection:
-        with self._lock:
-            if self._idle:
-                return self._idle.pop()
+    def acquire(self, fresh: bool = False) -> http.client.HTTPConnection:
+        """An idle connection, else a new one; `fresh` always opens a new one (the retry after a connection error: when R2 has closed
+        idle keep-alives, every connection in the pool is as dead as the one that just failed)."""
+        if not fresh:
+            with self._lock:
+                if self._idle:
+                    return self._idle.pop()
         return self._open()
 
     def release(self, conn: http.client.HTTPConnection) -> None:
@@ -506,12 +509,13 @@ class S3Remote:
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
         retries = HEAD_RETRIES if method == "HEAD" else RETRIES
         deadline = HEAD_DEADLINE_S if method == "HEAD" else REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE
+        conn_failed = False
         try:
             for attempt in range(retries + 1):
                 if isinstance(body, Path):
                     data.seek(0)
                 signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
-                conn = self.pool.acquire()
+                conn = self.pool.acquire(fresh=True) if conn_failed else self.pool.acquire()
                 dog = _Watchdog(conn, deadline)
                 try:
                     with self._stats_lock:
@@ -522,6 +526,7 @@ class S3Remote:
                 except _RETRIABLE as e:
                     dog.cancel()
                     self.pool.discard(conn)
+                    conn_failed = True
                     if dog.fired:
                         self._deadline_hit(method, key, attempt + 1, retries + 1, deadline)
                     if attempt == retries:

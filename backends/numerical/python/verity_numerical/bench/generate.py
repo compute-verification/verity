@@ -137,16 +137,52 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
             ("silu-mul", {"I": 8192}, 256),
             ("gumbel-top-p-token-select", {"V": 128256}, 32)],
+    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured #101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
+    #: largest batches the RTX 4090's 24 GB carried (16,384 and 8,192); each smaller set is the larger one's prefix.
+    "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
+            for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")
+            for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
+    #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
+    "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
 }
 
 
+#: Instances per set of the workloads suite, by template: enough for a sweep's first points, bounded by bytes (a set of GEMM
+#: coordinates at K = 14336 is 117 MB) and by the evaluator (an embedding input materialises the V x H table).
+WORKLOAD_N = {"gemm-coordinate": 2048, "attention-head": 128, "rope-head": 1024, "rmsnorm-fused-cuda": 256, "rmsnorm-triton": 256,
+              "silu-mul": 256, "gumbel-top-p-token-select": 32, "token-select-greedy": 64, "moe-router-topk": 4096,
+              "moe-router-topk-norm": 4096, "moe-sum": 1024, "bias-add": 1024, "bf16-mul-scalar": 1024, "embedding-row": 16,
+              "moe-expert-coordinate": 2048, "moe-expert-coordinate-weighted": 2048, "scaled-mm-fp8-block-coordinate": 2048}
+WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
+
+
+def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``census/workloads.json``, ``headline.groups``), in
+    id order; an attention head's T range is its census ``variable_ranges.T``."""
+    from . import census
+    from . import headline as H
+
+    sids = sorted({g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows
+                   for g in H.groups(w) if g["subcircuit"]})
+    out = []
+    for sid in sids:
+        sub = TM.parse_subcircuit_id(sid)
+        params = dict(sub.params)
+        if sub.template.id == "attention-head":
+            rng = census.SUBCIRCUITS[sid].variable_ranges.T
+            params["T"] = f"{rng.min}:{rng.max}"
+        out.append((sub.template.id, params, WORKLOAD_N[sub.template.id]))
+    return out
+
+
 def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False) -> list[dict[str, Any]]:
-    """Generate every set of suite ``name`` under ``out``; with ``digests_only`` each set's port arrays are removed once written
-    (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte for byte."""
+    """Generate every set of suite ``name``, each under ``<out>/n<n>/sets/<name>/``; with ``digests_only`` each set's port arrays
+    are removed once written (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte
+    for byte."""
     out_sets = []
-    for tid, params, n in SUITES[name]:
+    for tid, params, n in (workload_suite() if name == "workloads" else SUITES[name]):
         sub = TM.subcircuit(tid, **params)
-        s = generate(sub, n, seed, out, procs=procs)
+        s = generate(sub, n, seed, Path(out) / f"n{n}", procs=1 if tid == "embedding-row" else procs)   # one V x H table, not one per worker
         s["manifest_sha256"] = IS.InputSet.open(s["path"]).manifest_sha256()
         if digests_only:
             d = Path(s["path"])
@@ -197,7 +233,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--register", action="store_true", help="research data put --kind input-set/v1 --preserve; prints the art id")
-    ap.add_argument("--suite", choices=sorted(SUITES), help="every set of a named suite (SUITES) under --out, with --seed")
+    ap.add_argument("--suite", choices=sorted([*SUITES, "workloads"]),
+                    help="every set of a named suite (SUITES; workloads: one per bound subcircuit of WORKLOAD_ROWS) under --out, with --seed")
     ap.add_argument("--summary", default=None, help="--suite: write the sets' summaries (digests included) to this JSON file")
     ap.add_argument("--digests-only", action="store_true", help="--suite: keep each set's manifest and index, not its arrays")
     a = ap.parse_args(list(argv) if argv is not None else None)

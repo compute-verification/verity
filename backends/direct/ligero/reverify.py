@@ -233,6 +233,26 @@ def sharing_label(tile: Any) -> str:
     return "none" if tile is None else f"tile{tile['nx']}x{tile['nw']}"
 
 
+def input_set_dir(block: dict, instances_root: str | None = None) -> Path:
+    """The input set a dump's ``set.input_set`` block names (``InputSet.ref``: content digest, store id): ``instances_root``
+    when it is that set's directory, else the set fetched from the evidence store by its ``art``.  ``ValueError`` when neither
+    holds a set with the block's content digest."""
+    from verity_numerical.bench.input_sets import InputSet
+    cands = [Path(instances_root)] if instances_root else []
+    if block.get("art"):
+        r = subprocess.run(["research", "data", "fetch", block["art"]], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            cands.append(Path(r.stdout.strip().splitlines()[-1]))
+    for c in cands:
+        try:
+            if InputSet.open(c).content_digest == block.get("content_digest"):
+                return c
+        except (OSError, ValueError, KeyError):
+            continue
+    raise ValueError(f"input set {block.get('tier')!r} (content {str(block.get('content_digest'))[:16]}…, {block.get('art')}) is not at "
+                     f"--instances-root and could not be fetched: the commitments cannot be recomputed")
+
+
 def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
     """The x / W / y tree references of the input set the dump names, recomputed from the set itself: the pinned relation
     (``system-digest``) fixes the relation and leaf scheme, the manifest's ``set`` block the range ``[0, total_vus)`` and the
@@ -252,7 +272,7 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     from . import hashauth
     from .auth import OWNER
     from .leaf import registry as leaf_registry
-    from .relchain import instances, instances_digest, tile_digest, tile_instances
+    from .relchain import instances, instances_digest, set_instances, tile_digest, tile_instances
 
     base, leaf_name = leaf_registry.split_relation_name(pinned)
     s = man.get("set") or {}
@@ -269,7 +289,23 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     if hfmt is not None and (tile is not None or leaf_name != "poseidon2"):
         raise ValueError(f"{rel.name}: its lane format ({type(hfmt).__name__}) is recomputed unshared under the poseidon2 leaf only, "
                          f"not {leaf_name}{' as a tile' if tile is not None else ''}")
-    if tile is None:
+    iset = s.get("input_set")
+    dataset, tier = rel.instances_dataset, rel.instances_tier
+    if iset is not None:
+        # an input-set run (bench-vu --input-set): the set's own rows and recorded outputs, read by content digest; the
+        # relation's model must reproduce every recorded output word (relchain.set_instances)
+        from verity_numerical.bench.input_sets import InputSet
+        if tile is not None:
+            raise ValueError("an input-set dump with a `set.tile` block: an input set carries its own rows")
+        sdir = input_set_dir(iset, instances_root)
+        digest = InputSet.open(sdir).manifest_sha256()
+        if digest != claimed:
+            raise ValueError(f"input set {iset.get('tier')!r} has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
+        data = set_instances(rel, sdir, total)
+        dataset, tier = iset["dataset"], iset["tier"]
+        x_rows = [[int(w) for w in v[0]] for v in data]
+        w_cols = [[int(w) for w in v[1]] for v in data]
+    elif tile is None:
         digest = instances_digest(rel, total, root=instances_root)
         if digest != claimed:
             raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
@@ -290,8 +326,8 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
         data, x, w = tile_instances(rel, nx, nw, seed=seed, procs=procs)
         x_rows, w_cols = [[int(v) for v in r] for r in x], [[int(v) for v in r] for r in w]
     word_bits = 16 if rel.word_dtype == "<u2" else 8
-    K = int(getattr(rel, "vu_words", 1536))
-    scheme = leaf_registry.get(leaf_name)
+    K = int(getattr(rel, "vu_words", None) or rel.K)
+    scheme = leaf_registry.for_relation(pinned)
     if hfmt is not None:
         scheme, word_bits = scheme.with_lanes(hfmt), hfmt.elem_bits
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
@@ -302,8 +338,9 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
         raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
     counts = {"a": len(x_rows), "b": len(w_cols), "y": total}
     if hashauth.is_vllm(scheme):
-        return _vllm_committed_trees(x_rows, w_cols, y_words, rel=rel, claimed=claimed, total=total, K=K, word_bits=word_bits)
-    bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
+        return _vllm_committed_trees(x_rows, w_cols, y_words, rel=rel, claimed=claimed, total=total, K=K, word_bits=word_bits,
+                                     dataset=dataset, tier=tier)
+    bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=claimed, lo=0,
                                            hi=total, K=K, tree=n, schema=(scheme.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
     if scheme.schema == "blake3-keyed/row/v2":
         dom = {n: CommitmentDomain(bindings[n], OWNER[n], RangeIndexedDomain(0, counts[n])) for n in ("a", "b", "y")}
@@ -319,7 +356,8 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     return {n: (t.ref.binding, t.ref.owner, t.ref.count, t.ref.root) for n, t in trees.items()}
 
 
-def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: int, K: int, word_bits: int) -> dict[str, TreeKey]:
+def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: int, K: int, word_bits: int, dataset: str | None = None,
+                          tier: str | None = None) -> dict[str, TreeKey]:
     """The ``vllm-v1`` port references of the set, from the core scheme alone (``verity.commitments.vllm_v1``: position
     leaves of the raw row bytes and of each output word's little-endian bytes, node/lift fold, step-root binding) under
     the verifier-derived domains of ``vllm_tree`` (ctx = input set and range)."""
@@ -335,7 +373,8 @@ def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: 
               "y": [int(w).to_bytes(yb, "little") for w in y_words]}
     out = {}
     for n in ("a", "b", "y"):
-        ctx = vllm_tree.ctx_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0, hi=total, tree=n)
+        ctx = vllm_tree.ctx_digest(dataset=dataset or rel.instances_dataset, tier=tier or rel.instances_tier, manifest_sha256=claimed,
+                                   lo=0, hi=total, tree=n)
         dom = vllm_tree.domain(n, ctx, len(values[n]), K=K, word_bits=word_bits, y_bytes=yb)
         vl = vllm_tree.value_len(n, K=K, word_bits=word_bits, y_bytes=yb)
         cfg = vllm_v1.VllmV1({n: dom}, value_nbytes={n: lambda _i, vl=vl: vl})
@@ -545,8 +584,12 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
     d = work / result.removeprefix("art:")[:16]
     try:
         st.fetch(rep.run_files, d)
-        # a tree published as the proof dir itself (manifest.json + system.bin at its root) is read in place
-        pdir = next((d / n for n in ("proofs", "dumps") if (d / n / "manifest.json").is_file()), None) or \
+        # a bench.cell result names its dump in meta.artifacts[0] (sweep/<point>/proofs); a tree published as the proof dir
+        # itself (manifest.json + system.bin at its root) is read in place
+        arts = (m.meta or {}).get("artifacts") or []
+        named = d / arts[0] if arts and isinstance(arts[0], str) and not arts[0].startswith(("/", "..")) else None
+        pdir = (named if named is not None and (named / "manifest.json").is_file() else None) or \
+            next((d / n for n in ("proofs", "dumps") if (d / n / "manifest.json").is_file()), None) or \
             (d if (d / "manifest.json").is_file() and (d / "system.bin").is_file() else None)
         if pdir is None:
             rep.why = [f"{rep.run_files} has no proofs/ or dumps/ manifest.json (nor manifest.json + system.bin at its root)"]

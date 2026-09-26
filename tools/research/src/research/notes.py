@@ -179,21 +179,63 @@ def _head_commit() -> str:
         return "none"
 
 
+EAGAIN_TRIES = 6
+
+
+def _io(fn: Callable[[], object]):
+    """fn(), retried with backoff on BlockingIOError: the Cursor Project store's mount answers EAGAIN on reads, stats and rewrites of a
+    recently written file, and a write may land and still raise.  Callers pass writes of content computed once, so a retry is idempotent."""
+    for i in range(EAGAIN_TRIES):
+        try:
+            return fn()
+        except BlockingIOError:
+            if i == EAGAIN_TRIES - 1:
+                raise
+            time.sleep(0.2 * 2**i)
+
+
+_CHECK_BACK = re.compile(r"\bcheck[- ](?:back|after)\s+(\d{1,2}):(\d{2})Z", re.I)
+
+
+def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
+    """For a WAIT checkpoint: the one-shot timer that wakes the lane at its earliest check-back.  Only the lane's own timer is sure to fire
+    (the coordinator's sweep is a backstop), and cron timers are not read in UTC, so the delay is computed here from UTC."""
+    if not re.search(r"\bWAIT(?:ING)?\b", text):
+        return None
+    now = now or _utcnow()
+    delays = []
+    for m in _CHECK_BACK.finditer(text):
+        try:
+            at = now.replace(hour=int(m[1]), minute=int(m[2]), second=0, microsecond=0)
+        except ValueError:
+            continue
+        delta = (at - now).total_seconds()
+        delays.append((delta + 86400 if delta < -12 * 3600 else delta, f"{int(m[1]):02d}:{m[2]}Z"))
+    if not delays:
+        return None
+    delta, at = min(delays)
+    return (f"wake: before ending the turn, arm a one-shot timer (cursor-subscriptions subscribe_timer once=true "
+            f"delaySeconds={max(60, int(delta))}) for check-back {at} UTC" + (" (already past: in 1 min)" if delta < 60 else "")
+            + "; not a cron timer")
+
+
 def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None) -> Path:
     if state not in STATES:
         raise ValueError(f"state must be one of {', '.join(STATES)}, not {state!r}")
     now = now or _utcnow()
-    path = report_for(root, lane)
+    path = _io(lambda: report_for(root, lane))
     if path is None:
         path = root / "lanes" / lane / f"{now:%Y%m%dT%H%MZ}-report-{lane}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"---\nlane: {lane}\nkind: report\ncreated: {now:%Y-%m-%dT%H:%MZ}\nstatus: {state}\n---\n\n")
-    front, body = _split_front_matter(path.read_text())
+        head = f"---\nlane: {lane}\nkind: report\ncreated: {now:%Y-%m-%dT%H:%MZ}\nstatus: {state}\n---\n\n"
+        _io(lambda: path.write_text(head))
+    front, body = _split_front_matter(_io(path.read_text))
     if front:
         front = re.sub(r"^status:.*$", f"status: {state}", front, count=1, flags=re.M) if re.search(r"^status:", front, re.M) \
             else front[:-4] + f"status: {state}\n---\n"
     line = f"CHECKPOINT {commit or _head_commit()} ({now:%H:%M}Z) [{state}] {' '.join(text.split())}\n"
-    path.write_text(front + "\n" + line + body.lstrip("\n") if front else line + body)
+    new = front + "\n" + line + body.lstrip("\n") if front else line + body
+    _io(lambda: path.write_text(new))
     return path
 
 
@@ -206,7 +248,7 @@ def bind(root: Path, lane: str, branch: str | None = None, worktree: str | None 
         raise ValueError(f"--final wants HH:MMZ (UTC), not {final!r}")
     path = root / "lanes" / lane / BINDING
     path.parent.mkdir(parents=True, exist_ok=True)
-    cur = json.loads(path.read_text()) if path.exists() else {}
+    cur = json.loads(_io(path.read_text)) if _io(path.exists) else {}
     for k, v in (("branch", branch), ("worktree", worktree), ("pod", pod), ("succeeds", succeeds), ("brief", brief),
                  ("final", final), ("budget", budget), ("keep_pod", keep_pod)):
         if v is not None:
@@ -214,7 +256,8 @@ def bind(root: Path, lane: str, branch: str | None = None, worktree: str | None 
                 cur[k] = str(Path(v).expanduser()) if k == "worktree" else v
             else:
                 cur.pop(k, None)
-    path.write_text(json.dumps(cur, indent=1, sort_keys=True) + "\n")
+    doc = json.dumps(cur, indent=1, sort_keys=True) + "\n"
+    _io(lambda: path.write_text(doc))
     return path
 
 
@@ -284,7 +327,7 @@ def attempt(root: Path, lane: str, succ: dict[str, str] | None = None) -> tuple[
 def _seen(root: Path, lane: str) -> float | None:
     p = root / "lanes" / lane / SEEN
     try:
-        return float(p.read_text().strip())
+        return float(_io(p.read_text).strip())
     except (OSError, ValueError):
         return None
 
@@ -320,7 +363,8 @@ def mark_seen(root: Path, lane: str, items: list[dict]) -> None:
     if items:
         p = root / "lanes" / lane / SEEN
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(f"{max([x['mtime'] for x in items] + [_seen(root, lane) or 0.0])}\n")
+        seen = f"{max([x['mtime'] for x in items] + [_seen(root, lane) or 0.0])}\n"
+        _io(lambda: p.write_text(seen))
 
 
 def render_inbox(lane: str, items: list[dict], limit: int = 15) -> str:
@@ -347,7 +391,7 @@ def _checkpoint_time(hh: str | None, mm: str | None, mtime: dt.datetime) -> dt.d
 def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
     text = path.read_text(errors="replace")
     mtime = _ts(file_time(path.parents[2], path))           # <root>/lanes/<lane>/<report>
-    best = None
+    best, last_final, top = None, None, None
     for line in text.splitlines():
         i = line.find("CHECKPOINT")
         if i < 0:
@@ -362,6 +406,9 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
             hh, mm = late.groups()
         when = _checkpoint_time(hh, mm, mtime)
         cand = {"commit": m["sha"], "at": when, "state": "final" if final else m["state"], "text": rest}
+        top = top or cand
+        if cand["state"] == "final" and when is not None and (last_final is None or when > last_final):
+            last_final = when
         if best is None or (when is not None and (best["at"] is None or when > best["at"])):
             best = cand
     finals = [m.end() for m in FINAL_RE.finditer(text)]
@@ -371,8 +418,11 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
     fm = re.search(r"^status:\s*(\S+)", front, re.M)
     fm_state = fm.group(1).lower() if fm else "open"
     cp_state = (best or {}).get("state")
+    reopened = bool(best is top and best and best["at"] and cp_state not in DONE and last_final and best["at"] > last_final)
     if "superseded" in (fm_state, cp_state):
         state = "superseded"
+    elif reopened:                       # a newer open checkpoint after a [final] one: its FINAL section is history
+        state = cp_state
     else:
         state = "final" if has_final or fm_state in DONE_STATUSES else cp_state or fm_state
     age = (now - mtime).total_seconds() / 60
@@ -905,6 +955,11 @@ def terminate_pod(pod_id: str) -> None:
     runpod._request("DELETE", f"/pods/{pod_id}")  # noqa: SLF001
 
 
+def pod_gone(why: str) -> bool:
+    """A custody check that failed because RunPod no longer knows the pod (HTTP 404): nothing to reap, nothing to report."""
+    return "HTTP 404" in why
+
+
 def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float, noted: set[str], reap: bool = False,
                terminate: Callable[[str], None] = terminate_pod, custody: Callable[[str, dict], tuple[bool, str]] | None = None,
                state: dict | None = None) -> list[str]:
@@ -939,6 +994,9 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
                     ok, why = custody(r["lane"], p)
                 except Exception as e:  # noqa: BLE001
                     ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+                if not ok and pod_gone(why):
+                    noted.add(p["id"])
+                    continue
                 if not ok:
                     line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"
                 else:
@@ -1125,6 +1183,8 @@ def stale_reap_lines(root: Path, rows: list[dict], now: dt.datetime, idle_min: f
                 ok, why = custody(r["lane"], p)
             except Exception as e:  # noqa: BLE001
                 ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+            if not ok and pod_gone(why):
+                continue
             what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (STALE {_m(r.get('life_min', r['age_min']))}, idle {_m(p['idle_min'])})"
             if not ok:
                 line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"
@@ -1294,6 +1354,18 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
             else:
                 lines.append(f"{now:%H:%MZ} RENDER-FAILED {key} ({mod}): {' '.join(stderr.split())[-200:] or f'rc {rc}'}")
     return lines
+
+
+def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
+    """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
+    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent."""
+    from . import notes_sync  # noqa: PLC0415
+
+    if srep["rc"]:
+        ab = notes_sync.lag(root)
+        where = f"ahead {ab[0]} behind {ab[1]}" if ab else "lag unknown"
+        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}"]
+    return [f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []
 
 
 def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[str]:
@@ -1795,6 +1867,8 @@ def _main(argv: list[str]) -> int:
     if ns.cmd in ("checkpoint", "inbox"):
         if ns.cmd == "checkpoint":
             print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit))
+            if hint := wake_hint(" ".join(ns.text)):
+                print(hint)
             if ns.keep_pod:                                 # the reaper reads it from the binding
                 bind(root, ns.lane, keep_pod=ns.keep_pod)
             if ns.state == "superseded":                    # written by whoever relaunched it: the mail is the successor's
@@ -1950,8 +2024,7 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             from . import notes_sync  # noqa: PLC0415
 
             srep = notes_sync.sync(root)
-            if srep.get("commit") or srep["rc"]:
-                more.append(f"{now:%H:%MZ} {notes_sync.render_sync(srep)}")
+            more += sync_lines(root, srep, now)
         elif ns.sync:                                       # standby: read the others' notes, write nothing
             _git(root, "pull", "-q", "--ff-only", timeout=300)
         elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:

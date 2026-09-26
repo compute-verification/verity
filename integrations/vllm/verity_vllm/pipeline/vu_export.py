@@ -1,8 +1,10 @@
-"""Sampled VUs of a passing row, exported as content-addressed benchmark input sets (`vllm-vu-set/v1`).
+"""Sampled VUs of a passing row: the draw, the evaluation tap, the subcircuit decomposition and the flat input sets
+(`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which runs the draw);
+the flat input sets are its default extraction.
 
-Opt-in and not on the record: the Commit stage calls `after_replay` once pair 0's replay of record has passed and its value source
-is recorded; it exports only when `--vu-export-dir` (env `VERITY_VU_EXPORT_DIR`) is given.  `limits.json` (the `Limits` fields) and
-`provenance.json` (extra provenance: the row number, the research run) in that directory are read when present.  The draw is a
+Not on the record: the Commit stage calls `vu_store.after_replay` once pair 0's replay of record has passed and its value source
+is recorded (`--vu-export-dir`, env `VERITY_VU_EXPORT_DIR`; on by default under `verity-vllm row`).  `limits.json` (the `Limits`
+fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The draw is a
 stratified sample over the population the replay samples (every evaluable VU of the executed prefix, the replay's strata), keyed by
 `verity.randomness.derive` from the run root.  It is a benchmark selection, not a verifier challenge: fixed by the commitment and
 independent of the replay's own sample, nothing more.  Each drawn VU is
@@ -33,8 +35,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
-import time
-from collections import Counter
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -45,10 +45,10 @@ from verity.randomness import Key, derive
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
 from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows as RK
+from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"
 EXPORT_SCHEMA = "vllm-vu-export/v1"
@@ -86,6 +86,13 @@ class DecompositionMismatch(RuntimeError):
 
 
 @dataclasses.dataclass
+class RowSample:
+    """A GEMM weight as stored: the sampled rows (`rows`, ascending) of the [N, K] slice and their words (`data`, len(rows) x K)."""
+    rows: list[int]
+    data: np.ndarray
+
+
+@dataclasses.dataclass
 class Instance:
     set_name: str
     relation: dict[str, Any]
@@ -119,8 +126,10 @@ def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
     per: list[list[dict]] = []
     for fam in sorted(by_fam):
         cap = limits.for_family(fam)
-        names = sorted(by_fam[fam])
-        picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, key.shard(("family", fam)))
+        fkey = key.shard(("family", fam))
+        # the strata in a keyed order: in name order a cap below the stratum count takes one shape's strata first (all K=1536 of #4's GEMMs)
+        names = sorted(by_fam[fam], key=lambda k: fkey.stream(("stratum-order", k), 16))
+        picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, fkey)
         per.append(_round_robin(picks)[:cap])
     return _round_robin(per)
 
@@ -174,10 +183,14 @@ def _decompose_gemm(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
     K, N = int(st["K"]), int(st["N"])
     dot_id, _dot = _gemm_dot(fam, st)
     x = np.asarray(ops[0], dtype=np.uint16).reshape(K)
-    w = np.asarray(ops[1], dtype=np.uint16).reshape(N, K)
     y = _one(out).astype(np.uint16)
-    sel = np.asarray(pick(N, limits.gemm_coords_per_row), dtype=np.int64)
-    yy, nf = gemm_coordinate(dot_id, x, w[sel])
+    if isinstance(ops[1], RowSample):                                        # a stored weight: its sampled rows are the coordinates
+        sel = np.asarray(ops[1].rows, dtype=np.int64)
+        wsel = ops[1].data
+    else:
+        sel = np.asarray(pick(N, limits.gemm_coords_per_row), dtype=np.int64)
+        wsel = np.asarray(ops[1], dtype=np.uint16).reshape(N, K)[sel]
+    yy, nf = gemm_coordinate(dot_id, x, wsel)
     rel = {"subcircuit": f"GemmCoordinate<{K}>", "definition": fam, "dot": dot_id, "statics": {"K": K},
            "rule": "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)"}
     for j, n in enumerate(sel.tolist()):
@@ -186,7 +199,7 @@ def _decompose_gemm(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
         if yy[j] != y[n]:
             raise DecompositionMismatch(f"{fam} coordinate {n}: {int(yy[j]):#06x} != row word {int(y[n]):#06x}")
         yield Instance(f"gemm-coordinate-{_DOT_SLUG.get(dot_id, dot_id.lower())}-k{K}", rel,
-                       {"x": x.copy(), "w": w[n].copy(), "y": y[n:n + 1].copy()}, {"n": int(n), "N": N})
+                       {"x": x.copy(), "w": wsel[j].copy(), "y": y[n:n + 1].copy()}, {"n": int(n), "N": N})
 
 
 def _attn_prims(fam: str, st: dict[str, Any]) -> tuple[str, str]:
@@ -260,6 +273,37 @@ DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose
                                                            "RoPE_v1": _decompose_rope}
 
 
+def _gemm_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
+
+
+def _attention_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    dot, inv = _attn_prims(fam, st)
+    return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
+
+
+def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+
+
+#: beside `DECOMPOSE`, keyed alike: the template a Definition's Calls are cut into (every other Definition: the row itself)
+TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
+    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "Attention_v3": _attention_template, "Attention_v2": _attention_template,
+    "RoPE_v1": _rope_template}
+
+
+def template_of(spec: str) -> tuple[str, dict[str, Any], int]:
+    """A Call's Definition spec -> (subcircuit template, bound parameters, instances per Call): `decompose`'s cut, read off the spec."""
+    fam, st = RM.spec_family(spec), RM.spec_statics(spec)
+    t = TEMPLATE_OF.get(fam)
+    try:
+        if t is not None:
+            return t(fam, st)
+    except (KeyError, RK.Declined):
+        pass
+    return fam, st, 1
+
+
 def decompose(fam: str, st: dict[str, Any], ops: list[np.ndarray], out: dict[str, np.ndarray], pick: Callable[[int, int], list[int]],
               limits: Limits) -> list[Instance]:
     if fam in NOT_EXPORTED:
@@ -268,9 +312,10 @@ def decompose(fam: str, st: dict[str, Any], ops: list[np.ndarray], out: dict[str
 
 
 def capture(pi: ProgramIndex, store: CommittedStore, weights: Callable, vu: dict, *, arrive: int) -> tuple[dict, list[tuple]]:
-    """The replay's evaluation of one VU, with every row evaluation it performs (interior producers first, the VU's own row last)."""
+    """The replay's evaluation of one VU, with every row evaluation it performs (interior producers first, the VU's own row last):
+    (family, statics, operands, outputs, weight refs)."""
     evals: list[tuple] = []
-    tap = lambda fam, st, ops, out: evals.append((fam, dict(st), ops, out))  # noqa: E731
+    tap = lambda fam, st, ops, out, refs: evals.append((fam, dict(st), ops, out, refs))  # noqa: E731
     EV.EVALUATION_TAPS.append(tap)
     try:
         rec = EV.replay_vu(pi, store, weights, vu, arrive=arrive)
@@ -332,135 +377,37 @@ class _SetWriter:
                 "relation": self.relation.get("subcircuit")}
 
 
-_FORK: dict[str, Any] = {}          # the per-VU context the forked workers read (set in the parent right before the fork)
-
-
-def _one_vu(k: int) -> tuple[dict[str, Any], list[tuple[Instance, str]], float]:
-    """Evaluate VU `k` of the draw and decompose every row it evaluated: (log entry, [(instance, source)], seconds)."""
-    c = _FORK
-    vu, tv = c["picked"][k], time.perf_counter()
-    rid = vu["request_id"]
-    rec, evals = capture(c["indices"][rid], c["store"], c["weights"], vu, arrive=int(c["arrivals"].get(rid, 0)))
-    entry = {"vu": k, "request": rid, "i": vu["i"], "family": vu["family"], "spec": vu["spec"], "stratum": vu["stratum"],
-             "engine_step": rec.get("engine_step"), "op_path": rec.get("op_path"), "row": rec.get("row"), "phase": vu["phase"],
-             "result": rec.get("result"), "why": rec.get("why"), "inputs": rec.get("inputs")}
-    insts: list[tuple[Instance, str]] = []
-    if rec.get("result") is True:
-        try:
-            for j, (efam, est, ops, eout) in enumerate(evals):
-                pick = _Picker(c["key"], ("row", str(rid), int(vu["i"]), j))
-                insts += [(inst, "committed" if j == len(evals) - 1 else "interior") for inst in decompose(efam, est, ops, eout, pick, c["limits"])]
-        except DecompositionMismatch as e:
-            entry["decomposition_error"], insts = str(e), []
-    return entry, insts, time.perf_counter() - tv
-
-
-def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tuple[dict[str, Any], list[tuple[Instance, str]], float] | None]:
-    """The draw's results in order; None for a VU the spent time budget left undrawn.  `workers` > 1: a forked pool in chunks (the
-    replay's pattern: weights and twin libraries pre-warmed in the parent, the heap frozen before the fork, children never touch CUDA)."""
-    if workers <= 1:
-        for k in range(n):
-            yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
-        return
-    import gc
-    import multiprocessing as mp
-    from verity_vllm.check.replay import driver as SR
-    SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])
-    SR._prewarm_evaluators(_FORK["picked"])
-    gc.collect()
-    gc.freeze()
-    try:
-        with mp.get_context("fork").Pool(processes=workers) as pool:
-            chunk = workers * 4
-            for lo in range(0, n, chunk):
-                if time.perf_counter() - t0 > budget_s:
-                    yield from (None for _ in range(lo, n))
-                    return
-                yield from pool.map(_one_vu, range(lo, min(n, lo + chunk)))
-    finally:
-        gc.unfreeze()
-
-
-def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable, weights: Callable, *, out_dir: str | Path,
-               run_root: bytes, arrivals: dict[str, int] | None = None, manifest: dict[str, Any] | None = None,
-               executed_prefix: dict[str, dict] | None = None, program_dirs: dict[str, str] | None = None,
-               provenance: dict[str, Any] | None = None, limits: Limits | None = None) -> dict[str, Any]:
-    """Draw, evaluate, decompose and write the sets.  Returns the export summary (also written to `<out_dir>/export.json`)."""
-    t0 = time.perf_counter()
-    limits = limits or Limits()
-    arrivals = arrivals or {}
-    out = Path(out_dir)
-    (out / "sets").mkdir(parents=True, exist_ok=True)
-    indices: dict[str, ProgramIndex] = {}
-    by_inst: dict[int, ProgramIndex] = {}
-    all_vus: list[dict] = []
-    for rid, inst in programs.items():
-        pi = by_inst.get(id(inst)) or ProgramIndex(inst, program_dir=(program_dirs or {}).get(rid))
-        by_inst[id(inst)] = indices[rid] = pi
-        last = int(phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))["last_step"])
-        vus, _ne, _nef = population(pi, rid, arrive=int(arrivals.get(rid, 0)), last_step=last)
-        all_vus.extend(vus)
-    pool, _not_exec = split_not_executed(all_vus, executed_prefix)
-    key = selection_key(run_root)
-    picked = select(pool, limits, key)
-    _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
-                 arrivals=arrivals, key=key, limits=limits)
-    writers: dict[str, _SetWriter] = {}
-    fam_stats: dict[str, Counter] = {}
-    fam_time: Counter = Counter()
-    vus_log = []
-    try:
-        for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t0)):
-            st = fam_stats.setdefault(picked[k]["family"], Counter())
-            if res is None:
-                st["not_drawn_time_budget"] += 1
-                continue
-            entry, insts, dt = res
-            st["drawn"] += 1
-            fam_time[entry["family"]] += dt
-            if entry.get("decomposition_error"):
-                st["decomposition_error"] += 1
-            if entry["result"] is True:
-                st["replayed_equal"] += 1
-            else:
-                st["not_exported_" + ("mismatch" if entry["result"] is False else "not_evaluated")] += 1
-            got: Counter = Counter()
-            for inst, source in insts:
-                w = writers.get(inst.set_name) or writers.setdefault(inst.set_name, _SetWriter(inst.set_name, inst.relation))
-                if len(w.index) >= limits.max_instances_per_set:
-                    st["instances_over_cap"] += 1
-                    continue
-                w.add(inst, [k, entry["request"], entry["engine_step"], entry["op_path"], entry["row"], entry["phase"], source])
-                got[inst.set_name] += 1
-                st["instances"] += 1
-            vus_log.append(dict(entry, instances=dict(got)))
-            if k % 100 == 0:
-                print(f"[vu-export] {k}/{len(picked)} VUs, {sum(len(x.index) for x in writers.values())} instances, "
-                      f"{time.perf_counter() - t0:.0f} s", flush=True)
-    finally:
-        _FORK.clear()
-    prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
-                selection=f"verity.randomness.derive({SELECTION_SOURCE!r}, {SELECTION_DOMAIN!r}, {{run_root}}); per family key.shard(('family', "
-                          "family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))")
-    sets = [w.write(out / "sets", prov) for _n, w in sorted(writers.items())]
-    with (out / "vus.jsonl").open("w") as f:
-        for e in vus_log:
-            f.write(json.dumps(e, separators=(",", ":"), default=str) + "\n")
-    summary = {"schema": EXPORT_SCHEMA, "provenance": prov, "limits": dataclasses.asdict(limits),
-               "population": {"vus": len(all_vus), "pool": len(pool), "not_executed": len(_not_exec),
-                              "pool_by_family": dict(Counter(v["family"] for v in pool)), "not_exported_families": NOT_EXPORTED},
-               "by_family": {f: dict(c) | {"seconds": round(fam_time[f], 3)} for f, c in sorted(fam_stats.items())},
-               "sets": sets, "wall_s": round(time.perf_counter() - t0, 3)}
-    (out / "export.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
-    return summary
-
-
 def _read_port(d: Path, p: dict[str, Any], n: int) -> list[np.ndarray]:
     arr = np.frombuffer((d / p["file"]).read_bytes(), dtype=np.dtype(_WORD[int(p["dtype"][1:]) // 8][1]).newbyteorder("<"))
     if p.get("words") is not None:
         return list(arr.reshape(n, int(p["words"])))
     offs = np.frombuffer((d / p["offsets"]).read_bytes(), dtype="<u8").astype(np.int64)
     return [arr[offs[i]:offs[i + 1]] for i in range(n)]
+
+
+def _check_gemm(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    y, _nf = gemm_coordinate(rel["dot"], P["x"][i], P["w"][i][None, :])
+    return int(y[0]) == int(P["y"][i][0])
+
+
+def _check_attention(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    got, _nf = attention_head(rel["dot"], rel["inv"], int(rel["statics"]["BN"]), P["q"][i], P["k"][i], P["v"][i], int(rel["statics"]["D"]))
+    return bool(np.array_equal(got, P["out"][i]))
+
+
+def _check_rope(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    return bool(np.array_equal(D.rope_rows(P["x"][i][None, :], P["cs"][i]).reshape(-1), P["out"][i]))
+
+
+def _check_row(rel: dict[str, Any], P: dict[str, list[np.ndarray]], i: int) -> bool:
+    ins = sorted((k for k in P if k.startswith("in")), key=lambda k: int(k[2:]))
+    got = _outputs(EV.evaluate(rel["definition"], rel["statics"], [[P[k][i]] for k in ins], [None] * len(ins)))
+    return all(k[4:] in got and np.array_equal(got[k[4:]].astype(P[k][i].dtype), P[k][i]) for k in P if k.startswith("out."))
+
+
+#: a set's relation check, by the ports its decomposer declared (the set's own layout, never its Definition's name)
+_CHECK_BY_PORTS: dict[frozenset[str], Callable[[dict[str, Any], dict[str, list[np.ndarray]], int], bool]] = {
+    frozenset({"x", "w", "y"}): _check_gemm, frozenset({"q", "k", "v", "out"}): _check_attention, frozenset({"x", "cs", "out"}): _check_rope}
 
 
 def verify_set(d: Path) -> dict[str, Any]:
@@ -472,23 +419,8 @@ def verify_set(d: Path) -> dict[str, Any]:
     n, rel = int(man["n"]), man["relation"]
     P = {k: _read_port(d, p, n) for k, p in man["ports"].items()}
     idx = json.loads((d / "index.json").read_text())["rows"]
-    bad = []
-    for i in range(n):
-        fam = rel["definition"]
-        if fam in ("Gemm_v1", "Gemm_v2"):
-            y, _nf = gemm_coordinate(rel["dot"], P["x"][i], P["w"][i][None, :])
-            ok = int(y[0]) == int(P["y"][i][0])
-        elif fam in ("Attention_v3", "Attention_v2"):
-            got, _nf = attention_head(rel["dot"], rel["inv"], int(rel["statics"]["BN"]), P["q"][i], P["k"][i], P["v"][i], int(rel["statics"]["D"]))
-            ok = np.array_equal(got, P["out"][i])
-        elif fam == "RoPE_v1":
-            ok = np.array_equal(D.rope_rows(P["x"][i][None, :], P["cs"][i]).reshape(-1), P["out"][i])
-        else:
-            ins = sorted((k for k in P if k.startswith("in")), key=lambda k: int(k[2:]))
-            got = _outputs(EV.evaluate(fam, rel["statics"], [[P[k][i]] for k in ins], [None] * len(ins)))
-            ok = all(k[4:] in got and np.array_equal(got[k[4:]].astype(P[k][i].dtype), P[k][i]) for k in P if k.startswith("out."))
-        if not ok:
-            bad.append(idx[i][0])
+    check = _CHECK_BY_PORTS.get(frozenset(P), _check_row)
+    bad = [idx[i][0] for i in range(n) if not check(rel, P, i)]
     return {"set": man["set"], "ok": not bad, "n": n, "bad": bad[:16], "bad_n": len(bad)}
 
 
@@ -496,35 +428,3 @@ def verify(out_dir: str | Path) -> dict[str, Any]:
     root = Path(out_dir) / "sets"
     res = [verify_set(d) for d in sorted(root.iterdir()) if (d / "manifest.json").is_file()]
     return {"ok": all(r["ok"] for r in res) and bool(res), "sets": res}
-
-
-def _limits_for(out: Path, sr: dict[str, Any]) -> Limits:
-    lim = Limits.from_dir(out)
-    if (sr.get("evaluator") or {}).get("retention") == "device":
-        lim.workers = 1                                                      # forked children cannot read device-retained blocks
-    return lim
-
-
-def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: bytes, programs: dict[str, dict[str, Any]], bmap: dict[str, Any],
-                 reader: Callable, weights: Callable, arrivals: dict[str, int], manifest: Any, replay_kw: dict[str, Any], loaded: dict[str, dict],
-                 program_digests: dict[str, str], versions: dict[str, Any], eng: Any) -> dict[str, Any] | None:
-    """The Commit stage's call, right after pair 0's replay record and value source are taken: exports when `out_dir` is given and the
-    replay passed.  A failure is printed and returned by name; nothing here reaches the record or a verdict."""
-    if not out_dir or pair != 0 or sr.get("result") is not True:
-        return None
-    out = Path(out_dir)
-    extra = json.loads((out / "provenance.json").read_text()) if (out / "provenance.json").is_file() else {}
-    man = manifest if isinstance(manifest, dict) else None
-    prov = dict(extra, model=(getattr(eng, "cp", None) or {}).get("repo"), revision=(getattr(eng, "cp", None) or {}).get("revision"),
-                program_digests=program_digests, manifest_digest=(man or {}).get("manifest_digest"), pair=pair,
-                versions={k: v for k, v in versions.items() if isinstance(v, (str, int, float))})
-    try:
-        s = export_vus(programs, bmap, reader, weights, out_dir=out, run_root=run_root, arrivals=arrivals, manifest=man,
-                       executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},
-                       provenance=prov, limits=_limits_for(out, sr))
-    except Exception as e:  # noqa: BLE001  -- not part of the record: named, never a verdict
-        print(f"[vu-export] FAILED: {e!r}"[:400], flush=True)
-        return {"ok": False, "why": repr(e)[:400]}
-    print(f"[vu-export] {len(s['sets'])} sets, {sum(x['n'] for x in s['sets'])} instances, {sum(x['bytes'] for x in s['sets'])} bytes "
-          f"in {s['wall_s']} s -> {out}", flush=True)
-    return s

@@ -65,7 +65,8 @@ uv run pytest                            # all tests
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
 research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
-research run --on MACHINE --custody-r2 [--custody-ttl 6h] ...    # the machine puts the attempt + every run file on the store's remote (store README §10.1)
+research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
+research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
@@ -111,6 +112,10 @@ existing pod. `register` refuses a pod id the RunPod account doesn't know and
 a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
 or from `~/.research/notes/machines.d` on a machine without machines.toml.
 The two sources merge, and a name they bind to different pods is refused.
+`create` makes at most one live pod per `--name`, so a retry loop can't duplicate pods. It refuses when a live pod of that
+name exists (exit 4, `--allow-duplicate` overrides). After a failed create call it uses a pod that appeared under the name
+anyway. Only RunPod's explicit no-stock reply is exit 5, the one failure to answer with another spec; any other failure is
+exit 2.
 `research pods registry` lists the merged table, and `registry import
 --apply` seeds `machines.d` from machines.toml.
 
@@ -160,7 +165,11 @@ runner and the workload get the tree's `PYTHONPATH` derived from its root
 records it (`run.remote.pythonpath`). `research env --source TREE` prints the
 same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
-the claim and reports state. `--exclusive` refuses if any run is live, and
+the claim and reports state. The runner's argv carries the workload's command, so a
+`pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
+launcher.log and keeps supervising, so the run still records its end and
+publishes. Stop a run through its workload's process group (`kill -TERM
+-<pgid>`, status.json `pgid`). `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared

@@ -60,6 +60,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
+    "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "profile-descriptor": ("verity_vllm.program.profile_descriptor", "where a serialised descriptor's bytes go"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
@@ -88,6 +89,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
     "twins": ("verity_vllm.program.kernels.twins", "vectorized twins of the registered bodies"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
+    "vu-store": ("verity_vllm.pipeline.vu_store", "the hierarchical VU store: extract instance sets, verify"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
 }

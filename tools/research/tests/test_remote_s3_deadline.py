@@ -2,7 +2,9 @@
 request (a whole GET, body included) is retried with backoff.  A local HTTP server plays R2 stalling mid-body and before headers."""
 from __future__ import annotations
 
+import http.client
 import http.server
+import socket
 import threading
 import time
 
@@ -80,6 +82,28 @@ def test_a_head_that_never_answers_is_exhausted_after_its_one_retry_and_named(se
     with pytest.raises(TimeoutError, match="HEAD k2: no response within the 0s deadline on all 2 tries"):
         server.head("k2")
     assert time.monotonic() - t < 3 and [x["key"] for x in server.exhausted] == ["k2"] and len(server.deadline_hits) == 2
+
+
+def test_a_retry_after_a_dropped_connection_never_draws_another_idle_one(server, monkeypatch):
+    # R2 closes idle keep-alives (a pod's custody push had its sockets in CLOSE-WAIT, then failed with RemoteDisconnected on every try):
+    # with a pool full of such connections, the retry must open a new one instead of taking the next dead one
+    monkeypatch.setattr(_Stall, "stall_first", False)
+    dead = socket.create_server(("127.0.0.1", 0))
+    closed = threading.Event()
+
+    def accept_and_close():
+        for _ in range(4):
+            dead.accept()[0].close()
+        closed.set()
+    threading.Thread(target=accept_and_close, daemon=True).start()
+    for _ in range(4):
+        c = http.client.HTTPConnection("127.0.0.1", dead.getsockname()[1], timeout=5)
+        c.connect()
+        server.pool._idle.append(c)
+    assert closed.wait(5)
+    assert server.head("k") == {"bytes": len(BODY), "etag": "0123456789abcdef0123456789abcdef"}
+    assert _Stall.calls == ["HEAD"] and server.pool.idle == 3, "one dead connection tried, then a fresh one; the other three untouched"
+    dead.close()
 
 
 def test_a_request_that_always_stalls_fails_within_its_retries(server, tmp_path, monkeypatch):

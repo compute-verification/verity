@@ -135,6 +135,19 @@ def test_a_tree_published_as_the_proof_dir_itself_is_reverified(env, capsys):
     assert "custody 7/7, pinned=fp8-ada, 2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
 
 
+def test_a_bench_cell_result_names_its_dump_in_meta_artifacts(env, capsys):
+    # verify-bligero-real-k 2026-09-26: bench.cell results keep the dump under sweep/<point>/proofs and name it in artifacts[0]
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    tree = env / "cell"
+    _dump(tree / "sweep" / "p4-6272")
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=tree)
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-real-k-1", "artifacts": ["sweep/p4-6272/proofs"]}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
+
+
 def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys):
     from research.store.local import LocalStore
 
@@ -282,3 +295,17 @@ def test_verifier_tag_comes_from_the_crate_it_was_built_in(tmp_path):
     with pytest.raises(SystemExit, match="src/main.rs is newer than the binary"):
         R.load_verifier(binary)
     assert R.load_verifier(binary, allow_stale=True).src_commit is None
+
+
+def test_a_bench_cell_result_is_reverified_from_its_artifacts_path(env, capsys):
+    """A bench.cell result's run-files are its prover run's dump at ``sweep/<point>/proofs`` (the result's ``artifacts``):
+    reverify reads the tree there, not only at the top."""
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    root = env / "cell"
+    _dump(root / "sweep" / "p3-6272")
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=root)
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-cell", "artifacts": ["sweep/p3-6272/proofs"]}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
