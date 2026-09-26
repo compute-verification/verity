@@ -306,6 +306,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
 
     d = Path(set_dir)
     man = json.loads((d / "manifest.json").read_text())
+    if relation == "fp4-nvf4":
+        return _write_set_fp4(path, d, man, lo, hi, leaf, procs)
     pipe = PIPES[relation]
     ports = man.get("ports") or {}
     dts = {"u8": "u1", "u16": "<u2", "u32": "<u4"}
@@ -356,6 +358,63 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": wb, "units": accs.shape[1],
               "row_bytes": wb * K_ // 8, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
     return _write_file(path, header, np.ascontiguousarray(x).tobytes(), np.ascontiguousarray(w).tobytes(), accs, final, st["y"])
+
+
+def _chain_fp4(args):
+    from verity.ml.tc.models import BLACKWELL_SM120_NVF4 as M
+
+    out = []
+    for a, b, sa, sb in zip(*args):
+        a, b, sa, sb, c, row = a.tolist(), b.tolist(), sa.tolist(), sb.tolist(), 0, []
+        for s in range(len(a) // M.k):
+            c = M.step_scaled(c, a[M.k * s:M.k * (s + 1)], b[M.k * s:M.k * (s + 1)], sa[4 * s:4 * s + 4], sb[4 * s:4 * s + 4])
+            row.append(c)
+        out.append(row)
+    return out
+
+
+def _write_set_fp4(path, d: Path, man: dict, lo: int, hi: int | None, leaf: str, procs: int) -> dict:
+    """An NVFP4 input set (ports ``x`` / ``w`` one E2M1 code per byte, ``sx`` / ``sw`` the UE4M3 block-16 scales, ``y`` the FP32
+    accumulator) as ``flock-pure-instances/v1``: 864-byte ``nvfp4_row_bytes`` rows under the row-nvfp4 schemas, the 24
+    accumulators re-chained under ``BLACKWELL_SM120_NVF4`` and checked against y, ``out`` = y (a u32 word leaf)."""
+    from concurrent.futures import ProcessPoolExecutor
+    from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW_NVFP4, SCHEMA_SHA256_ROW_NVFP4, blake3_row_nvfp4_digest,
+                                            nvfp4_row_bytes, sha256_row_nvfp4_digest)
+
+    ports = man["ports"]
+    K_ = int(ports["x"]["words"])
+    arr = {r: np.fromfile(d / ports[r]["file"], dtype={"u8": "u1", "u32": "<u4"}[ports[r]["dtype"]]).reshape(-1, int(ports[r]["words"]))
+           for r in ("x", "w", "sx", "sw", "y")}
+    n_set = arr["x"].shape[0]
+    hi = n_set if hi is None else hi
+    if hi > n_set:
+        raise ValueError(f"{d.name} holds {n_set} instances; [{lo}, {hi}) would repeat instances")
+    x, w, sx, sw = (arr[r][lo:hi] for r in ("x", "w", "sx", "sw"))
+    y_rec = arr["y"][lo:hi, 0]
+    step = max(1, len(x) // max(1, 4 * procs))
+    jobs = [(x[i:i + step], w[i:i + step], sx[i:i + step], sw[i:i + step]) for i in range(0, len(x), step)]
+    if procs > 1:
+        with ProcessPoolExecutor(procs) as ex:
+            accs = np.asarray([r for part in ex.map(_chain_fp4, jobs) for r in part], dtype=np.uint32)
+    else:
+        accs = np.asarray([r for j in jobs for r in _chain_fp4(j)], dtype=np.uint32)
+    y = [int(a[-1]) for a in accs]
+    bad = sum(int(a != int(v)) for a, v in zip(y, y_rec))
+    if bad:
+        raise ValueError(f"{d.name}: {bad} recorded outputs differ from the BLACKWELL_SM120_NVF4 chain")
+    schema, dig = ((SCHEMA_SHA256_ROW_NVFP4, sha256_row_nvfp4_digest) if leaf == "sha256" else
+                   (SCHEMA_BLAKE3_ROW_NVFP4, blake3_row_nvfp4_digest))
+    da = [dig(c.tolist(), sc.tolist(), ROLE_X) for c, sc in zip(x, sx)]
+    db = [dig(c.tolist(), sc.tolist(), ROLE_W) for c, sc in zip(w, sw)]
+    dataset, tier = man.get("set", d.name), f"{man.get('schema', 'input-set/v1')}:{man.get('set', d.name)}"
+    st = _frame_v3(dataset, tier, man["content_digest"], lo, K_, schema, da, db, y, 32)
+    ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": man["content_digest"],
+           "set_schema": man.get("schema"), "source": (man.get("provenance") or {}).get("source")}
+    header = {"format": FORMAT, "relation": "fp4-nvf4", "vus": hi - lo, "k": K_, "word_bits": 4, "units": accs.shape[1],
+              "row_bytes": K_ // 2 + K_ // 16, "epilogue": False, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
+    rows_x = b"".join(nvfp4_row_bytes(c.tolist(), sc.tolist()) for c, sc in zip(x, sx))
+    rows_w = b"".join(nvfp4_row_bytes(c.tolist(), sc.tolist()) for c, sc in zip(w, sw))
+    return _write_file(path, header, rows_x, rows_w, accs, y, y)
 
 
 def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf: str = "blake3", procs: int = 1) -> dict:
