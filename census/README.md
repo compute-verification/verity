@@ -9,7 +9,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate | `schemas/hardware.schema.json` |
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
-| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm_coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates such as `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3` | `schemas/subcircuits.schema.json` |
+| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") | `schemas/subcircuits.schema.json` |
 | `instance_sets.json` | the frozen instance set of each subcircuit: dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its instances are of | `schemas/instance_sets.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
@@ -20,8 +20,9 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 - Every entry has an `id` that is unique within its file.
 - A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`. The dtype is named as
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
-- A subcircuit template id is snake_case, for example `gemm_coordinate`. A subcircuit (a fully bound template) is
-  `<template>/<bound parameters>`, for example `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3`; `legacy_target` keeps the
+- A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
+  `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`: the semantics are the exact
+  instruction's architecture, operation and types without its shape, and the full instruction is its `semantics` parameter; `legacy_target` keeps the
   target name it was known by, and `fidelity_notes` record known gaps from what production runs. An instance set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
 - The census holds workloads, subcircuit templates and subcircuits, instance sets, hardware and networks. It never encodes replay or verification

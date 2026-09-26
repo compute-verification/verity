@@ -9,7 +9,7 @@ import re
 import pytest
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.proofs.target import TARGETS
+from verity.proofs.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
@@ -22,7 +22,7 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
-    "subcircuit_templates": {"gemm_coordinate": ("K", "datatype", "semantics")},
+    "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics")},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
@@ -106,15 +106,19 @@ def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> 
 
 
 def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
-    """A subcircuit is a fully bound template: gemm_coordinate with K and semantics (the exact instruction) for each target."""
+    """A subcircuit is a fully bound template: gemm-coordinate with K, datatype and semantics (the exact
+    instruction) for each target, with a stable id template/params/semantics and a display name."""
     for t in TARGETS.values():
         s = census.subcircuit_of(t.name)
-        assert s.template == "gemm_coordinate" and vars(s.parameters) == {"K": 1536, "datatype": INSTRUCTIONS[t.instruction].a_dtype, "semantics": t.instruction}
+        assert s.template == "gemm-coordinate" and vars(s.parameters) == {"K": 1536, "datatype": INSTRUCTIONS[t.instruction].a_dtype, "semantics": t.instruction}
         assert s.parameters.datatype in census.DATATYPES
-        assert s.id == f"gemm_coordinate/k1536/{t.instruction}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
+        sem = "-".join(x for x in t.instruction.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
+        assert s.id == f"gemm-coordinate/k1536/{sem}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
+        assert s.display.startswith("GemmCoordinate<1536> · ") and s.display.endswith(census.DATATYPES[s.parameters.datatype].display)
     assert len(census.SUBCIRCUITS) == len(TARGETS)
+    assert census.subcircuit_of(FP8_HOPPER_WGMMA.name).id == "gemm-coordinate/k1536/sm90-wgmma-e4m3"
     notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
-    assert notes["gemm_coordinate/k1536/sm90.mma.m16n8k16.bf16"] == ["H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma"]
+    assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == ["H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma"]
     assert {i.id: i.provenance for i in census.INSTANCE_SETS.values()} == {
         "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
         "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}

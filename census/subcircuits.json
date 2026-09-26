@@ -1,6 +1,6 @@
 [
   {
-    "id": "gemm_coordinate",
+    "id": "gemm-coordinate",
     "name": "GemmCoordinate<K>",
     "description": "a chain of K multiply-accumulates from c_0 = 0 on one tensor-core instruction's exact semantics (FP32 accumulation), then that target's epilogue",
     "parameters": {
@@ -26,7 +26,8 @@
     ],
     "subcircuits": [
       {
-        "id": "gemm_coordinate/k1536/sm80.mma.m16n8k16.bf16",
+        "id": "gemm-coordinate/k1536/sm80-mma-bf16",
+        "display": "GemmCoordinate<1536> · sm80 mma · BF16",
         "parameters": {
           "K": 1536,
           "datatype": "bf16",
@@ -36,7 +37,8 @@
         "legacy_target": "first-campaign-target/2026-09-21"
       },
       {
-        "id": "gemm_coordinate/k1536/sm90.mma.m16n8k16.bf16",
+        "id": "gemm-coordinate/k1536/sm90-mma-bf16",
+        "display": "GemmCoordinate<1536> · sm90 mma · BF16",
         "parameters": {
           "K": 1536,
           "datatype": "bf16",
@@ -55,7 +57,8 @@
         "legacy_target": "bf16-hopper-mma-draft/2026-09-22"
       },
       {
-        "id": "gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3",
+        "id": "gemm-coordinate/k1536/sm90-wgmma-e4m3",
+        "display": "GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)",
         "parameters": {
           "K": 1536,
           "datatype": "e4m3",
@@ -65,7 +68,8 @@
         "legacy_target": "fp8-hopper-wgmma-draft/2026-09-22"
       },
       {
-        "id": "gemm_coordinate/k1536/sm89.mma.m16n8k32.e4m3",
+        "id": "gemm-coordinate/k1536/sm89-mma-e4m3",
+        "display": "GemmCoordinate<1536> · sm89 mma · FP8 (E4M3)",
         "parameters": {
           "K": 1536,
           "datatype": "e4m3",
@@ -75,7 +79,8 @@
         "legacy_target": "fp8-ada-mma-draft/2026-09-22"
       },
       {
-        "id": "gemm_coordinate/k1536/sm120.mma.m16n8k64.e2m1.nvf4",
+        "id": "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4",
+        "display": "GemmCoordinate<1536> · sm120 mma · FP4 (NVFP4, E2M1)",
         "parameters": {
           "K": 1536,
           "datatype": "e2m1",
