@@ -8,7 +8,7 @@ The work is staged along a16z's zkVM security stages (Thaler, "The path to secur
 Stage 1 covers the protocol: 1a PIOP soundness, 1b commitment binding, 1c the compiled argument, 1d the constraint
 system against its semantics, 1e the whole theorem including ZK. Stage 2 is the verifier implementation and Stage 3 the
 prover implementation. §10 maps them onto this work, including where it deliberately differs. §11 sketches a future
-Fiat–Shamir or SNARK variant.
+Fiat–Shamir or SNARK variant. §12 covers quantum provers and verifiers.
 
 ## 1. The claim, and its status
 
@@ -29,6 +29,12 @@ proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34,
 (`Accounting/Numbers.lean`). The statement shapes covered are those with at most 2^26 witness bits per block,
 1,024 public regions and 64 link-point coordinates. That covers every statement of §16 with room to spare.
 
+That theorem is the oracle layer, where committed tables are sent whole. **The compiled theorem** (§4.3) is about the
+protocol as run, with SHA-512 Merkle caps and the coin server keeping each round's bytes. It holds for every classical
+prover, under plain collision resistance of SHA-512. It adds `Σ_ℓ √(N_ℓ·Q_ℓ·Adv_ℓ) + Adv_×` for explicit collision
+finders, which is at most `t·2^{17.3−256}` for a prover making `t` hash evaluations, so the total stays below 2^-128 up to
+`t ≈ 2^110.7`. Quantum provers are covered by §12.
+
 | Piece | a16z stage | Lean | Status |
 |---|---|---|---|
 | Interaction model: live coins, prover strategies, acceptance probability, optimal prover | (framework) | `Game/Basic.lean` | proved |
@@ -41,8 +47,11 @@ proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34,
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
 | Phase lemmas: zerocheck, lincheck, opening, Ligerito | 1a | `zerocheck_phase`, `lincheck_phase`, `opening_phase`, `ligerito_phase` | **to prove** |
 | The link points reduce region checks to opened claims | 1a | `link_sound` | **to prove** |
-| The Merkle layer (SHA-256 caps and paths) | 1b | `Merkle` | **to write** (§4) |
-| Session binding (round digests) with live coins: the compiled interactive argument | 1c, interactive | `Merkle` | **to write** (§4) |
+| Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
+| Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
+| Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
+| Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
+| The compiled table theorem: SHA-512 collision resistance, every prover | 1c, interactive | `table_sound_compiled` | **to write**: the compiled game (openings at the end of the proof) and the coupling (§4.3) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§8) | planned |
@@ -58,9 +67,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 - **Two layers.**
   - The *oracle layer* is where the statistical bound lives. There, a committed table is sent as a whole and the
     verifier reads the queried columns.
-  - The *compiled layer* replaces each table by its SHA-256 Merkle cap plus authentication paths. It also binds each
-    round's bytes by the digest the coin server recorded before drawing the round's coins (§6 of the spec).
-  - The theorem above is the oracle layer. §4 covers the compiled layer.
+  - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
+    the proof. The coin server keeps each round's bytes before drawing that round's coins, and the replay compares
+    bytes, so no hash binds the rounds.
+  - The theorem above is the oracle layer. §4.3 is the compiled layer.
+  - **The compiled layer is the adopted variant, not yet the spec.** PROTOCOL.md (PR #85) specifies SHA-256 trees
+    (§14) and round digests (§6), following upstream. Daniel adopted SHA-512 trees and kept round bytes on
+    2026-09-26 (§4.2a). The spec, upstream's Rust verifier used for cross-validation, and the provers must follow.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
   commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
   not to one witness. The list has at most 50 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with η = 0.02).
@@ -107,8 +120,9 @@ make Lean prove something false.
   Its soundness follows from the paper's Appendix B argument (injective recombination over GF(2)) plus Schwartz–Zippel.
   So it needs no Diamond–Posen theorem. ArkLib's ring switching is on its legacy layer with 18 admits and formalizes
   the other variant; it is not used.
-- **Merkle binding.** Two different openings of one position against one root yield an explicit SHA-256 collision.
-  This is VCVio's `getPutativeRootWithHash_binding_collision`, proved.
+- **Merkle binding.** Two different openings of one position against one cap yield an explicit collision of the
+  hash (SHA-512 in the adopted variant). Proved for the spec's tree shape (`Merkle.opening_binding`). VCVio proves
+  the same for its trees (`getPutativeRootWithHash_binding_collision`).
 - **Johnson list bounds.** ArkLib's `irs_lambda_le_johnson_mds`, proved.
 - **Sumcheck rounds and univariate steps.** Root counting in Mathlib (`Polynomial.card_roots'`,
   `MvPolynomial.schwartz_zippel_totalDegree`).
@@ -117,30 +131,31 @@ make Lean prove something false.
 
 ## 4. Cryptographic assumptions, and which hash model the number lives in
 
-### 4.1 Where SHA-256 enters
+### 4.1 Where hashing enters
 
-1. **Merkle openings** (spec §14). Opened columns must be the committed ones.
-2. **Round digests** (§6). The coin server records SHA-256 of each round's bytes, then draws that round's coins. The
-   replay checks the proof's bytes against the digests. A collision would let a prover choose a round's message after
-   seeing its coins.
-3. **Statement binding** (the statement digest, Σ and `link_sha256`). These are part of the bytes bound by item 2.
+In the adopted variant (SHA-512 trees, round bytes kept):
 
-The round digests (item 2) could drop the assumption entirely if the server kept each round's bytes. It already receives
-them, and storing them costs about the proof size, 0.6 MB per rep.
+1. **Merkle openings** (spec §14, with SHA-512 leaves and nodes). Opened columns must be the committed ones. This is
+   the only hash assumption of the theorem: collision resistance of SHA-512.
+2. **Round bytes** (§6). The coin server keeps each round's bytes, then draws that round's coins, and the replay
+   compares the proof's bytes with the kept ones. Nothing is assumed: a message cannot change after its coins. This
+   replaces the SHA-256 round digests, whose collisions would have let a prover choose a round's message after seeing
+   its coins. Keeping the bytes costs about the proof size, 0.7 MB per rep.
+3. **Statement binding** (the statement digest, Σ and `link_sha256`). These are in round 0's kept bytes, fixed before
+   any coin. Their own collision resistance matters to what the statement refers to (registered data, linked
+   proofs), not to this theorem.
 
-### 4.2 Does collision resistance clear 2^-128? (Daniel's question)
+### 4.2 Why not SHA-256 (Daniel's question: does collision resistance clear 2^-128?)
 
-Three bounds for the compiled protocol. In each, `t` is the number of SHA-256 evaluations the adversary makes. The
-statistical term is `ε_stat = tableError ≤ 2^-195.5`.
+With SHA-256 trees, two arguments cleared 2^-128, each for `t` up to about 2^64 hash evaluations:
 
-| Model | Covers | Bound | Clears 2^-128? |
-|---|---|---|---|
-| Collision resistance, straight-line reduction | Provers that know the tables they commit to: each commitment is the Merkle cap of a table the prover holds | `ε_stat + Adv_CR(B)`, with `B` one run of the prover plus a comparison of the opened columns with the tables. With the generic bound `Adv_CR ≤ t²/2^256`, this is `2^-195.5 + t²·2^-256`. | **Yes**, for `t` up to about 2^64 hash evaluations. The statistical margin is untouched. |
-| Collision resistance, rewinding (the only known argument for arbitrary provers) | Every prover | Run the prover twice from the same commitment to extract a consistent table. This gives `Pr[inconsistent opening] ≤ √(N·Q·Adv_CR)` per committed level (`N` = codeword length, `Q` = queries). At level 0 for m = 33, `N·Q = 2^28.8`. So the bound is `t·2^-113.6` even with the most optimistic `Adv_CR ≤ t²/2^256`. | **No**, for every `t ≥ 1`. The square root sits on the hash term, where the 67.5-bit statistical margin cannot absorb it. |
-| Random-oracle model (VCVio's Merkle extraction) | Every prover | `ε_stat + t²/2^257 + t·(cap entries)/2^256` | **Yes**, for `t` up to about 2^63.5 |
+- the straight-line collision-resistance reduction, which covers only provers that know the tables they commit to;
+- the random-oracle model.
 
-Round digests (item 2) get a tight collision-resistance bound for every prover. The reduction includes the coin server,
-which sees the live bytes. So a mismatch with an equal digest is itself a collision.
+Rewinding, the only collision-resistance argument for every prover, gives `t·2^-113.6` at m = 33, which never clears
+2^-128. The comparison, the alternatives weighed and the cost of SHA-512 are in
+`note:20260926T2230Z-finding-sha512-merkle-choice`. In short: the prover costs about 1.5× per hashed byte on GPUs (under
+2% of a proof), proofs grow about 36%, and verifier time stays about the same.
 
 ### 4.2a The rewinding bound as a function of hash width
 
@@ -176,61 +191,83 @@ on the hash's output width `n`.
 - **The project's convention agrees.** `verity_numerical.security.accounting.hash_collision_bound` charges `q²/2^h` at
   `q = 2^64`. A-GKR moved its Merkle tree to SHA-512 for this reason (`backends/gkr/gpu/sha512_cuda.py`).
 
-**The route that avoids both the random oracle and the knowledge assumption:**
+**The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
 
 1. Build the in-proof Merkle trees with SHA-512, leaves and nodes.
 2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
-   them). Alternatively, move the digests to SHA-384 or SHA-512.
+   them).
 
 The compiled bound is then 2^-195.5 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
-every prover, up to `t ≈ 2^110`.
+every prover, up to `t ≈ 2^110`. §4.3 states it.
 
-**What the alternatives give:**
+**Outside the verifier:** the statement's own data commitments (frame-v3 roots, row digests, Halevi–Micali leaves
+hashed in the circuit) are tight collision-resistance terms. At `t ≥ 2^65` they too need a hash of at least 288 bits.
+That is a separate commitment-scheme decision.
 
-- **More repetitions:** no help, as above.
-- **Rewinding more than twice:** a k-run reduction finds more collisions but runs k times longer. Under the generic
-  bound the gain cancels.
-- **Tight standard-model extraction** needs other primitives: somewhere-statistically-binding or somewhere-extractable
-  hashes, built from LWE or DDH. They are impractical at this scale.
-- **Sending the verifier the committed tables** makes binding information-theoretic, but costs about 2.3 GiB per table
-  at m = 33, twice the witness, so the proof is no longer succinct.
+### 4.3 The compiled theorem: SHA-512 collision resistance, every prover
 
-**Cost of SHA-512 against SHA-256 in Flock.** Flock's in-proof Merkle trees are computed and checked natively, not in a
-circuit.
+The protocol is §1's table (the `fast100` profile twice on one root, live `os` coins, a statement of §16) in the adopted
+variant: SHA-512 Merkle caps, and the coin server keeping each round's bytes. No random oracle and no knowledge
+assumption is used.
 
-- **Prover.**
-  - The level-0 tree at m = 33 hashes about 2.1 GiB per table: 2^21 columns of 1 KiB, plus nodes.
-  - On NVIDIA GPUs SHA-512 costs about 1.5× SHA-256 per byte, since 64-bit arithmetic is emulated. hashcat on an
-    RTX 4090 does about 22 G SHA-256 compressions/s against 7.5 G SHA-512 compressions/s, and a SHA-512 compression
-    covers twice the bytes.
-  - That is a few milliseconds more per table, well under 2% of a 0.5–1 s GPU proof.
-  - On CPUs, where SHA-256 has SHA-NI and SHA-512 usually has no instructions, it is about 2× per byte, so the Merkle
-    share of a CPU proof roughly doubles.
-- **Proof size.** 64-byte siblings double the hash part, about 36% of a proof: 6,126 hashes in the m = 32 example of
-  spec §8.3. Proofs grow from about 544 KB to about 740 KB per rep.
-- **Verifier.** Lean has no hash instructions either way. A SHA-512 compression costs about 1.25× a SHA-256 one and
-  covers twice the bytes, so hashing time stays about the same (a few ms).
-- **In-circuit.** This applies only if Merkle checks were ever verified inside a circuit (recursion, for a SNARK
-  variant), or to the statement's own data hashes.
-  - Per compression (Bristol Fashion): 22,573 against 57,947 AND gates, 2.6× per compression and 1.3× per input byte.
-  - In Flock's power-of-two slots: 2^15 against 2^16 rows per compression, the same rows per input byte. Per
-    Merkle node (two compressions each) that is twice the rows.
-- **The statement's own data commitments** (frame-v3 roots, row digests, Halevi–Micali leaves hashed in the circuit)
-  are tight collision-resistance terms. At `t ≥ 2^65` they too need a hash of at least 288 bits. That is a
-  commitment-scheme decision, separate from the verifier's.
+**The committed values of an arbitrary prover.** Let `P*` be any classical prover. Without loss of generality it is
+deterministic, since a randomized prover is an average of deterministic ones. Its **committed table** is the plurality
+table `T*(P*)`: at each level-0 column position, the column `P*` opens there most often over the coins, with a path
+that verifies against its cap. `T*` is a function of `P*`, as in every rewinding-based binding. It is not computed by
+anyone.
 
-### 4.3 The model the theorem uses
+**Theorem** (`table_sound_compiled`, to write). For every classical prover `P*`,
 
-- **The main compiled theorem will be stated under collision resistance**, for provers that know their committed tables
-  (the first row). Its hash term is exactly `Pr[B finds a SHA-256 collision]`, for an explicit, efficient `B`. It is
-  not a hypothesis. Table 1 cites this as `cr/sha-256`.
-- **"Knows its tables" is a real restriction.** A prover that sends a cap without holding a table it hashes to is not
-  covered by collision resistance at 2^-128. For such provers the only route to 2^-128 is the random-oracle model
-  (the third row). The number then lives in the random-oracle model, and Table 1 must say so.
-- **With SHA-512 Merkle trees** (§4.2a), plain collision resistance covers every prover up to about 2^110 hash
-  evaluations. Neither the knowledge restriction nor the random-oracle model is needed. This is the recommended target
-  if Daniel keeps collision resistance.
-- The oracle-layer theorem (§1) is information-theoretic and needs neither.
+> Pr[the table is accepted, and no codeword within the level-0 proximity radius of `T*(P*)` packs a satisfying witness]
+> ≤ `tableError(fast100 m, shape)` + `Σ_ℓ √(N_ℓ · Q_ℓ · Adv_ℓ)` + `Adv_×`.
+
+- **The sum** is over the Merkle-committed levels: level 0 once, and levels 1 to R once per rep.
+- **`N_ℓ`** is the level's codeword length, its number of leaves. **`Q_ℓ`** is its openings in one run. Level 0 is
+  opened by both reps, 2 × 218 at m = 33.
+- **`Adv_ℓ`** is the probability that an explicit collision finder `B_ℓ` outputs a SHA-512 collision. `B_ℓ` runs
+  `P*` up to level ℓ's commitment, continues it twice on independent coins, and applies Merkle binding at the first
+  position the two runs open to different columns.
+- **`Adv_×`** is the probability that a single run opens one level-0 position in both reps, with two different columns
+  that both verify. That is a collision found in one run, with no rewinding.
+- For a false statement, where no witness satisfies it at all, the event is simply "accepted".
+
+**The number.** `B_ℓ` makes at most `2t` SHA-512 evaluations when `P*` makes `t`, plus two verifications. Under the
+generic bound for SHA-512, `Adv ≤ (2t)²/2^513`, which gives
+
+> ε ≤ 2^-195.5 + `t·√2·S_m / 2^256` + `t²/2^511`,
+
+with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§4.2a). That is at most 2^-128 for `t` up to
+2^110.7 at m = 35 and 2^117 at m = 22. The hash term overtakes the statistical one from `t ≈ 2^43` (m = 35) to
+`2^50` (m = 22).
+
+**Proof, and where it stands in Lean.**
+
+1. **The oracle-model prover `P̃`.** Wherever `P*` sends a cap, `P̃` sends the plurality table instead. At level ℓ ≥ 1
+   that is the plurality given the run so far. Otherwise `P̃` plays exactly as `P*`. `table_sound` bounds `P̃` by
+   `tableError`. Proved, modulo the phase lemmas and `link_sound` (§1).
+2. **Coupling.** Take one set of coins. If every opening in `P*`'s run agrees with the plurality tables, and the compiled
+   verifier accepts, then the oracle verifier accepts `P̃`: the opened columns are the tables' columns, and the paths
+   are checked. **To write**, with the compiled game: Ligerito with caps in place of oracles and the query answers
+   deferred to the end of the proof, where the spec puts the openings.
+3. **Rewinding.** The runs in which some opening leaves the plurality ("bad") have probability at most
+   `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])` per level. Here `conflict_ℓ` is the event that two runs, sharing the prefix up to the
+   commitment, open one position to different columns. Proved: `Rewinding.prBad_le`, and for levels committed after a
+   prefix of coins, `Compiled.compile_step_prefix` (Jensen over prefixes). `Compiled.compile_step` combines steps 1–3
+   for one table.
+4. **Binding.** A conflict is two openings of one position, verified against one cap, with different columns. That is a
+   SHA-512 collision, so `Pr[conflict_ℓ] ≤ Adv_ℓ`. Proved: `Merkle.opening_binding`.
+5. **Rounds.** The kept bytes fix every message before its coins. This is the `Game` model itself (`send` before
+   `coin`), with no hash.
+
+`table_sound_compiled` then follows from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound over
+levels. Steps 3 and 4 depend only on Lean's standard axioms (`Check.lean`).
+
+**Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
+committed tables (VCVio's Merkle extraction) and a tight bound, `2^-195.5 + O(t²/2^512) + t·(cap entries)/2^512`,
+without the square root. It is a cross-check only. The number above does not rest on it.
+
+**Table 1** cites `computational-soundness` under `cr/sha-512`, `live-verifier` and `rs-proximity-johnson` (A1). The
+theorem is classical; §12 covers quantum provers.
 
 ### 4.4 Coins
 
@@ -332,9 +369,9 @@ so that these slot in without restructuring:
 - **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they come
   from the operating system and ChaCha; their quality is trusted.
 - **Leaf hiding.** Halevi–Micali commitments are statistically hiding (`2^-k` per leaf by HM96 Theorem 1, summed over
-  every opened leaf) and binding under SHA-256 collision resistance.
+  every opened leaf) and binding under collision resistance of the tree's hash, SHA-512 in the adopted variant.
 - **Binding of the coin-seed commitment**, under SHA-256 collision resistance. This is needed for malicious-verifier ZK
-  only.
+  only. Against quantum verifiers it needs a wider, collapse-binding commitment (§12).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
   AHIV22 Lemma 4.15 condition). This is to be proved, not assumed.
 
@@ -368,10 +405,13 @@ so that these slot in without restructuring:
    Each phase is a doomed-state transition bounded by the matching `Accounting` term. `Game.value_bind_le` chains them.
 2. **Stage 1a, `link_sound`**: Schwartz–Zippel on each region's multilinear difference, at two independent points.
 3. **`Arith.Correct`** for the GHASH instance, from CompPoly's definitions.
-4. **Stages 1b and 1c (interactive), the compiled theorems** (§4):
-   - collision resistance with explicit tables, using VCVio's binding theorem;
-   - session binding through the round digests;
-   - the random-oracle version for arbitrary provers.
+4. **Stages 1b and 1c (interactive), the compiled theorem** (§4.3). Merkle binding, the rewinding lemma and the
+   compilation steps are proved. Remaining:
+   - the compiled game: Ligerito with caps in place of oracles and query answers deferred to the end of the proof;
+   - the coupling between a compiled run and the oracle-model run of the plurality prover `P̃` on the same coins;
+   - `table_sound_compiled` from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound.
+
+   Session binding needs nothing, since the server keeps the round bytes.
 5. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 6. **Stages 1e and 3, zero knowledge and the reference prover** (§8), after M1's masking spec.
@@ -392,8 +432,8 @@ We follow the staging and vocabulary, and differ where the setting does.
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
 | **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer. It covers the PIOP (zerocheck, lincheck, ring switching, batching) together with Ligerito as an interactive oracle commitment. It is information-theoretic, per table, against any prover. | Follows, with one gap: a16z's Stage 1 has no room for an unproved cited theorem. We reach "Stage 1a modulo A1" (our level 4a). Proving A1 is level 4b, which is not plannable at the Johnson bound. A unique-decoding profile would make it plannable, since ArkLib proves those gaps. |
-| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: SHA-256 collision resistance, tight for provers that know their tables, or random-oracle extraction for every prover (§4.2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (§2). | Follows. The model is named per result, as a16z asks. |
-| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The compiled argument is the oracle protocol plus Merkle commitments (1b) plus session binding. Each round's bytes are bound by the digest the coin server recorded before drawing that round's coins. That binding is tight under collision resistance for every prover, since the server holds the live bytes. | Differs. The coins need no random oracle, which avoids the article's main caveat (Fiat–Shamir security with real hash functions is an open question). A Fiat–Shamir variant is future work (§11). |
+| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§4.3). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (§2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
+| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The compiled argument is the oracle protocol plus Merkle commitments (1b) plus session binding. The coin server keeps each round's bytes before drawing that round's coins, so session binding needs no assumption. | Differs. The coins need no random oracle, which avoids the article's main caveat (Fiat–Shamir security with real hash functions is an open question). A Fiat–Shamir variant is future work (§11). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | There is no VM: statements are circuits. 1d is the lowering theorem: the block R1CS the verifier builds (slots, Δ, pin, regions; spec §16) is satisfied exactly by correct evaluations of the named circuit. That is level 3, in another lane. | Differs in content, not in intent. a16z's "verified bytecode" caveat becomes our rule "the circuit is the meaning". That the circuit matches the hardware is checked empirically, by capture replay recorded as Store evidence, and stays outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§8). | Follows. **Recursion caveat:** not triggered. There is no recursion: the spec rejects forks and the union prover. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | The executable Lean verifier (`Flock.Verify`, lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs in the target. The implementation is itself Lean, so the refinement is Lean-to-Lean. The machine code is trusted: Lean's compiler and runtime, mitigated by agreement tests against upstream's Rust verifier in CI (§5). |
@@ -414,13 +454,13 @@ target 2^-128, and state the number the way the stages suggest:
    - Only proven results are used: A1 is a published theorem, not a conjectured proximity gap.
    - No bits are credited to grinding (proof of work).
    - A session with several tables adds their errors.
-2. **The cryptographic part, with its model named:**
-   - collision resistance: the probability that an explicit reduction finds a SHA-256 collision;
-   - or the random-oracle model: `t²/2^257 + …` (§4.2).
+2. **The cryptographic part, with its model named:** collision resistance of SHA-512, as
+   `Σ_ℓ √(N_ℓ·Q_ℓ·Adv_ℓ) + Adv_×` for explicit collision finders. That is at most `t·2^{17.3−256}` under the generic
+   bound (§4.3), for classical provers.
 3. **Each assumption, at the stage that uses it:**
    - 1a: A1;
-   - 1b: SHA-256 collision resistance, or the random-oracle model;
-   - 1c (interactive): SHA-256 collision resistance for the round digests, and uniform coins;
+   - 1b: SHA-512 collision resistance;
+   - 1c (interactive): uniform coins, and nothing for the rounds, whose bytes the server keeps;
    - Stage 2: the compiler's correctness, mitigated by tests.
 
 **Performance stages.** a16z also sets speed and memory stages, and verifier-cost limits: proofs of at most 256 KB,
@@ -461,3 +501,111 @@ A non-interactive variant ("C-fs") derives each round's coins from a hash of the
 **The `seed` coin mode is not Fiat–Shamir** (PR #83, spec §7.2). Coins come from a seed the verifier commits at step
 0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
 verifier (§8), not to non-interactive proofs.
+
+## 12. Quantum provers and verifiers
+
+The full analysis, with sources, is `note:20260926T2240Z-finding-post-quantum`.
+
+**The theorem is classical, and only its compiled layer is affected.**
+
+- **The oracle layer holds against quantum provers as it stands.** `table_sound` is statistical, and every message and
+  coin is classical. A quantum prover is therefore one more randomized strategy, which `table_sound` already bounds.
+- **The compiled layer does not carry over.** §4.3 rewinds `P*` from a snapshot taken at the commitment.
+  - A quantum state cannot be copied, and measuring the first run's openings disturbs it. So there is no second
+    independent run, and no plurality table.
+  - Collision resistance is also the wrong property. Some hashes that resist quantum collision-finding give commitments
+    that do not bind quantum adversaries (Ambainis–Rosmanis–Unruh 2014). The replacement is **collapsing** (Unruh
+    2016).
+  - Classical proof frameworks, ours and VCVio included, are unsound for quantum adversaries by design.
+
+**What is known, and what applies to live coins.**
+
+- **Kilian's protocol.** Chiesa–Ma–Spooner–Zhandry (FOCS 2021) prove Kilian's argument (one PCP commitment) post-quantum
+  sound in the standard model, with a collapsing hash.
+- **Our setting.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947) extend this to interactive BCS: any
+  public-coin semi-adaptive IOP, a collapse-position-binding vector commitment, and openings at the end. Their Theorem
+  6.1 gives `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`.
+- **Flock fits:**
+  - the coins are public;
+  - Merkle caps are a vector commitment, and hash trees over a collapsing hash are collapsing;
+  - Ligerito's queries depend only on coins, so the IOP is non-adaptive, hence semi-adaptive;
+  - `ε_IOP` is the oracle-layer bound;
+  - the kept round bytes fix every message before its coins.
+
+  So **if SHA-512 is collapsing, Flock's interactive protocol is post-quantum sound with error `tableError + negl(λ)`.**
+  This is a paper-level corollary, not yet written out.
+- **Fiat–Shamir (§11).** The reference is the quantum random-oracle model: `O(t²·ε_rbr + t³/2^λ)` (Chiesa–Manohar–Spooner,
+  TCC 2019).
+
+**Is SHA-512 collapsing?** It is conjectured. Random oracles are collapsing (Unruh 2016), and Merkle–Damgård preserves
+collapsing (Unruh, Asiacrypt 2016; Fehr, TCC 2018). So SHA-512 is collapsing if its compression function is. No attack
+is known beyond generic collision search. Table 1 would need a new property for it (`collapsing/sha-512`).
+
+**The loss makes the corollary asymptotic only.** The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs,
+and its advantage is multiplied by `Σ_i L_i·(q_i + 5)`. At m = 33, `L_max = 2^21`, that sum is about `2^30`, and a table
+has 150–200 rounds.
+
+- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 prover runs.
+- Even at 2^157 queries, the generic quantum collision probability `q³/2^512 = 2^-41`, times `2^30`, is `2^-11`.
+
+**So no concrete post-quantum bound follows at our parameters, for any prover size.** A number would need one of:
+
+- the quantum random-oracle model, with straight-line extraction by Zhandry's compressed oracle, and a target of
+  `ε_stat + O(t³/2^512)`, which no one has proved for the interactive case;
+- a tighter standard-model rewinding, which is open.
+
+**Grover and BHT margins for SHA-512.**
+
+| Attack | Quantum cost |
+|---|---|
+| Preimage or second preimage (Grover) | 2^256 queries, sequential; `P` machines gain only `√P` |
+| Collision (Brassard–Høyer–Tapp) | 2^170.7 queries, and as much quantum-accessible memory |
+| Collision with small quantum memory (Chailloux–Naya-Plasencia–Schrottenloher) | 2^204.8 time |
+| Collision, generic limit (Zhandry) | success at most `O(q³/2^512)` |
+
+- **For comparison,** SHA-256 collisions cost 2^85.3 by BHT. NIST's post-quantum category 4 is SHA-384 collision search,
+  and SHA-512 sits above it.
+- **The hash has ample margin.** The reduction's loss is what blocks a number.
+- **`seed` coins** (PR #83) sit at exactly 2^128: Grover on the 256-bit seed, and on SHA-256 as a PRF.
+
+**Zero knowledge against quantum verifiers.**
+
+- **Honest-verifier ZK is unaffected.** The view is classical and statistically close to the simulation, and
+  statistical distance bounds quantum distinguishers too. Halevi–Micali hiding, masks and padding are statistical.
+- **Malicious-verifier ZK needs quantum rewinding** of a verifier whose state may be quantum.
+  - The closest result: Lombardi–Ma–Spooner (FOCS 2022) prove Goldreich–Kahan, where the verifier commits to its
+    challenges first, post-quantum ZK. It needs the verifier's commitment to be collapse-binding and statistically
+    hiding.
+  - Constant-round black-box post-quantum ZK is impossible (Chia–Chung–Liu–Yamakawa, FOCS 2021). Ours has 150–200
+    rounds, so that does not apply, but adapting LMS22 to coins revealed round by round is research.
+  - **Design consequence:** the coin-seed commitment would need a 128-bit quantum margin, so SHA-384 or SHA-512, not
+    SHA-256.
+
+**What a post-quantum statement would take:**
+
+1. **The asymptotic corollary, on paper (small).** Show that Flock is interactive BCS over a public-coin, non-adaptive
+   IOP, and apply CDDGS25 under "SHA-512 is collapsing". It needs a quantum-cryptography reviewer, and it gives
+   `tableError + negl(λ)`, not a number.
+2. **A concrete number (research).** Either interactive BCS in the quantum random-oracle model with concrete terms, or
+   tighter quantum rewinding.
+3. **Lean.**
+   - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, 2026; QICLean) with states, channels,
+     measurements, entropy and some QKD. They are outside Mathlib and not on our pins.
+   - **What no proof assistant has:**
+     - quantum adversaries with superposition oracle access, in a game model like ours;
+     - collapsing;
+     - CMSZ21's rewinding engine (Jordan's lemma, Marriott–Watrous);
+     - CDDGS25's multi-round argument;
+     - Zhandry's compressed oracle.
+
+     The nearest tools, qrhl-tool (Isabelle) and EasyPQC (EasyCrypt), handle quantum random-oracle proofs such as
+     Fujisaki–Okamoto and Full Domain Hash, but no rewinding.
+   - **A full Lean statement** is a research formalization program, larger than this whole classical development, and
+     not plannable now.
+   - **A cheap intermediate:** CDDGS25's theorem as a named `Prop`, like A1, with the application proved (Flock is
+     public-coin and non-adaptive, with `ε_IOP = tableError`). It is honest, but adds little while the conclusion is
+     asymptotic.
+
+**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. A fair statement is: the
+statistical layer holds against quantum provers; the compiled protocol is post-quantum sound asymptotically if SHA-512
+is collapsing (CDDGS25); no concrete post-quantum bound is known at these parameters.
