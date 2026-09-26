@@ -26,11 +26,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
 
+from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, spec_statics
@@ -289,3 +291,24 @@ def program_graph(instance_paths: Iterable[str | Path], *, row: dict[str, Any] |
     units = units_from_strata(strata, acc, prefix) if strata else None
     exported = exported_from_vus(vus_jsonl, acc, prefix) if vus_jsonl else None
     return {"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)}
+
+
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    """write a served row's program.json from its request Programs"""
+
+    out: str = option("out", help="the program.json to write")
+    instances: list[str] = option("instances", nargs="+", help="the row's request Programs (instances.json.gz)")
+    strata: str | None = option("--strata", default=None, help="a replay record (sampled_replay_p0.json, or a regression record) for the run's units")
+    vus: str | None = option("--vus", default=None, help="a VU export's vus.jsonl for the exported VUs")
+    row: str | None = option("--row", default=None, help="JSON object: the row block (row number, serving config, run)")
+
+
+def main(a: Options) -> int:
+    strata = None
+    if a.strata:
+        rec = json.loads(Path(a.strata).read_text())
+        strata = (rec.get("sampled_replay") or (rec.get("replay_partition") or {})).get("strata")
+    g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus)
+    Path(a.out).write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
+    return 0

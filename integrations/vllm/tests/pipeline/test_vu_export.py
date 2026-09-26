@@ -9,6 +9,7 @@ import pytest
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.pipeline import vu_export as VX
+from verity_vllm.pipeline import vu_store as VS
 from tests.check.test_sampled_replay import H, I, V, Honest, _bf16, _program, _programs, _weights
 
 ROOT = bytes(range(32))
@@ -33,7 +34,7 @@ def attn_world():
 
 def _export(world, out, *, limits=None, mutate=None, root=ROOT):
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    return VX.export_vus(_programs(world), bmap, committed, _weights(world), out_dir=out, run_root=root,
+    return VS.export_vus(_programs(world), bmap, committed, _weights(world), out_dir=out, run_root=root,
                          provenance={"row": "test", "model": "tiny"}, limits=limits or VX.Limits(per_family=64, workers=1))
 
 
@@ -97,7 +98,7 @@ def test_a_vu_that_does_not_replay_is_not_exported(attn_world, tmp_path):
     g = s["by_family"]["Gemm_v1"]
     assert g.get("not_exported_mismatch", 0) > 0 and g["replayed_equal"] < g["drawn"]
     lines = [json.loads(x) for x in (tmp_path / "vus.jsonl").read_text().splitlines()]
-    assert all(not e["instances"] for e in lines if e["result"] is not True)
+    assert all(not e.get("stored") for e in lines if e["result"] is not True)
     assert VX.verify(tmp_path)["ok"]
 
 
@@ -136,12 +137,12 @@ class _Eng:
 def test_after_replay_exports_only_a_passing_pair_zero(attn_world, tmp_path):
     bmap, committed = attn_world.bmap_and_reader()
     args = (_programs(attn_world), bmap, committed, _weights(attn_world), {}, None, {}, {}, {"r0": "d" * 64}, {"git_head": "f00"}, _Eng())
-    assert VX.after_replay(None, {"result": True}, 0, ROOT, *args) is None
-    assert VX.after_replay(str(tmp_path), {"result": None}, 0, ROOT, *args) is None
-    assert VX.after_replay(str(tmp_path), {"result": True}, 1, ROOT, *args) is None and not (tmp_path / "export.json").exists()
+    assert VS.after_replay(None, {"result": True}, 0, ROOT, *args) is None
+    assert VS.after_replay(str(tmp_path), {"result": None}, 0, ROOT, *args) is None
+    assert VS.after_replay(str(tmp_path), {"result": True}, 1, ROOT, *args) is None and not (tmp_path / "export.json").exists()
     (tmp_path / "provenance.json").write_text(json.dumps({"row": 101, "research_run": "r-test"}))
     (tmp_path / "limits.json").write_text(json.dumps({"per_family": 3}))
-    s = VX.after_replay(str(tmp_path), {"result": True}, 0, ROOT, *args)
+    s = VS.after_replay(str(tmp_path), {"result": True}, 0, ROOT, *args)
     p = s["provenance"]
     assert p["row"] == 101 and p["research_run"] == "r-test" and p["model"] == "tiny/model" and p["versions"] == {"git_head": "f00"}
     assert all(c["drawn"] <= 3 for c in s["by_family"].values()) and VX.verify(tmp_path)["ok"]
@@ -167,7 +168,7 @@ def test_families_are_interleaved_in_the_draw(attn_world):
 def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     a = _export(attn_world, tmp_path / "serial")
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
-    assert VX._limits_for(tmp_path, {"evaluator": {"retention": "device"}}).workers == 1 and VX._limits_for(tmp_path, {}).workers == 8
+    assert VS._limits_for(tmp_path, {"evaluator": {"retention": "device"}}).workers == 1 and VS._limits_for(tmp_path, {}).workers == 8
     assert [(x["set"], x["n"], x["content_digest"]) for x in a["sets"]] == [(x["set"], x["n"], x["content_digest"]) for x in b["sets"]]
 
 
@@ -177,3 +178,24 @@ def test_a_cap_below_the_stratum_count_reaches_every_shape():
     got = VX.select(pool, VX.Limits(per_family=20), VX.selection_key(ROOT))
     ks = {v["spec"] for v in got}
     assert len(got) == 20 and ks == {"Gemm_v1{K=1536,N=8}", "Gemm_v1{K=576,N=8}"}, ks
+
+
+def test_the_store_holds_the_units_and_a_query_cuts_the_sets(attn_world, tmp_path):
+    s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=2))
+    root = tmp_path / "store"
+    assert VS.verify_store(root)["ok"] and s["store"]["values"] > 0
+    run = json.loads((root / "run.json").read_text())
+    assert run["schema"] == VS.STORE_SCHEMA and run["provenance"]["weights"]["rows_per_gemm"] == 2
+    units = [json.loads(x) for p in root.glob("programs/*/units.jsonl") for x in p.read_text().splitlines()]
+    gemm_ev = [ev for u in units for ev in u.get("evaluations") or [] if ev["family"] == "Gemm_v1"]
+    assert gemm_ev and all(len(ev["args"][1]["sample"]["rows"]) == 2 and ev["args"][1]["weight"]["sha256"] for ev in gemm_ev)
+    default = {x["set"]: x["content_digest"] for x in s["sets"]}
+    only, fam = VS.extract(root, tmp_path / "gemm", where=f"Gemm_v1{{K={H},*}}")
+    assert {x["set"] for x in only} == {f"gemm-coordinate-ampere-bf16-k{H}"} and set(fam) == {"Gemm_v1"}
+    assert only[0]["content_digest"] == default[only[0]["set"]]
+    mod, _ = VS.extract(root, tmp_path / "mlp", module="model.layers.0.mlp")
+    assert mod and all(x["set"].startswith(("gemm-coordinate", "silumul")) for x in mod)
+    full, _ = VS.extract(root, tmp_path / "full", where="Gemm_v1", weights=_weights(attn_world),
+                         limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=1000))
+    assert sum(x["n"] for x in full) > sum(x["n"] for x in only)          # the checkpoint fallback cuts any row
+    assert VX.verify(tmp_path)["ok"]
