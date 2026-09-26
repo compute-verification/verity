@@ -4,24 +4,31 @@
 `lean/lean-toolchain`, no dependencies). It replays recorded sessions offline: interactive coins only, CPU only. Upstream's
 Rust verifier is the cross-validation oracle (§17.1).
 
-Scope today: the circuit statement in strict mode, without lookup slots. It covers two versions of PR #83: `9294e161`
-(tags `verity/flock-netlist/v1`) and `19c7269a` (tags `verity/flock-circuit`), both with the keyed-BLAKE3 row leaf. The
-byte tags (`Flock.Tags`) and the in-circuit row leaf (`Flock.RowLeaf`) are parameters. The legacy module (pure-block, IR
-frame) is not written yet.
+Scope today: the circuit statement in strict mode, including lookup slots (built from the pinned MUFU tables), tail stages
+and wires. It covers three versions of PR #83: `9294e161` (tags `verity/flock-netlist/v1`), `19c7269a` and the final
+format `fd02e847` (tags `verity/flock-circuit`). All three use the keyed-BLAKE3 row leaf and unsalted SHA-256 Merkle
+trees. Four things are parameters: the byte tags (`Flock.Tags`), the in-circuit row leaf (`Flock.RowLeaf`), the proof's
+Merkle scheme (`Flock.MerkleScheme`: SHA-256, or SHA-512 with 64-byte siblings) and the Halevi–Micali leaf (`Flock.Hm96`,
+generic over the hash). The legacy module (pure-block, IR frame) is not written yet.
 
 ## Build and run
 
 ~~~text
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
-flock-verify verify [--statement ID] --circuit F --comp comp.rows --public pub.bin [--coins seed|os] --session DIR...
-flock-verify statement [--statement ID] --circuit F --comp comp.rows --public pub.bin     # digest, Σ, Hello
+flock-verify verify [--statement ID] --circuit F --comp comp.rows --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
+flock-verify statement [--statement ID] --circuit F --comp comp.rows --public pub.bin [--tables DIR]   # digest, Σ, Hello
 ~~~
 
-`ID` is `verity/flock-circuit` (the default) or `verity/flock-netlist/v1`. Each `DIR` holds `session.json` (the
+`ID` is one of three versions:
+- `verity/flock-circuit`, the final format and the default;
+- `verity/flock-circuit@19c7269a`;
+- `verity/flock-netlist/v1`.
+
+`--tables` names the directory of the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots. Each `DIR` holds `session.json` (the
 `flock-live-session/v1` record) and `<table>.rep0.bin`, `<table>.rep1.bin` (the proofs the server received; the table is
 `circuit`, or `nl` for the older tags). The statement is set up once (about 20 s: `D_b3` is recomputed from `comp.rows`). The command prints
-one `VERDICT {"accepted", "session", "why"}` line per session and exits 0 iff all are accepted. `field-test`,
-`hash-test` and `comp-check` run the component checks.
+one `VERDICT {"accepted", "session", "why"}` line per session and exits 0 iff all are accepted. The component checks are `field-test`, `hash-test` (SHA-256, SHA-512, BLAKE3), `merkle-test`,
+`hm96-test` (on PR #88's `hm96/vectors.json`) and `comp-check`.
 
 `backends/flock/tests/test_lean_verifier.py` pins the toolchain and rejects `native_decide`, `implemented_by`, `extern` and
 `unsafe` in the sources.
@@ -35,6 +42,8 @@ one `VERDICT {"accepted", "session", "why"}` line per session and exits 0 iff al
 | `art:ef080b64` | replayable sessions `honest/` (accept) and `r-break/` (reject S13/R1), with upstream's verdicts, at `9294e161` |
 | `art:5715c8f9` | the RoPE stage at `19c7269a`: `circuit.txt`, `pub-8.bin`, `inst-8.bin` |
 | `art:b9e86ae1` | `honest/` and `r-break/` at `19c7269a` |
+| `art:d9837120`, `art:bd9f7efb` | the RoPE stage and its vectors at `fd02e847` (the final format) |
+| `art:fb5157c5`, `art:77cb4bec`, `art:925d6833` | RMSNorm Triton n128 at `fd02e847` (two lookup slots, three tail stages): stage, vectors, the MUFU tables |
 
 ~~~text
 research data fetch art:ef080b64 --to /tmp/v     # likewise the other two
@@ -48,14 +57,15 @@ every coin. Only the check the edit breaks can then reject. `OUT_DIR/mutants.jso
 
 The vectors patch of each version applies to its PR #83 commit (`git apply` in a checkout):
 - `netlist-vectors.patch`, for `9294e161`, patches `flock-netlist`;
-- `circuit-vectors.patch`, for `19c7269a`, patches `flock-circuit`.
+- `circuit-vectors.patch`, for `fd02e847`, patches `flock-circuit` (its `19c7269a` version is in commit 9605a77d).
 
 Each patch adds three subcommands:
 - `vectors` records the honest and R-BREAK sessions through a loopback transport;
 - `export-comp` writes `comp.rows`;
 - `replay --sessions DIR...` gives upstream's offline verdict (`Server::from_record`, then `finish`).
 
-Each patch also fixes `from_record` for a table that commits no public words. Build inside upstream `b684b12` with PR #83's
+The two older patches also fix `from_record` for a table that commits no public words; PR #83 carries the fix from
+`a2a7e7f4` on. Build inside upstream `b684b12` with PR #83's
 patches applied (`cargo build --release -p flock-live --bin <binary>`). Then compare the two verifiers:
 
 ~~~text
@@ -64,4 +74,9 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
 ~~~
 
 It writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict, on any
-session. Recorded runs: `art:f1f3c2aa` (`9294e161`) and `art:81645236` (`19c7269a`), 25 of 25 sessions agreeing in each.
+session. Recorded runs:
+- `art:f1f3c2aa` (`9294e161`): 25 of 25 sessions agree;
+- `art:81645236` (`19c7269a`): 25 of 25 agree;
+- `art:78ef0a6e` (`fd02e847`): 27 of 27 agree, with the retained-bytes sessions.
+
+`redigest.py --retain` writes a session with every round's framed bytes retained, and two negatives of it.

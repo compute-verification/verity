@@ -1,7 +1,7 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
     python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F --comp F --public F \
-        [--expect FILE]... --out DIR --sessions DIR...
+        [--tables DIR] [--expect FILE]... --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -17,6 +17,8 @@ def lean_verdicts(a):
     cmd = [a.lean, "verify", "--statement", a.statement, "--circuit", a.circuit, "--comp", a.comp, "--public", a.public]
     if a.coins:
         cmd += ["--coins", a.coins]
+    if a.tables:
+        cmd += ["--tables", a.tables]
     p = subprocess.run(cmd + ["--session", *a.sessions], capture_output=True, text=True)
     (a.out / "lean.txt").write_text(p.stdout)
     (a.out / "lean.err").write_text(p.stderr)
@@ -30,7 +32,8 @@ def lean_verdicts(a):
 
 def upstream_verdicts(a):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
-    p = subprocess.run([a.upstream, "replay", "--instances", a.public, flag, a.circuit, "--sessions", *a.sessions],
+    tables = ["--tables", a.tables] if a.tables else []
+    p = subprocess.run([a.upstream, "replay", "--instances", a.public, flag, a.circuit, *tables, "--sessions", *a.sessions],
                        capture_output=True, text=True)
     (a.out / "upstream.txt").write_text(p.stdout)
     (a.out / "upstream.err").write_text(p.stderr)
@@ -48,6 +51,7 @@ def main():
         ap.add_argument(k, required=True)
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
+    ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)

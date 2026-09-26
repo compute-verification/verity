@@ -1,6 +1,6 @@
 --- a/backends/flock/live/src/bin/flock-circuit.rs
 +++ b/backends/flock/live/src/bin/flock-circuit.rs
-@@ -803,6 +803,173 @@
+@@ -844,6 +844,173 @@
      }
  }
  
@@ -174,7 +174,7 @@
  fn refuse(why: String) -> ! {
      println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
      std::process::exit(2);
-@@ -810,6 +977,9 @@
+@@ -851,6 +1018,9 @@
  
  fn main() {
      let cmd = std::env::args().nth(1).unwrap_or_default();
@@ -184,7 +184,7 @@
      if cmd == "replay-coins" {
          let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
          match flock_live::replay_coin_seed(&rec) {
-@@ -865,6 +1035,19 @@
+@@ -906,6 +1076,19 @@
                  println!("LIVE\t{v}");
              }
          }
@@ -204,17 +204,3 @@
          _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
      }
  }
---- a/backends/flock/live/src/lib.rs
-+++ b/backends/flock/live/src/lib.rs
-@@ -1439,8 +1439,9 @@
-                     return Err(bad(&format!("{n}: root_b differs from root_b_sha256")));
-                 }
-                 roots.push((n.clone(), rb));
--                let p = hx(&l["publics"][n], "publics")?;
--                if l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
-+                // a statement that commits no public words has no entry for the table (the server records none)
-+                let p = if l["publics"][n].is_null() && l["publics_sha256"][n].is_null() { Vec::new() } else { hx(&l["publics"][n], "publics")? };
-+                if !(p.is_empty() && l["publics_sha256"][n].is_null()) && l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
-                     return Err(bad(&format!("{n}: publics differ from publics_sha256")));
-                 }
-                 publics.push((n.clone(), p));

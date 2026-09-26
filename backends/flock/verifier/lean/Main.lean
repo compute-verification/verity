@@ -53,6 +53,15 @@ def argOf (args : List String) (k : String) : Option String :=
   | _ :: v :: _ => some v
   | _ => none
 
+/-- The pinned MUFU tables found under `--tables DIR` (`<name>.u32`); the circuit checks each one it needs. -/
+def readTables (args : List String) : IO (List (String × ByteArray)) := do
+  let some dir := argOf args "--tables" | return []
+  let mut out := []
+  for (name, _, _) in MUFU_TABLES do
+    let p : System.FilePath := dir ++ s!"/{name}.u32"
+    if ← p.pathExists then out := out ++ [(name, ← IO.FS.readBinFile p)]
+  return out
+
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
 tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
@@ -60,13 +69,14 @@ verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
     | IO.eprintln "usage: flock-verify verify [--statement ID] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
-  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.statement)
-    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.statement)}"; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
   let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
-  let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins : V Stmt) with
+  let tables ← readTables args
+  let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
     | .ok st => pure (Except.ok (Setup.ofCircuit st))
     | .error e => pure (Except.error s!"setup: {e}")
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
@@ -87,11 +97,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
 def statementCmd (args : List String) : IO UInt32 := do
   let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
     | IO.eprintln "usage: flock-verify statement [--statement ID] --circuit F --comp F --public F [--coins seed|os]"; return 2
-  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.statement)
-    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.statement)}"; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
-  match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins : V Stmt) with
+  let tables ← readTables args
+  match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
   | .ok st =>
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), ("circuit_sha256", Lean.Json.str (hexOf st.c.sha)),
       ("statement_digest", Lean.Json.str (hexOf st.digest)), ("sigma", Lean.Json.str (hexOf st.sigma)),

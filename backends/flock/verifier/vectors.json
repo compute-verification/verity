@@ -3909,7 +3909,7 @@
    {
     "tags": "verity/flock-circuit",
     "pr83": "19c7269a",
-    "generator": "circuit-vectors.patch",
+    "generator": "circuit-vectors.patch at commit 9605a77d (the 19c7269a version of the patch)",
     "statement": {
      "circuit": "art:5715c8f9/circuit.txt",
      "public": "art:5715c8f9/pub-8.bin",
@@ -3941,6 +3941,75 @@
      "cases": "as in the first set"
     },
     "agreement": "art:81645236"
+   },
+   {
+    "tags": "verity/flock-circuit (final format)",
+    "pr83": "fd02e847",
+    "generator": "circuit-vectors.patch",
+    "statement": {
+     "circuit": "art:d9837120/circuit.txt",
+     "public": "art:d9837120/pub-8.bin",
+     "comp": "art:04259cdd",
+     "circuit_sha256": "18f4b46df89bd009e2cee6181ec4c8622976d598b6dff572800a168816cf7c4d",
+     "statement_digest": "09c6a3b82a0959f8f6e01725f91ba2fcd9cc7cb92b688c3eb176055e31f081f2",
+     "sigma": "c362a43314f595e5ce1a6038aadcd55087ba3d2e731ca5c2d678c43c0381c2fb",
+     "detail": "RoPE, 8 instances, m 23"
+    },
+    "sessions": [
+     {
+      "dir": "art:bd9f7efb/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:bd9f7efb/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      }
+     }
+    ],
+    "mutants": {
+     "tool": "redigest.py art:bd9f7efb/honest OUT; redigest.py --retain art:bd9f7efb/honest OUT",
+     "cases": "as in the first set, plus retained, retained-edited (retained-not-digest: intended divergence, upstream ignores the bytes)"
+    },
+    "agreement": "art:78ef0a6e (27/27)"
+   },
+   {
+    "tags": "verity/flock-circuit (final format)",
+    "pr83": "fd02e847",
+    "generator": "circuit-vectors.patch (vectors --tables)",
+    "statement": {
+     "circuit": "art:fb5157c5/circuit.txt",
+     "public": "art:fb5157c5/pub-2.bin",
+     "comp": "art:04259cdd",
+     "tables": "art:925d6833",
+     "statement_digest": "5e79ebf6c9e66b1c43d109c00c0318c01f8b7ab0d664b78222f1e1a56f5f9c8c",
+     "sigma": "a8064d5f66860ae458e43ecd61f4d35282fcf5c2de5cc413434e5550997de69e",
+     "detail": "rmsnorm-triton n128 (synthetic set, 2 instances): lookup slots rcp (23 bits, lo 13) and sqrt (24 bits, lo 14), 3 tail stages, META wires; k_log 21, m 24"
+    },
+    "sessions": [
+     {
+      "dir": "art:77cb4bec/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:77cb4bec/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      }
+     }
+    ],
+    "mutants": {
+     "tool": "redigest.py art:77cb4bec/honest OUT",
+     "cases": "as in the first set"
+    }
    }
   ]
  }

@@ -139,8 +139,9 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V S
   canon (Json.mkObj (if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base))
 
 /-- `setup` (§3 step 1): parse and check everything, then derive the statement. -/
-def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins) : V Stmt := do
-  let c ← Circuit.parse tags circuitFile
+def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray) := []) : V Stmt := do
+  let c ← Circuit.parse tags circuitFile tables
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   leaf.checkLayout c
   let pub ← Public.load tags c publicFile
@@ -196,16 +197,18 @@ def fold (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Ar
         let sparse ← match r.kind with
           | .comp =>
             if sl != st.leaf.comp.spec.kLog then throw "lincheck fold: a compression slot of the wrong size"
-            pure (some (st.leaf.comp.a, st.leaf.comp.b))
+            pure (some (st.leaf.comp.a, st.leaf.comp.b, none))
           | .net i =>
             let net := (c.nets.getD i default).2
             if net.unitLog != sl then throw "lincheck fold: a unit slot of the wrong size"
-            pure (some (net.a, net.b))
+            pure (some (net.a, net.b, net.lookup))
           | .mask => pure none
         let b := match sparse with
-          | some (a, b) =>
+          | some (a, b, lk) =>
             let fa := a.foldT eLo
-            let fb := b.foldT eLo
+            let fb := match lk with
+              | some t => Lookup.foldB t eLo (b.foldT eLo)
+              | none => b.foldT eLo
             (Array.range (2 ^ sl)).map fun i => alpha * fa[i]! + fb[i]!
           | none => eLo.map fun x => (alpha + 1) * x
         bases := bases.push (key, b)

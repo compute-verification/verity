@@ -898,6 +898,10 @@ included. Claims are listed region-major, then point 0 before point 1.
   | `Hello` coin scheme (seed mode) | `coin-commit/sha256/v1` | `coin-commit/sha256` |
   | identity | `merkle_hash: sha256` | a `hashes` object naming every commitment hash (`row_leaf_in_circuit: blake3-keyed/row/v2`) |
 
+  The format is final at `fd02e847`, with the tags of `19c7269a`. From that commit, META `leaf_scheme` is a pinned object: the
+  unsalted id, and a `target` reserving `hm96-sha256/v1` with `DEFAULT_KEY` named by its SHA-256. The verifier compares it
+  in canonical form, and the identity's `leaf_scheme` is that object.
+
 - The in-circuit row leaf is a parameter too (`Flock.RowLeaf`): its slot circuit, its layout check, its share of Δ, its
   regions with their known bytes, and the check of the input roots. Both versions use the keyed-BLAKE3 row leaf
   (`blake3-keyed/row/v2`) described below. The target leaf is `hm96-sha256/v1` (Halevi–Micali on SHA-256, PR #88). It
@@ -910,9 +914,13 @@ included. Claims are listed region-major, then point 0 before point 1.
 - The circuit file: line 1 `flock-netlist/v1 <name>`, line 2 `META <json>`, then `NET <name> <lines>` blocks, each an
   expanded circuit in `flock-ir-unit/v2` form (the unit, tail stages). `sha256(file)` is the pin. The parser refuses a `CUT`
   line and the META keys `tail, cut, cut_words, public_ports, public, native, outputs_by_tail`: that is where the rule
-  "the verifier evaluates nothing" is enforced. Lookup slots are built from sha256-pinned tables (`rsq, sqrt, rcp, ex2`)
-  as two-level one-hot circuits; their identity is `SHA-256("verity/flock-netlist/lookup/v1 {name} n= lo= bits=\n" ‖ table
-  words LE)`.
+  "the verifier evaluates nothing" is enforced. Lookup slots (META `lookups`, in key order after the expanded circuits,
+  each named `lookup:<table>`) are built from SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
+  - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
+    recursively; one product row per output bit `j` and high minterm `h`, with B the XOR of the low minterms `l` whose
+    `table[h·2^lo + l]` has bit `j`; padding to a word; the output word; the constant.
+  - `lo` is META's `lo_bits`, and the table's size must be `2^n` words.
+  - A fold may read the product rows' B side from the table, since it is about `bits · 2^{n−1}` entries.
 - Layout: whole VUs per block (`G` per block); slots: BLAKE3 compression runs per input port and chunk, one parent tree
   per multi-chunk port (heap order, root first), the unit range, tail stages, lookup slots, one mask slot, forced-zero
   padding. Δ: const wiring to the pin; A-only chaining-value copies within runs and from children into parents; "both"

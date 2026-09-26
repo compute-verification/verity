@@ -13,6 +13,8 @@ import Flock.Hm96
 import Flock.Ligerito
 import Flock.Comp
 import Flock.Tags
+import Flock.Net
+import Flock.Lookup
 import Flock.Circuit
 import Flock.Public
 import Flock.RowLeaf
