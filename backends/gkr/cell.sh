@@ -71,6 +71,19 @@ if [ "$ROLE" = verifier ]; then
   $B selftest --vus 8 --k $K > $O/selftest-8.txt 2>&1
   echo "flock-link selftest (8 VUs, K=$K): $(grep -c '"pass":true' $O/selftest-8.txt) passed, $(grep -c '"pass":false' $O/selftest-8.txt) failed; $(grep SELFTEST $O/selftest-8.txt | cut -c1-200)"
   [ -n "$SET_DIR" ] || { echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; }
+  # an echo on ECHO_PORT for the prover's open-connection RTT probe (a TCP connect over RunPod's global network costs ~4x a round trip)
+  python3 -c "
+import socket, threading
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('0.0.0.0', ${ECHO_PORT:-7201})); s.listen(16)
+def echo(c):
+    c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    with c:
+        while (d := c.recv(256)):
+            c.sendall(d)
+while True:
+    c, _ = s.accept(); threading.Thread(target=echo, args=(c,), daemon=True).start()
+" > $O/echo.log 2>&1 &
+  ECHO_PID=$!
   first=1
   for n in $SIZES; do
     # each size's statement just before serving it: the prover builds the same statement and runs a warm-up before its first
@@ -99,6 +112,7 @@ files += [str(p.relative_to(rd)) for p in sorted((rd / "out").rglob("*")) if p.i
      "meta": {"label": "A-route-a live verifier: every session's record, the Flock proofs kept beside it, the statements it served"}}]}))
 print(f"outputs.json: {len(files)} files")
 EOF
+  kill $ECHO_PID 2>/dev/null
   rm -rf $RD/set
   exit 0
 fi
@@ -167,18 +181,53 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 
 say "RTT probe to $RTT_TARGET"
-# 20 connects; a failed one is retried (the first connect to a freshly booted verifier over global networking can time out)
-RTT=$($PY -c "import socket,sys,time,statistics as S;h,p='$RTT_TARGET'.rsplit(':',1);t=[]
+# RTT_TARGET: the verifier's echo (ECHO_PORT) gives the round trip on one open connection, the way the session's rounds travel; else
+# (e.g. its sshd) the median of 20 TCP connects, a failed one retried (a first connect over global networking can time out)
+read -r RTT RTT_KIND < <($PY -c "
+import socket, statistics as S, sys, time
+h, p = '$RTT_TARGET'.rsplit(':', 1); p = int(p); MAGIC = b'verity-rtt-probe\\n'
+def open_rtt():
+    c = socket.create_connection((h, p), timeout=5); c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1); c.settimeout(3)
+    with c:
+        c.sendall(MAGIC); got = b''
+        while len(got) < len(MAGIC) and (d := c.recv(len(MAGIC) - len(got))):
+            got += d
+        if got != MAGIC:
+            return None
+        t = []
+        for _ in range(50):
+            a = time.perf_counter(); c.sendall(b'p' * 8); r = b''
+            while len(r) < 8:
+                r += c.recv(8 - len(r))
+            t.append((time.perf_counter() - a) * 1e3)
+        return t
+t = None
+for _ in range(3):
+    try:
+        t = open_rtt()
+        break
+    except OSError:
+        time.sleep(1)
+if t:
+    print(round(S.median(t), 3), 'open'); sys.exit()
+t = []
 for _ in range(40):
     try:
-        a=time.perf_counter();c=socket.create_connection((h,int(p)),timeout=5);t.append((time.perf_counter()-a)*1e3);c.close()
+        a = time.perf_counter(); c = socket.create_connection((h, p), timeout=5); t.append((time.perf_counter() - a) * 1e3); c.close()
     except OSError:
         pass
     time.sleep(0.05)
-    if len(t)==20: break
-print(round(S.median(t),3)) if len(t)==20 else sys.exit('only %d of 40 connects' % len(t))") || { echo "RTT probe failed"; exit 3; }
-echo "RTT $RTT ms" | tee $O/rtt.txt
-RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod's sshd ($RTT_TARGET), measured in this run before the sweep"
+    if len(t) == 20:
+        break
+print(round(S.median(t), 3), 'connect') if len(t) == 20 else sys.exit('only %d of 40 connects' % len(t))
+")
+[ -n "${RTT:-}" ] || { echo "RTT probe failed"; exit 3; }
+if [ "$RTT_KIND" = open ]; then
+  RTT_METHOD="median of 50 ping-pongs of 8 bytes on one open TCP connection (TCP_NODELAY) from the prover pod to the verifier pod's echo ($RTT_TARGET), measured in this run before the sweep"
+else
+  RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod ($RTT_TARGET), measured in this run before the sweep"
+fi
+echo "RTT $RTT ms ($RTT_KIND)" | tee $O/rtt.txt
 i=0; TPS=()
 for n in $SIZES; do
   P=$O/points/p$i-$n; mkdir -p $P; C=$W/cell/k$K-c$n
