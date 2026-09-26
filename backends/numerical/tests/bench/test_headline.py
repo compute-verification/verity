@@ -213,7 +213,7 @@ L40S_GPU = "NVIDIA L40S"
 
 def l40s_cell(store: LocalStore, sub: str, *, profile: str | None = None, relation: str | None = None, t_total: float = 0.4,
               redteam: bool = True, T: int | None = None, set_T: int | None = None, klass: tuple[int, int] | None = None,
-              key_counts: dict | None = None, per_key_count: dict | None = None) -> str:
+              key_counts: dict | None = None, per_key_count: dict | None = None, source: str = "captured") -> str:
     """A C-Flock frame-v3 keyed-BLAKE3 result proved on an L40S over ``sub`` (#101's statements), stamped as ``bench.cell``
     registers it, its inputs a registered captured set of ``sub``, verified by a non-producer, red-team cleared unless not."""
     import hashlib
@@ -225,7 +225,7 @@ def l40s_cell(store: LocalStore, sub: str, *, profile: str | None = None, relati
     params = vars(census.SUBCIRCUITS[sub].parameters)
     name = sub.replace("/", "-") + (f"-t{set_T if set_T is not None else T}" if T is not None else
                                     f"-class-t{klass[0]}-{klass[1]}" if klass else "")
-    store.put_artifact("input-set/v1", {"set": name, "subcircuit": sub, "source": "captured", "n": 4096,
+    store.put_artifact("input-set/v1", {"set": name, "subcircuit": sub, "source": source, "n": 4096,
                                         "content_digest": digest, "schema": "vllm-vu-set/v1", "parameters": params})
     doc = hashed("blake3", t_total=t_total, security={"target": -128, "achieved_log2": -195.5})
     fp = doc["workload_fingerprint"]
@@ -545,6 +545,22 @@ def test_a_class_cell_credits_each_listed_key_count_at_its_own_throughput(store:
     assert r["key_class"]["T"] == [1, 128] and set(r["key_class"]["key_counts"]) == {"1", "2", "3", "4", "128"}
     assert r["key_class"]["not_credited"] == {"5": "no per_key_count timing", "200": "outside the class 1–128"}
     assert V.parity(store) == []
+
+
+def test_key_counts_proved_on_synthetic_inputs_count_with_a_provenance_footnote(store: LocalStore) -> None:
+    """red-team-flock-3's CP6 (coordinator ruling 2026-09-26, open to Daniel): a class cell on the spine generator's synthetic
+    set covers its T like a captured one, and the covered entry says which T are synthetic."""
+    syn = l40s_cell(store, ATT, klass=(1, 128), key_counts={1: 64, 2: 64, 3: 64}, source="synthetic",
+                    per_key_count={1: (64, 0.5), 2: (64, 0.5), 3: (64, 0.6)})
+    cap = l40s_cell(store, ATT, T=4, t_total=0.05)
+    rec = next(r for r in H.headline(V.build(store, SPEC)) if r["workload"] == ROW101["id"])
+    att = next(x for x in next(b for b in rec["backends"] if b["backend"] == "C-interactive")["covered"] if x["subcircuit"] == ATT)
+    assert att["covered_values"] == [1, 2, 3, 4]
+    pv = {x["T"]: x for x in att["per_value"]}
+    assert pv[1]["artifact"] == syn and pv[1]["source"] == "synthetic" and pv[4]["artifact"] == cap and pv[4]["source"] == "captured"
+    assert att["provenance"]["synthetic_values"] == [1, 2, 3] and "3 of the 4 covered T values" in att["provenance"]["text"]
+    md = "\n".join(H.render_markdown([rec]))
+    assert "C-interactive†‡ at T = 1–4" in md and "‡ Synthetic inputs, AttentionHead<T,64>" in md and "proved on synthetic inputs" in md
 
 
 def test_a_broken_class_cell_is_rejected_not_guessed(store: LocalStore) -> None:
