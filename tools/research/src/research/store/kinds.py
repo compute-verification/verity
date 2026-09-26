@@ -22,6 +22,9 @@ KINDS: dict[str, str] = {
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
+                    "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
+                    "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "run-record/v1": "every file of a run dir (stdout.log, stderr.log, launcher.log, job.json, status.json, outputs; markers excluded) as one "
                      "tree, named by its attempt as outputs.run_record: the run's custody on the remote (store.custody); meta {run_id, files, bytes}",

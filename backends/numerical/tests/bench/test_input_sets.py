@@ -1,0 +1,213 @@
+"""Input sets (``bench.input_sets``), the template catalogue (``bench.templates``) and the IR generator (``bench.generate``).
+
+Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, PR #42's
+export ``art:b5bb0ca9``) identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
+seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
+set of each template has the captured layout and provenance fields and verifies the same way."""
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from verity_numerical.bench import generate as G
+from verity_numerical.bench import input_sets as IS
+from verity_numerical.bench import templates as TM
+
+DATA = Path(__file__).parent / "data" / "captured-101"
+CAPTURED = sorted((DATA / "manifests").glob("*.json"))
+SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
+CENSUS = Path(__file__).resolve().parents[4] / "census"
+
+#: Small bindings of every template (fast under the gate reference too).
+SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1:40"), "rope-head": dict(D=8),
+         "rmsnorm-fused-cuda": dict(N=64, EPS=1e-5), "rmsnorm-triton": dict(N=64, EPS=1e-6), "silu-mul": dict(I=32),
+         "gumbel-top-p-token-select": dict(V=16)}
+
+
+def test_catalogue_covers_the_101_templates():
+    assert set(TM.TEMPLATES) == set(SMALL)
+    assert len(CAPTURED) == 8 and len(SLICES) == 7
+
+
+@pytest.mark.parametrize("path", CAPTURED, ids=lambda p: p.stem)
+def test_captured_manifest_identifies_its_subcircuit(path):
+    man = json.loads(path.read_text())
+    sub = TM.identify(man["relation"])
+    assert sub.set_name == man["set"] == path.stem
+    assert sub.relation == man["relation"]
+    assert {p.name: (p.dtype, p.words) for p in sub.ports} == {k: (v["dtype"], v["words"]) for k, v in man["ports"].items()}
+    body = {k: man[k] for k in ("schema", "set", "relation", "n", "ports")}
+    body["files"] = {k: v for k, v in man["files"].items() if k != "index.json"}
+    assert IS.content_digest(body) == man["content_digest"]
+    assert man["content_digest_rule"] == IS.CONTENT_RULE
+    assert set(IS.provenance(man)) == set(IS.PROVENANCE_FIELDS) and IS.provenance(man)["source"] == "captured"
+    assert TM.parse_subcircuit_id(sub.id).set_name == sub.set_name
+
+
+@pytest.mark.parametrize("path", SLICES, ids=lambda p: p.name)
+def test_captured_slice_reevaluates_through_the_ir(path):
+    s = IS.InputSet.open(path)
+    assert s.source == "captured" and s.provenance["subset_of"]["content_digest"]
+    r = IS.verify(path)
+    assert r["ok"] and r["checked"] == s.n, r
+
+
+@pytest.fixture(scope="module")
+def synthetic(tmp_path_factory):
+    out = tmp_path_factory.mktemp("synthetic")
+    return {t: G.generate(TM.subcircuit(t, **p), 6, 11, out) for t, p in SMALL.items()}
+
+
+@pytest.mark.parametrize("template", sorted(SMALL))
+def test_synthetic_set_has_the_captured_layout(synthetic, template):
+    s = IS.InputSet.open(synthetic[template]["path"])
+    assert IS.verify(s.path)["ok"]
+    assert s.source == "synthetic" and s.manifest["schema"] == IS.SCHEMA
+    captured = json.loads(CAPTURED[0].read_text())
+    assert set(s.manifest) == set(captured)
+    assert set(s.manifest["provenance"]) == set(IS.PROVENANCE_FIELDS)
+    idx = json.loads((s.path / "index.json").read_text())
+    assert idx["columns"] == IS.INDEX_COLUMNS == json.loads((SLICES[0] / "index.json").read_text())["columns"]
+    assert [r[8]["draw"] for r in idx["rows"]] == sorted(r[8]["draw"] for r in idx["rows"])
+    sub = s.subcircuit
+    assert sub.id == TM.subcircuit(template, **SMALL[template]).id and s.name == sub.set_name
+    digests = s.provenance["program_digests"]
+    assert digests and all(len(v) == 64 for v in digests.values())
+    rec = s.provenance["recipe"]
+    assert rec["seed"] == 11 and rec["subcircuit"] == sub.id and rec["n"] == s.n == 6
+
+
+def test_synthetic_and_captured_names_coincide_for_the_101_bindings():
+    for path in CAPTURED:
+        man = json.loads(path.read_text())
+        sub = TM.identify(man["relation"])
+        bound = TM.subcircuit(sub.template.id, **sub.params)
+        assert (bound.id, bound.set_name, bound.relation) == (sub.id, man["set"], man["relation"])
+
+
+def test_generation_is_deterministic_and_prefix_stable(tmp_path):
+    sub = TM.subcircuit("gemm-coordinate", K=64, tile=4)
+    a = G.generate(sub, 8, 3, tmp_path / "a")
+    b = G.generate(sub, 16, 3, tmp_path / "b")
+    c = G.generate(sub, 8, 3, tmp_path / "c")
+    d = G.generate(sub, 8, 4, tmp_path / "d")
+    assert a["content_digest"] == c["content_digest"] != d["content_digest"]
+    sa, sb = IS.InputSet.open(a["path"]), IS.InputSet.open(b["path"])
+    for port in ("x", "w", "y"):
+        assert np.array_equal(sa.port(port), sb.port(port, 0, 8))
+    x = sb.port("x")
+    assert all(np.array_equal(x[i], x[4 * (i // 4)]) for i in range(16))    # activation rows shared per tile of 4
+    assert not np.array_equal(x[0], x[4])
+
+
+def test_draw_format_is_pinned():
+    """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
+    sub = TM.subcircuit("gemm-coordinate", K=64)
+    k = G.key_for(sub, 1)
+    assert k.stream(("x", 0), 8).hex() == "bf07a934b42bcac4"
+    d = sub.draw(k, 0)
+    assert d.inputs["x"][:8].tolist() == [48095, 15706, 14853, 16912, 15198, 48432, 17159, 17042]
+    assert d.inputs["w"][:8].tolist() == [17252, 14907, 17181, 14606, 15076, 18320, 15426, 15512]
+    assert TM.bf16_words(np.array([0, 1, 0xFFFFFFFF, 0x12345678, 0x01000000], dtype=np.uint32), 127, 4).tolist() == \
+        [0, 0, 49407, 16572, 15744]
+
+
+def test_parallel_generation_equals_serial(tmp_path):
+    sub = TM.subcircuit("rope-head", D=8)
+    assert G.generate(sub, 40, 5, tmp_path / "s", chunk=8)["content_digest"] == \
+        G.generate(sub, 40, 5, tmp_path / "p", procs=2, chunk=8)["content_digest"]
+
+
+def test_tampering_is_caught(tmp_path, synthetic):
+    d = tmp_path / "set"
+    shutil.copytree(synthetic["silu-mul"]["path"], d)
+    s = IS.InputSet.open(d)
+    f = d / s.manifest["ports"]["out.out"]["file"]
+    b = bytearray(f.read_bytes())
+    b[0] ^= 1
+    f.write_bytes(bytes(b))
+    assert IS.verify(d)["ok"] is False and "sha256" in IS.verify(d)["why"][0]
+    ports = {k: list(v) for k, v in s.instances().items()}
+    IS.write(tmp_path / "re", s.name, s.relation, ports, s.index(), s.manifest["provenance"])   # a consistent manifest, a wrong output
+    r = IS.verify(tmp_path / "re" / s.name)
+    assert r["ok"] is False and r["bad"] == [0]
+
+
+def test_evaluation_targets_equal_the_definitions():
+    """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
+    GEMM step AmpereBF16TcDot16_v1 equals core's _v2."""
+    from verity.evaluation import evaluate_batch
+    from verity.ir.defs import REGISTRY, bind
+    from verity.ml import gemm
+
+    key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
+    for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
+        draws = [sub.draw(key, j) for j in range(n)]
+        for d in draws:
+            st = d.instance_statics
+            args = [d.inputs[p.name][None, :] for p in sub.inputs]
+            ref = evaluate_batch(sub.definition(**st), *args, kernel="reference").reshape(-1)
+            via = np.asarray(sub.evaluate({p.name: [d.inputs[p.name]] for p in sub.inputs}, [st])[sub.outputs[0].name][0])
+            assert np.array_equal(ref, via.astype(ref.dtype))
+    sub = TM.subcircuit("gemm-coordinate", K=64)
+    draws = [sub.draw(key, j) for j in range(64)]
+    x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
+    import verity_vllm.program.registry.prims  # noqa: F401  (registers AmpereBF16TcDot16_v1)
+    v1 = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=REGISTRY["AmpereBF16TcDot16_v1"]), x, w, kernel="reference")
+    v2 = evaluate_batch(sub.target(), x, w)
+    assert np.array_equal(v1, v2)
+
+
+def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
+    ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) for s in t["subcircuits"]]
+    for sid in ids:
+        sub = TM.parse_subcircuit_id(sid)
+        assert sub.id == sid
+    sub = TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16")
+    with pytest.raises(TM.NotEvaluable):
+        G.generate(sub, 1, 0, tmp_path)
+
+
+def test_gemm_ids_fit_the_census_schema():
+    import re
+
+    schema = json.loads((CENSUS / "schemas" / "instance_sets.schema.json").read_text())
+    pattern = re.compile(schema["items"]["properties"]["subcircuit"]["pattern"])
+    for sem in TM.GEMM_SEMANTICS:
+        assert pattern.match(TM.subcircuit("gemm-coordinate", K=2048, semantics=sem).id)
+
+
+def test_meta_and_ref(synthetic):
+    s = IS.InputSet.open(synthetic["gemm-coordinate"]["path"])
+    m = s.meta()
+    assert (m["subcircuit"], m["template"], m["source"], m["n"], m["seed"]) == (s.subcircuit.id, "gemm-coordinate", "synthetic", 6, 11)
+    ref = s.ref(0, 4, art="art:" + "0" * 64)
+    from verity_numerical.bench import contract
+
+    assert not contract._validate_instances(ref, 4, None)
+    assert ref["range"] == [0, 4] and ref["content_digest"] == s.content_digest
+    with pytest.raises(ValueError):
+        s.ref(0, 7)
+
+
+def test_suite_digests_only(tmp_path, monkeypatch):
+    monkeypatch.setitem(G.SUITES, "tiny", [("rope-head", {"D": 8}, 5), ("silu-mul", {"I": 8}, 3)])
+    full = G.suite("tiny", 9, tmp_path / "full")
+    lean = G.suite("tiny", 9, tmp_path / "lean", digests_only=True)
+    assert [s["content_digest"] for s in full] == [s["content_digest"] for s in lean]
+    assert sorted(p.name for p in Path(lean[0]["path"]).iterdir()) == ["index.json", "manifest.json"]
+    assert set(G.SUITES["101"][0][1]) == {"K", "semantics"} and len(G.SUITES["101"]) == 10
+
+
+def test_cli(tmp_path, capsys):
+    assert G.main(["--list"]) == 0
+    listed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert {x["template"] for x in listed} == set(SMALL)
+    assert G.main(["--subcircuit", "silu-mul/i32/bf16", "--n", "3", "--seed", "2", "--out", str(tmp_path)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert IS.main(["verify", out["path"]]) == 0
+    assert G.register_command(out["path"], "m.json")[:5] == ["research", "data", "put", "--kind", "input-set/v1"]
