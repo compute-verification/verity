@@ -203,6 +203,7 @@ def lower_call(
     incoming = [widths[g] for g in arg_gates]
     constants: list[tuple[int, int]] = []  # (gate, value)
     table_gates: list[tuple[int, int, str]] = []  # (gate, operand gate, table)
+    extras: list[tuple[str, int]] = []  # the incoming values after the arguments, in body order: ("const", k) | ("table", k)
     gates: list[Gate] = []
 
     def arg(g: int) -> tuple[str, int]:
@@ -213,11 +214,13 @@ def lower_call(
         if not gv.operands:
             incoming_of[gv.index] = len(incoming)
             incoming.append(prim.ret.w)
+            extras.append(("const", len(constants)))
             constants.append((gv.index, prim.evaluate()))
             continue
         op = OPS[prim.id]
         args = [arg(o) for o in gv.operands]
         if op in TABLE_GATES:
+            extras.append(("table", len(table_gates)))
             table_gates.append((gv.index, gv.operands[0], TABLE_GATES[op]))
             args.append(("in", len(incoming)))
             incoming.append(64)
@@ -263,14 +266,17 @@ def lower_call(
                 references.append(Reference(ref, lid, (j,)))
                 in_refs.append(ref)
             start += n
-        in_refs += [f"constants[{k}]" for k in range(len(constants))]
         rows_read: set[tuple[str, int]] = set()
-        for g, operand, name in table_gates:
+        for kind, k in extras:
+            if kind == "const":
+                in_refs.append(f"constants[{k}]")
+                continue
+            _, operand, name = table_gates[k]
             index = tables[name].index(transcript[operand])
-            if (name, index) in rows_read:
-                raise ValueError(f"instance {inst.unit} reads row {index} of {name} twice")
-            rows_read.add((name, index))
             key = (name, index)
+            if key in rows_read:
+                raise ValueError(f"instance {inst.unit} reads row {index} of {name} twice")
+            rows_read.add(key)
             if key not in table_refs:
                 table_refs[key] = f"table/{name}[{index:08d}]"
                 rank = index // ROWS_PER_LEAF

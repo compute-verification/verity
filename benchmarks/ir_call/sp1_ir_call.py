@@ -57,7 +57,7 @@ from verity.proofs.binding import bound_public_values  # noqa: E402
 from verity.proofs.typed_obligation import TypedObligationSet, object_digest  # noqa: E402
 
 SP1_SECURITY_BITS = 100
-NEGATIVES = ("wrong-normed-word", "wrong-residual-word", "tampered-output-leaf")
+NEGATIVES = ("wrong-first-output-word", "wrong-last-output-word", "tampered-output-leaf")
 
 
 def _sha256(data: bytes) -> str:
@@ -71,27 +71,37 @@ def _bind(relation: dict):
     """The specialised IR definition a set's manifest names, and its tables (frontend imports stay here)."""
 
     from verity.ir.defs import bind
-    from verity.proofs.reduce_mufu import rsqrt_approx_index
+    from verity.proofs.reduce_mufu import div_full_rcp_index, mufu_sqrt_index, rsqrt_approx_index
     from verity_sp1.ir_call import Table
     from verity_vllm.program.kernels import rms_relation
     from verity_vllm.program.registry import b1
 
     statics = relation["statics"]
-    if relation["definition"] == "RMSNormFusedCuda_v2":
+    definition = relation["definition"]
+    t = rms_relation.tables("cuda")
+    if definition in ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"):
         eps = float.fromhex(json.loads(statics["EPS"])["f64"])
-        spec = bind(b1.RMSNormFusedCuda, N=int(statics["N"]), EPS=eps)
-        t = rms_relation.tables("cuda")
-        return spec, {"rsq": Table("rsq", t.rsq, rsqrt_approx_index, t.source["rsq"]["sha256"])}, {"rsq": t.source["rsq"]}
+        if definition == "RMSNormFusedCuda_v2":
+            return bind(b1.RMSNormFusedCuda, N=int(statics["N"]), EPS=eps), {"rsq": Table("rsq", t.rsq, rsqrt_approx_index, t.source["rsq"]["sha256"])}, {"rsq": t.source["rsq"]}
+        tables = {"sqrt": Table("sqrt", t.sqrt, mufu_sqrt_index, t.source["sqrt"]["sha256"]),
+                  "rcp": Table("rcp", t.rcp, div_full_rcp_index, t.source["rcp"]["sha256"])}
+        return bind(b1.RMSNormTriton, N=int(statics["N"]), EPS=eps), tables, {k: t.source[k] for k in tables}
+    if definition == "RoPE_v1":
+        return bind(b1.RoPEHead, D=int(statics["D"])), {}, {}
     raise SystemExit(f"no binding for {relation['definition']} yet")
 
 
-def _instances(set_dir: Path, manifest: dict, lo: int, hi: int):
+def _instances(spec, set_dir: Path, manifest: dict, lo: int, hi: int):
+    """Instances ``[lo, hi)``: argument ports in the definition's parameter order (by name, else ``in0, in1, ...``),
+    return ports ``out*`` in order."""
+
     import numpy as np
 
     from verity_sp1.ir_call import Instance
 
     ports = manifest["ports"]
-    ins = sorted(p for p in ports if p.startswith("in"))
+    names = [name for name, _ in spec.signature()[0]]
+    ins = names if all(n in ports for n in names) else sorted((p for p in ports if not p.startswith("out")), key=lambda p: int(p[2:]))
     outs = sorted(p for p in ports if p.startswith("out"))
     arrays = {p: np.fromfile(set_dir / ports[p]["file"], dtype="<u2").reshape(manifest["n"], ports[p]["words"]) for p in ins + outs}
     return [Instance(i, [int(v) for p in ins for v in arrays[p][i]], [int(v) for p in outs for v in arrays[p][i]]) for i in range(lo, hi)]
@@ -126,7 +136,7 @@ def prepare(a) -> int:
             raise SystemExit(f"{name} does not match the set's manifest")
     hi = a.hi if a.hi is not None else manifest["n"]
     spec, tables, table_sources = _bind(manifest["relation"])
-    instances = _instances(set_dir, manifest, a.lo, hi)
+    instances = _instances(spec, set_dir, manifest, a.lo, hi)
     prov = manifest["provenance"]
     session, compiled = prov["run_root"], prov["program_digests"]["r0"]
     started = time.perf_counter()
@@ -134,17 +144,23 @@ def prepare(a) -> int:
     lower_s = time.perf_counter() - started
     if not _python_verdict(honest):
         raise SystemExit("the Python reference rejects the honest bundle")
-    n0 = len(instances[0].returns) // 2
+    first = instances[0]
+    last = len(first.returns) - 1
+
+    def flipped(j: int):
+        return replace(first, returns=[w ^ 1 if k == j else w for k, w in enumerate(first.returns)])
+
     negatives = {
-        "wrong-normed-word": lower_call(spec, [replace(instances[0], returns=[w ^ 1 if j == 0 else w for j, w in enumerate(instances[0].returns)])],
-                                        tables=tables, session=session, compiled=compiled, oracle=False),
-        "wrong-residual-word": lower_call(spec, [replace(instances[0], returns=[w ^ 1 if j == n0 else w for j, w in enumerate(instances[0].returns)])],
-                                          tables=tables, session=session, compiled=compiled, oracle=False),
+        "wrong-first-output-word": lower_call(spec, [flipped(0)], tables=tables, session=session, compiled=compiled, oracle=False),
+        "wrong-last-output-word": lower_call(spec, [flipped(last)], tables=tables, session=session, compiled=compiled, oracle=False),
     }
     one = lower_call(spec, instances[:1], tables=tables, session=session, compiled=compiled)
+    # one byte of the first output leaf's value, flipped: the leaf no longer authenticates
+    out_width = one.obj.leaves[[v.id for v in one.obj.leaves].index("u%06d/out/0" % first.unit)].layout.length
+    leaf_bytes = b"".join(w.to_bytes(2, "little") for w in first.returns[:out_width])
     witness = bytearray(one.witness)
-    first_out = instances[0].returns[0].to_bytes(2, "little") + instances[0].returns[1].to_bytes(2, "little") + instances[0].returns[2].to_bytes(2, "little")
-    at = witness.find(first_out)
+    at = witness.find(leaf_bytes)
+    assert at >= 0 and witness.find(leaf_bytes, at + 1) < 0
     witness[at] ^= 0x01
     negatives["tampered-output-leaf"] = replace(one, witness=bytes(witness))
     python_negatives = {name: _python_verdict(low) for name, low in negatives.items()}
@@ -165,7 +181,6 @@ def prepare(a) -> int:
         "ir_oracle": f"verity.evaluation.reference evaluate_call of {spec.id} reproduces the recorded outputs of instances [{a.lo}, {hi})",
         "python_reference": {"honest": True, **{k: v for k, v in python_negatives.items()}},
         "negatives": {name: {"object_digest": object_digest(low.obj), "statement_sha256": _sha256(low.statement)} for name, low in negatives.items()},
-        "lower_seconds": lower_s,
         "source_sha": _git_sha(),
     }
     out = Path(a.out)
