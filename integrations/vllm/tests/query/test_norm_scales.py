@@ -79,9 +79,9 @@ def chain_program(rows: int = 3, rsqrt_n: int = 1) -> ProgramView:
     return ProgramView(tuple(calls), (weights, xs), (R(k - 1, "out"),), "synthetic", "synthetic")
 
 
-def _manifest(P, **kw):
+def _manifest(P, norm_scales=None, **kw):
     corr = Correspondence(P, implementation_paths=["model.lm_head"])
-    return request_manifest(P, corr, RES, request_id="r0", **kw)
+    return request_manifest(P, corr, RES, request_id="r0", norm_scales=NS.POLICY if norm_scales else norm_scales, **kw)
 
 
 def _rows(man, family):

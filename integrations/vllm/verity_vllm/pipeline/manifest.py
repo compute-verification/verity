@@ -69,7 +69,7 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     art = _load_json(art_p) if os.path.exists(art_p) else None
     corr = Correspondence.of(P, program_dir, implementation_paths=Correspondence.implementation_paths_of(res))   # the record when the Build carries it, else v1 annotations
     r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
-                         profile=profile, return_slots=return_slots, norm_scales=norm_scales)
+                         profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None)
     if word:
         word_check(P, corr, r.required, word, acquired=dict(NS.TAP_WORDS) if norm_scales else None, log=log)
     if log:

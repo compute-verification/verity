@@ -118,6 +118,17 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     return out
 
 
+class Policy:
+    """The norm-scale policy as `required.request_manifest(norm_scales=POLICY)` applies it (the query imports nothing from here)."""
+
+    population = staticmethod(population)
+    kernel_rows = staticmethod(kernel_rows)
+    header = staticmethod(header)
+
+
+POLICY = Policy()
+
+
 def policy_of(manifest: Mapping[str, Any] | None) -> bool:
     """Whether a manifest was built under the norm-scale policy (its query header says so)."""
     q = (manifest or {}).get("query")
@@ -151,5 +162,5 @@ def words_per_token(manifest: Mapping[str, Any] | None) -> int:
     return max((-(-w // tokens[k]) for k, w in words.items() if tokens.get(k)), default=0)
 
 
-__all__ = ["FAMILY", "MEMBER", "KERNEL_SCALES", "CALL_SCALES", "TAP_WORDS", "POLICY_TEXT", "site_of", "scale_calls", "population",
-           "kernel_rows", "header", "policy_of", "manifest_modules", "words_per_token"]
+__all__ = ["FAMILY", "MEMBER", "KERNEL_SCALES", "CALL_SCALES", "TAP_WORDS", "POLICY_TEXT", "POLICY", "Policy", "site_of", "scale_calls",
+           "population", "kernel_rows", "header", "policy_of", "manifest_modules", "words_per_token"]
