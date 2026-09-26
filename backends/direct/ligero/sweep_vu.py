@@ -69,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--start", type=int, default=1024)
     ap.add_argument("--max", type=int, default=1 << 17)
+    ap.add_argument("--cap", type=int, default=None,
+                    help="the input set's size (--input-set): doubling stops there, with a last point at exactly CAP (a set is not "
+                         "recycled)")
     ap.add_argument("--dump", choices=("plateau", "all", "none"), default="plateau")
     ap.add_argument("--id", default=None, help="sweep id (default: a digest of relation, bench args and start time)")
     a = ap.parse_args(own)
@@ -80,8 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     sid = a.id or "sweep-" + hashlib.sha256(json.dumps([a.relation, bench, time.time()]).encode()).hexdigest()[:12]
     points: list[dict[str, Any]] = []
-    total = a.start
-    while total <= a.max:
+    top = min(a.max, a.cap) if a.cap else a.max
+    total = min(a.start, top)
+    while total <= top:
         d = out / f"p{len(points)}-{total}"
         d.mkdir(exist_ok=True)
         cmd = [sys.executable, "-m", "backends.direct.ligero.run", "--relation", a.relation, "bench-vu", *bench,
@@ -102,14 +106,18 @@ def main(argv: list[str] | None = None) -> int:
             break
         if done([p["vu_per_second"] for p in points if p["vu_per_second"] is not None]):
             break
-        total *= 2
+        if total == top:
+            break
+        total = min(2 * total, top) if a.cap and 2 * total > a.cap else 2 * total
     ok = [p for p in points if p["vu_per_second"] is not None]
     if not ok:
         (out / "sweep.json").write_text(json.dumps({"id": sid, "relation": a.relation, "bench": bench, "points": points}, indent=1))
         return 1
     best = max(ok, key=lambda p: (p["vu_per_second"], -p["total_vus"]))
     stop = ("a point failed (rc %d)" % points[-1]["rc"]) if points[-1]["vu_per_second"] is None else \
-        ("< 2 %% over two doublings" if done([p["vu_per_second"] for p in ok]) else "reached --max")
+        ("< 2 %% over two doublings" if done([p["vu_per_second"] for p in ok]) else
+         f"reached the input set's {a.cap} instances (a set is not recycled)" if a.cap and points[-1]["total_vus"] == a.cap else
+         "reached --max")
     summary = {"id": sid, "relation": a.relation, "bench": bench, "rule": RULE, "stopped": stop,
                "plateau_point": best["point"], "plateau_total_vus": best["total_vus"], "points": points}
     for p in ok:

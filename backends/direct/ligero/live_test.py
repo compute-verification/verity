@@ -314,3 +314,54 @@ def test_challenge_stream_refuses_out_of_order_rounds(server):
     sess2._send(live.K_MSG, live.struct.pack("<III", 1, 0, 1) + b"L" + b"uncommitted batch")
     with pytest.raises(live.LiveError):
         sess2.round_future(1, 0).result(timeout=10)
+
+
+def test_probe_pings_the_open_connection_and_idle_exit(server, tmp_path):
+    """``live probe --pings``: round trips on the connection the HELLO opened (the cell's open-connection RTT), written with the
+    one-flow bandwidth to ``--out``; ``serve --idle-exit`` never fires before a session has finished."""
+    import argparse
+    import json
+    srv, url, _ = server
+    out = tmp_path / "probe.json"
+    assert live.cmd_probe(argparse.Namespace(verifier=url, mb=0.25, repeat=2, note="t", pings=7, out=str(out))) == 0
+    d = json.loads(out.read_text())
+    assert len(d["ping_ms"]) == 7 and d["ping_ms_median"] > 0 and "open connection" in d["ping_method"] and d["mbps_median"] > 0
+    quiet = live.Server("127.0.0.1:0", tmp_path / "q", srv.rust, jobs=1, log=lambda m: None, idle_exit=0.0)
+    assert not quiet._idle()
+
+
+def test_streamed_proofs_on_parallel_data_connections(server, monkeypatch):
+    """The sender that keeps pace (root's ruling 2026-09-26): each proof goes out the moment its sub-batch is done
+    (``prove_vus_many(on_done=...)``), framed from the proof's own arrays (``proof_buffers``: the same bytes as
+    ``proof_bytes``, no copy), on several data connections taking proofs off one queue -- the verifier reads them in any
+    order, accepts every sub-batch and stores the same bytes."""
+    from .relations import RELATIONS
+    from .relchain import RelationChainRunner, instances
+    from .serialize import proof_buffers, system_bytes
+    srv, url, out = server
+    monkeypatch.setattr(live, "_DATA_CONNECTIONS", 3)
+    n_proofs = 4
+    rel = RELATIONS["fp8-ada"]
+    R = RelationChainRunner(rel, "cpu", -100.0, 2, n_proofs=n_proofs, zk=False, mode=pm.MODE_INTERACTIVE)
+    data = instances(rel, 2 * n_proofs, procs=1)
+    batches = [data[2 * i:2 * i + 2] for i in range(n_proofs)]
+    hello = {"relation": "fp8-ada", "mode": pm.MODE_INTERACTIVE, "zk": False, "batch": 2 * R.steps, "target": -100.0,
+             "target_bits": 96.0, "run_id": "streamed", "device": "cpu", "n_proofs": n_proofs, "total_vus": 2 * n_proofs}
+    sess = live.Verifier(url, hello, system_bytes(R.sys)).session(n_proofs, 1, {"window": 2})
+    assert len(sess.datas) == 3
+    sess.start_pipeline(n_proofs)
+    order = []
+
+    def on_done(i, proof):
+        order.append(i)
+        sess.submit(i, proof)
+
+    many, _wall = R.prove_vus_many(batches, lambda i: sess.coins(i), depth=2, min_l=256, on_done=on_done)
+    verdict = sess.end()
+    assert verdict["accepted"] and verdict["accepted_subbatches"] == n_proofs, verdict["reason"]
+    assert sorted(order) == list(range(n_proofs)) and sess.drain_seconds >= 0.0
+    for si, (_coins, proof, _pubs, _lay) in enumerate(many):
+        bufs = proof_buffers(proof)
+        assert b"".join(bytes(b) for b in bufs) == proof_bytes(proof)
+        assert any(isinstance(b, memoryview) and b.nbytes == proof.opened.nbytes for b in bufs)      # the opened columns, uncopied
+        assert proof_bytes(proof) == (out / verdict["session_id"] / f"sub_{si:02d}.proof").read_bytes()

@@ -46,6 +46,12 @@ __all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "i
 # Instances
 # ---------------------------------------------------------------------------------------------------------------------
 
+def _K(rel: Relation) -> int:
+    """The relation's VU reduction length: its own ``vu_k``, else this module's ``K_VU`` (which the steps-pin red-team
+    scripts rebind together with ``relations.K_VU``)."""
+    return rel.vu_k or K_VU
+
+
 def _instance(args) -> tuple[list, list, list, int]:
     return _instance_np(args)[2]
 
@@ -55,7 +61,7 @@ def _instance_np(args) -> tuple[np.ndarray, np.ndarray, tuple[list, list, list, 
     name, seed, i = args
     rel = relation(name)
     rng = np.random.default_rng([seed, i])
-    a_np, b_np = rel.operands(rng, (K_VU,)), rel.operands(rng, (K_VU,))
+    a_np, b_np = rel.operands(rng, (_K(rel),)), rel.operands(rng, (_K(rel),))
     a, b = a_np.tolist(), b_np.tolist()
     k, accs, c = rel.k, [], 0
     for s in range(rel.steps):
@@ -94,6 +100,48 @@ def frozen_instances(rel: Relation, n: int, root=None):
     if n <= vu.n:
         return _with_rows(out, x[:n], w[:n])
     return _with_rows(out, [x[i % vu.n] for i in range(n)], [w[i % vu.n] for i in range(n)])
+
+
+def set_instances(rel: Relation, path, n: int, lo: int = 0):
+    """VUs ``[lo, lo + n)`` of an input set (``verity_numerical.bench.input_sets``: a captured ``vllm-vu-set/v1`` or a generated
+    ``input-set/v1`` of ``gemm-coordinate``) in the runner's shape ``(a, b, accs, y_final)``.  The operands are the set's
+    ``x`` / ``w`` rows; the column-end accumulators are recorded from the relation's model (``group_sum_total_batch``, the
+    batch form of ``tc_dot``) and every final word must be what the set recorded (its stored word, or the FP32 accumulator
+    a ``u32`` port holds), else the set is refused.
+    A set is never recycled: ``lo + n`` beyond its size is an error."""
+    from verity.ml.kernels import group_sum_total_batch
+    from verity_numerical.bench.input_sets import InputSet
+    s = InputSet.open(path)
+    K = int(s.subcircuit.params["K"])
+    if K != _K(rel):
+        raise ValueError(f"input set {s.name} is K = {K}; {rel.name} proves K = {_K(rel)}")
+    if lo < 0 or lo + n > s.n:
+        raise ValueError(f"input set {s.name} holds {s.n} instances, not [{lo}, {lo + n}) (a set is not recycled)")
+    ins = s.instances(lo, lo + n)
+    x, w = np.ascontiguousarray(ins["x"]), np.ascontiguousarray(ins["w"])
+    y = np.asarray(ins["y"]).reshape(n, -1)[:, 0].astype(np.int64)
+    k, acc = rel.k, np.zeros(n, dtype=np.uint32)
+    accs = np.empty((n, rel.steps), dtype=np.int64)
+    for c in range(rel.steps):
+        acc, _ = group_sum_total_batch(rel.model, acc, x[:, k * c:k * c + k], w[:, k * c:k * c + k])
+        accs[:, c] = acc
+    # the set records either the stored output word (BF16: the epilogue's word, rel.y_public) or the FP32 accumulator itself
+    # (a u32 port, the E4M3 sets: no epilogue) -- compared word for word in the set's own form
+    raw = s.manifest["ports"]["y"]["dtype"] == "u32"
+    model = accs[:, -1] if raw else np.asarray([rel.y_public(int(a)) for a in accs[:, -1]], dtype=np.int64)
+    bad = np.nonzero(model != y)[0]
+    if bad.size:
+        raise ValueError(f"input set {s.name}: {bad.size} of {n} instances' recorded outputs are not {rel.name}'s "
+                         f"(first: instance {lo + int(bad[0])}, model {int(model[bad[0]]):#x}, set {int(y[bad[0]]):#x}, "
+                         f"{'FP32 accumulator' if raw else 'stored word'})")
+    return _with_rows([(x[i].tolist(), w[i].tolist(), accs[i].tolist(), int(accs[i, -1])) for i in range(n)], x, w)
+
+
+def set_ref(path, n: int, art: str | None = None) -> dict:
+    """The fingerprint's ``instances`` block of a run over ids ``[0, n)`` of an input set (``InputSet.ref``: dataset, tier,
+    range, manifest and content digests, subcircuit, source, store id)."""
+    from verity_numerical.bench.input_sets import InputSet
+    return InputSet.open(path).ref(0, n, art=art)
 
 
 class VUs(list):
@@ -202,7 +250,7 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
     if getattr(rel, "instances_digest_fn", None) is not None:
         return rel.instances_digest_fn(n, seed=seed, root=root)
     seed = rel.instance_seed if seed is None else seed
-    return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
+    return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={_K(rel)}".encode()).hexdigest()
 
 
 def instances_ref(rel: Relation, total_vus: int, tile: tuple[int, int] | None = None, root=None) -> dict:
@@ -269,8 +317,8 @@ def tile_instances(rel: Relation, nx: int, nw: int, seed: int | None = None, pro
             x, w, accs = z["x"], z["w"], z["accs"]
     else:
         rng = np.random.default_rng([seed, 0x7115, nx, nw])
-        x = np.asarray([rel.operands(rng, (K_VU,)) for _ in range(nx)], dtype=np.int64)
-        w = np.asarray([rel.operands(rng, (K_VU,)) for _ in range(nw)], dtype=np.int64)
+        x = np.asarray([rel.operands(rng, (_K(rel),)) for _ in range(nx)], dtype=np.int64)
+        w = np.asarray([rel.operands(rng, (_K(rel),)) for _ in range(nw)], dtype=np.int64)
         jobs = [(rel.name, x[v // nw].tolist(), w[v % nw].tolist()) for v in range(nx * nw)]
         if procs > 1 and len(jobs) > 1:
             with ProcessPoolExecutor(procs) as ex:
@@ -294,7 +342,7 @@ def tile_digest(rel: Relation, nx: int, nw: int, seed: int | None = None) -> str
     """The manifest digest of :func:`tile_instances` (a synthetic draw of its own, for every relation: its VUs are not
     ``instances(rel, nx nw)``)."""
     seed = rel.instance_seed if seed is None else seed
-    return hashlib.sha256(f"{rel.name} synthetic tile|seed={seed}|{nx}x{nw}|K={K_VU}".encode()).hexdigest()
+    return hashlib.sha256(f"{rel.name} synthetic tile|seed={seed}|{nx}x{nw}|K={_K(rel)}".encode()).hexdigest()
 
 
 def tile_indices(nx: int, nw: int, lo: int, hi: int) -> tuple[list[int], list[int], list[int]]:
@@ -414,7 +462,8 @@ class RelationChainRunner:
                                          mutate=mutate, chain=(lay, bd["ypub_d"]), words={"a": bd["a"], "b": bd["b"], "y16": bd["ypub"]},
                                          coins=coins, rel=self.hooks, hints_fn=hints_fn, slot=slot)
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None,
+                       on_done=None):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
         the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
         of the next.  ``coins_factory(i)`` is called per sub-batch when it starts, in order (the honest verifier's step 0);
@@ -438,7 +487,7 @@ class RelationChainRunner:
                 return self._prove_stages(bundles[i], c, check=False, mutate=None, slot=slot)
             return start
 
-        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth, on_done=on_done)
         return [(coins_of[i], pf, (bd["a"], bd["b"], bd["ypub"]), bd["lay"]) for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None):
@@ -499,7 +548,7 @@ def commit_bindings(rel: Relation, leaf, *, dataset: str, tier: str, manifest_sh
                 for n in ("a", "b", "y")}
     ysch, _ = hashauth.word_schema(rel.y_bits)
     return {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=lo, hi=hi,
-                                       K=getattr(rel, "vu_words", K_VU), tree=n, schema=(leaf.schema if n != "y" else ysch))
+                                       K=getattr(rel, "vu_words", None) or _K(rel), tree=n, schema=(leaf.schema if n != "y" else ysch))
             for n in ("a", "b", "y")}
 
 
@@ -681,7 +730,7 @@ class HashedRelationRunner(RelationChainRunner):
             sibs_out.append(sibs)
         return proof
 
-    def _pipelined(self, bundles: list, stage, coins_factory, depth: int, live_statement=None):
+    def _pipelined(self, bundles: list, stage, coins_factory, depth: int, live_statement=None, on_done=None):
         """``prove_many`` over ``stage(bundle, coins, slot, sibs_out)`` generators.  Local coins, or -- when the runner
         passes ``live_statement(bundle, coins)`` (the statement, multiproofs included, handed to the live source before
         the root) -- a live verifier's coins; without it a live source is refused."""
@@ -700,10 +749,11 @@ class HashedRelationRunner(RelationChainRunner):
                 return stage(bundles[i], c, slot, sibs_of[i])
             return start
 
-        proofs, wall = prove_many([starter(i) for i in range(len(bundles))], self.device, depth=depth)
+        proofs, wall = prove_many([starter(i) for i in range(len(bundles))], self.device, depth=depth, on_done=on_done)
         return proofs, [s[0] for s in sibs_of], coins_of, wall
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None,
+                       on_done=None):
         """:meth:`RelationChainRunner.prove_vus_many` for the hashed statement: ``vu_ids_list[i]`` the committed-set VU
         indices of ``batches[i]`` (default: consecutive from 0).  Returns ``[(coins, proof, pubs, lay)]`` and the wall."""
         if vu_ids_list is None:
@@ -722,7 +772,7 @@ class HashedRelationRunner(RelationChainRunner):
 
         proofs, sibs, coins_of, wall = self._pipelined(
             bundles, lambda bd, c, slot, so: self._prove_stages_hashed(bd, c, slot, so), coins_factory, depth,
-            live_statement=live_statement)
+            live_statement=live_statement, on_done=on_done)
         return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
                 for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
@@ -2073,16 +2123,27 @@ def bench_vu_rel(args, rel: Relation) -> int:
         print(f"{R.relation} hash side (row units): {R.sys_h.summary()}; census {json.dumps(R.rh.census)}")
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
     root = getattr(args, "root", None)
+    input_set = getattr(args, "input_set", None)
+    if input_set and tile is not None:
+        raise SystemExit("--input-set and --tile: an input set carries its own rows")
+    set_inst = set_ref(input_set, total_vus, getattr(args, "input_set_art", None)) if input_set else None
     t0 = time.perf_counter()
     if tile is None:
-        data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
+        if input_set:
+            data = set_instances(rel, input_set, total_vus)
+        else:
+            data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
         # the committed set as stored (the rows in their words' dtype): the committer's input, made once with the set
         x_rows, w_cols = R.committed_rows(data) if hashed else (None, None)
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
-    inst_digest = tile_digest(rel, *tile) if tile is not None else instances_digest(rel, total_vus, root=root)
-    print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
+    inst_digest = (tile_digest(rel, *tile) if tile is not None else set_inst["manifest_sha256"] if set_inst
+                   else instances_digest(rel, total_vus, root=root))
+    inst_dataset, inst_tier = (set_inst["dataset"], set_inst["tier"]) if set_inst else (rel.instances_dataset, rel.instances_tier)
+    kind = (f"input set {set_inst['tier']} ({set_inst['source']})" if set_inst else
+            'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic')
+    print(f"{total_vus} {kind} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
     # --commit-per-rep: every rep (the warm-up included) commits its batch from scratch (no tree cache), timed apart from
     # proving: the statement's commitments (trees + row digests) are the commitment bucket; the prover's precomputed row
@@ -2094,7 +2155,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         raise SystemExit("--commit-per-rep and --commit-reps are two timings of the commitment bucket: pick one")
 
     def commit_batch(cache):
-        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
+        R.commit_vus(data, dataset=inst_dataset, tier=inst_tier, manifest_sha256=inst_digest,
                      cache=cache, tile=tile, x_rows=x_rows, w_cols=w_cols)
 
     commit_runs: list[tuple[float, dict]] = []
@@ -2143,7 +2204,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
-                                "instances": inst_digest}
+                                "instances": inst_digest, **({"input_set": set_inst} if set_inst else {})}
         if tile is not None:
             # what an independent verifier needs to recompute the committed tile (reverify.committed_trees): the draw is
             # tile_instances(rel, nx, nw, seed), VU v is x row v // nw against W column v % nw
@@ -2154,6 +2215,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
     # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
     live = None
+    skip_local = bool(getattr(args, "no_local_verify", False))
+    if skip_local and not getattr(args, "verifier", None):
+        raise SystemExit("--no-local-verify needs --verifier (a live verifier's verdict in place of the in-process one)")
     if getattr(args, "verifier", None):
         from .live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, rel.name, interactive)
@@ -2199,8 +2263,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
             # sent on the data channel after the pass.
             local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
             factory = live.pipeline_factory(local_factory) if live is not None else local_factory
+            # with a live verifier each proof goes out on the data connections as soon as its sub-batch is done
+            stream = {"on_done": live.stream} if live is not None and not shared else {}
             many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l,
-                                           vu_ids_list=[range(lo, hi) for lo, hi in subs])
+                                           vu_ids_list=[range(lo, hi) for lo, hi in subs], **stream)
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
                 if live is not None:
                     V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
@@ -2238,9 +2304,12 @@ def bench_vu_rel(args, rel: Relation) -> int:
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
         for si, lo, hi, V, proof, pubs, lay_i in proved:
-            t1 = time.perf_counter()
-            ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
-            vsum += time.perf_counter() - t1
+            if skip_local and rep > 0:
+                ok, why = True, "not verified in-process (--no-local-verify): the live verifier's session verdict is the check"
+            else:
+                t1 = time.perf_counter()
+                ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
+                vsum += time.perf_counter() - t1
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
             if dump_dir is not None and 0 < rep <= dump_reps:
                 rd = dump_dir / f"rep{rep}"
@@ -2334,9 +2403,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     zk_statement = snd["zk_statement"]
     if hashed and cfg.zk:
         zk_statement = zk_statement.split("; operands a, b")[0] + privacy_note.replace("; NOTE: ", "; ", 1)
-    inst = instances_ref(rel, total_vus, tile=tile, root=root)
+    inst = set_inst if set_inst else instances_ref(rel, total_vus, tile=tile, root=root)
     fp = contract.fingerprint(
-        profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=n_proofs,
+        profile=rel.target.name, domain=contract.DOMAIN, K=_K(rel), B=total_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication=(R.AUTH if hashed else "excluded"), zk_mode=zk_mode,
         security={"target": round(args.target), "field": "BabyBear", "challenge_coords": cfg.D, "rs_n": cfg.n, "rs_k": cfg.k, "rs_l": cfg.l,
                   "zk": cfg.zk, "t_pad": cfg.t_pad, "mode": cfg.mode, "bound_model": snd["bound_model"],
@@ -2376,6 +2445,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     )
     if hashed:
         fp["hash"] = R.leaf.hash_name
+        fp["statement_relation"] = R.relation
         fp["leaf"] = {"scheme": R.leaf.name, "suffix": R.leaf_name, "schema": R.leaf.schema, "params_sha256": R.leaf.params_sha256,
                       "digest_elems": R.leaf.digest_elems, "digest_bytes_per_row": len(R.leaf.leaf_bytes(np.asarray(R.digests["a"])[0])),
                       "assumption": R.leaf.assumption, "privacy_note": leaf_privacy_note(R.leaf)}
@@ -2398,7 +2468,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         contract.measurement("census.bytes_encoded", R.sys.m * cfg.n * 4 * n_proofs),
         contract.measurement("vu.seconds_per_vu", per_vu, "s"),
         contract.measurement("vu.count", total_vus, "count"),
-        *contract.rate_measurements(total, total_vus, K_VU, rel.target.name),
+        *contract.rate_measurements(total, total_vus, _K(rel), rel.target.name),
         contract.measurement("split.subbatches", n_proofs, "count"),
         contract.measurement("split.per_proof_vus", per_proof, "count"),
         contract.measurement("split.hints_seconds", med["hints_host"], "s"),
@@ -2454,7 +2524,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("commit.statement_seconds", med["statement"], "s"),
                  contract.measurement("e2e.seconds", e2e, "s"),
                  contract.measurement("e2e.vu_per_second", total_vus / e2e, "1/s"),
-                 contract.measurement("e2e.overhead_vs_native_peak", native * e2e / (2 * K_VU * total_vus), "ratio")]
+                 contract.measurement("e2e.overhead_vs_native_peak", native * e2e / (2 * _K(rel) * total_vus), "ratio")]
         fp["commitment"] = {
             "per_rep": True, "scheme": "frame-v3", "leaf_schema": R.leaf.schema, "trees": ["x", "W", "y"],
             "committer": "relchain.HashedRelationRunner.commit_vus (hashauth.load_or_build_trees, no cache)",
@@ -2500,8 +2570,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
                              if commit_per_rep else {})} for r in runs],
                 "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
                                                         "reps); verifier.seconds is the median over the reps"},
-                "verify_wall": "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "
-                               "with the prover), batch verdict included; not a file verifier's process wall"}
+                "verify_wall": ("--no-local-verify: no in-process verification of the timed reps (the live verifier's Rust "
+                                "verdicts are the check); verifier.seconds is the batch bound's arithmetic only" if skip_local else
+                                "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "
+                                "with the prover), batch verdict included; not a file verifier's process wall")}
     detail = f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}; batch {batch['reason']}"
     if dumps is not None:
         # the same code as the prover (the Python file verifier, cold from the dumped bytes): a self-check of the dump

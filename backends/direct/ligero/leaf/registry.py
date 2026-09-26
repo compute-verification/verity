@@ -122,6 +122,25 @@ def suffix_of(scheme: LeafScheme) -> str:
     return getattr(scheme, "tag", None) or scheme.name
 
 
+def sized(scheme: LeafScheme, row_words: int, word_bits: int) -> LeafScheme:
+    """``scheme`` framed for rows of ``row_words`` ``word_bits``-bit words: its ``for_row`` when it has one (BLAKE3: more
+    chunk slots for a row longer than 3 chunks), else itself."""
+    fit = getattr(scheme, "for_row", None)
+    return fit(int(row_words), int(word_bits)) if fit is not None else scheme
+
+
+def for_relation(name: str) -> LeafScheme:
+    """The leaf scheme a statement's relation string ``<rel>[+<leaf>]`` names, sized for that relation's rows (``K`` words
+    of its operand width).  A base the relation registry does not know (``fp4-nvf4``) keeps the unsized scheme."""
+    base, leaf = split_relation_name(name)
+    scheme = get(leaf)
+    from ..relations import RELATIONS
+    rel = RELATIONS.get(base)
+    if rel is None or getattr(rel, "hash_format", None) is not None:
+        return scheme
+    return sized(scheme, rel.steps * rel.k, 8 if rel.word_dtype == "<u1" else 16)
+
+
 def split_relation_name(name: str) -> tuple[str, str]:
     """``"fp8-ada+blake3"`` -> ``("fp8-ada", "blake3")``; ``"fp8-ada"`` / ``"fp8-ada+hash"`` -> ``("fp8-ada", "poseidon2")``;
     ``"fp8-ada+ajtai-n64"`` -> ``("fp8-ada", "ajtai-n64")``.  ``ValueError`` on a malformed name, ``KeyError`` on a suffix

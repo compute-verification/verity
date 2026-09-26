@@ -480,6 +480,20 @@ def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) 
     assert V.parity(store) == [] and pulled not in {c.artifact for c in V.build(store, V.LEGACY).cells}
 
 
+def test_a_superseded_by_label_rejects_the_result_in_both_renderers(store: LocalStore) -> None:
+    old = committed(store, t_total=0.4, labels=[("superseded_by", "art:" + "5" * 64, "red-team-flock", "2026-09-26T06:40:00Z")])
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, old)[-1] == "D"
+    assert T.cell_finding(store.labels(old))[0] == "pulled"
+
+
+def test_a_superseded_finding_rejects_the_result_like_a_pull(store: LocalStore) -> None:
+    old = committed(store, t_total=0.4, labels=[("finding", "SUPERSEDED: provenance: backend-generated inputs", "flock-backend",
+                                                  "2026-09-26T06:00:00Z")])
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, old)[-1] == "D"
+
+
 def _stream_ref(n: int, **over: Any) -> dict[str, Any]:
     return {**T.FROZEN_INSTANCES[FP8_ADA_MMA.name], "range": [0, n], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](n),
             "seed": 20260922, "recipe": "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)", **over}
@@ -1163,3 +1177,237 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
     assert fx["derived"] and fx["rounds_source"] == "derived: file-verified" and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
+
+
+def test_a_below_bar_result_is_shown_in_its_drill_down_not_dropped_and_not_a_cell(store: LocalStore) -> None:
+    res = result(candidate="SP1", profile=None, definition={"id": "RMSNormFusedCuda_v2{N=2048,EPS=1e-05}"}, family="veritor.reduce-mufu@1",
+                 modes=["core", "compressed"], instances=None)
+    res["workload_fingerprint"]["instances"] = {"set": "rmsnorm-set", "set_art": "art:" + "a" * 64}
+    res["measurements"] += [{"name": k, "value": v, "unit": "count"} for k, v in (("core.soundness_bits", 97.0), ("core.prove_seconds", 5.73),
+                                                                   ("core.seconds_per_instance", 5.73), ("core.proof_bytes", 12029628),
+                                                                   ("compressed.soundness_bits", 100.0))]
+    art = put(store, res, labels=[("verified", "accepted", "verify-night-3", "2026-09-26T06:30:00Z"),
+                                  ("below_bar", "true", "verify-night-3", "2026-09-26T06:30:00Z")])     # as verify-night-3 wrote it
+    views = V.build(store)
+    assert art not in {r["artifact"] for r in views.rejected} and art not in {c.artifact for c in views.admissible}
+    (e,) = V.render_entities(views, rendered_at="2026-09-26T06:40:00Z", commit="abc")["below_bar"]
+    assert (e["artifact"], e["backend_family"], e["definition"], e["bar_bits"]) == (art, "D-SP1", "RMSNormFusedCuda_v2{N=2048,EPS=1e-05}", 128)
+    assert e["modes"]["core"]["soundness_bits"] == 97.0 and e["modes"]["compressed"]["soundness_bits"] == 100.0
+    assert (e["verified"], e["verified_by"], e["input_set"]) == ("accepted", "verify-night-3", "rmsnorm-set")
+
+
+# --- real-K statements: K and the semantics are part of the subcircuit, so another K is another statement and another row --------
+
+
+def realk(store: LocalStore, K: int = 2048, *, relation: str = "fp8-ada", t_total: float = 0.4, commit: float = 0.6, n: int = 16384,
+          register: bool = True, set_k: int | None = None, stamp: str | None = None, labels: list[tuple] = ()) -> str:
+    """A B-Ligero keyed-BLAKE3 in-circuit result on the 4090 at reduction length ``K``, its inputs a spine input set (registered as
+    an ``input-set/v1`` artifact of ``set_k`` unless ``register`` is false), measured under the protocol with preserved dumps."""
+    import hashlib
+
+    digest = hashlib.sha256(f"set-k{K}-{relation}-{set_k}".encode()).hexdigest()
+    if register:
+        store.put_artifact("input-set/v1", {"set": f"fp8-ada-k{set_k or K}", "subcircuit": f"gemm-coordinate/k{set_k or K}/sm89-mma-e4m3",
+                                            "template": "gemm-coordinate", "parameters": {"K": set_k or K, "datatype": "e4m3"},
+                                            "source": "synthetic", "n": n, "content_digest": digest, "schema": "input-set/v1"})
+    doc = hashed("blake3", t_total=t_total)
+    fp = doc["workload_fingerprint"]
+    fp.update(K=K, relation=f"{relation}-x4-k{K}+blake3-xob",
+              instances={"dataset": f"fp8-ada-k{K}", "tier": f"input-set/v1:fp8-ada-k{K}", "range": [0, 4096], "manifest_sha256": digest,
+                         "source": "synthetic"})
+    doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead."))]
+    doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
+    doc["measurements"].append({"name": "rounds.sequential_depth", "value": 0, "unit": "count"})
+    doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
+    if stamp:
+        doc["cell"] = {"subcircuit": stamp, "statement": f"{stamp}+frame-v3/blake3-keyed"}
+    files = store.put_artifact("run-files/v1", {"run_id": doc["run_id"], "dump": "proofs"})
+    store.index.set_replica(files, "remote", "2026-09-25T00:00:00Z")
+    art = store.put_artifact(T.RESULT_KIND, doc, refs={"run_files": files})
+    store.put_attempt(attempt(doc["run_id"], art, LANE))
+    store.add_label(art, "candidate", "X", LANE, ts="2026-09-22T10:00:00Z")
+    store.add_label(art, "independently_verified", True, VERIFIER, ref=f"{doc['run_id']}:verify", ts="2026-09-22T10:01:00Z")
+    for key, value, by, ts in labels:
+        store.add_label(art, key, value, by, ts=ts)
+    return art
+
+
+K2048 = "gemm-coordinate/k2048/sm89-mma-e4m3"
+
+
+def test_a_real_k_result_is_its_own_statement_and_row_not_the_k1536_rows(store: LocalStore) -> None:
+    home = committed(store, t_total=0.4, commit=0.6)
+    art = realk(store, 2048)
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"].artifact == home                     # the K = 1536 row keeps its cell
+    rk = next(ln for ln in views.lines if ln.get("subcircuit") == K2048)
+    cell = rk["cells"]["B-Ligero"]
+    assert cell is not None and cell.artifact == art and cell.subcircuit == K2048 and rk["scheme"] == BLAKE3_ROW
+    N = V.native(FP8_ADA_MMA, 2048)
+    assert rk["native"] == N and N["ops_per_instance"] == 4096 and cell.overhead == pytest.approx(N["instances_per_second"] / cell.throughput["instances_per_second"])
+    assert views.lines.index(rk) > max(i for i, ln in enumerate(views.lines) if not ln.get("subcircuit"))   # after the K = 1536 rows
+    md = V.render_markdown(views)
+    assert f"| {contract.native_peak_of(FP8_ADA_MMA).device} · E4M3 · GemmCoordinate<2048> · sm89 mma · FP8 (E4M3) · frame-v3 · keyed-BLAKE3 rows |" in md
+    assert f"inputs [0, 4096) of input set fp8-ada-k2048 (synthetic)" in md
+    assert V.parity(store) == []                                                 # legacy rules: K != 1536 is still B, parity holds
+    assert "subcircuit" not in line(views)["cells"]["B-Ligero"].to_json() and cell.to_json()["subcircuit"] == K2048
+
+
+def test_real_k_inputs_must_be_a_registered_input_set_of_that_k(store: LocalStore) -> None:
+    unregistered = realk(store, 2048, register=False)
+    other_k = realk(store, 8192, set_k=2048)
+    views = V.build(store)
+    assert codes(views, unregistered)[:1] == ["I"] and "no registered input set" in next(r for r in views.rejected if r["artifact"] == unregistered)["codes"][0][1]
+    why = next(r for r in views.rejected if r["artifact"] == other_k)
+    assert why["codes"][0][0] == "I" and "is of K = 2048" in why["codes"][0][1] and why["subcircuit"] == "gemm-coordinate/k8192/sm89-mma-e4m3"
+    # a row still exists for each statement with a result, saying why it is empty
+    empty = next(ln for ln in views.lines if ln.get("subcircuit") == "gemm-coordinate/k8192/sm89-mma-e4m3")
+    assert empty["cells"]["B-Ligero"] is None and "first reasons I×1" in empty["empty"]["B-Ligero"]["text"]
+    assert all(r.get("subcircuit") != K2048 or r["artifact"] == unregistered for r in views.rejected)
+
+
+def test_a_superseded_real_k_result_is_dropped_and_its_successor_fills_the_row(store: LocalStore) -> None:
+    new = realk(store, 2048, t_total=0.5)
+    old = realk(store, 2048, t_total=0.1, labels=[("superseded_by", new, "red-team-flock", "2026-09-26T06:40:00Z")])
+    views = V.build(store)
+    rk = next(ln for ln in views.lines if ln.get("subcircuit") == K2048)
+    assert rk["cells"]["B-Ligero"].artifact == new
+    assert old in {r["artifact"] for r in views.rejected}
+
+
+def test_statement_resolution_from_the_stamp_the_relation_and_the_census_equivalence() -> None:
+    def meta(target, K, relation=None, stamp=None):
+        fp = {"profile": target.name, "K": K, **({"relation": relation} if relation else {})}
+        return {"workload_fingerprint": fp, **({"cell": {"subcircuit": stamp}} if stamp else {})}
+
+    rs = V.result_subcircuit
+    assert rs(meta(FIRST, 1536), FIRST) is None and rs(meta(FIRST, 1536, "bf16-ampere+blake3"), FIRST) is None
+    assert rs(meta(FIRST, 2048, "bf16-ampere"), FIRST) == "gemm-coordinate/k2048/sm80-mma-bf16"
+    assert rs(meta(FIRST, 8192, stamp="gemm-coordinate/k8192/sm80-mma-bf16"), FIRST) == "gemm-coordinate/k8192/sm80-mma-bf16"
+    # H100 BF16: wgmma is stood for by mma at K = 1536 (the existing row); at a real K the statement is wgmma's (root's ruling)
+    assert rs(meta(BF16_HOPPER, 1536, "bf16-hopper-wgmma"), BF16_HOPPER) is None
+    assert rs(meta(BF16_HOPPER, 2048, "bf16-hopper-wgmma"), BF16_HOPPER) == "gemm-coordinate/k2048/sm90-wgmma-bf16"
+    assert rs(meta(BF16_HOPPER, 8192, "bf16-hopper-x4-k8192+blake3-xob"), BF16_HOPPER) == "gemm-coordinate/k8192/sm90-wgmma-bf16"
+    assert rs(meta(FP8_HOPPER_WGMMA, 2048, "fp8-hopper"), FP8_HOPPER_WGMMA) == "gemm-coordinate/k2048/sm90-wgmma-e4m3"
+    assert rs(meta(FP8_ADA_MMA, 8192, "fp8-ada"), FP8_ADA_MMA) == "gemm-coordinate/k8192/sm89-mma-e4m3"
+    assert rs(meta(FP8_ADA_MMA, 4096, "fp8-ada"), FP8_ADA_MMA) == "gemm-coordinate/k4096/sm89-mma-e4m3"     # not in the census: still its own
+
+
+def test_the_entities_render_keys_real_k_results_by_their_statement(store: LocalStore) -> None:
+    art = realk(store, 2048)
+    ent = V.render_entities(V.build(store), rendered_at="2026-09-26T07:00:00Z", commit="abc")
+    stmt = f"{K2048}+frame-v3/blake3-keyed"
+    r = next(x for x in ent["results"] if x["artifact"] == art)
+    assert r["statement"] == stmt and r["subcircuit"] == K2048 and r["key"]["statement"] == stmt and r["best"]
+    assert r["id"] == f"B-interactive@{stmt}@{r['input_set']['id']}@rtx-4090/e4m3" and r["input_set"]["how"] == "registered"
+    assert r["input_set"]["provenance"] == "synthetic" and r["N"]["value"] == pytest.approx(V.native(FP8_ADA_MMA, 2048)["instances_per_second"])
+    sub = next(x for x in ent["subcircuits"] if x["id"] == K2048)
+    assert sub["parameters"] == {"K": 2048, "datatype": "e4m3", "semantics": "sm89.mma.m16n8k32.e4m3"} and sub["legacy_target"] is None
+    assert stmt in {x["id"] for x in ent["statements"]} and stmt in ent["axes"]["statements"]
+    t2 = next(ln for ln in ent["tables"]["table2"]["lines"] if ln["statement"] == stmt)
+    assert t2["cells"]["B-Ligero"]["result"] == r["id"] and t2["key"]["parameters"]["K"] == 2048
+    rows3 = [x for x in ent["tables"]["table3"]["rows"] if x["result"] == r["id"]]
+    assert rows3 and rows3[0]["key"]["statement"] == stmt and rows3[0]["label"].startswith(K2048)
+
+
+# --- non-GEMM statements: another template is another statement, with native N from its memory-bandwidth work model -------------
+
+NONGEMM = ("rope-head/d64/neox-bf16", "silu-mul/i8192/bf16", "rmsnorm-fused-cuda/n2048-eps1e-05/bf16", "rmsnorm-triton/n2048-eps1e-05/bf16")
+FLOCK_NAME = "flock union, flock-128-r2 (backends/flock)"
+
+
+def nongemm(store: LocalStore, sub: str, *, t_total: float = 0.4, commit: float = 0.1, verified: bool = True, redteam: bool = True,
+            register: bool = True, set_sub: str | None = None) -> str:
+    """A C-Flock frame-v3 keyed-BLAKE3 result on an H100 over ``sub`` (a #101 non-GEMM subcircuit), its inputs a registered input
+    set of ``set_sub``, with a non-producer's verification and red-team-flock-2's proof_class verdict unless switched off."""
+    import hashlib
+
+    digest = hashlib.sha256(f"set-{sub}-{set_sub}".encode()).hexdigest()
+    if register:
+        store.put_artifact("input-set/v1", {"set": (set_sub or sub).replace("/", "-"), "subcircuit": set_sub or sub, "source": "captured",
+                                            "n": 4096, "content_digest": digest, "schema": "vllm-vu-set/v1"})
+    doc = hashed("blake3", t_total=t_total, security={"target": -128, "achieved_log2": -195.5})
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"] = FLOCK_NAME
+    fp.update(proof_class="NON_ZK_PROOF", zk_mode="none", hardware={"gpu": {"name": H100, "driver": "570.211.01", "cuda": "12.8"}, "cpu": {"model": "c"}},
+              instances={"dataset": sub.replace("/", "-"), "tier": f"vllm-vu-set/v1:{sub}", "range": [0, 4096], "manifest_sha256": digest,
+                         "source": "captured"})
+    fp["profile"] = BF16_HOPPER.name
+    doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead."))]
+    doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
+    for name, value in FLOCK_LIVE.items():
+        if name in ("rtt_method", "t_total_includes_wait", "loopback_method"):
+            doc.setdefault("interaction", {})[name] = value
+        else:
+            doc["measurements"].append({"name": name, "value": value, "unit": {"rounds.sequential_depth": "count", "net.bytes_out": "B",
+                                                                                "net.bytes_in": "B", "net.rtt_ms": "ms"}.get(name, "s")})
+    doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
+    doc["cell"] = {"subcircuit": sub, "statement": f"{sub}+frame-v3/blake3-keyed", "backend": "C-interactive"}
+    files = store.put_artifact("run-files/v1", {"run_id": doc["run_id"], "dump": "proofs"})
+    store.index.set_replica(files, "remote", "2026-09-25T00:00:00Z")
+    art = store.put_artifact(T.RESULT_KIND, doc, refs={"run_files": files})
+    store.put_attempt(attempt(doc["run_id"], art, LANE))
+    store.add_label(art, "candidate", "X", LANE, ts="2026-09-22T10:00:00Z")
+    if verified:
+        store.add_label(art, "independently_verified", True, VERIFIER, ref=f"{doc['run_id']}:verify", ts="2026-09-22T10:01:00Z")
+    if redteam:
+        store.add_label(art, "proof_class", "NON_ZK_PROOF", "red-team-flock-2", ts="2026-09-26T07:30:00Z")
+    return art
+
+
+def test_non_gemm_statements_have_rows_and_are_rejected_until_red_team_cleared_and_verified(store: LocalStore) -> None:
+    uncleared = nongemm(store, NONGEMM[0], redteam=False)
+    unverified = nongemm(store, NONGEMM[1], verified=False)
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    subs = {ln.get("subcircuit") for ln in views.lines}
+    assert {NONGEMM[0], NONGEMM[1]} <= subs
+    why = next(r for r in views.rejected if r["artifact"] == uncleared)
+    assert [k for k, _ in why["codes"]] == ["U"] and "not red-team cleared" in why["codes"][0][1] and why["subcircuit"] == NONGEMM[0]
+    assert "U" in codes(views, unverified)
+    row = next(ln for ln in views.lines if ln.get("subcircuit") == NONGEMM[0])
+    assert row["cells"]["C-Flock" if "C-Flock" in row["cells"] else "Flock"] is None
+
+
+def test_a_cleared_non_gemm_cell_fills_its_row_with_memory_bandwidth_native_n(store: LocalStore) -> None:
+    arts = {sub: nongemm(store, sub) for sub in NONGEMM}
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    col = "C-Flock" if "C-Flock" in views.columns() else "Flock"
+    md = V.render_markdown(views)
+    for sub, nbytes in zip(NONGEMM, (6 * 64, 6 * 8192, 10 * 2048, 6 * 2048)):
+        row = next(ln for ln in views.lines if ln.get("subcircuit") == sub)
+        cell = row["cells"][col]
+        assert cell is not None and cell.artifact == arts[sub] and cell.subcircuit == sub and not cell.provisional
+        N = row["native"]
+        assert N["unit"] == "memory" and N["bytes_per_instance"] == nbytes and N["instances_per_second"] == pytest.approx(3.35e12 / nbytes)
+        assert cell.overhead == pytest.approx(N["instances_per_second"] / cell.throughput["instances_per_second"])
+        assert f"{sub}: work-model/v0 memory-bandwidth work model: {nbytes} bytes per input" in md
+    assert "· RoPEHead<64> · NeoX · BF16 · frame-v3 · keyed-BLAKE3 rows |" in md and " · memory, 3.35 TB/s [" in md
+    assert V.parity(store) == []
+
+
+def test_non_gemm_inputs_must_be_a_registered_set_of_that_subcircuit(store: LocalStore) -> None:
+    wrong = nongemm(store, NONGEMM[2], set_sub=NONGEMM[3])
+    unregistered = nongemm(store, NONGEMM[3], register=False)
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    why = next(r for r in views.rejected if r["artifact"] == wrong)["codes"][0]
+    assert why[0] == "I" and NONGEMM[3] in why[1]
+    assert next(r for r in views.rejected if r["artifact"] == unregistered)["codes"][0][0] == "I"
+
+
+def test_the_entities_render_has_the_non_gemm_statements(store: LocalStore) -> None:
+    art = nongemm(store, NONGEMM[0])
+    ent = V.render_entities(V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False)), rendered_at="2026-09-26T08:00:00Z", commit="abc")
+    stmt = f"{NONGEMM[0]}+frame-v3/blake3-keyed"
+    r = next(x for x in ent["results"] if x["artifact"] == art)
+    assert r["statement"] == stmt and r["subcircuit"] == NONGEMM[0] and r["backend"] == "C-interactive" and r["input_set"]["how"] == "registered"
+    assert r["N"]["value"] == pytest.approx(3.35e12 / (6 * 64))
+    sub = next(x for x in ent["subcircuits"] if x["id"] == NONGEMM[0])
+    assert sub["subcircuit_template"] == "rope-head" and sub["parameters"] == {"D": 64} and sub["native"]["value"] == pytest.approx(3.35e12 / 384)
+    assert stmt in ent["axes"]["statements"] and next(x for x in ent["statements"] if x["id"] == stmt)["display"].startswith("RoPEHead<64>")
+
+
+def test_a_non_gemm_cell_without_a_profile_takes_its_prover_gpus_hardware_line() -> None:
+    meta = {"workload_fingerprint": {"profile": None, "subcircuit": "rope-head/d64/neox-bf16",
+                                     "hardware": {"gpu": {"name": "NVIDIA H100 80GB HBM3"}}}}
+    assert V.hardware_target(meta, "rope-head/d64/neox-bf16") is BF16_HOPPER
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is None

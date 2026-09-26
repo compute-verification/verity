@@ -93,6 +93,48 @@ def render(rep: dict[str, Any]) -> str:
             f"  host {rep['cpu']}  load {rep['load']}  {rep['hostname']}  ->  {rep['verdict']}")
 
 
+#: RunPod's replies that mean "no machine of that spec right now": the only create failure a caller may answer with another spec.
+NO_STOCK = ("no instances currently available", "no longer any instances available")
+EXIT_EXISTS, EXIT_NO_STOCK, EXIT_FAILED = 4, 5, 2
+
+
+def _named(name: str) -> list[dict]:
+    """Live (not terminated) pods whose RunPod name is ``<name>-veritor-campaign`` (`runpod.create`'s naming)."""
+    from . import runpod
+
+    full = f"{name}-veritor-campaign"
+    return [p for p in (runpod._request("GET", "/pods") or []) if p.get("name") == full and p.get("desiredStatus") != "TERMINATED"]
+
+
+def create_once(ns: Any) -> tuple[dict | None, int]:
+    """At most one pod per --name, whatever the create call says (retry loops made duplicates three times, 2026-09-26; red-team-
+    flock-2's pod-create.sh): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
+    after a failed create, a pod that appeared under the name anyway is the pod; only an explicit no-stock reply is exit 5 (try
+    another spec), any other failure exit 2 (do not retry blindly).  Returns (pod, 0) or (None, exit code)."""
+    import sys
+
+    from . import runpod
+
+    before = {p["id"] for p in _named(ns.name)}
+    if before and not getattr(ns, "allow_duplicate", False):
+        print(f"research pods create: {ns.name} already has live pod(s) {', '.join(sorted(before))}; not creating another "
+              f"(register or terminate it, or --allow-duplicate)", file=sys.stderr)
+        return None, EXIT_EXISTS
+    try:
+        return runpod.create(ns), 0
+    except runpod.PodError as e:
+        appeared = [p for p in _named(ns.name) if p["id"] not in before]
+        if appeared:
+            print(f"research pods create: the create call failed ({e}) but pod {appeared[0]['id']} exists under {ns.name}; using it",
+                  file=sys.stderr)
+            return appeared[0], 0
+        if any(x in str(e).lower() for x in NO_STOCK):
+            print(f"research pods create: NO-STOCK {e}", file=sys.stderr)
+            return None, EXIT_NO_STOCK
+        print(f"research pods create: FAILED (no pod under {ns.name}): {e}", file=sys.stderr)
+        return None, EXIT_FAILED
+
+
 def main(argv: list[str]) -> int:
     """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> [--require-reference-part]`
     | `research pods ssh|sync ...` (connect.py) | `research pods health <pod>` (health.py) | any other verb goes to
@@ -133,10 +175,13 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--register", action="store_true", help="register the pod under --name once sshd answers (research pods register)")
         ap.add_argument("--project", default=None, help="--register: the project the machine is bound to")
         ap.add_argument("--guard", default=None, metavar="N|true", help="--register: opt the pod into the idle guard")
+        ap.add_argument("--allow-duplicate", action="store_true", help="create even when a live pod of this --name exists")
         ns = ap.parse_args(argv[1:])
         if ns.register and not ns.project:
             ap.error("--register needs --project")
-        pod = runpod.create(ns)
+        pod, rc = create_once(ns)
+        if pod is None:
+            return rc
         runpod.wait_ssh(pod["id"])
         if ns.register:
             from .registry import main as registry_main

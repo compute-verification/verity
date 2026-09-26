@@ -11,7 +11,7 @@
   research tele <telemetry subcommand...>        # the full harness surface (init, event, sample, cancel-intent, classify, ...)
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
-  research pods create <runpod flags> [--require-reference-part] [--register --project P]   # research.pods.runpod create, then the same verdict once sshd answers
+  research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
   research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)

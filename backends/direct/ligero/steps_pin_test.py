@@ -60,7 +60,8 @@ def test_every_verifier_runner_carries_its_relations_vu_shape() -> None:
     from .vu import STEPS as BF16_STEPS
     from .vu import ChainRunner
     for name, rel in RELATIONS.items():
-        assert rel.hooks.steps == rel.steps == 1536 // rel.k, name
+        K = int(name.rsplit("-k", 1)[1]) if rel.vu_k else 1536          # relations._at_k: "<fold>-k<K>"
+        assert rel.hooks.steps == rel.steps == K // rel.k, name
         assert rel.hooks.max_steps is None, name
     assert FP4_HOOKS.steps == FP4_STEPS == 24
     assert ChainRunner("cpu", -128.0).hooks.steps == BF16_STEPS == 96

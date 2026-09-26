@@ -612,6 +612,8 @@ class Ctx:
     family: Family
     config: Configuration | None
     statement_labels: list[Any]
+    subcircuit: str | None = None                         #: a statement other than the target's own (:func:`result_subcircuit`)
+    input_sets: Mapping[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
 
 
 def _column(ctx: Ctx, rules: Rules) -> str:
@@ -781,6 +783,170 @@ def _equiv_of(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv]) -> str 
     return stream_equivalence(inst, ctx.target, equivs, T.producers(ctx.attempt, ctx.labels, ctx.meta))[0]
 
 
+#: A result's ``relation`` (before any ``-x4-k<K>`` / ``+<leaf>`` suffix) naming its GEMM coordinate's semantics (the backends'
+#: relation names: ``verity_flock.bench.PROFILES``, ``ligero.templates.gemm_coordinate.RELATIONS``).
+RELATION_SEMANTICS = {"bf16-ampere": "sm80.mma.m16n8k16.bf16", "bf16-hopper": "sm90.mma.m16n8k16.bf16",
+                      "bf16-hopper-wgmma": "sm90.wgmma.m64n8k16.bf16", "fp8-ada": "sm89.mma.m16n8k32.e4m3",
+                      "fp8-hopper": "sm90.wgmma.m64n8k32.e4m3", "fp4-nvf4": "sm120.mma.m16n8k64.e2m1.nvf4"}
+#: The kinds of a registered input set a real-K result's inputs name.
+INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
+
+
+def _sem_slug(semantics: str) -> str:
+    return "-".join(x for x in semantics.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
+
+
+def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
+    """The census subcircuit of a result's statement when it is not its target's own -- a statement of its own, so a Table 2
+    row of its own (docs ontology, "A result": K and the semantics are part of the subcircuit) -- else ``None``.
+
+    K is the fingerprint's.  The semantics are the ``bench.cell`` stamp's subcircuit, else the result's ``relation``
+    (:data:`RELATION_SEMANTICS`), else the target's instruction.  Semantics the census records as one (``stood_for_by``) are
+    one statement: at the target's K the target's own subcircuit, at another K the one that is stood for (root's ruling
+    2026-09-26 02:44Z: real-K H100 BF16 cells use the wgmma subcircuit's id)."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    home = census.subcircuit_of(target.name)
+    named = stamped_subcircuit(meta)
+    if named and named.split("/")[0] != home.template:
+        return named                                         # another template (a non-GEMM subcircuit): its own statement
+    K = fp.get("K") if isinstance(fp.get("K"), int) and not isinstance(fp.get("K"), bool) else home.parameters.K
+    sem = None
+    stamped = (meta.get("cell") or {}).get("subcircuit") if isinstance(meta.get("cell"), Mapping) else None
+    if isinstance(stamped, str):
+        known = census.SUBCIRCUITS.get(stamped)
+        slug = stamped.rsplit("/", 1)[-1]
+        sem = known.parameters.semantics if known else next(
+            (x.parameters.semantics for x in census.SUBCIRCUITS.values() if _sem_slug(x.parameters.semantics) == slug), None)
+    if sem is None:
+        rel = fp.get("relation") if isinstance(fp.get("relation"), str) else meta.get("relation")
+        sem = RELATION_SEMANTICS.get(re.split(r"-x\d+|-k\d+|\+", rel)[0]) if isinstance(rel, str) else None
+    sem = sem or home.parameters.semantics
+    stands = {census.SUBCIRCUITS[x].parameters.semantics: census.SUBCIRCUITS[census.stood_for_by(x)].parameters.semantics
+              for x in census.SUBCIRCUITS if census.stood_for_by(x)}
+    if K == home.parameters.K:
+        sem = stands.get(sem, sem)
+        if sem == home.parameters.semantics:
+            return None
+    else:
+        sem = {v: k for k, v in stands.items()}.get(sem, sem)
+    found = census.subcircuit_with(home.template, K=K, semantics=sem)
+    return found.id if found else f"{home.template}/k{K}/{_sem_slug(sem)}"
+
+
+def stamped_subcircuit(meta: Mapping[str, Any]) -> str | None:
+    """The subcircuit a result names itself: the ``bench.cell`` stamp's, else the fingerprint's or the meta's ``subcircuit``."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    cell = meta.get("cell") if isinstance(meta.get("cell"), Mapping) else {}
+    return next((v for v in (cell.get("subcircuit"), fp.get("subcircuit"), meta.get("subcircuit")) if isinstance(v, str)), None)
+
+
+#: GPU model tokens a prover's ``hardware.gpu.name`` carries, as the census hardware lines' devices spell them.
+_GPU_TOKENS = ("A100", "H100", "4090", "5090")
+_DTYPE_TOKENS = (("bf16", "bf16"), ("e4m3", "e4m3"), ("fp8", "e4m3"), ("e2m1", "e2m1"), ("nvf4", "e2m1"))
+
+
+def hardware_target(meta: Mapping[str, Any], sub: str | None) -> Target | None:
+    """The target whose census hardware line a non-GEMM result ran on, for a result with no ``profile`` (a ``bench.cell`` cell
+    on a subcircuit of another template): the prover GPU's model and the subcircuit's datatype pick the line; ``None`` when none
+    matches (then the result is rejected X as before)."""
+    gpu = str(_get(meta.get("workload_fingerprint") or {}, "hardware", "gpu", "name") or "")
+    token = next((t for t in _GPU_TOKENS if t in gpu), None)
+    tail = (sub or "").rsplit("/", 1)[-1].lower()
+    dtype = next((d for key, d in _DTYPE_TOKENS if key in tail), None)
+    if token is None or dtype is None:
+        return None
+    return next((t for t in TARGETS.values() if token in contract.native_peak_of(t).device and contract.native_peak_of(t).dtype == dtype), None)
+
+
+def is_gemm(sub: str | None) -> bool:
+    return sub is None or sub.split("/")[0] == "gemm-coordinate"
+
+
+def native_of(target: Target, sub: str | None) -> dict[str, Any]:
+    """``N`` of a row: the GEMM work model (:func:`native`) at the subcircuit's K, or for another template its census
+    memory-bandwidth work model (:func:`memory_native`)."""
+    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub)
+
+
+def memory_native(target: Target, sub: str) -> dict[str, Any]:
+    """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
+    input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
+    binding (``ops_per_instance`` is the template's op count, for reference)."""
+    known = census.SUBCIRCUITS[sub]
+    wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
+    env = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}
+    nbytes, ops = census.evaluate(wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
+    hw = contract.native_peak_of(target)
+    bw = getattr(hw, "memory_bytes_per_second", None)
+    if not _num(bw):
+        raise ValueError(f"{hw.id}: no memory bandwidth in the census for {sub}'s memory-bandwidth work model")
+    version = WORK_MODEL.split(":")[0]
+    return {"instances_per_second": bw / nbytes, "unit": "memory", "ops_per_instance": ops, "bytes_per_instance": nbytes, "steps": None,
+            "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": hw.flop_per_second, "memory_bytes_per_second": bw,
+            "device": hw.device, "source": "; ".join(x.label for x in getattr(hw, "memory_sources", ())) or census.source(hw),
+            "work_model": f"{version}: memory-bandwidth bound, {wm.bytes_per_input} bytes per input over the line's memory bandwidth",
+            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({wm.bytes_per_input}: {wm.bytes_basis}; "
+                      f"{wm.bytes_source}) over {bw / 1e12:.3g} TB/s ({hw.id}); ops {ops} per input ({wm.ops_per_input}) are not binding")}
+
+
+def subcircuit_k(sub: str) -> int:
+    known = census.SUBCIRCUITS.get(sub)
+    return int(known.parameters.K) if known else int(re.search(r"/k(\d+)/", sub).group(1))
+
+
+def input_set_index(store: Any) -> dict[str, tuple[str, Mapping[str, Any]]]:
+    """Every registered input set (:data:`INPUT_SET_KINDS`) by its artifact id and by its content digest: ``(art, meta)``."""
+    out: dict[str, tuple[str, Mapping[str, Any]]] = {}
+    for kind in INPUT_SET_KINDS:
+        try:
+            rows = store.index.select_artifacts(kind=kind)
+        except Exception:  # noqa: BLE001  (a store without a catalog)
+            return out
+        for row in rows:
+            meta = D._doc(store, row).get("meta") or {}
+            out[row["id"]] = (row["id"], meta)
+            if isinstance(meta.get("content_digest"), str):
+                out[meta["content_digest"]] = (row["id"], meta)
+    return out
+
+
+def _set_k(meta: Mapping[str, Any]) -> int | None:
+    for v in ((meta.get("parameters") or {}).get("K") if isinstance(meta.get("parameters"), Mapping) else None,
+              ((meta.get("relation") or {}).get("statics") or {}).get("K") if isinstance(meta.get("relation"), Mapping) else None):
+        if isinstance(v, int):
+            return v
+    m = re.search(r"/k(\d+)/", str(meta.get("subcircuit") or ""))
+    return int(m.group(1)) if m else None
+
+
+def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
+    """Why a result on a statement of its own (another K or semantics) does not run on a registered input set of that K, or
+    ``[]``: its inputs name an ``input-set/v1`` / ``vllm-vu-set/v1`` artifact (the ``bench.cell`` stamp's art, else the set's
+    content digest), of the statement's K, over a range inside the set."""
+    fp = ctx.meta["workload_fingerprint"]
+    inst = fp.get("instances")
+    if not isinstance(inst, Mapping):
+        return [("I", "instances is null: no input set named")]
+    stamp = ((ctx.meta.get("cell") or {}).get("input_set") or {}) if isinstance(ctx.meta.get("cell"), Mapping) else {}
+    keys = [stamp.get("art"), inst.get("set_art"), inst.get("content_digest"), stamp.get("content_digest"), inst.get("manifest_sha256")]
+    hit = next((ctx.input_sets[k] for k in keys if isinstance(k, str) and k in ctx.input_sets), None)
+    if hit is None:
+        return [("I", f"inputs name no registered input set ({' | '.join(INPUT_SET_KINDS)}; "
+                      f"digest {inst.get('content_digest') or inst.get('manifest_sha256')!r})")]
+    art, meta = hit
+    if not is_gemm(ctx.subcircuit):
+        if meta.get("subcircuit") != ctx.subcircuit:
+            return [("I", f"input set {art} is of {meta.get('subcircuit')!r}, the statement's subcircuit is {ctx.subcircuit}")]
+    else:
+        K, sk = subcircuit_k(ctx.subcircuit), _set_k(meta)
+        if sk != K:
+            return [("I", f"input set {art} is of K = {sk}, the statement {ctx.subcircuit} is of K = {K}")]
+    rng, n = inst.get("range"), meta.get("n")
+    if isinstance(rng, (list, tuple)) and len(rng) == 2 and isinstance(n, int) and not (0 <= rng[0] < rng[1] <= n):
+        return [("I", f"inputs {list(rng)} leave input set {art} (n = {n})")]
+    return []
+
+
 def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_: set[str]) -> list[tuple[str, str]]:
     fp = ctx.meta["workload_fingerprint"]
     want, inst = T.frozen_instances(ctx.target), fp.get("instances")
@@ -842,7 +1008,7 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
         why = _custody(store, ctx)
         if why:
             p.append(("F", why))
-    p += _instances(ctx, rules, equivs, self_)
+    p += _input_set_codes(ctx) if ctx.subcircuit and not rules.legacy else _instances(ctx, rules, equivs, self_)
     gpu = _get(fp, "hardware", "gpu") if isinstance(_get(fp, "hardware", "gpu"), Mapping) else None
     if not T.same_sku(gpu.get("name") if gpu else None, contract.native_peak_of(ctx.target).device):
         p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {contract.native_peak_of(ctx.target).device!r}"))
@@ -868,6 +1034,9 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("M", why))
     verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
     ceiling, verdict = T._redteam_ceiling(verdicts, self_)
+    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None:
+        p.append(("U", f"not red-team cleared: a statement on a new template ({ctx.subcircuit}) needs a red-team proof_class verdict "
+                       "on its results before it is a cell"))
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
         p.append(("D", f"capped: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
     state, flab = T.cell_finding(ctx.labels)
@@ -882,7 +1051,7 @@ def provisional(ctx: Ctx) -> str | None:
     self_ = T.producers(ctx.attempt, T._labels(ctx.labels), ctx.meta)
     ceiling, verdict = T._redteam_ceiling(T._labels(ctx.statement_labels), self_)
     if verdict is None:
-        return f"no red-team clearance of {ctx.config.id if ctx.config else ctx.family.id}'s statement on {ctx.target.name}"
+        return f"no red-team clearance of {ctx.config.id if ctx.config else ctx.family.id}'s statement on {ctx.subcircuit or ctx.target.name}"
     return None
 
 
@@ -907,10 +1076,13 @@ class ViewCell:
     algebraic: list[str] = field(default_factory=list)   #: the algebraic hashes of its soundness argument (Table 1's flag)
     instances: dict[str, Any] = field(default_factory=dict)  #: the result's instance ref
     setup_s: float | None = None                          #: one-time setup (``fixed.setup_seconds``), outside the cell
+    subcircuit: str | None = None                         #: its statement's subcircuit when not its target's own (a real-K row)
 
     def to_json(self) -> dict[str, Any]:
         d = dataclasses.asdict(self)
         d["legacy"] = self.legacy.to_json()
+        if d["subcircuit"] is None:
+            del d["subcircuit"]
         return d
 
 
@@ -920,6 +1092,7 @@ class Views:
     lines: list[dict[str, Any]] = field(default_factory=list)
     cells: list[ViewCell] = field(default_factory=list)
     rejected: list[dict[str, Any]] = field(default_factory=list)
+    below_bar: list[dict[str, Any]] = field(default_factory=list)  #: verified results labelled below_bar=true (:func:`below_bar_entry`)
     not_families: dict[str, list[str]] = field(default_factory=dict)
     configurations: tuple[Configuration, ...] = CONFIGURATIONS
     unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
@@ -927,6 +1100,7 @@ class Views:
     security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
+    input_sets: dict[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
 
     def columns(self) -> list[str]:
         if not self.rules.legacy:
@@ -957,6 +1131,33 @@ def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
     return out
 
 
+#: The label that sends a verified result below the tables' 2^-128 bar to its own drill-down (never a Table 2 cell, never dropped).
+BELOW_BAR = "below_bar"
+
+
+def _latest(labels: Sequence[Any], key: str) -> Any:
+    found = [lab for lab in T._labels(labels) if lab.key == key]
+    return found[-1].value if found else None
+
+
+def below_bar_entry(art: str, meta: Mapping[str, Any], labels: Sequence[Any], cand: Any) -> dict[str, Any]:
+    """A below-bar result as the drill-down shows it: what it proves (its IR Definition and gate family), on which input set and
+    GPU, its own soundness per proof mode (core, compressed), its proving seconds per instance, proof bytes, and who verified it."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    m = T._measurements(meta)
+    num = lambda k: float(m[k]) if _num(m.get(k)) else None  # noqa: E731
+    verified = [lab for lab in T._labels(labels) if lab.key == "verified"]
+    inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}
+    return {"artifact": art, "backend_family": _fam(cand.id), "definition": _get(fp, "definition", "id"), "gate_family": fp.get("family"),
+            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
+            "proof_class": fp.get("proof_class"),
+            "modes": {mode: {"soundness_bits": num(f"{mode}.soundness_bits"), "prove_seconds": num(f"{mode}.prove_seconds"),
+                             "seconds_per_instance": num(f"{mode}.seconds_per_instance"), "proof_bytes": num(f"{mode}.proof_bytes"),
+                             "verify_seconds": num(f"{mode}.host_verify_seconds")}
+                      for mode in (fp.get("modes") or ["core"])},
+            "bar_bits": 128, "verified": verified[-1].value if verified else None, "verified_by": verified[-1].by if verified else None}
+
+
 def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuration] = CONFIGURATIONS) -> Views:
     """Read the store, apply :func:`reject_codes` under ``rules`` and assemble Tables 1-3 (rendering is separate)."""
 
@@ -973,18 +1174,28 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             V.not_families.setdefault(backend if isinstance(backend, str) else "(no software.backend.name)", []).append(art)
             continue
         rid, attempt = T._attempt_of(store, art)
+        labels = list(store.labels(art))
+        if not rules.legacy and str(_latest(labels, BELOW_BAR)).lower() == "true":     # written as a bool or, off-vocabulary, "true"
+            V.below_bar.append(below_bar_entry(art, meta, labels, cand))
+            continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
+        if target is None and not rules.legacy and not is_gemm(stamped_subcircuit(meta)):
+            target = hardware_target(meta, stamped_subcircuit(meta))
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
                                "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.proofs.target")]})
             continue
-        entries.append(Ctx(art, meta, list(store.labels(art)), attempt, target, _FAMILY[cand.id], config, []))
-    by_statement: dict[tuple[str | None, str], list[Any]] = {}
+        entries.append(Ctx(art, meta, labels, attempt, target, _FAMILY[cand.id], config, []))
+    if not rules.legacy:
+        sets = V.input_sets = input_set_index(store)
+        for c in entries:
+            c.subcircuit, c.input_sets = result_subcircuit(c.meta, c.target), sets
+    by_statement: dict[tuple[str | None, str, str | None], list[Any]] = {}
     for c in entries:
-        by_statement.setdefault((c.config.id if c.config else None, c.target.name), []).extend(c.labels)
+        by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).extend(c.labels)
     for c in entries:
-        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name)] if c.config else c.labels
+        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name, c.subcircuit)] if c.config else c.labels
 
     line_schemes: list[str | None] = [None] if rules.legacy else [
         s.id for s in SCHEMES if s.admissible and any(c.scheme == s.id for c in configurations)]
@@ -992,13 +1203,13 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     def scheme_of(c: Ctx) -> str | None:
         return c.config.scheme if not rules.legacy and c.config is not None and c.config.scheme in line_schemes else None
 
-    Key = tuple[str, str | None, str]
+    Key = tuple[str, str | None, str | None, str]
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
-        key = (c.target.name, scheme_of(c), _column(c, rules))
+        key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules))
         if not codes and P is not None:
             pools.setdefault(key, []).append((c, P))
             continue
@@ -1006,10 +1217,12 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             unfiltered.setdefault(key, []).append((c, P))
         rid, _ = T._attempt_of(store, c.art)
         entry = {"artifact": c.art, "family": c.family.id, "configuration": c.config.id if c.config else None, "line": c.target.name,
-                 "scheme": key[1], "column": key[2], "attempt": rid, "codes": codes or [("X", "no positive t.total and batch")]}
+                 "scheme": key[2], "column": key[3], "attempt": rid, "codes": codes or [("X", "no positive t.total and batch")]}
+        if c.subcircuit:
+            entry["subcircuit"] = c.subcircuit
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native(c.target)["instances_per_second"]
+            n = native_of(c.target, c.subcircuit)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1021,7 +1234,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         return {"artifact": c.art, "configuration": c.config.id if c.config else None, "bound_log2": whole_proof_log2(c.meta["workload_fingerprint"]),
                 "hashes": [h.text() for h in (c.config.hashes if c.config else ())], "overhead": N / P["instances_per_second"]}
 
-    def make_cell(c: Ctx, P: dict[str, Any], target: Target, scheme: str | None, col: str, N: Mapping[str, Any]) -> ViewCell:
+    def make_cell(c: Ctx, P: dict[str, Any], target: Target, scheme: str | None, col: str, N: Mapping[str, Any],
+                  sub: str | None = None) -> ViewCell:
         vb = T.independent_verification(c.meta, c.labels, c.attempt)
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         m = T._measurements(c.meta)
@@ -1041,36 +1255,54 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                         batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
                         algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
                         instances=dict(c.meta["workload_fingerprint"].get("instances") or {}),
-                        setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None)
+                        setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None,
+                        subcircuit=sub)
 
     columns = [f.id for f in FAMILIES] + ([f.id + T.AUTH_COLUMN_SUFFIX["included-hash"] for f in FAMILIES] if rules.legacy else [])
+    def add_line(target: Target, sub: str | None, scheme: str | None, N: Mapping[str, Any]) -> None:
+        line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
+                                "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
+                                "instruction": target.instruction, "cells": {}, "empty": {}}
+        if sub:
+            known = census.SUBCIRCUITS.get(sub)
+            line.update(subcircuit=sub, subcircuit_display=known.display if known else sub)
+        for col in columns:
+            key = (target.name, sub, scheme, col)
+            hit = best(pools.get(key, []))
+            if hit is None:
+                line["cells"][col] = None
+                line["empty"][col] = _empty_reason(V.rejected, target, scheme, line_schemes, col, configurations, sub)
+                if unfiltered.get(key):
+                    u = pick(*best(unfiltered[key]), N["instances_per_second"])
+                    line["empty"][col] = {"state": "below-filter", "unfiltered": u, "text": (
+                        f"only below the filter: unfiltered pick {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, "
+                        f"hashes {'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")}
+                continue
+            c, P = hit
+            cell = make_cell(c, P, target, scheme, col, N, sub)
+            V.admissible += [cell if o.art == c.art else make_cell(o, oP, target, scheme, col, N, sub) for o, oP in pools[key]]
+            alt = best(pools.get(key, []) + unfiltered.get(key, []))
+            if alt is not None and alt[0].art != c.art:
+                cell.unfiltered = pick(*alt, N["instances_per_second"])
+            line["cells"][col] = cell
+            V.cells.append(cell)
+        V.lines.append(line)
+
     for target in TARGETS.values():
         N = native(target)
         for scheme in line_schemes:
-            line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
-                                    "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
-                                    "instruction": target.instruction, "cells": {}, "empty": {}}
-            for col in columns:
-                key = (target.name, scheme, col)
-                hit = best(pools.get(key, []))
-                if hit is None:
-                    line["cells"][col] = None
-                    line["empty"][col] = _empty_reason(V.rejected, target, scheme, line_schemes, col, configurations)
-                    if unfiltered.get(key):
-                        u = pick(*best(unfiltered[key]), N["instances_per_second"])
-                        line["empty"][col] = {"state": "below-filter", "unfiltered": u, "text": (
-                            f"only below the filter: unfiltered pick {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, "
-                            f"hashes {'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")}
-                    continue
-                c, P = hit
-                cell = make_cell(c, P, target, scheme, col, N)
-                V.admissible += [cell if o.art == c.art else make_cell(o, oP, target, scheme, col, N) for o, oP in pools[key]]
-                alt = best(pools.get(key, []) + unfiltered.get(key, []))
-                if alt is not None and alt[0].art != c.art:
-                    cell.unfiltered = pick(*alt, N["instances_per_second"])
-                line["cells"][col] = cell
-                V.cells.append(cell)
-            V.lines.append(line)
+            add_line(target, None, scheme, N)
+    # statements of their own (another K, or semantics the target's subcircuit does not stand for): a row per scheme with a result
+    own: dict[tuple[str, str], set[str | None]] = {}
+    for c in entries:
+        if c.subcircuit:
+            own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
+    for target in TARGETS.values():
+        for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
+            N = native_of(target, sub)
+            for scheme in line_schemes:
+                if scheme in own[(target.name, sub)]:
+                    add_line(target, sub, scheme, N)
     return V
 
 
@@ -1080,14 +1312,14 @@ def _open_finding(labels: Sequence[Any]) -> str | None:
 
 
 def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme: str | None, line_schemes: Sequence[str | None],
-                  col: str, configurations: Sequence[Configuration]) -> dict[str, Any]:
+                  col: str, configurations: Sequence[Configuration], sub: str | None = None) -> dict[str, Any]:
     """Why a cell is empty: ``n/s`` when every configuration of the family declares the subcircuit unsupported, else what its
     results lack (weaker statements or undefined schemes only, or the first reasons that apply).  A result on no line's
     scheme counts on every scheme line of its subcircuit and hardware class."""
     fam = [c for c in configurations if c.family == col]
     if fam and all(target.name in c.unsupported for c in fam):
         return {"state": "n/s", "text": "; ".join(sorted({c.unsupported[target.name] for c in fam}))}
-    mine = [r for r in rejected if r.get("line") == target.name and r.get("column") == col
+    mine = [r for r in rejected if r.get("line") == target.name and r.get("column") == col and r.get("subcircuit") == sub
             and (r.get("scheme") == scheme or r.get("scheme") not in line_schemes)]
     if not mine:
         return {"state": "none", "text": "no result"}
@@ -1168,8 +1400,10 @@ def _fmt_bound(b: float | None) -> str:
     return f"2^{b:.1f}" if b is not None else "unknown"
 
 
-def _instances_text(target_name: str, inst: Mapping[str, Any]) -> str:
+def _instances_text(target_name: str, inst: Mapping[str, Any], sub: str | None = None) -> str:
     rng = inst.get("range") or ["?", "?"]
+    if sub:
+        return f"inputs [{rng[0]}, {rng[1]}) of input set {inst.get('dataset') or inst.get('set') or inst.get('tier', '?')} ({inst.get('source') or 'source not recorded'})"
     how, _ = instance_range(TARGETS[target_name], inst) if target_name in TARGETS and inst else (None, None)
     kind = {"stream": "a prefix-consistent extension of the frozen set", "prefix": "a prefix of the frozen set",
             "frozen": "the frozen set"}.get(how or "", "re-packed")
@@ -1177,6 +1411,8 @@ def _instances_text(target_name: str, inst: Mapping[str, Any]) -> str:
 
 
 def _native_text(N: Mapping[str, Any]) -> str:
+    if N.get("memory_bytes_per_second") and N["unit"] == "memory":
+        return f"{fmt_rate(N['instances_per_second'])} · memory, {N['memory_bytes_per_second'] / 1e12:.3g} TB/s"
     return f"{fmt_rate(N['instances_per_second'])} · {N['unit']}, {N['dtype']} {T._fmt_tflops(N['peak_flop_per_second'])}"
 
 
@@ -1204,7 +1440,7 @@ def table1_rows(V: Views) -> list[tuple[str, list[str]]]:
 
 
 def _cell_name(c: ViewCell) -> str:
-    return f"{c.line}{' · ' + _SCHEME[c.scheme].label if c.scheme else ''} · {column_header(c.column)}"
+    return f"{c.subcircuit or c.line}{' · ' + _SCHEME[c.scheme].label if c.scheme else ''} · {column_header(c.column)}"
 
 
 def overheads(c: ViewCell) -> tuple[float, float]:
@@ -1251,7 +1487,7 @@ def _cell_note(c: ViewCell, col: str) -> str:
     text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
             f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
             f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
-            f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
+            f"{_instances_text(c.legacy.target, c.instances, c.subcircuit)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
     if c.legacy.instances_equiv:
         text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
     ixl = P.get("interaction") or {}
@@ -1280,15 +1516,16 @@ def table2_grid(V: Views) -> list[dict[str, Any]]:
     for ln in V.lines:
         N = ln["native"]
         g: dict[str, Any] = {
-            "line": ln, "label": f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
-            "native": {"display": _native_text(N), "note": f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
+            "line": ln, "label": f"{N['device']} · {N['dtype']} · {ln.get('subcircuit_display') or ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
+            "native": {"display": _native_text(N), "note": f"{ln.get('subcircuit') or ln['line']}: {N['basis']}; {N['source']}" if N.get("basis") else
+                       f"{ln.get('subcircuit') or ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
                                                            f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}"},
             "cells": {}}
         for col in V.columns():
             c = ln["cells"].get(col)
             if c is None:
                 e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
-                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
+                where = f"{ln.get('subcircuit') or ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
                 g["cells"][col] = {"display": "n/s" if e["state"] == "n/s" else T.EMPTY, "note": f"{where}: {e['text']}", "state": e["state"],
                                    "marks": [], "cell": None}
                 continue
@@ -1909,6 +2146,27 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
                                     "work_model": N["work_model"]}})
 
+    for ln in V.lines:
+        sub_id = ln.get("subcircuit")
+        if not sub_id or any(c["id"] == sub_id for c in circuits):
+            continue
+        target, known = TARGETS[ln["line"]], census.SUBCIRCUITS.get(sub_id)
+        peak = contract.native_peak_of(target)
+        dt = census.DATATYPES[peak.dtype]
+        N = ln["native"]
+        circuits.append({"id": sub_id, "display": known.display if known else sub_id, "subcircuit_template": known.template if known else sub_id.split("/")[0],
+                         "parameters": vars(known.parameters) if known else {"K": subcircuit_k(sub_id)}, "legacy_target": None,
+                         "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
+                         "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
+                         "dtype": peak.dtype, "dtype_display": dt.display, "hardware_display": f"{peak.name} · {dt.display}",
+                         "accumulate": census.SUBCIRCUIT_TEMPLATES[known.template].accumulate if known else "fp32",
+                         "step": target.transition_unit if is_gemm(sub_id) else None, "status": target.status, "input_set": None,
+                         "input_set_provenance": None,
+                         "fidelity_notes": [{"note": n.note, "sources": [vars(x) for x in n.sources]} for n in (known.fidelity_notes if known else [])],
+                         "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
+                                    "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
+                                    "work_model": N["work_model"]}})
+
     configurations = configuration_records(V)
 
     backend_by_cfg = {c.id: backend_of(c) for c in V.configurations}
@@ -1919,29 +2177,44 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     scheme_list = scheme_entities(V.configurations)
     scheme_by_id = {x["id"]: x for x in scheme_list}
 
-    def statement_id(target_name: str, legacy_scheme: str | None) -> str:
-        return f"{subcircuit_id(target_name)}+{scheme_id(legacy_scheme)}"
+    def sub_of(target_name: str | None, sub: str | None) -> str | None:
+        return sub or subcircuit_id(target_name)
+
+    def statement_id(target_name: str, legacy_scheme: str | None, sub: str | None = None) -> str:
+        return f"{sub_of(target_name, sub)}+{scheme_id(legacy_scheme)}"
 
     def prover_of(c: ViewCell) -> str | None:
         dtype = contract.native_peak_of(TARGETS[c.line]).dtype
         return next((h.id for h in census.HARDWARE.values() if h.dtype == dtype and T.same_sku(V.prover_gpu.get(c.artifact), h.device)), None)
 
-    def key_of(target_name: str, legacy_scheme: str | None, prover: str | None) -> dict[str, Any]:
+    def key_of(target_name: str, legacy_scheme: str | None, prover: str | None, own: str | None = None) -> dict[str, Any]:
         """A row key: the statement (subcircuit and scheme, with the subcircuit's template and bound parameters) and the
         prover hardware."""
-        sub = census.subcircuit_of(target_name)
-        return {"statement": statement_id(target_name, legacy_scheme), "subcircuit": sub.id, "subcircuit_template": sub.template,
-                "parameters": vars(sub.parameters), "scheme": scheme_id(legacy_scheme), "prover_hardware": prover}
+        sub = census.SUBCIRCUITS.get(own) if own else census.subcircuit_of(target_name)
+        return {"statement": statement_id(target_name, legacy_scheme, own), "subcircuit": own if sub is None else sub.id,
+                "subcircuit_template": sub.template if sub else own.split("/")[0],
+                "parameters": vars(sub.parameters) if sub else {"K": subcircuit_k(own)}, "scheme": scheme_id(legacy_scheme), "prover_hardware": prover}
+
+    def registered_set(c: ViewCell) -> tuple[str, Mapping[str, Any]] | None:
+        keys = (c.instances.get("set_art"), c.instances.get("content_digest"), c.instances.get("manifest_sha256"))
+        return next((V.input_sets[k] for k in keys if isinstance(k, str) and k in V.input_sets), None)
 
     def input_set_id(c: ViewCell) -> str | None:
+        if c.subcircuit:
+            hit = registered_set(c)
+            return hit[0] if hit else None
         return (sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier"))) or SimpleNamespace(id=None)).id
 
     def result_key(c: ViewCell) -> str:
         """backend x statement x input set x prover hardware."""
-        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme)}"
+        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}"
                 f"@{input_set_id(c)}@{prover_of(c)}")
 
     def input_set_of(c: ViewCell) -> dict[str, Any] | None:
+        if c.subcircuit:
+            hit = registered_set(c)
+            return {"id": hit[0], "set": hit[1].get("set"), "provenance": hit[1].get("source"), "range": c.instances.get("range"),
+                    "how": "registered"} if hit else None
         x = sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier")))
         if x is None:
             return None
@@ -1971,16 +2244,16 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         cfg = cfg_of.get(c.configuration or "")
         per_proof = V.security_of.get(c.artifact, {}).get("per_proof_total_log2")
         peak = contract.native_peak_of(TARGETS[c.line])
-        prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme)
+        prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme, c.subcircuit)
         stmt_assumptions = scheme_by_id[scheme_id(c.scheme)]["assumptions"] if scheme_id(c.scheme) in scheme_by_id else []
         return {
             "id": result_key(c), "key": {"backend": backend, "statement": stmt, "input_set": input_set_id(c), "prover_hardware": prover},
             "backend": backend, "backend_family": _fam(c.column), "statement": stmt, "implementation": c.configuration,
-            "subcircuit": subcircuit_id(c.line), "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
+            "subcircuit": sub_of(c.line, c.subcircuit), "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
             "hardware": peak.id, "prover_hardware": prover, "input_set": input_set_of(c),
             "assumptions": {"backend": backend_assumptions.get(backend or "", []), "statement": stmt_assumptions,
                             "all": list(dict.fromkeys([*backend_assumptions.get(backend or "", []), *stmt_assumptions]))},
-            "best": any(b.artifact == c.artifact and b.line == c.line and b.scheme == c.scheme for b in V.cells),
+            "best": any(b.artifact == c.artifact and b.line == c.line and b.scheme == c.scheme and b.subcircuit == c.subcircuit for b in V.cells),
             "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id,
             "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
             "N": {"value": c.native, "unit": "instances/s", "work_model": WORK_MODEL.split(":")[0], "peak": peak.id},
@@ -2011,8 +2284,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     for g in grid:
         ln = g["line"]
         line_prover = contract.native_peak_of(TARGETS[ln["line"]]).id
-        line = {"statement": statement_id(ln["line"], ln["scheme"]), "subcircuit": subcircuit_id(ln["line"]), "scheme": scheme_id(ln["scheme"]),
-                "legacy_scheme": ln["scheme"], "key": key_of(ln["line"], ln["scheme"], line_prover), "label": g["label"],
+        own = ln.get("subcircuit")
+        line = {"statement": statement_id(ln["line"], ln["scheme"], own), "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
+                "legacy_scheme": ln["scheme"], "key": key_of(ln["line"], ln["scheme"], line_prover, own), "label": g["label"],
                 "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"]),
                            "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(TARGETS[ln["line"]]).id},
                 "cells": {}}
@@ -2036,10 +2310,12 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
               for b in backend_list]
     statements = {}
     for ln in V.lines:
-        sid = statement_id(ln["line"], ln["scheme"])
+        own = ln.get("subcircuit")
+        sid = statement_id(ln["line"], ln["scheme"], own)
         sch = scheme_by_id.get(scheme_id(ln["scheme"]) or "")
-        statements[sid] = {"id": sid, "display": f"{census.subcircuit_of(ln['line']).display} · {sch['name'] if sch else 'no scheme'}",
-                           "subcircuit": subcircuit_id(ln["line"]), "scheme": scheme_id(ln["scheme"]),
+        disp = ln.get("subcircuit_display") if own else census.subcircuit_of(ln["line"]).display
+        statements[sid] = {"id": sid, "display": f"{disp} · {sch['name'] if sch else 'no scheme'}",
+                           "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
                            "assumptions": sch["assumptions"] if sch else [], "assumption_details": sch["assumption_details"] if sch else []}
     phase_cols = [pid for pid, _ in PHASES]
     return {
@@ -2065,12 +2341,13 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "table2": {"columns": ["native", *columns], "column_labels": {_fam(c): column_header(c) for c in V.columns()}, "lines": table2_lines,
                        "footnotes": footnotes},
             "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
-                       "rows": [{"result": result_key(c), "key": key_of(c.line, c.scheme, prover_of(c)), "backend_family": _fam(c.column),
+                       "rows": [{"result": result_key(c), "key": key_of(c.line, c.scheme, prover_of(c), c.subcircuit), "backend_family": _fam(c.column),
                                  "backend": backend_by_cfg.get(c.configuration or ""), "label": _cell_name(c), "cells": table3_row(c)}
                                 for c in V.cells]},
         },
+        "below_bar": sorted(V.below_bar, key=lambda e: (e["backend_family"] or "", str(e["definition"]), e["B"] or 0, e["artifact"])),
         "rejected": [{"artifact": r["artifact"], "implementation": r["configuration"], "backend_family": _fam(r["family"]),
-                      "subcircuit": subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
+                      "subcircuit": r.get("subcircuit") or subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
     }
 
 

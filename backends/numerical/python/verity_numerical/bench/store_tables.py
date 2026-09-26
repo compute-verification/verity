@@ -125,7 +125,7 @@ def row_values(index: Any, r: DT.Row, by_glob: str | None) -> dict[str, Any]:
             "overhead": row.get("overhead") if r.prove_s is None else (spv / (DT.NATIVE_PS * 1e-12) if spv else None),
             "proof_class": shown, "claimed_proof_class": row.get("proof_class"), "verdict": verdict, "hardware": row.get("hardware"),
             "security": row.get("soundness"), "run_id": target if run_id and target == run_id else run_id, "lane": lane, "B": row.get("B"),
-            "target": target}
+            "target": target, "superseded_by": next((a.value for a in reversed(asserted) if a.key == "superseded_by"), None)}
 
 
 def _label_cell(v: dict[str, Any]) -> str:
@@ -147,7 +147,8 @@ def render_like_for_like(index: Any, by_glob: str | None = None) -> str:
         depth = ("--" if r.depth is None else f"{r.depth}") + (f" ({r.depth_note})" if r.depth_note else "")
         verify = DT._f(r.verify_s) + (f" ({r.verify_note})" if r.verify_note else "")
         rows.append([name, v["hardware"], f"{v['B']}", DT._f(v.get("prove_s")), DT._f(spv * 1e3, 3) if spv else "--", DT._sci(v.get("overhead")),
-                     verify, DT._mb(r.proof_bytes), depth, *e2e, v["security"], _label_cell(v), r.verified or "--", f"{v['lane']} / {v['run_id']}", r.flags or ""])
+                     verify, DT._mb(r.proof_bytes), depth, *e2e, v["security"], _label_cell(v), r.verified or "--", f"{v['lane']} / {v['run_id']}",
+                     "; ".join(x for x in (r.flags, f"superseded by {v['superseded_by']}" if v.get("superseded_by") else "") if x)])
     note = (f"\nEnd-to-end = prove + verify + depth x RTT + proof bytes / {DT.LINK_GBPS:.0f} Gb/s (`bench.latency.e2e`; the a-verifier "
             "lane's convention, `latency.md` used 25 Gb/s). Overhead = prover s/VU over 9.85 ps. Sub-batched rows: the soundness "
             "is the union bound over the sub-batches and the prover time is the sum.")

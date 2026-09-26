@@ -20,7 +20,7 @@ import numpy as np
 from verity.evaluation import ScalarReference, register_kernel
 from verity.ir.types import Array, Value
 
-from .tc.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
+from .tc.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
 from .tc.term import FORMATS
 from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
@@ -407,6 +407,36 @@ HOPPER_E4M3_DOT = ScalarReference(
     doc="the FP32 accumulator of one GEMM coordinate: K/32 ascending E4M3 steps from +0 (vLLM's DotE4m3_v1{K})")
 
 
+def _ada_e4m3_dot(x, w, *, K):
+    acc = 0
+    for s in range(0, K, 32):
+        acc = ADA_E4M3_M16N8K32.step(acc, x[s:s + 32], w[s:s + 32])
+    return acc
+
+
+#: sm_89's E4M3 step is pinned on finite operands and accumulators only (RTX 4090, 24,898,304 elements); no special-value
+#: campaign ran on it, so these references raise outside that domain and their kernels decline it.
+ADA_E4M3_STEP = ScalarReference(
+    "tc.ada_e4m3_mma_k32.step", lambda acc, a, b: ADA_E4M3_M16N8K32.step(acc, a, b),
+    lambda: ((F32, Array(32, _E4M3), Array(32, _E4M3)), F32),
+    doc="one accumulator coordinate of mma.sync.m16n8k32 f32.e4m3.e4m3 on sm_89 (models.ADA_E4M3_M16N8K32: two groups of 16, "
+        "14-bit adder), finite operands and accumulator")
+ADA_E4M3_DOT = ScalarReference(
+    "tc.ada_e4m3_mma_k32.dot", _ada_e4m3_dot, lambda K: ((Array(K, _E4M3), Array(K, _E4M3)), F32), statics=("K",),
+    doc="the FP32 accumulator of one GEMM coordinate on sm_89: K/32 ascending E4M3 steps from +0, finite throughout")
+
+
+def _finite_step(model: GroupSum) -> Callable[..., tuple[np.ndarray, np.ndarray]]:
+    """``model``'s step, declining every instance with a NaN operand, a non-finite accumulator in or out."""
+    def step(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        out, _ = group_sum_total_batch(model, acc, a, b)
+        acc = np.asarray(acc, dtype=np.uint32)
+        nan = ((np.asarray(a) & 0x7F) == 0x7F).any(axis=1) | ((np.asarray(b) & 0x7F) == 0x7F).any(axis=1)
+        inf = ((acc & 0x7F800000) == 0x7F800000) | ((np.asarray(out, dtype=np.uint32) & 0x7F800000) == 0x7F800000)
+        return out, nan | inf
+    return step
+
+
 def _block_scaled_refs(model: BlockScaledAlignAdd, tag: str) -> tuple[ScalarReference, ScalarReference]:
     k, ns, block = model.k, model.scales_per_step, model.block
     step = ScalarReference(
@@ -430,6 +460,10 @@ def _register_references() -> None:
     register_kernel(HOPPER_E4M3_STEP, fp8_step, domain="every encoding", sample=sample_tc)
     register_kernel(HOPPER_E4M3_DOT, lambda x, w, *, K: chain_batch(fp8_step, 32, K // 32, x, w),
                     domain="every encoding", sample=sample_tc)
+    ada_step = _finite_step(ADA_E4M3_M16N8K32)
+    finite = "finite E4M3 operands and FP32 accumulators (in and out); the rest declined"
+    register_kernel(ADA_E4M3_STEP, ada_step, domain=finite, sample=sample_tc)
+    register_kernel(ADA_E4M3_DOT, lambda x, w, *, K: chain_batch(ada_step, 32, K // 32, x, w), domain=finite, sample=sample_tc)
     for model, step, dot in ((BLACKWELL_SM120_NVF4, SM120_NVF4_STEP, SM120_NVF4_DOT),
                              (BLACKWELL_SM120_MXF4, SM120_MXF4_STEP, SM120_MXF4_DOT)):
         fire = (lambda m: lambda acc, ac, bc, as_, bs: block_scaled_batch(m, acc, ac, bc, as_, bs))(model)

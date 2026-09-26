@@ -117,13 +117,15 @@ def blake3_rows(rows, *, word_bits: int, role: int, block_out: bool = False):
     return fv3.blake3_keyed_rows(rb, b3.key_for(role), block_out=block_out), rb
 
 
-def blake3_digests(cvs, role: int):
-    """(N, n_chunks, 8) chunk CVs -> (N, DIGEST_ELEMS) int64 cupy: the scheme's published digests (``cvs_to_elems``)."""
+def blake3_digests(cvs, role: int, ncm: int | None = None):
+    """(N, n_chunks, 8) chunk CVs -> (N, 1 + 16 ncm) int64 cupy: the scheme's published digests (``cvs_to_elems``; ``ncm`` the
+    frame's chunk slots, default the registry instance's)."""
     from .leaf import blake3 as b3
     global _DIGESTS
+    ncm = b3.N_CHUNKS_MAX if ncm is None else ncm
     n, nch = int(cvs.shape[0]), int(cvs.shape[1])
-    if nch > b3.N_CHUNKS_MAX:
-        raise ValueError(f"{nch} chunks exceed the scheme's {b3.N_CHUNKS_MAX}")
+    if nch > ncm:
+        raise ValueError(f"{nch} chunks exceed the frame's {ncm}")
     if _DIGESTS is None:
         _DIGESTS = cp.ElementwiseKernel(
             "raw uint32 cvs, int32 nch, int32 width, int64 header", "int64 out",
@@ -131,8 +133,9 @@ def blake3_digests(cvs, role: int):
             "out = e == 0 ? header : (k / 16 >= nch ? 0ll"
             " : (long long)((cvs[(r * nch + k / 16) * 8 + (k % 16) / 2] >> (16 * (k & 1))) & 0xFFFFu));",
             "blake3_digest_elems")
-    out = cp.empty((n, b3.DIGEST_ELEMS), dtype=cp.int64)
-    _DIGESTS(cp.ascontiguousarray(cvs), np.int32(nch), np.int32(b3.DIGEST_ELEMS), np.int64(b3.header(nch, role)), out)
+    width = b3.digest_elems_of(ncm)
+    out = cp.empty((n, width), dtype=cp.int64)
+    _DIGESTS(cp.ascontiguousarray(cvs), np.int32(nch), np.int32(width), np.int64(b3.header(nch, role, ncm)), out)
     return out
 
 
@@ -152,7 +155,7 @@ def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, sche
         LIMITS.enforce("max_positions", count)
         domain = domain_for(binding, OWNER[name], count)
         t = fv3.build_tree(domain.domain_id, count, scheme.schema, roots.view(cp.uint8).reshape(count, 32), vlen=32)
-        dg = blake3_digests(cvs, role)
+        dg = blake3_digests(cvs, role, getattr(scheme, "n_chunks_max", None))
         if expect is not None:
             e = _dev(expect)
             if e.shape != dg.shape or not bool((e.astype(cp.int64, copy=False) == dg).all()):
@@ -161,11 +164,14 @@ def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, sche
     return WordTree.on_device(TreeRef(name, bytes(binding), OWNER[name], count, t.root), t), dg
 
 
-def blake3_chain(words, *, word_bits: int, role: int, row_words: int, n: int, steps: int):
+def blake3_chain(words, *, word_bits: int, role: int, row_words: int, n: int, steps: int, ncm: int | None = None):
     """``Blake3Leaf.row_sponges``: ``words`` (n * steps, k) int64 CUDA torch, row-major -> ``(carry (n, steps,
-    CARRY_ELEMS), digests (n, DIGEST_ELEMS))`` int64 torch = ``carry_values`` / ``native`` of the rows."""
+    carry_elems), digests (n, digest_elems))`` int64 torch = ``carry_values`` / ``native`` of the rows (``ncm``: the frame's
+    chunk slots)."""
     import torch
     from .leaf import blake3 as b3
+    ncm = b3.N_CHUNKS_MAX if ncm is None else ncm
+    ce, hm = b3.carry_elems_of(ncm), b3.hold_msg_of(ncm)
     dev = words.device
     rows = words.reshape(n, row_words)
     with _torch_stream():
@@ -175,7 +181,7 @@ def blake3_chain(words, *, word_bits: int, role: int, row_words: int, n: int, st
         if not half and nb % steps:
             raise ValueError("whole (or half) blocks per column")
         nblk = 1 if half else nb // steps
-        car = cp.zeros((n, steps, b3.CARRY_ELEMS), dtype=cp.int64)
+        car = cp.zeros((n, steps, ce), dtype=cp.int64)
         cols = cp.arange(2 if half else 1, steps)
         j = cols // 2 - 1 if half else cols * nblk - 1          # the last block of the previous column
         if cols.size:
@@ -187,7 +193,7 @@ def blake3_chain(words, *, word_bits: int, role: int, row_words: int, n: int, st
             car[:, end + 1:, 16 * (c + 1):16 * (c + 2)] = _limbs(cvs[:, c, :])[:, None, :]
         if half:                                               # the msg hold: the previous column's 16 limbs
             prev = rb.reshape(n, steps, 16, 2).astype(cp.int64)
-            car[:, 1:, b3.HOLD_MSG:b3.HOLD_MSG + 16] = prev[:, :-1, :, 0] | (prev[:, :-1, :, 1] << 8)
-        car[:, :, b3.CARRY_ELEMS - 1] = cp.arange(steps)[None, :]
-        dg = blake3_digests(cvs, role)
+            car[:, 1:, hm:hm + 16] = prev[:, :-1, :, 0] | (prev[:, :-1, :, 1] << 8)
+        car[:, :, ce - 1] = cp.arange(steps)[None, :]
+        dg = blake3_digests(cvs, role, ncm)
         return torch.as_tensor(car, device=dev), torch.as_tensor(dg, device=dev)
