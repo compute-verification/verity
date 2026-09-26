@@ -16,7 +16,7 @@ decoders), the models in :mod:`verity.ml.tc.models` (``GroupSum`` -- of which :c
 ``group_sum``, ``tc_dot``, ``tc_dot_chain``, the validated instances, and autoproof's ``BlockScaledAlignAdd``),
 and the instruction registry in :mod:`verity.ml.tc.instructions`.  Every name this module exported before is
 re-exported here with the same behaviour; ``tc_dot`` on ``AMPERE_BF16_M16N8K16`` is still the executable
-definition ``verity.verification.target.FIRST`` names.
+definition ``verity.proofs.target.FIRST`` names.
 
 Originally promoted verbatim from ``veritor`` ``src/veritor/core/silicon.py`` lines 77-395 (commit eb865ce29).
 """

@@ -20,7 +20,7 @@ External computation representations
         |                      |
         |  IR                  |  What computation?
         |  ML semantics        |  What do exact ML/hardware operations mean?
-        |  Verification        |  What must be checked?
+        |  Proofs              |  What must be established?
         |  Commitments         |  What values are bound and authenticated?
         |  Resource accounting |  What resource claims follow?
         +-----------+----------+
@@ -68,22 +68,15 @@ Examples include exact floating-point operations, dot products, tensor-core arit
 
 Hardware-specific semantics belong here when they are reusable facts about the computation itself. A backend should not invent a second definition of an H100 dot product, and a vLLM integration should not own its numerical meaning.
 
-### Verification
+### Proofs
 
-`verity.verification` defines **backend-independent verification plans and obligations over Verity programs**.
+`verity.proofs` defines **backend-independent single statements over Verity programs**: the concrete relations and authenticated values a backend must establish, and how a backend's proof of them is judged.
 
-It answers questions such as:
+Which parts of a Program are checked, how checks are selected or sampled, and which values must be bound before a challenge are protocol questions. They belong to `protocols/sampled_proofs`, which draws its challenges through `verity.randomness` and summarises an accepted audit as a `verity.proofs` `IntegrityProfile`: what verification established, which resource accounting, policies and other protocols read.
 
-- which parts of a Program must be checked;
-- what the boundary values of those checks are;
-- which values must already be bound before a challenge;
-- how checks are selected or sampled;
-- what concrete relations and authenticated values a backend must establish;
-- what acceptance structure the protocol requires.
+Proofs are separate from computation semantics: changing which verification units are sampled or how they are grouped for checking does not redefine the Program.
 
-Verification is separate from computation semantics: changing which units are sampled or how they are grouped for checking does not redefine the Program.
-
-Verification is also separate from proof implementation: the same obligation may be checked by SP1, a custom STARK, direct evaluation, or another backend.
+Proofs are also separate from proof implementation: the same statement may be established by SP1, a custom STARK, direct evaluation, or another backend.
 
 ### Commitments
 
@@ -130,7 +123,7 @@ frontends/
 
 A Torch frontend, for example, accepts specified Torch graph representations and translates supported computations into ordinary Verity Programs and bindings.
 
-A frontend should not silently guess exact numerical behavior that its source representation does not determine. Where necessary, exact target or semantic bindings must be supplied explicitly.
+A frontend should not silently guess exact numerical behavior that its source representation does not determine. Where necessary, the exact numeric (silicon) semantics must be bound explicitly.
 
 Frontends stop at the common Verity representation. They do not implement SP1-specific proving logic.
 
@@ -178,11 +171,11 @@ The vLLM integration may:
 
 - construct or obtain the relevant Verity Program;
 - use a frontend internally;
-- supply vLLM- and target-specific static bindings;
+- supply vLLM- and silicon-specific static bindings;
 - map a real vLLM execution onto Verity values;
 - acquire and commit runtime values;
 - choose vLLM-specific verification/query policy;
-- invoke a configured backend;
+- invoke a backend;
 - expose a user-facing wrapper around vLLM.
 
 Users should eventually be able to use the vLLM integration without manually assembling these components.
@@ -219,10 +212,12 @@ packages/
   verity/                Core Python library
     verity.ir
     verity.ml
-    verity.verification
+    verity.proofs
     verity.commitments
+    verity.randomness
     verity.resource_accounting
 
+protocols/               Runtime protocols over the core (sampled_proofs); each imports only the core
 frontends/               External computation representations -> Verity IR
 backends/                Verity obligations -> proofs/checks
 integrations/            End-to-end integrations with real systems
@@ -246,7 +241,7 @@ with explicit imports such as:
 ~~~python
 from verity.ir import Program
 from verity.ml import ...
-from verity.verification import ...
+from verity.proofs import ...
 from verity.commitments import ...
 from verity.resource_accounting import ...
 ~~~
@@ -293,9 +288,9 @@ commitments
 ir + commitments
        ^
        |
-verification
+proofs
 
-ir + verification + observations
+ir + proofs + observations
        ^
        |
 resource_accounting
@@ -357,3 +352,39 @@ Use `research` for substantial recorded experiments, remote execution, telemetry
 The proof benchmark decides what makes two proof runs semantically comparable. `research` records and exposes differences; it does not understand SP1, Verity IR, or proof semantics.
 
 Architectural explanation, consequential design decisions, and research interpretation live in Notion. Raw experiment evidence and telemetry live in artifact storage. The repository contains executable code and concise current operational guidance.
+
+## Glossary
+
+Code, docs, CLI help and output fields use these terms. When a term changes, this section changes with it, and the new term is rolled out in the same change.
+
+- **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity.ml.tc.instructions.INSTRUCTIONS`.
+- **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. A backend proves subcircuits, and a benchmark cell measures one.
+- **Input**: one concrete assignment to a subcircuit's input wires, with the output the chip produced recorded alongside.
+- **Input set**: a batch of inputs for one subcircuit, with their provenance (captured or synthetic).
+- **Commitment scheme**: how serving committed the values being proven, such as frame-v3 rows or `vllm-v1` (`verity.commitments`). Each scheme has a stable id and lists the hash assumptions it rests on.
+- **Statement**: what a backend proves, the full committed relation: a subcircuit plus the commitment scheme that binds its inputs and outputs. A backend lowers a statement into its own circuit. Changing the scheme changes the statement, not the backend.
+- **Backend family**: A-GKR, B-Ligero, C-Flock or D-SP1. The letter is part of the name.
+- **Backend**: an implementation of the Backend interface, that is, one concrete member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir. A composed backend gets its own id: route (a), A-GKR with C-Flock and a link, is `A-route-a`. A scheme is not part of a backend's identity.
+- **Cell**: one benchmark result, a backend × statement × input set × prover hardware.
+- **Replay unit (RU)** and **verification unit (VU)**: roles that sampled proofs assigns to parts of a Program (`protocols/sampled_proofs/PROTOCOL.md`). "Unit" never names a subcircuit.
+
+Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
+
+| Old name, where it stays | Term |
+|---|---|
+| "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | backend family A-GKR, B-Ligero |
+| the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
+| `verity.proofs.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
+| `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
+| "configured backend" | backend |
+| "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
+| "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a backend and a statement |
+| `verity.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of VU obligations, not a statement in this sense; a kind is a subcircuit |
+
+Some words keep a different, narrower sense:
+
+- `verity.ir`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay.
+- A **circuit** on its own is a backend's lowering of a statement, as in A-GKR's pinned circuits or "SHA-256 in circuit".
+- A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
+- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `backends/vole`, not C-Flock.
+- In `integrations/vllm`, "family" and "kind" name IR definitions and query families, many of them serialized fields (see its README's vocabulary).

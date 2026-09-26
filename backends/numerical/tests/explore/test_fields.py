@@ -66,7 +66,7 @@ def test_small_prime_extension_degree_per_operating_point(opt):
             assert bud.meets(-128)
     with pytest.raises(acc.AccountingError, match="lookup"):
         f.first_small_field_configuration(-128, opt, "A", B=4096, extension_degrees=(5,))
-    # two lookup repetitions rescue degree 5 for Candidate A only: B's powers-combination term floors at 2^-126.6
+    # two lookup repetitions rescue degree 5 for A-GKR only: B's powers-combination term floors at 2^-126.6
     d, _, _ = f.first_small_field_configuration(-128, opt, "A", B=4096, extension_degrees=(5,), lookup_repetitions=2)
     assert d == 5
     with pytest.raises(acc.AccountingError):

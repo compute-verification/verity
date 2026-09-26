@@ -11,9 +11,9 @@ through the host's ``--witness`` argument (the statement is ignored) and commits
     sha256(compact input) || sha256(output word: u16 LE) || 0xEE        (65 bytes)
 
 :func:`compact_input` derives that input from the object and the witness the sound path would be given: the
-witness is authenticated here, in Python, against the object's roots (:func:`~verity.verification.packed.check_packed_openings`),
+witness is authenticated here, in Python, against the object's roots (:func:`~verity.proofs.packed.check_packed_openings`),
 the one ``GemmCoordinate`` obligation's boundary words are read off it -- the x row, the W row, the committed
-output -- and the Python reference (:func:`~verity.verification.lowering.check_relations`) is required to agree
+output -- and the Python reference (:func:`~verity.proofs.lowering.check_relations`) is required to agree
 that the committed output is the relation's value.  What the guest then proves is the arithmetic on the real
 words; what it does not prove is anything about where they came from.  Such a run is labelled
 ``proof_class = ARITHMETIC_DIAGNOSTIC``, ``authentication = excluded``, ``statement_machinery = excluded``, and
@@ -28,10 +28,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.errors import ProtocolError
-from verity.verification.lowering import check_relations, to_statement
-from verity.verification.packed import check_packed_openings, decode_packed_witness
-from verity.verification.typed_obligation import TypedObligationSet, validate
-from verity.verification.wire import witness_format_of
+from verity.proofs.lowering import check_relations, to_statement
+from verity.proofs.packed import check_packed_openings, decode_packed_witness
+from verity.proofs.typed_obligation import TypedObligationSet, validate
+from verity.proofs.wire import witness_format_of
 
 __all__ = ["FAMILY", "FEATURE", "STEP", "VERDICT_DIAGNOSTIC_ACCEPT", "CompactInput", "compact_input", "encode_compact", "public_values_for"]
 
@@ -100,7 +100,7 @@ def compact_input(obj: TypedObligationSet | Mapping[str, Any], witness: bytes) -
 
     ``obj`` must validate in :data:`FAMILY` and carry exactly one ``GemmCoordinate`` obligation whose body is the
     canonical chain; ``witness`` must be a format-3 (packed) witness that authenticates under the object's roots
-    (a :class:`~verity.verification.codes.Reject` otherwise, as the reference checker raises it).  The committed
+    (a :class:`~verity.proofs.codes.Reject` otherwise, as the reference checker raises it).  The committed
     output word must be what the Python reference computes from the rows.  Anything else is ``ProtocolError``.
     """
 

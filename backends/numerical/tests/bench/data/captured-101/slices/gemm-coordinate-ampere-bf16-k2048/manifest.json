@@ -1,0 +1,85 @@
+{
+ "content_digest": "37bff648b11d9cfe3871c84cc40cd7d0777520ed762dbe0209fb6014e8424194",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "index.json": {
+   "bytes": 337,
+   "sha256": "674c3a82ee84cf27040080450505180465c85405e8867800aaed94c3bac5242c"
+  },
+  "w.u16": {
+   "bytes": 8192,
+   "sha256": "0a79e263393dcb20de1d281f44e9231491a0c852b2d1283d4eda7f5b47f98a2b"
+  },
+  "x.u16": {
+   "bytes": 8192,
+   "sha256": "c05030e74f95d9e925dbea026437ed5b11ffda83e8d3150e46e06610ca47b1d5"
+  },
+  "y.u16": {
+   "bytes": 4,
+   "sha256": "3f6e83f757c821d3f59cf49916d14998e32d3a1489b42e0e290b075f3e1dc75b"
+  }
+ },
+ "n": 2,
+ "ports": {
+  "w": {
+   "dtype": "u16",
+   "file": "w.u16",
+   "words": 2048
+  },
+  "x": {
+   "dtype": "u16",
+   "file": "x.u16",
+   "words": 2048
+  },
+  "y": {
+   "dtype": "u16",
+   "file": "y.u16",
+   "words": 1
+  }
+ },
+ "provenance": {
+  "manifest_digest": "90f8186879d5035af027259151b4ac465bf6c3dcf08c1e6d62dab9b680bfeaac",
+  "model": "unsloth/Llama-3.2-1B",
+  "pair": 0,
+  "program_digests": {
+   "r0": "ccc213475e7c4eed04b3b0d3717e2144012be65f41d900a018dbd09d1e400c6b"
+  },
+  "research_run": "r20260925-233347-8515",
+  "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+  "row": 101,
+  "row_key": "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+  "run_root": "7adcef49184525329814d62364be7cb2b2c45003cad96dbca1434b11f5b1dec5",
+  "selection": "verity.randomness.derive(b'verity-vllm benchmark selection', 'verity/vllm-vu-export/select/v1', {run_root}); per family key.shard(('family', family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))",
+  "subset_of": {
+   "content_digest": "49d7658f823ab777347ec1ca160821828d1e8ced70e6c3d6673edd0200458a70",
+   "range": [
+    0,
+    2
+   ]
+  },
+  "versions": {
+   "cuda": "12.9",
+   "declared_execution": "bi-eager",
+   "enforce_eager": true,
+   "flashinfer": "0.6.18",
+   "numpy": "2.3.5",
+   "python": "3.12.14",
+   "torch": "2.13.0+cu129",
+   "transformers": "5.17.0",
+   "triton": "3.7.1",
+   "vllm": "0.28.1rc1.dev472+gd9105ea80",
+   "weights_hash": "host"
+  }
+ },
+ "relation": {
+  "definition": "Gemm_v1",
+  "dot": "AmpereBF16TcDot16_v1",
+  "rule": "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)",
+  "statics": {
+   "K": 2048
+  },
+  "subcircuit": "GemmCoordinate<2048>"
+ },
+ "schema": "vllm-vu-set/v1",
+ "set": "gemm-coordinate-ampere-bf16-k2048"
+}

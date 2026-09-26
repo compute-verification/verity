@@ -15,9 +15,18 @@
 //! * [`ReplayChallenger`] runs the ordinary Flock verifier over the recorded session: at every squeeze it checks that the
 //!   proof's absorbed bytes hash to the round the server recorded before it issued that coin, then returns that coin.
 //!   The session record ([`Server::record_json`]) is the evidence; a proof file alone verifies nothing.
+//! * Live prime coins (route (a), [`SessionConfig::prime_live`]): the prime (A-GKR) prover's every challenge round is a
+//!   `Prime` request carrying its SHA-256 transcript state (which chains every message it absorbed since the domain,
+//!   the coins included) and the number of BabyBear^6 challenges; the server answers with OS-drawn words below p. Prime
+//!   rounds need `Hello`; at least one must precede `Commit` (root_F); none is issued between `Commit` and y. The
+//!   record keeps every round (state, count, words) and the round count before `Commit`; the prime verifier replays
+//!   its transcript against them (`backends/gkr/verifier/src/transcript.rs`).
+//! * [`Server::from_record`] rebuilds a finished session from its record alone (G2: the record keeps root_F, every
+//!   root_B and the committed public words), so [`Server::finish`] re-verifies the Flock side offline.
 
 pub mod chunk;
 pub mod pure_block;
+pub mod vllm_block;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 
@@ -115,6 +124,8 @@ pub enum Req {
     Round { stream: String, content: Vec<u8>, n: u32 },
     Proof { table: String, rep: u32, bytes: Vec<u8> },
     Finish,
+    /// A live prime round: the prime transcript's state (32 bytes) and the number of BabyBear^6 challenges wanted.
+    Prime { state: Vec<u8>, n: u32 },
 }
 
 #[derive(Clone, Debug)]
@@ -123,7 +134,14 @@ pub enum Resp {
     Coins(Vec<F128>),
     Refused(String),
     Verdict(String),
+    /// A prime round's coins: 6 n words, each uniform below [`BABYBEAR_P`].
+    Words(Vec<u32>),
 }
+
+pub const BABYBEAR_P: u32 = 2013265921;
+/// Coordinates per prime challenge (BabyBear^6).
+pub const PRIME_DEG: usize = 6;
+pub const PRIME_MODE: &str = "live-coins/v1";
 
 fn put_u32(w: &mut Vec<u8>, v: u32) {
     w.extend_from_slice(&v.to_le_bytes());
@@ -199,6 +217,11 @@ impl Req {
                     }
                 }
             }
+            Req::Prime { state, n } => {
+                w.push(8);
+                put_bytes(&mut w, state);
+                put_u32(&mut w, *n);
+            }
         }
         w
     }
@@ -227,6 +250,7 @@ impl Req {
                 let roots = lists.pop().unwrap();
                 Req::Commit { root_f, roots, publics }
             }
+            8 => Req::Prime { state: c.bytes()?, n: c.u32()? },
             t => return Err(format!("unknown request tag {t}")),
         })
     }
@@ -252,6 +276,13 @@ impl Resp {
                 w.push(4);
                 put_bytes(&mut w, s.as_bytes());
             }
+            Resp::Words(v) => {
+                w.push(5);
+                put_u32(&mut w, v.len() as u32);
+                for x in v {
+                    put_u32(&mut w, *x);
+                }
+            }
         }
         w
     }
@@ -272,6 +303,10 @@ impl Resp {
             }
             3 => Resp::Refused(c.string()?),
             4 => Resp::Verdict(c.string()?),
+            5 => {
+                let n = c.u32()? as usize;
+                Resp::Words((0..n).map(|_| c.u32()).collect::<Result<_, _>>()?)
+            }
             t => return Err(format!("unknown response tag {t}")),
         })
     }
@@ -582,17 +617,23 @@ pub struct SessionConfig {
     pub require_link: bool,
     /// `None`: the pre-flock-link stub (opaque `Link` bytes). `Some`: the real exchange.
     pub link: Option<LinkSpec>,
+    /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
+    pub prime_live: bool,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
-        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None }
+        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false }
     }
 
     /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
+    /// Live prime coins are ordered against root_F and y, so they need the exchange.
     pub fn check(&self) -> Result<(), String> {
         if self.link.is_some() && !self.require_link {
             return Err("E0: a link exchange (link: Some) without the R5 gate (require_link: false) is refused: y could follow Flock's coins".into());
+        }
+        if self.prime_live && self.link.is_none() {
+            return Err("live prime coins without a link exchange are refused: their order is against root_F and y".into());
         }
         Ok(())
     }
@@ -603,8 +644,19 @@ impl SessionConfig {
         if let Some(l) = &self.link {
             h["link"] = json!({"sigma": hex(&l.sigma), "m": l.m, "points": l.points});
         }
+        if self.prime_live {
+            h["prime"] = json!(PRIME_MODE);
+        }
         h.to_string()
     }
+}
+
+/// One live prime round: the state the prover committed, and the words issued after it.
+#[derive(Clone, Debug)]
+pub struct PrimeRound {
+    pub state: [u8; 32],
+    pub n: u32,
+    pub words: Vec<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -663,9 +715,12 @@ pub struct Server {
     y: Vec<F128>,
     streams: BTreeMap<String, StreamRec>,
     proofs: BTreeMap<(String, usize), Vec<u8>>,
+    prime: Vec<PrimeRound>,
+    /// Prime rounds issued before `Commit` (the prime verifier's root_F must follow exactly these).
+    prime_before_commit: Option<usize>,
     aborted: Option<String>,
     verdict: Option<Value>,
-    urandom: File,
+    urandom: Option<File>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
     handle_s: f64,
@@ -700,12 +755,44 @@ impl Server {
             y: Vec::new(),
             streams: BTreeMap::new(),
             proofs: BTreeMap::new(),
+            prime: Vec::new(),
+            prime_before_commit: None,
             aborted: None,
             verdict: None,
-            urandom: File::open("/dev/urandom").expect("/dev/urandom"),
+            urandom: Some(File::open("/dev/urandom").expect("/dev/urandom")),
             t0: std::time::Instant::now(),
             handle_s: 0.0,
         })
+    }
+
+    /// The live prime rounds, and how many preceded `Commit`.
+    pub fn prime_rounds(&self) -> (&[PrimeRound], Option<usize>) {
+        (&self.prime, self.prime_before_commit)
+    }
+
+    /// A server rebuilt from a record ([`Server::from_record`]) has no coin source: the points it draws while replaying
+    /// `Commit` are zeros, replaced at once by the recorded ones, and it never answers a prover.
+    fn urandom(&mut self, b: &mut [u8]) {
+        match self.urandom.as_mut() {
+            Some(f) => f.read_exact(b).expect("urandom"),
+            None => b.fill(0),
+        }
+    }
+
+    /// Words uniform below p (rejection sampling on OS u32s).
+    fn prime_words(&mut self, n: usize) -> Vec<u32> {
+        let mut out = Vec::with_capacity(n);
+        let mut b = [0u8; 4 * 64];
+        while out.len() < n {
+            self.urandom(&mut b);
+            for c in b.chunks(4) {
+                let v = u32::from_le_bytes(c.try_into().unwrap()) & 0x7fff_ffff;
+                if v < BABYBEAR_P && out.len() < n {
+                    out.push(v);
+                }
+            }
+        }
+        out
     }
 
     /// The proofs received, by (table, rep): kept beside the session record (E1).
@@ -722,7 +809,7 @@ impl Server {
 
     fn coins(&mut self, n: usize) -> Vec<F128> {
         let mut b = vec![0u8; 16 * n];
-        self.urandom.read_exact(&mut b).expect("urandom");
+        self.urandom(&mut b);
         b.chunks(16)
             .map(|c| F128 {
                 lo: u64::from_le_bytes(c[..8].try_into().unwrap()),
@@ -786,6 +873,9 @@ impl Server {
         if let Some(why) = &self.aborted {
             return Resp::Refused(format!("session aborted: {why}"));
         }
+        if self.verdict.is_some() {
+            return Resp::Refused("session finished: the verdict is issued".into());
+        }
         match req {
             Req::Hello(h) => {
                 let want = self.cfg.hello();
@@ -800,7 +890,7 @@ impl Server {
                     return self.refuse("link context sent twice".into());
                 }
                 if let Some(spec) = self.cfg.link.clone() {
-                    if self.points.is_empty() {
+                    if self.commit.is_none() {
                         return self.refuse("L1: y sent before root_F, root_B and the link points".into());
                     }
                     let want = 16 * spec.points * self.cfg.tables.len();
@@ -828,6 +918,13 @@ impl Server {
                 if root_f.is_empty() {
                     return self.refuse("L1/C2: no root_F: the points must follow both sides' roots".into());
                 }
+                if self.cfg.prime_live && self.prime.is_empty() {
+                    return self.refuse("P-live: root_F committed before any live prime coin (the prime proof's coins before root_F are the verifier's)".into());
+                }
+                // A statement with no link points (flock-pure) commits its Σ in root_F's place.
+                if spec.points == 0 && root_f != spec.sigma {
+                    return self.refuse("statement: Commit names another statement than the verifier's Σ".into());
+                }
                 let roots: BTreeMap<String, Vec<u8>> = roots.into_iter().collect();
                 let publics: BTreeMap<String, Vec<u8>> = publics.into_iter().collect();
                 let names: Vec<String> = self.cfg.tables.iter().map(|t| t.name.clone()).collect();
@@ -845,6 +942,7 @@ impl Server {
                     }
                 }
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
+                self.prime_before_commit = Some(self.prime.len());
                 let pts: Vec<Vec<F128>> = (0..spec.points).map(|_| self.coins(spec.m)).collect();
                 self.points = pts;
                 Resp::Coins(self.points.concat())
@@ -936,6 +1034,26 @@ impl Server {
                 let v = self.finish();
                 Resp::Verdict(v.to_string())
             }
+            Req::Prime { state, n } => {
+                if !self.cfg.prime_live {
+                    return self.refuse("P-live: this session serves no prime coins".into());
+                }
+                if self.hello.is_none() {
+                    return self.refuse("P-live/R7: prime coin requested before the session parameters".into());
+                }
+                if self.commit.is_some() && self.link.is_none() {
+                    return self.refuse("P-live/R5: prime coin requested after root_F and before y".into());
+                }
+                let Ok(state) = <[u8; 32]>::try_from(state.as_slice()) else {
+                    return self.refuse("P-live: a prime round commits a 32-byte transcript state".into());
+                };
+                if n == 0 || n > 1 << 12 {
+                    return self.refuse(format!("P-live: bad prime coin count {n}"));
+                }
+                let words = self.prime_words(PRIME_DEG * n as usize);
+                self.prime.push(PrimeRound { state, n, words: words.clone() });
+                Resp::Words(words)
+            }
         }
     }
 
@@ -981,11 +1099,29 @@ impl Server {
                 reps_out.push(json!({"stream": root, "ok": res.is_ok(), "why": res.err().unwrap_or_default()}));
             }
         }
+        if self.cfg.prime_live {
+            // the prime proof itself is verified against these rounds by the prime verifier; here only their shape
+            let before = self.prime_before_commit.unwrap_or(0);
+            let bad = if before == 0 {
+                Some("P-live: no live prime round before root_F".to_string())
+            } else if self.prime.len() <= before {
+                Some("P-live: no live prime round after y (rho and the Ligero queries)".to_string())
+            } else {
+                self.prime.iter().position(|r| r.words.len() != PRIME_DEG * r.n as usize || r.words.iter().any(|&w| w >= BABYBEAR_P))
+                    .map(|k| format!("P-live: prime round {k} is malformed"))
+            };
+            if let Some(e) = bad {
+                if ok {
+                    why = e;
+                }
+                ok = false;
+            }
+        }
         let rounds: usize = self.streams.values().map(|s| s.rounds.len()).sum();
         let empty: usize = self.streams.values().map(|s| s.rounds.iter().filter(|r| r.len <= 16).count()).sum();
         let v = json!({
             "accepted": ok, "why": why, "reps": reps_out, "streams": self.streams.len(), "rounds": rounds,
-            "rounds_without_prover_message": empty,
+            "rounds_without_prover_message": empty, "prime_rounds": self.prime.len(), "prime_before_commit": self.prime_before_commit,
             "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(), "handle_s": self.handle_s,
         });
         self.verdict = Some(v.clone());
@@ -1016,6 +1152,14 @@ impl Server {
             "publics_sha256": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(&sha256(p))))).collect::<serde_json::Map<_, _>>(),
             "points": self.points.iter().map(|p| p.iter().map(f128_hex).collect::<Vec<_>>()).collect::<Vec<_>>(),
             "y": self.y.iter().map(f128_hex).collect::<Vec<_>>(),
+            // G2: the committed words themselves, so the Flock side replays from the record alone
+            "root_f": hex(&c.root_f),
+            "root_b": c.roots.iter().map(|(t, r)| (t.clone(), json!(hex(r)))).collect::<serde_json::Map<_, _>>(),
+            "publics": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(p)))).collect::<serde_json::Map<_, _>>(),
+        }));
+        let prime = self.cfg.prime_live.then(|| json!({
+            "mode": PRIME_MODE, "before_commit": self.prime_before_commit,
+            "rounds": self.prime.iter().map(|r| json!({"state": hex(&r.state), "n": r.n, "words": r.words})).collect::<Vec<_>>(),
         }));
         // link_sha256 covers the whole exchange in exchange mode: root_F, every root_B, the points and y.
         let link_sha = match (&self.commit, &self.link) {
@@ -1034,11 +1178,175 @@ impl Server {
             "hello": self.hello, "link_sha256": link_sha, "link": link,
             "link_mode": if self.cfg.link.is_some() { "exchange" } else { "stub" },
             "config": {"profile": self.cfg.profile, "reps": self.cfg.reps, "flavor": self.cfg.flavor,
-                       "require_link": self.cfg.require_link,
+                       "require_link": self.cfg.require_link, "prime_live": self.cfg.prime_live,
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},
             "proof_sha256": self.proofs.iter().map(|((t, r), b)| json!({"stream": rep_stream(t, *r), "sha256": hex(&sha256(b)), "bytes": b.len()})).collect::<Vec<_>>(),
-            "aborted": self.aborted, "verdict": self.verdict, "streams": streams,
+            "aborted": self.aborted, "verdict": self.verdict, "streams": streams, "prime": prime,
         })
+    }
+
+    /// G2: the finished session `rec` (a [`Server::record_json`]) rebuilt under the verifier's own configuration and
+    /// statement, with `proofs` (by table and rep) as received; [`Server::finish`] then replays it. Everything the live
+    /// server checked when a message arrived is checked again here from the record: the hello, the committed public
+    /// words (C4), each rep's bound root against root_B and rep 0, the link context's shape, the prime rounds' order,
+    /// the proofs' hashes and `link_sha256`. A record is evidence only under the verifier's custody: nothing here
+    /// authenticates who wrote it.
+    pub fn from_record(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>, rec: &Value,
+                       proofs: BTreeMap<(String, usize), Vec<u8>>) -> Result<Server, String> {
+        let mut s = Server::try_new(cfg, verifier)?;
+        s.urandom = None;
+        let bad = |w: &str| format!("record: {w}");
+        let hx = |v: &Value, w: &str| -> Result<Vec<u8>, String> {
+            let t = v.as_str().ok_or_else(|| bad(&format!("{w} is not a hex string")))?;
+            if t.len() % 2 != 0 {
+                return Err(bad(&format!("{w}: odd hex length")));
+            }
+            (0..t.len() / 2).map(|i| u8::from_str_radix(&t[2 * i..2 * i + 2], 16).map_err(|_| bad(&format!("{w}: not hex")))).collect()
+        };
+        let f128s = |v: &Value, w: &str| -> Result<Vec<F128>, String> {
+            v.as_array().ok_or_else(|| bad(&format!("{w} is not a list")))?.iter().map(|x| {
+                let b = hx(x, w)?;
+                if b.len() != 16 {
+                    return Err(bad(&format!("{w}: a GF(2^128) element is 16 bytes")));
+                }
+                Ok(F128 { hi: u64::from_be_bytes(b[..8].try_into().unwrap()), lo: u64::from_be_bytes(b[8..].try_into().unwrap()) })
+            }).collect()
+        };
+        if rec["kind"] != "flock-live-session/v1" {
+            return Err(bad("not a flock-live-session/v1 record"));
+        }
+        if !rec["aborted"].is_null() {
+            return Err(bad(&format!("the live session aborted: {}", rec["aborted"])));
+        }
+        let hello = rec["hello"].as_str().ok_or_else(|| bad("no hello"))?.to_string();
+        if let Resp::Refused(e) = s.handle(Req::Hello(hello)) {
+            return Err(bad(&e));
+        }
+        let prime_rec = &rec["prime"];
+        let before = if s.cfg.prime_live {
+            if prime_rec["mode"] != PRIME_MODE {
+                return Err(bad("the configuration serves live prime coins, the record has none"));
+            }
+            let b = prime_rec["before_commit"].as_u64().ok_or_else(|| bad("prime.before_commit"))? as usize;
+            let rounds = prime_rec["rounds"].as_array().ok_or_else(|| bad("prime.rounds"))?;
+            if b > rounds.len() {
+                return Err(bad("prime.before_commit exceeds the prime rounds"));
+            }
+            for r in rounds {
+                let state = hx(&r["state"], "prime state")?;
+                let n = r["n"].as_u64().ok_or_else(|| bad("prime n"))? as u32;
+                let words: Vec<u32> = r["words"].as_array().ok_or_else(|| bad("prime words"))?.iter()
+                    .map(|w| w.as_u64().filter(|&x| x < BABYBEAR_P as u64).map(|x| x as u32).ok_or_else(|| bad("a prime word is not below p")))
+                    .collect::<Result<_, _>>()?;
+                if state.len() != 32 || n == 0 || words.len() != PRIME_DEG * n as usize {
+                    return Err(bad("a malformed prime round"));
+                }
+                s.prime.push(PrimeRound { state: state.try_into().unwrap(), n, words });
+            }
+            Some(b)
+        } else {
+            if !prime_rec.is_null() {
+                return Err(bad("prime rounds in a session configured without them"));
+            }
+            None
+        };
+        let l = &rec["link"];
+        if s.cfg.link.is_some() {
+            if rec["link_mode"] != "exchange" || l["mode"] != "exchange" {
+                return Err(bad("link_mode is not exchange"));
+            }
+            let root_f = hx(&l["root_f"], "root_f")?;
+            let names: Vec<String> = s.cfg.tables.iter().map(|t| t.name.clone()).collect();
+            let mut roots = Vec::new();
+            let mut publics = Vec::new();
+            for n in &names {
+                let rb = hx(&l["root_b"][n], "root_b")?;
+                if l["root_b_sha256"][n].as_str() != Some(hex(&sha256(&rb)).as_str()) {
+                    return Err(bad(&format!("{n}: root_b differs from root_b_sha256")));
+                }
+                roots.push((n.clone(), rb));
+                let p = hx(&l["publics"][n], "publics")?;
+                if l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
+                    return Err(bad(&format!("{n}: publics differ from publics_sha256")));
+                }
+                publics.push((n.clone(), p));
+            }
+            if l["root_f_sha256"].as_str() != Some(hex(&sha256(&root_f)).as_str()) {
+                return Err(bad("root_f differs from root_f_sha256"));
+            }
+            // the prime rounds before Commit were issued before it; the rest after y
+            let tail = before.map(|b| s.prime.split_off(b)).unwrap_or_default();
+            match s.handle(Req::Commit { root_f, roots, publics }) {
+                Resp::Coins(_) => {}
+                Resp::Refused(e) => return Err(bad(&e)),
+                r => return Err(bad(&format!("commit: {r:?}"))),
+            }
+            s.prime.extend(tail);
+            let pts = l["points"].as_array().ok_or_else(|| bad("link.points"))?;
+            let spec = s.cfg.link.clone().unwrap();
+            s.points = pts.iter().map(|p| f128s(p, "point")).collect::<Result<_, _>>()?;
+            if s.points.len() != spec.points || s.points.iter().any(|p| p.len() != spec.m) {
+                return Err(bad("the link points are not the configured shape"));
+            }
+            let y = f128s(&l["y"], "y")?;
+            let mut yb = Vec::new();
+            for v in &y {
+                yb.extend_from_slice(&v.lo.to_le_bytes());
+                yb.extend_from_slice(&v.hi.to_le_bytes());
+            }
+            if let Resp::Refused(e) = s.handle(Req::Link(yb)) {
+                return Err(bad(&e));
+            }
+        }
+        let streams = rec["streams"].as_array().ok_or_else(|| bad("no streams"))?;
+        for st in streams {
+            let name = st["stream"].as_str().ok_or_else(|| bad("stream name"))?.to_string();
+            let mut sr = StreamRec {
+                parent: st["parent"].as_str().ok_or_else(|| bad("stream parent"))?.to_string(),
+                label: st["label"].as_str().ok_or_else(|| bad("stream label"))?.as_bytes().to_vec(),
+                at: st["at"].as_u64().ok_or_else(|| bad("stream at"))?,
+                ..Default::default()
+            };
+            for (k, r) in st["rounds"].as_array().ok_or_else(|| bad("stream rounds"))?.iter().enumerate() {
+                if r["k"].as_u64() != Some(k as u64) {
+                    return Err(bad(&format!("{name}: rounds out of order")));
+                }
+                let sha = hx(&r["msg_sha256"], "msg_sha256")?;
+                let coins = f128s(&r["coins"], "coins")?;
+                let n = r["n"].as_u64().ok_or_else(|| bad("round n"))? as u32;
+                if sha.len() != 32 || coins.len() != n as usize {
+                    return Err(bad(&format!("{name} round {k}: malformed")));
+                }
+                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
+            }
+            if sr.parent.is_empty() {
+                let Some((table, rep)) = s.root_of(&name) else { return Err(bad(&format!("unknown root stream {name}"))) };
+                if rep >= s.cfg.reps || sr.label != s.verifier.domain(&table.name, rep) {
+                    return Err(bad(&format!("{name}: beyond the configured reps, or the wrong domain")));
+                }
+                // every rep binds the one committed root_B (the live server refused any other before its first coin)
+                let rb = s.commit.as_ref().and_then(|c| c.roots.get(&table.name)).cloned().ok_or_else(|| bad("no root_B"))?;
+                if st["root_sha256"].as_str() != Some(hex(&sha256(&rb)).as_str()) {
+                    return Err(bad(&format!("R1/L1: {name} bound a root other than the committed root_B")));
+                }
+                sr.cap = Some(rb);
+            }
+            s.streams.insert(name, sr);
+        }
+        for p in rec["proof_sha256"].as_array().ok_or_else(|| bad("proof_sha256"))? {
+            let (t, r) = p["stream"].as_str().and_then(|x| x.rsplit_once("/rep")).ok_or_else(|| bad("proof stream"))?;
+            let rep: usize = r.parse().map_err(|_| bad("proof rep"))?;
+            let b = proofs.get(&(t.to_string(), rep)).ok_or_else(|| bad(&format!("no proof file for {t}/rep{rep}")))?;
+            if p["sha256"].as_str() != Some(hex(&sha256(b)).as_str()) {
+                return Err(bad(&format!("the proof for {t}/rep{rep} is not the one the verifier received")));
+            }
+        }
+        s.proofs = proofs;
+        let got = s.record_json();
+        if got["link_sha256"] != rec["link_sha256"] {
+            return Err(bad("link_sha256 differs from the exchange it covers"));
+        }
+        Ok(s)
     }
 
     pub fn aborted(&self) -> Option<&str> {

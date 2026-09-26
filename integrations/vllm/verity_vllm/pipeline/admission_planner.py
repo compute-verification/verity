@@ -36,20 +36,21 @@ WARN when the mode has no calibration or an approximate over-record; ADMIT other
 record names it (`admission_of_record`), as revb M-0254 / S-r17b-03 (ii) require; a run whose VmHWM exceeds it is a finding against the
 derivation, never a slack adjustment.
 
-Torch-free.  CLI:  python -m verity_vllm.pipeline.admission_planner --workload <manifest.json> --sizing <arena_sizing_*.json>
+Torch-free.  CLI:  verity-vllm admission-planner --workload <manifest.json> --sizing <arena_sizing_*.json>
                    [--bounded] [--retain host|none|sample] [--exclude fa3_hidden_m1] [--open-after-release] [--openings 64] [--pairs 3]
                    [--engine-rss-mb N] [--cap-bytes N] [--others-mb N] [--calibration <entries.jsonl>] [--record <commit dir>] [--json]
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.pipeline.admission_bound import compare_observed, host_cap, observed_steps, scheduled_step_bytes
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
@@ -571,19 +572,33 @@ def _load_workload_sizing(wl_path: str, sizing_path: str) -> tuple[dict, dict, i
     return wl, sizing, mnbt
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--workload", required=True); ap.add_argument("--sizing", required=True)
-    ap.add_argument("--bounded", action="store_true"); ap.add_argument("--retain", default="host", choices=["host", "none", "sample"])
-    ap.add_argument("--exclude", default="", help="comma-separated families excluded from host retention (bounded)")
-    ap.add_argument("--open-after-release", action="store_true"); ap.add_argument("--openings", type=int, default=64); ap.add_argument("--pairs", type=int, default=1)
-    ap.add_argument("--window-mb", type=int, default=256); ap.add_argument("--slots", type=int, default=8); ap.add_argument("--learn-mb", type=int, default=4096)
-    ap.add_argument("--engine-rss-mb", type=int, default=2200); ap.add_argument("--cap-bytes", type=int, default=None); ap.add_argument("--others-mb", type=int, default=0)
-    ap.add_argument("--margin", type=float, default=0.10); ap.add_argument("--lag", type=int, default=1)
-    ap.add_argument("--calibration", default=None, help="jsonl of calibration entries (one per Commit: mode, predicted_bytes, measured_bytes, ratio)")
-    ap.add_argument("--record", default=None, help="a Commit's commit/ directory: report measured vs predicted per term + the calibration entry")
-    ap.add_argument("--row", default=None); ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload")
+    sizing: str = option("--sizing")
+    bounded: bool = option("--bounded", default=False, action="store_true")
+    retain: str = option("--retain", default="host", choices=["host", "none", "sample"])
+    exclude: str = option("--exclude", default="", help="comma-separated families excluded from host retention (bounded)")
+    open_after_release: bool = option("--open-after-release", default=False, action="store_true")
+    openings: int = option("--openings", type=int, default=64)
+    pairs: int = option("--pairs", type=int, default=1)
+    window_mb: int = option("--window-mb", type=int, default=256)
+    slots: int = option("--slots", type=int, default=8)
+    learn_mb: int = option("--learn-mb", type=int, default=4096)
+    engine_rss_mb: int = option("--engine-rss-mb", type=int, default=2200)
+    cap_bytes: int | None = option("--cap-bytes", type=int, default=None)
+    others_mb: int = option("--others-mb", type=int, default=0)
+    margin: float = option("--margin", type=float, default=0.10)
+    lag: int = option("--lag", type=int, default=1)
+    calibration: str | None = option("--calibration", default=None,
+                                     help="jsonl of calibration entries (one per Commit: mode, predicted_bytes, measured_bytes, ratio)")
+    record: str | None = option("--record", default=None,
+                                help="a Commit's commit/ directory: report measured vs predicted per term + the calibration entry")
+    row: str | None = option("--row", default=None)
+    json: bool = option("--json", default=False, action="store_true")
+
+
+def main(a: Options) -> int:
     wl, sizing, mnbt = _load_workload_sizing(a.workload, a.sizing)
     cap, src = (a.cap_bytes, "--cap-bytes") if a.cap_bytes is not None else host_cap()
     entries = [json.loads(l) for l in Path(a.calibration).read_text().splitlines() if l.strip()] if a.calibration else None
@@ -618,7 +633,3 @@ def main(argv: list[str] | None = None) -> int:
                   f"since the first step {((gg.get('observed_device_delta_bytes') or 0) >> 20):,} MiB, torch reserved delta {((gg.get('observed_torch_reserved_delta_bytes') or 0) >> 20):,} MiB)")
         print(f"  ENTRY {json.dumps(cal['entry'])}")
     return 0 if p["admitted"] else 3
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

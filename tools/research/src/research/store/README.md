@@ -429,7 +429,7 @@ prints the table; the groups are:
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
-- **evidence** — probe captures and instance sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
+- **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
@@ -541,7 +541,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
-trust-dossier/v1         the computed trust level of one numerical target (`python -m verity.verification.trust --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python -m verity.proofs.trust --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor

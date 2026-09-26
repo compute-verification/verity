@@ -19,6 +19,7 @@ import numpy as np
 
 from verity_vllm.program import model as analytic
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.pipeline import cli
 from tests.check.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 
 FIELD = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"
@@ -136,14 +137,14 @@ def test_reroot_and_diff_are_readers_that_name_host_only_differences_apart_from_
     pa, pb, pc = tmp_path / "a.json", tmp_path / "b.json", tmp_path / "c.json"
     pa.write_text(json.dumps(rec)); pb.write_text(json.dumps(v1)); pc.write_text(json.dumps(other))
     before = {p.name: p.stat().st_mtime_ns for p in (pa, pb, pc)}
-    assert WR.main(["--diff", str(pa), str(pb)]) == 0
+    assert cli.main(["weights-of-record", "--diff", str(pa), str(pb)]) == 0
     out = capsys.readouterr().out
     assert "same weights of record: True" in out and "host-only " + FIELD in out and "re-root under " + WR.SCHEMA in out
-    assert WR.main(["--diff", str(pa), str(pc)]) == 1
+    assert cli.main(["weights-of-record", "--diff", str(pa), str(pc)]) == 1
     assert "DIFFER model.model.norm.weight: digest" in capsys.readouterr().out
     assert {p.name: p.stat().st_mtime_ns for p in (pa, pb, pc)} == before
     # deriving still needs --checkpoint-dir (a manual check now that --diff exists without one)
     import pytest
     with pytest.raises(SystemExit):
-        WR.main(["--program-dir", str(tmp_path)])
+        cli.main(["weights-of-record", "--program-dir", str(tmp_path)])
     assert "--checkpoint-dir is required" in capsys.readouterr().err

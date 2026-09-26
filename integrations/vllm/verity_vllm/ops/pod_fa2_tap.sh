@@ -12,7 +12,7 @@
 #
 # What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into /workspace/cp/vllm-flash-attn
 # when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_v8.py (parametric (kBlockN, kHeadDim) M1
-# layout; see fa2_tap_src/apply_v8.py); (3) builds with fa2_tap_src/build_ext.py (same flags as the pinned CMake build, sm arch from the
+# layout; see fa2_tap_src/apply_v8.py); (3) builds with `verity-vllm fa2-tap-build` (fa2_tap_src/build_ext.py; same flags as the pinned CMake build, sm arch from the
 # device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; the R9 hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
 # hdims mask contains every requested head dim.  Exactness per head dim is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).
@@ -84,7 +84,7 @@ if [ -n "$WHY" ]; then
   # build BESIDE the live .so and swap when done: the live tap stays loadable for a row / a second release running on this pod meanwhile
   # (05:14Z cp-sys: two pod_release.sh at once, the second's `rm -rf` emptied the first's build dir mid-nvcc -> FA2-TAP-FAIL, pod without a tap)
   NEW="$OUT.build-$$"; rm -rf "$NEW"; mkdir -p "$NEW"
-  $PY "$SRC/build_ext.py" --tree "$FA2/trees/tap8/csrc" --name verity_fa2_matReq --build-dir "$NEW" --arch "$ARCH" --hdims "$HDIMS" \
+  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-build --tree "$FA2/trees/tap8/csrc" --name verity_fa2_matReq --build-dir "$NEW" --arch "$ARCH" --hdims "$HDIMS" \
       --tree-commit "$PIN+tap8" --define VERITY_TAP=3 --define VERITY_MAT_SRC=59 > "$FA2/logs/build_matReq_v8.log" 2>&1 \
       || { rm -rf "$NEW"; fail "build (see $FA2/logs/build_matReq_v8.log: $(grep -a -m1 -i 'error' "$FA2/logs/build_matReq_v8.log" | cut -c1-200))"; }
   echo "$SRC_SHA" > "$NEW/source_set.sha256"

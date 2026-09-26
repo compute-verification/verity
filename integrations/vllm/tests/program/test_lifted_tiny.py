@@ -793,7 +793,7 @@ def test_lifted_width_summary_is_the_true_width_rule_r17_6b():
     assert L.lifted_width_summary([32, 32], w_max_lifted=66)["ok"]  # the parameter is a parameter
     with pytest.raises(ValueError):
         L.lifted_width_summary([0])
-    from verity_vllm.query import partition
+    from verity.ir import partition
     assert getattr(partition, "validate_width", None) is not None  # the ONE validator: lifted_width_admissibility calls it at W_MAX_LIFTED
 
 

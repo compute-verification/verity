@@ -266,7 +266,7 @@ def test_a3_5_boundaries_reject_random_noncanonical_words_by_name():
 
 
 def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted():
-    from verity_vllm.query import partition as PT
+    from verity.ir import partition as PT
     TSEL = bind(b1.TokenSelect, V=64)  # 32-bit token / index arithmetic: lifted leaves are 33 bits
     P0, P1 = Program(TSEL), Program(L.lift_def(TSEL))
     v0 = PT.validate_vu_partition(P0, f"default({L.W_MAX})", L.W_MAX)
@@ -324,7 +324,8 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
 
 
 def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_g8_refuses_it_by_name(tmp_path):
-    from verity_vllm.query import partition as PT, query_artifact as QA
+    from verity.ir import partition as PT
+    from verity_vllm.query import query_artifact as QA
     from verity_vllm.check import gates as G
     TSEL = bind(b1.TokenSelect, V=64)
     P1 = Program(L.lift_def(TSEL))

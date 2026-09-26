@@ -299,7 +299,7 @@ def gemm_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
 def _words(rng: np.random.Generator, fmt, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
            regime: np.ndarray, spread: int = 6) -> np.ndarray:
     """Operand words with exponents clustered around a per-instance centre (so products align, cancel and overflow),
-    a uniform word one time in eight, and ``specials`` with probability ``p_special`` (per instance).  The centre is
+    a uniform word one time in eight, and ``specials`` with probability ``p_special`` (per input).  The centre is
     uniform (regime 0), at the unit binade (1), or where products land at the bottom of the FP32 range (2)."""
     n = shape[0]
     emax = (1 << fmt.exp_bits) - 1
@@ -319,7 +319,7 @@ def _words(rng: np.random.Generator, fmt, shape: tuple[int, ...], specials: tupl
 
 def _acc_words(rng: np.random.Generator, n: int, regime: np.ndarray) -> np.ndarray:
     """FP32 accumulators: uniform words, moderate exponents, subnormals, both zeros, the largest finite, NaN, infinities;
-    regime-2 instances (tiny products) get a zero or subnormal accumulator."""
+    regime-2 inputs (tiny products) get a zero or subnormal accumulator."""
     kind = rng.integers(0, 16, size=n)
     frac = rng.integers(0, 1 << 23, size=n)
     sign = rng.integers(0, 2, size=n) << 31
@@ -385,7 +385,7 @@ def _sample_block_scaled(model: BlockScaledAlignAdd):
     return sample
 
 
-# ---- FP8 and NVFP4 references (no core Definition yet) and their kernels -----------------------------------------------
+# ---- FP8 and NVFP4 references and their kernels (the FP8 step is also the Definition `prims.HopperE4m3QgmmaDot32`) -----
 
 _E4M3, _E2M1, _SCALE = Value(8), Value(4), Value(8)
 

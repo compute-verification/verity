@@ -1,0 +1,648 @@
+"""Subcircuit templates: each a registered IR Definition with typed parameters, bound to the ports an input set stores.
+
+    template  = a named Definition family with typed parameters           (``gemm-coordinate``, ``attention-head``, ...)
+    subcircuit = a template with every parameter bound                     (``gemm-coordinate/k2048/sm80-mma-bf16``)
+
+A :class:`Subcircuit` carries what both kinds of input set need: the IR target its instances are evaluated with
+(``verity.evaluation.evaluate_batch``, the one evaluator: a registered kernel where one is self-checked against the gate
+reference, else the reference), its input and output ports, and the ``relation`` / set name the vLLM VU exporter writes
+(``verity_vllm.pipeline.vu_export``, PR #42), so a synthetic set and a captured set of one subcircuit have the same name,
+relation and ports.  :func:`identify` maps a set's ``relation`` back to its subcircuit, whichever wrote it.
+
+The templates of row #101 (Llama-3.2-1B) and their Definitions:
+
+  gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``verity.ml.gemm``)
+  attention-head             AttentionHead_v3{T, D, BN}         q[D], k[T*D], v[T*D] -> out  (FA2; T varies per instance)
+  rope-head                  RoPEHead_v1{D}                     x[D], cs[D] -> out
+  rmsnorm-fused-cuda         RMSNormFusedCuda_v2{N, EPS}        in0 x, in1 res, in2 w -> out.0, out.1
+  rmsnorm-triton             RMSNormTriton_v1{N, EPS}           in0 x, in1 w -> out.out
+  silu-mul                   SiluMul_v1{I}                      in0 gu[2I] -> out.out
+  gumbel-top-p-token-select  GumbelTopPTokenSelect_v1{V}        in0 logits, in1 top_p, in2 seed, in3 pos, in4 temp, in5 splits
+                                                                -> out.sampled_token_ids (u64, as the row kernel returns it)
+
+All but ``gemm-coordinate`` are Definitions of the vLLM integration's registry (``verity_vllm.program.registry``), imported
+lazily: this module and the GEMM template need only ``verity``.  Two templates are evaluated through an equal Definition
+that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batch of that head) and ``RoPEHead_v1`` as
+``RoPE_v1{NHEADS=1}``; ``test_templates`` checks both against the head's gate reference.  The captured GEMM sets name the
+vLLM step ``AmpereBF16TcDot16_v1``; it and core's ``_v2`` evaluate the same function (``tc_dot_total`` on
+``AMPERE_BF16_M16N8K16``), so both evaluate through core's ``_v2`` (tested on sampled inputs).
+
+Sampling (:meth:`Subcircuit.draw`): draw ``j`` of a synthetic set reads each port's words from the counter stream
+``key.stream((port, j), ...)`` of ``verity.randomness`` (SHA-256 counter mode, index-addressable), four bytes per word, so
+draw ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
+``(r >> 1) & 0x7F``, exponent field ``c - h + ((r >> 8) & 0xFFFF) mod (2h + 1)`` for the port's window (centre ``c``,
+half-width ``h`` chosen per draw from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge
+word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM draws
+share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` and its class are drawn at ``j // tile``.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping, Sequence
+
+import numpy as np
+
+from verity.randomness import Key
+
+WORD_DTYPES = {"u8": np.uint8, "u16": np.uint16, "u32": np.uint32, "u64": np.uint64}
+BF16_EDGES = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x3F80, 0xBF80], dtype=np.uint16)
+
+
+@dataclass(frozen=True)
+class Port:
+    """One stored array per instance: ``words`` per instance (``None``: it varies, the set stores offsets)."""
+
+    name: str
+    dtype: str
+    words: int | None
+
+
+@dataclass(frozen=True)
+class Draw:
+    """One synthetic draw: its input words per port, the statics that vary per instance, and what ``index.json`` records."""
+
+    inputs: dict[str, np.ndarray]
+    instance_statics: dict[str, int]
+    sub: dict[str, Any]
+
+
+class NotEvaluable(ValueError):
+    """The subcircuit has no IR Definition in this tree (its semantics are only a ``verity.ml.tc`` model)."""
+
+
+# --- word samplers ------------------------------------------------------------------------------------------------------------
+
+def stream_u32(key: Key, index: tuple, n: int) -> np.ndarray:
+    return np.frombuffer(key.stream(index, 4 * n), dtype="<u4").astype(np.uint32)
+
+
+def stream_u64(key: Key, index: tuple, n: int) -> np.ndarray:
+    return np.frombuffer(key.stream(index, 8 * n), dtype="<u8").astype(np.uint64)
+
+
+def bf16_words(r: np.ndarray, centre: int, half: int, edges: np.ndarray = BF16_EDGES) -> np.ndarray:
+    """BF16 words from 32 random bits each (the module docstring's rule): normal words in the exponent window, one in 32 an edge word."""
+    r = np.asarray(r, dtype=np.uint32)
+    lo = centre - half
+    if lo < 1 or centre + half > 254:
+        raise ValueError(f"exponent window {centre} +- {half} leaves the normal range")
+    e = lo + ((r >> 8) & 0xFFFF) % np.uint32(2 * half + 1)
+    w = ((r & 1) << 15) | (e << 7) | ((r >> 1) & 0x7F)
+    edge = ((r >> 24) & 0x1F) == 0
+    w = np.where(edge, edges[((r >> 29) % np.uint32(len(edges))).astype(np.int64)], w)
+    return w.astype(np.uint16)
+
+
+@dataclass(frozen=True)
+class Bf16Window:
+    """A BF16 port's sampler: exponent window centre and the half-widths one draw picks from."""
+
+    centre: int = 127
+    halves: tuple[int, ...] = (4,)
+
+    def words(self, key: Key, index: tuple, n: int, cls_index: tuple) -> tuple[np.ndarray, int]:
+        h = self.halves[key.uniform(len(self.halves), ("class", *cls_index))] if len(self.halves) > 1 else self.halves[0]
+        return bf16_words(stream_u32(key, index, n), self.centre, h), h
+
+    def describe(self) -> str:
+        return f"bf16 window: exponent field {self.centre} +- h, h in {list(self.halves)} per draw; 1/32 edge words {BF16_EDGES.tolist()}"
+
+
+def f32_uniform(key: Key, index: tuple, lo: float, hi: float) -> int:
+    """The f32 word of lo + (hi - lo) * u / 2^32 for one 32-bit stream word u (rounded to f32)."""
+    u = int(stream_u32(key, index, 1)[0])
+    return int(np.asarray([lo + (hi - lo) * u / 2.0 ** 32], dtype=np.float32).view(np.uint32)[0])
+
+
+def finite_bf16(words: np.ndarray) -> np.ndarray:
+    """Per row: every BF16 word finite."""
+    w = np.asarray(words, dtype=np.uint16)
+    return ~(((w & 0x7F80) == 0x7F80).reshape(w.shape[0], -1).any(axis=1))
+
+
+# --- statics as the Program records them ---------------------------------------------------------------------------------------
+
+def encode_static(v: Any) -> Any:
+    """A static as a vLLM Program's call records it (``verity.ir.codec``): a float is the JSON string ``{"f64":"<hex>"}``."""
+    if isinstance(v, float):
+        return json.dumps({"f64": v.hex()}, separators=(",", ":"))
+    return v
+
+
+def decode_static(v: Any) -> Any:
+    if isinstance(v, str) and v.startswith("{"):
+        d = json.loads(v)
+        if isinstance(d, dict) and "f64" in d:
+            return float.fromhex(d["f64"])
+    return v
+
+
+def row_set_name(family: str, statics: Mapping[str, Any]) -> str:
+    """The exporter's name of a row-shaped set: family, its int statics, and a digest of the others (``vu_export._row_set_name``)."""
+    ints = "-".join(f"{k.lower()}{v}" for k, v in sorted(statics.items()) if isinstance(v, int))
+    other = {k: v for k, v in statics.items() if not isinstance(v, int)}
+    tag = hashlib.sha256(json.dumps(other, sort_keys=True).encode()).hexdigest()[:8] if other else ""
+    return "-".join(p for p in (family.lower().replace("_", "-"), ints, tag) if p)
+
+
+def _slug_float(v: float) -> str:
+    return repr(float(v)).replace("+", "").lower()
+
+
+# --- subcircuits ----------------------------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True, eq=False)
+class Subcircuit:
+    """A template with every parameter bound (``params``, census names).  ``target(**instance_statics)`` is the IR target the
+    instances are evaluated with; ``definition(**instance_statics)`` the subcircuit's own Definition."""
+
+    template: "Template"
+    params: dict[str, Any]
+    id: str
+    display: str
+    set_name: str
+    relation: dict[str, Any]
+    inputs: tuple[Port, ...]
+    outputs: tuple[Port, ...]
+    target: Callable[..., Any] = field(repr=False)
+    definition: Callable[..., Any] = field(repr=False)
+    sampler: Callable[["Subcircuit", Key, int], Draw] | None = field(default=None, repr=False)
+    instance_statics_of: Callable[[Mapping[str, np.ndarray]], dict[str, int]] = field(default=lambda _p: {}, repr=False)
+    output_words: Callable[[Port, Mapping[str, int]], int] | None = field(default=None, repr=False)
+    admit: Callable[[Mapping[str, np.ndarray]], np.ndarray] | None = field(default=None, repr=False)
+    recipe: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ports(self) -> tuple[Port, ...]:
+        return self.inputs + self.outputs
+
+    def draw(self, key: Key, j: int) -> Draw:
+        if self.sampler is None:
+            raise NotEvaluable(f"{self.id}: no synthetic sampler")
+        return self.sampler(self, key, j)
+
+    def _out_words(self, p: Port, inst: Mapping[str, int]) -> int:
+        if p.words is not None:
+            return p.words
+        if self.output_words is None:
+            raise ValueError(f"{self.id}: output {p.name} has no fixed width")
+        return self.output_words(p, inst)
+
+    def evaluate(self, inputs: Mapping[str, Sequence[np.ndarray]], instance_statics: Sequence[Mapping[str, int]] | None = None
+                 ) -> dict[str, list[np.ndarray]]:
+        """Every instance's outputs through ``verity.evaluation.evaluate_batch``: ``inputs[port][i]`` the words of instance i;
+        instances are batched by their instance statics.  Returns ``{output port: [words of instance i]}``."""
+        from verity.evaluation import evaluate_batch
+
+        n = len(next(iter(inputs.values()))) if inputs else 0
+        if instance_statics is None:
+            instance_statics = [self.instance_statics_of({p.name: inputs[p.name][i] for p in self.inputs}) for i in range(n)]
+        groups: dict[tuple, list[int]] = {}
+        for i, st in enumerate(instance_statics):
+            groups.setdefault(tuple(sorted(st.items())), []).append(i)
+        out: dict[str, list[np.ndarray | None]] = {p.name: [None] * n for p in self.outputs}
+        for key, idx in groups.items():
+            st = dict(key)
+            arrays = [np.stack([np.asarray(inputs[p.name][i]).reshape(-1) for i in idx]) for p in self.inputs]
+            flat = np.asarray(evaluate_batch(self.target(**st), *arrays)).reshape(len(idx), -1)
+            off = 0
+            for p in self.outputs:
+                w = self._out_words(p, st)
+                block = flat[:, off:off + w].astype(WORD_DTYPES[p.dtype])
+                off += w
+                for r, i in enumerate(idx):
+                    out[p.name][i] = block[r]
+            if off != flat.shape[1]:
+                raise ValueError(f"{self.id}: the target returns {flat.shape[1]} leaves, the output ports hold {off}")
+        return {k: list(v) for k, v in out.items()}  # type: ignore[arg-type]
+
+    def admitted(self, outputs: Mapping[str, Sequence[np.ndarray]]) -> np.ndarray:
+        """Per instance: inside the domain a benchmark instance must be in (every BF16 output word finite, unless the template says)."""
+        n = len(next(iter(outputs.values())))
+        if self.admit is not None:
+            return np.asarray(self.admit(outputs), dtype=bool)
+        ok = np.ones(n, dtype=bool)
+        for p in self.outputs:
+            if p.dtype == "u16":
+                ok &= np.array([bool(finite_bf16(np.asarray(w)[None, :])[0]) for w in outputs[p.name]], dtype=bool)
+        return ok
+
+    def program_digests(self, instance_statics: Sequence[Mapping[str, int]] = ({},)) -> dict[str, str]:
+        """``{definition id: verity.ir.codec.program_digest}`` of the subcircuit's own Definition at each instance-statics binding."""
+        from verity.ir.codec import program_digest
+        from verity.ir.program import Program
+
+        out = {}
+        for st in {tuple(sorted(s.items())): s for s in instance_statics}.values():
+            d = self.definition(**st)
+            out[d.id] = program_digest(Program(d))
+        return out
+
+
+@dataclass(frozen=True)
+class Template:
+    """A subcircuit template: ``id`` (census-style kebab-case), typed ``parameters`` (name -> description), ``bind(**params)``,
+    and ``identify(relation)`` for a relation a set records (``None`` when it is not this template's)."""
+
+    id: str
+    name: str
+    description: str
+    parameters: dict[str, str]
+    bind: Callable[..., Subcircuit] = field(repr=False)
+    identify: Callable[[Mapping[str, Any]], Subcircuit | None] = field(repr=False)
+    example: dict[str, Any] = field(default_factory=dict)
+
+
+# --- gemm-coordinate ------------------------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _GemmSemantics:
+    semantics: str
+    slug: str
+    display: str
+    dots: tuple[str, ...]        # the DOT ids a recorded relation may name
+    dot: str                     # the one a synthetic set's relation names (the exporter's)
+    definition: str              # the row family the exporter names
+    set_slug: str
+    step: str                    # core step primitive attribute (verity.ml.prims)
+
+
+GEMM_SEMANTICS = {s.semantics: s for s in (
+    _GemmSemantics("sm80.mma.m16n8k16.bf16", "sm80-mma-bf16", "sm80 mma · BF16", ("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2"),
+                   "AmpereBF16TcDot16_v1", "Gemm_v1", "ampere-bf16", "AmpereBF16TcDot16"),
+    _GemmSemantics("sm90.wgmma.m64n8k16.bf16", "sm90-wgmma-bf16", "sm90 wgmma · BF16", ("HopperBF16WgmmaDot16_v1",),
+                   "HopperBF16WgmmaDot16_v1", "Gemm_v2", "hopper-bf16-wgmma", "HopperBF16WgmmaDot16"),
+)}
+#: Census GEMM semantics with a ``verity.ml.tc`` model but no IR Definition here: a subcircuit binds, it cannot be generated.
+GEMM_MODEL_ONLY = {
+    "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
+    "sm89.mma.m16n8k32.e4m3": ("sm89-mma-e4m3", "sm89 mma · FP8 (E4M3)", "e4m3"),
+    "sm90.wgmma.m64n8k32.e4m3": ("sm90-wgmma-e4m3", "sm90 wgmma · FP8 (E4M3)", "e4m3"),
+    "sm120.mma.m16n8k64.e2m1.nvf4": ("sm120-mma-e2m1-nvf4", "sm120 mma · FP4 (NVFP4, E2M1)", "e2m1"),
+}
+GEMM_RULE = "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)"
+GEMM_X, GEMM_W = Bf16Window(127, (4, 16, 40)), Bf16Window(127, (4, 16, 40))
+
+
+def _gemm_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    K, tile = sub.params["K"], int(sub.recipe.get("tile", 32))
+    t = j // tile
+    x, hx = GEMM_X.words(key, ("x", t), K, ("x", t))
+    w, hw = GEMM_W.words(key, ("w", j), K, ("w", j))
+    return Draw({"x": x, "w": w}, {}, {"tile": t, "hx": hx, "hw": hw})
+
+
+def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype: str | None = None, tile: int = 32) -> Subcircuit:
+    K = int(K)
+    if K <= 0 or K % 16:
+        raise ValueError(f"gemm-coordinate: K = {K} is not a positive multiple of 16")
+    ports_in, ports_out = (Port("x", "u16", K), Port("w", "u16", K)), (Port("y", "u16", 1),)
+    if semantics in GEMM_MODEL_ONLY:
+        slug, disp, dt = GEMM_MODEL_ONLY[semantics]
+
+        def none(**_st: int) -> Any:
+            raise NotEvaluable(f"gemm-coordinate {semantics}: a verity.ml.tc model, no IR Definition to evaluate or generate with")
+
+        return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": dt, "semantics": semantics}, f"gemm-coordinate/k{K}/{slug}",
+                          f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
+    if semantics not in GEMM_SEMANTICS:
+        raise ValueError(f"gemm-coordinate: unknown semantics {semantics!r} (one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_MODEL_ONLY)})")
+    s = GEMM_SEMANTICS[semantics]
+    if datatype not in (None, "bf16"):
+        raise ValueError(f"gemm-coordinate {semantics}: datatype is bf16, not {datatype!r}")
+
+    def target(**_st: int) -> Any:
+        from verity.ir.defs import bind
+        from verity.ml import gemm, prims
+
+        return bind(gemm.GemmCoordinate, K=K, DOT=getattr(prims, s.step))
+
+    rel = {"subcircuit": f"GemmCoordinate<{K}>", "definition": s.definition, "dot": s.dot, "statics": {"K": K}, "rule": GEMM_RULE}
+    return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": "bf16", "semantics": semantics}, f"gemm-coordinate/k{K}/{s.slug}",
+                      f"GemmCoordinate<{K}> · {s.display}", f"gemm-coordinate-{s.set_slug}-k{K}", rel, ports_in, ports_out, target, target,
+                      sampler=_gemm_sample,
+                      recipe={"tile": int(tile), "x": GEMM_X.describe() + "; one row per tile of `tile` draws", "w": GEMM_W.describe()})
+
+
+def _gemm_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") not in ("Gemm_v1", "Gemm_v2"):
+        return None
+    for s in GEMM_SEMANTICS.values():
+        if rel.get("dot") in s.dots:
+            sub = gemm_coordinate(int(rel["statics"]["K"]), s.semantics)
+            return sub if rel.get("dot") == s.dot else _with_relation(sub, rel)
+    raise KeyError(f"gemm-coordinate: no semantics for DOT {rel.get('dot')!r}")
+
+
+def _with_relation(sub: Subcircuit, rel: Mapping[str, Any]) -> Subcircuit:
+    import dataclasses
+
+    return dataclasses.replace(sub, relation=dict(rel))
+
+
+# --- attention-head (FA2) -------------------------------------------------------------------------------------------------------
+
+ATTN_RULE = "one query at position T-1 over keys 0..T-1 of its KV head, ceil(T/BN) key blocks last -> first (the Definition's head)"
+ATTN_QKV = Bf16Window(127, (2, 4))
+
+
+def _parse_range(v: Any) -> tuple[int, int]:
+    if isinstance(v, int):
+        return v, v
+    if isinstance(v, (list, tuple)) and len(v) == 2:
+        return int(v[0]), int(v[1])
+    lo, _, hi = str(v).partition(":")
+    return int(lo), int(hi or lo)
+
+
+def _attn_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    D = sub.params["D"]
+    lo, hi = _parse_range(sub.recipe["T"])
+    T = lo + key.uniform(hi - lo + 1, ("T", j))
+    q, h = ATTN_QKV.words(key, ("q", j), D, ("qkv", j))
+    k = bf16_words(stream_u32(key, ("k", j), T * D), ATTN_QKV.centre, h)
+    v = bf16_words(stream_u32(key, ("v", j), T * D), ATTN_QKV.centre, h)
+    return Draw({"q": q, "k": k, "v": v}, {"T": int(T)}, {"T": int(T), "h": h})
+
+
+def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2.bf16") -> Subcircuit:
+    """FA2's head (``AttentionHead_v3``): ``T`` is per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic
+    draw's range ``lo:hi`` (uniform per draw)."""
+    D, BN = int(D), int(BN)
+    if semantics != "sm80.fa2.bf16":
+        raise ValueError(f"attention-head: semantics {semantics!r} (only FA2 on the Ampere BF16 step: sm80.fa2.bf16)")
+    lo, hi = _parse_range(T)
+    if not 1 <= lo <= hi:
+        raise ValueError(f"attention-head: T range {T!r}")
+
+    def target(T: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import b1
+
+        return bind(b1.AttentionV3, T=int(T), NH=1, KVH=1, D=D, BN=BN)
+
+    def definition(T: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import b1
+
+        return bind(b1.AttentionHeadV3, T=int(T), D=D, BN=BN)
+
+    rel = {"subcircuit": f"AttentionHead<T,{D}>", "definition": "Attention_v3", "dot": "AmpereBF16TcDot16_v1", "inv": "Fa2InvSum_v1",
+           "statics": {"D": D, "BN": BN}, "rule": ATTN_RULE}
+    return Subcircuit(TEMPLATES["attention-head"], {"D": D, "BN": BN, "semantics": semantics}, f"attention-head/d{D}-bn{BN}/sm80-fa2-bf16",
+                      f"AttentionHead<T,{D}> · FA2 BN={BN} · sm80 mma · BF16", f"attention-head-fa2-d{D}-bn{BN}", rel,
+                      (Port("q", "u16", D), Port("k", "u16", None), Port("v", "u16", None)), (Port("out", "u16", D),),
+                      target, definition, sampler=_attn_sample,
+                      instance_statics_of=lambda p: {"T": int(np.asarray(p["k"]).size) // D},
+                      recipe={"T": f"{lo}:{hi}", "T_rule": "T = lo + key.uniform(hi - lo + 1, ('T', j))", "qkv": ATTN_QKV.describe()
+                              + "; one h per draw for q, k and v"})
+
+
+def _attn_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "Attention_v3":
+        return None
+    return attention_head(int(rel["statics"]["D"]), int(rel["statics"]["BN"]))
+
+
+# --- rope-head ------------------------------------------------------------------------------------------------------------------
+
+ROPE_RULE = ("out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])), out[i+R] = bf16_rn(RN32(x[i+R]*c[i] + x[i]*s[i])), cs = [c | s], "
+             "R = D/2")
+ROPE_X, ROPE_CS = Bf16Window(127, (4, 16)), Bf16Window(120, (6,))
+
+
+def _rope_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    D = sub.params["D"]
+    x, h = ROPE_X.words(key, ("x", j), D, ("x", j))
+    cs, _ = ROPE_CS.words(key, ("cs", j), D, ("cs", j))
+    return Draw({"x": x, "cs": cs}, {}, {"h": h})
+
+
+def rope_head(D: int) -> Subcircuit:
+    D = int(D)
+    if D <= 0 or D % 2:
+        raise ValueError(f"rope-head: D = {D} is not a positive even number")
+
+    def target(**_st: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import b1
+
+        return bind(b1.RoPE, NHEADS=1, D=D)
+
+    def definition(**_st: int) -> Any:
+        from verity.ir.defs import bind
+        from verity_vllm.program.registry import b1
+
+        return bind(b1.RoPEHead, D=D)
+
+    rel = {"subcircuit": f"RoPEHead<{D}>", "definition": "RoPE_v1", "statics": {"D": D}, "rule": ROPE_RULE}
+    return Subcircuit(TEMPLATES["rope-head"], {"D": D}, f"rope-head/d{D}/neox-bf16", f"RoPEHead<{D}> · NeoX · BF16", f"rope-head-d{D}", rel,
+                      (Port("x", "u16", D), Port("cs", "u16", D)), (Port("out", "u16", D),), target, definition, sampler=_rope_sample,
+                      recipe={"x": ROPE_X.describe(), "cs": ROPE_CS.describe() + " (|c|, |s| < 1)"})
+
+
+def _rope_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    return rope_head(int(rel["statics"]["D"])) if rel.get("definition") == "RoPE_v1" else None
+
+
+# --- row-shaped templates (the exporter's generic rows) ------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _Row:
+    template: str
+    family: str
+    registry: str                                  # module:attribute of the composite
+    statics: tuple[str, ...]
+    inputs: Callable[[Mapping[str, Any]], tuple[Port, ...]]
+    outputs: Callable[[Mapping[str, Any]], tuple[Port, ...]]
+    sample: Callable[[Mapping[str, Any], Key, int], tuple[dict[str, np.ndarray], dict[str, Any]]]
+    slug: Callable[[Mapping[str, Any]], str]
+    display: Callable[[Mapping[str, Any]], str]
+    recipe: dict[str, str]
+    admit: Callable[[Mapping[str, np.ndarray]], np.ndarray] | None = None
+
+
+def _composite(path: str) -> Any:
+    import importlib
+
+    mod, _, attr = path.partition(":")
+    return getattr(importlib.import_module(mod), attr)
+
+
+def _row_subcircuit(row: _Row, **params: Any) -> Subcircuit:
+    missing = [k for k in row.statics if k not in params]
+    extra = sorted(set(params) - set(row.statics))
+    if missing or extra:
+        raise TypeError(f"{row.template}: parameters {list(row.statics)} (missing {missing}, unknown {extra})")
+    st = {k: (float(params[k]) if isinstance(params[k], float) or k == "EPS" else int(params[k])) for k in row.statics}
+
+    def target(**_s: int) -> Any:
+        from verity.ir.defs import bind
+
+        import verity_vllm.program.kernels.rows  # noqa: F401  (registers the self-checked row kernels with verity.evaluation)
+        return bind(_composite(row.registry), **st)
+
+    enc = {k: encode_static(v) for k, v in st.items()}
+    rel = {"subcircuit": row.family, "definition": row.family, "statics": enc,
+           "rule": f"the registered row kernel of {row.family} (verity_vllm.program.kernels.rows)"}
+
+    def sampler(sub: Subcircuit, key: Key, j: int) -> Draw:
+        ins, info = row.sample(st, key, j)
+        return Draw(ins, {}, info)
+
+    return Subcircuit(TEMPLATES[row.template], dict(st), f"{row.template}/{row.slug(st)}", row.display(st), row_set_name(row.family, enc), rel,
+                      row.inputs(st), row.outputs(st), target, target, sampler=sampler, admit=row.admit, recipe=dict(row.recipe))
+
+
+def _row_identify(row: _Row) -> Callable[[Mapping[str, Any]], Subcircuit | None]:
+    def ident(rel: Mapping[str, Any]) -> Subcircuit | None:
+        if rel.get("definition") != row.family:
+            return None
+        return _row_subcircuit(row, **{k: decode_static(v) for k, v in rel["statics"].items()})
+    return ident
+
+
+RMS_X, RMS_W = Bf16Window(127, (4, 12)), Bf16Window(127, (2,))
+SILU = Bf16Window(127, (4, 8))
+LOGITS = Bf16Window(127, (2, 4))
+
+
+def _rms_fused_sample(st: Mapping[str, Any], key: Key, j: int):
+    N = st["N"]
+    x, h = RMS_X.words(key, ("in0", j), N, ("in", j))
+    res = bf16_words(stream_u32(key, ("in1", j), N), RMS_X.centre, h)
+    w, _ = RMS_W.words(key, ("in2", j), N, ("in2", j))
+    return {"in0": x, "in1": res, "in2": w}, {"h": h}
+
+
+def _rms_triton_sample(st: Mapping[str, Any], key: Key, j: int):
+    N = st["N"]
+    x, h = RMS_X.words(key, ("in0", j), N, ("in", j))
+    w, _ = RMS_W.words(key, ("in1", j), N, ("in1", j))
+    return {"in0": x, "in1": w}, {"h": h}
+
+
+def _silu_sample(st: Mapping[str, Any], key: Key, j: int):
+    gu, h = SILU.words(key, ("in0", j), 2 * st["I"], ("in0", j))
+    return {"in0": gu}, {"h": h}
+
+
+def _gumbel_sample(st: Mapping[str, Any], key: Key, j: int):
+    logits, h = LOGITS.words(key, ("in0", j), st["V"], ("in0", j))
+    ins = {"in0": logits,
+           "in1": np.asarray([f32_uniform(key, ("in1", j), 0.05, 1.0)], dtype=np.uint32),
+           "in2": stream_u64(key, ("in2", j), 1),
+           "in3": np.asarray([key.uniform(1 << 20, ("in3", j))], dtype=np.uint64),
+           "in4": np.asarray([f32_uniform(key, ("in4", j), 0.3, 2.0)], dtype=np.uint32),
+           "in5": np.asarray([1 << key.uniform(4, ("in5", j))], dtype=np.uint32)}
+    return ins, {"h": h}
+
+
+def _u16(n: int, *names: str) -> tuple[Port, ...]:
+    return tuple(Port(nm, "u16", n) for nm in names)
+
+
+ROWS: dict[str, _Row] = {r.template: r for r in (
+    _Row("rmsnorm-fused-cuda", "RMSNormFusedCuda_v2", "verity_vllm.program.registry.b1:RMSNormFusedCuda", ("N", "EPS"),
+         lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
+         lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormFusedCuda_v2<{s['N']}> · eps {s['EPS']:g} · BF16",
+         {"in0/in1 (x, res)": RMS_X.describe() + "; one h per draw for both", "in2 (w)": RMS_W.describe()}),
+    _Row("rmsnorm-triton", "RMSNormTriton_v1", "verity_vllm.program.registry.b1:RMSNormTriton", ("N", "EPS"),
+         lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
+         lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v1<{s['N']}> · eps {s['EPS']:g} · BF16",
+         {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}),
+    _Row("silu-mul", "SiluMul_v1", "verity_vllm.program.registry.b1:SiluMul", ("I",),
+         lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
+         lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v1<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()}),
+    _Row("gumbel-top-p-token-select", "GumbelTopPTokenSelect_v1", "verity_vllm.program.registry.sampling:GumbelTopPTokenSelect", ("V",),
+         lambda s: (Port("in0", "u16", s["V"]), Port("in1", "u32", 1), Port("in2", "u64", 1), Port("in3", "u64", 1),
+                    Port("in4", "u32", 1), Port("in5", "u32", 1)),
+         lambda s: (Port("out.sampled_token_ids", "u64", 1),), _gumbel_sample,
+         lambda s: f"v{s['V']}/fp32", lambda s: f"GumbelTopPTokenSelect_v1<{s['V']}> · temperature + top-p · FP32",
+         {"in0 (logits)": LOGITS.describe(), "in1 (top_p)": "f32 of 0.05 + 0.95 u / 2^32", "in2 (seed)": "u64 stream word",
+          "in3 (pos)": "key.uniform(2^20)", "in4 (temp)": "f32 of 0.3 + 1.7 u / 2^32", "in5 (splits)": "1 << key.uniform(4)"},
+         admit=lambda outs: np.ones(len(next(iter(outs.values()))), dtype=bool)),
+)}
+
+
+# --- the catalogue -------------------------------------------------------------------------------------------------------------
+
+TEMPLATES: dict[str, Template] = {}
+
+
+def _add(t: Template) -> None:
+    TEMPLATES[t.id] = t
+
+
+_add(Template("gemm-coordinate", "GemmCoordinate<K>",
+              "one output word of x @ W^T: K multiply-accumulates on one tensor-core instruction's exact semantics (FP32 accumulation), "
+              "then the bf16 epilogue", {"K": "int, a multiple of 16", "semantics": "the tensor-core instruction (GEMM_SEMANTICS)",
+                                         "datatype": "operand datatype (bf16)"},
+              gemm_coordinate, _gemm_identify, {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}))
+_add(Template("attention-head", "AttentionHead<T,D>",
+              "FlashAttention-2 forward, one query head at position T-1 over its KV head (AttentionHead_v3); T varies per instance",
+              {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
+               "semantics": "sm80.fa2.bf16"}, attention_head, _attn_identify, {"D": 64, "BN": 128, "T": "1:512"}))
+_add(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
+              rope_head, _rope_identify, {"D": 64}))
+for _r in ROWS.values():
+    _add(Template(_r.template, _r.family, f"{_r.family} (verity_vllm.program.registry), one row", {k: "static" for k in _r.statics},
+                  (lambda r: lambda **p: _row_subcircuit(r, **p))(_r), _row_identify(_r),
+                  {"rmsnorm-fused-cuda": {"N": 2048, "EPS": 1e-5}, "rmsnorm-triton": {"N": 2048, "EPS": 1e-5}, "silu-mul": {"I": 8192},
+                   "gumbel-top-p-token-select": {"V": 128256}}[_r.template]))
+
+
+def get(template_id: str) -> Template:
+    if template_id not in TEMPLATES:
+        raise KeyError(f"unknown subcircuit template {template_id!r} (one of {sorted(TEMPLATES)})")
+    return TEMPLATES[template_id]
+
+
+def subcircuit(template_id: str, **params: Any) -> Subcircuit:
+    return get(template_id).bind(**params)
+
+
+def identify(relation: Mapping[str, Any]) -> Subcircuit:
+    """The subcircuit a set's ``relation`` names, captured or synthetic."""
+    for t in TEMPLATES.values():
+        sub = t.identify(relation)
+        if sub is not None:
+            return sub
+    raise KeyError(f"no subcircuit template for relation {dict(relation)!r}")
+
+
+def parse_subcircuit_id(sid: str) -> Subcircuit:
+    """A census-style subcircuit id (``gemm-coordinate/k2048/sm80-mma-bf16``) back to its subcircuit (default synthetic recipe)."""
+    tid, _, rest = sid.partition("/")
+    params, _, sem = rest.partition("/")
+    if tid == "gemm-coordinate":
+        K = int(params.lstrip("k"))
+        for s, g in GEMM_SEMANTICS.items():
+            if g.slug == sem:
+                return gemm_coordinate(K, s)
+        for s, (slug, _d, _t) in GEMM_MODEL_ONLY.items():
+            if slug == sem:
+                return gemm_coordinate(K, s)
+    elif tid == "attention-head":
+        d, _, bn = params.partition("-")
+        return attention_head(int(d.lstrip("d")), int(bn.lstrip("bn")))
+    elif tid == "rope-head":
+        return rope_head(int(params.lstrip("d")))
+    elif tid in ROWS:
+        row = ROWS[tid]
+        vals: dict[str, Any] = {}
+        for part in params.split("-eps"):
+            if part.startswith(("n", "i", "v")) and part[1:].isdigit():
+                vals[part[0].upper()] = int(part[1:])
+            elif vals:
+                vals["EPS"] = float(part)
+        sub = _row_subcircuit(row, **vals)
+        if sub.id == sid:
+            return sub
+    raise KeyError(f"not a subcircuit id this catalogue binds: {sid!r}")
+
+
+__all__ = ["BF16_EDGES", "Draw", "GEMM_SEMANTICS", "GEMM_MODEL_ONLY", "NotEvaluable", "Port", "ROWS", "Subcircuit", "TEMPLATES", "Template",
+           "bf16_words", "decode_static", "encode_static", "get", "identify", "parse_subcircuit_id", "row_set_name", "subcircuit"]

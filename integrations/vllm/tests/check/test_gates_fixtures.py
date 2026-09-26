@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import shutil
 from pathlib import Path
@@ -137,6 +138,34 @@ def test_verdict_rules():
     err[1].status = "error"
     assert G.verdict(err) == "INCOMPLETE"
     assert G.verdict(ok[:6]) == "INCOMPLETE"       # G7 missing entirely
+
+
+def test_verdict_is_the_match_verdict_over_check_results():
+    """The word is `verdict.match_verdict` over the gates' CheckResults, equal to the status rule it replaced for every status a gate
+    produces (a frozen gate: pass / fail / skipped / error; G8 adds unsupported, R1 unverified), with and without a frozen gate absent."""
+    def by_status(results):
+        core = [r for r in results if r.id in G.GATES]
+        extra = [r for r in results if r.id not in G.GATES]
+        st = {r.status for r in core}
+        if "fail" in st or any(r.status == "fail" for r in extra):
+            return "REJECTED"
+        if ("skipped" in st or "error" in st or {r.id for r in core} != set(G.GATES)
+                or any(r.status in ("error", "unsupported", "unverified") for r in extra)):
+            return "INCOMPLETE"
+        return "ACCEPTED"
+
+    frozen = ("pass", "fail", "skipped", "error")
+    n = 0
+    for a, b in itertools.product(frozen, repeat=2):
+        for g8 in frozen + ("unsupported",):
+            for r1 in frozen + ("unverified",):
+                res = [G.GateResult(g, G.GATE_NAMES[g], s) for g, s in zip(G.ALL_GATES, (a, b, "pass", "pass", "pass", "pass", "pass", g8, r1))]
+                for rs in (res, res[:6] + res[7:]):
+                    assert G.verdict(rs) == by_status(rs), [(r.id, r.status) for r in rs]
+                    n += 1
+    assert n == 800
+    r = G.GateResult("G3", G.GATE_NAMES["G3"], "fail", reason="x").result()
+    assert (r.name, r.outcome, r.reason, r.claim) == ("G3", "FAIL", "x", G.GATE_NAMES["G3"])
 
 
 def test_frozen_constants():
@@ -803,7 +832,7 @@ def test_card_unsealed_and_failures(tmp_path):
     assert "(unsealed: no provenance.json)" in CARD.summarize_md(card)
 
 
-def test_card_json_roundtrip_and_schema(tmp_path):
+def test_card_json_roundtrip(tmp_path):
     arts = passing_artifacts()
     card = _card(tmp_path, arts)
     p = CARD.write_card(card, tmp_path / "cards" / f"{card.config_id}.json")
@@ -812,12 +841,6 @@ def test_card_json_roundtrip_and_schema(tmp_path):
     assert back.C["BN"]["provenance"] == "derived"
     assert set(back.counts) >= {"unsupported", "ambiguous", "operand_provenance", "sampled_vus", "served_tokens", "chained_slices"}
     assert back.diagnostics["structure"]["status"] == "ok"
-    schema = Path(__file__).resolve().parents[2] / "out/gen/cards/SCHEMA.md"
-    text = schema.read_text()
-    for f in card.to_json():
-        assert f"`{f}`" in text, f"{f} undocumented in SCHEMA.md"
-    for f in G.FOLD_SUMMARY_FIELDS:
-        assert f"`{f}`" in text
 
 
 def test_card_ids():

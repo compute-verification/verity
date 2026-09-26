@@ -1,6 +1,6 @@
 """Live soundness budget of the GPU prover's proof: ``security.accounting.account_candidate_a`` on the instance proved.
 
-Model: the interactive protocol of PROTOCOL.md (Candidate A, "Fiat-Shamir is not used"): the verifier's coins are
+Model: the interactive protocol of PROTOCOL.md (A-GKR, "Fiat-Shamir is not used"): the verifier's coins are
 live.  The benchmark harness derives them as SHA-256(statement, transcript prefix) so that a proof file can be
 re-checked offline (``verity-gkr-verify``); no Fiat-Shamir soundness is claimed for that file (under the campaign's
 ``q x eps`` rule every statistical term below would be multiplied by 2^60).  Terms, BabyBear^6 challenges
@@ -80,12 +80,15 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
     return B
 
 
-def summary(B) -> dict:
+def summary(B, live: bool = False) -> dict:
+    """``live``: the proof's coins were the live verifier's (route (a), PROTOCOL 17.6), not derived from its transcript."""
     by = {c: round(math.log2(v), 2) for c, v in B.by_component().items() if v}
     top = max(B.soundness_terms(), key=lambda tm: tm.error)
     return {"achieved_log2": math.log2(B.total()), "by_component_log2": by,
             "dominant_term": {"component": top.component, "name": top.name, "log2": round(top.log2, 2)},
             "hash": f"SHA-512 Merkle (generic q^2/2^{HASH_BITS}, q = 2^{int(math.log2(HASH_QUERIES))})",
-            "model": "interactive (PROTOCOL.md A); proof files derive the coins as SHA-256(transcript) for offline "
-                     "re-checking, no Fiat-Shamir soundness is claimed",
+            "model": ("interactive (PROTOCOL.md A), coins live: every challenge issued by the session's verifier after the "
+                      "transcript state committing the messages before it (PROTOCOL 17.6); the record's rounds replay it") if live else
+                     ("interactive (PROTOCOL.md A); proof files derive the coins as SHA-256(transcript) for offline "
+                      "re-checking, no Fiat-Shamir soundness is claimed"),
             "source": "backends/gkr/soundness.py -> security.accounting.account_candidate_a on the proved instance"}

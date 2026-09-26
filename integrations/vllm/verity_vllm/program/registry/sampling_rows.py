@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.program.registry import derived_rows as DR
+from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import sampling as SP
 
 U32 = np.uint32

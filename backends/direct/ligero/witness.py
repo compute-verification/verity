@@ -92,6 +92,12 @@ def _run_program(sys: System, W: torch.Tensor, pub_rows: torch.Tensor, hints: to
             k0 = _const(("k0", id(op), dk), lambda v=k0s: torch.tensor(v, dtype=torch.int64, device=device)[:, None])
             k1 = _const(("k1", id(op), dk), lambda v=k1s: torch.tensor(v, dtype=torch.int64, device=device)[:, None])
             W[row0:row0 + len(k0s)] = ((x[None, :] >= k0) & (x[None, :] <= k1)).to(torch.int64)
+        elif kind == "xadd":
+            _, row0, lo, hi, olo, ohi = op             # honest: lo, hi sums of 16-bit limbs; olo, ohi limbs
+            s = (eval_expr(lo, W) + (eval_expr(hi, W) << 16)) & 0xFFFFFFFF
+            x = s ^ (eval_expr(olo, W) + (eval_expr(ohi, W) << 16))
+            shifts = _const(("shifts", 32, dk), lambda: torch.arange(32, dtype=torch.int64, device=device)[:, None])
+            W[row0:row0 + 32] = (x[None, :] >> shifts) & 1
         elif kind == "inv":
             from .field import batch_modinv
             _, idx, x = op

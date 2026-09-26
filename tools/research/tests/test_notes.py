@@ -880,6 +880,44 @@ def test_a_render_entry_opts_into_the_tables_preview(tmp_path):
     assert not (tmp_path / "plain" / "20260923T2100Z-tables-preview.md").exists()
 
 
+def test_a_render_entry_publishes_the_views_and_keeps_the_frozen_tables_as_a_drilldown(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npublished = "views"\npreview = true\n\n'
+                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "typo"\npublished = "view"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[2:])
+        return 0, f"# {cmd[2]}\n", ""
+
+    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
+    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views", "verity_numerical.bench.tables",
+                                     "verity_numerical.bench.drilldown"]
+    assert calls[1][-1] == calls[2][-1] == "--published" and "--published" not in calls[3] + calls[4]
+    assert calls[1][calls[1].index("--format") + 1] == "md" and calls[2][calls[2].index("--format") + 1] == "entities"
+    r = tmp_path / "r"
+    assert (r / "20260923T2100Z-tables.md").read_text() == "# verity_numerical.bench.views\n"
+    assert (r / "20260923T2100Z-tables-frozen.md").read_text() == "# verity_numerical.bench.tables\n"
+    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.json",
+                                                   "20260923T2100Z-tables.md"]
+    assert "21:00Z RENDER-FAILED typo@20:30Z: published = 'view': \"tables\", \"views\" or \"entities\"" in lines
+    assert not (tmp_path / "typo").exists()
+
+
+def test_an_entities_entry_renders_only_the_json_and_the_parity_gate(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npublished = "entities"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[2:])
+        return (1, "parity: DIFFERENT\n", "cells differ") if "--parity" in cmd else (0, "{}\n", "")
+
+    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
+    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views"]
+    assert calls[1][calls[1].index("--format") + 1] == "entities" and calls[1][-1] == "--published" and calls[2][-1] == "--parity"
+    assert sorted(p.name for p in (tmp_path / "r").iterdir()) == ["20260923T2100Z-tables.json"]
+    assert "21:00Z RENDER-FAILED r@20:30Z (views): cells differ" in lines
+
+
 def test_a_render_refreshes_its_store_with_the_payloads_its_readers_parse(tmp_path):
     (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "a"\nstore = "/s"\n\n'
                                            '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "b"\nstore = "/s"\npayloads = ["x/v1"]\n\n'

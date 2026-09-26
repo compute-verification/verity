@@ -1,4 +1,4 @@
-# Packed (base-field-first) sumcheck for Candidate A's GKR c-rounds -- design
+# Packed (base-field-first) sumcheck for A-GKR's GKR c-rounds -- design
 
 Lane `a-packed`, track A.  Question: how much of A's dominant bucket -- the checker sumcheck, 5.4e9 limb MACs per VU
 in `note:r20-proof/tensor-cost/20260922T0450Z-report-tensor`, priced with a 24-limb extension challenge on both sides of every product

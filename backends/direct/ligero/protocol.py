@@ -121,7 +121,8 @@ def _field_terms_ok(D: int, n: int, k: int, l: int, t: int, per_proof: float, zk
 
 def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
                t_pad: int | None = None, mode: str = MODE_INTERACTIVE) -> Config:
-    """t from Appendix C with k = l (no ZK padding) or k = l + t_pad (ZK: the padding is t_pad random *coefficients*
+    """t from Appendix C with k = l + 1 (no ZK padding: the conservative stand-in for k = l that ``soundness`` reports
+    and ligero-verify gates on) or k = l + t_pad (ZK: the padding is t_pad random *coefficients*
     of Z_H(x) s(x), so k need not be a power of two and n stays l << rate_log2 -- section 8b's "n = 32768" was the
     cost of rounding k to a power of two, which the coefficient form avoids) and the extension degree from
     ``security.accounting``: BabyBear^6 for 2^-128, BabyBear^4 for 2^-80 (the sensitivity point).  ``n_proofs > 1``:
@@ -142,15 +143,16 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
     shift = FS_QUERIES_LOG2 if fs else 0
     query_target = per_proof - shift
     k = l + (t_pad if zk else 0)
+    k_acc = k if zk else l + 1            # the k ``soundness`` (and ligero-verify) evaluates the bound at (BV-D1)
     while n <= 2 * k:                     # small-l ZK configurations (l <= t_pad): the quadratic test needs n > 2k
         n *= 2
-    t = acc.ligero_queries_for(query_target, n, k, l)
+    t = acc.ligero_queries_for(query_target, n, k_acc, l)
     while zk and not k > l + t:           # small l: the padding lowers the rate; double n until Lemma 4.15 holds
         n *= 2
-        t = acc.ligero_queries_for(query_target, n, k, l)
+        t = acc.ligero_queries_for(query_target, n, k_acc, l)
     # field terms: (n + 1 + 2) / p^D must stay under the (shifted) target; D = 6 at -128 interactive, 7 Fiat-Shamir
     D = 6 if target_log2 <= -100 else 4
-    while not _field_terms_ok(D, n, k, l, t, per_proof, zk, shift):
+    while not _field_terms_ok(D, n, k_acc, l, t, per_proof, zk, shift):
         D += 1
         if D > 12:
             raise acc.AccountingError("no extension degree <= 12 meets the target")

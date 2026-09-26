@@ -1,4 +1,4 @@
-"""A `verity.verification.query.Program` view of a derived Program.
+"""A `verity.proofs.query.Program` view of a derived Program.
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
@@ -38,7 +38,7 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator, Sequence
 
-from verity.verification.query import ValueRef
+from verity.proofs.query import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
            "spec_base", "spec_statics", "ports_of_type", "REGISTRY_MODULES", "param_reads", "reads_any_of", "iter_instance_rows"]

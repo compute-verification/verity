@@ -37,6 +37,7 @@ from .models import (
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_NVF4,
     HOPPER_BF16_M16N8K16,
+    HOPPER_BF16_WGMMA_K16,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
     Model,
@@ -60,7 +61,7 @@ class Instruction:
     model: Model | None
     status: Status
     evidence: tuple[str, ...] = ()
-    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``verity.verification.trust``).
+    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``verity.proofs.trust``).
     dossier: str | None = None
 
     def __post_init__(self) -> None:
@@ -134,6 +135,21 @@ _H100_BF16 = (
     "veritor docs/data/tc-hopper-2026-09-07 (H100, driver 580.178.04): wgmma.mma_async.sync.aligned.m64n128k16."
     "f32.bf16.bf16 / HGMMA.64x128x16.F32.BF16, 307,281,920 words, 0 mismatches against groups=(16,), width 26, "
     "floor -133 (verity.ml.tc.total.HOPPER_BF16_WGMMA_K16) -- the wgmma path, not mma.sync"
+)
+_H100_WGMMA_BF16 = (
+    "lane wgmma-bf16 (2026-09-26), tools/tc_probe on vy-wgmma-bf16-h100 (H100 80GB HBM3, driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, "
+    "GPU-d5e245b4-5429-c607-9efb-a3578c7334e2): one wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x "
+    "HGMMA.64x8x16.F32.BF16, against the total semantics (specials asserted).  A from shared memory (SS) r20260926-020157-242a "
+    "art:8f903385776fdb04bd3008120f44422b76fa4e2cbb5ad6533275a67548d7a6a0 and from registers (RS) r20260926-020210-aee8 "
+    "art:f9508ae817053e57d93332518608430d7988a7bf2fdf0fc0d58bcf6695ec74d5: each 26,361,344 swept elements in 14 families, 2,876,928 "
+    "elements of four back-to-back wgmma on one accumulator (K = 64: the chain of single steps), veritor's 44,046 records replayed, "
+    "0 mismatches; the Ampere pipeline misses 3.15M.  Words identical to the first pair (r20260926-015601-b530, -015605-bc89; same "
+    "seeds).  Canary r20260926-021005-456c art:4ca1294d1cf34183e57d638873ea6cbee75ee42054e88c6b105ac61e0f49b513 (26,624, 0)"
+)
+_H100_MMA_EQ_WGMMA = (
+    "lane wgmma-bf16 r20260926-023321-ecb5 (a second H100 80GB HBM3, GPU-7e095246-1454-01f4-2b76-197d7ab9d18b, driver 580.126.09): "
+    "mma.sync.m16n8k16 bf16, 25,833,472 swept elements, specials included, 0 mismatches against HOPPER_BF16_WGMMA_K16's total step; the "
+    "specials words equal the wgmma runs' word for word; veritor's 44,046 wgmma-recorded words re-executed through mma.sync, 0 mismatches"
 )
 _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
@@ -226,7 +242,22 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
             dossier="art:0664d5c367791927273cf038f0f6caa326a00801a3d563210c1969f159d3afff",
-            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16),
+            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16,
+                      _H100_MMA_EQ_WGMMA),
+        ),
+        # --- BF16 Hopper wgmma -----------------------------------------------------------------------------------
+        _i(
+            # The instruction vLLM's H100 BF16 GEMMs (cuBLAS, CUTLASS, Triton) and FA3 issue.  Same parameters as the mma.sync
+            # path's model, a separate entry so that a subcircuit names the instruction production runs.
+            id="sm90.wgmma.m64n8k16.bf16",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16",
+            shape=(64, 8, 16),
+            a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
+            model=HOPPER_BF16_WGMMA_K16,
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5, Ta) on 2026-09-26 before this entry was added
+            dossier="art:50508ab77719ba3d93bd2985416eba0029116f313304a4632e67ad0dd28579d9",
+            evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
         _i(
@@ -313,10 +344,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
             # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; lane fp4-proof's fresh-seed sweep
-            # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.verification.trust computed PINNED (P1-P5) on 2026-09-23
+            # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.proofs.trust computed PINNED (P1-P5) on 2026-09-23
             # before this flip (registry <= computed level, lane pin-bf16).  Re-published once lane fp4-proof's B-Ligero
             # relation supplied Tc (2,048 honest VUs / 3,131 negatives, art:098c184a...): still PINNED, Ta and Tc now PASS,
-            # Td (hardware-in-the-loop replay of the frozen instance set) open.  Previous: art:de42d6cad7c63a387d64535efc...
+            # Td (hardware-in-the-loop replay of the frozen input set) open.  Previous: art:de42d6cad7c63a387d64535efc...
             status="pinned",
             dossier="art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
             evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4, _PIN_FP4,
@@ -349,7 +380,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM100_NVF4,
-            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), "
                       "r20260923-001759-d869 (6,463,488 + probe3 1,601/1,601), r20260923-001856-7d63 (1,134,592, K=128 chain), "
@@ -365,7 +396,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM100_MXF4,
-            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 "
                       "(3,956,736) and r20260923-002320-6fbf (3,956,736), kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and "

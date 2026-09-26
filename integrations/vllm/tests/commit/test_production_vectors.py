@@ -155,6 +155,35 @@ def test_integer_like_fields_are_coerced() -> None:
     assert got.hex() == next(c["root"] for c in VECTORS["roots"] if c["kind"] == "step")
 
 
+class _GpuLayout:
+    """``native_host._gpu_layout``'s duck-typed block layout: (HB, M, NB) = (step, padded words, block kind)."""
+
+    def __init__(self, HB: int, M: int, NB: int = 0) -> None:
+        self.HB, self.M, self.NB = HB, M, NB
+
+
+def _pre_c1_chunk_header(layout, launch_tag: int, chunk_index: int, chunk_words: int, src_mask: int) -> bytes:
+    """The integration's host header before it routed through core: every word masked to u32 by ``pack_words``, as the kernels write it."""
+    return hs.pack_words([scheme.FA2H_TAG, (scheme.FA2H_VERSION << 16) | (scheme.FA2H_KIND_CHUNK << 8) | (src_mask & 0xFF), launch_tag,
+                          chunk_index, chunk_words, layout.HB, layout.M, layout.NB, 0, 0, 0, 0, 0, 0, 0, 0])
+
+
+@pytest.mark.parametrize("M", [0, 8, 2**32 - 1, 2**32, 2**32 + 7, 5036944512, 2**40 + 3])
+def test_chunk_header_matches_the_pre_c1_u32_header(M: int) -> None:
+    layout = _GpuLayout(4, M, 1)
+    assert scheme.chunk_header(layout, 4, 17, 64, 3) == _pre_c1_chunk_header(layout, 4, 17, 64, 3)
+    if M < 2**32:
+        assert scheme.chunk_header(layout, 4, 17, 64, 3) == ref.chunk_header(launch_tag=4, chunk_index=17, chunk_words=64, src_mask=3,
+                                                                             HB=4, M=M, NB=1)
+
+
+def test_chunk_header_of_a_step_past_2_32_words() -> None:
+    step, m = 4, 5036944512
+    header = scheme.chunk_header(_GpuLayout(step, m), step, 0, 64, 0)
+    assert header[24:28] == (m % 2**32).to_bytes(4, "little")
+    assert header == ref.chunk_header(launch_tag=step, chunk_index=0, chunk_words=64, src_mask=0, HB=step, M=m - 2**32, NB=0)
+
+
 def test_id_leaf() -> None:
     *leaves, ids = VECTORS["id_leaf"]
     for case in leaves:

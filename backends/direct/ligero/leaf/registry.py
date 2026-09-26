@@ -41,9 +41,9 @@ def canonical(name: str | None) -> str:
     return ALIASES.get(n, n)
 
 
-#: the in-tree schemes (each module registers itself on import); a scheme whose optional dependency is missing is skipped.
+#: the in-tree scheme modules (each registers itself on import); a scheme whose optional dependency is missing is skipped.
 #: The test-only ``dummy`` is NOT here: a test imports ``leaf.dummy`` explicitly.
-BUILTIN = ("poseidon2", "blake3", "sha256", "ajtai")
+BUILTIN = ("poseidon2", "blake3", "blake3_xob", "sha256", "vllm_v1", "ajtai")
 
 
 def _ensure_builtin() -> None:
@@ -108,8 +108,8 @@ def _known() -> str:
 
 
 def by_schema(schema: str) -> LeafScheme:
-    """The scheme whose leaf ``schema`` string this is (the statement reader's check that the block names the scheme the
-    relation suffix names).  Registered schemes only (a family member is found through its relation suffix)."""
+    """A scheme whose leaf ``schema`` string this is, the first registered (``blake3`` and ``blake3-xob`` share one: the
+    same leaf, two circuits).  Registered schemes only (a family member is found through its relation suffix)."""
     _ensure_builtin()
     for n, proto in _PROTOTYPES.items():
         if proto.schema == schema:

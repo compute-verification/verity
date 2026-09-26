@@ -1,6 +1,6 @@
 # B-Ligero at the checker-v2 relation: the witness shape (b-v2 lane, 2026-09-22)
 
-**Scope: the Ligero layout** of Candidate B for checker v2 (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`, `checker/v2/`:
+**Scope: the Ligero layout** of B-Ligero for checker v2 (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`, `checker/v2/`:
 the same relation as v1 -- every accepted pair is accepted by both -- with 33 mul / 9 lin / 89 lookups / 15 hints per
 unit instead of 358 / 137 / 306 / 225, at the price of 5.2M fixed-table rows).  Computed by `v2_shape.py` from the v2
 census under `VERITY_CHECKER_VARIANT=v2` plus the BabyBear repairs of `explore.fields.small_field_census`

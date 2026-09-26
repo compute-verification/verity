@@ -13,6 +13,7 @@ Eight constructions run in parallel (~20 s on a 128-vCPU pod, ~1.9 GB RSS each);
 (iv)  reuse of an artifact under a mismatched profile / applicability is rejected with every differing field named;
 plus: the Program digest of B0 8/4 is unchanged by the patch; the dead env `VLLM_ATTENTION_BACKEND` is not a declared fact."""
 
+import glob
 import json
 import os
 import subprocess
@@ -28,6 +29,7 @@ from verity_vllm.program.frontend.target_profile import ApplicabilityError, Arti
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # A's cp-cba request_8_4 == CB-C2's cp-cbc sens/base
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CORE_SRC = os.path.join(os.path.dirname(os.path.dirname(REPO)), "packages", "verity", "src")
 HF_HOME = os.environ.get("HF_HOME", "/workspace/hf")
 SNAP = os.path.join(HF_HOME, "hub", "models--HuggingFaceTB--SmolLM2-135M", "snapshots", "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "config.json")
 if not os.path.exists(SNAP):
@@ -61,7 +63,7 @@ _HOSTILE_EXPORT = textwrap.dedent("""
 
 
 def _env(extra=None, gpu_visible=False):
-    e = dict(os.environ, CUDA_VISIBLE_DEVICES="", HF_HUB_OFFLINE="1", HF_HOME=HF_HOME, PYTHONPATH=REPO, VLLM_BATCH_INVARIANT="1", OMP_NUM_THREADS="8")
+    e = dict(os.environ, CUDA_VISIBLE_DEVICES="", HF_HUB_OFFLINE="1", HF_HOME=HF_HOME, PYTHONPATH=os.pathsep.join([REPO, CORE_SRC]), VLLM_BATCH_INVARIANT="1", OMP_NUM_THREADS="8")
     if gpu_visible:  # a second "construction host": whatever GPU the pod has stays visible (the declared target must still win)
         e.pop("CUDA_VISIBLE_DEVICES", None)
     e.update(extra or {})
@@ -74,7 +76,7 @@ def builds(tmp_path_factory):
     procs = {}
     for name, target in CASES.items():
         out = root / name
-        cmd = [sys.executable, "-m", "verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
+        cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         if target:
             cmd += ["--target", target]
         procs[name] = (out, subprocess.Popen(cmd, cwd=REPO, env=_env(), stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
@@ -82,11 +84,11 @@ def builds(tmp_path_factory):
     procs["export_divergence"] = (out, subprocess.Popen([sys.executable, "-c", _HOSTILE_EXPORT, str(out)], cwd=REPO, env=_env(),
                                                         stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
     out = root / "dead_env"  # the default profile with the dead variable set in the environment
-    procs["dead_env"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request",
+    procs["dead_env"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
                                                 "--LP", "8", "--T", "4"], cwd=REPO, env=_env({"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}),
                                                stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
     out = root / "gpu_host"  # the default profile on a host whose GPU (if any) is NOT hidden: a second construction host for (iii)
-    procs["gpu_host"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request",
+    procs["gpu_host"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
                                                 "--LP", "8", "--T", "4"], cwd=REPO, env=_env(gpu_visible=True),
                                                stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
     res = {}
@@ -273,7 +275,8 @@ def test_dead_env_var_is_recorded_as_ignored_not_declared(builds):
 
 
 def test_no_target_literal_remains_in_the_builder_sources():
-    for rel in ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/rules/vllm_bindings.py", "verity_vllm/program/frontend/vllm_meta.py"):
+    bindings = sorted(os.path.relpath(p, REPO) for p in glob.glob(os.path.join(REPO, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))
+    for rel in ("verity_vllm/program/frontend/export_compat.py", *bindings, "verity_vllm/program/frontend/vllm_meta.py"):
         src = open(os.path.join(REPO, rel)).read()
         assert "DeviceCapability(major=8" not in src and "8.9 (sm_89, Ada)" not in src, rel
         assert 'os.environ.get("VLLM_ATTENTION_BACKEND")' not in src, rel

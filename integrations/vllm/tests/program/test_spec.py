@@ -17,7 +17,7 @@ from verity.ir import Program, bind  # noqa: E402
 from verity.ir.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.registry import spec  # noqa: E402
 from verity_vllm.program.registry.b1 import Serve  # noqa: E402
-from verity_vllm.program.registry.crosscheck import _standalone  # noqa: E402
+from tests.program.crosscheck import _standalone  # noqa: E402
 
 U32 = 0xFFFFFFFF
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

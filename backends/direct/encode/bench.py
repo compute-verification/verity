@@ -2,8 +2,8 @@
 
     python -m encode.bench --reps 7 --out result.json [--encoders simt,cublas,triton] [--shapes B,A] [--quick]
 
-Shapes (BabyBear, [n=16384, k=4096], B = 4096 K = 1536 at 2^-128): Candidate B 310,602 rows (5.09 GB in, 20.36 GB
-out), Candidate A 48,873 rows (0.80 GB in, 3.20 GB out).  The B batch does not fit beside its input on a 24 GB card,
+Shapes (BabyBear, [n=16384, k=4096], B = 4096 K = 1536 at 2^-128): B-Ligero 310,602 rows (5.09 GB in, 20.36 GB
+out), A-GKR 48,873 rows (0.80 GB in, 3.20 GB out).  The B batch does not fit beside its input on a 24 GB card,
 so every encoder streams the batch in row slices (``--slice-rows``, default 65,536: 1.07 GB in + 4.29 GB out per
 slice); the batch time is the CUDA-event time of the whole slice loop (kernel launches only; the slices' input is a
 resident buffer, the cost is data-independent).  The unfused cuBLAS matrix-DFT is measured on ``--cublas-rows`` rows

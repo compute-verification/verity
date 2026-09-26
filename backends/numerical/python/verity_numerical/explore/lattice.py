@@ -2,7 +2,7 @@
 
 Question (``backends/LANES_OVERNIGHT.md`` section 1): for the exact bounded-integer checker (358 mul / 137 lin / 306
 lookups per 16-product unit; 76,808 predicates per K=1536 VU; every honest witness value a non-negative integer below
-2^40) and the B = 4096 batch, is there a credible path to lower *complete* prover cost than Candidates A/B/C?  Same
+2^40) and the B = 4096 batch, is there a credible path to lower *complete* prover cost than A-GKR, B-Ligero and the VOLE candidate?  Same
 units as ``explore.tensor``: UINT8 x UINT8 -> INT32 limb MACs on tensor cores, SIMT field multiplications, bytes; time
 on an H100 at the INT8 dense peak times a stated utilisation; ``overhead.vs_native_peak`` against 9.85 ps per VU.
 
@@ -24,7 +24,7 @@ kinds and the distinction is the whole scout:
   decomposition with a *vanishing-polynomial* (exact) range check proved by sumcheck (Akita 6.1: balanced base-``b``
   digits, degree ``b/2`` after the ``w -> w(w+1)`` symmetry, GKR-style product tree).  Coordinate-wise constraints are
   native (CCS / R1CS), and the checker's ``mod nothing`` equalities embed exactly as long as ``q`` exceeds every
-  intermediate (:func:`exact_embedding`).  This is Candidate A's structure with the PCS swapped.
+  intermediate (:func:`exact_embedding`).  This is A-GKR's structure with the PCS swapped.
 
 So the only complete lattice design that fits the checker is "A's sumchecks + a lattice PCS"; the LaBRADOR-direct
 route (:func:`labrador_direct`) is priced for the record and is dominated by the ``r x N`` aggregation products of its
@@ -245,7 +245,7 @@ RESPONSE_DIGIT_BITS = 4
 
 #: ASSUMPTIONS for column widths the census does not record: looked-up row columns (POW 512 rows x 3, ALIGN 512 x 4,
 #: LEAD 31 x 3, NORM 32 x 4 -> outputs up to 32 bits; 16 taken as the mean), query wires on computed values (up to 2^40:
-#: 32 taken), Candidate B's product triples (operands copied: their own widths; products: sum of operand widths ~ 32).
+#: 32 taken), B-Ligero's product triples (operands copied: their own widths; products: sum of operand widths ~ 32).
 LOOKUP_OUTPUT_BITS = 16
 QUERY_WIRE_BITS = 32
 PRODUCT_BITS = 32
@@ -263,7 +263,7 @@ class WitnessBits:
 
     @property
     def total_a(self) -> int:
-        """Candidate A's committed set: inputs + hints + looked-up columns (+ query wires when committed)."""
+        """A-GKR's committed set: inputs + hints + looked-up columns (+ query wires when committed)."""
         return self.inputs + self.hints + self.lookup_outputs + self.query_wires
 
     @property
@@ -375,7 +375,7 @@ def _a_row(field: str = "babybear", target: int = -128) -> dict:
 
 def design_lattice_pcs(msis_key: str = "q64_chunk16", candidate: str = "A", target_log2: int = -128,
                        commit_query_wires: bool = True, fold_arity: int = FOLD_ARITY) -> dict:
-    """Candidate A (or B's trace) with the RS-Ligero + Merkle commitment replaced by a lattice PCS: Ajtai commitment
+    """A-GKR (or B's trace) with the RS-Ligero + Merkle commitment replaced by a lattice PCS: Ajtai commitment
     of the source digits, K-ary fold opening (sumcheck), Ajtai commitment of the response, exact digit range check of
     the response.  Everything that is not the commitment layer is taken from ``explore.tensor``'s A row on the field
     the modulus dictates (the sumcheck field must contain Z_q): Goldilocks^3 for a 64-bit q, BabyBear^6 for a 32-bit q

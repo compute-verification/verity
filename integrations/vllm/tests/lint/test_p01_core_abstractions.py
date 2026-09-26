@@ -7,13 +7,14 @@ Checked today, against ``allowlists/p01_core_abstractions.json``:
   ``codec._LAZY_PRIMITIVE_FAMILIES = ...``.
 * ``core-private``: importing a ``_private`` name or module from ``verity``, or reading ``_private`` off an imported
   core module or object.
-* ``definition-id``: a Definition id (name and version, from ``@primitive(...)``, ``PrimitiveDefinition(...)`` or
-  ``CompositeDefinition(...)`` with literal arguments and without ``register=False``) that another file, in the
-  integration or in core, also registers.  One entry per integration file and id.
+* ``definition-id``: a Definition id (name and version, from ``@primitive(...)``, ``@composite(...)``,
+  ``PrimitiveDefinition(...)`` or ``CompositeDefinition(...)`` with literal arguments and without ``register=False``)
+  that another file, in the integration or in core, also registers.  One entry per integration file and id.
 
-Not checked here: a test that imports ``verity.ml`` and every integration registry in one process (today core's
-Definition registry refuses the duplicates that ``definition-id`` pins statically); one id computing two functions,
-which only evaluation can see; and verifying a production opening with core alone.
+Not checked here: ids built at run time, such as the ``Const<w>[0x..]`` family (``tests/program/
+test_registry_one_process.py`` loads ``verity.ml`` and every integration registry module into one process, where
+core's Definition registry refuses a second object under an id); one id computing two functions, which only
+evaluation can see; and verifying a production opening with core alone.
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ NAME = "p01_core_abstractions"
 RULE = "P1 (use core's abstractions; never copy or patch them)"
 MUTATORS = frozenset({"append", "extend", "insert", "update", "setdefault", "pop", "popitem", "clear", "add", "remove",
                       "discard", "__setitem__", "__delitem__"})
-DEFINITION_CALLS = frozenset({"primitive", "PrimitiveDefinition", "CompositeDefinition"})
+DEFINITION_CALLS = frozenset({"primitive", "composite", "PrimitiveDefinition", "CompositeDefinition"})
 
 
 def _core(origin: str | None) -> bool:
@@ -163,5 +164,6 @@ def test_detectors_on_examples() -> None:
     good = "from verity.ir.defs import primitive, CompositeDefinition\nx = CompositeDefinition('A', 1, (), None, None)\nx.doc = 'd'\n"
     assert file_violations(good, "verity_vllm/a.py") == []
     tree = ast.parse("@primitive('Bf16ToF32', 1, [], None)\ndef f(a): return a\n"
-                     "G = CompositeDefinition('G', 2, (), None, None, register=False)\n")
-    assert [d for d, _, _ in definitions(tree)] == ["Bf16ToF32_v1"]
+                     "G = CompositeDefinition('G', 2, (), None, None, register=False)\n"
+                     "@composite('Gemm', 2, ['K', 'N', 'DOT'], None)\ndef g(B, S, x, w): return x\n")
+    assert sorted(d for d, _, _ in definitions(tree)) == ["Bf16ToF32_v1", "Gemm_v2"]

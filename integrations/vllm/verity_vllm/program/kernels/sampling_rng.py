@@ -25,18 +25,19 @@ Exactness budget (what is bit-exact and what is not):
     case the division result is *in the captured logits* and the argmax input is exact.
 
 CLI (laptop, CPU-only, needs the run's log + snapshots):
-    python -m verity_vllm.program.kernels.sampling_rng --run RUN_DIR [--out RUN_DIR/rng_check.json]
+    verity-vllm sampling-rng --run RUN_DIR [--out RUN_DIR/rng_check.json]
 """
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
+
+from verity_vllm.config import option
 
 # Triton `random.py` (32-bit path) and vLLM `gumbel.py` constants
 PHILOX_KEY_A = np.uint32(0x9E3779B9)
@@ -280,13 +281,15 @@ def _small_int_arg(store, launch, name: str):
     return w.view(np_dt).astype(np.int64) if np_dt is not None else None
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--run", required=True, help="run dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
-    ap.add_argument("--log", default=None)
-    ap.add_argument("--snapshots", default=None)
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    run: str = option("--run", help="run dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
+    log: str | None = option("--log", default=None)
+    snapshots: str | None = option("--snapshots", default=None)
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     run = Path(a.run)
     log = Path(a.log) if a.log else run / "capture" / "log.jsonl.gz"
     snaps = Path(a.snapshots) if a.snapshots else log.parent
@@ -302,7 +305,3 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"  step {r['step']} row {r.get('row')}: {r['status']} {r.get('note', '')}")
     return 0 if s["mismatch"] == 0 else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

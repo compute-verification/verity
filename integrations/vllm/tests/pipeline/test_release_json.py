@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -142,69 +141,49 @@ def test_native_collect_build_dir_per_tree():
     assert rj.native_collect_build_dir("/workspace/cp/r17-int-1/") == "/workspace/cp/nc_build-r17-int-1"
 
 
-def test_cli_check_and_line_with_system_python(tmp_path):
-    """row_pod / pod_release call the file with the pod's system python3: stdlib only, exit codes as documented."""
+def test_cli_check_and_line_as_a_process(tmp_path):
+    """The row reads its release line through `verity-vllm release-json line` in a child process: exit codes and output as documented."""
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
     rj.write_record(_rec(own), str(own), str(pod))
-    py = [sys.executable, str(HERE / ".." / "pipeline" / "release_json.py")]
-    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
+    py = [sys.executable, "-m", "verity_vllm.pipeline.cli", "release-json"]
+    cwd = HERE.parents[1]
+    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True,
+                       cwd=cwd)
     assert r.returncode == 0 and r.stdout.startswith("RELEASE-TREE-OK r16-int-3 a2dabe493 tree=")
-    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-4", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
+    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-4", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True,
+                       cwd=cwd)
     assert r.returncode == 1 and r.stdout.startswith("RELEASE-TREE-FAIL")
-    r = subprocess.run(py + ["line", str(own), "--pod-path", str(pod)], capture_output=True, text=True)
+    r = subprocess.run(py + ["line", str(own), "--pod-path", str(pod)], capture_output=True, text=True, cwd=cwd)
     line, src = r.stdout.rstrip("\n").split("\t")
     assert r.returncode == 0 and line.startswith("r16-int-3|commit=a2dabe493 ") and src.endswith("/r16-int-3/RELEASE.json")
-    r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True)
+    r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True, cwd=cwd)
     assert r.stdout.strip() == "/workspace/cp/nc_build-r16-int-3"
 
 
-def test_pod_release_sh_writes_through_the_module_and_checks():
-    """The shell side: no constant tree, the module gets --tree "$TREE", the record is re-read after the ship, the pod-side steps run
-    under the per-pod lock with the per-tree collector build dir."""
-    s = (HERE / "pod_release.sh").read_text()
-    assert '"tree": "/workspace/cp/veritor"' not in s and "os.path.realpath(os.getcwd())" not in s
-    assert re.search(r'release_json write --tag "\$TAG" --tree "\$TREE"', s)
-    assert re.search(r"release_json\.py check --tree '\$TREE' --tag '\$TAG' --commit '\$HEAD9'", s)
-    assert "RELEASE-TREE-OK" in s and "RELEASE-FAIL $TAG $POD: RELEASE.json does not name the installed tree" in s
-    assert re.search(r"flock -w \$\{RELEASE_LOCK_WAIT_S:-3600\} /workspace/cp/release\.lock bash -s", s)
-    assert re.search(r'NC_BUILD=\$\(python3 verity_vllm/pipeline/release_json\.py nc-build "\$TREE"\)', s)
-    assert "NATIVE_COLLECT_BUILD=${NC_BUILD:-/workspace/cp/nc_build}" in s
-    assert '--nc-build "$NATIVE_COLLECT_BUILD"' in s
-    # the TREE the pod side sees is the REMOTE_TREE the laptop side resolved; readiness uses the same collector build dir
-    assert re.search(r"TREE='\$TREE' NC_BUILD='\$NC_BUILD'", s)
-    assert 'REMOTE_ENV="${REMOTE_ENV:-} NATIVE_COLLECT_BUILD=$NC_BUILD"' in s
-    assert subprocess.run(["bash", "-n", str(HERE / "pod_release.sh")]).returncode == 0
-
-
-def test_row_pod_sh_reads_the_release_through_the_module():
-    """row_pod's REL-09 line: from release_json.py (tree-local first), the record USED is the one copied into the evidence, and a
+def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
+    """The row's REL-09 line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
-    s = (HERE / "row_pod.sh").read_text()
-    assert 'json.load(open("/workspace/cp/RELEASE.json"))' not in s      # no direct pod-wide read any more
-    assert re.search(r'REL_OUT=\$\(python3 verity_vllm/pipeline/release_json\.py line "\$TREE_HERE"', s)
-    assert 'cp "$REL_SRC" "$D/release.json"' in s and 'cp /workspace/cp/RELEASE.json "$D/release.json"' not in s
-    assert "NCB_SET=${NATIVE_COLLECT_BUILD:-}" in s and "get('build_dirs') or {}).get('native_collect')" in s
-    assert subprocess.run(["bash", "-n", str(HERE / "row_pod.sh")]).returncode == 0
+    from tests.pipeline.test_row import _row
+    rel = tmp_path / "RELEASE.json"
+    rel.write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
 
+    def prepared(*flags, environ=None):
+        r = _row(tmp_path / "sweep", "--native-collect-default", str(tmp_path / "nc_default"), *flags, environ=environ)
+        monkeypatch.setattr(r, "release_line", lambda fallback: (f"r16-int-3|commit=a2dabe493 tree={r.tree}", str(rel)))
+        for step in ("precheck_identity", "precheck_target", "admission", "install_signal_forwarding"):
+            monkeypatch.setattr(r, step, lambda: None)
 
-def test_pod_release_busy_pattern_names_the_stage_processes_launched_outside_row_pod():
-    """[R18 infra, F-r18-infra-2, M-0105] pod_release.sh busy(): a Match stage run outside row_pod.sh from the default tree (run_config +
-    its m1_capture / fold workers, cb_a.global_match, cb_a.compare) is row-like -- cp-r18-l40s 22:57Z the int-2 ship landed under x09's
-    fold the moment the capture freed the GPU.  The pgrep -f pattern is applied to real command lines of that shape."""
-    src = (HERE / "pod_release.sh").read_text()
-    m = re.search(r"pgrep -f '([^']+)' \| grep -v -w", src)
-    assert m, "busy() pgrep pattern not found"
-    pat = re.compile(m.group(1))
-    row_like = [
-        "bash verity_vllm/ops/row_pod.sh smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager B0 wl.json /d build",
-        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --case MISTRAL7B --workload w.json --out /o/match --phase all",
-        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --worker fold --log /o/match/capture/log.jsonl.gz",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.m1_capture --case MISTRAL7B",
-        "/workspace/venv-py312/bin/python -m verity_vllm.check.match.global_match --gprog p.json --workload w.json",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit --case B0 --workload w.json",
-    ]
-    for cmd in row_like:
-        assert pat.search(cmd), cmd
-    for cmd in ["/usr/bin/python3 zk/campaign/tele sample --attempt-dir /a", "nvidia-smi --query-gpu=memory.used --format=csv", "sshd: root@notty"]:
-        assert not pat.search(cmd), cmd
+        def shape():
+            r.B = r.I = r.O = r.LP = r.T = 1
+            r.ck = r.tgt = r.hidden_so = r.code9 = ""
+        monkeypatch.setattr(r, "shape", shape)
+        r.prepare()
+        return r
+    r = prepared()
+    assert json.loads((Path(r.d) / "release.json").read_text()) == json.loads(rel.read_text())
+    assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_rel")
+    assert json.loads((Path(r.d) / "tree.json").read_text())["release_line"].startswith("r16-int-3|commit=a2dabe493 ")
+    for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
+                   prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
+        assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")

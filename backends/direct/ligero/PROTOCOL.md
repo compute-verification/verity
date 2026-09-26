@@ -143,7 +143,8 @@ alone and was forgeable by choosing the claimed words after the challenges -- RE
 ## 6. Soundness accounting
 
 `security.accounting.ligero_error` (Appendix C, `e = (n - k)/2`, uniform combinations), with `k = l` (no ZK padding;
-`validate()` needs `l < k`, so `k = l + 1` stands in, conservative) and `F_challenge = BabyBear^D`:
+`validate()` needs `l < k`, so `k = l + 1` stands in, conservative; `config_for` sizes `t` and `D` at the stand-in too,
+so the reported bound meets the target, ligero-verify DISCREPANCIES BV-D1) and `F_challenge = BabyBear^D`:
 
     l = 4096, n = 16384, t = 189, D = 6:
       irs_query (1 - e/n)^t = (5/8)^189 = 2^-128.1    linear_query ((k+l)/n)^t = 2^-189    quadratic_query (2k/n)^t = 2^-189

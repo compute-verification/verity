@@ -68,7 +68,7 @@ def test_source_binds_shard_and_received_output_per_call_and_declares_two_per_st
     assert src.site_counts() == {"model.layers.0.self_attn.o_proj": 1, "model.layers.0.self_attn": 2}
     src.install()
     # the model module's OWN name is patched (the vllm layer modules are not importable here and are skipped)
-    assert any(mod.__name__ == THIS and attr == "tensor_model_parallel_all_gather" for mod, attr, _o in src._patched)
+    assert any(p.owner.__name__ == THIS and p.name == "tensor_model_parallel_all_gather" for p in src._hooks.entries)
     q, k, gq, gk = _T(4 * 1024), _T(4 * 1024), _T(4 * 2048), _T(4 * 2048)
     outs = iter([gq, gk])
     # drive a forward: self_attn.pre -> gather(q) -> gather(k) -> o_proj.pre -> all_reduce -> o_proj.post -> self_attn.post

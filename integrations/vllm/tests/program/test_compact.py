@@ -311,7 +311,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     every row of record runs) on both stores, record and fast; the fast document keeps naming it under impl.config.fold_load too."""
     import os
     from verity_vllm.pipeline import match as RC
-    from verity_vllm.check.match import global_match as gm
+    from verity_vllm.pipeline import cli
     from verity_vllm.check.match import global_match_fast as GMF
     from tests.check import test_global_match as T
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
@@ -325,7 +325,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
             gpp = tmp_path / f"gp_{tag}.json"; gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
-            gm.main(["--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
+            cli.main(["global-match", "--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
             docs[(impl, tag)] = json.load(open(out))
     for (impl, tag), d in docs.items():
         assert d["verdict"] == "PASS" and d["impl"]["name"] == impl, (impl, tag, d["reasons"])

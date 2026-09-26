@@ -43,12 +43,19 @@ files): interactive non-ZK `l = 256`: `t = 189`, `2^-127.73` (MISS); Fiat-Shamir
 the target (`2^-128.05` interactive ZK, `2^-128.04` FS ZK, `2^-128.25` / `2^-128.59` non-ZK at 25 x 170).  The gap
 is the one-symbol `k` mismatch and only bites where `(1 - e/n)^t` is the dominant term at small `n`.
 
+**Resolved (lane `ligero-hygiene`, 2026-09-25).**  The claim is made at the stand-in: `config_for` now sizes `t` and
+`D` at `k = l + 1` for non-ZK, the `k` that `soundness()` and ligero-verify evaluate.  Over 595 configurations
+(both modes, ZK and not, targets -80 / -100 / -128, 1 to 50 sub-batches, `l = 2^6 .. 2^15`) `soundness()` now meets the
+per-proof target everywhere (it missed 108 before).  ZK configurations and every `l >= 8192` configuration keep their
+`(t, D, n)`; small-`l` non-ZK ones gain a column or two (`l = 256` interactive at 2^-128: `t = 189 -> 190`).  The
+first visible casualty was the 2x4 shared-pair live test at 2^-100 (G at `l = 512`, `t = 149`: `2^-99.86` union).
+
 ~~~json
 {"id": "BV-D1", "issue": "config_for chooses t at k = l; soundness() reports at k = l + 1; verify() checks neither against the target. At l = 256 non-ZK the chosen t gives 2^-127.73 (interactive, t = 189) / 2^-127.88 (Fiat-Shamir, t = 278) by the reported formula. Unchanged by b-zk-fix.",
  "document": "PROTOCOL.md section 6: 'k = l (no ZK padding; validate() needs l < k, so k = l + 1 stands in, conservative)'",
  "code": "protocol.py config_for (k = l) vs soundness() (k = l + 1); verify() has no parameter check",
  "verifier": "recomputes the k = l + 1 bound from the statement and refuses below --soundness-bits (default 128)",
- "status": "open", "owner": "b-zk (decide which k the claim is made at; make the prover choose t at that k)",
+ "status": "resolved", "owner": "b-zk (decide which k the claim is made at; make the prover choose t at that k); resolved by ligero-hygiene: config_for sizes t and D at k = l + 1",
  "evidence": ["fixtures/rust_verdicts/small_interactive_plain.json", "fixtures/rust_verdicts/small_fiat-shamir_plain.json", "fixtures/rust_verdicts/small_*_plain_127.5.json", "runs r20260922-100145-374a, r20260922-111453-609b, r20260922-111531-e2d3"]}
 ~~~
 
@@ -230,7 +237,7 @@ the verdict; the reasons are listed side by side in `fixtures/rust_verdicts/*.js
 ## D9. `authentication = included` (lane `auth-included`): a third hash, two new file versions, and the check order
 
 The included result binds every published boundary word to three SHA-256 indexed Merkle trees of
-`verity.commitments` (`backends/direct/ligero/auth.py`: a-words, b-words, output words of the frozen instance set,
+`verity.commitments` (`backends/direct/ligero/auth.py`: a-words, b-words, output words of the frozen input set,
 one `u16` leaf per word, `RangeIndexedDomain(0, count)`, owner `-1 / -2 / -1`, binding = `identity_digest` of the
 dataset manifest + word range).  Facts a verifier needs that PROTOCOL.md does not state (the code is the reference):
 

@@ -40,6 +40,7 @@ from verity_vllm.commit import hashing, identity
 from verity_vllm.observe.capture_v1 import CaptureError, CaptureReader, Value
 from verity_vllm.commit.merkle import CommitError, Opening, TreeCache, verify_opening_in
 from verity_vllm.check.poc_description import Description, DescriptionError, NodeInstance
+from verity_vllm.commit import challenge as CH
 
 SAME_RUNTIME = "same_runtime"
 INDEPENDENT = "independent"
@@ -1155,7 +1156,7 @@ def draw_sample(
     (slots the run captured) and ``<op_type>:inactive`` (derived slots of the fixed population);
     inactive slots are drawn per position without enumerating the whole population.
     """
-    rng = np.random.default_rng(seed)
+    rng = CH.generator(seed)
     strata: dict[tuple[str, str, str], list[Any]] = {}
     wanted_types = set(op_types) if op_types is not None else None
     profile_id = reader.profile_id
@@ -1286,10 +1287,9 @@ def ensure_adjacent_pair(
     contains a pair or when the capture has no wired pair at all.
     """
     sample = list(sample)
-    pairs = adjacent_pairs(description, reader, sample)
-    if pairs:
+    if pairs := adjacent_pairs(description, reader, sample):
         return sample, pairs
-    rng = np.random.default_rng(seed)
+    rng = CH.generator(seed)
     order = [sample[i] for i in rng.permutation(len(sample))]
     for consumer in order:
         for name, ref in _node_inputs(description, reader, consumer):

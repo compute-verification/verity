@@ -50,6 +50,12 @@ R9_REFERENCE_MANIFESTS = [  # other construction hosts, same profile (pre-fix ma
     REPO / "out/gen/r10/cb-test/repro_base/sens/base/construction_manifest.json",             # cp-cb8 (L40S hidden), owner 9
 ]
 SOURCE_ROOTS = ("verity.ir", "verity_vllm", "EXPORT.json", "pyproject.toml")  # what a build needs (A's driver imports only these)
+#: core `verity` is not copied into the build trees (only the integration is mutated); the builds import it from the repo
+CORE_SRC = REPO.parents[1] / "packages" / "verity" / "src"
+
+
+def _pythonpath(tree: pathlib.Path) -> str:
+    return os.pathsep.join([str(tree), str(CORE_SRC)])
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # ADAPTER — the ONLY place allowed to know owner 8's names (from `out/gen/r10/cb-fix/design.md`). Every entry has a generic fallback.
@@ -286,12 +292,12 @@ class Harness:
             shutil.rmtree(out)
         out.mkdir(parents=True)
         e = dict(self.env_base)
-        e["PYTHONPATH"] = str(tree)
+        e["PYTHONPATH"] = _pythonpath(tree)
         if env:
             e.update(env)
         if gpu_visible:
             e.pop("CUDA_VISIBLE_DEVICES", None)
-        argv = ["verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
+        argv = ["verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         code = (preamble + "\nimport runpy, sys\nsys.argv = " + repr(argv) + "\nrunpy.run_module(sys.argv[0], run_name='__main__')\n")
         (self.work / name / "driver.py").write_text(code)
         t0 = time.time()
@@ -738,7 +744,7 @@ try:
 except Exception as e:
     print(json.dumps({{"api": True, "rejected": True, "reason": repr(e)[:1200]}}))
 """
-        p = subprocess.run([python, "-c", code], cwd=str(tree), env={**os.environ, "PYTHONPATH": str(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=600)
+        p = subprocess.run([python, "-c", code], cwd=str(tree), env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=600)
         try:
             j = json.loads(p.stdout.strip().splitlines()[-1])
         except Exception:  # noqa: BLE001
@@ -837,7 +843,7 @@ def reuse_check_cbfix(artifact_dir: pathlib.Path, requested: dict, tree: pathlib
     latter two is probed. Returns (rejected, reason); rejected=None when the API is absent (e.g. on the unpatched base)."""
     code = REUSE_PROBE_CBFIX.format(tp_mod=ADAPTER["target_profile_module"], mods=tuple(ADAPTER["reuse_api_modules"]))
     p = subprocess.run([python, "-c", code, str(artifact_dir), json.dumps(requested), json.dumps(tweak_applicability or {})], cwd=str(tree),
-                       env={**os.environ, "PYTHONPATH": str(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=900)
+                       env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=900)
     try:
         j = json.loads(p.stdout.strip().splitlines()[-1])
     except Exception:  # noqa: BLE001

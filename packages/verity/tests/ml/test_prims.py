@@ -7,9 +7,10 @@ import pytest
 
 from verity.ir.defs import REGISTRY
 from verity.ml import prims as P
-from verity.ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity.ml.tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
 NAN32, PINF32, NINF32, ONE32 = 0x7FC00000, 0x7F800000, 0xFF800000, 0x3F800000
 NAN16, PINF16, NINF16, ONE16, MAX16 = 0x7FC0, 0x7F80, 0xFF80, 0x3F80, 0x7F7F
@@ -87,6 +88,27 @@ def test_ampere_v2_pins_the_measured_special_values_v1_got_wrong() -> None:
     assert P.HopperBF16WgmmaDot16.evaluate(0, *a, *b) == 0x7FFFFFFF
     assert P.AmpereBF16TcDot16.evaluate(PINF32, *([ONE16] * 16), *([ONE16] * 16)) == PINF32   # infinities are sticky
     assert P.AmpereBF16TcDot16.evaluate(PINF32, *([NINF16] + [ONE16] * 15), *([ONE16] * 16)) == 0x7FFFFFFF  # +Inf + -Inf
+
+
+def test_fp8_primitives_are_the_tc_functions() -> None:
+    assert (P.F32ToE4m3Sat.id, P.HopperE4m3QgmmaDot32.id) == ("F32ToE4m3Sat_v1", "HopperE4m3QgmmaDot32_v1")
+    assert REGISTRY["F32ToE4m3Sat_v1"] is P.F32ToE4m3Sat and REGISTRY["HopperE4m3QgmmaDot32_v1"] is P.HopperE4m3QgmmaDot32
+    assert P.F32ToE4m3Sat.signature() == ((("x", P.F32),), P.E4M3)
+    assert P.HopperE4m3QgmmaDot32.signature() == ((("acc", P.F32), ("a", P.A32_8), ("b", P.A32_8)), P.F32)
+    rng = random.Random(5)
+    for x in [NAN32, 0xFFC00000, PINF32, NINF32, ONE32, 0, 0x80000000] + [rng.getrandbits(32) for _ in range(5000)]:
+        assert P.F32ToE4m3Sat.evaluate(x) == f32_to_e4m3_sat_word(x)
+    specials8 = [0x7F, 0xFF, 0x00, 0x80, 0x01, 0x7E, 0xFE, 0x38]
+    cases = [(rng.getrandbits(32), [rng.getrandbits(8) for _ in range(32)], [rng.getrandbits(8) for _ in range(32)])
+             for _ in range(300)]
+    for acc in (0, 0x80000000, ONE32, NAN32, PINF32, NINF32, 0x7F7FFFFF, 0x00000001):
+        for sa in specials8:
+            a, b = [0x38] * 32, [0x38] * 32
+            a[5], b[5] = sa, rng.choice(specials8)
+            cases.append((acc, a, b))
+    for acc, a, b in cases:
+        assert P.HopperE4m3QgmmaDot32.evaluate(acc, *a, *b) == tc_dot_total_e4m3(HOPPER_E4M3_WGMMA_K32, acc, a, b)
+    assert P.HopperE4m3QgmmaDot32.evaluate(0, *([0x38] * 64)) == 0x42000000  # 32 * (1 * 1)
 
 
 def test_const_primitives_are_memoised_and_decodable() -> None:

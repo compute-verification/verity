@@ -1,4 +1,4 @@
-# Candidate A on the GPU (torch + Triton, BabyBear^6)
+# A-GKR on the GPU (torch + Triton, BabyBear^6)
 
 Track A's prover (GKR + LogUp + Ligero, `../PROTOCOL.md`) for the **full K=1536 VU** (96 chained units + epilogue,
 PROTOCOL §12) at **batch 4096 on one H100**, in Python/torch with fused Triton kernels, over `F_{p^6}`,
@@ -79,7 +79,7 @@ ZK masking.
 
 ## Negatives
 
-`vu-k1536-neg` (52 instances): 52/52 rejected — 8 at witness generation (`bf16.t`/`acc.t: 255 not in [0, 255)`,
+`vu-k1536-neg` (52 inputs): 52/52 rejected — 8 at witness generation (`bf16.t`/`acc.t: 255 not in [0, 255)`,
 a hint outside its table range, i.e. the prover cannot even build an in-domain witness) and 44 by the verifier
 (`assertions phase-2a: round 0 sum mismatch`: the assertion layer's claimed zero is not zero).  An accepted negative
 would be a soundness bug; there are none.  Re-run with `negatives` below.

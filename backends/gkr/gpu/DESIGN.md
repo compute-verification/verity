@@ -1,4 +1,4 @@
-# Candidate A on the GPU: design
+# A-GKR on the GPU: design
 
 Track A's prover (GKR + LogUp + Ligero, `../PROTOCOL.md`) in torch (+Triton) over BabyBear^6, for the full
 K=1536 VU (96 chained units + epilogue, PROTOCOL §12) at batch 4096 on one H100.  The CPU Rust crate

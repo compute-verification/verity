@@ -38,6 +38,10 @@ record (`bench.m1_capture.ACCEPTED_TOKENS`, and `data/logs/m1_ctl_tokens.json` w
 ids of (a)'s `SampleEnd` == (b)'s engine outputs; hashes (a) == (b) for every (step, layer, hidden|residual) + final + logits.
 Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any mismatch.
 
+The record a run cites (`record`, `verity-vllm/noninterference/v2`, `<run>/properties/noninterference.json`) needs no engine of its
+own: the run's observed Match arm against its bare arm, per request, at tensor-parallel world 1 or 2 (a larger world is refused), with
+this comparison's boundary hashes folded in when given (world 1).
+
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. VLLM_BATCH_INVARIANT=1 VLLM_USE_V2_MODEL_RUNNER=1 \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_USE_FLASHINFER_SAMPLER=0 /workspace/venv-cu129/bin/python -m \
     verity_vllm.properties.noninterference --workload workloads/workload_32x16_1req.json --out /vol/cp/l5/nonint
@@ -45,7 +49,6 @@ Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
@@ -55,15 +58,19 @@ import subprocess
 import sys
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import option
+from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
+from verity_vllm.properties.record import seal
 
 # [SHARED-CODE lane cov-ln] the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE lanes) and GPT-NeoX `gpt_neox.layers.N` /
 # `gpt_neox.final_layer_norm` (Pythia).  The (b) hooks and the hooks-side parser read these; the Llama-shaped (a)-side rules
-# (`_DOWN_RE`, `_POST_RE`) stay Llama-only and the GPT-NeoX (a)-side boundaries are `_parallel_residual_boundaries` below.
+# (`_DOWN_RE`, `_POST_RE`) stay Llama-only and the GPT-NeoX (a)-side boundaries are `parallel_residual_boundaries`.
 _LAYER_RE = re.compile(r"^(?:model|gpt_neox)\.layers\.(\d+)$")
-_FINAL_NORM_MODULES = ("model.norm", "gpt_neox.final_layer_norm")
 _DOWN_RE = re.compile(r"^model\.layers\.(\d+)\.mlp\.down_proj$")
 _POST_RE = re.compile(r"^model\.layers\.(\d+)\.post_attention_layernorm$")
 #: MoE layers (OLMoE, lane `moe`): the layer's return[0] is the `vllm.moe_forward*` custom op's output (module hint
@@ -195,7 +202,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     handles = []
     hooked: list[str] = []
     for name, mod in eng.model.named_modules():
-        if _LAYER_RE.match(name) or name in _FINAL_NORM_MODULES or name in ("logits_processor", "lm_head"):
+        if _LAYER_RE.match(name) or name in FINAL_NORM_MODULES or name in ("logits_processor", "lm_head"):
             handles.append(mod.register_forward_hook(make_hook(name)))
             hooked.append(name)
     print(f"[nonint/b] {len(hooked)} forward hooks: {hooked[:3]} ... {hooked[-3:]}", flush=True)
@@ -292,101 +299,6 @@ def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dic
 # ---------------------------------------------------------------------------------------------------------
 
 
-_PRE_FF_RE = re.compile(r"^model\.layers\.(\d+)\.pre_feedforward_layernorm$")
-_POST_FF_RE = re.compile(r"^model\.layers\.(\d+)\.post_feedforward_layernorm$")
-
-
-def _unfused_norm_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[str]) -> None:
-    """[PROPOSED GEN dense2] the (a)-side boundaries of a family whose norms run unfused (Gemma-2: `GemmaRMSNorm.forward_native`,
-    no `fused_add_rms_norm` op, so the Llama-shaped rules above leave `residual` / `final` empty and every comparison fails by
-    construction).  What the (b) hooks hash: `model.layers.L` returns `(post_feedforward_layernorm(x), residual)` where
-    `residual` is the bf16 copy of the fp32 sum formed inside `pre_feedforward_layernorm`; `model.norm` returns its normalised
-    output; `logits_processor` returns the softcapped logits.  So
-        hidden[L]   := outs of the LAST dispatch in module model.layers.L.post_feedforward_layernorm   (the bf16 cast)
-        residual[L] := outs of the aten.to.dtype whose input is the two-tensor aten.add.Tensor output in ...pre_feedforward_layernorm
-        final       := outs of the last dispatch in module model.norm
-        logits      := outs of the last dispatch in module logits_processor (replaces the raw lm_head GEMM output above)."""
-    from verity_vllm.observe.events import DispatchEnter
-
-    last: dict[str, object] = {}
-    adds: dict[int, int] = {}                 # layer -> alloc of the fp32 residual sum
-    for node in se.all_nodes():
-        ev = node.enter
-        if not isinstance(ev, DispatchEnter):
-            continue
-        mod = ev.module or ""
-        if _POST_FF_RE.match(mod) or mod in ("model.norm", "logits_processor"):
-            last[mod] = node
-        m = _PRE_FF_RE.match(mod)
-        if m:
-            L = int(m.group(1))
-            outs = node.exit.outs if node.exit is not None else None
-            if ev.op == "aten.add.Tensor" and sum(hasattr(a, "alloc") for a in ev.args) == 2 and hasattr(outs, "alloc"):
-                adds[L] = outs.alloc
-            elif ev.op == "aten.to.dtype" and ev.args and getattr(ev.args[0], "alloc", None) == adds.get(L) and L not in rec["residual"]:
-                sha = by_key.get((s, ev.id, "outs"))
-                if sha is None:
-                    problems.append(f"step {s}: no snapshot for the residual cast id {ev.id} outs (layer {L})")
-                else:
-                    rec["residual"][L] = sha
-    if not last:
-        return
-    for mod, node in last.items():
-        sha = by_key.get((s, node.id, "outs"))
-        if sha is None:
-            problems.append(f"step {s}: no snapshot for {mod} id {node.id} outs")
-            continue
-        m = _POST_FF_RE.match(mod)
-        if m:
-            rec["hidden"][int(m.group(1))] = sha       # replaces the down_proj GEMM output recorded above
-        elif mod == "model.norm":
-            rec["final"] = sha
-        else:
-            rec["logits"] = sha
-
-
-_NEOX_LAYER_RE = re.compile(r"^gpt_neox\.layers\.(\d+)$")
-
-
-def _parallel_residual_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[str]) -> None:
-    """[SHARED-CODE lane cov-ln] the (a)-side boundaries of vLLM's GPT-NeoX family (Pythia): `nn.LayerNorm` runs as
-    `aten.layer_norm` (no fused residual op), the MLP's down projection is `mlp.dense_4h_to_h` (no `down_proj` launch) and
-    `GPTNeoXLayer.forward` returns ONE tensor, the parallel residual `mlp(ln2(x)) + attn(ln1(x)) + x` formed by two
-    `aten.add.Tensor` calls in the layer module itself -- so the Llama and Gemma-2 rules above leave every boundary empty.
-    What the (b) hooks hash: `gpt_neox.layers.L` output[0] (that sum), `gpt_neox.final_layer_norm` output[0], the logits.  So
-        hidden[L]   := outs of the LAST aten.add.Tensor dispatched in module gpt_neox.layers.L itself (the second residual add)
-        residual[L] := (none: the layer returns no separate residual; both sides leave it empty)
-        final       := outs of the last dispatch in module gpt_neox.final_layer_norm (the aten.layer_norm output)
-        logits      := the lm_head GEMM output recorded above (Pythia's `logits_processor` applies no softcap)."""
-    from verity_vllm.observe.events import DispatchEnter
-
-    last_add: dict[int, object] = {}
-    final_node = None
-    for node in se.all_nodes():
-        ev = node.enter
-        if not isinstance(ev, DispatchEnter):
-            continue
-        mod = ev.module or ""
-        m = _NEOX_LAYER_RE.match(mod)
-        if m and ev.op.startswith("aten.add.Tensor"):
-            last_add[int(m.group(1))] = node
-        elif mod == "gpt_neox.final_layer_norm":
-            final_node = node
-    if not last_add and final_node is None:
-        return
-    for L, node in sorted(last_add.items()):
-        sha = by_key.get((s, node.id, "outs")) or by_key.get((s, node.id, "outs[0]"))
-        if sha is None:
-            problems.append(f"step {s}: no snapshot for the layer-{L} residual add id {node.id} outs")
-        else:
-            rec["hidden"][L] = sha
-    if final_node is not None:
-        sha = by_key.get((s, final_node.id, "outs")) or by_key.get((s, final_node.id, "outs[0]"))
-        if sha is None:
-            problems.append(f"step {s}: no snapshot for gpt_neox.final_layer_norm id {final_node.id} outs")
-        rec["final"] = sha
-
-
 def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
     """From (a)'s log + snapshots.json: {step: {"hidden": {L: sha}, "residual": {L: sha}, "final": sha, "logits": sha}}."""
     from verity_vllm.observe.events import DispatchEnter, TritonLaunch
@@ -458,9 +370,9 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
                         problems.append(f"step {s}: no snapshot for model.norm id {ev.id} args[0]")
                     rec["final"] = sha
         if not rec["residual"] and rec["final"] is None:
-            _unfused_norm_boundaries(se, by_key, s, rec, problems)
+            unfused_norm_boundaries(se, by_key, s, rec, problems)
         if not rec["hidden"] and rec["final"] is None:
-            _parallel_residual_boundaries(se, by_key, s, rec, problems)   # [SHARED-CODE lane cov-ln] GPT-NeoX
+            parallel_residual_boundaries(se, by_key, s, rec, problems)   # [SHARED-CODE lane cov-ln] GPT-NeoX
         out[s] = rec
     return {"steps": out, "sample_ids": sample_ids, "sample_rows": sample_rows}, problems
 
@@ -484,7 +396,7 @@ def hooks_boundary_hashes(b_dir: Path) -> tuple[dict, list[str]]:
                     rec["rows"] = r["shape"][0]
                 elif r["index"] == 1:
                     rec["residual"][L] = r["sha256"]
-            elif r["module"] in _FINAL_NORM_MODULES and r["index"] == 0:
+            elif r["module"] in FINAL_NORM_MODULES and r["index"] == 0:
                 rec["final"] = r["sha256"]
             elif r["module"] == "logits_processor" and r["index"] == 0:
                 rec["logits"] = r["sha256"]
@@ -668,6 +580,57 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
     return rep
 
 
+# ---------------------------------------------------------------------------------------------------------
+# the property record, world-parametric: a run's observed arm against its bare arm
+# ---------------------------------------------------------------------------------------------------------
+
+SCHEMA = "verity-vllm/noninterference/v2"
+#: the tensor-parallel worlds a record is taken at; there are no collective records above two ranks, so a larger world is refused
+WORLDS = (1, 2)
+
+
+def token_parity(observed: dict, bare: dict) -> dict:
+    """The two arms' requests in order, as (request id, prompt ids, generated ids): equal, and at least one."""
+    a, b = ([(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in d["requests"]] for d in (observed, bare))
+    differing = [x[0] for x, y in zip(a, b) if x != y] + [x[0] for x in a[len(b):] + b[len(a):]]
+    return {"equal": a == b and len(a) > 0, "requests": len(a), "requests_bare": len(b), "differing": differing[:16]}
+
+
+def record(match_dir: str | Path, world: int, *, run: str | None = None, hashes: str | Path | None = None) -> dict:
+    """The sealed record of one run at tensor-parallel `world`: `match_dir/capture/tokens.json` (the observed arm: the observer, at
+    world 2 with the collective recorder, on every rank) against `match_dir/control/tokens.json` (the bare arm), plus, when
+    `hashes` names a `compare` report (`noninterference.json`, world 1), its boundary-hash comparison."""
+    if world not in WORLDS:
+        raise ValueError(f"tensor-parallel world {world} refused: non-interference is recorded at worlds {WORLDS}")
+    if hashes is not None and world != 1:
+        raise ValueError(f"boundary hashes are compared at world 1, not {world}")
+    d = Path(match_dir)
+    arms: dict[str, dict] = {}
+    docs: dict[str, dict] = {}
+    problems: list[str] = []
+    for arm, sub in (("observed", "capture"), ("bare", "control")):
+        p = d / sub / "tokens.json"
+        if not p.exists():
+            problems.append(f"missing {sub}/tokens.json")
+            continue
+        raw = p.read_bytes()
+        docs[arm] = json.loads(raw)
+        arms[arm] = {"file": f"{sub}/tokens.json", "sha256": _sha(raw), "world": int(docs[arm].get("tp") or 1)}
+        if arms[arm]["world"] != world:
+            problems.append(f"{sub}/tokens.json was taken at world {arms[arm]['world']}, not {world}")
+    parity = token_parity(docs["observed"], docs["bare"]) if len(docs) == 2 else None
+    boundary = None
+    if hashes is not None:
+        raw = Path(hashes).read_bytes()
+        rep = json.loads(raw)
+        boundary = {"sha256": _sha(raw), "PASS": rep.get("PASS") is True, "problems": (rep.get("problems") or [])[:8],
+                    **{k: rep.get(k) for k in ("hash_comparisons", "hash_equal", "expected_steps", "layers", "expected_layers")}}
+    observed = docs.get("observed") or {}
+    doc = {"schema": SCHEMA, "world": world, "run": run, "subject": {k: observed[k] for k in ("case", "model") if observed.get(k) is not None},
+           "arms": arms, "tokens": parity, "boundary_hashes": boundary, "problems": problems}
+    return seal(doc, not problems and bool(parity and parity["equal"]) and (boundary is None or boundary["PASS"]))
+
+
 def compare_markdown(rep: dict) -> str:
     L: list[str] = []
     L.append("# Non-interference: observer vs bare (M1 workload)")
@@ -738,9 +701,9 @@ def orchestrate(args) -> int:
         common += ["--max-tokens", str(args.max_tokens)]
     common += [f"--engine-arg={x}" for x in args.engine_arg]
     runs = [
-        ("a_observer", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
-        ("b_hooks", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
-        ("c_bare", [py, "-m", "verity_vllm.pipeline.m1_capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
+        ("a_observer", [py, "-m", "verity_vllm.pipeline.cli", "noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
+        ("b_hooks", [py, "-m", "verity_vllm.pipeline.cli", "noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
+        ("c_bare", [py, "-m", "verity_vllm.pipeline.cli", "m1-capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
     ]
     timings = {}
     for name, cmd in runs:
@@ -763,23 +726,25 @@ def orchestrate(args) -> int:
     return 0 if rep["PASS"] else 1
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default="workloads/workload_32x16_1req.json")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--max-tokens", type=int, default=None)
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--no-warmup", action="store_true")
-    ap.add_argument("--variant", choices=["observer", "hooks"], default=None, help="(internal) run one variant in this process")
-    ap.add_argument("--compare", action="store_true", help="torch-free: compare the three variants' outputs under --out")
-    ap.add_argument("--only", default=None, help="orchestrator: comma list of a_observer,b_hooks,c_bare to (re)run")
-    ap.add_argument("--python", default=None)
-    ap.add_argument("--accepted-ctl", default="data/logs/m1_ctl_tokens.json")
-    ap.add_argument("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
-    ap.add_argument("--expected-layers", type=int, default=None, help="gate I3: decoder layers per step (default: the --case profile's C[\"NL\"])")
-    ap.add_argument("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; forwarded to all three variants")
-    args = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    out: str = option("--out")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None)
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true")
+    variant: str | None = option("--variant", choices=["observer", "hooks"], default=None, help="(internal) run one variant in this process")
+    compare: bool = option("--compare", default=False, action="store_true", help="torch-free: compare the three variants' outputs under --out")
+    only: str | None = option("--only", default=None, help="orchestrator: comma list of a_observer,b_hooks,c_bare to (re)run")
+    python: str | None = option("--python", default=None)
+    accepted_ctl: str = option("--accepted-ctl", default="data/logs/m1_ctl_tokens.json")
+    case: str | None = option("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
+    expected_layers: int | None = option("--expected-layers", type=int, default=None, help="gate I3: decoder layers per step (default: the --case profile's C[\"NL\"])")
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; forwarded to all three variants")
+
+
+def main(args: Options) -> int:
     if args.variant == "observer":
         run_observer_variant(args.workload, args.out, args.checkpoints, max_tokens=args.max_tokens, max_num_seqs=args.max_num_seqs,
                              warmup=not args.no_warmup, case=args.case, engine_args=_engine_args(args.engine_arg))
@@ -797,7 +762,3 @@ def main(argv: list[str] | None = None) -> int:
               f"problems {rep['problems'][:5]}")
         return 0 if rep["PASS"] else 1
     return orchestrate(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

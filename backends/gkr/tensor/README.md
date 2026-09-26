@@ -1,4 +1,4 @@
-# backends/gkr/tensor: Candidate A's GKR round on INT8 tensor cores
+# backends/gkr/tensor: A-GKR's GKR round on INT8 tensor cores
 
 One kernel family, measured: the degree-3 GKR c-round over BabyBear with a degree-6 extension challenge (2^-128), as
 INT8 tensor-core matrix multiplications in TensorZKP's limb layout.  Labels on every number: `ARITHMETIC_DIAGNOSTIC`,

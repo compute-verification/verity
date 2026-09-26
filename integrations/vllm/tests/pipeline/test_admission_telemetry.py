@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.pipeline.telemetry import admission as adm
+from verity_vllm.pipeline import cli
 
 FIXTURE = Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "out" / "gen" / "sweep" / "evidence" / "admit" / "r17_fixture"
 MiB = adm.MiB
@@ -253,7 +254,7 @@ WL = Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "out/gen/
 def test_plan_writes_admission_json_and_never_fails(tmp_path, capsys):
     wl = WL / "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json"
     out = tmp_path / "admission.json"
-    rc = adm.main(["plan", "--workload", str(wl), "--host-limit-bytes", str(188_000_000_000), "--snapshot-max-bytes", "33554432", "--snapshot-steps", "0,1", "--out", str(out)])
+    rc = cli.main(["telemetry-admission", "plan", "--workload", str(wl), "--host-limit-bytes", str(188_000_000_000), "--snapshot-max-bytes", "33554432", "--snapshot-steps", "0,1", "--out", str(out)])
     line = capsys.readouterr().out.strip()
     assert rc == 0 and out.exists()
     doc = json.loads(out.read_text())
@@ -264,9 +265,9 @@ def test_plan_writes_admission_json_and_never_fails(tmp_path, capsys):
     assert doc["stages"]["match"]["verdict"] == "LOWER_BOUND" and "match" in doc["lower_bound"]
     assert line.startswith("ADMISSION advisory WARN would-refuse commit") and "commit=REFUSE" in line and line == doc["line"]
     # unknown model: dense default, named, still a document and exit 0
-    rc = adm.main(["plan", "--workload", str(WL / "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"), "--host-limit-bytes", str(200_000_000_000), "--out", str(tmp_path / "a2.json")])
+    rc = cli.main(["telemetry-admission", "plan", "--workload", str(WL / "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"), "--host-limit-bytes", str(200_000_000_000), "--out", str(tmp_path / "a2.json")])
     line = capsys.readouterr().out.strip()
     assert rc == 0 and "no calibration for model 'smollm2-135m'" in line and "WARN" not in line
     # a broken input is reported in the line, exit 0 (advisory: the row must never stop here)
-    rc = adm.main(["plan", "--workload", str(tmp_path / "missing.json")])
+    rc = cli.main(["telemetry-admission", "plan", "--workload", str(tmp_path / "missing.json")])
     assert rc == 0 and capsys.readouterr().out.startswith("ADMISSION advisory unavailable")

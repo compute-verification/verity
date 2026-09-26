@@ -12,7 +12,7 @@ Roofline: `note:r20-proof/b-encode/20260922T0625Z-report-roofline`.  Recorded ru
 CUDA runtime 12.9, cupy 14.2.0, torch 2.4.1+cu124, Triton 3.0.0.  Earlier run `r20260922-061346-71f8` (v1 kernel
 only) is superseded.
 
-## Roofline vs measured, Candidate B shape (310,602 rows x 4096 -> 16384; 5.09 GB in, 20.36 GB out)
+## Roofline vs measured, B-Ligero shape (310,602 rows x 4096 -> 16384; 5.09 GB in, 20.36 GB out)
 
 ~~~text
 encoder                                 floor (roofline)                    measured ms/batch   us/row   codeword GB/s   fraction of floor
@@ -26,7 +26,7 @@ HBM: read input + write codeword        25.2 ms  (write alone 20.2)         --
 (d) Brakedown expander (20 MAC/symbol)  39 ms SIMT / 3.2 s HBM gather       not built (more multiplies than the NTT at k = 4096; changes the Ligero test)
 ~~~
 
-Candidate A shape (48,873 rows; 0.80 GB in, 3.20 GB out; HBM floor 4.0 ms): NTT v2 t512 **5.3 ms** (0.76 of floor),
+A-GKR shape (48,873 rows; 0.80 GB in, 3.20 GB out; HBM floor 4.0 ms): NTT v2 t512 **5.3 ms** (0.76 of floor),
 Triton matrix DFT 26.8 ms, cuBLAS 2,396 ms (scaled).  Per-row times are shape-independent (0.10-0.11 us/row SIMT).
 Peak device memory for the B batch: 5.5 GiB with 65,536-row slices (1.07 GB in + 4.29 GB out per slice; the
 20.36 GB codeword is never resident -- see the streaming plan).  All SIMT variants in the run: v1 t256 40.2, v1 t512
@@ -168,7 +168,7 @@ reference before it is timed (`tests/test_commit_stream.py`, `tests/test_buckets
 shape).  Inputs are resident pseudo-random data (data-independent cost).  Re-pricing and the honest label:
 `note:r20-proof/b-commit/20260922T0733Z-report-b-measured-4090` (`ARITHMETIC_DIAGNOSTIC`-level: not a proof, buckets measured separately).
 
-## Candidate B shape (310,602 rows x [16384, 4096]; 33,485 product rows; 125.9M helpers; t = 192), ms per batch
+## B-Ligero shape (310,602 rows x [16384, 4096]; 33,485 product rows; 125.9M helpers; t = 192), ms per batch
 
 ~~~text
 bucket                                    kernel / configuration                                              ms/batch   us/row    floor                                      of floor   bit-exact
@@ -187,7 +187,7 @@ column openings, t = 192                  gather_columns from the kept store (+1
                                                                                                      sum      246 measured + 12.5 modelled (r^T A, witness, PRG) = 258.7 ms -> overhead 6.41e6
 ~~~
 
-\* per product row.  Candidate A shape (48,873 rows): fused Blake3 commitment 7.4 ms (1.96x vs unfused), SHA-256 9.3 ms;
+\* per product row.  A-GKR shape (48,873 rows): fused Blake3 commitment 7.4 ms (1.96x vs unfused), SHA-256 9.3 ms;
 IRS row combination 1.0 ms; openings 0.66 ms from the store / 5.3 ms re-encoded (+1.4 ms paths).  Slice sweep (B, Blake3):
 256 rows 49.7-52.2 ms, 512 47.2, 1024 46.7-47.1, 4096 58.7-59.3 (slice leaves L2), 65,536 (HBM-sized) 55.4-55.7.
 

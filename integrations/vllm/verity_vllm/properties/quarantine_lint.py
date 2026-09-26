@@ -1,7 +1,7 @@
 """verity_vllm/properties/quarantine_lint.py — PROTECTED (gate G4, admission rules 1–2).  Static purity + identity lint of the
 quarantine registry.
 
-    uv run python -m verity_vllm.properties.quarantine_lint [--root verity_vllm/program/registry/quarantine] [--out quarantine_lint.json]
+    uv run verity-vllm quarantine-lint [--root verity_vllm/program/registry/quarantine] [--out quarantine_lint.json]
 
 Rules (AST, no import of the checked modules):
   - forbidden imports: os, sys, time, datetime, random, secrets, pathlib, io, json, pickle, subprocess, socket, urllib,
@@ -16,15 +16,17 @@ Rules (AST, no import of the checked modules):
 """
 from __future__ import annotations
 
-import argparse
 import ast
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT as REPO
+from verity_vllm.config import option
+from verity_vllm.properties.record import seal
 
 ROOT = REPO / "verity_vllm" / "program" / "registry" / "quarantine"
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -105,16 +107,18 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     reports = [lint_file(p) for p in files]
     ids = [r["semantic_id"] for r in reports if r["semantic_id"] and not r["adapter"]]
     dup = sorted({i for i in ids if ids.count(i) > 1})
-    return {"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files),
-            "status": "pass" if all(r["status"] == "pass" for r in reports) and not dup else "fail",
-            "duplicate_semantic_ids": dup, "files": reports}
+    ok = all(r["status"] == "pass" for r in reports) and not dup
+    return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
+                 "duplicate_semantic_ids": dup, "files": reports}, ok)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--root", default=str(ROOT))
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    root: str = option("--root", default=str(ROOT))
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     rep = lint(Path(a.root))
     if a.out:
         Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
@@ -123,7 +127,3 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[quarantine_lint] FAIL {r['file']}: " + "; ".join(r["problems"]), file=sys.stderr)
     print(f"[quarantine_lint] {rep['status']}: {rep['n_files']} files" + (f", duplicate ids {rep['duplicate_semantic_ids']}" if rep["duplicate_semantic_ids"] else ""), file=sys.stderr)
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

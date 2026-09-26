@@ -1,4 +1,4 @@
-"""Re-price Candidate A with the two measured GPU buckets (laptop side, no torch):
+"""Re-price A-GKR with the two measured GPU buckets (laptop side, no torch):
 
     python -m backends.gkr.packed.reprice_a --sumcheck results/r20260922-065412-73be/bench.json \
         --logup results/<run>/logup_bench.json --out backends/numerical/reports/a_kernels_h100

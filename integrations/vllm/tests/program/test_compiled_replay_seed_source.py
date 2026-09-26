@@ -25,8 +25,11 @@ def test_the_constant_names_the_form_and_the_call_site_uses_both() -> None:
     src = SRC.read_text()
     m = re.search(r'^COMPILED_REPLAY_SEED_SOURCE = "(.*)"$', src, re.M)
     assert m and m.group(1) == FORM
-    call = re.search(r"CompiledKernelCheck\(com, eng\.model, _toks, seed=int\(rc\.run_root\.hex\(\)\[:8\], 16\),.*?seed_source=COMPILED_REPLAY_SEED_SOURCE\)", src, re.S)
+    call = re.search(r"CompiledKernelCheck\(com, eng\.model, _toks, seed=CH\.kernel_check_seed\(rc\.run_root\),.*?seed_source=COMPILED_REPLAY_SEED_SOURCE\)", src, re.S)
     assert call, "the compiled check must be seeded from the run root AND record the form"
+    from verity_vllm.commit import challenge as CH
+    root = "1491" + "ab" * 30
+    assert CH.kernel_check_seed(bytes.fromhex(root)) == seed_of_record(root)
 
 
 def test_compiled_kernel_check_records_seed_source() -> None:

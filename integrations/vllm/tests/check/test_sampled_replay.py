@@ -8,7 +8,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import (compare as CMP, coverage as COV, driver as SR, evaluate as EV, index as IX, linkage as LK,
+                                      opening as OP, population as POP, replay_codes as RC, sample as SM)
+from verity_vllm.program.kernels import rows as RK
+from verity_vllm.query.manifest import format as RM
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -137,7 +140,7 @@ class Honest:
 
     def __init__(self, inst, woff, weights, prompts):
         self.inst, self.woff, self.weights, self.prompts = inst, woff, weights, prompts
-        self.pi = SR.ProgramIndex(inst)
+        self.pi = IX.ProgramIndex(inst)
         self.values: dict[tuple[str, int], np.ndarray] = {}       # (rid, row i) -> flattened output words
         self.blocks: dict[tuple[int, str, str, str], np.ndarray] = {}   # (step, rid, op_path, member) -> block words
         self.dtypes: dict[tuple[int, str, str, str], str] = {}    # (step, rid, op_path, member) -> the member's dtype (bf16 / f32 / i32 / i64)
@@ -164,7 +167,7 @@ class Honest:
                         words.append(self.values[(rid, a)][lo:hi])
                 inputs.append(words)
                 wsl.append(w)
-            got = SR.evaluate(fam, d["statics"], inputs, wsl)
+            got = EV.evaluate(fam, d["statics"], inputs, wsl)
             if d.get("plane") and d["plane"] not in got and len(got) == 1:  # [MAN-06f v3] the act SiluMul's `out` IS its plane
                 got = {d["plane"]: next(iter(got.values()))}
             if not d["members"]:                                        # interior row (pre-bias Gemm): value flows on, nothing is committed
@@ -194,7 +197,7 @@ class Honest:
         for (step, rid, op, mem), blk in sorted(self.blocks.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], order.index(kv[0][1]))):
             packed.setdefault((step, op, mem), []).append((rid, blk))
         entries, store = [], {}
-        dtype_of = lambda op, mem: "i64" if op == SR.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
+        dtype_of = lambda op, mem: "i64" if op == IX.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
         for (step, op, mem), parts in packed.items():
             name = f"{op}/{mem}"
             off, arrs = 0, []
@@ -266,7 +269,7 @@ def _weights(world):
 
 
 def test_struct_parser_declaration_order_and_counts():
-    fs = SR.parse_struct("{a: Array<3,Array<2,Value<16>>>, b: Array<4,Value<16>>, c: Value<16>}")
+    fs = IX.parse_struct("{a: Array<3,Array<2,Value<16>>>, b: Array<4,Value<16>>, c: Value<16>}")
     assert [(n, c, s) for n, c, s, _b in fs] == [("a", 6, [3, 2]), ("b", 4, [4]), ("c", 1, [])]
 
 
@@ -298,7 +301,7 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
     assert rep["sample"]["seed_source"] == "caller"
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
     assert rep2["strata"] == rep["strata"] and rep2["sample"] == rep["sample"]
-    assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16")
+    assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16")
 
 
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
@@ -367,11 +370,11 @@ def test_missing_committed_input_is_partial_never_pass(world):
 def test_boundary_linkage_positive_and_negatives(world):
     bmap, committed = world.bmap_and_reader()
     reqs = [{"request_id": rid, "arrive_step": 0, "prompt_token_ids": p, "steps": [0, 1, 2]} for rid, p in world.prompts.items()]
-    lk = SR.boundary_linkage(bmap, committed, reqs)
+    lk = LK.boundary_linkage(bmap, committed, reqs)
     assert lk["result"] is True and lk["pairs"] == 6 and lk["linked"] == 6, lk
     # foreign prompt: the declared prompt of r1 differs from what the embedding consumed
     bad = [dict(r, prompt_token_ids=[5, 4]) if r["request_id"] == "r1" else r for r in reqs]
-    lk2 = SR.boundary_linkage(bmap, committed, bad)
+    lk2 = LK.boundary_linkage(bmap, committed, bad)
     assert lk2["result"] is False and lk2["unlinked"][0]["request_id"] == "r1" and lk2["unlinked"][0]["kind"] == "prompt"
     # broken chain: r0's committed input id at step 2 is not r0's sampled id of step 1
 
@@ -383,7 +386,7 @@ def test_boundary_linkage_positive_and_negatives(world):
         b[pos] ^= 0x04
         store[k] = bytes(b)
     bmap3, committed3 = world.bmap_and_reader(mutate=mutate)
-    lk3 = SR.boundary_linkage(bmap3, committed3, reqs)
+    lk3 = LK.boundary_linkage(bmap3, committed3, reqs)
     assert lk3["result"] is False
     u = lk3["unlinked"][0]
     assert u["request_id"] == "r0" and u["engine_step"] == 2 and u["kind"] == "chain" and "!= committed sampled id" in u["why"]
@@ -400,7 +403,7 @@ def _bnd(n_req):
 def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2():
     """DECISIONS-2 §4 C2 / M-0356: at B>=2 a complete sampled replay + linked boundaries PASS without any Match oracle; a replay mismatch or
     an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute (F-cb-23 stays closed)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}}
     ok_sr = {"result": True, "grade": "complete", "why": None}
@@ -445,7 +448,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
     unevaluated stratum is NAMED (family | module | reason) + a COMPLETE form (B) oracle compare = PASS carrying the named gap; the same
     partial replay without form (B), with a form (B) mismatch / incomplete attribution, with an UNNAMED gap, or with any replay mismatch =
     FAIL (O1 stands: absence of both forms never passes)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
             "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
@@ -531,9 +534,9 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
-    assert SR.token_select_first_max(logits) == 1
+    assert RK.token_select_first_max(logits) == 1
     nan = np.asarray([0x7FC0, 0x3F80], dtype=np.uint16)                         # NaN never wins
-    assert SR.token_select_first_max(nan) == 1
+    assert RK.token_select_first_max(nan) == 1
 
 
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):
@@ -601,8 +604,8 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     gu_u = {r["spec"].split("{")[0] for r in mu["identities"] if r["op_path"] == "model.layers.0.mlp.gate_up_proj"}
     assert gu_b == {"BiasAdd_v1"} and gu_u == {"Gemm_v1"}
     # (2) population: the interior Gemm is counted by name (not a VU, not 'not evaluable'), the BiasAdd rows are VUs; replay is exact
-    pi = SR.ProgramIndex(biased_world.inst)
-    vus, not_ev, not_ev_fam = SR.population(pi, "r0")
+    pi = IX.ProgramIndex(biased_world.inst)
+    vus, not_ev, not_ev_fam = POP.population(pi, "r0")
     assert not_ev_fam["Gemm_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)"] == LP + T
     assert sum(1 for v in vus if v["family"] == "BiasAdd_v1") == LP + T and not not_ev
     bmap, committed = biased_world.bmap_and_reader()
@@ -611,13 +614,13 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     assert rep["timing"]["per_family_n"]["BiasAdd_v1"] == 2 * (LP + T)          # every biased-linear row of both requests: exact
     assert any(u["family"].startswith("Gemm_v1 (interior") and u["n"] == 2 * (LP + T) and "composed" in u["why"] for u in rep["unreplayable"])
     # the replay of one BiasAdd VU composes the interior Gemm (recorded as an `interior` input with its own committed inputs)
-    pi0 = SR.ProgramIndex(biased_world.inst)
+    pi0 = IX.ProgramIndex(biased_world.inst)
     ba = next(r for r in pi0.rows if r["spec"].startswith("BiasAdd_v1"))
-    one = SR.replay_vu(pi0, SR.CommittedStore(bmap, committed), _weights(biased_world), {"i": ba["i"], "phase": "prefill"} | {"request_id": "r0"}, arrive=0)
+    one = EV.replay_vu(pi0, OP.CommittedStore(bmap, committed), _weights(biased_world), {"i": ba["i"], "phase": "prefill"} | {"request_id": "r0"}, arrive=0)
     assert one["result"] is True and any(i["kind"] == "interior" and i["family"] == "Gemm_v1" for i in one["inputs"])
     # (3) the M-0528 shape in reverse: pre-bias bytes committed as member 0 -> mismatch named at the module with the producer spec
     def mutate(store, entries):
-        pi2 = SR.ProgramIndex(biased_world.inst)
+        pi2 = IX.ProgramIndex(biased_world.inst)
         gem = [r for r in pi2.rows if r["spec"].startswith("Gemm_v1") and "gate_up_proj" in r["name"] and pi2.step_of(r["i"]) == 0]
         pre = np.concatenate([biased_world.values[("r0", r["i"])] for r in gem])
         post = np.concatenate([biased_world.values[("r1", r["i"] + 1)] for r in gem])
@@ -642,20 +645,20 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
     not know (`Gemm_v9`): the same code path, the same names."""
     from verity_vllm.query import program_view as PV
     inst = json.loads(json.dumps(biased_world.inst))
-    pi1 = SR.ProgramIndex(inst)
-    vus1, ne1, nef1 = SR.population(pi1, "r0")
+    pi1 = IX.ProgramIndex(inst)
+    vus1, ne1, nef1 = POP.population(pi1, "r0")
     assert sum(1 for v in vus1 if v["family"] == "BiasAdd_v1") == LP + T and not ne1
-    assert SR._interior_feeders_without_evaluator(pi1, next(r for r in pi1.rows if r["spec"].startswith("BiasAdd_v1"))) == set()
+    assert POP._interior_feeders_without_evaluator(pi1, next(r for r in pi1.rows if r["spec"].startswith("BiasAdd_v1"))) == set()
     # the interior Gemm rows under the biased linear are of a GEMM version without a registered evaluator
-    assert "Gemm_v9" not in SR.EVALUATORS and "Gemm_v9" not in SR.NOT_YET
+    assert "Gemm_v9" not in RK.EVALUATORS and "Gemm_v9" not in RC.NOT_YET
     for r in inst["rows"]:
         if r["spec"].startswith("Gemm_v1") and "gate_up_proj" in r["name"]:
             monkeypatch.setitem(PV._PORTS_CACHE, "Gemm_v9" + r["spec"][len("Gemm_v1"):], PV.definition_ports(r["spec"]))
             r["spec"] = "Gemm_v9" + r["spec"][len("Gemm_v1"):]
-    pi2 = SR.ProgramIndex(inst)
+    pi2 = IX.ProgramIndex(inst)
     ba = next(r for r in pi2.rows if r["spec"].startswith("BiasAdd_v1"))
-    assert SR._interior_feeders_without_evaluator(pi2, ba) == {"Gemm_v9 (no registered evaluator)"}
-    vus2, ne2, nef2 = SR.population(pi2, "r0")
+    assert POP._interior_feeders_without_evaluator(pi2, ba) == {"Gemm_v9 (no registered evaluator)"}
+    vus2, ne2, nef2 = POP.population(pi2, "r0")
     assert sum(1 for v in vus2 if v["family"] == "BiasAdd_v1") == 0                                   # no BiasAdd stratum can stay unevaluated
     assert nef2["BiasAdd_v1 (fed by interior Gemm_v9: composed evaluator, v2)"] == LP + T
     assert ne2["fed by interior producer(s) without an evaluator (Gemm_v9 (no registered evaluator)): composition not possible in this replay (MAN-06g, v2)"] == LP + T
@@ -669,11 +672,11 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
     assert any(u["family"].startswith("BiasAdd_v1 (fed by interior Gemm_v9") and u["n"] == 2 * (LP + T) for u in rep["unreplayable"])
     assert "BiasAdd_v1" not in rep["timing"]["per_family_n"]
     # why classes on the record
-    assert rep["why_classes"]["by_name"] == list(SR.WHY_CLASSES_BY_NAME) and rep["unevaluated_strata"] == []
-    assert SR.why_class("arg slice ['n', 5, 0, 2048) is not inside one committed member of row 5") == "mapping"
-    assert SR.why_class("evaluator error OSError: librms_triton_model.so: file too short") == "evaluator-error"
-    assert SR.why_class("fed by moe_block_stream planes (MoeSum_v1): ...") == "plane-fed"
-    assert SR.why_class("no derived_rows evaluator for RoPE_v1 yet (v2)") == "no-evaluator"
+    assert rep["why_classes"]["by_name"] == list(RC.WHY_CLASSES_BY_NAME) and rep["unevaluated_strata"] == []
+    assert RC.why_class("arg slice ['n', 5, 0, 2048) is not inside one committed member of row 5") == "mapping"
+    assert RC.why_class("evaluator error OSError: librms_triton_model.so: file too short") == "evaluator-error"
+    assert RC.why_class("fed by moe_block_stream planes (MoeSum_v1): ...") == "plane-fed"
+    assert RC.why_class("no derived_rows evaluator for RoPE_v1 yet (v2)") == "no-evaluator"
 
 
 # ------------------------------------------------------------------------------------------------ [R17 dense, F-r16-20b / ruling R17-3]
@@ -698,7 +701,7 @@ def _hopper_program(inst: dict, dot: str = HOPPER_DOT) -> dict:
 
 @pytest.fixture(scope="module")
 def hopper_worlds():
-    """(plain, biased) honest worlds executed under the Hopper GEMM relation (Honest runs SR.evaluate, so the committed bytes ARE the
+    """(plain, biased) honest worlds executed under the Hopper GEMM relation (Honest runs EV.evaluate, so the committed bytes ARE the
     wgmma chain's words), with the same seeds / prompts as `world` / `biased_world`."""
     outs = []
     for bias, seed in ((False, 7), (True, 11)):
@@ -714,17 +717,17 @@ def hopper_worlds():
 
 
 def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
-    from verity_vllm.program.registry import derived_rows as D
-    assert "Gemm_v2" in SR.EVALUATORS and "Gemm_v2" not in SR.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
-    assert "dot_bf16_for" in SR.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in SR.EVALUATORS["Gemm_v2"]
-    assert SR.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
-    assert SR.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v1"}) == "AmpereBF16TcDot16_v1"
+    from verity_vllm.program.kernels import derived_rows as D
+    assert "Gemm_v2" in RK.EVALUATORS and "Gemm_v2" not in RC.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
+    assert "dot_bf16_for" in RK.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in RK.EVALUATORS["Gemm_v2"]
+    assert RK.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
+    assert RK.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v1"}) == "AmpereBF16TcDot16_v1"
     for bad in ({}, {"DOT": "k16"}, {"DOT": '{"fn":"Hopper; drop"}'}, {"DOT": 12}):
-        with pytest.raises(SR._Unresolved, match="does not name a registered primitive"):
-            SR.gemm_dot_prim(bad)
+        with pytest.raises(EV._Unresolved, match="does not name a registered primitive"):
+            RK.gemm_dot_prim(bad)
     # the spec text of a real Hopper row parses to the same statics the Build wrote (codec._spec_id form)
-    st = SR.RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
-    assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and SR.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
+    st = RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
+    assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and RK.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
     assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v1", "HopperBF16WgmmaDot16_v1"}
 
 
@@ -732,14 +735,14 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     """Word for word against the registered scalar primitive (`hopper.HopperBF16WgmmaDot16`, pinned on the H100) on random finite lanes,
     and on an adversarial lane where the 26-bit and 25-bit adders round to DIFFERENT bf16 words: evaluate('Gemm_v2', Hopper DOT) returns
     the wgmma word, evaluate('Gemm_v1') / ('Gemm_v2', Ampere DOT) the mma.sync word."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
     rng = np.random.default_rng(1701)
     K, N = 64, 8
     x = _bf16(rng, K, 1.0)
     w = _bf16(rng, N * K, 1.0)
     st_h = {"K": K, "N": N, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}
-    got = SR.evaluate("Gemm_v2", st_h, [[x], [w]], [None, w])["0"]
+    got = EV.evaluate("Gemm_v2", st_h, [[x], [w]], [None, w])["0"]
     for n in range(N):                                                                  # the scalar registered chain, coordinate by coordinate
         acc = 0
         for s in range(0, K, 16):
@@ -760,16 +763,16 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     assert found is not None, "no lane where the Hopper and Ampere adders differ after bf16 rounding (search budget exhausted)"
     xa, wb, want_h, want_m = found
     st16 = {"K": 16, "N": 1}
-    assert int(SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_h
-    assert int(SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
-    assert int(SR.evaluate("Gemm_v1", st16, [[xa], [wb]], [None, wb])["0"][0]) == want_m and want_h != want_m
+    assert int(EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_h
+    assert int(EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
+    assert int(EV.evaluate("Gemm_v1", st16, [[xa], [wb]], [None, wb])["0"][0]) == want_m and want_h != want_m
     # an unregistered step / a non-finite operand lane: unresolved BY NAME, never a word under another adder
-    with pytest.raises(SR._Unresolved, match="no registered evaluator for Gemm_v2 with DOT=BlackwellBF16TcDot16_v1"):
-        SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"BlackwellBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])
+    with pytest.raises(EV._Unresolved, match="no registered evaluator for Gemm_v2 with DOT=BlackwellBF16TcDot16_v1"):
+        EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"BlackwellBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])
     xn = xa.copy()
     xn[3] = 0x7F80                                                                       # +inf operand
-    with pytest.raises(SR._Unresolved, match="non-finite bf16 operand"):
-        SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xn], [wb]], [None, wb])
+    with pytest.raises(EV._Unresolved, match="non-finite bf16 operand"):
+        EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xn], [wb]], [None, wb])
 
 
 def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hopper_worlds):
@@ -782,12 +785,12 @@ def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hop
     assert fams == {"Embedding_v1", "RMSNormTriton_v1", "Gemm_v2", "SiluMul_v1", "RMSNormFusedCuda_v2", "TokenSelect_v1"}
     assert "Gemm_v1" not in fams and rep["population"]["not_evaluable"] == {} and rep["unreplayable"] == []
     assert rep["timing"]["per_family_n"]["Gemm_v2"] == 2 * (2 * (LP + T) + (1 + T))        # gate_up + down per token row, logits per step, x2 requests
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT)")
     assert "Gemm_v2" not in rep["applicability"]["families_not_yet"]
     # a Gemm_v2 VU's recorded inputs are ONE committed identity (the norm output row) + ONE registered weight slice: explicit, resolvable (R17-3)
-    pi = SR.ProgramIndex(plain.inst)
+    pi = IX.ProgramIndex(plain.inst)
     g = next(r for r in pi.rows if r["spec"].startswith("Gemm_v2{") and "gate_up_proj" in r["name"])
-    one = SR.replay_vu(pi, SR.CommittedStore(bmap, committed), _weights(plain), {"i": g["i"], "phase": "prefill", "request_id": "r0"}, arrive=0)
+    one = EV.replay_vu(pi, OP.CommittedStore(bmap, committed), _weights(plain), {"i": g["i"], "phase": "prefill", "request_id": "r0"}, arrive=0)
     assert one["result"] is True and [i["kind"] for i in one["inputs"]] == ["committed", "weights"], one
     assert one["inputs"][0]["identity"][2:4] == ["model.layers.0.input_layernorm", "out"] and one["inputs"][1]["field"] == "model.model.layers.0.mlp.gate_up_proj.weight"
 
@@ -796,10 +799,10 @@ def test_hopper_biased_linear_composes_the_interior_gemm_v2(hopper_worlds):
     """The F-r16-20b / MAN-06g gap of record (exec M-0655: 32,228 'BiasAdd_v1 fed by interior Gemm_v2' VUs on the Qwen2.5 H100 row) closes:
     with the Gemm_v2 evaluator the BiasAdd VU composes the interior wgmma GEMM from ITS committed inputs and replays exact."""
     _plain, biased = hopper_worlds
-    pi = SR.ProgramIndex(biased.inst)
+    pi = IX.ProgramIndex(biased.inst)
     ba = next(r for r in pi.rows if r["spec"].startswith("BiasAdd_v1"))
-    assert SR._interior_feeders_without_evaluator(pi, ba) == set()
-    vus, not_ev, not_ev_fam = SR.population(pi, "r0")
+    assert POP._interior_feeders_without_evaluator(pi, ba) == set()
+    vus, not_ev, not_ev_fam = POP.population(pi, "r0")
     assert sum(1 for v in vus if v["family"] == "BiasAdd_v1") == LP + T and not not_ev
     assert not_ev_fam["Gemm_v2 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)"] == LP + T
     assert not any("fed by interior" in k for k in not_ev_fam)
@@ -807,9 +810,9 @@ def test_hopper_biased_linear_composes_the_interior_gemm_v2(hopper_worlds):
     rep = SR.sampled_replay(_programs(biased), bmap, committed, _weights(biased), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete" and rep["sample"]["mismatch_n"] == 0 and rep["sample"]["not_evaluated_n"] == 0, rep.get("why")
     assert rep["timing"]["per_family_n"]["BiasAdd_v1"] == 2 * (LP + T)
-    one = SR.replay_vu(pi, SR.CommittedStore(bmap, committed), _weights(biased), {"i": ba["i"], "phase": "prefill", "request_id": "r0"}, arrive=0)
+    one = EV.replay_vu(pi, OP.CommittedStore(bmap, committed), _weights(biased), {"i": ba["i"], "phase": "prefill", "request_id": "r0"}, arrive=0)
     assert one["result"] is True and any(i["kind"] == "interior" and i["family"] == "Gemm_v2" for i in one["inputs"])
-    assert rep["why_classes"]["by_name"] == list(SR.WHY_CLASSES_BY_NAME) and not any("interior-composed" in str(u) for u in rep["unreplayable"])
+    assert rep["why_classes"]["by_name"] == list(RC.WHY_CLASSES_BY_NAME) and not any("interior-composed" in str(u) for u in rep["unreplayable"])
 
 
 def test_hopper_flipped_committed_input_byte_fails_named_at_the_gemm_v2_row(hopper_worlds):
@@ -846,7 +849,7 @@ def test_hopper_program_over_ampere_committed_bytes_is_told_apart_where_the_adde
     progs = {rid: _hopper_program(world.inst) for rid in world.prompts}
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT)")
     if rep["result"] is False:
         assert rep["grade"] == "mismatch" and all(x["spec"].startswith(("Gemm_v2{", "SiluMul", "RMSNormFusedCuda", "TokenSelect")) for x in rep["mismatch"])
     else:
@@ -884,7 +887,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
             self.model = Model()
 
     m = Wrapper()
-    read = SR.model_weights_provider(m, "model.")
+    read = OP.model_weights_provider(m, "model.")
     # the buffer, under the qualname `named_buffers()` gives it (layer 0; the Program names the shared table once)
     cs = read("model.model.layers.0.rotary_emb.cos_sin_cache", 0, 8)
     assert cs is not None and cs.dtype == np.uint16 and cs.shape == (8,)
@@ -908,9 +911,9 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
 # --- [R17 dense, ruling R17-9] RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
 
 def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away(rope_world):
-    assert "RoPE_v1" in SR.EVALUATORS and "RoPE_v1" not in SR.NOT_YET and SR.EVALUATORS["RoPE_v1"].startswith("verity_vllm.program.registry.derived_rows.rope_rows")
+    assert "RoPE_v1" in RK.EVALUATORS and "RoPE_v1" not in RC.NOT_YET and RK.EVALUATORS["RoPE_v1"].startswith("verity_vllm.program.kernels.derived_rows.rope_rows")
     pi = rope_world.pi
-    vus, ne, nef = SR.population(pi, "r0")
+    vus, ne, nef = POP.population(pi, "r0")
     ropes = [v for v in vus if v["spec"].startswith("RoPE_v1")]
     assert len(ropes) == 2 * (LP + T) and not any("RoPE" in k for k in list(ne) + list(nef))
     assert {v["spec"] for v in ropes} == {f"RoPE_v1{{NHEADS={NH},D={DH}}}", f"RoPE_v1{{NHEADS={KVH},D={DH}}}"}
@@ -929,7 +932,7 @@ def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from
     rs = {k: v for k, v in rep["strata"].items() if k.startswith("RoPE_v1")}
     assert rs and all(v["evaluated"] >= 1 and v["evaluated"] == v["sampled"] for v in rs.values()), rs
     assert not any(k.startswith("RoPE_v1") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["RoPE_v1"].startswith("verity_vllm.program.registry.derived_rows.rope_rows")
+    assert rep["evaluators"]["RoPE_v1"].startswith("verity_vllm.program.kernels.derived_rows.rope_rows")
 
 
 def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_world):
@@ -973,7 +976,7 @@ def test_rope_v1_evaluator_equals_the_registered_prims_on_the_replays_own_rows(r
     x = rope_world.values[("r0", r["args"][0][0][1])][r["args"][0][0][2]: r["args"][0][0][3]]
     lo, hi = r["args"][1][0][2], r["args"][1][0][3]
     cs = rope_world.weights[lo:hi]
-    got = SR.evaluate("RoPE_v1", d["statics"], [[x], []], [None, cs])["0"]
+    got = EV.evaluate("RoPE_v1", d["statics"], [[x], []], [None, cs])["0"]
     R = DH // 2
     for h in range(NH):
         for j in range(R):
@@ -1003,9 +1006,9 @@ def attn_world():
 def test_attention_rows_are_registered_units_of_the_population_and_the_interior_mechanism_is_named(attn_world):
     """[ruling R17-11] Attention_v3 / Attention_v2 are EVALUATORS (the row is the Q_module_v1 unit), not NOT_YET labels: every attention row
     is a VU of the population; the record names the AttnBlock-interior mechanism (Q_fine_v1 units) the replay does not read, with the count."""
-    assert all(f in SR.EVALUATORS and f not in SR.NOT_YET for f in ("Attention_v3", "Attention_v2"))
-    assert SR.EVALUATORS["Attention_v2"].startswith("verity_vllm.program.registry.derived_rows.attention_rows") and "Fa3InvSum_v1" in SR.EVALUATORS["Attention_v2"]
-    assert "MAN-09c" in SR.EVALUATORS["RoPE_v1"]                                    # [revb F-r17b-14] the cos_sin bound travels with the row
+    assert all(f in RK.EVALUATORS and f not in RC.NOT_YET for f in ("Attention_v3", "Attention_v2"))
+    assert RK.EVALUATORS["Attention_v2"].startswith("verity_vllm.program.kernels.derived_rows.attention_rows") and "Fa3InvSum_v1" in RK.EVALUATORS["Attention_v2"]
+    assert "MAN-09c" in RK.EVALUATORS["RoPE_v1"]                                    # [revb F-r17b-14] the cos_sin bound travels with the row
     n_att = sum(1 for r in attn_world.pi.rows if r["spec"].startswith("Attention_v3"))
     assert n_att == LP + T
     bmap, committed = attn_world.bmap_and_reader()
@@ -1031,7 +1034,7 @@ def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_h
     assert any(k.startswith("Attention_v3{NB=1,last=partial,") and "|last|" in k for k in at), sorted(at)
     assert not any("{T=" in k for k in at) and {k.split("|")[3] for k in at} == {"prefill", "first-decode", "last"}, sorted(at)
     assert not any(k.startswith("Attention_v3") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["Attention_v3"].startswith("verity_vllm.program.registry.derived_rows.attention_rows")
+    assert rep["evaluators"]["Attention_v3"].startswith("verity_vllm.program.kernels.derived_rows.attention_rows")
 
 
 def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_last_block_apart_and_nothing_else():
@@ -1039,16 +1042,16 @@ def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_las
     lane sums); the key carries `last=full|partial` so the full-block chain is a stratum of its own again (<= +1 stratum per formerly mixed
     stratum).  The VU keeps its spec (T); only the stratum key changes.  Every other family's spec is its own key."""
     spec = "Attention_v3{T=%d,NH=32,KVH=8,D=64,BN=128}"
-    key = lambda t, bn=128: SR._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
+    key = lambda t, bn=128: POP._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
     assert key(128) == "Attention_v3{NB=1,last=full,NH=32,KVH=8,D=64,BN=128}"
     assert key(127) == "Attention_v3{NB=1,last=partial,NH=32,KVH=8,D=64,BN=128}"
     assert key(1) == key(127) and key(129) == "Attention_v3{NB=2,last=partial,NH=32,KVH=8,D=64,BN=128}"
     assert key(256) == "Attention_v3{NB=2,last=full,NH=32,KVH=8,D=64,BN=128}" and key(384, 192) == "Attention_v3{NB=2,last=full,NH=32,KVH=8,D=64,BN=128}"
     assert key(128) != key(127) != key(129) and len({key(t) for t in range(1, 1025)}) == 16   # 8 block counts x {full, partial}
-    assert SR._stratum_spec("Attention_v2", "Attention_v2{T=5,NH=12,KVH=2,D=128,BN=128}", {"T": 5, "BN": 128}) == "Attention_v2{NB=1,last=partial,NH=12,KVH=2,D=128,BN=128}"
-    assert SR._stratum_spec("Attention_v3", spec % 7, {"NH": 32}) == spec % 7                    # no T / BN static -> the spec itself
-    assert SR._stratum_spec("Attention_v3", spec % 7, {"T": "seven", "BN": 128}) == spec % 7    # unparsable -> the spec itself, never a guess
-    assert SR._stratum_spec("Gemm_v2", "Gemm_v2{K=1536,N=2048}", {"T": 7, "BN": 128}) == "Gemm_v2{K=1536,N=2048}"
+    assert POP._stratum_spec("Attention_v2", "Attention_v2{T=5,NH=12,KVH=2,D=128,BN=128}", {"T": 5, "BN": 128}) == "Attention_v2{NB=1,last=partial,NH=12,KVH=2,D=128,BN=128}"
+    assert POP._stratum_spec("Attention_v3", spec % 7, {"NH": 32}) == spec % 7                    # no T / BN static -> the spec itself
+    assert POP._stratum_spec("Attention_v3", spec % 7, {"T": "seven", "BN": 128}) == spec % 7    # unparsable -> the spec itself, never a guess
+    assert POP._stratum_spec("Gemm_v2", "Gemm_v2{K=1536,N=2048}", {"T": 7, "BN": 128}) == "Gemm_v2{K=1536,N=2048}"
 
 
 def test_attention_v3_flipped_committed_output_word_fails_named_at_the_attention_row(attn_world):
@@ -1143,31 +1146,31 @@ def test_attention_v2_statics_resolve_the_hopper_twins_by_name_and_an_unknown_id
     r = next(x for x in pi.rows if x["spec"].startswith(f"Attention_v3{{T={LP + T},"))
     d = pi.describe(r)
     inputs = [[attn_world.values[("r0", a)][lo:hi] for _k, a, lo, hi in g] for g in r["args"]]
-    v3 = SR.evaluate("Attention_v3", d["statics"], inputs, [None] * 3)["out"]
+    v3 = EV.evaluate("Attention_v3", d["statics"], inputs, [None] * 3)["out"]
     assert np.array_equal(v3, attn_world.values[("r0", r["i"])])
     st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v1"}', INV='{"fn":"Fa2InvSum_v1"}')
-    assert np.array_equal(SR.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
-    from verity_vllm.program.registry import derived_rows as D
+    assert np.array_equal(EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
+    from verity_vllm.program.kernels import derived_rows as D
     st = dict(d["statics"], DOT='{"fn":"HopperBF16WgmmaDot16_v1"}', INV='{"fn":"Fa3InvSum_v1"}')
-    got = SR.evaluate("Attention_v2", st, inputs, [None] * 3)["out"]
+    got = EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"]
     q = np.asarray(inputs[0][0], dtype=np.uint16).reshape(NH, DH)
     kc = np.concatenate(inputs[1]).reshape(LP + T, KVH, DH)
     vc = np.concatenate(inputs[2]).reshape(LP + T, KVH, DH)
     ref, _nf = D.attention_rows(q, kc, vc, ABN, dot_prim="HopperBF16WgmmaDot16_v1", inv_prim="Fa3InvSum_v1")
     assert np.array_equal(got, ref.reshape(-1))
-    with pytest.raises(SR._Unresolved, match="does not name a registered primitive"):
-        SR.evaluate("Attention_v2", dict(d["statics"], DOT="wgmma", INV='{"fn":"Fa3InvSum_v1"}'), inputs, [None] * 3)
-    with pytest.raises(SR._Unresolved, match="no registered evaluator for Attention_v2"):
-        SR.evaluate("Attention_v2", dict(d["statics"], DOT='{"fn":"BlackwellDot16_v9"}', INV='{"fn":"Fa3InvSum_v1"}'), inputs, [None] * 3)
+    with pytest.raises(EV._Unresolved, match="does not name a registered primitive"):
+        EV.evaluate("Attention_v2", dict(d["statics"], DOT="wgmma", INV='{"fn":"Fa3InvSum_v1"}'), inputs, [None] * 3)
+    with pytest.raises(EV._Unresolved, match="no registered evaluator for Attention_v2"):
+        EV.evaluate("Attention_v2", dict(d["statics"], DOT='{"fn":"BlackwellDot16_v9"}', INV='{"fn":"Fa3InvSum_v1"}'), inputs, [None] * 3)
     # [R17-14] the row's DECLARED signature drives the evaluator: the Definition's arity is 3 (q, K history, V history) -- a row wiring a
     # 4th arg (a mask / scale the Definition does not declare) or only two is unresolved BY NAME, never evaluated over a guessed subset
-    with pytest.raises(SR._Unresolved, match="wires 4 args, the registered Definition takes 3"):
-        SR.evaluate("Attention_v3", d["statics"], inputs + [[np.zeros(4, dtype=np.uint16)]], [None] * 4)
-    with pytest.raises(SR._Unresolved, match="wires 2 args"):
-        SR.evaluate("Attention_v3", d["statics"], inputs[:2], [None] * 2)
-    assert "DECLARED signature" in SR.ATTENTION_INTERIOR_MECHANISM and "hand list" in SR.ATTENTION_INTERIOR_MECHANISM
-    with pytest.raises(SR._Unresolved, match="K history"):
-        SR.evaluate("Attention_v3", d["statics"], [inputs[0], inputs[1][:-1], inputs[2]], [None] * 3)
+    with pytest.raises(EV._Unresolved, match="wires 4 args, the registered Definition takes 3"):
+        EV.evaluate("Attention_v3", d["statics"], inputs + [[np.zeros(4, dtype=np.uint16)]], [None] * 4)
+    with pytest.raises(EV._Unresolved, match="wires 2 args"):
+        EV.evaluate("Attention_v3", d["statics"], inputs[:2], [None] * 2)
+    assert "DECLARED signature" in COV.ATTENTION_INTERIOR_MECHANISM and "hand list" in COV.ATTENTION_INTERIOR_MECHANISM
+    with pytest.raises(EV._Unresolved, match="K history"):
+        EV.evaluate("Attention_v3", d["statics"], [inputs[0], inputs[1][:-1], inputs[2]], [None] * 3)
 
 
 def test_prewarm_reads_the_composed_interior_producers_weights_in_the_parent_exec_m0749(biased_world):
@@ -1184,7 +1187,7 @@ def test_prewarm_reads_the_composed_interior_producers_weights_in_the_parent_exe
             cache[(field, lo, hi)] = base(field, lo, hi)
         return cache[(field, lo, hi)]
 
-    pi = SR.ProgramIndex(biased_world.inst)
+    pi = IX.ProgramIndex(biased_world.inst)
     ba = [{"i": r["i"], "request_id": "r0", "spec": r["spec"], "family": "BiasAdd_v1"} for r in pi.rows if r["spec"].startswith("BiasAdd_v1")][:2]
     SR._prewarm_weights({"r0": pi}, ba, weights)
     assert "model.model.layers.0.mlp.gate_up_proj.bias" in reads, reads
@@ -1199,10 +1202,10 @@ def test_challenge_seed_binds_the_verifier_challenge_to_the_run_root():
     """[rev-cb M-0572] the v2 seed source: the same challenge on two roots (or two challenges on one root) selects different samples; the
     recorded source names the challenge and the binding."""
     r1, r2 = bytes(range(32)), bytes(range(1, 33))
-    s1, src = SR.challenge_seed("c0ffee", r1)
-    s2, _ = SR.challenge_seed("c0ffee", r2)
-    s3, _ = SR.challenge_seed("deadbeef", r1)
-    assert len({s1, s2, s3}) == 3 and SR.challenge_seed("c0ffee", r1)[0] == s1
+    s1, src = SM.challenge_seed("c0ffee", r1)
+    s2, _ = SM.challenge_seed("c0ffee", r2)
+    s3, _ = SM.challenge_seed("deadbeef", r1)
+    assert len({s1, s2, s3}) == 3 and SM.challenge_seed("c0ffee", r1)[0] == s1
     assert "verifier challenge" in src and "post-commitment" in src
 
 
@@ -1342,7 +1345,7 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
     dn = next(r for r in pi.rows if r["spec"].startswith("MoeExpertGemmW"))
     assert pi.member_at(int(dn["args"][1][0][1]), TOPK, TOPK + 1)[1:] == ("router_ids", 0, 1, "i32")
     assert pi.member_at(int(dn["args"][2][0][1]), 0, 1)[1:] == ("router_w", 0, 1, "f32")
-    vus, ne, nef = SR.population(pi, "r0")
+    vus, ne, nef = POP.population(pi, "r0")
     assert not any("moe_block_stream" in k or "plane" in k for k in list(ne) + list(nef)), (ne, nef)
     assert {v["family"] for v in vus} >= MOE_FAMS | {"SiluMul_v1", "RMSNormFusedCuda_v2"}
     assert {v["op_path"] for v in vus if v["family"] in MOE_FAMS - {"MoeSum_v1"} or v["family"] == "SiluMul_v1"} == {"moe/L0"}
@@ -1428,13 +1431,13 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
     is the direct fact beside it, not a second gate."""
     w = moe_world
     bmap, committed = w.bmap_and_reader()
-    ac = SR.moe_plane_alias_check(SR.CommittedStore(bmap, committed))
+    ac = POP.moe_plane_alias_check(OP.CommittedStore(bmap, committed))
     assert ac["result"] is True and ac["identical_n"] == 0 and ac["compared"] >= 2 and ac["per_layer"] == {"L0": {"compared": ac["compared"], "identical": 0}}, ac
     assert ac["plane_words"] == {"up": sorted({2 * I * LP * TOPK, 2 * I * TOPK}), "down": sorted({H * LP * TOPK, H * TOPK})}, ac["plane_words"]   # prefill / decode rows
     rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, workers=0)
     assert rep["moe_planes"]["alias_check"]["result"] is True and rep["result"] is True
     bmap, committed = w.bmap_and_reader(mutate=lambda st, en: _alias_up_to_down(st, en, "r1", 0))
-    ac = SR.moe_plane_alias_check(SR.CommittedStore(bmap, committed))
+    ac = POP.moe_plane_alias_check(OP.CommittedStore(bmap, committed))
     assert ac["result"] is False and ac["identical_n"] == 1 and ac["per_layer"]["L0"]["identical"] == 1, ac
     assert ac["identical"][0]["request_id"] == "r1" and ac["identical"][0]["step"] == 0 and ac["identical"][0]["layer"] == 0 and ac["identical"][0]["bytes_compared"] > 0
     assert "r1 step 0 L0" in ac["why"] and "alias" in ac["why"]
@@ -1442,7 +1445,7 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
     assert rep["result"] is False and rep["moe_planes"]["alias_check"]["result"] is False       # the relation fails it too; the fact is stated beside it
     assert any(m["request_id"] == "r1" and m["spec"].startswith("MoeExpertGemm") for m in rep["mismatch"]), rep["mismatch"][:3]
     bmap, committed = world.bmap_and_reader()
-    ac = SR.moe_plane_alias_check(SR.CommittedStore(bmap, committed))
+    ac = POP.moe_plane_alias_check(OP.CommittedStore(bmap, committed))
     assert ac["result"] is None and ac["compared"] == 0 and ac["per_layer"] == {} and ac["why"] is None
 
 
@@ -1472,19 +1475,19 @@ def test_moe_plane_mapping_refuses_a_program_that_is_not_pair_major(moe_world):
     rows = [dict(r) for r in inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
     rows[ups[0]]["name"], rows[ups[1]]["name"] = rows[ups[1]]["name"], rows[ups[0]]["name"]
-    pi = SR.ProgramIndex(dict(inst, rows=rows))
-    vus, ne, nef = SR.population(pi, "r0")
+    pi = IX.ProgramIndex(dict(inst, rows=rows))
+    vus, ne, nef = POP.population(pi, "r0")
     keys = [k for k in ne if k.startswith("MoE plane row -> plane slice mapping failed")]
     assert sum(ne[k] for k in keys) == 2 and all("!= its Program name index" in k for k in keys) and nef["MoeExpertGemm_v1 (plane mapping failed)"] == 2
-    assert all(SR.why_class(k) == "mapping" for k in keys)
+    assert all(RC.why_class(k) == "mapping" for k in keys)
     rows = [dict(r) for r in inst["rows"]]
     rows[ups[0]]["args"], rows[ups[1]]["args"] = rows[ups[1]]["args"], rows[ups[0]]["args"]
-    pi = SR.ProgramIndex(dict(inst, rows=rows))
-    vus2, ne2, _nef2 = SR.population(pi, "r0")
+    pi = IX.ProgramIndex(dict(inst, rows=rows))
+    vus2, ne2, _nef2 = POP.population(pi, "r0")
     keys = [k for k in ne2 if k.startswith("MoE plane row -> plane slice mapping failed")]
     assert sum(ne2[k] for k in keys) == 2 and all("not pair-major" in k for k in keys)
-    assert len(vus2) == len(vus) and len(vus) + 2 == len(SR.population(SR.ProgramIndex(inst), "r0")[0])
-    assert SR.moe_plane_kind("SiluMul_v1", "model.model.layers.0.mlp.act_fn") is None and SR.moe_plane_kind("SiluMul_v1", "model.model.layers.0.mlp.experts") == "act"
+    assert len(vus2) == len(vus) and len(vus) + 2 == len(POP.population(IX.ProgramIndex(inst), "r0")[0])
+    assert IX.moe_plane_kind("SiluMul_v1", "model.model.layers.0.mlp.act_fn") is None and IX.moe_plane_kind("SiluMul_v1", "model.model.layers.0.mlp.experts") == "act"
 
 
 def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step():
@@ -1498,9 +1501,9 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
     assert TC.TOTAL_FAMILY_VERSION == "3" and TC.HOPPER_WGMMA_FAMILY_VERSION == "1"
     for name in ("Gemm_v1", "Attention_v3"):
-        assert ampere in SR.EVALUATORS[name] and "hopper" not in SR.EVALUATORS[name].split("k16 step = ")[1], name
+        assert ampere in RK.EVALUATORS[name] and "hopper" not in RK.EVALUATORS[name].split("k16 step = ")[1], name
     for name in ("Gemm_v2", "Attention_v2"):
-        assert hopper in SR.EVALUATORS[name] and ampere.split(" ", 1)[1] in SR.EVALUATORS[name], name
+        assert hopper in RK.EVALUATORS[name] and ampere.split(" ", 1)[1] in RK.EVALUATORS[name], name
 
 
 def test_moe_evaluators_equal_the_registered_definitions():
@@ -1523,23 +1526,23 @@ def test_moe_evaluators_equal_the_registered_definitions():
         lg = _bf16(rng, E, 2.0)
         if trial == 2:
             lg[5] = lg[7]
-        w, ids = SR.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_)
+        w, ids = RK.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_)
         assert [int(x) for x in w] + [int(x) for x in ids] == ref(bind(R.MoeRouterTopK, E=E, TOPK=K_, VPT=V_), [[int(v) for v in lg]])
-        wn, idn = SR.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_, renormalize=True)
+        wn, idn = RK.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_, renormalize=True)
         assert [int(x) for x in wn] + [int(x) for x in idn] == ref(bind(R.MoeRouterTopKNorm, E=E, TOPK=K_, VPT=V_), [[int(v) for v in lg]])
     y = _bf16(rng, K_ * 16, 3.0)
-    assert [int(v) for v in SR.evaluate("MoeSum_v1", {"TOPK": K_, "H": 16}, [[y]], [None])["sum"]] == ref(bind(R.MoeSum, TOPK=K_, H=16), [[int(v) for v in y]])
+    assert [int(v) for v in EV.evaluate("MoeSum_v1", {"TOPK": K_, "H": 16}, [[y]], [None])["sum"]] == ref(bind(R.MoeSum, TOPK=K_, H=16), [[int(v) for v in y]])
     Es, K, N = 4, 32, 4
     x, slab, e = _bf16(rng, K), _bf16(rng, Es * N * K, 0.5), 2
     g = np.float32(0.37).view(np.uint32).item()
-    up = SR.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
+    up = EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
     assert [int(v) for v in up] == ref(bind(R.MoeExpertGemm, E=Es, K=K, N=N), [[int(v) for v in x], [e], [int(v) for v in slab]])
-    dn = SR.evaluate("MoeExpertGemmW_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [np.asarray([g], dtype=np.uint32)], [slab]], [None, None, None, slab])["down"]
+    dn = EV.evaluate("MoeExpertGemmW_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [np.asarray([g], dtype=np.uint32)], [slab]], [None, None, None, slab])["down"]
     assert [int(v) for v in dn] == ref(bind(R.MoeExpertGemmW, E=Es, K=K, N=N), [[int(v) for v in x], [e], [g], [int(v) for v in slab]])
-    other = SR.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([1], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
+    other = EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([1], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
     assert not np.array_equal(other, up)                                           # the gather is by the value operand e
     with pytest.raises(ValueError):
-        SR.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([Es], dtype=np.uint32)], [slab]], [None, None, slab])
+        EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([Es], dtype=np.uint32)], [slab]], [None, None, slab])
 
 
 def _jit_slow_compile(out):
@@ -1605,13 +1608,13 @@ def test_moe_plane_naming_on_real_programs_dense_zero_moe_nonzero_rev_cb_m0733()
     dense = [d for d in os.environ.get("VERITY_DENSE_PROGRAM_DIRS", "").split(":") if d]
     moe = [d for d in os.environ.get("VERITY_MOE_PROGRAM_DIRS", "").split(":") if d]
     for d in dense:
-        pi = SR.ProgramIndex(RM.load_program(d)["instances"])
-        vus, ne, nef = SR.population(pi, "r0")
+        pi = IX.ProgramIndex(RM.load_program(d)["instances"])
+        vus, ne, nef = POP.population(pi, "r0")
         assert not any("moe_block_stream" in k for k in list(ne) + list(nef)), (d, sorted(nef))
         assert len(vus) > 0
     for d in moe:
-        pi = SR.ProgramIndex(RM.load_program(d)["instances"])
-        vus, ne, nef = SR.population(pi, "r0")
+        pi = IX.ProgramIndex(RM.load_program(d)["instances"])
+        vus, ne, nef = POP.population(pi, "r0")
         named = {k: v for k, v in nef.items() if "moe_block_stream" in k}
         assert named and sum(named.values()) > 0, (d, sorted(nef))
         assert not any(k.startswith("SiluMul_v1") and "moe_block_stream" not in k for k in nef if k.startswith("SiluMul_v1 (fed"))
@@ -1638,11 +1641,11 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     assert rep["result"] is None and rep["grade"] == "partial"
     assert rep["why"].startswith(f"{rep['sample']['not_evaluated_n']} pick(s) not evaluated inside evaluated strata (missing-input x {rep['sample']['not_evaluated_n']}) -- run-time fault, not a gap on the record: ")
     assert "not retained" in rep["why"] and "(F-r16-13)" in rep["why"]
-    assert SR.why_class("committed bytes not retained for (r0, step 0, x/out) [0, 16)") == "missing-input" and SR.why_class("ambiguous binding: 2 entries for (...)") == "missing-input"
-    assert SR.why_class("committed bytes not retained ...") in SR.WHY_CLASSES_FAULT and "missing-input" not in SR.WHY_CLASSES_BY_NAME
+    assert RC.why_class("committed bytes not retained for (r0, step 0, x/out) [0, 16)") == "missing-input" and RC.why_class("ambiguous binding: 2 entries for (...)") == "missing-input"
+    assert RC.why_class("committed bytes not retained ...") in RC.WHY_CLASSES_FAULT and "missing-input" not in RC.WHY_CLASSES_BY_NAME
     assert all(x["why_class"] == "missing-input" for x in rep["not_evaluated"])
     # the row verdict: fail closed on the partial replay, the fault in the text (no named-gap lift: no fully unevaluated stratum)
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage", "result": None},
             "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
@@ -1674,24 +1677,24 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
     E, TOPK, VPT, H, I = 8, 2, 4, 32, 16
     st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I}
     x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * I, H), 0.3), bf16((E, H, I), 0.3)
-    SR._PADDED_BLOCK_MEMO.clear()
-    got = SR.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
+    RK._PADDED_BLOCK_MEMO.clear()
+    got = RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
     assert set(got) == {"out", "router_ids", "router_w"} | {f"slot{e}/{m}" for e in range(E) for m in ("up", "act", "down", "g")}
     # the MOE-01 composition through the SAME evaluate() entry the record's pair rows use
-    r = SR.evaluate("MoeRouterTopK_v1", {"E": E, "TOPK": TOPK, "VPT": VPT}, [[logits]], [None])
+    r = EV.evaluate("MoeRouterTopK_v1", {"E": E, "TOPK": TOPK, "VPT": VPT}, [[logits]], [None])
     assert got["router_ids"].tolist() == r["router_ids"].tolist() and got["router_w"].tolist() == r["router_w"].tolist()
     ids, alpha = [int(v) for v in r["router_ids"]], [int(v) for v in r["router_w"]]
     downs = []
     for j in range(TOPK):
         e = ids[j]
-        up = SR.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * I}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
-        act = SR.evaluate("SiluMul_v1", {"I": I}, [[up]], [None])["out"]
-        down = SR.evaluate("MoeExpertGemmW_v1", {"E": E, "K": I, "N": H},
+        up = EV.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * I}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
+        act = EV.evaluate("SiluMul_v1", {"I": I}, [[up]], [None])["out"]
+        down = EV.evaluate("MoeExpertGemmW_v1", {"E": E, "K": I, "N": H},
                            [[act], [np.asarray([e], dtype=np.uint32)], [np.asarray([alpha[j]], dtype=np.uint32)], [w2.reshape(-1)]], [None] * 4)["down"]
         assert got[f"slot{e}/up"].tolist() == up.tolist() and got[f"slot{e}/act"].tolist() == act.tolist() and got[f"slot{e}/down"].tolist() == down.tolist()
         assert int(got[f"slot{e}/g"][0]) == alpha[j]
         downs.append(down)
-    y = SR.evaluate("MoeSum_v1", {"TOPK": TOPK, "H": H}, [[np.concatenate(downs)]], [None])["sum"]
+    y = EV.evaluate("MoeSum_v1", {"TOPK": TOPK, "H": H}, [[np.concatenate(downs)]], [None])["sum"]
     assert got["out"].tolist() == y.tolist()
     # the unselected slots: evaluated with g = 0.0f -> down = f2fp(acc * 0) is a signed zero word, the up / act words are the body's own
     for e in range(E):
@@ -1700,14 +1703,14 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         assert int(got[f"slot{e}/g"][0]) == 0 and set(int(v) & 0x7FFF for v in got[f"slot{e}/down"]) == {0}
         assert got[f"slot{e}/up"].any()
     # the memo: the same (statics, x, logits) is one evaluation; a different logits word is another
-    assert SR.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
+    assert RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
     logits2 = logits.copy(); logits2[0] ^= 0x0080
-    assert SR.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
+    assert RK.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
     # MoeFfnFixed_v1: the router Gemm inside = Gemm_v1 on (x, wg) then the same block
     wg = bf16((E, H), 0.5)
-    lg = SR.evaluate("Gemm_v1", {"K": H, "N": E}, [[x], [wg.reshape(-1)]], [None, None])["0"]
-    assert SR.padded_moe_block(st, [x, wg, w13, w2], router_gemm=True)["out"].tolist() == SR.padded_moe_block(st, [x, lg, w13, w2], router_gemm=False)["out"].tolist()
-    assert "MoeFfnFixedL_v1" in SR.EVALUATORS and "MoeFfnFixed_v1" in SR.EVALUATORS
+    lg = EV.evaluate("Gemm_v1", {"K": H, "N": E}, [[x], [wg.reshape(-1)]], [None, None])["0"]
+    assert RK.padded_moe_block(st, [x, wg, w13, w2], router_gemm=True)["out"].tolist() == RK.padded_moe_block(st, [x, lg, w13, w2], router_gemm=False)["out"].tolist()
+    assert "MoeFfnFixedL_v1" in RK.EVALUATORS and "MoeFfnFixed_v1" in RK.EVALUATORS
 
 
 def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail_by_name_and_exact_bot_passes():
@@ -1717,30 +1720,30 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     bot plane and the exact Active plane PASS.  The enable is derived from the row's COMMITTED router_ids, never the twin's."""
     payload = np.asarray([0x3F80, 0xBF00, 0x0000, 0x4049], dtype=np.uint16)
     bot17 = 1 << 16
-    eq, nd, first, v = SR.lifted_compare(payload.astype(np.uint32), payload, True, "l17")
+    eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32), payload, True, "l17")
     assert eq and nd == 0 and first is None and v.startswith("active")
-    eq, nd, first, v = SR.lifted_compare(np.full(4, bot17, dtype=np.uint32), payload, False, "l17")
+    eq, nd, first, v = CMP.lifted_compare(np.full(4, bot17, dtype=np.uint32), payload, False, "l17")
     assert eq and v.startswith("disabled")
     have = payload.astype(np.uint32); have[2] = bot17                                # a bot word where the slot is Active
-    eq, nd, first, v = SR.lifted_compare(have, payload, True, "l17")
+    eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 2 and "bot word under an Active enable" in v
     have = np.full(4, bot17, dtype=np.uint32); have[1] = 0x3F80                      # a value word where the slot is disabled
-    eq, nd, first, v = SR.lifted_compare(have, payload, False, "l17")
+    eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and nd == 1 and first == 1 and "value word under a disabled enable" in v
     have = np.full(4, bot17, dtype=np.uint32); have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
-    eq, nd, first, v = SR.lifted_compare(have, payload, False, "l17")
+    eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and "nonzero payload" in v
     # revb n-52-2: an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
     have = payload.astype(np.uint32).copy(); have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
-    eq, nd, first, v = SR.lifted_compare(have, payload, True, "l17")
+    eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 3 and "INV word" in v and "Active" in v
-    eq, nd, first, v = SR.lifted_compare(payload.astype(np.uint32)[:3], payload, True, "l17")
+    eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32)[:3], payload, True, "l17")
     assert not eq and nd == -1 and "width" in v
     # l33: the g word and the router members (u64)
     g = np.asarray([0x3F2C4635], dtype=np.uint32)
-    assert SR.lifted_compare(np.asarray([0x3F2C4635], dtype=np.uint64), g, True, "l33")[0]
-    assert SR.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, False, "l33")[0]
-    assert not SR.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, True, "l33")[0]
+    assert CMP.lifted_compare(np.asarray([0x3F2C4635], dtype=np.uint64), g, True, "l33")[0]
+    assert CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, False, "l33")[0]
+    assert not CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, True, "l33")[0]
     # the enable from the COMMITTED router_ids of the row (a store stub): e in ids -> Active; e not in ids -> disabled; a bot id -> not evaluable
 
     class _Store:
@@ -1752,15 +1755,15 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
             return (np.asarray(self.ids[elo:ehi], dtype=np.uint64), "uint64") if self.ids is not None else (None, "no committed identity")
 
     st = _Store([3, 1, 7, 0])
-    assert SR.padded_slot_enable("slot3/up", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (True, "")
-    assert SR.padded_slot_enable("slot7/down", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (False, "")   # row 0 = ids[0:2] = {3, 1}
-    assert SR.padded_slot_enable("slot7/down", {}, st, "r0", 5, "model.layers.1.mlp.experts", 1, 2) == (True, "")    # row 1 = ids[2:4] = {7, 0}
-    assert SR.padded_slot_enable("router_w", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (True, "")
-    a, why = SR.padded_slot_enable("slot3/up", {}, _Store(None), "r0", 5, "model.layers.1.mlp.experts", 0, 2)
+    assert CMP.padded_slot_enable("slot3/up", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (True, "")
+    assert CMP.padded_slot_enable("slot7/down", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (False, "")   # row 0 = ids[0:2] = {3, 1}
+    assert CMP.padded_slot_enable("slot7/down", {}, st, "r0", 5, "model.layers.1.mlp.experts", 1, 2) == (True, "")    # row 1 = ids[2:4] = {7, 0}
+    assert CMP.padded_slot_enable("router_w", {}, st, "r0", 5, "model.layers.1.mlp.experts", 0, 2) == (True, "")
+    a, why = CMP.padded_slot_enable("slot3/up", {}, _Store(None), "r0", 5, "model.layers.1.mlp.experts", 0, 2)
     assert a is None and "committed router_ids are not available" in why
-    a, why = SR.padded_slot_enable("slot3/up", {}, _Store([1 << 32, 1]), "r0", 5, "model.layers.1.mlp.experts", 0, 2)
+    a, why = CMP.padded_slot_enable("slot3/up", {}, _Store([1 << 32, 1]), "r0", 5, "model.layers.1.mlp.experts", 0, 2)
     assert a is None and "is bot" in why
-    assert SR._ITEMSIZE["l17"] == 4 and SR._ITEMSIZE["l33"] == 8
+    assert OP._ITEMSIZE["l17"] == 4 and OP._ITEMSIZE["l33"] == 8
 
 
 def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_world, biased_world, monkeypatch):
@@ -1771,16 +1774,16 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
 
     from verity_vllm.check.replay import replay_codes as RC
 
-    monkeypatch.delitem(SR.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
-    monkeypatch.delitem(SR.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)
-    monkeypatch.delitem(SR.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (MAN-06g) + direct Gemm gaps
-    monkeypatch.setitem(SR.NOT_YET, "TokenSelect_v1", "not replayed by this version (test label)")     # the stated domain
+    monkeypatch.delitem(RK.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
+    monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)
+    monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (MAN-06g) + direct Gemm gaps
+    monkeypatch.setitem(RC.NOT_YET, "TokenSelect_v1", "not replayed by this version (test label)")     # the stated domain
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
     rows[ups[0]]["name"], rows[ups[1]]["name"] = rows[ups[1]]["name"], rows[ups[0]]["name"]            # a plane mapping failure
     ne, codes = Counter(), {}
     for inst in (dict(moe_world.inst, rows=rows), biased_world.inst):
-        ne.update(SR.population(SR.ProgramIndex(inst), "r0", codes=codes)[1])
+        ne.update(POP.population(IX.ProgramIndex(inst), "r0", codes=codes)[1])
     assert set(codes) == set(ne)
     assert {"no-evaluator", "plane-fed", "interior-composed-v2", "mapping"} <= {c["class"] for c in codes.values()}
     assert [k for k, c in codes.items() if c["domain"]] == ["not replayed by this version (test label)"]

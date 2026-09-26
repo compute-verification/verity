@@ -6,7 +6,7 @@ tree at once), and trees over whole runtime tensor leaves under the ``verity-vll
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.
 
-Two named schemes sit behind ``scheme.CommitmentScheme`` and are selectable by configured backends, each with a spec
+Two named schemes sit behind ``scheme.CommitmentScheme`` and are selectable by backends, each with a spec
 and conformance vectors beside it: ``frame_v3`` (word leaves and the ``sha256/row/v1`` / ``blake3-keyed/row/v2`` row
 leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's production Commit path emits (id, position and ``fa2h``
 leaves, node/lift trees, raw-SHA root bindings).  ``CommitmentScheme.leaf_layout`` is what a backend proves: every
@@ -14,7 +14,7 @@ leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blak
 verifiers check the trees natively.
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
-relation between those values; that is a verification obligation (``verity.verification``) a backend establishes.
+relation between those values; that is a verification obligation (``verity.proofs``) a backend establishes.
 A proof system's own commitments (a STARK's trace or FRI commitments) are not here.
 
 Promoted from veritor (eb865ce2): ``protocol/merkle.py``, ``protocol/multiproof.py``, ``core/indexed.py``,

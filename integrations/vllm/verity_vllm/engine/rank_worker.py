@@ -39,6 +39,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine import hooks
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -363,7 +364,7 @@ class TP2CaptureWorkerExtension:
             names += [f"model.layers.{li}.self_attn.qkv_proj", f"model.layers.{li}.self_attn.o_proj",
                       f"model.layers.{li}.mlp.gate_up_proj", f"model.layers.{li}.mlp.down_proj"]
         mods = dict(model.named_modules())
-        st: dict[str, Any] = {"active": None, "calls": {n: 0 for n in names}, "handles": [], "orig": {}, "rank": rank, "out": out,
+        st: dict[str, Any] = {"active": None, "calls": {n: 0 for n in names}, "handles": [], "hooks": hooks.Hooks(), "rank": rank, "out": out,
                               "max_calls": int(max_calls), "records": []}
         self._tp2_sem = st
 
@@ -387,8 +388,7 @@ class TP2CaptureWorkerExtension:
         for mod, attr, kind in ((L, "tensor_model_parallel_all_reduce", "all_reduce"), (VE, "tensor_model_parallel_all_reduce", "all_reduce"),
                                 (LP, "tensor_model_parallel_all_gather", "all_gather"), (LP, "tensor_model_parallel_gather", "gather")):
             if hasattr(mod, attr):
-                st["orig"][(mod.__name__, attr)] = getattr(mod, attr)
-                setattr(mod, attr, coll_wrap(getattr(mod, attr), kind))
+                st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
 
         def pre(name: str) -> Any:
             def h(m: Any, args: tuple, kwargs: dict) -> None:
@@ -454,9 +454,7 @@ class TP2CaptureWorkerExtension:
         torch.cuda.synchronize()
         for h in st["handles"]:
             h.remove()
-        import importlib
-        for (modname, attr), orig in st["orig"].items():
-            setattr(importlib.import_module(modname), attr, orig)
+        st["hooks"].uninstall()
         (st["out"] / "records.json").write_text(json.dumps(st["records"], indent=1, default=str) + "\n")
         return _jsonable({"rank": st["rank"], "records": st["records"]})
 
@@ -481,7 +479,7 @@ class TP2CaptureWorkerExtension:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         model = self.model_runner.get_model()
-        st: dict[str, Any] = {"rank": rank, "world": world, "out": out, "step": -1, "k": 0, "cur": None, "handles": [], "orig": {},
+        st: dict[str, Any] = {"rank": rank, "world": world, "out": out, "step": -1, "k": 0, "cur": None, "handles": [], "hooks": hooks.Hooks(),
                               "moe_sites": _moe_collective_modules(),
                               "records": [], "values": {"part": [], "out": []}, "store_steps": int(store_steps), "n_stored": 0}
         self._tp2_coll = st
@@ -548,10 +546,11 @@ class TP2CaptureWorkerExtension:
         mid = mid_module_sites(model, world)
         st["mid_sites"] = {s["name"]: s for s in mid}
         sites += patch_targets(mid)
+        wrapped: set[tuple[str, str]] = set()
         for mod, attr, kind in sites:
-            if hasattr(mod, attr) and (mod.__name__, attr) not in st["orig"]:
-                st["orig"][(mod.__name__, attr)] = getattr(mod, attr)
-                setattr(mod, attr, coll_wrap(getattr(mod, attr), kind))
+            if hasattr(mod, attr) and (mod.__name__, attr) not in wrapped:
+                wrapped.add((mod.__name__, attr))
+                st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
@@ -590,8 +589,6 @@ class TP2CaptureWorkerExtension:
         return _jsonable({"rank": rank, "world_size": world, "n_hooked": len(hooked)})
 
     def tp2_coll_close(self) -> dict[str, Any]:
-        import importlib
-
         import torch
 
         st = self._tp2_coll
@@ -602,8 +599,7 @@ class TP2CaptureWorkerExtension:
             st["n_stored"] += 1
         for h in st["handles"]:
             h.remove()
-        for (modname, attr), orig in st["orig"].items():
-            setattr(importlib.import_module(modname), attr, orig)
+        st["hooks"].uninstall()
         with (st["out"] / f"coll.rank{st['rank']}.jsonl").open("w") as f:
             for r in st["records"]:
                 f.write(json.dumps(r) + "\n")
@@ -627,7 +623,6 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
-        import argparse
         from types import SimpleNamespace
 
         from verity_vllm.pipeline.commit import baseline_state, make_committer
@@ -637,7 +632,7 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
-        args = argparse.Namespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
+        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
         if hidden_so:
@@ -1140,7 +1135,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.check import oracle_compare as OC
             from verity_vllm.query.manifest import format as RM
-            from verity_vllm.check.replay import sampled_replay as SR
+            from verity_vllm.check.replay import driver as SR
             from verity_vllm.program.registry import b1_tp2 as _TP2
 
             com = st["com"]

@@ -5,7 +5,7 @@ the prover's challenges to them through ``statement_digest``.  On its own that p
 computed".  This module supplies the missing half of the claim -- "the dot products were computed on *these committed*
 weights and activations, and produced *these committed* outputs" -- by
 
-  1. committing the instance set's words as three indexed Merkle trees of :mod:`verity.commitments` (one 16-bit word per
+  1. committing the input set's words as three indexed Merkle trees of :mod:`verity.commitments` (one 16-bit word per
      leaf, ``schema="u16"``, big-endian value bytes; SHA-256 with the ``veritor/protocol/merkle/frame/v3`` framing;
      binary tree, ``merkle_depth(count)`` levels):
 
@@ -14,7 +14,7 @@ weights and activations, and produced *these committed* outputs" -- by
          tree ``y``  outputs       owner -1   leaf rank  vu              (the 16-bit public output word)
 
      The commitment domain of each tree is ``CommitmentDomain(binding, owner, RangeIndexedDomain(0, count))``; the
-     *binding* is the identity digest of the frozen instance set's manifest (dataset, tier, ``manifest_sha256``, the VU
+     *binding* is the identity digest of the frozen input set's manifest (dataset, tier, ``manifest_sha256``, the VU
      range, K, the tree name), so the same words under a different manifest are a different object.
 
   2. extending the public statement with an :class:`AuthStatement` -- the three ``(binding, owner, count, root)``
@@ -108,7 +108,7 @@ def _pool(workers: int) -> ProcessPoolExecutor:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, K: int, tree: str) -> bytes:
-    """Identity of the committed object: the frozen instance set (by manifest digest) and which words of it."""
+    """Identity of the committed object: the frozen input set (by manifest digest) and which words of it."""
     if tree not in TREE_NAMES:
         raise ValueError(f"unknown tree {tree!r}")
     h = identity_digest(BINDING_TAG, {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256,
@@ -292,7 +292,7 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, *, procs: int 
 
 def load_or_build_trees(cache: Path | None, *, a_words: np.ndarray, b_words: np.ndarray, y_words: np.ndarray,
                         bindings: Mapping[str, bytes], procs: int | None = None) -> tuple[dict[str, WordTree], bool]:
-    """The three trees of an instance set, from ``cache`` when its bindings match, else built (and cached)."""
+    """The three trees of an input set, from ``cache`` when its bindings match, else built (and cached)."""
     words = {"a": a_words, "b": b_words, "y": y_words}
     if cache is not None:
         cache = Path(cache)

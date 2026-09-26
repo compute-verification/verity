@@ -1,6 +1,6 @@
 """Verity source identity + precheck (F-r17-tp-06 fixed by construction; BRIEF R18 Phase 0, adapted to the Verity tree in R19).
 
-    python -m verity_vllm.pipeline.source_identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
+    verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
@@ -25,21 +25,22 @@ cannot be imported is a broken environment and is reported as one, not repaired 
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT as INTEGRATION
+from verity_vllm.config import option
 
 try:
     from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
     raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
-                      "(PYTHONPATH must include <repo>/tools/research/src; row_pod.sh exports it); nothing is appended here on purpose: "
+                      "(PYTHONPATH must include <repo>/tools/research/src; verity-vllm row exports it); nothing is appended here on purpose: "
                       f"{_e}") from _e
 
 INTEGRATION_REL = Path("integrations") / "vllm"
@@ -55,7 +56,7 @@ SourceIdentityError = _sid.SourceIdentityError
 HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
 PACKAGE_ROOTS = {
-    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.verification
+    "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.proofs
     "verity_vllm": ("verity_vllm", "integrations/vllm"),
     "research": ("research", "tools/research/src"),                    # the runner/telemetry package of the tree of record
 }
@@ -189,14 +190,18 @@ def assert_loaded_module_is_ours(mod: Any, name: str, tree: str | os.PathLike[st
     return rec
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tree", default=None, help="the requested tree: the Verity repo root or its integrations/vllm (default: this file's tree; $VERITOR_REPO must agree)")
-    ap.add_argument("--sha", default=None, help="the requested commit; every package's git_sha must equal it (default: $RESEARCH_SOURCE_SHA when set)")
-    ap.add_argument("--out", default=None, help="write the manifest record here (also on failure)")
-    ap.add_argument("--stage", default="precheck")
-    ap.add_argument("--print", action="store_true", help="print the record to stdout")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    tree: str | None = option("--tree", default=None,
+                              help="the requested tree: the Verity repo root or its integrations/vllm (default: this file's tree; $VERITOR_REPO must agree)")
+    sha: str | None = option("--sha", default=None,
+                             help="the requested commit; every package's git_sha must equal it (default: $RESEARCH_SOURCE_SHA when set)")
+    out: str | None = option("--out", default=None, help="write the manifest record here (also on failure)")
+    stage: str = option("--stage", default="precheck")
+    print: bool = option("--print", default=False, action="store_true", help="print the record to stdout")
+
+
+def main(a: Options) -> int:
     try:
         doc = precheck(a.stage, a.tree, sha=a.sha, out=a.out)
     except SourceIdentityError as e:
@@ -210,7 +215,3 @@ def main(argv: list[str] | None = None) -> int:
     print("SOURCE-IDENTITY-OK " + " ".join(f"{k}={('' if v.get('git_sha') else '-')}{(v.get('git_sha') or '')[:9]}" for k, v in pk.items())
           + f" tree={doc['requested_root']}", flush=True)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

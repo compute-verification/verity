@@ -13,7 +13,7 @@ Three groups, by asserter:
 
     result        the producing lane, about its own result / ledger row (`ledger_to_store`, or `research data label` by hand)
     verification  an independent verifier, never the producer (a table counts it only when `by` is not a producer)
-    evidence      a probe or instance-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
+    evidence      a probe or input-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
 
 Value forms: `enum` (one of `values`), `bool` (`true` | `false`), `int`, `number`, `text`, `list` (of strings).  Enum and bool
 values are compared as the catalog stores them (`index.scalar_text`: strings raw, everything else JSON), so `true` and `"true"`
@@ -77,7 +77,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 OUTCOME = "outcome"
 
-# ---- evidence labels: probe captures and instance sets --------------------------------------------------------------------------------
+# ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
 INSTRUCTION = "instruction"
 MODEL = "model"
@@ -243,13 +243,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
-    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.verification.target name)"),
+    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.proofs.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.verification.trust)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.proofs.trust)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
 

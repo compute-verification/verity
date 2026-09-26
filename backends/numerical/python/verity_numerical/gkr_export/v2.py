@@ -1,4 +1,4 @@
-"""Candidate A on checker v2 (``checker.v2``): the state-chained unit circuit, the Pack + epilogue circuit, the
+"""A-GKR on checker v2 (``checker.v2``): the state-chained unit circuit, the Pack + epilogue circuit, the
 chain specification, the witnesses of ``bench-instances/v1`` and the fixed tables (PROTOCOL.md section 14).
 
 The VU is proved as in section 12 -- two data-parallel segments over one commitment, linkage as linear constraints

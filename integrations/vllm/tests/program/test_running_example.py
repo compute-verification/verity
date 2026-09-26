@@ -162,7 +162,7 @@ def test_call_interface_vs_boundary():
     assert reg.in_ == (0, 1, 4, 5)
     assert reg.out == (17,)  # the Relu16 output is a root output
     # a non-contiguous subcircuit: the two Mul16 gates of Row #0
-    S = C.subcircuit([15, 14])
+    S = C.gate_selection([15, 14])
     assert S.size == 2 and S[0].index == 14 and S[1].index == 15
     assert S.in_ == (0, 1, 4, 5)
     assert S.out == (14, 15)
@@ -258,18 +258,18 @@ def test_intrinsic_summary():
 
 def test_plan_input_gates_are_sampled_gates():
     from fractions import Fraction
-    from verity.verification.plan import weight_binding_plan, Obligation
+    from verity_sampled_proofs.plan import weight_binding_plan, Obligation
     P = make_program()
     C = P.circuit
-    # W (param 1) at rate 1 = WB's model binding; everything else sampled at 1/4
+    # W (param 1) at p = 1 = WB's model binding; everything else sampled at 1/4
     plan = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
-    assert plan.rate_of(C[4]) == 1 and plan.rate_of(C[13]) == 1  # W Input gates
-    assert plan.rate_of(C[0]) == Fraction(1, 4)  # X Input gates are sampled like any other gate
-    assert plan.rate_of(C[14]) == Fraction(1, 4)
-    assert plan.expected_checked(C, C[0:54]) == 10 + Fraction(44, 4)
+    assert plan.check_probability(C[4]) == 1 and plan.check_probability(C[13]) == 1  # W Input gates
+    assert plan.check_probability(C[0]) == Fraction(1, 4)  # X Input gates are sampled like any other gate
+    assert plan.check_probability(C[14]) == Fraction(1, 4)
+    assert plan.expected_checked(C[0:54]) == 10 + Fraction(44, 4)
     # the same plan with sampled weights
     plan2 = weight_binding_plan(P, [1], other_rate=Fraction(1, 4), weight_rate=Fraction(1, 2))
-    assert plan2.rate_of(C[4]) == Fraction(1, 2)
+    assert plan2.check_probability(C[4]) == Fraction(1, 2)
     row = query(C, "//Row")[0]
     ob = Obligation(row, plan, {g: None for g in row.in_}, {g: None for g in row.out})
     assert ob.to_json()["function_call"]["args"] == [0, 1, 4, 5]

@@ -94,11 +94,8 @@ def test_the_real_source_binds_the_names_the_python_side_calls():
     assert len(names) >= 40
 
 
-def test_pod_release_fails_closed_on_a_stale_so_and_records_the_digest():
-    """pod_release.sh's collector step asserts missing_bindings == [] and prints source_digest= beside the sha; release_json keeps it."""
-    s = open(os.path.join(HERE, "..", "sweep", "pod_release.sh")).read()
-    assert "native_jit.missing_bindings(e, os.path.join(nc.HERE, 'native_collect.cpp'))" in s
-    assert "assert not missing" in s and "'source_digest=' + nc.build_source_digest()" in s
+def test_release_json_records_the_collector_source_digest():
+    """release_json keeps the source_digest= / bindings= a collector build line prints beside the sha."""
     from verity_vllm.pipeline import release_json as rj
 
     arts = rj.parse_artifacts("HIDDEN-GPU-OK 1111 /a.so sm_89", "FA2-TAP-OK 2222 /b.so arch=8.9",

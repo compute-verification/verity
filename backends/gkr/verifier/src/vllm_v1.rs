@@ -123,7 +123,7 @@ impl StepDomain {
 pub const PORTS: [&str; 3] = ["a", "b", "y"];
 
 /// The provisional step domain of port `a` (x rows), `b` (W columns) or `y` (output words, one leaf per word) of the
-/// statement's instance set; mirrored by `gpu/commit.py vllm_domain`.
+/// statement's input set; mirrored by `gpu/commit.py vllm_domain`.
 pub fn operand_domain(spec: &Spec, port: &str) -> StepDomain {
     let hi = spec.lo + spec.vus;
     let base = spec.relation.strip_suffix(spec.hash.suffix()).unwrap_or(&spec.relation);

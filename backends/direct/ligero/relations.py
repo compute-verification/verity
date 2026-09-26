@@ -10,7 +10,7 @@ runs any of them: gate, bench, proof dumps, verification.
     fp8-hopper    GemmAccumulator<1536> over sm90.wgmma.m64n8k32.e4m3 HOPPER_E4M3_K32      (32,) / 14 bits / -139; bare FP32 word
     fp8-ada       GemmAccumulator<1536> over sm89.mma.m16n8k32.e4m3   ADA_E4M3_M16N8K32    (16, 16) / 14 bits / -139; bare FP32 word
 
-The Ampere BF16 relation (``--relation bf16``, the frozen target FIRST on the frozen instance set) stays in ``vu.py``;
+The Ampere BF16 relation (``--relation bf16``, the frozen target FIRST on the frozen input set) stays in ``vu.py``;
 ``REAL == Params.from_model(AMPERE_BF16_M16N8K16)`` is the same unit at the Ampere widths.
 
 Statement binding: the compiled system's id is in every statement digest (``protocol.statement_digest``), so two
@@ -30,7 +30,7 @@ from typing import Callable
 import numpy as np
 from verity.ml.tc.cast import f32_to_bf16_word
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 from verity_numerical.bench import contract
 from verity_numerical.checker.params import Params
 
@@ -70,7 +70,7 @@ class Relation:
     frozen_tier: str | None = None           # a FROZEN VU tier (verity_numerical.bench.instances: ``vu-k1536`` of bench-instances/v1)
     #                                          the runner proves instead of synthetic instances (relchain.instances reads it from --root)
     fold: int = 1                            # instruction steps of the base model per column (``_folded``); 1 = one step per unit
-    folded_from: str = ""                    # the base relation's name when ``fold > 1`` (its synthetic instance set is this one's)
+    folded_from: str = ""                    # the base relation's name when ``fold > 1`` (its synthetic input set is this one's)
 
     @property
     def k(self) -> int:
@@ -300,7 +300,7 @@ FP8_ADA_V2_RELATION = _register(_v2_of(FP8_ADA_RELATION, "fp8-ada-v2", "FP8Param
 
 # The Ampere BF16 v1 relation on the generic chain runner (lane hash-compose): the SAME unit as ``vu.py``'s ``--relation bf16``
 # (``compile_unit(Params.from_model(AMPERE_BF16_M16N8K16))``, ``REAL``), the same statement widths and chain-end word, proved
-# on the same frozen instance set (``frozen_tier``: ``bench-instances/v1`` ``vu-k1536``, read from ``--root``) -- registered so
+# on the same frozen input set (``frozen_tier``: ``bench-instances/v1`` ``vu-k1536``, read from ``--root``) -- registered so
 # that ``hashchain.compose`` / ``HashedRelationRunner`` give the A100 cell its committed column (``--auth included-hash``).
 # Additive: ``vu.py``'s bare path, its v2 / v3 statements and its Rust pin are untouched; this entry's bare v4 statement names
 # "bf16-ampere" and is not the Table 2 bare cell.
@@ -333,7 +333,7 @@ BF16_AMPERE_RELATION = _register(Relation(
     frozen_tier="vu-k1536",
 ))
 
-# The Ampere BF16 pipeline on the generic chain runner, on the A100 row's frozen instance set like ``bf16-ampere`` (``frozen_tier``:
+# The Ampere BF16 pipeline on the generic chain runner, on the A100 row's frozen input set like ``bf16-ampere`` (``frozen_tier``:
 # ``bench-instances/v1`` ``vu-k1536``, read from ``--root``; the v3 / v2x4 / v3x4 relations below inherit it).  Until lane
 # fused-phases these drew a synthetic set (``bench-instances-bf16-ampere/v1``), which Table 2 rejects as not the frozen set.
 BF16_AMPERE_V2_RELATION = _register(_v2_of(

@@ -74,7 +74,7 @@ deviation from the reference over the integers or over Goldilocks (`notes-asset:
 coordinated on every hint column, z3 per gadget with Boolean case splits); every SAT is a field below the checker's
 F1-F4 thresholds.  What an implementation can still get wrong is the *realisation*.  Check, per commit:
 
-### In a GKR layer wiring (Candidate A) and in an AIR / trace (Candidate B) alike
+### In a GKR layer wiring (A-GKR) and in an AIR / trace (B-Ligero) alike
 
 - [ ] **Every `rng` of the contracts is present, on the canonical representative.**  Diff the layer's / AIR's range
       queries against `contract().hints` + `contract().checked` (the `checked` expressions: `t-nz`, `M+z-1`, `u+z-1`,
@@ -101,7 +101,7 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       (wave 1's `magW`: 388/870 groups forged at Goldilocks).  Grep the AIR for columns without a defining identity.
 - [ ] **Query wires on computed wires.**  140 of the 306 lookup queries per unit are on expressions (`lt_pow` products,
       `t - nz`, `M + z - 1`, `d = E - cand`, `k`, ...; `census.queries_on_computed_wires`).  GKR: the lookup argument
-      reads a *committed* copy, so the checker must bind copy = wire (Candidate A `commit_query_wires`); check the
+      reads a *committed* copy, so the checker must bind copy = wire (A-GKR `commit_query_wires`); check the
       binding is in the layer, not assumed.  AIR: each is a column with its defining constraint (`census_review`: +44
       chunk columns for the 22 checks wider than 16 bits, +69 scaled rows for the sub-16-bit checks on plain columns if the
       one 16-bit table is used).
@@ -119,7 +119,7 @@ F1-F4 thresholds.  What an implementation can still get wrong is the *realisatio
       unit index range of the sub-batch, the round index); the same transcript prefix must not yield the lookup challenge
       of table `T` and the range-batching challenge (checklist item "verifier-side randomness reuse").  The public
       inputs (`a`, `b`, `y16`, `K`) are absorbed before the first challenge; the tables by their identifiers, not their
-      contents re-sent by the prover.  Candidate A (interactive, libzk-style) must state where the interactive protocol
+      contents re-sent by the prover.  A-GKR (interactive, libzk-style) must state where the interactive protocol
       is made non-interactive, if at all, and that the AHIV22 extractor argument survives it.
 - [ ] **Negatives suite coverage.**  Port `tests/checker/test_negative.py` (every hint mutated in the handoff's named
       ways) to the backend's witness layout and additionally include: each `drop=` case of `search.integer_queries`

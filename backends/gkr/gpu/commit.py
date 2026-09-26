@@ -5,7 +5,7 @@ and W column, and the verifier checks them natively against the commitment schem
 
 Statement files (beside the Params-only files and ``public.bin``):
 
-  commitment.txt  scheme, leaf, relation, the instance set (dataset, tier, manifest digest), lo, vus, K, the row
+  commitment.txt  scheme, leaf, relation, the input set (dataset, tier, manifest digest), lo, vus, K, the row
                   word widths, the y word schema and count per VU (format: ``commitments.rs``); its SHA-256 is
                   absorbed into the transcript after the binding digests (``prover.Chain.commit_digest``)
   epilogue.txt    the export's epilogue with 32 more columns ``dx0..dx15 dw0..dw15``: the x and W digests as 16-bit
@@ -14,7 +14,7 @@ Statement files (beside the Params-only files and ``public.bin``):
                   the two digests
 
 The domains are B-Ligero's (``backends/direct/ligero/hashauth.py``: same binding tag and fields, owners ``a = -1``,
-``b = -2``, ``y = -1``, one row per VU at rank = VU index), so for the same instance set and leaf schema the roots
+``b = -2``, ``y = -1``, one row per VU at rank = VU index), so for the same input set and leaf schema the roots
 are B-Ligero's.  Until the hash layers bind the digest columns to the operand columns, nothing in the circuit
 constrains them: the relation names have no circuit pin and the statement verifies only under
 ``--allow-any-circuit`` (an altered operand with honest digests is accepted: the gap the hash layers close).
@@ -181,7 +181,7 @@ class Commitment:
 
 def commit(leaf: str, base_relation: str, iset: InstanceSet, lo: int, x: np.ndarray, w: np.ndarray, y: np.ndarray,
            y_width: int) -> Commitment:
-    """The trees of the instance set: ``x`` / ``w`` ``(vus, K)`` rows, ``y`` ``(vus, n_y)`` public words."""
+    """The trees of the input set: ``x`` / ``w`` ``(vus, K)`` rows, ``y`` ``(vus, n_y)`` public words."""
     from verity.commitments import RangeIndexedDomain
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.merkle import CommitmentDomain

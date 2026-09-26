@@ -22,11 +22,14 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.mma.m16n8k32.e5m2      sm_90a     mma_e5m2_m16n8k32_tiles      32  HYPOTHESES the three above with e5m2 products
     sm90.wgmma.m64n8k32.e4m3    sm_90a     wgmma_e4m3_m64n8k32_tiles    32  hopper_e4m3_wgmma_k32 (pinned)
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
+    sm90.wgmma.m64n8k16.bf16    sm_90a     wgmma_bf16_m64n8k16_tiles    16  hopper_bf16_wgmma_k16 (total semantics: specials asserted);
+                                       (_rs_tiles: --a-source registers)     control HYPOTHESIS ampere_bf16_m16n8k16
 
 A pinned model's mismatches fail ``validation``; a HYPOTHESIS model only yields agreement counts (validation ``not_run`` when no
 pinned model is compared) and the raw capture is recorded regardless.  The E5M2 product (``_e5m2_product``) is a local
 HYPOTHESIS pending the canonical one in ``verity.ml.tc``.  Kernels: ``mma_tiles.cu`` (``mma.sync``, sm_80+/sm_89+) and
-``wgmma_tiles.cu`` (``wgmma.mma_async``, sm_90a; A from registers, B through a shared-memory descriptor).
+``wgmma_tiles.cu`` (``wgmma.mma_async``, sm_90a; B through a shared-memory descriptor, A from registers -- or, for BF16, from a
+second descriptor, the SS form GEMM mainloops issue).
 
 SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
 ``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
@@ -73,7 +76,7 @@ the same families, the same random draws, the same words.
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
 mismatch against a declared model, and marks ``result.json`` (``tc-evidence/v1``) with ``workload_fingerprint.family = canary``
-and ``tc_evidence.canary``; the trust framework (``verity.verification.trust``) treats a failing canary on the anchor as an
+and ``tc_evidence.canary``; the trust framework (``verity.proofs.trust``) treats a failing canary on the anchor as an
 invalidation trigger.  Run it after any driver / ptxas / toolkit change on an anchor and on a second device of the SKU.
 """
 
@@ -97,13 +100,15 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.ml.tc import models as TCM
 from verity.ml.tc import silicon as S
+from verity.ml.tc import total as T
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
 MAX_TILES_PER_CALL = 1 << 16
 FIRST_MISMATCHES = 20
-UNASSERTED_FAMILIES = {"specials"}  # recorded, never compared for validation
+UNASSERTED_FAMILIES = {"specials"}  # recorded, never compared for validation -- unless the declared model is total (family_asserted)
 SEED_DEFAULT = 20260902
 
 
@@ -319,13 +324,15 @@ def sm90_fp8_mma_lowered(pipeline16: S.Pipeline, product: Callable[[int, int], S
 class Model:
     """A model the capture is compared with.  ``product`` names an entry of :data:`PRODUCTS` (None: the pipeline's own product,
     evaluated by :func:`silicon.tc_dot` exactly as pinned).  ``lowering`` names a multi-instruction lowering the pipeline is
-    embedded in (:data:`SM90_FP8_MMA_LOWERING`).  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES
-    whose agreement counts are reported."""
+    embedded in (:data:`SM90_FP8_MMA_LOWERING`).  ``total`` evaluates the pipeline's total semantics
+    (:func:`verity.ml.tc.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
+    too.  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES whose agreement counts are reported."""
 
     pipeline: S.Pipeline
     product: str | None = None
     declared: bool = True
     lowering: str | None = None
+    total: bool = False
 
     @property
     def name(self) -> str:
@@ -335,9 +342,11 @@ class Model:
     def describe(self) -> dict:
         p = self.pipeline
         return {"name": self.name, "pipeline": p.name, "groups": list(p.groups), "width": p.width, "zero_exponent": p.zero_exponent,
-                "product": self.product or p.dtype, "lowering": self.lowering, "declared": self.declared}
+                "product": self.product or p.dtype, "lowering": self.lowering, "declared": self.declared, "total": self.total}
 
     def evaluate(self, acc_bits: int, a, b) -> int:
+        if self.total:
+            return T.tc_dot_total(self.pipeline, acc_bits, a, b)
         if self.lowering == SM90_FP8_MMA_LOWERING:
             return sm90_fp8_mma_lowered(self.pipeline, PRODUCTS[self.product or self.pipeline.dtype], acc_bits, a, b)
         if self.product is None:
@@ -357,10 +366,22 @@ class Instruction:
     k: int
     models: tuple[Model, ...]
     sass_mma: int = 1  # MMA-class SASS instructions ptxas emits for the PTX instruction (measured; 1 = single-instruction probe)
+    rs_kernel: str | None = None  # the same instruction with A from registers (``--a-source registers``); ``kernel`` reads A from shared memory
+
+    @property
+    def a_sources(self) -> tuple[str, ...]:
+        """``--a-source`` values: ``smem`` and ``registers`` where the table has both kernels, else the one ``kernel`` uses."""
+
+        if self.rs_kernel is not None:
+            return ("smem", "registers")
+        return ("registers",) if self.tu == "wgmma_tiles.cu" else ("n/a",)
+
+    def entry(self, a_source: str | None) -> str:
+        return self.rs_kernel if a_source == "registers" and self.rs_kernel is not None else self.kernel
 
     def describe(self) -> dict:
-        return {"id": self.id, "arch": self.arch, "tu": self.tu, "kernel": self.kernel, "ptx": self.ptx, "format": self.fmt.name,
-                "m": self.m, "n": N, "k": self.k, "sass_mma": self.sass_mma, "models": [m.describe() for m in self.models]}
+        return {"id": self.id, "arch": self.arch, "tu": self.tu, "kernel": self.kernel, "rs_kernel": self.rs_kernel, "ptx": self.ptx,
+                "format": self.fmt.name, "m": self.m, "n": N, "k": self.k, "sass_mma": self.sass_mma, "models": [m.describe() for m in self.models]}
 
 
 def _mma(id_: str, arch: str, fmt: Format, models: tuple[Model, ...], sass_mma: int = 1) -> Instruction:
@@ -370,8 +391,10 @@ def _mma(id_: str, arch: str, fmt: Format, models: tuple[Model, ...], sass_mma: 
 
 
 def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
-    return Instruction(id_, "sm_90a", "wgmma_tiles.cu", f"wgmma_{fmt.name}_m64n8k32_tiles",
-                       f"wgmma.mma_async.sync.aligned.m64n8k32.f32.{fmt.name}.{fmt.name}", fmt, 64, 32, models)
+    k = 16 if fmt is BF16 else 32
+    rs = f"wgmma_{fmt.name}_m64n8k{k}_rs_tiles" if fmt is BF16 else None  # FP8: A is always in registers
+    return Instruction(id_, "sm_90a", "wgmma_tiles.cu", f"wgmma_{fmt.name}_m64n8k{k}_tiles",
+                       f"wgmma.mma_async.sync.aligned.m64n8k{k}.f32.{fmt.name}.{fmt.name}", fmt, 64, k, models, rs_kernel=rs)
 
 
 _HOPPER_E5M2 = Model(S.HOPPER_E4M3_K32, "e5m2", declared=False)
@@ -396,6 +419,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm90.mma.m16n8k32.e5m2", "sm_90a", E5M2, (_HOPPER_E5M2, _ADA_E5M2, _HOPPER_HMMA_X2_E5M2), sass_mma=2),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
+        # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
+        # pipeline is the control that the tiles distinguish one group of 16 / 26 bits from two groups of 8 / 25 bits.
+        _wgmma("sm90.wgmma.m64n8k16.bf16", BF16, (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True), Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
     )
 }
 ARCH_DEFAULT_INSTRUCTION = {"sm_80": "sm80.mma.m16n8k16.bf16", "sm_89": "sm89.mma.m16n8k16.bf16", "sm_90a": "sm90.mma.m16n8k16.bf16"}
@@ -475,10 +501,17 @@ def _sha256_text(text: str) -> str:
 
 
 class Probe:
-    def __init__(self, so: Path, ins: Instruction):
+    def __init__(self, so: Path, ins: Instruction, a_source: str | None = None, kernel: str | None = None, k: int | None = None):
+        """``kernel`` / ``k`` override the instruction's entry point and tile depth (the chained BF16 wgmma kernels, K = 64)."""
+
         self.ins = ins
+        self.a_source = a_source or ins.a_sources[0]
+        if self.a_source not in ins.a_sources:
+            raise ValueError(f"{ins.id} has no {self.a_source!r} A operand path (has {', '.join(ins.a_sources)})")
+        self.kernel = kernel or ins.entry(self.a_source)
+        self.k = k or ins.k
         self.lib = ctypes.CDLL(str(so))
-        fn = getattr(self.lib, ins.kernel)
+        fn = getattr(self.lib, self.kernel)
         fn.restype = ctypes.c_int
         fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
         self.fn = fn
@@ -507,7 +540,7 @@ class Probe:
     def tiles(self, A: np.ndarray, Bt: np.ndarray, C: np.ndarray) -> np.ndarray:
         """One instruction per tile.  ``A``: (n,M,K), ``Bt``: (n,8,K) operand words, ``C``: (n,M,8) FP32 words -> ``D`` (n,M,8)."""
 
-        M, K, fmt = self.ins.m, self.ins.k, self.ins.fmt
+        M, K, fmt = self.ins.m, self.k, self.ins.fmt
         n = A.shape[0]
         A = np.ascontiguousarray(A, dtype=fmt.dtype).reshape(n, M, K)
         Bt = np.ascontiguousarray(Bt, dtype=fmt.dtype).reshape(n, N, K)
@@ -519,7 +552,7 @@ class Probe:
             d = np.zeros((stop - start, M, N), dtype=np.uint32)
             rc = self.fn(a.ctypes.data, b.ctypes.data, c.ctypes.data, d.ctypes.data, stop - start)
             if rc != 0:
-                raise RuntimeError(f"CUDA error {rc} in {self.ins.kernel} (209 = no kernel image for this device: wrong --arch?)")
+                raise RuntimeError(f"CUDA error {rc} in {self.kernel} (209 = no kernel image for this device: wrong --arch?)")
             D[start:stop] = d
         return D
 
@@ -995,9 +1028,22 @@ def floor_probe_summary(meta: dict, D: np.ndarray) -> dict:
 _MODELS: list[Model] = []
 
 
+def family_asserted(ins: Instruction, name: str) -> bool:
+    """Whether a family's mismatches count for validation: every family, except ``specials`` unless every declared model is total
+    (a hypothesis's counts are recorded per family either way)."""
+
+    return name not in UNASSERTED_FAMILIES or all(m.total for m in ins.models if m.declared)
+
+
+def model_descs(ins: Instruction) -> list[tuple]:
+    """The picklable form of ``ins.models`` the worker processes rebuild them from (:func:`_init`)."""
+
+    return [(m.pipeline.name, m.product, m.declared, m.lowering, m.total) for m in ins.models]
+
+
 def _init(model_descs):
     global _MODELS
-    _MODELS = [Model(S.PIPELINES[pname], prod, declared, lowering) for pname, prod, declared, lowering in model_descs]
+    _MODELS = [Model(TCM.MODELS[pname], prod, declared, lowering, total) for pname, prod, declared, lowering, total in model_descs]
 
 
 def _eval_tiles(args):
@@ -1024,7 +1070,7 @@ def model_eval(pool, A, Bt, C, procs, worker=_eval_tiles):
     chunks = max(1, min(n // 64 + 1, procs * 8))
     idx = np.array_split(np.arange(n), chunks)
     parts = pool.map(worker, [(A[i], Bt[i], C[i]) for i in idx])
-    if worker is not _eval_tiles:
+    if worker not in (_eval_tiles, _eval_chain_tiles):  # the alternative evaluators return one (words, errors) pair
         return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
     n_models = len(parts[0][0])
     return [(np.concatenate([p[0][m] for p in parts]), np.concatenate([p[1][m] for p in parts])) for m in range(n_models)]
@@ -1139,7 +1185,7 @@ def layout_check(probe: Probe, ins: Instruction) -> dict:
         got = probe.tiles(fmt.from_f32(a), fmt.from_f32(b), f32_bits(c))
         if np.array_equal(want, got):
             return {"status": "passed", "elements": n * M * N, "descriptor": probe.descriptor}
-    raise RuntimeError(f"fragment layout check failed: {ins.kernel} does not compute C + A.Bt on exact integer tiles "
+    raise RuntimeError(f"fragment layout check failed: {probe.kernel} does not compute C + A.Bt on exact integer tiles "
                        f"({int(np.count_nonzero(want != got))} of {n * M * N} words differ; descriptor {probe.descriptor})")
 
 
@@ -1167,8 +1213,22 @@ def special_all_finite_records(path: Path) -> list[dict]:
     return finite
 
 
-def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, pipeline: str | None = None) -> dict:
-    """Every record at its own tile position (r % M, (r // M) % 8), the rest of the tile zero."""
+def hopper_capture_records(path: Path) -> list[dict]:
+    """Every record of veritor's H100 BF16 wgmma capture (``tc-hopper-2026-09-07/special.reduced.json.gz``: 14 families, the
+    non-finite ones included), in the golden-record shape with ``family`` set."""
+
+    import gzip
+
+    data = json.loads(gzip.open(path).read())
+    ins = data["kernel_identity"]["instruction"]
+    assert ins.startswith("wgmma.mma_async.sync.aligned.m64n") and ins.endswith("k16.f32.bf16.bf16"), ins
+    return [{"acc": r["acc"], "a": r["a"], "b": r["b"], "d": r["d"], "family": fam} for fam, recs in data["families"].items() for r in recs]
+
+
+def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, pipeline: str | None = None,
+                  model: Model | None = None) -> dict:
+    """Every record at its own tile position (r % M, (r // M) % 8), the rest of the tile zero.  With ``model``, the hardware word
+    is also compared with the model's (``model_mismatches``), and both counts are broken down by the records' ``family``."""
 
     ins = probe.ins
     M, K, fmt = ins.m, ins.k, ins.fmt
@@ -1188,15 +1248,35 @@ def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, p
         C[r, i, j] = int(rec["acc"], 16)
     D = probe.tiles(A, Bt, C)
     mism = []
+    model_mism = []
+    by_family: dict[str, dict] = {}
     other_nonzero = 0
     for r, rec in enumerate(records):
         i, j = r % M, (r // M) % N
-        if int(D[r, i, j]) != int(rec["d"], 16):
-            mism.append({**rec, "hardware": f"{int(D[r, i, j]):08x}"})
+        hw = int(D[r, i, j])
+        fam = by_family.setdefault(rec.get("family", "records"), {"records": 0, "mismatches": 0, "model_mismatches": 0})
+        fam["records"] += 1
+        if hw != int(rec["d"], 16):
+            mism.append({**rec, "hardware": f"{hw:08x}"})
+            fam["mismatches"] += 1
+        if model is not None:
+            try:
+                want = model.evaluate(int(rec["acc"], 16), words(rec["a"], fmt.hex_width), words(rec["b"], fmt.hex_width))
+            except Exception:  # noqa: BLE001 - a domain error is a mismatch
+                want = None
+            if want != hw:
+                model_mism.append({**rec, "hardware": f"{hw:08x}", "model": "error" if want is None else f"{want:08x}"})
+                fam["model_mismatches"] += 1
+        # every other output has a zero accumulator and a zero row or column: +0, except that a zero times a non-finite operand
+        # is NaN, so row i reads the canonical NaN where a[i] holds an infinity or NaN, and column j where b[j] does
         rest = D[r].copy()
         rest[i, j] = 0
-        other_nonzero += int(np.count_nonzero(rest))  # zero rows times anything, zero accumulator: every other output is +0
-    return {
+        if not fmt.is_finite(A[r, i]).all():
+            rest[i, :] ^= np.where(np.arange(N) != j, np.uint32(T.FP32_CANONICAL_NAN), np.uint32(0))
+        if not fmt.is_finite(Bt[r, j]).all():
+            rest[:, j] ^= np.where(np.arange(M) != i, np.uint32(T.FP32_CANONICAL_NAN), np.uint32(0))
+        other_nonzero += int(np.count_nonzero(rest))
+    out = {
         "file": str(path),
         "pipeline": pipeline,
         "records": n,
@@ -1205,6 +1285,11 @@ def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, p
         "first_mismatches": mism[:FIRST_MISMATCHES],
         "other_positions_nonzero": other_nonzero,
     }
+    if model is not None:
+        out.update(model=model.name, model_mismatches=len(model_mism), first_model_mismatches=model_mism[:FIRST_MISMATCHES])
+    if len(by_family) > 1:
+        out["families"] = by_family
+    return out
 
 
 def _sha256(path: Path) -> str:
@@ -1346,8 +1431,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
         "records": [],
     }
     fams: dict = {}
-    descs = [(m.pipeline.name, m.product, m.declared, m.lowering) for m in ins.models]
-    with mp.Pool(args.procs, initializer=_init, initargs=(descs,)) as pool:
+    with mp.Pool(args.procs, initializer=_init, initargs=(model_descs(ins),)) as pool:
         for name, A, Bt, C, meta in families(rng, args.n_random, fmt, M, K):
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
@@ -1359,7 +1443,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
             t0 = time.time()
             results = model_eval(pool, A, Bt, C, args.procs)
             t_model = time.time() - t0
-            asserted = name not in UNASSERTED_FAMILIES
+            asserted = family_asserted(ins, name)
             fam = {
                 "tiles": int(A.shape[0]),
                 "elements": int(A.shape[0]) * M * N,
@@ -1436,6 +1520,88 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
     return report, capture
 
 
+# --- chained wgmma (BF16) ---------------------------------------------------------------------------------------------------------
+
+CHAIN_STEPS = 4
+
+
+def chain_kernel(probe: Probe) -> str:
+    """The chained entry of the probe's kernel: four wgmma back to back in one commit group (``wgmma_tiles.cu``, STEPS = 4)."""
+
+    return probe.kernel.replace("_tiles", f"_chain{CHAIN_STEPS}_tiles")
+
+
+def _eval_chain_tiles(args):
+    """``_eval_tiles`` for K = 16 * CHAIN_STEPS tiles: each model's step folded over the k16 slices in ascending order."""
+
+    A, Bt, C = args
+    n, M, K = A.shape
+    outs = [np.zeros((n, M, N), np.uint32) for _ in _MODELS]
+    errs = [np.zeros((n, M, N), np.bool_) for _ in _MODELS]
+    w = K // CHAIN_STEPS
+    for t in range(n):
+        a_rows = [A[t, i].tolist() for i in range(M)]
+        b_rows = [Bt[t, j].tolist() for j in range(N)]
+        for i in range(M):
+            for j in range(N):
+                for m, model in enumerate(_MODELS):
+                    acc = int(C[t, i, j])
+                    try:
+                        for s in range(CHAIN_STEPS):
+                            acc = model.evaluate(acc, a_rows[i][s * w:(s + 1) * w], b_rows[j][s * w:(s + 1) * w])
+                        outs[m][t, i, j] = acc
+                    except Exception:  # noqa: BLE001 - domain errors are counted, not raised
+                        errs[m][t, i, j] = True
+    return outs, errs
+
+
+def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
+    """Every sweep family at K = 64 through the chained kernel (one layout check first), against each model's step folded over the
+    four k16 slices: whether back-to-back wgmma on one accumulator equal the chain of single steps, bit for bit.  ``base`` is the
+    single-instruction probe whose layout check fixed the descriptor offsets."""
+
+    ins, a_source = base.ins, base.a_source
+    probe = Probe(so, ins, a_source, kernel=chain_kernel(base), k=CHAIN_STEPS * ins.k)
+    probe.set_descriptor(base.descriptor["lbo_bytes"], base.descriptor["sbo_bytes"])
+    M, K, fmt = ins.m, probe.k, ins.fmt
+    rng = np.random.default_rng(1)
+    a = rng.integers(-8, 9, (64, M, K)).astype(np.float32)
+    b = rng.integers(-8, 9, (64, N, K)).astype(np.float32)
+    c = rng.integers(-1000, 1001, (64, M, N)).astype(np.float32)
+    want = f32_bits((c + np.einsum("nik,njk->nij", a, b)).astype(np.float32))
+    got = probe.tiles(fmt.from_f32(a), fmt.from_f32(b), f32_bits(c))
+    if not np.array_equal(want, got):
+        raise RuntimeError(f"chain layout check failed: {probe.kernel} ({int(np.count_nonzero(want != got))} words differ)")
+    model_names = [m.name for m in ins.models]
+    fams: dict = {}
+    rng = np.random.default_rng(args.seed + CHAIN_STEPS)
+    with mp.Pool(args.procs, initializer=_init, initargs=(model_descs(ins),)) as pool:
+        for name, A, Bt, C, _meta in families(rng, args.chain_n_random, fmt, M, K):
+            D = probe.tiles(A, Bt, C)
+            results = model_eval(pool, A, Bt, C, args.procs, worker=_eval_chain_tiles)
+            fam = {"tiles": int(A.shape[0]), "elements": int(A.shape[0]) * M * N, "asserted": family_asserted(ins, name), "models": {},
+                   "first_mismatches": []}
+            any_mism = np.zeros(D.shape, np.bool_)
+            for mname, (model, err) in zip(model_names, results):
+                mism = (model != D) | err
+                any_mism |= mism
+                fam["models"][mname] = {"mismatches": int(mism.sum()), "domain_errors": int(err.sum())}
+            for t, i, j in list(zip(*np.nonzero(any_mism)))[:FIRST_MISMATCHES]:
+                rec = {"tile": int(t), "i": int(i), "j": int(j), **hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], fmt.hex_width), "model": {}}
+                for mname, (model, err) in zip(model_names, results):
+                    rec["model"][mname] = "error" if err[t, i, j] else f"{int(model[t, i, j]):08x}"
+                fam["first_mismatches"].append(rec)
+            np.savez_compressed(out / f"tiles_chain{CHAIN_STEPS}_{name}.npz", A=A, Bt=Bt, C=C, D=D)
+            fams[name] = fam
+            print(f"chain{CHAIN_STEPS}", name, json.dumps({k: v for k, v in fam.items() if k != "first_mismatches"}), flush=True)
+    totals = {m: sum(f["models"][m]["mismatches"] for f in fams.values() if f["asserted"]) for m in model_names}
+    return {"kernel": probe.kernel, "steps": CHAIN_STEPS, "k": K, "a_source": a_source, "seed": args.seed + CHAIN_STEPS,
+            "n_random": args.chain_n_random, "layout_check": {"status": "passed", "elements": int(want.size)}, "families": fams,
+            "total_elements": sum(f["elements"] for f in fams.values()),
+            "total_asserted_elements": sum(f["elements"] for f in fams.values() if f["asserted"]),
+            "total_mismatches_by_model": totals, "model_agrees": {m: totals[m] == 0 for m in model_names}}
+
+
 # --- main --------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1459,6 +1625,9 @@ def compile_only(ids: list[str], out: Path, args) -> int:
             entry = {"instruction": ins.describe(), "arch": arch, "nvcc": nvcc, "so": so.name, "compiled": True, "seconds": round(time.time() - t0, 1)}
             entry["sass"] = sass_check(so, ins.kernel, out, ins.sass_mma)
             ok = ok and entry["sass"]["ok"]
+            if ins.rs_kernel is not None:
+                entry["sass_rs"] = sass_check(so, ins.rs_kernel, out, ins.sass_mma)
+                ok = ok and entry["sass_rs"]["ok"]
         except subprocess.CalledProcessError as exc:
             entry = {"instruction": ins.describe(), "arch": arch, "compiled": False, "error": str(exc), "seconds": round(time.time() - t0, 1)}
             ok = False
@@ -1498,9 +1667,19 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--replay-golden", default=None, metavar="JSON")
     ap.add_argument("--replay-special", default=None, metavar="JSON.GZ", help="mma_special.reduced.json.gz: its all-finite records (BF16)")
+    ap.add_argument("--replay-capture", default=None, metavar="JSON.GZ", help="tc-hopper-2026-09-07/special.reduced.json.gz: every record (all 14 "
+                    "families, non-finite included) against its recorded word and the declared model")
+    ap.add_argument("--also-model", action="append", default=[], metavar="NAME[:total]",
+                    help="compare a further verity.ml.tc.models model as a HYPOTHESIS (':total': its total semantics, which also asserts the "
+                         "specials family and serves --replay-capture); repeatable")
+    ap.add_argument("--a-source", default=None, choices=("smem", "registers"), help="the A operand path where the instruction has both (BF16 wgmma: "
+                    "smem = SS, the GEMM form, default; registers = RS, FA3's P.V form)")
     ap.add_argument("--replay-instances", default=None, metavar="DIR", help="bench-instances/v1 directory with the built arrays: replay tu-k16 and vu-k1536 (BF16)")
     ap.add_argument("--instances-manifest", default=None, metavar="JSON", help="the pinned manifest to check the arrays against (default DIR/manifest.json)")
     ap.add_argument("--sweep", action="store_true")
+    ap.add_argument("--chain", action="store_true", help="BF16 wgmma: every family at K = 64 through four back-to-back wgmma in one commit group, "
+                    "against the model's step folded over the four k16 slices")
+    ap.add_argument("--chain-n-random", type=int, default=2000, help="--n-random of the chained families")
     ap.add_argument("--n-random", type=int, default=100_000)
     ap.add_argument("--seed", type=int, default=SEED_DEFAULT)
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 4) - 4))
@@ -1529,16 +1708,28 @@ def main() -> int:
         ap.error("one instruction per capture run")
     ins = INSTRUCTIONS[ids[0]]
     arch = args.arch or ins.arch
+    if args.also_model:
+        import dataclasses
+
+        extra = []
+        for spec in args.also_model:
+            name, _, mode = spec.partition(":")
+            if name not in TCM.MODELS or mode not in ("", "total"):
+                ap.error(f"--also-model {spec!r}: a verity.ml.tc.models name, optionally ':total'")
+            extra.append(Model(TCM.MODELS[name], declared=False, total=mode == "total"))
+        ins = dataclasses.replace(ins, models=ins.models + tuple(extra))
 
     so, nvcc = build(ins.tu, arch, out)
     results: dict = {"schema": "wp1/tc-probe/v0", "instruction": ins.describe()}
     if args.sass_check:
-        results["sass"] = sass_check(so, ins.kernel, out, ins.sass_mma)
+        results["sass"] = sass_check(so, ins.entry(args.a_source), out, ins.sass_mma)
         print("sass", json.dumps({k: v for k, v in results["sass"].items() if k in ("ok", "kernel", "tile_kernel_mma_count", "tile_kernel_functions", "error")}), flush=True)
-    probe = Probe(so, ins)
+    probe = Probe(so, ins, args.a_source)
     identity = probe.identity()
     identity["nvcc"] = nvcc
     identity["arch"] = arch
+    identity["a_source"] = probe.a_source
+    identity["kernel"] = probe.kernel
     results["identity"] = identity
     results["layout_check"] = layout_check(probe, ins)
     results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
@@ -1554,12 +1745,25 @@ def main() -> int:
         results["special_replay"] = replay_golden(probe, path, special_all_finite_records(path), ins.models[0].pipeline.name)
         print("special_replay", json.dumps({k: v for k, v in results["special_replay"].items() if k != "first_mismatches"}), flush=True)
 
+    if args.replay_capture:
+        path = Path(args.replay_capture)
+        replay_model = next((m for m in ins.models if m.total), ins.models[0])  # the non-finite records need a total model
+        results["capture_replay"] = replay_golden(probe, path, hopper_capture_records(path), "veritor tc-hopper-2026-09-07", replay_model)
+        print("capture_replay", json.dumps({k: v for k, v in results["capture_replay"].items() if not k.startswith("first_")}), flush=True)
+
     if args.replay_instances:
         results["instances_replay"] = replay_instances(probe, Path(args.replay_instances),
                                                        Path(args.instances_manifest) if args.instances_manifest else None)
 
     if args.sweep:
         results["sweep"], _ = sweep(probe, ins, args, out, identity)
+
+    if args.chain:
+        if ins.rs_kernel is None:
+            ap.error("--chain needs an instruction with the chained kernels (sm90.wgmma.m64n8k16.bf16)")
+        results["chain_sweep"] = chain_sweep(so, probe, args, out)
+        print("chain TOTAL", results["chain_sweep"]["total_asserted_elements"], "asserted elements,",
+              json.dumps(results["chain_sweep"]["total_mismatches_by_model"]), "mismatches", flush=True)
 
     canary_plan = None
     if args.canary:
@@ -1581,15 +1785,22 @@ def main() -> int:
         for mname, count in results["canary"]["total_mismatches_by_model"].items():
             if count and mname not in declared:
                 findings.append(f"canary mismatches vs {mname}={count}")
-    for replay in ("golden_replay", "special_replay"):
-        if replay in results and (results[replay]["mismatches"] or results[replay]["other_positions_nonzero"]):
-            failures.append(f"{replay} mismatches={results[replay]['mismatches']} other_positions_nonzero={results[replay]['other_positions_nonzero']}")
+    for replay in ("golden_replay", "special_replay", "capture_replay"):
+        if replay in results and (results[replay]["mismatches"] or results[replay]["other_positions_nonzero"] or results[replay].get("model_mismatches")):
+            failures.append(f"{replay} mismatches={results[replay]['mismatches']} other_positions_nonzero={results[replay]['other_positions_nonzero']}"
+                            + (f" model_mismatches={results[replay]['model_mismatches']}" if "model_mismatches" in results[replay] else ""))
     if "sweep" in results:
         for mname, count in results["sweep"]["total_mismatches_by_model"].items():
             if count and mname in declared:
                 failures.append(f"sweep mismatches vs {mname}={count}")
             elif count:
                 findings.append(f"sweep mismatches vs {mname}={count}")
+    if "chain_sweep" in results:
+        for mname, count in results["chain_sweep"]["total_mismatches_by_model"].items():
+            if count and mname in declared:
+                failures.append(f"chain{CHAIN_STEPS} mismatches vs {mname}={count}")
+            elif count:
+                findings.append(f"chain{CHAIN_STEPS} mismatches vs {mname}={count}")
     if "instances_replay" in results:
         ir = results["instances_replay"]
         tu, vu = ir["tu-k16"], ir["vu-k1536"]
@@ -1610,13 +1821,15 @@ def main() -> int:
     if run_id:
         import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
 
-        checked_something = any(k in results for k in ("golden_replay", "special_replay", "instances_replay")) or (("sweep" in results or "canary" in results) and declared)
+        checked_something = any(k in results for k in ("golden_replay", "special_replay", "capture_replay", "instances_replay", "chain_sweep")) or (("sweep" in results or "canary" in results) and declared)
         status = "failed" if failures else ("passed" if checked_something else "not_run")
         fingerprint = {
             "probe": "tools/tc_probe/tc_probe.py",
             "instruction": ins.id,
             "ptx": ins.ptx,
             "arch": arch,
+            "a_source": probe.a_source,
+            "kernel": probe.kernel,
             "sku": identity["device"],
             "device": identity["device"],
             "compute_capability": identity["compute_capability"],
@@ -1640,6 +1853,7 @@ def main() -> int:
         evidence = {
             "instruction": ins.id,
             "arch": arch,
+            "a_source": probe.a_source,
             "sku": identity["device"],
             "driver": identity["driver"],
             "gpu_uuid": identity.get("gpu_uuid"),
@@ -1648,7 +1862,8 @@ def main() -> int:
             "seed": args.seed,
             "n": args.n_random,
             "layout_check": results["layout_check"],
-            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype, "lowering": m.lowering}
+            "models": {m.name: {"declared": m.declared, "pipeline": m.pipeline.name, "product": m.product or m.pipeline.dtype, "lowering": m.lowering,
+                                "total": m.total}
                        for m in ins.models},
         }
         measurements = [{"name": "wall", "value": results["seconds"], "unit": "s"}]
@@ -1668,12 +1883,20 @@ def main() -> int:
                 measurements.append({"name": f"{name}.elements", "value": f["elements"], "unit": "elements"})
                 for m, v in f["models"].items():
                     measurements.append({"name": f"{name}.mismatches[{m}]", "value": v["mismatches"], "unit": "elements"})
-        for replay in ("golden_replay", "special_replay"):
+        for replay in ("golden_replay", "special_replay", "capture_replay"):
             if replay in results:
-                evidence[replay] = {k: v for k, v in results[replay].items() if k != "first_mismatches"}
-                evidence[replay]["first_mismatches"] = results[replay]["first_mismatches"]
+                evidence[replay] = dict(results[replay])
                 measurements.append({"name": f"{replay}.records", "value": results[replay]["records"], "unit": "records"})
                 measurements.append({"name": f"{replay}.mismatches", "value": results[replay]["mismatches"], "unit": "records"})
+        if "chain_sweep" in results:
+            ch = results["chain_sweep"]
+            evidence["chain"] = {**{k: v for k, v in ch.items() if k != "families"},
+                                 "families": {name: {"elements": f["elements"], "asserted": f["asserted"],
+                                                     "mismatches": {m: v["mismatches"] for m, v in f["models"].items()},
+                                                     "first_mismatches": f["first_mismatches"]} for name, f in ch["families"].items()}}
+            measurements.append({"name": f"chain{CHAIN_STEPS}.elements", "value": ch["total_elements"], "unit": "elements"})
+            for mname, count in ch["total_mismatches_by_model"].items():
+                measurements.append({"name": f"chain{CHAIN_STEPS}.mismatches[{mname}]", "value": count, "unit": "elements"})
         if "sass" in results:
             evidence["sass"] = {k: v for k, v in results["sass"].items() if k != "functions"}
             measurements.append({"name": "tile_kernel_mma_count", "value": results["sass"].get("tile_kernel_mma_count"), "unit": "instructions"})
@@ -1696,6 +1919,8 @@ def main() -> int:
         artifacts = []
         if "sweep" in results:
             artifacts = ["capture_sample.json"] + [f"tiles_{name}.npz" for name in results["sweep"]["families"]]
+        if "chain_sweep" in results:
+            artifacts += [f"tiles_chain{CHAIN_STEPS}_{name}.npz" for name in results["chain_sweep"]["families"]]
         if "canary" in results:
             artifacts.append("canary_tiles.npz")
         if results.get("sass", {}).get("sass_file"):

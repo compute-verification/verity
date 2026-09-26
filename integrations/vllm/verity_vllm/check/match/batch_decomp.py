@@ -26,7 +26,7 @@ reusable across requests and rows. The verdict is PASS iff every request is cano
 resolved AND no XREQ AND every needed derivation is present. Missing derivations are listed (`missing_derived`) and
 exit 4 so the driver (`row_pod.sh`) can derive them and rerun; refusal/mismatch exits 3.
 
-    python -m verity_vllm.check.match.batch_decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
+    verity-vllm batch-decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
         --derived <dir with descriptor.json.gz + derive-report.json + artifact.json> [--derived <dir> ...] --out decomp.json
 
 PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09; occurrence resolution at B>1)
@@ -46,7 +46,6 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
 
 from __future__ import annotations
 
-import argparse
 import collections
 import gzip
 import json
@@ -54,9 +53,11 @@ import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.program_ops import Ops
+from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
 XREQ = "XREQ"
@@ -890,17 +891,20 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     return res
 
 
-def main(argv=None) -> int:
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    oracle: str = option("--oracle", help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")
+    derived: list[str] = option("--derived", action="append", default=[],
+                                help="derived request-wrapper dir (repeatable; shape read from artifact.json)")
+    log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
+    out: str = option("--out")
+    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
+                              help="within-step criterion of record: dag (COORD M-0177; live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
+
+
+def main(a: Options) -> int:
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--oracle", required=True, help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")
-    ap.add_argument("--derived", action="append", default=[], help="derived request-wrapper dir (repeatable; shape read from artifact.json)")
-    ap.add_argument("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
-                    help="within-step criterion of record: dag (COORD M-0177; live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
-    a = ap.parse_args(argv)
     res = decompose(a.oracle, a.derived, a.log, within_step=a.within_step)
     json.dump(res, open(a.out, "w"), indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],
@@ -910,7 +914,3 @@ def main(argv=None) -> int:
              "xreq_total": res["xreq_total"], "seconds": res["seconds"]}
     print(json.dumps(brief, indent=1, default=str))
     return 0 if res["verdict"] == "PASS" else (4 if res["verdict"] == "MISSING_DERIVED" else 3)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

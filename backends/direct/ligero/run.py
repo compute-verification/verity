@@ -1,4 +1,4 @@
-"""Correctness gate and measurement for the Ligero unit prover on the frozen instance set.
+"""Correctness gate and measurement for the Ligero unit prover on the frozen input set.
 
     python -m backends.direct.ligero.run gate  --root fixtures/bench-instances/v1 --device cuda --vus 64
     python -m backends.direct.ligero.run bench --root fixtures/bench-instances/v1 --device cuda --reps 5 --out result.json
@@ -377,7 +377,7 @@ def main(argv=None) -> int:
 
     # --relation <registered>: relations.py on the generic chain runner (relchain.py); fp4-nvf4: the sm_120 NVFP4 unit
     # (backends/direct/ligero/fp4, its own chain runner); gate-vu / bench-vu dispatch there, nothing else changes for the
-    # Ampere BF16 relation (vu.py on the frozen instance set)
+    # Ampere BF16 relation (vu.py on the frozen input set)
     ap.add_argument("--relation", default="bf16", type=_relation_arg, choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4",
                                                              "bf16-ampere",
                                                              "bf16-hopper-v2", "bf16-ampere-v2", "fp8-hopper-v2", "fp8-ada-v2",
@@ -387,7 +387,7 @@ def main(argv=None) -> int:
                                                              "bf16-hopper-v3x4", "bf16-ampere-v3x4", "fp8-hopper-v3x4",
                                                              "fp8-ada-v3x4",
                                                              "bf16-hopper-x4", "bf16-ampere-x4", "fp8-hopper-x4", "fp8-ada-x4"),
-                    help="bf16: the Ampere relation on the frozen instance set (vu.py); bf16-ampere: the same unit and frozen set "
+                    help="bf16: the Ampere relation on the frozen input set (vu.py); bf16-ampere: the same unit and frozen set "
                          "(--root) on the generic chain runner (relations.py; its --auth included-hash column); fp4-nvf4: "
                          "fp4/chain.py; the others: relations.py on synthetic instances.  A `+<leaf>` suffix (fp8-ada+poseidon2, "
                          "fp8-ada+blake3) selects the leaf scheme of --auth included-hash, as --leaf does")
@@ -470,7 +470,7 @@ def main(argv=None) -> int:
         sub.choices[name].add_argument("--instance-procs", type=int, default=1,
                                        help="non-bf16 relations: processes recording the synthetic instances' accumulators")
         sub.choices[name].add_argument("--instances-cache", default=os.environ.get("LIGERO_INSTANCES_CACHE"), metavar="DIR",
-                                       help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR "
+                                       help="non-bf16 relations: keep the synthetic input set as an .npz under DIR "
                                             "(default $LIGERO_INSTANCES_CACHE: pod_bootstrap.sh's env.sh sets it)")
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")

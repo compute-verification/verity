@@ -2,7 +2,7 @@
 //! `packages/verity/src/verity/commitments/frame_v3` (its `PROTOCOL.md`; the framing is `merkle.py`'s, the row-leaf
 //! schemas `rowleaf.py`'s), checked natively.  The proof publishes, per VU, the row digests of its x row and W column
 //! as public words; this module rebuilds the tree leaves from them (and the `y` word leaves from the output words),
-//! the three roots, and compares them with the pinned roots of the frozen instance set.  The domains are derived here
+//! the three roots, and compares them with the pinned roots of the frozen input set.  The domains are derived here
 //! from pinned fields only (B-Ligero's `hashauth.binding_digest`, so the roots are B-Ligero's for the same set and
 //! leaf schema); nothing the prover sends names a domain.  One module per scheme: `vllm_v1.rs` (`R+vllm-v1`) is the
 //! other, dispatched from `check`.
@@ -257,7 +257,7 @@ pub fn from_limbs(limbs: &[u32]) -> Option<Digest> {
     Some(out)
 }
 
-/// The pinned roots of a frozen instance set under one leaf schema (`python -m gpu.commit pin`).
+/// The pinned roots of a frozen input set under one leaf schema (`python -m gpu.commit pin`).
 pub struct Pin {
     pub relation: &'static str,
     pub lo: u64,

@@ -13,7 +13,6 @@ every relation consistent and FAILS the linkage (post-overwrite read); an omitte
 """
 from __future__ import annotations
 
-import random
 import re
 import time
 from typing import Any
@@ -21,6 +20,7 @@ from typing import Any
 import torch
 
 from verity_vllm.check import compiled_autotune
+from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
@@ -203,7 +203,7 @@ class CompiledKernelCheck:
         sample = {steps[0]}
         if len(steps) > 1:
             sample |= {steps[1], steps[len(steps) // 2], steps[-1]}
-        rng = random.Random(self.seed)
+        rng = CH.stream(self.seed)
         pool = [s for s in steps if s not in sample]
         sample |= set(rng.sample(pool, min(self.n_random, len(pool))))
         res["sampled_steps"] = sorted(sample)

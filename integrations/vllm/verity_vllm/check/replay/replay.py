@@ -5,7 +5,7 @@ replaying it against the evidence L1 snapshotted, in three tiers.  Each tier ret
 tier-level `status` in {"pass", "fail", "skipped", "error"}; per-instance entries carry the same four statuses plus
 "computed" (evaluated, but no snapshot of the output exists to compare with — normal in tiers B/C).
 
-    uv run python -m verity_vllm.check.replay.replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
+    uv run verity-vllm replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
         --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --seed S --out out/capture/reports/replay_a.json
     ... --tier b --step 1 --max-arg-leaves 4000000 [--layers 0,1,2] [--max-instances N] [--evaluator gates|twins|auto]
     ... --tier c                                     # pod only: hours for a real model
@@ -44,17 +44,15 @@ Program 2.1 s / 0.19 GB, plus 0.51 GB once per process when the first RMSNorm ga
 encodings (Python ints of the bit pattern) exactly as `compare_subcircuits` passes them.
 
 Evaluators (h4).  `--evaluator gates|twins|auto` (default `auto`) selects how tiers B and C evaluate an instance:
-`gates` is `evaluate_call` on the registered body; `twins` uses the vectorized twin of `verity_vllm.program.kernels.twins`
-(numpy / the numerics lane's C++ models, bit-exact re-implementations of the same bodies) wherever one exists; `auto`
-uses a twin only after its in-process self-check (>= 3 random instances against the gates, per specialization) passed,
-else the gates.  A twin that declines an operand (non-finite words outside its exact domain) falls back to the gates for
-that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and `twin_id`; step reports carry
-`evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the body-exactness tier).  Pass/fail,
-`partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
+`gates` is `evaluate_call` on the registered body; `twins` uses the twin kernel of `verity_vllm.program.kernels.twins`
+wherever one claims the specialization; `auto` uses a twin only after core `self_check` passed on >= 3 random instances
+of the specialization, else the gates.  A twin that declines an operand (non-finite words outside its exact domain)
+falls back to the gates for that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and
+`twin_id`; step reports carry `evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the
+body-exactness tier).  Pass/fail, `partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import json
 import random
@@ -66,14 +64,17 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+from dataclasses import dataclass
 
 from verity.ir.evaluate import evaluate_call
+from verity_vllm.config import UsageError, option
 from verity_vllm.program.frontend.rules.family import _field_intervals
 from verity.ir.layout import FunctionCall
 from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
 from verity_vllm.observe.fold.fold import FoldResult
+from verity_vllm.commit import challenge as CH
 
 TIER_STATUSES = ("pass", "fail", "skipped", "error")
 EVALUATORS = ("gates", "twins", "auto")
@@ -288,10 +289,10 @@ class Replayer:
         return np.array(got, dtype=np.uint64)
 
     def twin_of(self, k: int):
-        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization, or None (the gates), per
-        `self.evaluator`.  The first instance of a spec runs the twin's self-check (`self_check_n` random instances
-        against the gates) and records it in `self.self_checks`; `auto` falls back to the gates on a failed check,
-        `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
+        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization as (twin_id, its
+        instance form, the statics), or None (the gates), per `self.evaluator`.  The first instance of a spec runs the
+        twin's self-check (`twins.admit`) and records it in `self.self_checks`; `auto` falls back to the gates on a
+        failed check, `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
         if self.evaluator == "gates":
             return None
         m = self.by_node[k]
@@ -301,16 +302,16 @@ class Replayer:
             if isinstance(tw, str):
                 raise RuntimeError(tw)
             return tw
-        from verity_vllm.program.kernels.twins import self_check, twin_for
-        tw = twin_for(m["_spec"])
-        if tw is not None:
-            rec = self_check(tw, n=self.self_check_n, seed=self.seed)
+        from verity_vllm.program.kernels import kernel_registry as KR, twins
+        spec, tw = m["_spec"], None
+        if KR.covers(spec, twins.KERNEL) is None:
+            rec = twins.admit(spec, n=self.self_check_n, seed=self.seed)
             self.self_checks[sid] = rec
-            if rec["status"] != "pass":
-                if self.evaluator == "twins":
-                    self._twins[sid] = f"twin {tw.twin_id} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
-                    raise RuntimeError(self._twins[sid])
-                tw = None
+            if rec["status"] == "pass":
+                tw = (rec["twin_id"], KR.instance(spec, twins.KERNEL), dict(spec.statics))
+            elif self.evaluator == "twins":
+                self._twins[sid] = f"twin {rec['twin_id']} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
+                raise RuntimeError(self._twins[sid])
         self._twins[sid] = tw
         return tw
 
@@ -318,12 +319,12 @@ class Replayer:
         """`evaluate` from `operand_arrays` through the selected evaluator: the admitted twin when it exists and claims
         the operands, else the gates.  Returns (return encodings, {"evaluator": "twins"|"gates", "twin_id"[, "declined"]})."""
         tw = self.twin_of(k)
-        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw.twin_id if tw is not None else None}
+        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw[0] if tw is not None else None}
         if tw is not None:
-            from verity_vllm.program.kernels.twins import TwinDeclined
+            from verity_vllm.program.kernels.kernel_registry import Declined
             try:
-                got = np.asarray(tw(arrays), dtype=np.uint64)
-            except TwinDeclined as e:
+                got = np.asarray(tw[1](*arrays, **tw[2]), dtype=np.uint64)
+            except Declined as e:
                 ev["declined"] = str(e)
             else:
                 ev["evaluator"] = "twins"
@@ -530,7 +531,7 @@ def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | Non
     label), evaluated bit-exactly against their output snapshots; oversize instances at a child unit.  See the module
     docstring for the pass rule."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "a", "status": "pass", "k": k, "seed": seed, "snapshot_steps": snap_steps,
                               "max_arg_leaves": max_arg_leaves, "coverage": {}, "instances": [], "uncovered_specs": []}
@@ -944,7 +945,7 @@ def tier_chain(result: FoldResult, store: SnapshotStore, weights: WeightSource |
     errors that per-instance evaluation from snapshots cannot see.  Pass iff every slice's members pass and every
     slice chained >= 1 producer->consumer edge."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "chain", "status": "pass", "n": n, "seed": seed, "depth": depth, "max_nodes": max_nodes,
                               "max_arg_leaves": max_arg_leaves, "snapshot_steps": snap_steps, "slices": []}
@@ -1092,35 +1093,35 @@ def summary_line(rep: dict) -> str:
     return f"tier {t} {rep.get('status')}"
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--log", required=True)
-    ap.add_argument("--snapshots", default=None, help="directory with snapshots.json and values/ (tiers a, b)")
-    ap.add_argument("--profile", required=True)
-    ap.add_argument("--tier", required=True, choices=("a", "b", "c", "chain"))
-    ap.add_argument("--chains", type=int, default=3, help="tier chain: number of connected slices")
-    ap.add_argument("--chain-depth", type=int, default=3)
-    ap.add_argument("--chain-max-nodes", type=int, default=8)
-    ap.add_argument("--step", type=int, default=None, help="tier b: the step to replay; tier c: replay steps 0..STEP")
-    ap.add_argument("--k", type=int, default=3)
-    ap.add_argument("--seed", type=int, default=None, help="tiers a, chain: the sample's seed (required); tiers b, c: the twin self-check's (default 0)")
-    ap.add_argument("--max-arg-leaves", type=int, default=None, help="tier a default 4000000; tiers b/c default unlimited")
-    ap.add_argument("--max-instances", type=int, default=None, help="tier b: replay only this prefix of the step's instances")
-    ap.add_argument("--layers", default=None, help="tier b: comma-separated layers to replay (non-layer instances always)")
-    ap.add_argument("--no-compare", action="store_true", help="tier b: do not compare outputs with snapshots")
-    ap.add_argument("--safetensors", default=None, help="glob of the checkpoint's model*.safetensors (default: HF cache of the profile's model)")
-    ap.add_argument("--cos-sin", default=None, help="uint16 .npy of the rotary cos_sin table (default: <snapshots>/cos_sin_cache.npy, else the B0 fixture)")
-    ap.add_argument("--progress", action="store_true", help="print progress every 50 instances (tiers b, c)")
-    ap.add_argument("--evaluator", default="auto", choices=EVALUATORS,
-                    help="tiers b, c: gates (evaluate_call), twins (verity_vllm.program.kernels.twins wherever one exists; a failed self-check is "
-                         "an error), auto (a twin after its self-check passed, else gates; default)")
-    ap.add_argument("--self-check-n", type=int, default=3, help="random instances per specialization in the twin self-check (>= 3)")
-    ap.add_argument("--out", required=True)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    log: str = option("--log")
+    snapshots: str | None = option("--snapshots", default=None, help="directory with snapshots.json and values/ (tiers a, b)")
+    profile: str = option("--profile")
+    tier: str = option("--tier", choices=("a", "b", "c", "chain"))
+    chains: int = option("--chains", type=int, default=3, help="tier chain: number of connected slices")
+    chain_depth: int = option("--chain-depth", type=int, default=3)
+    chain_max_nodes: int = option("--chain-max-nodes", type=int, default=8)
+    step: int | None = option("--step", type=int, default=None, help="tier b: the step to replay; tier c: replay steps 0..STEP")
+    k: int = option("--k", type=int, default=3)
+    seed: int | None = option("--seed", type=int, default=None, help="tiers a, chain: the sample's seed (required); tiers b, c: the twin self-check's (default 0)")
+    max_arg_leaves: int | None = option("--max-arg-leaves", type=int, default=None, help="tier a default 4000000; tiers b/c default unlimited")
+    max_instances: int | None = option("--max-instances", type=int, default=None, help="tier b: replay only this prefix of the step's instances")
+    layers: str | None = option("--layers", default=None, help="tier b: comma-separated layers to replay (non-layer instances always)")
+    no_compare: bool = option("--no-compare", default=False, action="store_true", help="tier b: do not compare outputs with snapshots")
+    safetensors: str | None = option("--safetensors", default=None, help="glob of the checkpoint's model*.safetensors (default: HF cache of the profile's model)")
+    cos_sin: str | None = option("--cos-sin", default=None, help="uint16 .npy of the rotary cos_sin table (default: <snapshots>/cos_sin_cache.npy, else the B0 fixture)")
+    progress: bool = option("--progress", default=False, action="store_true", help="print progress every 50 instances (tiers b, c)")
+    evaluator: str = option("--evaluator", default="auto", choices=EVALUATORS, help="tiers b, c: gates (evaluate_call), twins (verity_vllm.program.kernels.twins wherever one exists; a failed self-check is " "an error), auto (a twin after its self-check passed, else gates; default)")
+    self_check_n: int = option("--self-check-n", type=int, default=3, help="random instances per specialization in the twin self-check (>= 3)")
+    out: str = option("--out")
+
+
+def main(a: Options) -> int:
     if a.self_check_n < 3:
-        ap.error("--self-check-n must be >= 3")
+        raise UsageError("--self-check-n must be >= 3")
     if a.seed is None and a.tier in ("a", "chain"):
-        ap.error(f"--seed is required for tier {a.tier}: its sample is drawn from it")
+        raise UsageError(f"--seed is required for tier {a.tier}: its sample is drawn from it")
 
     t0 = time.time()
     if a.evaluator != "gates" and a.tier in ("b", "c"):
@@ -1172,7 +1173,3 @@ def main(argv: list[str] | None = None) -> int:
     print(summary_line(rep), file=sys.stderr)
     print(str(out))
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

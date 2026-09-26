@@ -1,8 +1,8 @@
 """verity_vllm/properties/golden.py — PROTECTED (gate G6, regression half).  The frozen golden corpus: every previously accepted
 observation log must keep resolving to exactly its recorded pattern attribution and Program digest.
 
-    uv run python -m verity_vllm.properties.golden --check [--out golden.json]          # CPU only, no GPU, every candidate commit
-    uv run python -m verity_vllm.properties.golden --record NAME --log LOG --profile MOD  # integrator only (protected path)
+    uv run verity-vllm golden --check [--out golden.json]          # CPU only, no GPU, every candidate commit
+    uv run verity-vllm golden --record NAME --log LOG --profile MOD  # integrator only (protected path)
 
 Why: a lane that adds a Gemma pattern which accidentally also matches a Qwen operation, or loosens a matcher, changes how an
 *old* capture resolves.  Re-folding the corpus catches that without a GPU: `attribution_sha` is the sha256 of the node-ordered
@@ -14,16 +14,18 @@ Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `
 """
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import hashlib
 import json
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT as REPO
+from verity_vllm.config import UsageError, option
+from verity_vllm.properties.record import seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
@@ -81,7 +83,7 @@ def check(corpus_path: Path = CORPUS, only: list[str] | None = None) -> dict[str
     st = [x["status"] for x in out["entries"]]
     out["n_pass"], out["n_fail"], out["n_skipped"] = st.count("pass"), st.count("fail"), st.count("skipped")
     out["status"] = "fail" if out["n_fail"] else ("pass" if out["n_pass"] else "skipped")
-    return out
+    return seal(out, out["status"] == "pass")
 
 
 def record(name: str, log: str, profile_name: str, *, decision: str | None = None, corpus_path: Path = CORPUS) -> dict[str, Any]:
@@ -100,19 +102,21 @@ def _utc() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--check", action="store_true")
-    ap.add_argument("--record", default=None, metavar="NAME")
-    ap.add_argument("--log", default=None)
-    ap.add_argument("--profile", default=None)
-    ap.add_argument("--decision", default=None, help="decision id authorizing a re-record of an existing entry")
-    ap.add_argument("--only", default=None, help="comma list of entry names to check")
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    check: bool = option("--check", default=False, action="store_true")
+    record: str | None = option("--record", default=None, metavar="NAME")
+    log: str | None = option("--log", default=None)
+    profile: str | None = option("--profile", default=None)
+    decision: str | None = option("--decision", default=None, help="decision id authorizing a re-record of an existing entry")
+    only: str | None = option("--only", default=None, help="comma list of entry names to check")
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     if a.record:
         if not (a.log and a.profile):
-            ap.error("--record needs --log and --profile")
+            raise UsageError("--record needs --log and --profile")
         e = record(a.record, a.log, a.profile, decision=a.decision)
         print(json.dumps(e, indent=1))
         return 0
@@ -124,7 +128,3 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[golden] {e['status']:7s} {e['name']}: {e.get('reason', '')} ({e.get('n_instances', '?')} instances, {e.get('seconds', '?')} s)", file=sys.stderr)
     print(f"[golden] {rep['status']}: {rep['n_pass']} pass, {rep['n_fail']} fail, {rep['n_skipped']} skipped", file=sys.stderr)
     return 0 if rep["status"] in ("pass", "skipped") else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -15,7 +15,7 @@ import pytest
 from tests.check import test_oracle_compare as TOC
 from tests.check.opened import commit_host_steps, commit_steps, meta, retained_block
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import evaluate as EV, linkage as LK
 
 QKV = (0, "model.layers.0.self_attn.qkv_proj/0")
 IDS = (0, "model.embed_tokens/in")
@@ -196,10 +196,10 @@ def test_boundary_linkage_names_an_input_id_changed_after_the_commit_unlinked(tm
     com, run = commit_host_steps(_steps_of(members))
     workload = [{"request_id": "r1", "arrive_step": 0, "prompt_token_ids": [100, 101, 102], "steps": [0]},
                 {"request_id": "r0", "arrive_step": 0, "prompt_token_ids": [103, 104, 105, 106, 107], "steps": [0]}]
-    ok = SR.boundary_linkage(bmap, OC.OpenedReader(com, run), workload)
+    ok = LK.boundary_linkage(bmap, OC.OpenedReader(com, run), workload)
     assert ok["pairs"] == ok["linked"] == 2 and ok["unlinked"] == [], ok
     members[IDS][0:4] = np.int32(999).tobytes()                                  # r1's first prompt id changed in the retained copy
-    res = SR.boundary_linkage(bmap, OC.OpenedReader(com, run), workload)
+    res = LK.boundary_linkage(bmap, OC.OpenedReader(com, run), workload)
     assert res["result"] is False and res["linked"] == 0 and len(res["unlinked"]) == 2
     assert all(u["why"].startswith("opened value not verified") for u in res["unlinked"])
 
@@ -209,6 +209,6 @@ def test_a_replayed_vu_whose_committed_read_does_not_verify_is_a_mismatch_by_nam
         rec.update({"i": vu["i"], "request_id": vu["request_id"]})
         raise OC.OpeningNotVerified("step 3 x/0 (ordinal 7) bytes [0, 8) = leaves [0, 1): the opening does not verify against the run root")
 
-    monkeypatch.setattr(SR, "_replay_vu", unverified)
-    r = SR.replay_vu(None, None, lambda *a: None, {"i": 5, "request_id": "r0"}, arrive=0)
+    monkeypatch.setattr(EV, "_replay_vu", unverified)
+    r = EV.replay_vu(None, None, lambda *a: None, {"i": 5, "request_id": "r0"}, arrive=0)
     assert r["result"] is False and r["i"] == 5 and r["why"].startswith("opened value not verified: step 3 x/0 (ordinal 7)")

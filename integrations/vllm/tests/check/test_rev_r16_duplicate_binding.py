@@ -1,7 +1,7 @@
 """rev R16 F-r16-08 -- one identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
 
 BRIEF §3 C1: "every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
-identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `sampled_replay.CommittedStore` keys the
+identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `opening.CommittedStore` keys the
 committed words by (request, step, op_path, member) and keeps the first entry (min invocation), so a second binding of the SAME identity
 to a different buffer is never read by form (A) and is not a named failure anywhere on the (A) path.  Honest records have 0 copies
 (153/153 R15/R16 coverage records), so gating on it costs nothing.
@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.commit.binding import coverage_check, identity, identity_dict
-from verity_vllm.check.replay.sampled_replay import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore
 
 PD = "ab" * 32
 
@@ -130,7 +130,7 @@ def test_duplicate_of_another_identity_does_not_hide_a_missing_one():
 
 def test_commit_verdict_names_the_ambiguous_binding():
     """The row verdict reads coverage.ok: an ambiguous binding (all bound, none missing) FAILs with the C1 text naming the identity + copies."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     cov = coverage_check(_population(), bm)
     rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},

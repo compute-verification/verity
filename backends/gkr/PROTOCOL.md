@@ -1,4 +1,4 @@
-# Candidate A — data-parallel GKR + logUp-GKR lookups + interactive Longfellow-style ZK layer
+# A-GKR — data-parallel GKR + logUp-GKR lookups + interactive Longfellow-style ZK layer
 
 Status: **specification / proposed research**. Nothing here is implemented or measured. The interactive
 adaptation of the Longfellow ZK layer (section 5), the merging of logUp-GKR claims into the checker GKR
@@ -127,9 +127,9 @@ coordinates; an \(F_c\)-linear constraint on pads is \(\deg\) \(F_t\)-linear con
 | leaf \(j\) **[proposal, default]** | HM96 \(O(k)\)-bit commitment to column \(j\): \(s_j=H(T[0][j]\|\cdots\|T[\mathrm{NROW}][j])\), random \(x_j\in\{0,1\}^{6k+4}\), universal \(h_j\) with \(h_j(x_j)=s_j\), leaf \(=(h_j,\,H(x_j))\), \(k=160\); opening \(=\) column \(\|\,x_j\) | hiding of unopened columns is **statistical**, \(n\cdot2^{-160}=2^{-146}\) (HM96 Theorem 1, union over \(n\) leaves; calculator `zk` term); binding by collision resistance of \(H\). Alternative (unsalted \(H(\text{column})\), libzk `commit`) needs a hiding assumption on \(H\) beyond CRH (section 7) |
 | committed elements, \(K=1536,B=4096\) | \(181.4\)M \(F_t\) elements = \(393216\cdot(321+140)\) inputs, hints, row columns and query wires \(+\) 66 623 multiplicities \(+\) 4 674 pads \(\times3\) coordinates → 47 231 rows, \(774\)M encoded symbols; \(126.3\)M without the query wires (`commit_query_wires=False`, depth 630) | calculator `parameters` |
 
-Quadratic constraints are laid out libzk-style as aligned triples of rows (`layout_quadratic_rows`); Candidate A
+Quadratic constraints are laid out libzk-style as aligned triples of rows (`layout_quadratic_rows`); A-GKR
 has only the deferred products of section 6 (\(\approx4\) per checker layer, 3 per fractional-GKR layer, times
-\(\deg^2\) coordinates), so alignment copies are negligible here (they are not for Candidate B).
+\(\deg^2\) coordinates), so alignment copies are negligible here (they are not for B-Ligero).
 
 ## 4. Interactive reductions
 
@@ -251,7 +251,7 @@ lookups on the critical path (section 5.4: depth 630 instead of 381).
 | two-claims-to-one line reduction, \(\alpha,\beta,\gamma,\mu,\lambda\) combinations | none (multiplications by challenges) | — |
 | deferred final-round identities (6) | none (products of padded values) | — |
 
-There is no witness-dependent division in Candidate A; the only zero-test on witness data is the public
+There is no witness-dependent division in A-GKR; the only zero-test on witness data is the public
 \(z_T\in\mathrm{Img}_T\) rule of step 2a, whose inputs (\(z_T\), \(\beta_T\), the table) are all public.
 
 ## 5. ZK layer: padded transcript + deferred Ligero verification, made interactive
@@ -498,9 +498,9 @@ Public inputs to constraint generation: all challenges, all padded values, \(\wi
 points, table evaluations \(\widetilde t_v(\beta_T)\) at \(\rho_T\). Output: matrices \(A\) (linear) and triples
 (quadratic) over \(F_c\) on the committed vector \(W_1\), expanded to \(F_t\) coordinates. Both parties compute
 them; the prover needs them only for step 5b. Combination coefficients: \(r\) (IRS test) is an explicit uniform
-vector; \(r_{add}\), \(r_q\) may be explicit (Candidate A has \(\approx10\)k linear and \(\approx1\)k quadratic
+vector; \(r_{add}\), \(r_q\) may be explicit (A-GKR has \(\approx10\)k linear and \(\approx1\)k quadratic
 constraints) or powers of one uniform element each (`ligero_error(combination="powers")`, error
-\((\#\text{constraints}-1)/|F_c|\) by Schwartz–Zippel **[derivation]**; required for Candidate B).
+\((\#\text{constraints}-1)/|F_c|\) by Schwartz–Zippel **[derivation]**; required for B-Ligero).
 
 ## 7. Hash properties assumed, and where
 
@@ -646,7 +646,7 @@ which is an upper bound a real layout would shrink; the depth column separates t
 ## 11. Open items (questions, not decisions)
 
 - Sequential depth: baseline 381 at \(B=4096\) (network floor 0.38 s at 1 ms RTT, 19.1 s at 50 ms) against
-  Candidate B's 3; the proposals reach 158 (\(c=2,s=5\)) at \(+1.3\%\) committed elements and \(\approx2\times\)
+  B-Ligero's 3; the proposals reach 158 (\(c=2,s=5\)) at \(+1.3\%\) committed elements and \(\approx2\times\)
   sumcheck-round prover work; the checker chain (297) is the floor of sharding alone. The measurements decide; no
   round budget is set.
 - Whether to commit the 140 computed query wires per unit (depth 381, 181M committed) or not (depth 630, 126M).
@@ -989,7 +989,7 @@ v1 Goldilocks control on the same binary revision and box.
 
 ## 15. Batched logUp over the table union (implemented 2026-09-22, lane a-logup-union; `--logup union`)
 
-**This is a protocol change to Candidate A's lookup argument and to nothing else.** The relation (`checker.v2`),
+**This is a protocol change to A-GKR's lookup argument and to nothing else.** The relation (`checker.v2`),
 the circuit export, the committed columns, the chain linkage and the Ligero opening are those of sections 12–14; only
 *how the lookups are proved* changes: the ten (v2: twelve, counting the epilogue's `R16`/`R15`) per-table
 fractional-GKR instances of section 4 become **one** instance over the union of the tables, every element tagged by
@@ -1273,3 +1273,41 @@ session as this proof; the red-team-flock third audit's P1-P3 and E0-E1 are what
 * **Soundness:** `soundness.py` adds 255/p^6 (the sigma batching) and (m/2^128)^2 (Schwartz-Zippel over the two
   session points); the Flock side's terms are its own (red-team-flock third audit: about 2^-195.5 for the two reps,
   2^-243.9 for the link claims' reduction). The composed bound is set by A-GKR's Ligero queries, 2^-130.19.
+
+### 17.6 Live prime coins (lane route-a-live; the red-team-flock fourth audit's class condition and G2)
+
+Under 17.5 the prime half drew every challenge from its own SHA-256 transcript: runner-derived Fiat–Shamir coins, so
+the cell was NON_ZK_PROOF_DIAGNOSTIC (under the campaign's ×2^60 rule that half is 2^-70.2). Here the same live session
+serves them, so the whole cell is the interactive object of §0 and the bound is the interactive one, 2^-130.19.
+
+* **Round (R2's discipline):** the prime transcript keeps its absorb chain (`state <- SHA-256(state || msg)`). A challenge
+  with an absorb since the previous round opens a round: the prover sends `Prime{state, n}` (the state commits every
+  message absorbed so far and every earlier coin), and the verifier answers with `6 n` OS-drawn words below p, the
+  round's n BabyBear^6 challenges; both sides then chain `state <- SHA-256(state || "verity-gkr/live-coins/v1" || words
+  LE)`. A challenge with no absorb since takes the round's next unused coin; an absorb discards the rest. `reserve(n)`
+  makes one round of n known-consecutive challenges, at four places mirrored by prover, Python verifier and Rust
+  verifier: the transcript start (every table's z, beta and every segment's z0, gamma), each LogUp level's (mu, lam),
+  the link's rho with the batching coins after it (`open_coins`: the functionals, geo, the bind pair, Ligero's row
+  coefficient), and the Ligero query set (t + 8). Nothing is derived under live coins: `challenge_bytes` is refused, and
+  the graphed LogUp tree (device-side Fiat–Shamir) is off.
+* **Order (server, `backends/flock/live`):** `Prime` is refused before `Hello`, and between `Commit` and y (R5 for the
+  prime half: rho and the Ligero queries follow the points and y); `Commit` is refused before any prime round (root_F
+  must follow live GKR coins); `Hello` pins `prime: live-coins/v1` (R7). No coin follows the verdict. The record keeps
+  every round (state, n, words) and `before_commit`; the verdict requires at least one round on each side of `Commit`.
+* **Replay (the prime verifier):** `prime_coins.txt` (from the record, `tools/cell_gate.py`) beside `link.txt`; the
+  verifier's transcript must reproduce each recorded state before it takes that round's words, draw exactly the
+  recorded counts, compute root_F after exactly `before_commit` rounds, and consume every round
+  (`verifier/src/transcript.rs`, `gpu/transcript.py::ReplayTranscript`). `--require-live-coins` refuses a linked proof
+  without them.
+* **Transport:** one connection per session. `cell-prove --prime-sock` forwards the prime prover's `Prime` frames on the
+  session's connection after `Hello`, and sends the proofs and `Finish` only after the prime prover closed its socket.
+* **Cost:** one RTT per prime round, sequential. Before root_F they are on the critical path (Flock's `Commit`, and so
+  all of Flock's rounds, wait for root_F); after y they overlap Flock. Each round is 45 bytes up and 13 + 24 n down.
+  `times.json` / the result record `session.prime_rounds`, `session.prime_rounds_before_root_f`, the prime bytes each
+  way, `prime.network_wait_seconds` and `prime.wait_before_root_f_seconds`; `session.rounds` counts both provers' rounds.
+* **G2 (offline Flock replay):** the record also keeps root_F, every root_B and the committed public words.
+  `flock-link replay --session DIR` rebuilds the session from `session.json` under the verifier's own configuration
+  and statement (`Server::from_record`: the hello, C4 on the public words, each rep's root against root_B, the link
+  context's shape, the prime order, the proofs' hashes, `link_sha256`), then re-runs the verdict without using the
+  recorded one. `tools/cell_gate.py --flock` adds it as the `flock_replay` check. The record is evidence only under the
+  verifier's custody; nothing in it authenticates its writer.

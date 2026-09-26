@@ -6,7 +6,9 @@ tree on sys.path ahead of the tree of record -- and require the precheck to fail
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITOR_REPO).
 
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from packages/verity/src, `verity_vllm` from integrations/vllm,
-`research` from tools/research/src.
+`research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
+`.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
+of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
     cd integrations/vllm && PYTHONPATH=.:../../packages/verity/src:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
 """
@@ -24,6 +26,7 @@ import pytest
 
 from research.telemetry import source_identity as gsid
 from verity_vllm import config as vconfig
+from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import source_identity as sid
 
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
@@ -39,7 +42,7 @@ def _env(**extra: str) -> dict[str, str]:
 
 
 def _run(*args: str, cwd: Path = INTEGRATION, **env: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", *args], cwd=cwd, env=_env(PYTHONPATH=PP, **env),
+    return subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", *args], cwd=cwd, env=_env(PYTHONPATH=PP, **env),
                           capture_output=True, text=True)
 
 
@@ -130,7 +133,7 @@ def test_negative_mixed_tree_copy_of_verity_vllm_elsewhere_is_refused_by_name(tm
     shutil.copytree(INTEGRATION / "verity_vllm", elsewhere / "verity_vllm", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (elsewhere / "EXPORT.json").write_text(json.dumps({"commit": "c0ffee" * 6 + "c0ff", "branch": "stale-copy", "dirty_patch_sha256": "0" * 64}))
     out = tmp_path / "source_identity.json"
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(INTEGRATION), "--out", str(out)], cwd=tmp_path,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(INTEGRATION), "--out", str(out)], cwd=tmp_path,
                        env=_env(PYTHONPATH=f"{elsewhere}{os.pathsep}{PP}"), capture_output=True, text=True)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert r.stderr.startswith(gsid.FAIL_CLASS) and "verity_vllm:" in r.stderr and str(elsewhere) in r.stderr, r.stderr
@@ -176,7 +179,7 @@ def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
                        env=_env(PYTHONPATH=f"{INTEGRATION}{os.pathsep}{REPO / 'packages' / 'verity' / 'src'}"), capture_output=True, text=True)
     if r.returncode == 0:
         pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
-    assert "tools/research/src" in r.stderr and "row_pod.sh" in r.stderr, r.stderr
+    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
@@ -223,7 +226,7 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers, stub packages at Verity's locations, and the REAL
-    source_identity modules (generic + project, with the verity_vllm.config it locates the tree through) so the precheck under test runs
+    source_identity modules (generic + project, with the verity_vllm.config it locates the tree through, and the CLI) so the precheck under test runs
     from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in ("packages/verity/src/verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
@@ -235,6 +238,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     shutil.copy(gsid.__file__, t / "tools" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
+    shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
     assert not (t / ".git").exists() and not (t / "EXPORT.json").exists()
     return t
 
@@ -250,7 +254,7 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     t = _shipped_tree(tmp_path)
     integ = t / "integrations" / "vllm"
     out = tmp_path / "sid.json"
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t), RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 0, (r.stdout, r.stderr)
     doc = json.loads(out.read_text())
@@ -261,13 +265,13 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     assert doc["packages"]["hidden_gpu"]["resolved_path"] is None      # optional: not shipped in the stub, not a mismatch
     assert "f" * 9 in r.stdout and doc["RESEARCH_SOURCE_SHA"] == "f" * 40
     # --sha wins over the environment and is checked against it: a differing env sha is not a package mismatch (env is only a fallback)
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--sha", "e" * 40, "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--sha", "e" * 40, "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t)), capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     doc = json.loads(out.read_text())
     assert doc["packages"]["verity"]["git_sha"] == "e" * 40 and doc["packages"]["verity"]["git_sha_source"] == "--sha"
     # no declaration at all: ok, sha None, source says why
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t)), capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     doc = json.loads(out.read_text())
@@ -280,7 +284,7 @@ def test_shipped_tree_still_refuses_a_foreign_package(tmp_path):
     t = _shipped_tree(tmp_path)
     integ = t / "integrations" / "vllm"
     pp = os.pathsep.join([str(REPO / "packages" / "verity" / "src"), _shipped_pp(t)])
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ)], cwd=integ,
                        env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "verity:" in r.stderr and os.path.realpath(REPO) in r.stderr, r.stderr
 
@@ -343,22 +347,18 @@ def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
 
 # ---- runners set VERITOR_REPO from their own tree -------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("script,args", [("verity_vllm/ops/row_pod.sh", ["some-row", "ROLE", "org/repo", "rev"]),
-                                         ("verity_vllm/ops/canary.sh", ["r18-test"])])
-def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, script, args):
+@pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
+                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"]])
+def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, argv):
     other = tmp_path / "other"
     other.mkdir()
-    r = subprocess.run(["bash", str(INTEGRATION / script), *args], cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", "")),
+    r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP),
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(other) in r.stderr
     assert not list(tmp_path.glob("**/stages.txt"))
 
 
-def test_row_pod_exports_veritor_repo_from_its_own_tree_and_ignores_the_default_path():
-    src = (INTEGRATION / "verity_vllm" / "ops" / "row_pod.sh").read_text()
-    assert 'cd "${VERITOR_REPO:-/workspace/cp/veritor}"' not in src
-    assert 'export VERITOR_REPO=$TREE_SELF' in src
-    assert "verity_vllm.pipeline.source_identity" in src and "PRECHECK_FAIL_SOURCE_IDENTITY" in src
+def test_canary_exports_veritor_repo_from_its_own_tree_and_ignores_the_default_path():
     can = (INTEGRATION / "verity_vllm" / "ops" / "canary.sh").read_text()
     assert 'cd "${VERITOR_REPO:-/workspace/cp/veritor}"' not in can and 'export VERITOR_REPO=$TREE_SELF' in can

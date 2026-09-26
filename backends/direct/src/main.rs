@@ -334,7 +334,7 @@ fn read_u32_words(path: &Path) -> Vec<u64> {
     b.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as u64).collect()
 }
 
-/// A VU tier of `bench-instances/v1`: `x`, `w` (K words per instance), claimed `y`, the recorded accumulators
+/// A VU tier of `bench-instances/v1`: `x`, `w` (K words per input), claimed `y`, the recorded accumulators
 /// (positives only).
 struct VuTier {
     vus: Vec<VuIo>,
@@ -772,7 +772,7 @@ fn write_result(b: BenchNumbers) {
         FieldKind::BabyBear => 4,
     };
     let per_vu_cells = (steps * committed_width) as u64;
-    // bench.contract native_reference(FIRST.name) == verity.verification.target.FIRST.native_peak: the A100 SXM4 dense
+    // bench.contract native_reference(FIRST.name) == verity.proofs.target.FIRST.native_peak: the A100 SXM4 dense
     // BF16 tensor-core peak with FP32 accumulate, 312 TFLOP/s; one GemmCoordinate<K> VU is 2K flop.  This bench is
     // BF16-only (the fingerprint below names profile FIRST); a bench of another target divides by that target's own
     // Target.native_peak, never by this constant.  overhead.vs_native_peak == rate.native_peak / rate.proved.

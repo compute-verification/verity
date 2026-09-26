@@ -10,7 +10,8 @@ import random
 
 import pytest
 
-from verity_vllm.acquire.committer_api import Opening, RunCommitment, challenge_positions
+from verity_vllm.acquire.committer_api import Opening, RunCommitment
+from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = 64

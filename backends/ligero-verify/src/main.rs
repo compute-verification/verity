@@ -1,4 +1,4 @@
-//! ligero-verify: the independent verifier for Candidate B's B-Ligero chain proofs.
+//! ligero-verify: the independent verifier for B-Ligero's chain proofs.
 //!
 //! ~~~text
 //! ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]
@@ -11,7 +11,8 @@
 //!                      # available parallelism), each exactly as `verify` does; the batch is accepted iff every
 //!                      # sub-batch is AND (PROTOCOL.md 8c, "Batch verification") the union of this verifier's own
 //!                      # per-proof bounds over the N sub-batches presented is <= 2^-target AND every proof's n_proofs
-//!                      # is N (`batch: n_proofs mismatch`).  Agreement with the python_verdict of DIR/manifest.json, or
+//!                      # is N (`batch: n_proofs mismatch`) AND every DIR/*.stmt has its DIR/*.proof (`batch: ...
+//!                      # statement(s) without a proof`).  Agreement with the python_verdict of DIR/manifest.json, or
 //!                      # of DIR/../manifest.json naming the proofs as `<DIR name>/<file>` (a bench-vu dump's rep dirs).
 //! ligero-verify system-digest --system system.bin           # the two digests (and the relation they are pinned for)
 //!
@@ -31,6 +32,7 @@ mod hash;
 mod leaf;
 mod relation;
 mod verify;
+mod vllm_v1;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -468,6 +470,18 @@ fn main() {
                 eprintln!("batch: no *.proof in {}", dir.display());
                 std::process::exit(2);
             }
+            // a statement in DIR that no proof answers claims VUs nothing proves (red-team-standard-hash R4): the batch
+            // is refused, whatever the proofs beside it say
+            let mut unproven: Vec<String> = std::fs::read_dir(&dir)
+                .map(|e| e.filter_map(|e| e.ok().map(|e| e.path())).collect::<Vec<_>>())
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|p| p.extension().map_or(false, |x| x == "stmt"))
+                .filter(|p| !p.file_name().map_or(false, |n| n.to_string_lossy().starts_with("._")))
+                .filter(|p| !p.with_extension("proof").is_file())
+                .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+                .collect();
+            unproven.sort();
             let available = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
             let jobs = arg(&args, "--jobs").map(|s| s.parse::<usize>().expect("--jobs")).unwrap_or(available).max(1).min(proofs.len());
             // The batch target (PROTOCOL.md 8c, "Batch verification"): the union of this verifier's own per-proof bounds
@@ -563,6 +577,7 @@ fn main() {
             // precedence: unreadable input, a rejected sub-batch (first in name order), then the batch rule
             let (batch_accepted, batch_reason) = match (&first_reject, io_errors, &bound) {
                 (_, e, _) if e > 0 => (false, format!("{e} sub-batch file(s) could not be read")),
+                _ if !unproven.is_empty() => (false, format!("batch: {} statement(s) without a proof ({})", unproven.len(), unproven.join(", "))),
                 (Some(r), _, _) => (false, r.clone()),
                 (None, _, Some(b)) => (b.accepted && n_acc == proofs.len(), b.reason.clone()),
                 (None, _, None) => (false, "batch: no verdict".to_string()),

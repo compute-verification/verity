@@ -82,12 +82,13 @@ def test_conformance_record_names_the_evidence():
     rec = CF.record()
     defs = rec["definitions"]
     assert defs["F2fpBf16_v1"]["status"] == "exact-model-tested"
-    assert "cvt_special.json" in defs["F2fpBf16_v1"]["conformance"]
-    assert "veritor.tc-ampere-bf16@2" in defs["F2fpBf16_v1"]["conformance"]
+    assert "cvt_special" in defs["F2fpBf16_v1"]["conformance"]
     assert defs["F32ToBf16Rn_v1"]["status"] == "exact-model-tested"
-    assert "superseded in production by F2fpBf16_v1" in defs["F32ToBf16Rn_v1"]["conformance"]
     nan = rec["nan_canonicalisation"]
     assert nan["production_conversion"] == "F2fpBf16_v1" and nan["nan_word"] == "0x7FFF"
+    assert "cvt_special.json" in nan["source"]
+    assert nan["interface_family"]["F2fpBf16_v1"].startswith("veritor.tc-ampere-bf16@2")
+    assert "not bound by B0/B1" in nan["not_bound"]["F32ToBf16Rn_v1"]
     assert nan["program_digests_unchanged"]["B0"] == B0_DIGEST
     assert nan["recorded_traces_finite"]["B0"]["nan_words"] == 0 and nan["recorded_traces_finite"]["B1"]["nan_words"] == 0
     assert nan["source"].startswith("measured")

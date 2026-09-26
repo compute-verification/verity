@@ -73,6 +73,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .errors import InvalidArtifact
+from .models import HOPPER_BF16_WGMMA_K16
 from .silicon import (
     AMPERE_BF16_M16N8K16,
     FP32_MAX_EXPONENT,
@@ -238,21 +239,7 @@ AMPERE_BF16_DOT16_TOTAL = AMPERE_BF16_M16N8K16
 
 TOTAL_FAMILY_VERSION = "3"
 
-#: One accumulator coordinate of Hopper's ``wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16``: all
-#: sixteen products and the accumulator in one grouped sum, 26-bit adder, exponent floor ``-133``.  The
-#: parameters are the same as :data:`~verity.ml.tc.silicon.HOPPER_BF16_M16N8K16` (Hawkeye's H100 numbers);
-#: this pipeline is the one *re-measured* by lane HP's campaign on the instruction the production GEMM and
-#: FA3 execute (``gpu/tc-hopper``).  The value does not depend on N, on the coordinate's position in the
-#: 64 x 128 tile, or on ``scale-d`` (``0`` behaves as ``acc = +0``), so one k16 step is the primitive.
-HOPPER_BF16_WGMMA_K16 = Pipeline(
-    name="hopper_bf16_wgmma_k16",
-    arch="sm_90",
-    dtype="bf16",
-    operand_bits=16,
-    groups=(16,),
-    width=26,
-    zero_exponent=-133,
-    validated="lane HP campaign, H100 80GB HBM3 (sm_90), 2026-09-07: 37,510 tiles x 8,192 outputs x 3 reps",
-)
-
+#: :data:`verity.ml.tc.models.HOPPER_BF16_WGMMA_K16` (the model of ``sm90.wgmma.m64n8k16.bf16``) is re-exported
+#: here, where lane HP's campaign first registered it: all sixteen products and the accumulator in one grouped
+#: sum, 26-bit adder, exponent floor ``-133``, the parameters of :data:`~verity.ml.tc.silicon.HOPPER_BF16_M16N8K16`.
 HOPPER_WGMMA_FAMILY_VERSION = "1"

@@ -12,7 +12,7 @@ import pytest
 from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
 from verity_vllm.commit import binding as B
 from verity_vllm.check import executed_prefix as EP
-from verity_vllm.check.replay.sampled_replay import linkage_horizon
+from verity_vllm.check.replay.linkage import linkage_horizon
 
 EOS = 50279
 
@@ -285,7 +285,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
     and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
-    import verity_vllm.check.replay.sampled_replay as SR
+    from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
     acct = EP.load_match_account(_match_account(tmp_path, write_tokens=False))
@@ -297,9 +297,9 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     assert "G6 lengths_by_request" in f["r0"]["a_r_source"] and f["r0"]["a_r_source"].endswith("Match account leg(s) NOT beside the Commit: tokens.json")
     assert f["r0"]["linked"] is False and f["r0"]["lag_attested"] is False
     # the consumer (reqval's normaliser) accepts the fact and faults on it by name, first
-    facts = EP.facts_accepted_by(SR.executed_prefix_of_record, f)
+    facts = EP.facts_accepted_by(POP.executed_prefix_of_record, f)
     assert "account_missing" in facts["r0"]
-    rec = SR.executed_prefix_of_record("r0", **facts["r0"])
+    rec = POP.executed_prefix_of_record("r0", **facts["r0"])
     assert rec["faults"][0].startswith("Match account leg(s) missing beside the Commit: tokens.json") and "not a verdict on the Program" in rec["faults"][0]
     assert any("a_r is not linked" in x for x in rec["faults"]) and any("LAG rule not attested" in x for x in rec["faults"])   # still fail-closed
     assert rec["account_missing"] == ["tokens.json"] and rec["mechanism"].startswith("not classified")
@@ -310,7 +310,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     full = EP.link_to_match_account(e, EP.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
     ff = EP.executed_prefix_facts(e, {"coverage": {"match_account_link": full}}, {"result": True}, {"r0": 0, "r1": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert ff["r0"]["account_missing"] == [] and "NOT beside" not in ff["r0"]["a_r_source"]
-    ok = SR.executed_prefix_of_record("r0", **EP.facts_accepted_by(SR.executed_prefix_of_record, ff)["r0"])
+    ok = POP.executed_prefix_of_record("r0", **EP.facts_accepted_by(POP.executed_prefix_of_record, ff)["r0"])
     assert ok["faults"] == [] and ok["account_missing"] == []
 
 

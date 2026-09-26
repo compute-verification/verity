@@ -31,9 +31,10 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../../packages/verity/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no packages/verity/src beside $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
+SAMPLED=$(cd "$ROOT/../../protocols/sampled_proofs" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no protocols/sampled_proofs beside $ROOT" >&2; exit 3; }
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
-export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$SAMPLED${PYTHONPATH:+:$PYTHONPATH}
 export VERITOR_REPO=$ROOT
 CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
 while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
@@ -60,6 +61,9 @@ if [ ! -x "$PY" ]; then
   uv venv "$VENV" --python 3.12 >/dev/null || fail VENV "uv venv --python 3.12 failed"
 fi
 $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail PYTHON "$PY is not Python 3.12: $($PY -V 2>&1)"
+# scripts that set their own PYTHONPATH (gates, rows) still import verity_sampled_proofs: a .pth in the venv's site-packages
+SITE=$VENV/lib/python3.12/site-packages; [ -d "$SITE" ] || fail PTH "no $SITE (the venv is Python 3.12)"
+echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth" || fail PTH "cannot write $SITE/verity-sampled-proofs.pth"
 
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
@@ -81,6 +85,9 @@ if ! $PY -c "import vllm, torch" 2>/dev/null; then
   done
 fi
 $PY -c "import ninja" 2>/dev/null || uv pip install --python "$PY" ninja >/dev/null 2>&1
+# the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
+printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
+  && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
 rm -rf /root/.cache/uv /root/.cache/pip 2>/dev/null
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------
@@ -131,9 +138,9 @@ fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
 HG_SO=$(echo "$HG_LINE" | awk '{print $3}')
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" "$SAMPLED" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, hg_so, cc, research, mode = sys.argv[1:8]
+root, core, out, hg_so, cc, research, mode, sampled = sys.argv[1:9]
 gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
 if not gpu:
@@ -161,6 +168,16 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.ir", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
+check("sampled_proofs_from_tree", lambda: under("verity_sampled_proofs.law", sampled))   # verity_vllm.commit.challenge imports it
+def sampled_without_pythonpath():
+    # drop only protocols/sampled_proofs from PYTHONPATH: the .pth must supply it; verity (its dependency) stays on the path
+    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(sampled)]
+    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}
+    r = subprocess.run([sys.executable, "-c", "import verity_sampled_proofs.law as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
+    if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(sampled) + os.sep):
+        raise RuntimeError(f"without protocols/sampled_proofs on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
+    return r.stdout.strip()
+check("sampled_proofs_via_pth", sampled_without_pythonpath)   # the venv's verity-sampled-proofs.pth, for scripts whose PYTHONPATH omits it
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:

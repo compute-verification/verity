@@ -30,6 +30,8 @@ from typing import Any
 
 import torch
 
+from verity_vllm.engine import hooks
+
 _lib_ready = False
 
 
@@ -219,18 +221,17 @@ class tp_group_override:
 
     def __enter__(self) -> TPStub:
         from vllm.distributed import parallel_state as ps
-        self._saved = ps._TP
-        ps._TP = self.stub
+        self._patch = hooks.patch(ps, "_TP", self.stub)
         return self.stub
 
     def __exit__(self, *exc: Any) -> None:
-        from vllm.distributed import parallel_state as ps
-        ps._TP = self._saved
+        self._patch.uninstall()
 
 
-def bind_vocab_parallel_embeddings(model: torch.nn.Module) -> list[dict]:
+def bind_vocab_parallel_embeddings(model: torch.nn.Module, into: hooks.Hooks) -> list[dict]:
     """Bind every `VocabParallelEmbedding` (exact class; `ParallelLMHead` is applied through the LogitsProcessor, not called) with
-    tp_size > 1 to the `embedding_shard` + all-reduce forward.  Refuses padded / added-vocab shards (not what `EmbeddingShard` states)."""
+    tp_size > 1 to the `embedding_shard` + all-reduce forward, until `into` is uninstalled.  Refuses padded / added-vocab shards (not
+    what `EmbeddingShard` states)."""
     import types
 
     from vllm.distributed import tensor_model_parallel_all_reduce
@@ -250,7 +251,7 @@ def bind_vocab_parallel_embeddings(model: torch.nn.Module) -> list[dict]:
             part = torch.ops.verity_tp.embedding_shard(input_.reshape(-1), self.weight, _start, _end)
             return tensor_model_parallel_all_reduce(part.view(*input_.shape, _H))
 
-        m.forward = types.MethodType(fwd, m)
+        into.patch(m, "forward", types.MethodType(fwd, m))
         bound.append({"module": name, "START": start, "END": end, "VS": end - start, "H": H, "tp_rank": int(m.tp_rank), "tp_size": int(m.tp_size)})
     return bound
 

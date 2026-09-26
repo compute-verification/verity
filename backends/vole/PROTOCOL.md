@@ -8,7 +8,7 @@ reproduced in `notes-asset:campaigns/r20-proof/assets/explore/reports/vole.json`
 **Proof class, stated plainly.** This is *designated-verifier* zero knowledge: the auditor holds a secret MAC key
 \(\Delta\) and the transcript convinces nobody else. It is **not** one of the contract's public-coin classes
 (`backends/AGENTS.md`). If built, it would be recorded as `COMPLETE_ZK_BACKEND` with
-`zk_mode = "vole-itmac-designated-verifier"` and never compared against Candidates A/B without that caveat in the
+`zk_mode = "vole-itmac-designated-verifier"` and never compared against A-GKR and B-Ligero without that caveat in the
 same row. It is also **not hash-based**: soundness of the VOLE rests on LPN + oblivious transfer (section 6).
 
 ## 0. Sources (version read 2026-09-22)
@@ -31,7 +31,7 @@ returned only an IEICE range argument built from QuickSilver. Nothing else is cl
 
 ## 1. Relation and embedding
 
-Same public data as Candidate A section 1 (profile, \(K\), \(B\), \(U=BK/16\), tables, WP2 census). Values live in
+Same public data as `backends/gkr/PROTOCOL.md` section 1 (profile, \(K\), \(B\), \(U=BK/16\), tables, WP2 census). Values live in
 \(F_p\), \(p=2^{61}-1\) — the field of every cited benchmark, and \(p>2^{60}\ge2^{2B}\) so the checker's `lt_pow`
 products embed without wrap (checker F1) **[source, checker docstring]**. MACs live in \(F_{p^r}\) (subfield
 VOLE); the prover sends **one \(F_p\) element per committed value whatever \(r\)** [source YSWW21 §4.2].
@@ -163,7 +163,7 @@ statement parsing); the VOLE \(B=1\) figure is 78 ms ± 3×.
 ## 9. Killing questions, with numbers
 
 1. **Per-batch communication.** 2.73 GB at \(B=4096\) (logup or rom), 12.5 GB with bit decomposition: \(36.6\times\)
-   Candidate A, \(8.6\times\) Candidate B. It streams (no GB of memory) but costs 22 s at 1 Gbps — longer than the
+   A-GKR, \(8.6\times\) B-Ligero. It streams (no GB of memory) but costs 22 s at 1 Gbps — longer than the
    compute of either candidate's \(B=1\) case by two orders. Only AntMan-style SIMD packing brings it to 21 MB
    (\(<\) A's 74.7 MB), at the price of a BGV assumption and an unbenchmarked field.
 2. **Prover time.** 220 s single-thread at \(r=3\) (74–660 s), ≈119 s at 4 threads; per VU 54 ms. A/B publish no wall

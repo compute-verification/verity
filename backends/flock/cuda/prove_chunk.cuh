@@ -285,8 +285,44 @@ __global__ void pure_sha_chain(const uint8_t* __restrict__ rx, const uint8_t* __
     }
 }
 
-// flock-vllm-v1's pure_sha256_witness (cursor/flock-vllm-v1-4cdd ff1c1e3f, verbatim): one thread per SHA-256 compression writes
-// its (z, a, b) into block ci / slots, 2^15-bit slot ci % slots (zeroed), Flock's build_block_ab_packed_into.
+// pure_unit_inputs for the sha256/row/v1 layouts (block = VU): unit u's x and W words are the rows' little-endian words
+// at byte 32 u (zero for dummy blocks).
+__global__ void pure_unit_inputs_rows(const uint8_t* __restrict__ rx, const uint8_t* __restrict__ rw, int row_bytes,
+                                      const uint32_t* __restrict__ accs, int units_per_vu, int blocks_real, long long n_blocks,
+                                      int units, uint64_t* out, int scale_off) {
+    long long id = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (id >= n_blocks * units) return;
+    long long b = id / units; int u = (int)(id % units);
+    bool real = b < blocks_real;
+    uint64_t* o = out + id * 10;
+    for (int role = 0; role < 2; role++) {
+        const uint32_t* m = (const uint32_t*)((role ? rw : rx) + b * row_bytes + 32 * u);
+        for (int w = 0; w < 4; w++) o[4 * role + w] = real ? ((uint64_t)m[2 * w] | ((uint64_t)m[2 * w + 1] << 32)) : 0;
+    }
+    uint64_t sx = 0, sw = 0;
+    if (real && scale_off >= 0) {
+        sx = *(const uint32_t*)(rx + b * row_bytes + scale_off + 4 * u);
+        sw = *(const uint32_t*)(rw + b * row_bytes + scale_off + 4 * u);
+    }
+    o[8] = (real && u > 0 ? accs[b * units_per_vu + u - 1] : 0) | (sx << 32); o[9] = sw;
+}
+
+// The unit region of every block (2^unit_log-bit positions unit_pos0 .. unit_pos0 + units), to or from a cache.
+__global__ void pure_unit_region_copy(F128* __restrict__ w, F128* __restrict__ cache, long long n_blocks, int k_log, int unit_log,
+                                      int unit_pos0, int units, int to_cache) {
+    const long long per = (long long)units << (unit_log - 7);
+    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_blocks * per; t += (long long)gridDim.x * blockDim.x) {
+        long long b = t / per, k = t % per;
+        long long at = (b << (k_log - 7)) + ((long long)unit_pos0 << (unit_log - 7)) + k;
+        if (to_cache) cache[t] = w[at]; else w[at] = cache[t];
+    }
+}
+
+// Unit 31's output words of every real block, read from the witness.
+// verity/flock-vllm-block/v1: Flock's SHA-256 compression witness (flock-prover r1cs_hashes/sha2.rs
+// build_block_ab_packed_into, Option F: fused 4-op / 3-op carry-save adders, constant add of K[r], E/A materialised every
+// other round), one thread per compression, written straight into slot ci % slots of block ci / slots (2^15 bits). The
+// destinations must be zero on entry.
 namespace vsha {
 __device__ __constant__ uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
@@ -403,40 +439,6 @@ __global__ void pure_sha256_witness(const uint32_t* __restrict__ cv, const uint3
     }
 }
 
-// pure_unit_inputs for the sha256/row/v1 layouts (block = VU): unit u's x and W words are the rows' little-endian words
-// at byte 32 u (zero for dummy blocks).
-__global__ void pure_unit_inputs_rows(const uint8_t* __restrict__ rx, const uint8_t* __restrict__ rw, int row_bytes,
-                                      const uint32_t* __restrict__ accs, int units_per_vu, int blocks_real, long long n_blocks,
-                                      int units, uint64_t* out, int scale_off) {
-    long long id = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-    if (id >= n_blocks * units) return;
-    long long b = id / units; int u = (int)(id % units);
-    bool real = b < blocks_real;
-    uint64_t* o = out + id * 10;
-    for (int role = 0; role < 2; role++) {
-        const uint32_t* m = (const uint32_t*)((role ? rw : rx) + b * row_bytes + 32 * u);
-        for (int w = 0; w < 4; w++) o[4 * role + w] = real ? ((uint64_t)m[2 * w] | ((uint64_t)m[2 * w + 1] << 32)) : 0;
-    }
-    uint64_t sx = 0, sw = 0;
-    if (real && scale_off >= 0) {
-        sx = *(const uint32_t*)(rx + b * row_bytes + scale_off + 4 * u);
-        sw = *(const uint32_t*)(rw + b * row_bytes + scale_off + 4 * u);
-    }
-    o[8] = (real && u > 0 ? accs[b * units_per_vu + u - 1] : 0) | (sx << 32); o[9] = sw;
-}
-
-// The unit region of every block (2^unit_log-bit positions unit_pos0 .. unit_pos0 + units), to or from a cache.
-__global__ void pure_unit_region_copy(F128* __restrict__ w, F128* __restrict__ cache, long long n_blocks, int k_log, int unit_log,
-                                      int unit_pos0, int units, int to_cache) {
-    const long long per = (long long)units << (unit_log - 7);
-    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_blocks * per; t += (long long)gridDim.x * blockDim.x) {
-        long long b = t / per, k = t % per;
-        long long at = (b << (k_log - 7)) + ((long long)unit_pos0 << (unit_log - 7)) + k;
-        if (to_cache) cache[t] = w[at]; else w[at] = cache[t];
-    }
-}
-
-// Unit 31's output words of every real block, read from the witness.
 __global__ void pure_unit_outputs(const F128* __restrict__ z, int blocks_real, int k_log, int unit_log, int unit_pos, int col_acc,
                                   int col_y, uint32_t* acc, uint32_t* y16) {
     int b = blockIdx.x * blockDim.x + threadIdx.x;
@@ -446,14 +448,14 @@ __global__ void pure_unit_outputs(const F128* __restrict__ z, int blocks_real, i
     y16[b] = col_y >= 0 ? (uint32_t)(z[at + col_y].lo & 0xFFFF) : 0;
 }
 
-__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots, int comp_log,
+__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots, int sub_log,
                                  const F128* __restrict__ base_u, const F128* __restrict__ ratio_u, int units, int unit_log, int unit_pos0,
                                  long long k, F128* __restrict__ comb) {
     long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= k) return;
-    long long s = i >> comp_log, p = i >> unit_log;
+    long long s = i >> sub_log, p = i >> unit_log;
     F128 v{0, 0};
-    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & ((1LL << comp_log) - 1)]);
+    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & ((1LL << sub_log) - 1)]);
     else if (p >= unit_pos0 && p < unit_pos0 + units) v = ghash_mul_karatsuba(ratio_u[p - unit_pos0], base_u[i & ((1LL << unit_log) - 1)]);
     comb[i] = v;
 }
@@ -501,14 +503,17 @@ typedef struct {
     // the block layout (flock_live::pure_block::Layout): compressions per role, chunks per block and their sizes, blocks
     // per VU; dummy_keyed: dummy blocks keep the role keys and chunk counters (fp8, where they are per-slot constants)
     int per_role, chunks_per_block, chunk_nb0, chunk_nb1, blocks_per_vu, dummy_keyed;
-    // mode 1, host witness: z, a, b of the whole block witness (len F128 each), uploaded as is (the SHA-256 layouts)
-    const F128* host_z; const F128* host_a; const F128* host_b;
-    // mode 1, device inputs, sha256/row/v1 layouts: the chains start from sha_mid[role] ([2][8]) and end with sha_pad
-    // ([16]); the unit inputs are read from the rows
-    int sha; const uint32_t* sha_mid; const uint32_t* sha_pad;
+    // mode 1, host witness: the whole packed z, a = A z, b = B z ([2^(m-7)] F128, lo then hi) from the host (the
+    // selftest's tampered SHA-256 witnesses, verity/flock-vllm-block/v1)
+    const uint64_t* host_z; const uint64_t* host_a; const uint64_t* host_b;
+    // mode 1, sha256 = 1: the compression slots are SHA-256 (2^15 bits), witnessed on the device. With rows_x the chains
+    // are built from the rows (from sha_mid[role] ([2][8]) to the last block, whose words past last_data_words are
+    // sha_pad ([16])) and the unit inputs are read from the rows; without, cv / msg carry h_in and the 16 big-endian
+    // message words per compression, and the units come from u_inputs
+    int sha256; const uint32_t* sha_mid; const uint32_t* sha_pad;
     // fp4-nvf4: the last block of a role's chunk holds last_blen bytes (and is the ROOT when last_root); the units' scale
     // words are message word u % 16 of slot scale_slot0 + u / 16 of each role (-1: none); SHA-256: the last block's first
-    // last_data_words words are row data, the rest sha_pad
+    // last_data_words words are row data
     int last_blen, last_root, scale_slot0, last_data_words;
 } FlockChunkParams;
 
@@ -530,7 +535,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     const long long n_comp = C->mode == 1 ? (1LL << (m - k_log)) * C->comp_slots : 1LL << C->n_comp_log;
     const bool pure = C->mode == 1;
     const int n_blocks_log = m - k_log;
-    if (pure ? (C->comp_slots > 256 || k_log < 20 || k_log > 22 || (C->sub_log != 14 && C->sub_log != 15))
+    if (pure ? ((C->host_z || C->sha256) ? (C->comp_slots > 256 || k_log < 20 || k_log > 22 || (C->comp_slots << sub_log) > (1 << k_log))
+                          : (C->comp_slots > 64 || (k_log != 20 && k_log != 21)))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
     // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
@@ -548,8 +554,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
         chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
         CK(cudaGetLastError());
-    } else
-    {
+        CK(cudaStreamSynchronize(0));
+    } else {
         uint32_t *d_cv, *d_m, *d_blen, *d_flags; b3u64* d_ctr;
         CK(ffi_malloc(&d_cv, (size_t)n_comp * 8 * 4)); CK(ffi_malloc(&d_m, (size_t)n_comp * 16 * 4));
         CK(ffi_malloc(&d_blen, (size_t)n_comp * 4)); CK(ffi_malloc(&d_flags, (size_t)n_comp * 4));
@@ -565,7 +571,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaMemcpy(d_rx, C->rows_x, rb, cudaMemcpyHostToDevice)); CK(cudaMemcpy(d_rw, C->rows_w, rb, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_accs, C->accs, (size_t)C->vus * C->units_per_vu * 4, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_keys, C->keys, 64, cudaMemcpyHostToDevice));
-            if (C->sha) {
+            if (C->sha256) {
                 uint32_t* d_sp;
                 CK(ffi_malloc(&d_sp, 32 * 4));
                 CK(cudaMemcpy(d_sp, C->sha_mid, 16 * 4, cudaMemcpyHostToDevice));
@@ -597,10 +603,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         } else {
             CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
             CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
-            if (C->sha) {
-                if (!dev_in) { printf("FFI chunk: SHA-256 layouts take device inputs or a host witness\n"); return 206; }
-                pure_sha256_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log, (uint64_t*)df,
-                                                                               (uint64_t*)d_a, (uint64_t*)d_b);
+            if (C->sha256) {
+                pure_sha256_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log,
+                                                                               (uint64_t*)df, (uint64_t*)d_a, (uint64_t*)d_b);
                 CK(cudaGetLastError());
             } else {
             F128 *tz, *ta, *tb;
@@ -632,7 +637,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             uint64_t* d_in; uint32_t *d_ao, *d_ac, *d_bo, *d_bc;
             CK(ffi_malloc(&d_in, n_units * 10 * sizeof(uint64_t)));
             if (dev_in) {
-                if (C->sha)
+                if (C->sha256)
                     pure_unit_inputs_rows<<<(unsigned)((n_units + 255) / 256), 256>>>(d_rx, d_rw, C->row_bytes, d_accs, C->units_per_vu,
                                                                                       C->blocks_real, 1LL << n_blocks_log, C->units, d_in,
                                                                                       C->scale_slot0 >= 0 ? 768 : -1);

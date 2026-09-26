@@ -17,12 +17,12 @@ values (:class:`Sym`) through a counting context (:class:`CensusCtx`) that imple
 
 A multiplication is counted whenever two non-constant expressions are multiplied (constant coefficients are free);
 each product is a column (the ``z`` of a Ligero triple, a gate of a GKR layer) and its multiplicative depth is
-recorded, which gives the layered shape Candidate A's data-parallel GKR needs.  Identical products formed twice are
+recorded, which gives the layered shape A-GKR's data-parallel GKR needs.  Identical products formed twice are
 counted twice (an upper count; a compiler may share them).
 
 Witness columns, with bit widths from ``contract().hints``: the public words (``c``, 32 operand words), every hint,
 every looked-up row column.  Products and materialised range expressions are further columns for a backend that
-commits every value (Candidate B); Candidate A commits only inputs + hints + lookup outputs and computes the rest.
+commits every value (B-Ligero); A-GKR commits only inputs + hints + lookup outputs and computes the rest.
 
 Two unit variants are counted (``backends/AGENTS.md``: the backend transition unit is one 16-product update with
 arbitrary finite ``c``; the VU is the chain from ``c_0 = 0``):
@@ -230,7 +230,7 @@ class UnitCensus:
 
     @property
     def columns_committed_a(self) -> int:
-        """Candidate A commits inputs, hints and looked-up row columns; products and materialised expressions are wires."""
+        """A-GKR commits inputs, hints and looked-up row columns; products and materialised expressions are wires."""
         return self.columns_inputs + self.columns_hints + self.columns_lookup_outputs
 
     @property
@@ -239,7 +239,7 @@ class UnitCensus:
 
     @property
     def columns_committed_b(self) -> int:
-        """Candidate B (Ligero): every product occupies an aligned triple (x, y, z: 3 slots, operands copied), every
+        """B-Ligero (Ligero): every product occupies an aligned triple (x, y, z: 3 slots, operands copied), every
         other column one slot.  ESTIMATE of the layout, upper count."""
         return 3 * self.mul + (self.columns_all - self.columns_in_mul)
 
@@ -596,7 +596,7 @@ def lookups_by_table(c: UnitCensus, consolidate_ranges: bool = True) -> dict[str
 
 
 def layer_shape(c: UnitCensus) -> list[dict]:
-    """Candidate A's layered quad circuit (libzk 6.3: strictly layered, values used later are carried by copy gates)
+    """A-GKR's layered quad circuit (libzk 6.3: strictly layered, values used later are carried by copy gates)
     from the census, output layer first.  ESTIMATE of the widths: layer at multiplicative depth d holds its products
     plus every value of lower depth (inputs and earlier products), an upper bound on what must be carried; the
     assertion layer holds the linear identities.  Each entry: ``{"depth", "products", "width", "s_out", "s_in",

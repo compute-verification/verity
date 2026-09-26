@@ -30,6 +30,7 @@ __all__ = [
     "key_of",
     "resolve",
     "signature_of",
+    "standalone_call",
     "statics_of",
 ]
 
@@ -104,7 +105,8 @@ _STANDALONE = CompositeDefinition("EvaluationStandalone", 1, ("FN",), lambda S: 
 _CALLS: dict[SpecializedDefinition, tuple[Program, FunctionCall]] = {}
 
 
-def _standalone_call(spec: SpecializedDefinition) -> tuple[Program, FunctionCall]:
+def standalone_call(spec: SpecializedDefinition) -> tuple[Program, FunctionCall]:
+    """The one-call Program of ``spec`` and that call: the gate list :func:`evaluate` walks for a composite."""
     hit = _CALLS.get(spec)
     if hit is None:
         prog = Program(bind(_STANDALONE, FN=spec))
@@ -137,5 +139,5 @@ def evaluate(target: Target, *args: Any) -> tuple[int, ...]:
     if isinstance(t, PrimitiveDefinition):
         lazy = getattr(t, "evaluate_lazy", None)
         return (lazy(flat.__getitem__),) if lazy is not None else (t.evaluate(*flat),)
-    prog, call = _standalone_call(t)
+    prog, call = standalone_call(t)
     return evaluate_call(prog.circuit, call, flat)

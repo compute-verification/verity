@@ -150,7 +150,7 @@ def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
     sz = tmp_path / "sizing.json"; sz.write_text(json.dumps(sizing))
     st = tmp_path / "steps.jsonl"
     st.write_text("".join(json.dumps({"pair": 0, "arm": "instrumented", "step": s, "n_bytes": b}) + "\n" for s, b in obs.items()))
-    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import admission_bound as admission; sys.exit(admission.main(sys.argv[1:]))",
+    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import cli; sys.exit(cli.main(['admission-bound', *sys.argv[1:]]))",
            "--workload", str(REPO / "workloads" / f"{wl['sweep']['row_id']}.json"), "--sizing", str(sz),
            "--cap-bytes", str(CAP_CP_BIG), "--observed", str(st)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env={"PYTHONPATH": f"{REPO}:{REPO / 'vllm-poc'}", "PATH": "/usr/bin:/bin"})

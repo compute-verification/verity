@@ -35,7 +35,6 @@ model, is a named FAIL of the row (`commit_verdict`: weights differ from the che
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -47,6 +46,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from dataclasses import dataclass
+
+from verity_vllm.config import UsageError, option
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
@@ -355,7 +357,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
 
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
-    from verity_vllm.check.replay.sampled_replay import parse_struct
+    from verity_vllm.check.replay.index import parse_struct
     wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
@@ -928,24 +930,24 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
             "argv": list(argv) if argv is not None else sys.argv[1:], "supersedes": os.path.abspath(supersedes) if supersedes else None}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="weights of record: per-field digests of the checkpoint-composed served weights (MAN-09)")
-    ap.add_argument("--program-dir", default=None, help="the Program of record (instances.json.gz + result.json)")
-    ap.add_argument("--programs-root", default=None, help="[M-0733] a row dir: derive from its first component Program and stamp EVERY component's "
-                    "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
-    ap.add_argument("--manifest", default=None, help="the row's required manifest (default <programs-root>/manifest.json): its digests join the stamp")
-    ap.add_argument("--checkpoint-dir", default=None, help="the pinned checkpoint snapshot (safetensors shards + config.json); required to derive")
-    ap.add_argument("--diff", nargs=2, metavar=("A.json", "B.json"), default=None,
-                    help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; "
-                         "exit 0 when they pin the same weights of record (COORD R16 ruling 25: same-model rows across pods under schema v1)")
-    ap.add_argument("--checkpoints", default=None, help="manifests/checkpoints.json (default: the repo's)")
-    ap.add_argument("--model", default=None, help="HF repo id, to select the checkpoints.json entry when --checkpoint-dir is not its local_path")
-    ap.add_argument("--revision", default=None)
-    ap.add_argument("--no-verify-shards", action="store_true", help="skip the shard sha256 (the record then says pinned: null)")
-    ap.add_argument("--kv-cache-dtype", default="auto", help="[MAN-09c] the engine's kv_cache_dtype the record assumes (auto: kv scales pinned as f32 1.0)")
-    ap.add_argument("--out", default=None, help="write the record here (default: <program-dir>/weights_of_record.json)")
-    ap.add_argument("--supersedes", default=None, help="[COORD R16 M-0038 (2)] the record this derivation replaces (moved aside by the caller), named in `derived`")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    """weights of record: per-field digests of the checkpoint-composed served weights (MAN-09)"""
+    program_dir: str | None = option("--program-dir", default=None, help="the Program of record (instances.json.gz + result.json)")
+    programs_root: str | None = option("--programs-root", default=None, help="[M-0733] a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
+    manifest: str | None = option("--manifest", default=None, help="the row's required manifest (default <programs-root>/manifest.json): its digests join the stamp")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint snapshot (safetensors shards + config.json); required to derive")
+    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (COORD R16 ruling 25: same-model rows across pods under schema v1)")
+    checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (default: the repo's)")
+    model: str | None = option("--model", default=None, help="HF repo id, to select the checkpoints.json entry when --checkpoint-dir is not its local_path")
+    revision: str | None = option("--revision", default=None)
+    no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true", help="skip the shard sha256 (the record then says pinned: null)")
+    kv_cache_dtype: str = option("--kv-cache-dtype", default="auto", help="[MAN-09c] the engine's kv_cache_dtype the record assumes (auto: kv scales pinned as f32 1.0)")
+    out: str | None = option("--out", default=None, help="write the record here (default: <program-dir>/weights_of_record.json)")
+    supersedes: str | None = option("--supersedes", default=None, help="[COORD R16 M-0038 (2)] the record this derivation replaces (moved aside by the caller), named in `derived`")
+
+
+def main(a: Options) -> int:
     if a.diff:
         A, B = (json.load(open(x)) for x in a.diff)
         d = diff_records(A, B)
@@ -963,9 +965,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  re-root under {SCHEMA}: {d['reroot'][0][:16]} / {d['reroot'][1][:16]} -> same weights of record: {d['same_weights_of_record']}")
         return 0 if d["same_weights_of_record"] else 1
     if not a.program_dir and not a.programs_root:
-        ap.error("one of --program-dir / --programs-root is required")
+        raise UsageError("one of --program-dir / --programs-root is required")
     if not a.checkpoint_dir:
-        ap.error("--checkpoint-dir is required to derive a record")
+        raise UsageError("--checkpoint-dir is required to derive a record")
     pdir = a.program_dir
     if not pdir:
         cands = component_program_dirs(a.programs_root)
@@ -978,7 +980,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.programs_root:
         stamp_of_record_set(rec, a.programs_root, manifest=a.manifest)
     out = a.out or os.path.join(a.programs_root or pdir, "weights_of_record.json")
-    rec["derived"] = derivation_provenance(pdir, a.checkpoint_dir, a.checkpoints, argv, supersedes=a.supersedes)
+    rec["derived"] = derivation_provenance(pdir, a.checkpoint_dir, a.checkpoints, None, supersedes=a.supersedes)
     with open(out, "w") as f:
         json.dump(rec, f, indent=1)
     print(f"weights_of_record: root {rec['root_of_record'][:16]} fields {rec['n_pinned']}/{rec['n_fields']} pinned ({rec['n_analytic']} analytic), unpinned {len(rec['unpinned'])}, "
@@ -993,7 +995,3 @@ def main(argv: list[str] | None = None) -> int:
         for u in rec["unresolved"][:20]:
             print(f"  UNRESOLVED {u['field']}: {u['why']}")
     return 0 if rec["of_record"] else 2
-
-
-if __name__ == "__main__":
-    sys.exit(main())
