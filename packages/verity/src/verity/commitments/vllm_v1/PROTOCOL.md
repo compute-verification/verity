@@ -280,7 +280,8 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
    and absorbs `domain_digest(domain)` into its statement digest and Fiat–Shamir transcript.
 
    `domain_digest(domain)` is `identity_digest("verity/vllm-v1/domain/v1", {kind, leaf_count, <fields>})`, with byte
-   fields in hex. The verifier builds the domain from its own Program, input set and range, never from the
+   fields in hex. For a `vllm-v1-sha512` domain it is `identity_digest_sha512` over the same document plus
+   `"hash": "sha512"` (§10). The verifier builds the domain from its own Program, input set and range, never from the
    proof.
 
    This is the external stand-in for frame-v3's verifier-derived `domain_id`. Without it, two statements over the
@@ -325,8 +326,8 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 
 | width | what |
 |---|---|
-| 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds |
-| 32 bytes: identity digests from the integration, unchanged | `program`, `ctx`, `geo`, `layout`, `template`, `names` |
+| 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds; `domain_digest` (§9) |
+| 32 bytes: IR identity digests from the integration, SHA-256 until the re-baseline | `program`, `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests |
 | variable, unchanged | `query_id` |
 
 **What carries over unchanged:**
@@ -336,7 +337,9 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - **§5's binding argument and every verifier duty.**
 
 **What differs:**
-- **Domain digests.** `domain_digest` includes `"hash": "sha512"` for a SHA-512 domain, so SHA-256 domain digests are unchanged.
+- **Domain digests.** For a SHA-512 domain, `domain_digest` is `identity_digest_sha512` (64 bytes) over the document with
+  `"hash": "sha512"`. That is the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
+  `verity/tagged-sha512/v1\0`. SHA-256 domain digests are unchanged.
 - **Thread trees.** Unvisited slots hold 64 zero bytes.
 - **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1` (`Hm96Sha512`). Under it, the §4 context suffix carries that rule's
   64-byte scheme digest.
@@ -373,5 +376,19 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - **In a circuit** the tree is native at the verifier; only leaf digests are proven, and `hm96/PROTOCOL.md` §5 and §6 give their ANDs.
 - **Measured.** `benchmarks/commitments/commit_cost.py --scheme vllm-v1-sha512` measures it.
 
-**Hashes.** Table 1 lists SHA-512 under collision resistance (`cr/sha-512`) for everything the scheme computes. The integration's
-identity digests stay SHA-256; making identities SHA-512 is not part of E4.
+**Hashes.**
+- **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the scheme computes: leaves, nodes,
+  lifts, the empty root, the stream and thread contexts, every root binding, and `domain_digest`. Binding a value inside a
+  verifier-held domain rests on `cr/sha-512` alone.
+- **What still rests on SHA-256.** The root bindings absorb the integration's IR identity digests, all 32-byte SHA-256 digests:
+  `program`, `ctx` (context), `geo` (geometry) and `layout`, and in the semantic and weights roots `template` and `names`. So which
+  program, context and step a root belongs to also rests on SHA-256.
+- **What that means for Table 1.** Until then, a Table 1 row that cites `vllm-v1-sha512` cites `cr/sha-256` beside `cr/sha-512`.
+
+**The remaining SHA-256 dependency, for the re-baseline.** Daniel's rule is SHA-512 on every commitment path, and E4 extends to the
+identity and domain digests at the re-baseline. What is left:
+1. the IR identity digests `program`, `ctx`, `geo` and `layout`, and the integration's `template` and `names`;
+2. frame-v3's `binding` (frame-v3 §6).
+
+Each becomes a 64-byte SHA-512 digest. That is a fixed-width change to these preimages, applied to every field at once, with new
+vectors. Accepting both widths at once would break the one-way parsing of §4, so neither variant does.

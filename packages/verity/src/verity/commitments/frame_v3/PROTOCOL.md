@@ -107,10 +107,15 @@ SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
 **What changes.**
 - The frame string, the tags and the part framing are the same bytes. The hash is SHA-512.
 - Domain ids, leaves, pads, nodes, empty roots and roots are 64 bytes, and each enters the next message with u64be length 64.
+- The domain id absorbs the positions' SHA-512 identity (`identity_sha512()`, 64 bytes), not their SHA-256 `identity_digest`. It is
+  the same manifest and tag under `identity_digest_sha512`: the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
+  `verity/tagged-sha512/v1\0`.
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
-**What stays.** `binding` and the positions' identity digest are identity inputs of 32 bytes each (SHA-256 identity digests), as the
-statement and the integration produce them.
+**What stays: the one SHA-256 input.** `binding` is the caller's 32-byte SHA-256 identity digest of what the commitment may not
+outlive: a header, a replay phase or a weights tag. It is an identity from the protocol and the IR, not something the frame computes.
+It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
+it a fixed-width change to this section, with new vectors.
 
 **Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows only. `FrameV3` refuses SHA-256 and BLAKE3 rows under it, and SHA-512 rows
 under a SHA-256 frame.
@@ -121,7 +126,16 @@ digest = SHA-512( prefix ‖ row_bytes )
 ~~~
 
 The prefix is one SHA-512 block, so a gadget starts from a constant midstate. The tree leaf is the frame leaf over the 64-byte digest,
-with schema `sha512/row/v1`. A hiding row wraps this digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`).
+with schema `sha512/row/v1`.
+
+**Hiding rows.** A hiding row wraps this digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`):
+
+~~~text
+tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_leaf(key, b ‖ c))
+~~~
+
+The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. The SHA-256 frame's counterpart is
+`hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts both at their widths.
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.
@@ -147,4 +161,10 @@ trees with their pads and paths, word leaves and an empty root. `test_sha512_fra
   block, against 22,696 per 64-byte block for `sha256/row/v1`: 1.28× per byte (`hm96/PROTOCOL.md` §5 has the model).
 - **Measured.** `benchmarks/commitments/commit_cost.py --scheme frame-v3-sha512 --scheme frame-v3-sha512-row` measures it.
 
-**Hashes.** Table 1 lists SHA-512 under collision resistance (`cr/sha-512`) for everything the SHA-512 frame computes.
+**Hashes.**
+- **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the SHA-512 frame computes: the
+  domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
+  rests on `cr/sha-512` alone.
+- **What still rests on SHA-256.** Which statement and which session a root belongs to also rests on `binding`, a 32-byte SHA-256
+  identity digest from the protocol and the IR. Until the re-baseline moves identities to SHA-512, a Table 1 row that cites this
+  frame cites `cr/sha-256` beside `cr/sha-512`.
