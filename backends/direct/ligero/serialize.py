@@ -398,7 +398,7 @@ class Statement:
 
     def leaf_scheme(self):
         from .leaf import registry as leaf_registry
-        return leaf_registry.get(self.leaf)
+        return leaf_registry.for_relation(self.relation)
 
     def config(self):
         from .protocol import Config
@@ -598,8 +598,12 @@ def _statement_bytes_v5(st: Statement, trimmed: bool = False) -> bytes:
 
 
 def _K_of(st: Statement) -> int:
-    from .relations import K_VU
-    return K_VU
+    """The v5 / v6 header's K: the words per committed row, the relation's K (``relations.Relation.K``; K_VU for every
+    relation registered at 1536 and for a base the registry does not know)."""
+    from .leaf import registry as leaf_registry
+    from .relations import K_VU, RELATIONS
+    rel = RELATIONS.get(leaf_registry.split_relation_name(st.relation)[0])
+    return rel.K if rel is not None else K_VU
 
 
 def hashed_statement_format() -> str:
@@ -641,8 +645,7 @@ def _read_v6(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
     if n_vus * steps > l:
         raise ValueError("layout does not fit the columns")
     try:
-        _, leaf_name = leaf_registry.split_relation_name(relation)
-        scheme = leaf_registry.get(leaf_name)
+        scheme = leaf_registry.for_relation(relation)
     except (ValueError, KeyError) as e:
         raise ValueError(f"v6 statement: {e}") from None
     y16 = r.arr((l,), _DTYPES[yb])
@@ -675,8 +678,7 @@ def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
     if n_vus * steps > l:
         raise ValueError("layout does not fit the columns")
     try:
-        _, leaf_name = leaf_registry.split_relation_name(relation)
-        scheme = leaf_registry.get(leaf_name)
+        scheme = leaf_registry.for_relation(relation)
     except (ValueError, KeyError) as e:
         raise ValueError(f"v5 statement: {e}") from None
     d = r.arr((n_vus, 2 * scheme.digest_elems), "<u4").astype(np.int64)

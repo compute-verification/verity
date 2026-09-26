@@ -405,10 +405,10 @@ pub enum Decode {
     PrivSel(&'static privsel::PrivSel),
 }
 
-/// The K a v5 (hashed) statement header carries: the GEMM reduction length of every relation (`GemmAccumulator<1536>`;
-/// Python `relations.K_VU`, written by `serialize._K_of` whatever the relation).  It is `steps x k_ops` for the
-/// Relation-registry units but NOT for fp4-nvf4 (24 x 64 codes; its bare unit takes 68 words = codes + scales), so a
-/// hashed statement is checked against this, a bare one against `k_ops`.
+/// The K a v5 (hashed) statement header carries for every relation registered at 1536 (Python `relations.K_VU`, written by
+/// `serialize._K_of`); a relation's own is [`Relation::vu_k`] (`steps x k_ops` for the Relation-registry units, NOT for
+/// fp4-nvf4: 24 x 64 codes, its bare unit takes 68 words = codes + scales).  A hashed statement is checked against
+/// `vu_k`, a bare one against `k_ops`.
 pub const HASHED_ROW_K: usize = 1536;
 
 #[derive(Debug)]
@@ -451,6 +451,13 @@ pub struct Relation {
     /// interactive / FP_COORDS_FS Fiat-Shamir): `(interactive, [G sys_id, G table digest, H sys_id, H table digest])`.
     /// Empty when the relation is not composed for sharing.
     pub shared_systems: &'static [(bool, [&'static str; 4])],
+}
+
+impl Relation {
+    /// The VU's reduction length: `steps` columns of `k_ops` products (an NVFP4 column multiplies 64 codes).
+    pub fn vu_k(&self) -> usize {
+        self.steps * if self.decode == Decode::Nvf4 { nvf4::K } else { self.k_ops }
+    }
 }
 
 pub static BF16_AMPERE: Relation = Relation {
@@ -900,7 +907,8 @@ pub static FP8_ADA_V3X4: Relation = Relation {
     shared_systems: &[],
 };
 
-pub static BF16_HOPPER_X4: Relation = Relation {
+pub static BF16_HOPPER_X4: Relation = BF16_HOPPER_X4_BASE;
+const BF16_HOPPER_X4_BASE: Relation = Relation {
     name: "bf16-hopper-x4",
     aliases: &[],
     tag: b"",
@@ -919,7 +927,8 @@ pub static BF16_HOPPER_X4: Relation = Relation {
 };
 
 /// The frozen `vu-k1536` set's claim (every fourth recorded accumulator; `relchain.frozen_instances`).
-pub static BF16_AMPERE_X4: Relation = Relation {
+pub static BF16_AMPERE_X4: Relation = BF16_AMPERE_X4_BASE;
+const BF16_AMPERE_X4_BASE: Relation = Relation {
     name: "bf16-ampere-x4",
     aliases: &[],
     tag: b"",
@@ -937,7 +946,8 @@ pub static BF16_AMPERE_X4: Relation = Relation {
     shared_systems: &[],
 };
 
-pub static FP8_HOPPER_X4: Relation = Relation {
+pub static FP8_HOPPER_X4: Relation = FP8_HOPPER_X4_BASE;
+const FP8_HOPPER_X4_BASE: Relation = Relation {
     name: "fp8-hopper-x4",
     aliases: &[],
     tag: b"|rel=fp8-hopper-x4|v1",
@@ -955,7 +965,8 @@ pub static FP8_HOPPER_X4: Relation = Relation {
     shared_systems: &[],
 };
 
-pub static FP8_ADA_X4: Relation = Relation {
+pub static FP8_ADA_X4: Relation = FP8_ADA_X4_BASE;
+const FP8_ADA_X4_BASE: Relation = Relation {
     name: "fp8-ada-x4",
     aliases: &[],
     tag: b"|rel=fp8-ada-x4|v1",
@@ -973,12 +984,31 @@ pub static FP8_ADA_X4: Relation = Relation {
     shared_systems: &[],
 };
 
-pub static RELATIONS: [&Relation; 25] = [
+/// The x4 folds at vLLM's reduction lengths (Python `relations._at_k`, `<fold>-k<K>`): the same compiled column as the fold at
+/// K = 1536 -- so the same bare pins -- and `K / k_ops` columns per VU, which the pinned `steps` check enforces.  The FP8 tags
+/// carry the name; the BF16 ones stay empty (their statements absorb `steps`).
+macro_rules! at_k {
+    ($name:literal, $base:ident, $tag:expr, $steps:expr) => {
+        Relation { name: $name, aliases: &[], tag: $tag, steps: $steps, shared_systems: &[], ..$base }
+    };
+}
+pub static BF16_AMPERE_X4_K2048: Relation = at_k!("bf16-ampere-x4-k2048", BF16_AMPERE_X4_BASE, b"", 32);
+pub static BF16_AMPERE_X4_K8192: Relation = at_k!("bf16-ampere-x4-k8192", BF16_AMPERE_X4_BASE, b"", 128);
+pub static BF16_HOPPER_X4_K2048: Relation = at_k!("bf16-hopper-x4-k2048", BF16_HOPPER_X4_BASE, b"", 32);
+pub static BF16_HOPPER_X4_K8192: Relation = at_k!("bf16-hopper-x4-k8192", BF16_HOPPER_X4_BASE, b"", 128);
+pub static FP8_ADA_X4_K2048: Relation = at_k!("fp8-ada-x4-k2048", FP8_ADA_X4_BASE, b"|rel=fp8-ada-x4-k2048|v1", 16);
+pub static FP8_ADA_X4_K8192: Relation = at_k!("fp8-ada-x4-k8192", FP8_ADA_X4_BASE, b"|rel=fp8-ada-x4-k8192|v1", 64);
+pub static FP8_HOPPER_X4_K2048: Relation = at_k!("fp8-hopper-x4-k2048", FP8_HOPPER_X4_BASE, b"|rel=fp8-hopper-x4-k2048|v1", 16);
+pub static FP8_HOPPER_X4_K8192: Relation = at_k!("fp8-hopper-x4-k8192", FP8_HOPPER_X4_BASE, b"|rel=fp8-hopper-x4-k8192|v1", 64);
+
+pub static RELATIONS: [&Relation; 33] = [
     &BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4, &BF16_HOPPER_V2, &BF16_AMPERE_V2, &FP8_HOPPER_V2, &FP8_ADA_V2,
     &BF16_HOPPER_V3, &BF16_AMPERE_V3, &FP8_HOPPER_V3, &FP8_ADA_V3,
     &BF16_HOPPER_V2X4, &BF16_AMPERE_V2X4, &FP8_HOPPER_V2X4, &FP8_ADA_V2X4,
     &BF16_HOPPER_V3X4, &BF16_AMPERE_V3X4, &FP8_HOPPER_V3X4, &FP8_ADA_V3X4,
     &BF16_HOPPER_X4, &BF16_AMPERE_X4, &FP8_HOPPER_X4, &FP8_ADA_X4,
+    &BF16_AMPERE_X4_K2048, &BF16_AMPERE_X4_K8192, &BF16_HOPPER_X4_K2048, &BF16_HOPPER_X4_K8192,
+    &FP8_ADA_X4_K2048, &FP8_ADA_X4_K8192, &FP8_HOPPER_X4_K2048, &FP8_HOPPER_X4_K8192,
 ];
 
 /// The relation a statement names: `None` (a v2 / v3 file) is the Ampere BF16 unit; an unknown name is refused (its
@@ -1267,8 +1297,9 @@ mod tests {
     fn vu_shapes_are_the_python_registry_and_match_the_decodes() {
         // relations.Relation.steps = K_VU // k (every registered relation), fp4.relation.STEPS = 1536 // 64 (68 words per
         // unit: 64 codes + 4 scale bytes)
-        const K_VU: usize = HASHED_ROW_K;
         for r in RELATIONS.iter() {
+            // relations._at_k: "<fold>-k<K>" is that fold at K; everything else is at K_VU
+            let k_vu = r.name.rsplit_once("-k").and_then(|(_, k)| k.parse::<usize>().ok()).unwrap_or(HASHED_ROW_K);
             let products = match r.decode {
                 Decode::Nvf4 => {
                     assert_eq!(r.k_ops, nvf4::WORDS, "{}", r.name);
@@ -1284,9 +1315,12 @@ mod tests {
                 }
                 Decode::Word(_) => r.k_ops,
             };
-            assert_eq!(r.steps * products, K_VU, "{}: {} x {}", r.name, r.steps, products);
+            assert_eq!(r.steps * products, k_vu, "{}: {} x {}", r.name, r.steps, products);
+            assert_eq!(r.vu_k(), k_vu, "{}", r.name);
         }
         let shape = |n: &str| for_statement(Some(n)).map(|r| (r.steps, r.k_ops)).unwrap();
+        assert_eq!((shape("bf16-ampere-x4-k2048"), shape("bf16-hopper-x4-k8192")), ((32, 64), (128, 64)));
+        assert_eq!((shape("fp8-ada-x4-k2048"), shape("fp8-hopper-x4-k8192")), ((16, 128), (64, 128)));
         assert_eq!((shape("bf16-ampere"), shape("fp8-ada"), shape("fp4-nvf4")), ((96, 16), (48, 32), (24, 68)));
         assert_eq!((shape("bf16-hopper-v3x4"), shape("fp8-ada-v2x4"), shape("fp8-hopper-x4")), ((24, 64), (12, 128), (12, 128)));
         // every Ajtai pin's canonical VU fits its ring degree (the leaf's structural bound)
@@ -1300,17 +1334,24 @@ mod tests {
 
     #[test]
     fn names_are_distinct_and_digests_unique() {
+        // one fold at several K (relations._at_k) shares the compiled column, so its pins: the same decode and widths, other steps
+        let same_column = |a: &Relation, b: &Relation| {
+            a.decode == b.decode && a.k_ops == b.k_ops && (a.word_bytes, a.y_bytes, a.y_bits) == (b.word_bytes, b.y_bytes, b.y_bits)
+                && a.steps != b.steps
+        };
         for (i, a) in RELATIONS.iter().enumerate() {
             for b in RELATIONS.iter().skip(i + 1) {
                 assert_ne!(a.name, b.name);
-                assert_ne!(a.sys_id, b.sys_id);
-                assert_ne!(a.table_digest, b.table_digest);
+                assert_ne!(a.tag.is_empty() && b.tag.is_empty() && a.steps == b.steps && a.sys_id == b.sys_id, true);
+                if a.sys_id == b.sys_id || a.table_digest == b.table_digest {
+                    assert!(a.sys_id == b.sys_id && a.table_digest == b.table_digest && same_column(a, b), "{} / {}", a.name, b.name);
+                }
             }
             assert_eq!(a.sys_id.len(), 64);
             assert_eq!(a.table_digest.len(), 64);
             assert_eq!(for_statement(Some(a.name)).unwrap().name, a.name);
             let (r0, h0) = by_digests(a.sys_id, a.table_digest).unwrap();
-            assert!(r0.name == a.name && h0.is_none());
+            assert!((r0.name == a.name || a.name.starts_with(&format!("{}-k", r0.name))) && h0.is_none(), "{}", a.name);
             if !a.hashed_sys_id.is_empty() {
                 assert_eq!(a.hashed_sys_id.len(), 64);
                 assert_eq!(a.hashed_table_digest.len(), 64);

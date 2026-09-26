@@ -716,6 +716,11 @@ impl Statement {
         }
         // "<rel>" (Poseidon2) or "<rel>+<leaf>": the leaf scheme fixes the digest table's width and the block's framing
         let (base, leaf) = crate::leaf::split_relation(&rel)?;
+        // a BLAKE3 frame is sized to the relation's row (`leaf.registry.for_relation`): K words of its operand width
+        let leaf = match crate::relation::for_statement(Some(base)) {
+            Ok(r) => crate::leaf::sized(leaf, steps * k_ops * r.word_bytes as usize)?,
+            Err(_) => leaf,
+        };
         let vllm = if crate::leaf::is_vllm(leaf) {
             Some(crate::vllm_v1::shape_for(base).ok_or_else(|| format!("relation {rel:?}: vllm-v1 covers no relation {base:?}"))?)
         } else {

@@ -5,7 +5,7 @@ backend's own pod scripts.  A module defines
     INTERACTIVE               True when the protocol puts a live verifier on a separate pod
     RESULT                    the prover run's result document, relative to its run directory
     def unmet(cell) -> str | None                  what the cell lacks for this driver (optional)
-    def jobs(cell) -> list[dict]                   in launch order: {role, pod, stage, command, env?, ttl?} for a ``research run
+    def jobs(cell) -> list[dict]                   in launch order: {role, pod, stage, command, env?, ttl?, send?} for a ``research run
                                                    --on``, or {role, pod, setup: True, command} for a ``research pods`` step
     def register(cell, prover_run, verifier_run, out) -> list[list[str]]
                                                    the commands (the backend's own registration script) that write the

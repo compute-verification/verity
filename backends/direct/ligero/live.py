@@ -722,7 +722,9 @@ class ProverSession:
         self._q.put((sub, meta, proof))
 
     def end(self, summary: dict | None = None) -> dict:
-        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification)."""
+        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification).  ``drain_seconds``:
+        how long the proofs still in flight took to leave after the prover's pass (the transfer tail the pass does not time)."""
+        t_drain = time.perf_counter()
         if self.pipelined and getattr(self, "_net", None) is not None:
             self._net.join(timeout=600.0)                    # the network thread owns ctrl until it has read the last OPEN2
             self._ctrl_q.put(None)
@@ -731,6 +733,7 @@ class ProverSession:
                 raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
         self._q.put(None)
         self._sender.join()
+        self.drain_seconds = time.perf_counter() - t_drain
         if self._sender_error is not None:
             raise LiveError(f"proof sender failed: {self._sender_error!r}")
         self._send(self.ctrl, K_END, json.dumps(summary or {}).encode())
@@ -858,7 +861,8 @@ class BenchLive:
             "net_wait": agg.get("net_wait", 0.0), "t_total_live": total + agg.get("net_wait", 0.0),
             "rtt_ms_median": statistics.median(rtts) * 1e3 if rtts else None,
             "rtt_ms_p90": rtts[int(0.9 * (len(rtts) - 1))] * 1e3 if rtts else None, "rtt_ms_max": rtts[-1] * 1e3 if rtts else None,
-            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"]})
+            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"],
+            "drain_s": getattr(s, "drain_seconds", None), "bytes_out": s.bytes_out, "bytes_in": s.bytes_in, "round_trips": len(s.rtts)})
         print(f"rep {rep}: live verifier {'ACCEPTED' if v['accepted'] else 'REJECTED'} {v['accepted_subbatches']}/{self.n_proofs} "
               f"({v['reason'][:160]}); net wait {s.wait:.3f}s over {len(s.rtts)} round trips (median rtt "
               f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms, p90 "
@@ -1062,7 +1066,7 @@ class PythonVerifier:
 
 class Server:
     def __init__(self, listen: str, out: Path, rust: RustVerifier | PythonVerifier, jobs: int = 4, target_bits: float = 128.0,
-                 log=None, max_sessions: int = 64):
+                 log=None, max_sessions: int = 64, idle_exit: float | None = None):
         self.host, self.port = parse_url("tcp://" + listen) if not listen.startswith("tcp://") else parse_url(listen)
         self.out = Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
@@ -1078,6 +1082,8 @@ class Server:
         self._logf = (self.out / "serve.log").open("a")
         self.max_sessions = max_sessions
         self.stop = threading.Event()
+        self.idle_exit = idle_exit
+        self.last_activity = time.monotonic()
 
     def log(self, msg: str) -> None:
         line = f"[{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}] {msg}"
@@ -1103,11 +1109,27 @@ class Server:
                 try:
                     conn, addr = srv.accept()
                 except socket.timeout:
+                    if self._idle():
+                        self.log(f"idle for {self.idle_exit:.0f}s after {len(self.sessions)} session(s): exiting (--idle-exit)")
+                        break
                     continue
+                self.last_activity = time.monotonic()
                 conn.settimeout(900.0)
                 threading.Thread(target=self._accept, args=(conn, addr), daemon=True).start()
         finally:
             srv.close()
+
+    def _idle(self) -> bool:
+        """``--idle-exit``: a session has finished, none is running, and nothing connected for ``idle_exit`` seconds."""
+        if self.idle_exit is None:
+            return False
+        with self.lock:
+            sessions = list(self.sessions.values())
+        if not any(x.done.is_set() for x in sessions) or not all(x.done.is_set() for x in sessions):
+            if sessions:
+                self.last_activity = time.monotonic()
+            return False
+        return time.monotonic() - self.last_activity > self.idle_exit
 
     def _accept(self, conn: socket.socket, addr) -> None:
         try:
@@ -1200,6 +1222,21 @@ def cmd_probe(args) -> int:
     out = {"verifier": _json(payload).get("verifier"), "verifier_dc": _json(payload).get("verifier_dc"), "prover_dc": pod_dc(),
            "connect_ms": (t_connected - t_conn) * 1e3,
            "rtt_ms": (t_welcome - t_connected) * 1e3, "tcp_cc": _TCP_CC or "kernel default", "flows": []}
+    # --pings N: the open-connection round trip -- an 8-byte NOP answered by the server's VERDICT on the connection the
+    # HELLO opened (no handshake, no slow start in it), N times back to back
+    pings = []
+    for _ in range(int(getattr(args, "pings", 0) or 0)):
+        t0 = time.perf_counter()
+        send_frame(s, K_NOP, b"\0" * 8)
+        kind, _payload = recv_frame(s)
+        pings.append((time.perf_counter() - t0) * 1e3)
+        if kind != K_VERDICT:
+            print(f"probe: ping answered by {_KIND_NAME.get(kind, kind)}", file=sys.stderr)
+            return 2
+    if pings:
+        out.update(ping_ms=pings, ping_ms_median=sorted(pings)[len(pings) // 2], ping_ms_min=min(pings),
+                   ping_method=f"ping over the open connection: {len(pings)} x (8-byte NOP -> VERDICT) on the live verifier's "
+                               f"probe channel after HELLO, median")
     blob = os.urandom(max(1, int(float(args.mb) * (1 << 20))))
     for i in range(int(args.repeat)):
         t0 = time.perf_counter()
@@ -1217,6 +1254,8 @@ def cmd_probe(args) -> int:
     if flows:
         out["mbps_median"] = sorted(f["mbps_to_ack"] for f in flows)[len(flows) // 2]
     print(json.dumps(out, indent=1))
+    if getattr(args, "out", None):
+        Path(args.out).write_text(json.dumps(out, indent=1))
     mbps = max(out.get("mbps_median", 1), 1)
     print(f"RTT {out['rtt_ms']:.1f} ms ({out['prover_dc']} -> {out['verifier_dc']}); one-flow throughput {mbps:.0f} Mbps "
           f"(median of {len(flows)} x {args.mb} MB; first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU session "
@@ -1638,7 +1677,8 @@ def cmd_serve(args) -> int:
     core = rust if rust is not None else PythonVerifier(args.device)
     if rust is None:
         print("WARNING: --python-verifier: the Python file verifier shares code with the prover; verdicts are NOT independent", flush=True)
-    srv = Server(args.listen, Path(os.path.expandvars(args.out)), core, jobs=args.jobs, target_bits=args.target_bits)
+    srv = Server(args.listen, Path(os.path.expandvars(args.out)), core, jobs=args.jobs, target_bits=args.target_bits,
+                 idle_exit=getattr(args, "idle_exit", None))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -2453,6 +2493,8 @@ def main(argv=None) -> int:
     s.add_argument("--jobs", type=int, default=max(1, min(8, (os.cpu_count() or 2) - 1)), help="concurrent ligero-verify processes")
     s.add_argument("--threads", type=int, default=1, help="--threads inside each ligero-verify")
     s.add_argument("--target-bits", type=float, default=128.0, help="default batch target when the prover's HELLO names none")
+    s.add_argument("--idle-exit", type=float, default=None, metavar="S",
+                   help="exit once a session has finished and none has run or connected for S seconds (a recorded verifier run)")
     s.set_defaults(fn=cmd_serve)
     n = sub.add_parser("negatives", help="honest control + malicious provers against a live verifier")
     n.add_argument("--verifier", required=True)
@@ -2479,6 +2521,8 @@ def main(argv=None) -> int:
     p.add_argument("--mb", type=float, default=16, help="MB per NOP frame (0.5 mimics a test message, 3.7 a proof)")
     p.add_argument("--repeat", type=int, default=4)
     p.add_argument("--note", default=None, help="shows in the verifier's log line")
+    p.add_argument("--pings", type=int, default=0, help="open-connection round trips (8-byte NOP -> VERDICT) before the flows")
+    p.add_argument("--out", default=None, help="write the probe's JSON here")
     p.set_defaults(fn=cmd_probe)
     c = sub.add_parser("chalbench", help="the synthetic many-round challenge stream against a live verifier (lane live-2, for Ligerito)")
     c.add_argument("--verifier", required=True)
