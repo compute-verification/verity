@@ -428,7 +428,7 @@ def test_piece_counts_are_what_the_design_says():
     assert narrow * 3 < general
 
 
-# --- verity/flock-ir-frame/v2: the frame-v3 binding --------------------------------------------------------------------------
+# --- verity/flock-ir-frame/v3: the frame-v3 binding --------------------------------------------------------------------------
 
 def test_frame_plans_take_the_largest_run_that_fits():
     """RoPE and SiLU·mul read whole chunks; an RMSNorm block holds runs of its chunks' compressions (fused: 4 of 16, its four
@@ -463,7 +463,7 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
     head, body = path.read_bytes().split(b"\n", 1)
     h = json.loads(head)
-    assert h["format"] == "flock-ir-frame/v2" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
+    assert h["format"] == "flock-ir-frame/v3" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
     assert sorted(h["frame_v3"]["roots"]) == ["cs", "out", "x"] and h["frame_v3"]["schemas"]["x"] == "blake3-keyed/row/v2"
     x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)
     row0 = x[0, :64].astype("<u2").tobytes()
@@ -557,3 +557,28 @@ def test_attention_units_are_tensor_core_steps():
     cuts = IL.cut_words(low, fin)
     _res, cut_out, ok = low.evaluate(fin, cuts)
     assert ok == (1 << U.n) - 1 and (cut_out == cuts).all()
+
+
+def test_attention_frame_places_a_block_per_16_keys(tmp_path):
+    """A 16-key group per block: run slots [K keys | V keys] (one key = one run of two BLAKE3 blocks), unit slots [QK steps | PV
+    columns]; keys past T are empty run slots, their QK steps empty unit slots, and a PV step's masked port reads the empty
+    slot; the query is a public port and the tail computes the outputs, which the file carries."""
+    import json
+
+    from verity_flock import ir_frame as F
+
+    s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
+    mod = REG.module("attention-head")
+    assert mod.key_count(s) == 129
+    low = mod.lowering_for_set(s)
+    pl = F.plan_tc(low, s.subcircuit)
+    assert (pl.nb, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log, pl.public_ports, len(pl.comps)) == (2, 32, 128, 128, 22, [0], 9)
+    runs, units = pl.comps[8]
+    assert runs[0] == (1, 16, 0) and runs[1:16] == [None] * 15 and runs[16] == (2, 16, 0) and units[4:64] == [None] * 60
+    assert pl.wiring[5] == [(1, 32 + 2 * t) for t in range(16)] and pl.wiring[64 + 7] == [(16 + t, 14) for t in range(16)]
+    path = mod.stage(s, 0, 1, tmp_path)
+    head, body = path.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    assert h["public_ports"] == [0] and h["outputs"] == "tail" and h["layout"]["ret_group"] is None and len(h["blocks"]) == 9
+    out = np.frombuffer(body[-4 * h["cut_words"] - 128:-4 * h["cut_words"]], dtype="<u2")
+    assert (out == s.port("out")[0]).all()
