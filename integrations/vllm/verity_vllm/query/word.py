@@ -3,7 +3,9 @@ of at most W bits, over values serving commits.
 
 The rule (no recomputes):
 
-  * A gate is interior to exactly one unit or on the boundary of one or more units; each gate is **computed in exactly one unit**.
+  * A gate is interior to exactly one unit or on the boundary of one or more units; each gate is **computed in exactly one unit**,
+    and so is each value: a unit never recomputes a value another unit computes.  A value computed twice inside one unit reaches
+    no other unit; it is reported as the unit's redundant gates (`redundant_gates`), not a recompute.
   * For every computation gate exactly one unit certifies it: its proof being valid implies the gate is the correct function of the
     committed values the unit reads.  A value read across units is **committed once at serving**, and every reader reuses it.  There
     are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values.  Constants and
@@ -396,6 +398,7 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
                    X, W, extras)
     rule["violations"] = [dict(v, definition=fid) for v in viol.values()]
     rule["free_gates"] = sum(r.get("free_gates", 0) * m for r, m in parts)
+    rule["redundant_gates"] = sum(r.get("redundant_gates", 0) * m for r, m in parts)
     free = Counter()
     for r, m in parts:
         for k, v in (r.get("free_by_prim") or {}).items():
@@ -455,6 +458,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                        X, W, extras)
         rule["free_gates"] = G.free
         rule["free_by_prim"] = dict(G.free_by_prim.most_common(8))
+        rule["redundant_gates"] = cut.detail["redundant_gates"]
         if not cut.ok:
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})
     memo[key] = rule

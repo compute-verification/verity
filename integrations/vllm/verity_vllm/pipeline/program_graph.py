@@ -530,6 +530,9 @@ def _class_words(rule: dict[str, Any]) -> dict[tuple[str, str], tuple[float, flo
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
+_WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gates", "redundant_gates")
+
+
 def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None) -> dict[str, Any]:
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
     interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
@@ -557,7 +560,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             bn = x["statics"].get("BN") if a == "T" else None
             pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
             rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo) for v in pts}
-            per = {f: [float(rules[v][f]) for v in pts] for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}
+            per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}
             total = {f: int(round(sum(_interp(pts, per[f], v) * calls[v] for v in vals))) for f in per}
             cw = {v: _class_words(rules[v]) for v in pts}
             for k in {k for v in pts for k in cw[v]}:
@@ -575,20 +578,20 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             except (KeyError, TypeError, ValueError, AttributeError) as e:
                 x["q_word_v1"] = {"unresolved": f"{type(e).__name__}: {e}"[:300]}
                 continue
-            total = {f: rep.get(f, 0) * x["calls"] for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}
-            entry = {"per_call": {f: rep.get(f, 0) for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}, "interpolated": False}
+            total = {f: rep.get(f, 0) * x["calls"] for f in _WORD_FIELDS}
+            entry = {"per_call": {f: rep.get(f, 0) for f in _WORD_FIELDS}, "interpolated": False}
             for k, (w, bits) in _class_words(rep).items():
                 t = taps.setdefault(k, [0.0, 0.0])
                 t[0] += w * x["calls"]
                 t[1] += bits * x["calls"]
         entry.update(definition=rep["definition"] if x["definition"] in sub else None,
-                     units=total["units_per_call"], gates=total["gates"], free_gates=total["free_gates"],
+                     units=total["units_per_call"], gates=total["gates"], free_gates=total["free_gates"], redundant_gates=total["redundant_gates"],
                      committed_interior_words=total["committed_interior_words"], by_kind=rep["by_kind"], classes=rep["classes"][:8],
                      committed_interior=rep["committed_interior"][:8], violations=rep["violations"])
         if entry["definition"] is None:
             del entry["definition"]
         x["q_word_v1"] = entry
-        for f in ("units", "gates", "free_gates", "committed_interior_words"):
+        for f in ("units", "gates", "free_gates", "redundant_gates", "committed_interior_words"):
             tot[f] += entry[f]
             by_template.setdefault(x.get("template") or x["definition"], Counter())[f] += entry[f]
         for v in rep["violations"]:
@@ -604,9 +607,10 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity_vllm.query.word, no recomputes: each gate is computed in exactly one unit; a value read across units is committed once at "
-        "serving (constants, public inputs and wiring are fixed or free, never committed); outputs of <= X bits or one value of <= W bits; "
-        "per group: per_call and row totals (units, gates, free gates, committed interior words), classes (kind, head primitive @ activation, "
+        "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "committed once at serving (the Call's inputs are committed; constants and wiring are structure, never committed); outputs of <= X "
+        "bits or one value of <= W bits; per group: per_call and row totals (units, gates, free gates, redundant gates: a value computed "
+        "twice inside its own unit, committed interior words), classes (kind, head primitive @ activation, "
         "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "
         "interior value class with where serving commits it today or the kernel a new tap goes in")
     return g

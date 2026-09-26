@@ -1097,10 +1097,12 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     `total_gates` (input gates included) are such.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
     `committed` the gates whose values are committed once and reused by every reader (the input gates' values under their roots),
     `recomputed` the (gate, earlier gate) pairs that compute the same function of the same values (a second computation of one value).
+    A value computed again in the unit that already computes it crosses no boundary: it is a redundant gate of that unit's statement
+    (`detail["redundant_gates"]`), not a recompute.
 
     * every input gate is in the input unit                                          -> "input-outside-input-unit"  (gate ids)
     * every computed gate is computed in exactly one computing unit                  -> "gate-not-certified-once"   (gate ids)
-    * no value is computed twice (no recompute)                                      -> "gate-recomputed"          ((gate, earlier))
+    * every value is computed in exactly one unit (no recompute)                     -> "gate-recomputed"          ((gate, earlier))
     * the units' gates and the structure sum to the circuit                          -> "gate-count"
     * a cross-unit read goes only through a committed value                           -> "read-uncommitted"          ((producer, consumer))
     * a returned value is committed                                                   -> "output-uncommitted"        (gate ids)
@@ -1116,14 +1118,17 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     outs = set(outputs)
     boundary = {p for p, _q in crossing} | outs
     certified = sum(1 for g, u in enumerate(owner) if g not in ins and isinstance(u, int) and u >= 0)
+    again = [(int(a), int(b)) for a, b in recomputed]
+    across = sorted((a, b) for a, b in again if not (0 <= a < n and 0 <= b < n) or owner[a] != owner[b])
     problems = {"input-outside-input-unit": outside, "gate-not-certified-once": uncertified,
-                "gate-recomputed": sorted((int(a), int(b)) for a, b in recomputed),
+                "gate-recomputed": across,
                 "gate-count": [] if certified + len(ins) + int(structure_gates) == int(total_gates) else [certified],
                 "read-uncommitted": [(p, q) for p, q in crossing if p not in c], "output-uncommitted": sorted(outs - c),
                 "committed-unread": sorted(g for g in c if g not in boundary or not 0 <= g < n)}
     detail: dict = {"input_gates": len(ins), "computed_gates": n - len(ins), "certified": certified, "structure_gates": int(structure_gates),
                     "total_gates": int(total_gates), "committed": len(c), "cross_unit_reads": len(crossing),
-                    "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0})}
+                    "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0}),
+                    "redundant_gates": len(again) - len(across)}
     codes = tuple(k for k, v in problems.items() if v)
     for k in codes:
         detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:_MAX_LISTED]]}
