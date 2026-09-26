@@ -119,8 +119,10 @@ def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
     per: list[list[dict]] = []
     for fam in sorted(by_fam):
         cap = limits.for_family(fam)
-        names = sorted(by_fam[fam])
-        picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, key.shard(("family", fam)))
+        fkey = key.shard(("family", fam))
+        # the strata in a keyed order: in name order a cap below the stratum count takes one shape's strata first (all K=1536 of #4's GEMMs)
+        names = sorted(by_fam[fam], key=lambda k: fkey.stream(("stratum-order", k), 16))
+        picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, fkey)
         per.append(_round_robin(picks)[:cap])
     return _round_robin(per)
 

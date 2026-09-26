@@ -169,3 +169,11 @@ def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
     assert VX._limits_for(tmp_path, {"evaluator": {"retention": "device"}}).workers == 1 and VX._limits_for(tmp_path, {}).workers == 8
     assert [(x["set"], x["n"], x["content_digest"]) for x in a["sets"]] == [(x["set"], x["n"], x["content_digest"]) for x in b["sets"]]
+
+
+def test_a_cap_below_the_stratum_count_reaches_every_shape():
+    pool = [{"family": "Gemm_v1", "stratum": f"Gemm_v1{{K={k},N=8}}|r0|rank0|mid|m{j}|w", "i": 100 * k + j, "spec": f"Gemm_v1{{K={k},N=8}}"}
+            for k in (1536, 576) for j in range(50)]
+    got = VX.select(pool, VX.Limits(per_family=20), VX.selection_key(ROOT))
+    ks = {v["spec"] for v in got}
+    assert len(got) == 20 and ks == {"Gemm_v1{K=1536,N=8}", "Gemm_v1{K=576,N=8}"}, ks
