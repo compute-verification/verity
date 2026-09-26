@@ -16,6 +16,7 @@ from verity.ml.tc.models import (
     HOPPER_E4M3_K32,
     MODELS,
     HOPPER_BF16_M16N8K16,
+    HOPPER_BF16_WGMMA_K16,
     ADA_E5M2_M16N8K32,
     HOPPER_E5M2_K32,
     Model,
@@ -25,6 +26,7 @@ EXPECTED_IDS = {
     "sm80.mma.m16n8k16.bf16",
     "sm89.mma.m16n8k16.bf16",
     "sm90.mma.m16n8k16.bf16",
+    "sm90.wgmma.m64n8k16.bf16",
     "sm89.mma.m16n8k32.e4m3",
     "sm89.mma.m16n8k32.e5m2",
     "sm90.wgmma.m64n8k32.e4m3",
@@ -55,6 +57,7 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm89.mma.m16n8k32.e4m3": ADA_E4M3_M16N8K32,
         "sm89.mma.m16n8k32.e5m2": ADA_E5M2_M16N8K32,             # lane tc-probe-fp8 2026-09-22: 25.0M + 141k, 0 mismatches
         "sm90.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane tc-probe-fp8 2026-09-22: 25.7M, 0 mismatches
+        "sm90.wgmma.m64n8k16.bf16": HOPPER_BF16_WGMMA_K16,       # lane wgmma-bf16 2026-09-26: 2 x 26.4M (SS, RS) + chains, 0 mismatches
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
         "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,             # lane tc-probe-fp8 2026-09-22: 25.5M, 0 mismatches
         "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
@@ -135,6 +138,7 @@ def test_sm100_models_are_the_sm120_parameters_under_their_own_name() -> None:
 
 def test_instructions_for_filters_by_model() -> None:
     assert [i.id for i in instructions_for(HOPPER_E4M3_K32)] == ["sm90.wgmma.m64n8k32.e4m3"]
+    assert [i.id for i in instructions_for(HOPPER_BF16_WGMMA_K16)] == ["sm90.wgmma.m64n8k16.bf16"]
     assert instructions_for(BLACKWELL_SM120_NVF4)[0].id == "sm120.mma.m16n8k64.e2m1.nvf4"
 
 
