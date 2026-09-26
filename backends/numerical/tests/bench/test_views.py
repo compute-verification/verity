@@ -667,6 +667,13 @@ def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
     assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md
 
 
+def test_markdown_prints_family_names_while_column_ids_stay_the_cell_keys() -> None:
+    md = V.render_markdown(V.Views(rules=V.SPEC))
+    assert "| Subcircuit · hardware · scheme | Native N | A-GKR | B-Ligero | D-SP1 | C-Flock |" in md
+    assert "| **D-SP1** |" in md and "| **C-Flock** |" in md and "| **SP1** |" not in md
+    assert V.Views(rules=V.SPEC).columns() == ["A-GKR", "B-Ligero", "SP1", "Flock"]
+    assert V.column_header("SP1 + in-proof hash") == "D-SP1 + in-proof hash" and V.column_header("Ligerito") == "Ligerito"
+
 FLOCK_LIVE = {"rounds.sequential_depth": 1070, "net.bytes_out": 922_000.0, "net.bytes_in": 34_240.0, "net.rtt_ms": 0.9,
               "rtt_method": "median of the session's coin round trips (same datacenter)", "net.wait_seconds": 1.071}
 
@@ -817,7 +824,7 @@ def test_entities_print_every_table2_cell_and_footnote_exactly_as_the_markdown(s
             assert f" {cell['display']} [{cell['footnote']}] |" in md
             assert (cell["value"] is None) == (cell["result"] is None) == (cell["state"] != "cell")
     assert ent["axes"]["backend_families"] == t2["columns"][1:] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"]
-    assert t2["column_labels"] == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
+    assert t2["column_labels"] == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "C-Flock", "D-SP1": "D-SP1"}
     assert ent["axes"]["subcircuits"] == [c["id"] for c in ent["subcircuits"]]
     assert [c["legacy_target"] for c in ent["subcircuits"]] == list(TARGETS)
 
@@ -954,7 +961,7 @@ def test_entities_backends_are_backend_families_by_interaction_mode_with_their_c
     inst = {i["id"]: i for i in ent["backends"]}
     assert list(inst) == ["A-route-a", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
     assert [f["id"] for f in ent["backend_families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["backend_families"]
-    assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
+    assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "C-Flock", "D-SP1": "D-SP1"}
     for i in inst.values():
         assert i["display"] == i["id"] and (i["id"] == f"{i['backend_family'][0]}-{i['mode']}" or i["composed"])
         members = [cfgs[c] for c in i["implementations"]]

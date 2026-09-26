@@ -377,3 +377,11 @@ blocks nothing.
   canonical.
 - Rust for anything whose speed is the result; Python for references,
   checkers and adversarial search. CPU baselines first, GPU after parity.
+- New subcircuits go through the benchmark spine. Input sets are
+  `input-set/v1` / `vllm-vu-set/v1` directories read by id
+  (`verity_numerical.bench.generate` makes synthetic ones from the IR). A
+  family lowers template T in its own `templates/<t>.py`
+  (`verity_numerical.bench.lowerings`), and
+  `python -m verity_numerical.bench.cell plan|run|check|register` runs a
+  (backend, statement, input set) cell through the backend's `bench/drivers/`
+  module.

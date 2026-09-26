@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
+
+- The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family
+  to it, and `backend_families[].column` is that name (`SP1` is now `D-SP1`, `Flock` is now `C-Flock`; A-GKR and B-Ligero
+  are unchanged).
+- The markdown developer render prints the same names in Table 2's header, Table 3's cell labels and Table 1's family rows.
+- Column ids stay `SP1` and `Flock`: they key the cells, `--format json`'s `table2.columns` and the parity gate against
+  the frozen tables (`tables.py`, whose own headers are unchanged), so `views --parity` is unaffected. The first published
+  entities render after this change differs from the previous one only in those two fields.
+
 ## 2026-09-26: the markdown tables are retired; backend profiles match main
 
 - The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
@@ -57,6 +67,28 @@
 - Recorded names keep the old word, because fixtures and results carry them: the `instance-equiv/v1` artifact kind, a
   result's `instances` ref, and the `tier` field. Printed markdown strings such as reason I, "another instance set", are
   also unchanged, so renders stay byte-identical.
+
+## 2026-09-26: the benchmark spine (input sets from the IR, one cell entry point, per-template lowerings)
+
+- `bench.templates`: the subcircuit templates of row #101, each a registered IR Definition with typed parameters:
+  `gemm-coordinate` (`GemmCoordinate_v2{K, DOT}`, any K, Ampere mma and Hopper wgmma BF16; the census's other semantics
+  bind but cannot be generated), `attention-head` (FA2 `AttentionHead_v3`, T per instance), `rope-head`,
+  `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and `gumbel-top-p-token-select` (the vLLM registry's Definitions,
+  imported lazily). A subcircuit carries the relation, set name and ports the vLLM VU exporter (PR #42) writes, and
+  `identify(relation)` maps any set back to its subcircuit.
+- `bench.input_sets`: one layout for captured and synthetic sets (PR #42's `vllm-vu-set/v1`; synthetic sets are
+  `input-set/v1` with the same fields), `verify` re-evaluates every instance through `verity.evaluation`. All 11,040
+  instances of the eight captured #101 sets (`art:b5bb0ca9`) re-evaluate bit-exactly.
+- `bench.generate`: seeded synthetic sets. Draw `j` reads each port from `verity.randomness` counter streams at
+  `(port, j)`; outputs come from the IR evaluator; instance `i` is the `i`-th draw in the subcircuit's domain, so sets are
+  prefix-stable. `--register` stores a set as an `input-set/v1` artifact.
+- `bench.cell plan | run | check | register`: one entry point per (backend, statement, input set). It resolves the
+  family's lowering, plans the backend driver's `research run`s (`bench.drivers`, one module per backend; today
+  `c_interactive`, wrapping `backends/flock/pod/30-cell.sh` and `verity_flock.register`), checks a result against the
+  protocol (contract, warm/runs/uncontended/plateau, interaction record, verifier on another host, RTT and loopback
+  probes, statement and instance set) and registers it with the cell stamped and the running lane as its producer.
+- `bench.lowerings`: each family (A-GKR, B-Ligero, C-Flock, D-SP1) keeps one module per template under `templates/`
+  (`supports(subcircuit, scheme)` with the reason, `relation`, optional `stage`); the reason is the cell's `n/s`.
 
 ## 2026-09-25: `views --format entities`, the docs site's render
 

@@ -115,13 +115,30 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
         sem = "-".join(x for x in t.instruction.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
         assert s.id == f"gemm-coordinate/k1536/{sem}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
         assert s.display.startswith("GemmCoordinate<1536> · ") and s.display.endswith(census.DATATYPES[s.parameters.datatype].display)
-    assert len(census.SUBCIRCUITS) == len(TARGETS)
     assert census.subcircuit_of(FP8_HOPPER_WGMMA.name).id == "gemm-coordinate/k1536/sm90-wgmma-e4m3"
     notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
-    assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == ["H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma"]
+    assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == [
+        "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). "
+        "On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the "
+        "name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs"]
     assert {i.id: i.provenance for i in census.INPUT_SETS.values()} == {
         "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
         "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}
+
+
+def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
+    """Every subcircuit's semantics is an exact instruction of the registry, with its operand datatype and a stable id; a
+    subcircuit need not have a (legacy) target: the H100 BF16 wgmma one (lane wgmma-bf16) came after the targets froze."""
+    for s in census.SUBCIRCUITS.values():
+        ins = INSTRUCTIONS[s.parameters.semantics]
+        sem = "-".join(x for x in ins.id.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
+        assert s.id == f"{s.template}/k{s.parameters.K}/{sem}" and s.parameters.datatype == ins.a_dtype and ins.model is not None
+        assert s.display == f"GemmCoordinate<{s.parameters.K}> · {sem.split('-')[0]} {sem.split('-')[1]} · {census.DATATYPES[ins.a_dtype].display}"
+    untargeted = {s.id for s in census.SUBCIRCUITS.values() if getattr(s, "legacy_target", None) is None}
+    assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"}
+    assert len(census.SUBCIRCUITS) == len(TARGETS) + len(untargeted)
+    wgmma = census.SUBCIRCUITS["gemm-coordinate/k1536/sm90-wgmma-bf16"]
+    assert INSTRUCTIONS[wgmma.parameters.semantics].status == "pinned" and wgmma.fidelity_notes == []
 
 
 def test_native_seconds_per_instance() -> None:
@@ -129,3 +146,12 @@ def test_native_seconds_per_instance() -> None:
     assert census.native_seconds_per_instance(h, 1536) == 2 * 1536 / 312e12
     with pytest.raises(ValueError):
         census.native_seconds_per_instance(h, 0)
+
+
+def test_the_h100_bf16_cells_and_input_set_stand_for_the_wgmma_bf16_subcircuit() -> None:
+    wg, mma = "gemm-coordinate/k1536/sm90-wgmma-bf16", "gemm-coordinate/k1536/sm90-mma-bf16"
+    assert census.stood_for_by(wg) == mma and census.stood_for_by(mma) is None
+    e = census.SUBCIRCUITS[wg].stood_for_by
+    assert "r20260926-023321-ecb5" in census.source(e) and "bench-instances-bf16-hopper-v1" in e.covers
+    assert census.INPUT_SETS["bench-instances-bf16-hopper-v1"].subcircuit == mma
+    assert all(census.stood_for_by(s) in (None, *census.SUBCIRCUITS) for s in census.SUBCIRCUITS)

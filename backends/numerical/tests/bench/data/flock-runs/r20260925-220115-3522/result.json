@@ -1,0 +1,419 @@
+{
+ "schema": "research/result/v0.1",
+ "run_id": "r20260925-220115-3522",
+ "workload_fingerprint": {
+  "profile": "bf16-hopper-mma-draft/2026-09-22",
+  "domain": "finite",
+  "K": 1536,
+  "B": 8192,
+  "N_subbatches": 1,
+  "proof_class": "NON_ZK_PROOF",
+  "authentication": "included-hash",
+  "zk_mode": "none",
+  "security": {
+   "target": -128,
+   "achieved_log2": -195.44,
+   "per_proof_log2": -195.44,
+   "proofs": 1,
+   "union": "union bound over the batch's sequential sub-batch proofs",
+   "profile": "flock-128-r2",
+   "reps": 2,
+   "per_rep_log2": -97.8,
+   "coins": "live verifier (flock-live R1-R8)",
+   "accountant": "lanes/flock-128/evidence/accounting.py"
+  },
+  "hardware": {
+   "gpu": {
+    "name": "NVIDIA H100 80GB HBM3",
+    "driver": "595.91.07",
+    "cuda": "13.2",
+    "count": 1,
+    "memory_total_bytes": 85520809984
+   },
+   "cpu": {
+    "model": "Intel(R) Xeon(R) Platinum 8470",
+    "count": 208
+   }
+  },
+  "software": {
+   "backend": {
+    "name": "flock-pure-gpu",
+    "configuration": "Flock(scheme=frame-v3/blake3-keyed/row/v2, profile=flock-128-r2, statement=block)",
+    "commit": "unknown",
+    "statement": "verity/flock-pure-block/v2",
+    "prover": "flock-cuda-block",
+    "prove_args": [
+     "--gpu"
+    ],
+    "lowering_sha256": "da1bbe2cdbf02971f0d7f12f6d5a3caabefb658af95afeeff44d001ff30dddba",
+    "lowering_version": "41158d749e5c41c7aea8ea94db23c5919e7869c8f1acb2eb008a3a77f71e4230",
+    "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"
+   },
+   "toolchain": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "python": "3.12.14"
+   },
+   "allocator": {
+    "MALLOC_MMAP_MAX_": "unset",
+    "MALLOC_TRIM_THRESHOLD_": "unset"
+   }
+  },
+  "preprocessing": "none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds); every timed session commits its batch and builds its rows afresh",
+  "retention": "retained",
+  "instances": {
+   "dataset": "bench-instances-bf16-hopper/v1",
+   "tier": "vu-k1536-bf16-hopper",
+   "range": [
+    0,
+    8192
+   ],
+   "manifest_sha256": "d660397d4f3b8b2f0dcb59210e58827b1b7049c67254b2f67beebc4472780b5c",
+   "seed": 20260922,
+   "recipe": "bf16-hopper synthetic (random_finite_bf16: finite BF16 words incl. subnormals and exact zeros, model-recorded accumulators)"
+  },
+  "batching": {
+   "total": 8192,
+   "per_proof": 8192,
+   "in_flight": 1,
+   "subbatches": [
+    [
+     0,
+     8192
+    ]
+   ]
+  },
+  "scheme": "frame-v3/blake3-keyed/row/v2",
+  "statement": "verity/flock-pure-block/v2",
+  "relation": "bf16-hopper",
+  "roots": {
+   "a": "f7d7eba65d1299602c42ecca54aa0a9603144bd3d0866fd55997ea4e74c1c43a",
+   "b": "6af0a30af9b49cafe3782d9ecb0c8bcb49c14e9dd8ce587e1dd625fb9e017e66",
+   "y": "266cf5fad905067215031b7c223725dd2316489a94823dc23941b549ec4d7fa3"
+  },
+  "sigma": "4feab7cf603395c246483d6b8b67033a7386cd94f89fdb51a6f859b9e4330ae0",
+  "dense_m": 35,
+  "units_per_vu": 96,
+  "n_blake3": 786432,
+  "n_units": 786432,
+  "rtt_method": "net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
+  "verifier": {
+   "placement": "216.243.220.199:10661",
+   "process": "flock-pure serve (separate process)"
+  }
+ },
+ "validation": {
+  "status": "passed",
+  "checker": "flock-pure serve (live verifier, R1-R8 replay)",
+  "detail": "6/6 sessions accepted",
+  "evidence": [
+   "p3-8192/sessions/index.jsonl"
+  ],
+  "contract_problems": []
+ },
+ "measurements": [
+  {
+   "name": "t.total",
+   "value": 1.2964902150000002,
+   "unit": "s"
+  },
+  {
+   "name": "t.total_live",
+   "value": 1.2964902150000002,
+   "unit": "s"
+  },
+  {
+   "name": "vu.count",
+   "value": 8192,
+   "unit": "count"
+  },
+  {
+   "name": "vu.seconds_per_vu",
+   "value": 0.0001582629656982422,
+   "unit": "s"
+  },
+  {
+   "name": "vu.per_second",
+   "value": 6318.597630141003,
+   "unit": "1/s"
+  },
+  {
+   "name": "rate.proved_flop_per_second",
+   "value": 19410731.91979316,
+   "unit": "FLOP/s"
+  },
+  {
+   "name": "rate.native_peak_flop_per_second",
+   "value": 989400000000000.0,
+   "unit": "FLOP/s"
+  },
+  {
+   "name": "overhead.vs_native_peak",
+   "value": 50971802.81960965,
+   "unit": "ratio"
+  },
+  {
+   "name": "commit.seconds",
+   "value": 0.011041462,
+   "unit": "s"
+  },
+  {
+   "name": "e2e.seconds",
+   "value": 1.307531677,
+   "unit": "s"
+  },
+  {
+   "name": "e2e.vu_per_second",
+   "value": 6265.240180487038,
+   "unit": "1/s"
+  },
+  {
+   "name": "e2e.seconds_min",
+   "value": 1.260067017,
+   "unit": "s"
+  },
+  {
+   "name": "e2e.seconds_max",
+   "value": 1.3314670229999999,
+   "unit": "s"
+  },
+  {
+   "name": "rows.seconds",
+   "value": 1.141e-06,
+   "unit": "s"
+  },
+  {
+   "name": "prove.rep0_seconds",
+   "value": 0.792388737,
+   "unit": "s"
+  },
+  {
+   "name": "prove.rep1_seconds",
+   "value": 0.491935915,
+   "unit": "s"
+  },
+  {
+   "name": "net.wait_seconds",
+   "value": 0.459153427,
+   "unit": "s"
+  },
+  {
+   "name": "net.messages",
+   "value": 290,
+   "unit": "count"
+  },
+  {
+   "name": "net.bytes_out",
+   "value": 3126700,
+   "unit": "B"
+  },
+  {
+   "name": "net.bytes_in",
+   "value": 38556,
+   "unit": "B"
+  },
+  {
+   "name": "rounds.protocol",
+   "value": 282,
+   "unit": "count"
+  },
+  {
+   "name": "rounds.sequential_depth",
+   "value": 290,
+   "unit": "count"
+  },
+  {
+   "name": "live.verifier_round_seconds",
+   "value": 0.011781194000000002,
+   "unit": "s"
+  },
+  {
+   "name": "live.network_wait_seconds",
+   "value": 0.44737725100000003,
+   "unit": "s"
+  },
+  {
+   "name": "live.coin_wait_per_round_ms",
+   "value": 1.5426801758620692,
+   "unit": "ms"
+  },
+  {
+   "name": "net.rtt_ms",
+   "value": 0.910687493160367,
+   "unit": "ms"
+  },
+  {
+   "name": "live.loopback_round_seconds",
+   "value": 0.0009154313551724138,
+   "unit": "s"
+  },
+  {
+   "name": "live.prover_compute_seconds",
+   "value": 0.8373367880000002,
+   "unit": "s"
+  },
+  {
+   "name": "transcript.bytes",
+   "value": 3165256,
+   "unit": "B"
+  },
+  {
+   "name": "verify.wall_s",
+   "value": 0.331123041,
+   "unit": "s"
+  },
+  {
+   "name": "proof.bytes",
+   "value": 1221554,
+   "unit": "B"
+  },
+  {
+   "name": "fixed.setup_seconds",
+   "value": 3.742685317993164,
+   "unit": "s"
+  },
+  {
+   "name": "t.witness",
+   "value": 0.463517611,
+   "unit": "s"
+  },
+  {
+   "name": "t.encoding_commitment",
+   "value": 0.10005565599999999,
+   "unit": "s"
+  },
+  {
+   "name": "t.arithmetic",
+   "value": 0.6922575559999999,
+   "unit": "s"
+  },
+  {
+   "name": "mem.peak_host_bytes",
+   "value": 944275456,
+   "unit": "B"
+  }
+ ],
+ "measurement_files": [],
+ "artifacts": [
+  "out/cell/p3-8192"
+ ],
+ "sweep": {
+  "id": "sweep-41382710c3ec",
+  "point": 3,
+  "plateau": true,
+  "total_vus": 8192,
+  "rule": "double total VUs from start at fixed per-proof settings until two successive doublings together raise the median throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)",
+  "stopped": "< 2 % over two doublings at 32768",
+  "points": [
+   [
+    1024,
+    3582.7474893914464
+   ],
+   [
+    2048,
+    4980.269354658108
+   ],
+   [
+    4096,
+    5698.839410762489
+   ],
+   [
+    8192,
+    6265.240180487038
+   ],
+   [
+    16384,
+    6239.0327526992205
+   ],
+   [
+    32768,
+    6180.974990292193
+   ],
+   [
+    65536,
+    6246.797159357829
+   ]
+  ]
+ },
+ "contention": {
+  "contended": false,
+  "reasons": [],
+  "other_gpu_procs": 0,
+  "gpu_pids_seen": [],
+  "throttled": 0.0,
+  "busy_periods": 131,
+  "load1_max": 19.3447265625,
+  "cpu_quota": 22.1,
+  "nproc": 208,
+  "window_s": 18.4,
+  "samples": 10
+ },
+ "interaction": {
+  "rtt_method": "net.rtt_ms = TCP connect time from the prover pod to the verifier pod (216.243.220.199:10659, its sshd), median of 30, measured in this run before the sweep",
+  "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, median over the timed sessions; verifier 216.243.220.199:10661",
+  "loopback_method": "loopback probe in this run: 5 timed sessions (5 per sub-batch) of the plateau point's instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)",
+  "hello_rtt_ms": 13.984418,
+  "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",
+  "verifier_operator": "flock-backend-verifier-pod",
+  "t_total_includes_wait": true,
+  "t_total_note": "live coins: t.total and the buckets include the prover's coin waits; prover compute alone is live.prover_compute_seconds = t.total - net.wait_seconds"
+ },
+ "protocol": {
+  "warm": true,
+  "runs": 5,
+  "statistic": "median",
+  "contended": false,
+  "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"
+ },
+ "runs": [
+  {
+   "e2e_s": 1.260067017,
+   "commit_s": 0.007166463,
+   "prove_s": [
+    0.762423227,
+    0.469777664
+   ],
+   "wait_s": 0.42533852,
+   "dump": null
+  },
+  {
+   "e2e_s": 1.307531677,
+   "commit_s": 0.012157187,
+   "prove_s": [
+    0.792388737,
+    0.489080814
+   ],
+   "wait_s": 0.458398188,
+   "dump": null
+  },
+  {
+   "e2e_s": 1.322294364,
+   "commit_s": 0.011041462,
+   "prove_s": [
+    0.800602264,
+    0.495423211
+   ],
+   "wait_s": 0.47003615,
+   "dump": null
+  },
+  {
+   "e2e_s": 1.307241489,
+   "commit_s": 0.011530775,
+   "prove_s": [
+    0.791072061,
+    0.491935915
+   ],
+   "wait_s": 0.459153427,
+   "dump": null
+  },
+  {
+   "e2e_s": 1.3314670229999999,
+   "commit_s": 0.010282288,
+   "prove_s": [
+    0.802647515,
+    0.503837716
+   ],
+   "wait_s": 0.499708458,
+   "dump": null
+  }
+ ]
+}

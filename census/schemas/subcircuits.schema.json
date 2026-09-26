@@ -115,6 +115,20 @@
               "minLength": 1,
               "description": "the verity.proofs.target name it was known by"
             },
+            "stood_for_by": {
+              "type": "object",
+              "description": "another subcircuit whose results and input set stand for this one (a recorded equivalence, not duplicated cells)",
+              "additionalProperties": false,
+              "required": ["subcircuit", "covers", "why", "ruling", "sources"],
+              "properties": {
+                "subcircuit": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/k[0-9]+/[a-z0-9]+(-[a-z0-9]+)*$"},
+                "covers": {"type": "string", "minLength": 1},
+                "why": {"type": "string", "minLength": 1},
+                "ruling": {"type": "string", "minLength": 1},
+                "sources": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["label"],
+                            "properties": {"label": {"type": "string", "minLength": 1}, "href": {"type": "string", "format": "uri"}}}}
+              }
+            },
             "fidelity_notes": {
               "type": "array",
               "description": "known gaps between the subcircuit and what production runs",

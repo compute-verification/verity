@@ -627,3 +627,16 @@ def test_tc_probe_tool_declaration_keys_the_canary_flag():
     without = T.parse(["python", "tools/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--sweep"])
     assert with_flag["canary"] is True and "canary" not in without
     assert "canary" in T.TC_PROBE.key_params
+
+
+def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> None:
+    """``tc_probe --replay-capture`` compares the hardware with the recorded words and with the declared model; a replay is clean only
+    if all three counts are zero (lane wgmma-bf16: veritor's H100 wgmma capture, the reference of sm90.wgmma.m64n8k16.bf16)."""
+    clean = {"file": "packages/verity/tests/ml/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
+             "model_mismatches": 0, "other_positions_nonzero": 0, "pipeline": "veritor tc-hopper-2026-09-07"}
+    assert trust._replay_summary("capture_replay", clean)["mismatches"] == 0
+    assert trust._replay_summary("capture_replay", {**clean, "model_mismatches": 3})["mismatches"] == 3
+    assert trust._replay_summary("capture_replay", {**clean, "other_positions_nonzero": 5})["mismatches"] == 5
+    (ref,) = trust.INDEPENDENT_REFERENCES["sm90.wgmma.m64n8k16.bf16"]
+    assert ref.kind == "second-compiled-path" and ref.replay in clean["file"]
+    assert all((REPO_ROOT / p).is_file() for p in ref.paths)
