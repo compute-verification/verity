@@ -41,9 +41,11 @@ from verity_vllm.config import option
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.pipeline import vu_export as VX
 
 STORE_SCHEMA = "vllm-vu-store/v1"
+SR.keep_population(True)            # the Commit imports this module before its replay: the export reuses that replay's population
 WEIGHT_SAMPLE_RULE = ("GEMM weight rows: selection_key(run_root).subset(k, N, ('row', request, i, evaluation)) with k = "
                       "gemm_coords_per_row; the whole [N, K] slice referenced by checkpoint field, range and sha256 (an FP8 block GEMM: "
                       "the e4m3 rows; a MoE expert GEMM: the routed expert's rows of the [E, N, K] slab, `expert` = the committed router id)")
@@ -129,9 +131,11 @@ def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tupl
 def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable, weights: Callable, *, out_dir: str | Path,
                run_root: bytes, arrivals: dict[str, int] | None = None, manifest: dict[str, Any] | None = None,
                executed_prefix: dict[str, dict] | None = None, program_dirs: dict[str, str] | None = None,
-               provenance: dict[str, Any] | None = None, limits: VX.Limits | None = None) -> dict[str, Any]:
+               provenance: dict[str, Any] | None = None, limits: VX.Limits | None = None,
+               population_of_record: dict[str, Any] | None = None) -> dict[str, Any]:
     """Draw and evaluate, write the store (`<out_dir>/store`), then the default extraction (`<out_dir>/sets`).  Returns the export
-    summary (also `<out_dir>/export.json`)."""
+    summary (also `<out_dir>/export.json`).  `population_of_record`: the replay's own population (`driver.take_population()`), reused
+    instead of rebuilt (on a B32 row the rebuild alone took > 18 min, inside the Commit, before its verdict)."""
     t0 = time.perf_counter()
     limits = limits or VX.Limits()
     arrivals = arrivals or {}
@@ -142,7 +146,8 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     by_inst: dict[int, ProgramIndex] = {}
     all_vus: list[dict] = []
     skipped: list[str] = []
-    for n_built, (rid, inst) in enumerate(programs.items()):
+    reuse = population_of_record if (population_of_record or {}).get("indices") and set(population_of_record["indices"]) >= set(map(str, programs)) else None
+    for n_built, (rid, inst) in enumerate([] if reuse else programs.items()):
         # the population build has its own budget, checked between request Programs (a B32 row's 33 Programs took > 18 min):
         # the requests left are named, the draw runs over the ones built
         if time.perf_counter() - t0 > float(limits.max_population_seconds):
@@ -153,12 +158,17 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
         last = int(phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))["last_step"])
         vus, _ne, _nef = population(pi, rid, arrive=int(arrivals.get(rid, 0)), last_step=last)
         all_vus.extend(vus)
-    pool, _not_exec = split_not_executed(all_vus, executed_prefix)
+    if reuse:
+        indices, all_vus = {r: reuse["indices"][str(r)] for r in programs}, list(reuse["vus"])
+        pool, _not_exec = list(reuse["pool"]), list(reuse["not_executed"])
+    else:
+        pool, _not_exec = split_not_executed(all_vus, executed_prefix)
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
     t_draw = time.perf_counter()                                             # the draw's budget starts here, never inside the build
     print(f"[vu-export] population: {len(indices)}/{len(programs)} request Programs, {len(all_vus)} VUs, {len(picked)} drawn, "
-          f"{t_draw - t0:.0f} s" + (f"; {len(skipped)} Programs past the population budget" if skipped else ""), flush=True)
+          f"{t_draw - t0:.0f} s" + (" (the replay's own)" if reuse else "") + (f"; {len(skipped)} Programs past the population budget" if skipped else ""),
+          flush=True)
     _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
@@ -216,6 +226,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     summary = {"schema": VX.EXPORT_SCHEMA, "provenance": prov, "limits": dataclasses.asdict(limits),
                "population": {"vus": len(all_vus), "pool": len(pool), "not_executed": len(_not_exec),
                               "programs": len(programs), "programs_built": len(indices), "programs_past_budget": skipped,
+                              "source": "the sampled replay's own population (reused)" if reuse else "built here",
                               "pool_by_family": dict(Counter(v["family"] for v in pool)), "not_exported_families": VX.NOT_EXPORTED},
                "by_family": {f: dict(c) | {"seconds": round(fam_time[f], 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
@@ -353,6 +364,7 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
                  program_digests: dict[str, str], versions: dict[str, Any], eng: Any) -> dict[str, Any] | None:
     """The Commit stage's call, right after pair 0's replay record and value source are taken: exports when `out_dir` is given and the
     replay passed.  A failure is printed and returned by name; nothing here reaches the record or a verdict."""
+    kept = SR.take_population()                                              # taken (and dropped) whether or not this pair exports
     if not out_dir or pair != 0 or sr.get("result") is not True:
         return None
     out = Path(out_dir)
@@ -366,7 +378,7 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
     try:
         s = export_vus(programs, bmap, reader, weights, out_dir=out, run_root=run_root, arrivals=arrivals, manifest=man,
                        executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},
-                       provenance=prov, limits=_limits_for(out, sr))
+                       provenance=prov, limits=_limits_for(out, sr), population_of_record=kept)
     except Exception as e:  # noqa: BLE001  -- not part of the record: named, never a verdict
         print(f"[vu-export] FAILED: {e!r}"[:400], flush=True)
         return {"ok": False, "why": repr(e)[:400]}

@@ -42,3 +42,28 @@ def test_the_draw_budget_starts_after_a_slow_population_build(tmp_path, monkeypa
     b = run("b", max_population_seconds=0.25)
     assert b["population"]["programs_built"] < 12 and b["population"]["programs_past_budget"] == list(prompts)[b["population"]["programs_built"]:]
     assert {v["request"] for v in map(json.loads, (tmp_path / "b" / "vus.jsonl").read_text().splitlines())} <= set(list(prompts)[:b["population"]["programs_built"]])
+
+
+def test_the_export_reuses_the_replays_population_and_never_keeps_it(tmp_path, monkeypatch):
+    """The Commit's replay has already built every request Program's index and population: the export takes that one (no rebuild
+    inside the Commit), and `after_replay` drops it whether or not it exports."""
+    from verity_vllm.check.replay import driver as SR
+    from tests.pipeline.test_vu_export import _world
+    world = _world(attn=True)
+    programs = {rid: world.inst for rid in world.prompts}
+    bmap, committed = world.bmap_and_reader()
+    SR.keep_population(True)
+    rep = SR.sampled_replay(programs, bmap, committed, _weights(world), per_stratum=1, seed=3, workers=0)
+    kept = SR.take_population()
+    assert set(kept["indices"]) == set(programs) and len(kept["vus"]) == rep["population"]["vus"] and not SR.take_population()
+
+    def no_build(*a, **kw):
+        raise AssertionError("the export rebuilt a request Program's index")
+
+    monkeypatch.setattr(VS, "ProgramIndex", no_build)
+    s = VS.export_vus(programs, bmap, committed, _weights(world), out_dir=tmp_path / "a", run_root=ROOT,
+                      limits=VX.Limits(per_family=8, workers=1), population_of_record=kept)
+    assert s["population"]["source"].startswith("the sampled replay") and s["population"]["vus"] == rep["population"]["vus"] and s["sets"]
+    SR.sampled_replay(programs, bmap, committed, _weights(world), per_stratum=1, seed=3, workers=0)
+    assert VS.after_replay(None, {"result": True}, 0, ROOT, programs, bmap, committed, _weights(world), {}, None, {}, {}, {}, {}, None) is None
+    assert SR.take_population() == {}                                     # dropped even when the export is off
