@@ -1067,6 +1067,14 @@ The lowering theorems are proved about a certified checker, over all inputs. The
 files at setup and refuses a circuit it cannot certify. So no proof evaluates a pinned file in the kernel, and no proof
 uses `native_decide`.
 
+Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
+`Classical.choice` and `Quot.sound`):
+- **1b, Merkle:** `merkle_binding` is proved, for any `MerkleScheme`. Two accepted checks against one cap at the same
+  positions, whose rows differ at a query, give a node or leaf collision (`climb_binding`, `opens_binding`).
+- **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
+  round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
+- Planned: the field (with the soundness package's Mathlib), the assembly lemmas, and the lowering checkers.
+
 ## 18. Test vectors
 
 `backends/flock/verifier/vectors.json` (`flock-verifier-vectors/v1`) lists them; the bytes stay in the evidence store

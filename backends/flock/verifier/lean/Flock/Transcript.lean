@@ -57,21 +57,33 @@ def absorbBytes (b : ByteArray) : TM Unit :=
 /-- A proof-of-work nonce: a message, never checked (R4). -/
 def pow (nonce : UInt64) : TM Unit := absorbBytes (le64 nonce)
 
-def squeeze (kind : UInt8) (n : Nat) : TM (Array F128) := do
-  let t ← get
-  let c := t.pending ++ header 4 kind n
-  if n == 0 then
-    set { t with pending := c }
-    return #[]
-  match t.rounds[t.k]? with
-  | none => throw s!"R2: round {t.k}: the verifier issued no such coin"
-  | some r =>
-    if r.n != n then throw s!"R2: round {t.k}: {n} coins requested, {r.n} issued"
-    match r.bytes with
-    | some b => if c != b then throw s!"R2: round {t.k}: the proof's messages are not the bytes the server retained before the coin"
-    | none => if Sha256.hash c != r.sha then throw s!"R2: round {t.k}: the proof's messages differ from those committed before the coin"
-    set { t with pending := ByteArray.empty, k := t.k + 1 }
-    return r.coins
+/-- The framed bytes a squeeze of `n` coins of `kind` answers: everything absorbed since the last coin, then its header. -/
+def framed (t : Transcript) (kind : UInt8) (n : Nat) : ByteArray := t.pending ++ header 4 kind n
+
+/-- Round `r` answers the framed bytes `c`: exactly its retained bytes when the server kept them, else their digest. -/
+def _root_.Flock.Round.answers (r : Round) (c : ByteArray) : Prop :=
+  match r.bytes with
+  | some b => c = b
+  | none => Sha256.hash c = r.sha
+
+instance (r : Round) (c : ByteArray) : Decidable (r.answers c) := by
+  unfold Round.answers
+  split <;> infer_instance
+
+/-- §6.2: a squeeze of `n = 0` coins only frames its header; otherwise round `k` must exist, issue `n` coins and answer
+the framed bytes, and the squeeze returns its coins, clears `pending` and moves to round `k + 1` (R2). -/
+def squeeze (kind : UInt8) (n : Nat) : TM (Array F128) := fun t =>
+  let c := framed t kind n
+  if n = 0 then .ok (#[], { t with pending := c })
+  else match t.rounds[t.k]? with
+    | none => .error s!"R2: round {t.k}: the verifier issued no such coin"
+    | some r =>
+      if r.n ≠ n then .error s!"R2: round {t.k}: {n} coins requested, {r.n} issued"
+      else if ¬ r.answers c then
+        .error (match r.bytes with
+          | some _ => s!"R2: round {t.k}: the proof's messages are not the bytes the server retained before the coin"
+          | none => s!"R2: round {t.k}: the proof's messages differ from those committed before the coin")
+      else .ok (r.coins, { t with pending := ByteArray.empty, k := t.k + 1 })
 
 def sample : TM F128 := do
   let c ← squeeze 1 1

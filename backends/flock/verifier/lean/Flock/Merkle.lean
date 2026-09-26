@@ -39,22 +39,32 @@ def find? (id : String) : Option MerkleScheme := all.find? (·.id == id)
 
 end MerkleScheme
 
+/-- The digest a query climbs to from `acc` at index `idx`, one sibling per level, leaf side first: the node of
+`(acc, sibling)` when the index is even, of `(sibling, acc)` when it is odd. -/
+def climb (ms : MerkleScheme) : ByteArray → Nat → List ByteArray → ByteArray
+  | acc, _, [] => acc
+  | acc, idx, s :: rest => climb ms (if idx % 2 = 0 then ms.node acc s else ms.node s acc) (idx / 2) rest
+
+/-- Query at `pos` opens: its row has `lanes` elements, it has `d − c` siblings, and its leaf climbs to its cap entry. -/
+def opens (ms : MerkleScheme) (cap : Array ByteArray) (c d lanes pos : Nat) (row : Array F128) (sibs : List ByteArray) : Bool :=
+  decide (row.size = lanes) && decide (sibs.length = d - c) &&
+    decide (climb ms (ms.leaf row) pos sibs = cap.getD (pos >>> (d - c)) ByteArray.empty)
+
+/-- The `w` siblings of query `j`. -/
+def sibsOf (siblings : Array ByteArray) (w j : Nat) : List ByteArray := (siblings.extract (j * w) (j * w + w)).toList
+
 /-- §14: `rows` open to `cap` (depth `c`) at `positions` of a codeword of `2^d` rows, each of `lanes` elements, with
-`d − c` siblings per query, leaf side first at the bottom. -/
+`d − c` siblings per query. -/
 def merkleCheck (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat) (rows : Array (Array F128))
-    (siblings : Array ByteArray) (lanes : Nat) : V Unit := do
+    (siblings : Array ByteArray) (lanes : Nat) : V Unit :=
   if cap.size != 2 ^ c || rows.size != positions.size || siblings.size != positions.size * (d - c) then
     throw "merkle: shape"
-  if cap.any (·.size != ms.digestLen) || siblings.any (·.size != ms.digestLen) then throw "merkle: digest width"
-  for j in [0:positions.size] do
-    let row := rows[j]!
-    if row.size != lanes then throw "merkle: row length"
-    let mut acc := ms.leaf row
-    let mut idx := positions[j]!
-    for t in [0:d - c] do
-      let sib := siblings[j * (d - c) + t]!
-      acc := if idx % 2 == 0 then ms.node acc sib else ms.node sib acc
-      idx := idx / 2
-    if acc != cap[positions[j]! >>> (d - c)]! then throw s!"merkle: query {j} does not open to the cap"
+  else if cap.any (·.size != ms.digestLen) || siblings.any (·.size != ms.digestLen) then
+    throw "merkle: digest width"
+  else
+    match (List.range positions.size).find? (fun j =>
+        !opens ms cap c d lanes positions[j]! rows[j]! (sibsOf siblings (d - c) j)) with
+    | some j => throw s!"merkle: query {j} does not open to the cap"
+    | none => pure ()
 
 end Flock

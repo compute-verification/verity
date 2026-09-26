@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the soundness package's Mathlib and ArkLib pin v4.34.0
@@ -30,3 +34,17 @@ def test_no_escape_hatches():
     hits = [f"{p.relative_to(LEAN)}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
     assert not hits, hits
+
+
+STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_proofs_use_only_standard_axioms():
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    out = subprocess.run(["lake", "env", "lean", "CheckAxioms.lean"], cwd=LEAN, check=True, capture_output=True, text=True).stdout
+    lines = [l for l in out.splitlines() if "depends on axioms" in l or "does not depend on any axioms" in l]
+    assert lines, out
+    for l in lines:
+        used = set(re.findall(r"[\w.]+", l.split(":", 1)[1])) if "depends on axioms" in l else set()
+        assert used <= STANDARD_AXIOMS, l
