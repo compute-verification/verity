@@ -382,7 +382,7 @@ def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
 
 def test_the_tables_are_the_pinned_ones(tmp_path):
     assert IL.write_tables(tmp_path) == IL.TABLES
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["rcp.u32", "rsq.u32", "sqrt.u32"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ex2.u32", "rcp.u32", "rsq.u32", "sqrt.u32"]
 
 
 @SLOW
@@ -428,7 +428,7 @@ def test_piece_counts_are_what_the_design_says():
     assert narrow * 3 < general
 
 
-# --- verity/flock-ir-frame/v2: the frame-v3 binding --------------------------------------------------------------------------
+# --- verity/flock-ir-frame/v3: the frame-v3 binding --------------------------------------------------------------------------
 
 def test_frame_plans_take_the_largest_run_that_fits():
     """RoPE and SiLU·mul read whole chunks; an RMSNorm block holds runs of its chunks' compressions (fused: 4 of 16, its four
@@ -463,7 +463,7 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
     head, body = path.read_bytes().split(b"\n", 1)
     h = json.loads(head)
-    assert h["format"] == "flock-ir-frame/v2" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
+    assert h["format"] == "flock-ir-frame/v3" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
     assert sorted(h["frame_v3"]["roots"]) == ["cs", "out", "x"] and h["frame_v3"]["schemas"]["x"] == "blake3-keyed/row/v2"
     x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)
     row0 = x[0, :64].astype("<u2").tobytes()
@@ -513,3 +513,72 @@ def test_an_ir_cell_plans_through_the_spine():
     assert v["command"][:3] == ["bash", "backends/flock/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
     assert "--send" in v["argv"] and v["argv"][v["argv"].index("--send") + 1] == p["argv"][p["argv"].index("--send") + 1]
     assert "VERIFIER=1.2.3.4:7400" in p["command"] and "LOOPBACK=1" in p["command"]
+
+
+# --- attention: tensor-core k-steps as units, the softmax native -------------------------------------------------------------
+
+def test_the_tensor_core_step_matches_the_ir_on_every_encoding():
+    """``fp.tc_dot16`` = ``AmpereBF16TcDot16`` (the total model): attention-range words, full-range words (overflowing groups),
+    NaN / inf / inf x 0 operands and accumulators, bit for bit."""
+    rng = random.Random(11)
+    specials16 = [0, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 1, 0x8001, 0x7F7F, 0xFF7F]
+    specials32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F7FFFFF, 0xFF7FFFFF, 1]
+
+    def bf(att):
+        if att:
+            return (rng.getrandbits(1) << 15) | (rng.randint(110, 135) << 7) | rng.getrandbits(7)
+        r = rng.random()
+        return rng.choice(specials16) if r < 0.05 else (rng.getrandbits(1) << 15) | (rng.randint(200, 254) << 7) | rng.getrandbits(7) \
+            if r < 0.3 else rng.getrandbits(16)
+
+    vecs = []
+    for i in range(1500):
+        att = i % 3 == 0
+        acc = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.getrandbits(23) if att else \
+            rng.choice(specials32) if rng.random() < 0.1 else rng.getrandbits(32)
+        vecs.append([acc] + [bf(att) for _ in range(32)])
+    got = run_piece(lambda C, acc, *ab: IL.PIECES["AmpereBF16TcDot16_v1"](C, acc, *ab), [32] + [16] * 32, 32, vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != P.AmpereBF16TcDot16.evaluate(*v)] == []
+
+
+def test_attention_units_are_tensor_core_steps():
+    """Every AmpereBF16TcDot16 gate is a unit (b from K/V leaves or a zero word where the IR pads a masked key; a, acc and the
+    result cut words; the query public), the rest is the tail, which returns the output; on the captured T = 129 head the laid-out
+    units reproduce every tensor-core value of the IR."""
+    s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
+    sub = s.subcircuit
+    (T,) = {len(x) // 64 for x in s.port("k")}
+    low = IL.lowering(sub.definition(T), f"attention-head/tc-step/t{T}", unit_fn=IL.tc_units)
+    U = low.units
+    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9857)
+    assert sum(k == "zero" for u in U.in_src for k, _ in u) == 64 * 15
+    assert low.leaves["out"] == [[]] * U.n and low.cut["outputs"] and len(low.cut["outputs"]) == 64
+    fin = np.stack([np.concatenate([s.port("q")[i], s.port("k")[i], s.port("v")[i]]).astype(np.uint64) for i in range(s.n)])
+    cuts = IL.cut_words(low, fin)
+    _res, cut_out, ok = low.evaluate(fin, cuts)
+    assert ok == (1 << U.n) - 1 and (cut_out == cuts).all()
+
+
+def test_attention_frame_places_a_block_per_16_keys(tmp_path):
+    """A 16-key group per block: run slots [K keys | V keys] (one key = one run of two BLAKE3 blocks), unit slots [QK steps | PV
+    columns]; keys past T are empty run slots, their QK steps empty unit slots, and a PV step's masked port reads the empty
+    slot; the query is a public port and the tail computes the outputs, which the file carries."""
+    import json
+
+    from verity_flock import ir_frame as F
+
+    s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
+    mod = REG.module("attention-head")
+    assert mod.key_count(s) == 129
+    low = mod.lowering_for_set(s)
+    pl = F.plan_tc(low, s.subcircuit)
+    assert (pl.nb, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log, pl.public_ports, len(pl.comps)) == (2, 32, 128, 128, 22, [0], 9)
+    runs, units = pl.comps[8]
+    assert runs[0] == (1, 16, 0) and runs[1:16] == [None] * 15 and runs[16] == (2, 16, 0) and units[4:64] == [None] * 60
+    assert pl.wiring[5] == [(1, 32 + 2 * t) for t in range(16)] and pl.wiring[64 + 7] == [(16 + t, 14) for t in range(16)]
+    path = mod.stage(s, 0, 1, tmp_path)
+    head, body = path.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    assert h["public_ports"] == [0] and h["outputs"] == "tail" and h["layout"]["ret_group"] is None and len(h["blocks"]) == 9
+    out = np.frombuffer(body[-4 * h["cut_words"] - 128:-4 * h["cut_words"]], dtype="<u2")
+    assert (out == s.port("out")[0]).all()

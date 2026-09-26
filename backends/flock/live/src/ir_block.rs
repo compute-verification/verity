@@ -495,11 +495,20 @@ impl IrStmt {
 /// The cut words of a cut template's instance file: per instance-local unit, the (column, cut word) of each cut input port
 /// and each cut output port, and the native tail. Red-team-flock-2 IR1: the verifier accepts no cut word it does not
 /// account for itself.
+#[derive(Clone)]
 pub struct CutMap {
     pub words: usize,
     pub tail: Vec<crate::ir_tail::Op>,
     pub unit_in: Vec<Vec<(usize, usize)>>,
     pub unit_out: Vec<Vec<(usize, usize)>>,
+    /// the bit width of each cut input / output port (16 or 32; the same for every unit)
+    pub in_bits: Vec<usize>,
+    pub out_bits: Vec<usize>,
+    /// `(cut word, input leaf)`: cut words that are input leaves the units read publicly (the verifier checks them against
+    /// their port's committed row)
+    pub public: Vec<(usize, usize)>,
+    /// per output leaf, the tail slot that computes it, when the units return none
+    pub outputs: Vec<usize>,
 }
 
 fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
@@ -547,23 +556,36 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
         if net.cut.is_some() || net.in_groups.len() != 1 || net.out_groups.len() != 1 {
             return Err("a netlist with cut groups or a CUT line but no cut words".into());
         }
-        return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi] });
+        return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi], in_bits: vec![], out_bits: vec![],
+                           public: vec![], outputs: vec![] });
     }
-    if net.in_groups.len() != 2 || net.out_groups.len() != 2 {
-        return Err(format!("{words} cut words, but the netlist has no cut port groups"));
+    let outputs: Vec<usize> = cut["outputs"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64().map(|y| y as usize)).collect()).unwrap_or_default();
+    let public: Vec<(usize, usize)> = pairs(&serde_json::json!([cut["public"].clone()]))
+        .ok().and_then(|v| v.into_iter().next()).unwrap_or_default();
+    // units that return output leaves have a returned-output group before their cut group; tail-output units only a cut group
+    let want_out = if outputs.is_empty() { 2 } else { 1 };
+    if net.in_groups.len() != 2 || net.out_groups.len() != want_out {
+        return Err(format!("{words} cut words, but the netlist's port groups are not a leaf and a cut input group and {want_out} output group(s)"));
     }
     let (unit_in, unit_out) = (pairs(&cut["in"])?, pairs(&cut["out"])?);
     if unit_in.len() != upi || unit_out.len() != upi {
         return Err(format!("{upi} units per instance, but the netlist's cut ports list {}", unit_in.len()));
     }
     let group_cols = |g: &Group, base: usize| -> Result<Vec<usize>, String> {
-        if g.bits.iter().any(|&b| b != 32) {
-            return Err("a cut port is not 32 bits".into());
+        if g.bits.iter().any(|&b| b != 16 && b != 32) {
+            return Err("a cut port is not 16 or 32 bits".into());
         }
-        Ok((0..g.bits.len()).map(|j| g.col * WORD - base + 32 * j).collect())
+        Ok(g.bits.iter().scan(g.col * WORD - base, |a, &b| { let c = *a; *a += b; Some(c) }).collect())
     };
-    let (cin, cout) = (group_cols(&net.in_groups[1], 0)?, group_cols(&net.out_groups[1], net.out_cols[0] * WORD)?);
+    let cg_out = net.out_groups.last().unwrap();
+    let (cin, cout) = (group_cols(&net.in_groups[1], 0)?, group_cols(cg_out, net.out_cols[0] * WORD)?);
+    let (in_bits, out_bits) = (net.in_groups[1].bits.clone(), cg_out.bits.clone());
     let mut produced = std::collections::BTreeSet::new();
+    for &(k, _) in &public {
+        if k >= words || !produced.insert(k) {
+            return Err(format!("public cut word {k} out of range or listed twice"));
+        }
+    }
     for u in 0..upi {
         if unit_in[u].iter().map(|p| p.0).collect::<Vec<_>>() != cin || unit_out[u].iter().map(|p| p.0).collect::<Vec<_>>() != cout {
             return Err(format!("unit {u}'s cut ports are not the netlist's cut groups"));
@@ -581,9 +603,12 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
     }
     let tail = crate::ir_tail::parse(&cut["tail"], words, &produced)?;
     if tail.iter().any(|o| o.out < words && produced.contains(&o.out)) {
-        return Err("a cut word is computed by a unit and by the tail".into());
+        return Err("a cut word is computed by a unit, by the tail or by the file twice".into());
     }
-    Ok(CutMap { words, tail, unit_in, unit_out })
+    if outputs.iter().any(|&s| !tail.iter().any(|o| o.out == s)) {
+        return Err("an output slot the tail does not compute".into());
+    }
+    Ok(CutMap { words, tail, unit_in, unit_out, in_bits, out_bits, public, outputs })
 }
 
 fn word32(words: &[F128], col: usize) -> u32 {

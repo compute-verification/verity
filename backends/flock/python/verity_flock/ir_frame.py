@@ -21,15 +21,15 @@ each unit's cut ports a region claim; the verifier evaluates the netlist's pinne
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
 from . import ir_lower as IL
 
-FORMAT = "flock-ir-frame/v2"
-STATEMENT = "verity/flock-ir-frame/v2"
+FORMAT = "flock-ir-frame/v3"
+STATEMENT = "verity/flock-ir-frame/v3"
 SCHEME = "frame-v3/blake3-keyed"
 BINDING_TAG = "verity/flock-ir-frame/binding/v1"
 CHUNK = 1024
@@ -64,6 +64,8 @@ class Plan:
     unit_pos0: int
     units_per_block: int
     k_log: int
+    #: input ports the units read as public words (hashed by the verifier, not in the circuit)
+    public_ports: list = field(default_factory=list)
 
     @property
     def chunks_per_comp(self) -> int:
@@ -117,8 +119,7 @@ def plan(low: IL.Lowering, sub, k_max: int = K_MAX) -> Plan:
     packing with the best fill for it."""
     if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
         raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
-    in_ports = [(p.name, p.words) for p in sub.inputs]
-    out_ports = [(p.name, p.words) for p in sub.outputs]
+    in_ports, out_ports = _ports(low, sub)
     starts = np.cumsum([0] + [w for _, w in in_ports])
     row_bytes = [2 * w for _, w in in_ports]
     sizes = {min(CHUNK, rb - CHUNK * c) for rb in row_bytes for c in range(-(-rb // CHUNK))}
@@ -165,6 +166,69 @@ def plan(low: IL.Lowering, sub, k_max: int = K_MAX) -> Plan:
                      f"2^{k_max} bits (units of 2^{ul}, a power-of-two unit count)")
 
 
+def _ports(low: IL.Lowering, sub) -> tuple[list, list]:
+    """``(name, words)`` per input and output port, the words from the lowering's pinned leaf maps (a key-count port has
+    none in the subcircuit)."""
+    lv = low.leaves
+    return ([(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])], [(p.name, w) for p, (w, _) in zip(sub.outputs, lv["out_ports"])])
+
+
+def plan_tc(low: IL.Lowering, sub) -> Plan:
+    """Tensor-core steps (``ir_lower.tc_units``) of an attention head: the public query port is not hashed here; the two key
+    ports (K, V; D words per key, a run of ``2 D`` bytes = one key's row) are. One block per group of 16 keys: run slots
+    ``[K keys 0..15 | V keys 0..15]``, unit slots ``[QK (key j, step s) at D/16 j + s | PV column d at D + d]``; a key past T is
+    an empty run slot, its QK steps empty unit slots, and a PV step reads the empty slot's zero words where the IR pads."""
+    in_ports, out_ports = _ports(low, sub)
+    starts = [int(x) for x in np.cumsum([0] + [w for _, w in in_ports])]
+    public = {pos for _, pos in low.units.public}
+    pub = [p for p in range(len(in_ports)) if all(q in public for q in range(starts[p], starts[p + 1]))]
+    rows = [p for p in range(len(in_ports)) if p not in pub]
+    if len(pub) != 1 or len(rows) != 2:
+        raise ValueError(f"{low.name}: a tensor-core frame needs one public port and two key ports")
+    pk, pv = rows
+    D = in_ports[pub[0]][1]
+    T = in_ports[pk][1] // D
+    key_bytes, steps = 2 * D, D // 16
+    if in_ports[pv][1] != T * D or key_bytes % BLOCK or CHUNK % key_bytes or D % 16:
+        raise ValueError(f"{low.name}: keys of {D} words do not tile BLAKE3 chunks")
+    nb = key_bytes // BLOCK
+
+    def run(p, c):
+        byte = c * key_bytes
+        return (p, byte // CHUNK, byte % CHUNK // key_bytes)
+
+    lv = low.leaves["in"]
+    ng = -(-T // 16)
+    comps = [([run(pk, 16 * g + j) if 16 * g + j < T else None for j in range(16)]
+              + [run(pv, 16 * g + j) if 16 * g + j < T else None for j in range(16)], [None] * (2 * D)) for g in range(ng)]
+    for u, leaves in enumerate(lv):
+        first = next(x for x in leaves if x >= 0)
+        p = next(q for q in rows if starts[q] <= first < starts[q + 1])
+        c, w = divmod(first - starts[p], D)
+        if p == pk:
+            s = w // 16
+            want = [starts[pk] + c * D + 16 * s + t for t in range(16)]
+            g, slot = c // 16, steps * (c % 16) + s
+        else:
+            g, d = c // 16, w
+            want = [starts[pv] + (16 * g + t) * D + d if 16 * g + t < T else -1 for t in range(16)]
+            slot = D + d
+        if leaves != want or comps[g][1][slot] is not None:
+            raise ValueError(f"{low.name}: unit {u} is not a QK or PV step of its key group")
+        comps[g][1][slot] = u
+    wiring = [[(j, 32 * s + 2 * t) for t in range(16)] for j in range(16) for s in range(steps)] + \
+             [[(16 + t, 2 * d) for t in range(16)] for d in range(D)]
+    ul = max(7, (low.layout.useful - 1).bit_length())
+    Q, units = 32, 2 * D
+    C = Q * nb
+    pos0 = -(-(C << SUB_LOG) // (1 << ul))
+    pos0 = -(-pos0 // units) * units
+    k_log = max(K_MIN, (((pos0 + units) << ul) - 1).bit_length())
+    if k_log > K_MAX or units > MAX_SLOTS or C > MAX_SLOTS:
+        raise ValueError(f"{low.name}: a 16-key group does not fit a block of at most 2^{K_MAX} bits")
+    return Plan(low, in_ports, out_ports, comps, wiring, 1, nb, CHUNK // BLOCK, C, ul, pos0, units, k_log, public_ports=pub)
+
+
 # --- frame-v3 statement commitments ------------------------------------------------------------------------------------------
 
 def statement(pl: Plan, input_set, lo: int, hi: int, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]):
@@ -206,10 +270,11 @@ def statement(pl: Plan, input_set, lo: int, hi: int, rows: dict[str, np.ndarray]
 # --- the instance file -------------------------------------------------------------------------------------------------------
 
 def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None = None) -> dict:
-    """``flock-ir-frame/v2``: one JSON header line (the plan, every block's runs as ``[instance, port, chunk, run]`` and units, the
+    """``flock-ir-frame/v3``: one JSON header line (the plan, every block's runs as ``[instance, port, chunk, run]`` and units, the
     frame-v3 statement), then every instance's input rows (ports in order, words little-endian), every instance's row digests
-    (32 bytes per input port), every unit's returned-output words (``ret_words`` x 16 bytes, units instance-major) and, for a
-    cut template, every instance's cut words (u32 LE)."""
+    (32 bytes per input port), the outputs: every unit's returned-output words (``ret_words`` x 16 bytes, units instance-major)
+    or, when the tail computes them, every instance's output words (u16 LE), and, for a cut template, every instance's cut
+    words (u32 LE)."""
     low, sub, n = pl.low, input_set.subcircuit, hi - lo
     U, lay = low.units, low.layout
     rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
@@ -226,26 +291,32 @@ def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None =
                 continue
             i, c = divmod(gi, len(pl.comps))
             cs, us = pl.comps[c]
-            chunks += [[i, p, ci, r] for p, ci, r in cs]
-            units += [i * U.n + u for u in us]
+            chunks += [None if x is None else [i, *x] for x in cs]
+            units += [None if u is None else i * U.n + u for u in us]
         blocks.append([chunks + [None] * (pl.chunk_slots - len(chunks)), units])
-    ret = lay.out_groups[0]
-    n_ret = len(ret[2])
     fout = IL.flat_ports(input_set, sub.outputs, lo, hi)
-    out_bytes = IL._pack_words(low.unit_outputs(fout, cuts)[:n_ret], ret[2], ret[1],
-                               [c - ret[0] * IL.WORD for c in lay.out_port_cols[:n_ret]])
-    leaf_ports = [j for j, (k, _) in enumerate(U.in_src[0]) if k == "leaf"]
+    tail_out = bool(U.tail_rets)
+    n_ret = 0 if tail_out else len(lay.out_groups[0][2])
+    ret = None if tail_out else lay.out_groups[0]
+    if tail_out:
+        out_bytes = np.asarray(fout, dtype="<u2").tobytes()
+    else:
+        out_bytes = IL._pack_words(low.unit_outputs(fout, cuts)[:n_ret], ret[2], ret[1],
+                                   [c - ret[0] * IL.WORD for c in lay.out_port_cols[:n_ret]])
+    leaf_ports = [j for j, (k, _) in enumerate(U.in_src[0]) if k in ("leaf", "zero")]
     head = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "unit": low.name, "unit_sha256": low.sha256,
             "set": input_set.name, "subcircuit": sub.id, "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n,
             "units_per_instance": U.n, "units": n * U.n,
             "in_ports": [[nm, w] for nm, w in pl.in_ports], "out_ports": [[nm, w] for nm, w in pl.out_ports],
-            "layout": {"sub_log": SUB_LOG, "comp_slots": pl.comp_slots, "nb": pl.nb, "chunk_nb": pl.chunk_nb, "chunks_per_block": pl.chunk_slots,
+            "public_ports": pl.public_ports, "outputs": "tail" if tail_out else "units",
+            "layout": {"sub_log": SUB_LOG, "comp_slots": pl.comp_slots, "nb": pl.nb, "chunks_per_block": pl.chunk_slots,
                        "units_per_block": pl.units_per_block, "unit_log": pl.unit_log, "unit_pos0": pl.unit_pos0, "k_log": pl.k_log,
                        "G": pl.G, "chunks_per_comp": pl.chunks_per_comp, "units_per_comp": pl.units_per_comp,
                        "wiring": [[[q + pl.chunks_per_comp * (k // pl.units_per_comp), off] for q, off in pl.wiring[k % pl.units_per_comp]]
                                   for k in range(pl.units_per_block)],
                        "leaf_cols": [lay.in_port_cols[j] for j in leaf_ports],
-                       "ret_group": [ret[0], ret[1]], "ret_cols": [c - ret[0] * IL.WORD for c in lay.out_port_cols[:n_ret]],
+                       "ret_group": [ret[0], ret[1]] if ret else None,
+                       "ret_cols": [c - ret[0] * IL.WORD for c in lay.out_port_cols[:n_ret]] if ret else [],
                        "out_leaf": [[p for k, p in U.out_src[u] if k == "ret"] for u in range(U.n)]},
             "blocks": blocks, "cut_words": len(U.cut), "frame_v3": fv}
     body = b"".join(np.concatenate([rows[nm] for nm, _ in pl.in_ports], axis=1).astype("<u2")[i].tobytes() for i in range(n))
@@ -266,7 +337,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, k_max: int = K
     out.mkdir(parents=True, exist_ok=True)
     (out / "net.txt").write_text(low.text)
     sub = input_set.subcircuit
-    pl = plan(low, sub, k_max)
+    pl = plan_tc(low, sub) if low.units.tail_rets else plan(low, sub, k_max)
     path = out / f"frame-{hi - lo}.bin"
     cuts = IL.cut_words(low, IL.flat_ports(input_set, sub.inputs, lo, hi)) if low.units.cut else None
     write(pl, input_set, lo, hi, path, cuts)
