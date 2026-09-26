@@ -14,12 +14,17 @@ backend's driver (``bench.drivers``, one module per backend), the family's lower
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the
 ``research run`` of every job, which ``run`` launches in order.  The protocol is the backend's own scripts', wrapped, never
 rewritten: the plateau sweep (doubling from 1,024 until two doublings add < 2 %), warm + >= 5 timed runs + the timing guard, the
-verifier on a separate pod, an open-connection RTT probe and a loopback probe.
+verifier on a separate machine, an open-connection RTT probe and a loopback probe.
+
+Separate means another physical machine on a routed link (``bench.placement``): ``plan`` reads both pods' RunPod machine id and
+public IP (or ``--placement FILE``) and refuses a pair sharing either, or linked over a host-private address; each job first
+records its container's identity (DMI product uuid, kernel boot id, CPU model, public IP, the route to the verifier) in the run's
+``placement.json``, and ``check`` compares both runs' identities, never their hostnames.
 
 ``check`` reads the prover run's result and says what keeps it from counting: the result contract (``contract.validate``), the
-protocol (``views._protocol``), the interaction record (``views.interaction_problem``), a live verifier on another host for an
+protocol (``views._protocol``), the interaction record (``views.interaction_problem``), a live verifier on another machine for an
 interactive backend, the loopback probe, and that its statement and instance set are the cell's.  ``register`` runs the backend's
-registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set) into the document, checks it,
+registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set, both machines) into the document, checks it,
 and puts it in the evidence store (``research data put --kind bench-result/v1 --ref run_files=... --preserve``).
 """
 from __future__ import annotations
@@ -36,7 +41,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import census as CN
-from . import contract, drivers, input_sets as IS, lowerings as LW, templates as TM, views
+from . import contract, drivers, input_sets as IS, lowerings as LW, placement as PL, templates as TM, views
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
@@ -77,6 +82,8 @@ class Cell:
     per_proof: int | None = None
     backend_args: list[str] = field(default_factory=list)
     jobs: list[dict[str, Any]] = field(default_factory=list)
+    #: an interactive cell's pods: {"prover": identity, "verifier": identity, "link": {"peer", "peer_ip"}} (``bench.placement``)
+    placement: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1, default=str) + "\n"
@@ -133,11 +140,31 @@ def plan(backend: str, statement: str, input_set: str, prover: str, **kw: Any) -
         raise NotSupported(f"{backend} is interactive: the protocol puts its verifier on a separate pod (--verifier, --verifier-addr)")
     if drv.INTERACTIVE and cell.verifier == cell.prover:
         raise NotSupported("the verifier must run on a pod other than the prover's")
+    if drv.INTERACTIVE:
+        if not cell.placement:
+            cell.placement = resolve_placement(cell)
+        why = PL.separation(cell.placement.get("prover") or {}, cell.placement.get("verifier") or {}, cell.placement.get("link"))
+        if why:
+            raise NotSupported("; ".join(why))
     why = getattr(drv, "unmet", lambda _c: None)(cell)
     if why:
         raise NotSupported(why)
     cell.jobs = [research_run(cell, j) for j in drv.jobs(cell)]
     return cell
+
+
+def resolve_placement(cell: Cell) -> dict[str, Any]:
+    """Both pods' identity from the RunPod API (machine id, public IP) and the address the prover will reach the verifier at."""
+    try:
+        prover, verifier = PL.from_runpod(cell.prover), PL.from_runpod(cell.verifier or "")
+    except Exception as e:  # noqa: BLE001  (no API, no key, an unknown pod: the separation cannot be shown)
+        raise NotSupported(f"the pods' machine identity is unavailable ({type(e).__name__}: {e}); pass it with --placement FILE") from e
+    return {"prover": prover, "verifier": verifier, "link": PL.link_to(cell.verifier_addr or "")}
+
+
+#: Before a cell's job, each pod records its identity (and the prover the route to its verifier) in the run's placement.json.
+PROBE_WRAP = (f'python3 {PL.PROBE} probe --peer "$1" --out "${{RESEARCH_RUN_DIR:-.}}/placement.json" >/dev/null '
+              '|| echo "placement probe failed" >&2; shift; exec "$@"')
 
 
 def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
@@ -155,7 +182,10 @@ def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
         argv += ["--env", f"{k}={v}"]
     for f in job.get("send") or []:
         argv += ["--send", f]
-    return dict(job, argv=argv + ["--", *job["command"]])
+    command = list(job["command"])
+    if cell.placement:
+        command = ["bash", "-c", PROBE_WRAP, "cell-job", (cell.verifier_addr or "") if job.get("role") == "prover" else "", *command]
+    return dict(job, argv=argv + ["--", *command])
 
 
 def launch(cell: Cell, dry_run: bool = False) -> list[dict[str, Any]]:
@@ -179,11 +209,26 @@ def _meas(doc: Mapping[str, Any]) -> dict[str, Any]:
     return {m["name"]: m.get("value") for m in doc.get("measurements") or [] if isinstance(m, Mapping) and "name" in m}
 
 
-def _host(run_dir: Path | None) -> str | None:
-    if run_dir is None or not (run_dir / "job.json").is_file():
-        return None
-    job = json.loads((run_dir / "job.json").read_text())
-    return (job.get("environment") or {}).get("hostname")
+def run_placement(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> dict[str, Any]:
+    """Each side's identity: the plan's (the RunPod API) merged with what its run recorded (``placement.json``, ``job.json``)."""
+    plan = cell.placement or {}
+    p = PL.merge(plan.get("prover"), PL.from_job(prover_run) if prover_run else None)
+    v = PL.merge(plan.get("verifier"), PL.from_job(verifier_run) if verifier_run else None)
+    return {"prover": p, "verifier": v, "link": PL.merge(plan.get("link"), p.pop("link", None)), "verifier_link": v.pop("link", None)}
+
+
+def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
+    """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
+    the cell planned (a run whose pod id differs from the plan's)."""
+    if not (cell.placement or prover_run or verifier_run):
+        return []
+    pl = run_placement(cell, prover_run, verifier_run)
+    out = PL.separation(pl["prover"], pl["verifier"], pl["link"])
+    for role, run in (("prover", prover_run), ("verifier", verifier_run)):
+        planned, ran = (cell.placement.get(role) or {}).get("pod_id"), (PL.from_job(run) if run else {}).get("pod_id")
+        if planned and ran and planned != ran:
+            out.append(f"the {role} run ran on pod {ran}, the cell planned {planned}")
+    return out
 
 
 def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, verifier_run: Path | None = None) -> list[str]:
@@ -206,9 +251,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
         placement = (fp.get("verifier") or {}).get("placement") if isinstance(fp.get("verifier"), Mapping) else None
         if placement in (None, "loopback") or str(placement).startswith("127."):
             out.append(f"verifier placement {placement!r}: the protocol's verifier runs on a separate pod")
-        hp, hv = _host(prover_run), _host(verifier_run)
-        if hp and hv and hp == hv:
-            out.append(f"prover and verifier ran on one host ({hp})")
+        out += placement_problems(cell, prover_run, verifier_run)
         if not isinstance(m.get("live.loopback_round_seconds"), (int, float)) or not inter.get("loopback_method"):
             out.append("no loopback probe (live.loopback_round_seconds with interaction.loopback_method)")
         if not isinstance(m.get("net.rtt_ms"), (int, float)) or not inter.get("rtt_method"):
@@ -240,6 +283,11 @@ def run_dir(ref: str) -> Path:
     d = runs_root() / ref
     if not (d / "job.json").is_file():
         subprocess.run(["research", "fetch", ref], check=True, capture_output=True, text=True)
+    if not (d / "placement.json").is_file() and (files := run_files(ref)):          # the probe's record is a run file, not a record
+        r = subprocess.run(["research", "data", "fetch", files, "--path", "placement.json"], capture_output=True, text=True)
+        got = Path(r.stdout.strip().splitlines()[-1]) / "placement.json" if r.returncode == 0 and r.stdout.strip() else None
+        if got and got.is_file():
+            (d / "placement.json").write_bytes(got.read_bytes())
     return d
 
 
@@ -250,11 +298,13 @@ def run_files(run_id: str) -> str | None:
     return ((json.loads(r.stdout).get("outputs") or {}).get("run_files"))
 
 
-def stamp(cell: Cell, doc: dict[str, Any]) -> dict[str, Any]:
+def stamp(cell: Cell, doc: dict[str, Any], prover_run: Path | None = None, verifier_run: Path | None = None) -> dict[str, Any]:
     doc["cell"] = {"backend": cell.backend, "backend_family": cell.family, "statement": cell.statement, "subcircuit": cell.subcircuit,
                    "subcircuit_template": cell.subcircuit.split("/")[0], "scheme": cell.scheme, "relation": cell.relation,
                    "input_set": {k: cell.input_set.get(k) for k in ("kind", "id", "art", "n", "content_digest", "manifest_sha256", "source")},
                    "prover_pod": cell.prover, "verifier_pod": cell.verifier, "entry": "verity_numerical.bench.cell"}
+    if cell.placement or prover_run or verifier_run:
+        doc["cell"]["placement"] = dict(run_placement(cell, prover_run, verifier_run), plan=cell.placement)
     if cell.lane:
         doc["cell"]["script_lane"] = {k: doc.get(k) for k in ("lane", "registered_by")}
         doc["lane"] = doc["registered_by"] = cell.lane      # the producer is the lane that ran the cell, not the script's author
@@ -270,7 +320,7 @@ def register(cell: Cell, prover_ref: str, verifier_ref: str | None, work: Path, 
     meta = work / f"{pd.name}.meta.json"
     for cmd in drv.register(cell, pd, vd, meta):
         subprocess.run(cmd, check=True)
-    doc = stamp(cell, json.loads(meta.read_text()))
+    doc = stamp(cell, json.loads(meta.read_text()), pd, vd)
     problems = check(cell, doc, pd, vd)
     doc.setdefault("validation", {})["cell_problems"] = problems
     meta.write_text(json.dumps(doc, indent=1, default=str) + "\n")
@@ -314,6 +364,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--runs", type=int, default=5)
     p.add_argument("--per-proof", type=int, default=None)
     p.add_argument("--backend-arg", action="append", default=[], help="an extra argument for the backend's prover script")
+    p.add_argument("--placement", default=None, help="JSON {prover, verifier, link}: the pods' identities (default: the RunPod API)")
     p.add_argument("--out", default="cell.json")
     for name in ("run", "check", "register"):
         q = sp.add_parser(name)
@@ -334,7 +385,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         try:
             cell = plan(a.backend, a.statement, a.input_set, a.prover, verifier=a.verifier, verifier_addr=a.verifier_addr,
                         rtt_target=a.rtt_target, campaign=a.campaign, lane=a.lane, points=a.points, runs=a.runs, per_proof=a.per_proof,
-                        backend_args=a.backend_arg)
+                        backend_args=a.backend_arg, placement=json.loads(Path(a.placement).read_text()) if a.placement else {})
         except NotSupported as e:
             print(json.dumps({"backend": a.backend, "statement": a.statement, "input_set": a.input_set, "n/s": str(e)}))
             return 3

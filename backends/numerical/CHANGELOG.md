@@ -1,5 +1,20 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: bench.cell requires the verifier on another machine, not another container
+
+- `bench.placement` identifies machines by the RunPod machine id, the public IP, the DMI `product_uuid`, the kernel `boot_id` and the
+  host CPU model, rather than by container hostname. This follows red-team-flock's 12:00Z ruling that a co-resident verifier is not
+  a separate verifier.
+- **`plan`:** it reads both pods' machine id and public IP from the RunPod API (or from `--placement FILE`), and records them in
+  `cell.placement`. It refuses a pair that shares a machine id, public IP, product uuid or boot id. It also refuses a pair that talks
+  over a host-private address (loopback, link-local, RFC 1918, 100.64/10, ULA) unless both machine ids are known and differ, and a
+  pair whose identity isn't enough to tell the machines apart.
+- **Jobs:** every job first runs the stdlib-only probe, `placement.py probe`, which writes the container's identity (and, on the
+  prover, the route to the verifier) to the run's `placement.json`.
+- **`check` and `register`:** they compare both runs' identities (`placement.json`, else `job.json`'s boot id) merged with the plan's.
+  They flag a run whose pod differs from the plan's, and stamp `cell.placement` into the registered document. The hostname
+  comparison is gone.
+
 ## 2026-09-26: attention counted per key count; one verifier-evaluated switch
 
 - **Attention rows per T:** an attention cell's key count T is read wherever the cell records it (`views.input_variables`):
