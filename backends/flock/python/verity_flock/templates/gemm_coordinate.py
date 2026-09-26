@@ -3,7 +3,8 @@
 
 K = 1536 is the frozen sets' K: ``Chunk(3)`` / ``ShaBf16`` for BF16, ``Fp8`` / ``ShaFp8`` for E4M3, ``Fp4`` / ``ShaFp4`` for
 NVFP4 (keyed-BLAKE3 / SHA-256 rows). Any other K lowers when a row is whole BLAKE3 chunks, at least two (``Chunk(n)``,
-n = K x word bytes / 1024, keyed-BLAKE3 only). ``stage`` writes an input set's range as the instance file
+n = K x word bytes / 1024), or n whole chunks and a 512-byte partial one (``ChunkTail(n)``, n + 1 blocks per VU), keyed-BLAKE3
+only. ``stage`` writes an input set's range as the instance file
 (``instances.write_set``, rows per VU). A proof holds at most 32,768 / n VUs (CN2); larger batches are sub-batches."""
 from pathlib import Path
 
@@ -13,8 +14,9 @@ SCHEMES = {"frame-v3/blake3-keyed": "blake3", "frame-v3/sha-256": "sha256"}
 RELATIONS = {"sm80.mma.m16n8k16.bf16": "bf16-ampere", "sm90.mma.m16n8k16.bf16": "bf16-hopper",
              "sm90.wgmma.m64n8k16.bf16": "bf16-hopper-wgmma", "sm89.mma.m16n8k32.e4m3": "fp8-ada",
              "sm90.wgmma.m64n8k32.e4m3": "fp8-hopper", "sm120.mma.m16n8k64.e2m1.nvf4": "fp4-nvf4"}
-#: Chunk(n) with a red-team grant (red-team-flock 04:20Z: n in {2, 4, 8, 16}; Chunk(3) is the K = 1536 BF16 layout's own).
-GRANTED_CHUNKS = {2, 3, 4, 8, 16}
+#: Chunk(n) with a red-team grant (red-team-flock, extended 2026-09-26 10:05Z to every n from 2 to 64); ChunkTail(n) is under review.
+GRANTED_CHUNKS = set(range(2, 65))
+TAIL = 512
 CHUNK = 1024
 
 
@@ -24,15 +26,24 @@ def row_bytes(subcircuit) -> int:
 
 
 def chunks(subcircuit) -> int | None:
-    """``n`` of the ``Chunk(n)`` layout a K lowers to, or None at the frozen K (its own layouts)."""
+    """``n`` of the ``Chunk(n)`` / ``ChunkTail(n)`` layout a K lowers to, or None at the frozen K (its own layouts)."""
     return None if int(subcircuit.params["K"]) == K else row_bytes(subcircuit) // CHUNK
 
 
+def tail(subcircuit) -> bool:
+    return int(subcircuit.params["K"]) != K and row_bytes(subcircuit) % CHUNK == TAIL
+
+
+def layout(subcircuit) -> str | None:
+    n = chunks(subcircuit)
+    return None if n is None else f"ChunkTail({n})" if tail(subcircuit) else f"Chunk({n})"
+
+
 def max_vus_per_proof(subcircuit) -> int:
-    """CN2: m <= 35 (``Chunk(n)``: n x VUs <= 32,768; K = 1536 layouts by their ``k_log``)."""
+    """CN2: m <= 35 (blocks per VU x VUs <= 32,768; K = 1536 layouts by their ``k_log``)."""
     n = chunks(subcircuit)
     if n is not None:
-        return 32768 // n
+        return 32768 // (n + tail(subcircuit))
     return {"bf16": 10922, "e4m3": 16384, "e2m1": 32768}[subcircuit.params["datatype"]]
 
 
@@ -48,9 +59,9 @@ def supports(subcircuit, scheme):
     if "e2m1" in sem:
         return f"the NVFP4 layouts (Fp4 / ShaFp4) are K = {K} rows; K = {k} needs its own layout"
     row = row_bytes(subcircuit)
-    if row % CHUNK or row // CHUNK < 2:
-        return (f"flock-pure-block's Chunk(n) layout needs a row of whole BLAKE3 chunks, at least two (CN3); K = {k} gives a "
-                f"{row}-byte row ({row / CHUNK:g} chunks): a partial last chunk needs a Chunk(n, tail) layout")
+    if row % CHUNK not in (0, TAIL) or row < 2 * CHUNK and row % CHUNK == 0 or row < CHUNK:
+        return (f"flock-pure-block's Chunk(n) / ChunkTail(n) layouts need a row of whole BLAKE3 chunks (at least two) or whole "
+                f"chunks and a 512-byte partial one (CN3); K = {k} gives a {row}-byte row ({row / CHUNK:g} chunks)")
     if scheme != "frame-v3/blake3-keyed":
         return f"Chunk(n) rows are keyed-BLAKE3 only; SHA-256 rows exist at K = {K}"
     return None
@@ -59,8 +70,10 @@ def supports(subcircuit, scheme):
 def granted(subcircuit, scheme) -> str | None:
     """None when a red-team grant covers the layout this statement lowers to, else what is missing (a cell may still run)."""
     n = chunks(subcircuit)
+    if n is not None and tail(subcircuit):
+        return f"ChunkTail({n}) has no red-team grant yet (red-team-flock is reviewing PR #70)"
     if n is not None and n not in GRANTED_CHUNKS:
-        return f"Chunk({n}) is outside red-team-flock's Chunk(n) grant (n in {sorted(GRANTED_CHUNKS - {3})})"
+        return f"Chunk({n}) is outside red-team-flock's Chunk(n) grant (n from 2 to 64)"
     return None
 
 
