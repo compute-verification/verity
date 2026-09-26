@@ -252,7 +252,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # routed weight multiplied into the f32 accumulator); the routed sum over a token's TOPK slots. `rules/vllm_moe.py` asks for them.
            "moe_router_topk": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=VPT),
            "moe_router_topk_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKNorm, E=E, TOPK=TOPK, VPT=VPT),
-           # the same router stated round by round (`TargetProfile.moe_router = "rounds"`)
+           # the same router stated round by round (`moe_construction = indexed-read-rounds`)
            "moe_router_topk_rounds": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKRounds, E=E, TOPK=TOPK, VPT=VPT),
            "moe_router_topk_rounds_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKRoundsNorm, E=E, TOPK=TOPK, VPT=VPT),
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
@@ -297,6 +297,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                               "reduction geometry E/VPT threads x VPT), TOPK rounds of lowest-index argmax; -> (weights f32[TOPK], ids i32[TOPK])",
            "moe_router_topk_norm": "MoeRouterTopKNorm_v1{E,TOPK,VPT}: the same kernel with renormalize=True -- the TOPK probabilities summed in slot order, "
                                    "denom = sum > 0 ? sum : 1, one div.rn.f32 reciprocal, one f32 mul per slot (Qwen3-MoE / Mixtral norm_topk_prob)",
+           "moe_router_topk_rounds": "MoeRouterTopKRounds_v1{E,TOPK,VPT}: MoeRouterTopK_v1's function, each round and each slot's weight its own "
+                                     "subcircuit over the logits and the ids chosen before it (moe_construction = indexed-read-rounds)",
+           "moe_router_topk_rounds_norm": "MoeRouterTopKRoundsNorm_v1{E,TOPK,VPT}: MoeRouterTopKNorm_v1's function, stated as MoeRouterTopKRounds_v1",
            "moe_expert_gemm": "MoeExpertGemm_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=False) for one (token, slot) pair — bf16_rne(DotBf16(x, W[e][n,:])), "
                               "e an I32 value operand (gather over the expert axis inside the body)",
            "moe_expert_gemm_w": "MoeExpertGemmW_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=True) — bf16_rne(f32mul(DotBf16(x, W[e][n,:]), g)), g the pair's routed weight",

@@ -72,20 +72,13 @@ def test_the_kernel_order_routers_of_record_are_unchanged():
 
 def test_the_statement_is_opt_in():
     base = TargetProfile.default()
-    assert "moe_router" not in base.to_json()
-    rounds = base.with_overrides(moe_router="rounds")
-    assert rounds.to_json()["moe_router"] == "rounds" and rounds.digest() != base.digest()
-    with pytest.raises(ValueError, match="moe_router must be"):
-        base.with_overrides(moe_router="kernel")
-    with pytest.raises(ValueError, match="indexed-read router"):
-        base.with_overrides(moe_router="rounds", moe_construction="padded")
+    assert "moe_construction" not in base.to_json() and base.effective_moe_construction() == "indexed-read"
+    rounds = base.with_overrides(moe_construction="indexed-read-rounds")
+    assert rounds.digest() != base.digest()
+    assert rounds.moe_construction_declaration()["definitions"][0] == "MoeRouterTopKRounds_v1{E,TOPK,VPT}"
 
 
 def test_the_fold_states_the_declared_router():
-    from verity_vllm.engine.profiles.gen_ov_moe_patterns import MoEFusedExperts, with_moe_router
-    from verity_vllm.observe.fold.resolver import Profile
-    prof = Profile("p", [MoEFusedExperts({})], {}, lambda n: None)
-    assert with_moe_router(prof, None) is prof
-    assert with_moe_router(prof, "rounds").patterns[0].router == "rounds" and prof.patterns[0].router is None
-    with pytest.raises(ValueError, match="no indexed-read MoE scope pattern"):
-        with_moe_router(Profile("q", [], {}, lambda n: None), "rounds")
+    from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS
+    assert MOE_CONSTRUCTION_PATTERNS["indexed-read"]({}).router is None
+    assert MOE_CONSTRUCTION_PATTERNS["indexed-read-rounds"]({}).router == "rounds"

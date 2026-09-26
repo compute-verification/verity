@@ -263,7 +263,7 @@ def MoeRouterTopKNorm(B, S, logits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same router restated round by round (opt-in: `TargetProfile.moe_router = "rounds"`): round k is its own subcircuit over the
+# the same router restated round by round (opt-in: `TargetProfile.moe_construction = "indexed-read-rounds"`): round k is its own subcircuit over the
 # logits and the ids chosen before it, a slot's weight its own over the logits and the ids -- so no score vector crosses a round
 # ---------------------------------------------------------------------------------------------------------
 

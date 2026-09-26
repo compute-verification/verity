@@ -166,8 +166,7 @@ class MoEFusedExperts:
     #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
-    #: the router's statement (`TargetProfile.moe_router`): None = kernel order, "rounds" = `MoeRouterTopKRounds[Norm]_v1`, the same
-    #: function; the workload's declaration, passed down like `moe_construction`, never read off the trace
+    #: the router's statement: None = kernel order, "rounds" = `MoeRouterTopKRounds[Norm]_v1`, the same function (`MoEFusedExpertsRounds`)
     router: str | None = None
     #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
@@ -416,18 +415,15 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         return Group(tuple(keep) + (one, *tail), r.consumed, hint=hint, pattern=self.name)
 
 
-def with_moe_router(profile: Any, router: str | None) -> Any:
-    """`profile` with its indexed-read MoE scope pattern stating the router as `router` declares (None = kernel order: unchanged)."""
-    if router is None:
-        return profile
-    pats = [dataclasses.replace(pt, router=router) if type(pt) is MoEFusedExperts else pt for pt in profile.patterns]
-    if not any(type(pt) is MoEFusedExperts for pt in profile.patterns):
-        raise ValueError(f"moe_router={router!r} declared but the profile has no indexed-read MoE scope pattern")
-    return dataclasses.replace(profile, patterns=pats)
+@dataclass
+class MoEFusedExpertsRounds(MoEFusedExperts):
+    """`moe_construction = indexed-read-rounds`: `MoEFusedExperts` with the router stated round by round (`MoeRouterTopKRounds[Norm]_v1`)."""
+
+    router: str | None = "rounds"
 
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
-MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded}
+MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded, "indexed-read-rounds": MoEFusedExpertsRounds}
 
 
 def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] | None = None, gemm_num_sms: int | None = None,

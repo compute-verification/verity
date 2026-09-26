@@ -218,8 +218,6 @@ class Plan:
         # a Program static of record; default indexed-read): passed down explicitly, never read off the trace
         mc = _workload_moe_construction(a.workload)
         MC = ["--moe-construction", mc] if mc else []
-        mr = _workload_moe_router(a.workload)
-        MC += ["--moe-router", mr] if mr else []
         if stage in ("fold", "fold_2"):
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + \
@@ -623,8 +621,6 @@ class Options:
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
     persist_dir: str | None = option("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
     moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | padded); the driver passes it from --workload")
-    moe_router: str | None = option("--moe-router", default=None, help="(--worker fold) the workload's DECLARED router statement (manifest "
-                                    "target.moe_router: rounds; unset = kernel order); the driver passes it from --workload")
 
 
 def main(a: Options) -> int:
@@ -906,17 +902,6 @@ def _workload_moe_construction(path: str | None) -> str | None:
     return str(mc)
 
 
-def _workload_moe_router(path: str | None) -> str | None:
-    """The workload's DECLARED router statement (manifest `target.moe_router`; None = kernel order), validated by the frontend's table."""
-    mr = ((_workload_doc(path) or {}).get("target") or {}).get("moe_router")
-    if mr is None:
-        return None
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    if mr not in TargetProfile.MOE_ROUTERS:
-        raise SystemExit(f"workload target.moe_router {mr!r} is not one of {sorted(TargetProfile.MOE_ROUTERS)}")
-    return str(mr)
-
-
 def _workload_execution(path: str | None) -> str | None:
     doc = _workload_doc(path) or {}
     sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
@@ -952,8 +937,7 @@ def fold_summary(log_path: str | Path, profile_name: str, *, with_program: bool 
     return fold_summary_result(log_path, profile_name, with_program=with_program)[0]
 
 
-def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None,
-                        moe_router: str | None = None) -> tuple[dict, Any]:
+def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None) -> tuple[dict, Any]:
     """`fold_summary` plus the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's DECLARED
     construction; a profile that has no `with_moe_construction` hook cannot fold a declared one -- that FAILS here by name (never MOE-01
     silently under a `padded` declaration)."""
@@ -971,9 +955,6 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
             raise SystemExit(f"workload declares moe_construction={moe_construction!r} but profile {profile_name} has no with_moe_construction hook: "
                              f"it cannot fold that construction (refused by name; the MOE-01 fold is NOT a substitute)")
         profile = hook(profile, moe_construction)
-    if moe_router is not None:
-        from verity_vllm.engine.profiles.gen_ov_moe_patterns import with_moe_router
-        profile = with_moe_router(profile, moe_router)
     events = list(read_log(log_path))
     header = next((e for e in events if isinstance(e, RunHeader)), None)
     result = fold(events, profile, strict=None, with_program=with_program)
@@ -1023,7 +1004,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
         "schema": G.FOLD_SUMMARY_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "log": str(log_path),
         "profile": profile_name, "profile_id": profile.id, "with_program": with_program, "digest": result.digest, "spec": summ.get("spec"),
         # [R17-42 route A (4)] the DECLARED construction the scope folded under (None = undeclared = indexed-read) and the pattern that did
-        "moe_construction": moe_construction, **({"moe_router": moe_router} if moe_router else {}), "moe_scope_pattern": scope_pattern,
+        "moe_construction": moe_construction, "moe_scope_pattern": scope_pattern,
         "n_instances": len(result.instances), "n_steps": len(per_step), "unsupported": result.report.unsupported,
         "unresolved": result.unresolved, "opaque_fallbacks": opaque, "errors": len(result.errors), "error_classes": summ.get("error_classes"),
         "error_examples": summ.get("error_examples"), "unknown_roots": unknown, "root_classes": dict(classes), "unbound_roots": unbound,
@@ -1177,8 +1158,7 @@ def fold_worker(a: Options) -> int:
             raise SystemExit(f"--worker fold needs --{req}")
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
-    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None),
-                                      moe_router=getattr(a, "moe_router", None))
+    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None))
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if getattr(a, "persist_dir", None):

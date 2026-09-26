@@ -105,11 +105,6 @@ class TargetProfile:
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
                            population is reported as what it is (R17-45 (1): no forced #Q correspondence).  A dense model ignores the
                            field (no MoE block to construct).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
-    moe_router          -> how the MoE router (`_moe_C.topk_softmax`) is STATED in the Program, under the indexed-read construction: None =
-                           kernel order (`MoeRouterTopK_v1` / `MoeRouterTopKNorm_v1`: one softmax, TOPK masked argmax rounds over it);
-                           `"rounds"` = the same function with each round and each slot's weight its own subcircuit over the logits and the
-                           ids chosen before it (`MoeRouterTopKRounds_v1` / `MoeRouterTopKRoundsNorm_v1`), so no score vector crosses a round.
-                           A Program static like `moe_construction`; omitted from `to_json()` when None (no digest of record moves).
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -144,8 +139,6 @@ class TargetProfile:
     async_scheduling: bool | None = None
     #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read", MOE-01; see the doc); never attested
     moe_construction: str | None = None
-    #: the MoE router's statement (None = kernel order; see the doc)
-    moe_router: str | None = None
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -161,11 +154,12 @@ class TargetProfile:
                                     "definitions": ("MoeFfnFixedL_v1{E,TOPK,VPT,H,I}",),
                                     "lift_of_record": "LMoeFfnL_v1{E,TOPK,VPT,H,I} (hand-authored; registry.lifted.register_hand_lift)",
                                     "population": "|Q(Lift(P_fixed-slot))|: every expert slot of every token, the unselected ones DISABLED (bot) -- "
-                                                  "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"}}
+                                                  "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"},
+                         "indexed-read-rounds": {"rules": "vllm_moe MOE-01, the router stated round by round (the same function as MOE-01's)",
+                                                 "definitions": ("MoeRouterTopKRounds_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
+                                                                 "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
+                                                 "population": "indexed-read's, the router's units one per output (no committed round scores)"}}
     DEFAULT_MOE_CONSTRUCTION = "indexed-read"
-    #: the registered router statements besides kernel order: value -> the Definitions `TopkSoftmax[vllm-moe]` binds
-    MOE_ROUTERS = {"rounds": {"definitions": ("MoeRouterTopKRounds_v1{E,TOPK,VPT}", "MoeRouterTopKRoundsNorm_v1{E,TOPK,VPT}"),
-                              "same_function_as": ("MoeRouterTopK_v1{E,TOPK,VPT}", "MoeRouterTopKNorm_v1{E,TOPK,VPT}")}}
 
     #: [R17-1] the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
     #: config/vllm.py:1273-1322): True unless the model is a pooling runner, a speculative method other than EAGLE/MTP/draft-model/
@@ -207,12 +201,6 @@ class TargetProfile:
             # [R17-42] one spelling per construction; "MOE-01" / "fixed-slot" / booleans are not accepted (no coercion, no alias)
             raise ValueError(f"moe_construction must be None ({self.DEFAULT_MOE_CONSTRUCTION}) or one of {sorted(self.MOE_CONSTRUCTIONS)}; "
                              f"got {self.moe_construction!r}")
-        if self.moe_router is not None:
-            if self.moe_router not in self.MOE_ROUTERS:
-                raise ValueError(f"moe_router must be None (kernel order) or one of {sorted(self.MOE_ROUTERS)}; got {self.moe_router!r}")
-            if self.effective_moe_construction() != self.DEFAULT_MOE_CONSTRUCTION:
-                raise ValueError(f"moe_router={self.moe_router!r} states the indexed-read router; the {self.moe_construction!r} construction "
-                                 "carries its own (MoeFfnFixedL_v1)")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -343,8 +331,6 @@ class TargetProfile:
             d.pop("async_scheduling", None)   # [R17-1] absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
         if d.get("moe_construction") is None:
             d.pop("moe_construction", None)   # [R17-42] absent = indexed-read (MOE-01); every earlier profile digest unchanged
-        if d.get("moe_router") is None:
-            d.pop("moe_router", None)         # absent = kernel order; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:
