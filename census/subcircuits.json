@@ -393,7 +393,7 @@
       "parts": "the softmax: the running max, MUFU.EX2, the lane sums and rescaling, MUFU.RCP of the sum and the output cast (C-Flock's native tail on the public words)",
       "share": "4–11% of a head's scalar ops, all of its exp2 and reciprocal work",
       "counted": true,
-      "ruling": "red-team-flock-3 granted attention on flock-ir-frame/v3 on condition that the headline footnotes this (handoff 20260926T1115Z)",
+      "ruling": "red-team-flock-3 granted attention on flock-ir-frame/v3 on condition that the headline footnotes this (handoff 20260926T1115Z), and the class-pin statement (one pin per key-count class, T 1–128, 129–256, 257–512) with condition CP7 (handoff 20260926T1340Z)",
       "sources": [
         {
           "label": "red-team-flock-3's grant of AttentionHead_v3 on flock-ir-frame/v3 (lanes/coordinator/20260926T1115Z-handoff-from-red-team-flock-3.md); backends/flock/python/verity_flock/templates/attention_head.py (the softmax is the native tail the verifier evaluates)"

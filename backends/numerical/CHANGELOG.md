@@ -1,5 +1,20 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: class-pin attention cells credited per listed key count
+
+- **Class cells:** flock-ir-lowering's class-pin statement proves a batch spanning several key counts under one pin per
+  class (T 1–128, 129–256, 257–512; red-team-flock-3's grant, condition CP7). Such a cell records `key_counts` {T: heads} and
+  `key_class` {T, pin} in its fingerprint, and `per_key_count` {T: heads, e2e_s, ...} on the result. `views.key_class_of`
+  reads that shape; before, the one-T matcher rejected these cells X.
+- **What is credited:** each T listed in `key_counts` that lies inside the class and has a positive `heads` and `e2e_s` in
+  `per_key_count`, at P = heads / e2e_s and native N at that T. Other listed T are shown as `not_credited` with the reason;
+  unlisted T are never credited. A class cell with nothing creditable is rejected X.
+- **Table 2:** a row per class (`· T = 1–128`). The cell's N is work-weighted over its credited T
+  (heads / Σ heads_T / N_T), so N / P is its overhead on its own inputs.
+- **Headline:** per T, the fastest of the single-T and class cells covers #101's units at that T, still weighted by the
+  template mix; the † footnote stays.
+- **Unchanged:** tables, raw JSON, parity and the headline without class cells are byte-identical.
+
 ## 2026-09-26: bench.cell requires the verifier on another machine, not another container
 
 - `bench.placement` identifies machines by the RunPod machine id, the public IP, the DMI `product_uuid`, the kernel `boot_id` and the
