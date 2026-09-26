@@ -137,16 +137,22 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
             ("silu-mul", {"I": 8192}, 256),
             ("gumbel-top-p-token-select", {"V": 128256}, 32)],
+    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured #101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
+    #: largest batches the RTX 4090's 24 GB carried (16,384 and 8,192); each smaller set is the larger one's prefix.
+    "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
+            for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")
+            for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
 }
 
 
 def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False) -> list[dict[str, Any]]:
-    """Generate every set of suite ``name`` under ``out``; with ``digests_only`` each set's port arrays are removed once written
-    (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte for byte."""
+    """Generate every set of suite ``name``, each under ``<out>/n<n>/sets/<name>/``; with ``digests_only`` each set's port arrays
+    are removed once written (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte
+    for byte."""
     out_sets = []
     for tid, params, n in SUITES[name]:
         sub = TM.subcircuit(tid, **params)
-        s = generate(sub, n, seed, out, procs=procs)
+        s = generate(sub, n, seed, Path(out) / f"n{n}", procs=procs)
         s["manifest_sha256"] = IS.InputSet.open(s["path"]).manifest_sha256()
         if digests_only:
             d = Path(s["path"])
