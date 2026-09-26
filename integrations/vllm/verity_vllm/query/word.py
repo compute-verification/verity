@@ -78,7 +78,7 @@ def specialization(fam: str, statics: dict[str, Any]):
         return lookup_primitive(reg, fam)
 
     def fn_value(v: Any) -> Any:
-        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v.startswith('{"fn"') else v)
+        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v[:5] == '{"fn"' else v)
         if not isinstance(fid, str):
             return v
         try:
