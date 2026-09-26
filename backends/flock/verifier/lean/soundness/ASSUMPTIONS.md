@@ -52,6 +52,7 @@ finders, which is at most `t·2^{17.3−256}` for a prover making `t` hash evalu
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem: SHA-512 collision resistance, every prover | 1c, interactive | `table_sound_compiled` | **to write**: the compiled game (openings at the end of the proof) and the coupling (§4.3) |
+| Knowledge soundness: extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write**, after `table_sound_compiled` (§4.4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§8) | planned |
@@ -77,11 +78,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
   commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
   not to one witness. The list has at most 50 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with η = 0.02).
-  - "The committed values satisfy the circuit" therefore means that some codeword of that list packs a satisfying
-    witness (`Model.CommittedSatisfies`).
-  - For soundness of the statement this is exactly right.
-  - Anything that uses the committed values outside this proof needs its own binding argument. Link claims to another
-    proof system are an example.
+  - "The committed values satisfy the circuit" means that some codeword of that list packs a satisfying witness
+    (`Model.CommittedSatisfies`), which is exactly right for soundness.
+  - Claims that use the committed values elsewhere (registered data, links to other proofs, recursion) need them
+    extracted (§4.4).
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3), outside
   this lane.
@@ -112,17 +112,12 @@ make Lean prove something false.
 
 **Not assumptions** (proved, or to be proved, from the libraries):
 
-- **Ring switching.** The spec's variant (§12, deviation A9) is different from the Diamond–Posen protocol:
-  - each claim is switched with its own seven coins;
-  - then all claims are batched;
-  - Ligerito's sumcheck replaces the standalone one.
-
-  Its soundness follows from the paper's Appendix B argument (injective recombination over GF(2)) plus Schwartz–Zippel.
-  So it needs no Diamond–Posen theorem. ArkLib's ring switching is on its legacy layer with 18 admits and formalizes
-  the other variant; it is not used.
-- **Merkle binding.** Two different openings of one position against one cap yield an explicit collision of the
-  hash (SHA-512 in the adopted variant). Proved for the spec's tree shape (`Merkle.opening_binding`). VCVio proves
-  the same for its trees (`getPutativeRootWithHash_binding_collision`).
+- **Ring switching.** The spec's variant (§12, A9: seven coins per claim, then batching, with Ligerito's sumcheck in
+  place of the standalone one) is not Diamond–Posen's. Its soundness follows from the paper's Appendix B argument
+  (injective recombination over GF(2)) plus Schwartz–Zippel. ArkLib's ring switching (legacy layer, 18 admits, the
+  other variant) is not used.
+- **Merkle binding.** Two different openings of one position against one cap give a collision: `Merkle.opening_binding`,
+  proved, as VCVio proves for its trees.
 - **Johnson list bounds.** ArkLib's `irs_lambda_le_johnson_mds`, proved.
 - **Sumcheck rounds and univariate steps.** Root counting in Mathlib (`Polynomial.card_roots'`,
   `MvPolynomial.schwartz_zippel_totalDegree`).
@@ -236,22 +231,18 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§4.
 
 **Proof, and where it stands in Lean.**
 
-1. **The oracle-model prover `P̃`.** Wherever `P*` sends a cap, `P̃` sends the plurality table instead. At level ℓ ≥ 1
-   that is the plurality given the run so far. Otherwise `P̃` plays exactly as `P*`. `table_sound` bounds `P̃` by
-   `tableError`. Proved, modulo the phase lemmas and `link_sound` (§1).
-2. **Coupling.** Take one set of coins. If every opening in `P*`'s run agrees with the plurality tables, and the compiled
-   verifier accepts, then the oracle verifier accepts `P̃`: the opened columns are the tables' columns, and the paths
-   are checked. **To write**, with the compiled game: Ligerito with caps in place of oracles and the query answers
-   deferred to the end of the proof, where the spec puts the openings.
-3. **Rewinding.** The runs in which some opening leaves the plurality ("bad") have probability at most
-   `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])` per level. Here `conflict_ℓ` is the event that two runs, sharing the prefix up to the
-   commitment, open one position to different columns. Proved: `Rewinding.prBad_le`, and for levels committed after a
-   prefix of coins, `Compiled.compile_step_prefix` (Jensen over prefixes). `Compiled.compile_step` combines steps 1–3
-   for one table.
-4. **Binding.** A conflict is two openings of one position, verified against one cap, with different columns. That is a
-   SHA-512 collision, so `Pr[conflict_ℓ] ≤ Adv_ℓ`. Proved: `Merkle.opening_binding`.
-5. **Rounds.** The kept bytes fix every message before its coins. This is the `Game` model itself (`send` before
-   `coin`), with no hash.
+1. **The oracle-model prover `P̃`** sends the plurality table wherever `P*` sends a cap (at level ℓ ≥ 1, given the run
+   so far), and otherwise plays as `P*`. `table_sound` bounds it by `tableError`: proved, modulo the phase lemmas and
+   `link_sound`.
+2. **Coupling.** On the same coins, if every opening of `P*` agrees with the plurality tables and the compiled verifier
+   accepts, the oracle verifier accepts `P̃`. **To write**, with the compiled game: Ligerito with caps for oracles and
+   query answers deferred to the end of the proof, where the spec puts the openings.
+3. **Rewinding.** Runs with an opening off the plurality ("bad") have probability at most `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])`
+   per level, where `conflict_ℓ` is two runs sharing the prefix up to the commitment opening one position differently.
+   Proved: `Rewinding.prBad_le`, and `Compiled.compile_step_prefix` (Jensen over prefixes); `Compiled.compile_step`
+   combines steps 1–3 for one table.
+4. **Binding.** A conflict is a SHA-512 collision, so `Pr[conflict_ℓ] ≤ Adv_ℓ`. Proved: `Merkle.opening_binding`.
+5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
 `table_sound_compiled` then follows from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound over
 levels. Steps 3 and 4 depend only on Lean's standard axioms (`Check.lean`).
@@ -263,7 +254,37 @@ without the square root. It is a cross-check only. The number above does not res
 **Table 1** cites `computational-soundness` under `cr/sha-512`, `live-verifier` and `rs-proximity-johnson` (A1). The
 theorem is classical; §12 covers quantum provers.
 
-### 4.4 Coins
+### 4.4 Knowledge soundness: extracting the committed witness
+
+Soundness says the committed witness satisfies the statement. A claim about *which* data a proof used needs that witness
+computed, because hiding leaves open to essentially any row. So "these proofs used the registered weights" (§13) needs
+it, and so does the recursion track, whose outer proof must be a proof of knowledge. The long form, with the effort
+table, is `note:20260926T2330Z-finding-knowledge-soundness`.
+
+- **`table_knowledge_sound`** (to write). An extractor reruns any classical prover `P*` from the start, about
+  `(N₀/Q₀)·ln(1/(ζβ))/ε` times, where ε is the probability that `P*` is accepted. That sees all but a fraction ζ of
+  level 0's columns, except with probability β. Level 0 is committed in the first message, so every run opens the same
+  cap.
+  - Two runs that open one position differently give a SHA-512 collision.
+  - Otherwise the extractor list-decodes the observed columns, treating the rest as erasures, and outputs a witness that
+    satisfies the statement.
+  - The claim: `Pr[witness or collision] ≥ ε − κ`, where `κ` is the compiled soundness error plus extraction terms.
+- **`registered_weights`** (to write). Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
+  statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision. So
+  `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
+- **The extraction is mostly straight-line,** since the extractor sees conflicts itself. The rewinding lemma bounds the
+  positions where it saw only off-plurality values.
+  - A first estimate of that term is `t·2^-227/ε`, so 2^-128 needs `t/ε ≤ 2^99`. This is to be sharpened.
+  - Generic interactive-BCS bounds give only about 2^-100 to 2^-111 with SHA-512.
+- **Effort:** about 1,250–2,000 lines of Lean, roughly half the development so far, plus 200–350 if recursion needs
+  witness-extended emulation. Decoding is the largest piece and is provable: CompPoly's Guruswami–Sudan decoder is
+  verified with no `sorry`, and ArkLib's Johnson bound covers the punctured interleaved code. Write and review the
+  analysis on paper first. It follows `table_sound_compiled`; `registered_weights` waits for the SHA-512 leaf layout,
+  and recursion for M1/M2.
+- **Risks:** the concrete knowledge error; a thin decoding margin at level 0 (`η = 1/50` leaves under 1% after
+  erasures, so coverage must be about 99%); bridging CompPoly, ArkLib and `Model`. It is classical only (§12).
+
+### 4.5 Coins
 
 - **`os` coins (the default).** Each round's coins are uniform and unknown to the prover before it sent the round. They
   come from the coin server's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. Nothing else is
@@ -281,19 +302,15 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 - **Lean's kernel.**
   - Re-check the proofs with an independent checker (nanoda, `lean4checker`).
   - Numeric checks use `decide +kernel`, which is kernel evaluation. The development never uses `native_decide`.
-- **Lean's compiler, runtime and the C compiler, for the running binary.** In production only the Lean verifier runs.
-  Upstream's Rust verifier is a cross-validation test in CI, not a second verifier that must also accept. Proofs are
-  about Lean definitions, not the machine code.
-  - **Mitigation:** the agreement tests of spec §17.1. An independent implementation (Rust, compiled by rustc) must
-    reach the same verdict on the whole corpus and on fuzzed mutations. So a miscompilation that changes a tested
-    verdict fails CI.
-  - **Not mitigated:** inputs no test reaches.
+- **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in production;
+  upstream's Rust verifier is a CI cross-validation, not a second verifier. Proofs are about Lean definitions, not
+  machine code.
+  - **Mitigation:** the agreement tests of spec §17.1. The Rust implementation must reach the same verdict on the corpus
+    and on fuzzed mutations, so a miscompilation that changes a tested verdict fails CI. Untested inputs stay exposed.
   - **Also trusted:** any `@[extern]` or `@[implemented_by]` in the verification logic. There is none today.
-- **The model against the executable verifier.** Until the refinement theorem, the theorem is about `Model`, not about
-  `Flock.Verify`. The refinement theorem says that if the executable verifier accepts, the model accepts on the decoded
-  proof and record.
-  - Alignment rests on the executable verifier using the same arithmetic (`Model.Arith`) and the same order of steps.
-  - The first refinement proofs belong to the level-3 plan.
+- **The model against the executable verifier.** Until the refinement theorem (if `Flock.Verify` accepts, the model
+  accepts on the decoded proof and record), the theorem is about `Model`. Alignment rests on shared arithmetic
+  (`Model.Arith`) and step order; the refinement proofs belong to the level-3 plan.
 - **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights, the packing basis, the
   Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are hypotheses until proved for
   the instance the executable verifier defines. They are to be proved, not trusted.
@@ -330,13 +347,9 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 - **2^-195.5 holds for m ≤ 33 only.** At m = 34 and 35, `fast100` has a seventh Ligerito level. Its query term
   (2^-102.6) moves the table bound to 2^-195.43. PROTOCOL.md §15 quotes 2^-195.5 per table, from the m = 33 ledger.
   Both are far below 2^-128.
-- **Terms flock-128's ledger does not charge.** None changes the total by more than 0.001 bit:
-  - the list factor `L₀` on every term before Ligerito's binding (paper Appendix A, "Security");
-  - the `r = 1` exceptional set (A5);
-  - pin enforcement (A8);
-  - the link points (A14);
-  - the MCA and fold-sumcheck terms, summed over every folding round rather than one per level;
-  - consistency batching charged at the list size of the level it is about.
+- **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit: the list factor `L₀` before
+  Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and fold terms
+  per folding round rather than per level, and consistency batching at each level's own list size.
 - **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (50 at rate 1/2). Flock uses the sharper
   `1/(2η√ρ)` (35). The bound uses ArkLib's, and the difference is below 0.001 bit.
 
@@ -362,8 +375,8 @@ so that these slot in without restructuring:
 
 - **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they come
   from the operating system and ChaCha; their quality is trusted.
-- **Leaf hiding.** Halevi–Micali commitments are statistically hiding (`2^-k` per leaf by HM96 Theorem 1, summed over
-  every opened leaf) and binding under collision resistance of the tree's hash, SHA-512 in the adopted variant.
+- **Leaf hiding.** Halevi–Micali leaves are statistically hiding (`N·2^-256` for N leaves with a fresh key, §13) and
+  binding under collision resistance of their hash, SHA-512 in the adopted variant.
 - **Binding of the coin-seed commitment**, under SHA-256 collision resistance. This is needed for malicious-verifier ZK
   only. Against quantum verifiers it needs a wider, collapse-binding commitment (§12).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
@@ -402,11 +415,12 @@ so that these slot in without restructuring:
    - `table_sound_compiled` from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound.
 
    Session binding needs nothing, since the server keeps the round bytes.
-5. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
+5. **Knowledge soundness** (§4.4): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
+   registered data and for recursion's outer proof.
+6. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-6. **Stages 1e and 3, zero knowledge and the reference prover** (§8), after M1's masking spec.
-   Knowledge soundness (extracting the committed witness) is needed for any claim about registered data (§13).
-7. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
+7. **Stages 1e and 3, zero knowledge and the reference prover** (§8), after M1's masking spec.
+8. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
 
 ## 10. Staging against a16z's security stages
@@ -422,13 +436,13 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
-| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer. It covers the PIOP (zerocheck, lincheck, ring switching, batching) together with Ligerito as an interactive oracle commitment. It is information-theoretic, per table, against any prover. | Follows, with one gap: a16z's Stage 1 has no room for an unproved cited theorem. We reach "Stage 1a modulo A1" (our level 4a). Proving A1 is level 4b, which is not plannable at the Johnson bound. A unique-decoding profile would make it plannable, since ArkLib proves those gaps. |
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, modulo A1 (our level 4a); proving A1 is level 4b, not plannable at the Johnson bound (a unique-decoding profile would be, since ArkLib proves those gaps). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§4.3). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (§2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
-| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The compiled argument is the oracle protocol plus Merkle commitments (1b) plus session binding. The coin server keeps each round's bytes before drawing that round's coins, so session binding needs no assumption. | Differs. The coins need no random oracle, which avoids the article's main caveat (Fiat–Shamir security with real hash functions is an open question). A Fiat–Shamir variant is future work (§11). |
-| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | There is no VM: statements are circuits. 1d is the lowering theorem: the block R1CS the verifier builds (slots, Δ, pin, regions; spec §16) is satisfied exactly by correct evaluations of the named circuit. That is level 3, in another lane. | Differs in content, not in intent. a16z's "verified bytecode" caveat becomes our rule "the circuit is the meaning". That the circuit matches the hardware is checked empirically, by capture replay recorded as Store evidence, and stays outside formal scope. |
-| **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§8). | Follows. **Recursion caveat:** not triggered. There is no recursion: the spec rejects forks and the union prover. |
-| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | The executable Lean verifier (`Flock.Verify`, lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs in the target. The implementation is itself Lean, so the refinement is Lean-to-Lean. The machine code is trusted: Lean's compiler and runtime, mitigated by agreement tests against upstream's Rust verifier in CI (§5). |
-| **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems. The production prover (Rust and CUDA) is linked to it by byte-for-byte differential tests (§8). | **Deliberately different: the production prover is not proved.** Equivalence beyond the tested inputs is trusted. Completeness failures cost liveness (a true statement that cannot be proved), not soundness. |
+| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§11). |
+| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
+| **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§8). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§4.4), and every component inside it verified. |
+| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` (lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (§5). |
+| **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§8). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
 
 **Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
 
@@ -507,20 +521,14 @@ The full analysis, with sources, is `note:20260926T2240Z-finding-post-quantum`.
 
 **What is known, and what applies to live coins.**
 
-- **Kilian's protocol.** Chiesa–Ma–Spooner–Zhandry (FOCS 2021) prove Kilian's argument (one PCP commitment) post-quantum
-  sound in the standard model, with a collapsing hash.
-- **Our setting.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947) extend this to interactive BCS: any
-  public-coin semi-adaptive IOP, a collapse-position-binding vector commitment, and openings at the end. Their Theorem
-  6.1 gives `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`.
-- **Flock fits:**
-  - the coins are public;
-  - Merkle caps are a vector commitment, and hash trees over a collapsing hash are collapsing;
-  - Ligerito's queries depend only on coins, so the IOP is non-adaptive, hence semi-adaptive;
-  - `ε_IOP` is the oracle-layer bound;
-  - the kept round bytes fix every message before its coins.
-
-  So **if SHA-512 is collapsing, Flock's interactive protocol is post-quantum sound with error `tableError + negl(λ)`.**
-  This is a paper-level corollary, not yet written out.
+- Chiesa–Ma–Spooner–Zhandry (FOCS 2021) prove Kilian's argument post-quantum sound with a collapsing hash.
+  Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947) extend it to our setting, interactive BCS for any
+  public-coin semi-adaptive IOP with a collapse-position-binding vector commitment:
+  `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`.
+- **Flock fits:** public coins; Merkle caps over a collapsing hash; Ligerito's queries depend only on coins
+  (non-adaptive); `ε_IOP` is the oracle-layer bound; kept round bytes. So **if SHA-512 is collapsing, Flock's
+  interactive protocol is post-quantum sound with error `tableError + negl(λ)`**, a paper-level corollary not yet
+  written out.
 - **Fiat–Shamir (§11).** The reference is the quantum random-oracle model: `O(t²·ε_rbr + t³/2^λ)` (Chiesa–Manohar–Spooner,
   TCC 2019).
 
@@ -528,18 +536,12 @@ The full analysis, with sources, is `note:20260926T2240Z-finding-post-quantum`.
 collapsing (Unruh, Asiacrypt 2016; Fehr, TCC 2018). So SHA-512 is collapsing if its compression function is. No attack
 is known beyond generic collision search. Table 1 would need a new property for it (`collapsing/sha-512`).
 
-**The loss makes the corollary asymptotic only.** The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs,
-and its advantage is multiplied by `Σ_i L_i·(q_i + 5)`. At m = 33, `L_max = 2^21`, that sum is about `2^30`, and a table
-has 150–200 rounds.
-
-- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 prover runs.
-- Even at 2^157 queries, the generic quantum collision probability `q³/2^512 = 2^-41`, times `2^30`, is `2^-11`.
-
-**So no concrete post-quantum bound follows at our parameters, for any prover size.** A number would need one of:
-
-- the quantum random-oracle model, with straight-line extraction by Zhandry's compressed oracle, and a target of
-  `ε_stat + O(t³/2^512)`, which no one has proved for the interactive case;
-- a tighter standard-model rewinding, which is open.
+**The loss makes the corollary asymptotic only.** The collapse adversary costs `poly(k·L_max/ϵ)` prover runs and its
+advantage is multiplied by `Σ_i L_i·(q_i + 5) ≈ 2^30` (m = 33, `L_max = 2^21`, 150–200 rounds). A 2^-128 target needs
+`ϵ ≤ 2^-128`, hence at least 2^157 runs; even then `q³/2^512 = 2^-41`, times 2^30, is 2^-11. **So no concrete
+post-quantum bound follows at our parameters, for any prover size.** A number would need the quantum random-oracle model
+(straight-line extraction by Zhandry's compressed oracle, target `ε_stat + O(t³/2^512)`, unproved for the interactive
+case) or a tighter standard-model rewinding (open).
 
 **Grover and BHT margins for SHA-512.**
 
@@ -558,22 +560,18 @@ has 150–200 rounds.
 
 - **Honest-verifier ZK is unaffected.** The view is classical and statistically close to the simulation, and
   statistical distance bounds quantum distinguishers too. Halevi–Micali hiding, masks and padding are statistical.
-- **Malicious-verifier ZK needs quantum rewinding** of a verifier whose state may be quantum.
-  - The closest result: Lombardi–Ma–Spooner (FOCS 2022) prove Goldreich–Kahan, where the verifier commits to its
-    challenges first, post-quantum ZK. It needs the verifier's commitment to be collapse-binding and statistically
-    hiding.
-  - Constant-round black-box post-quantum ZK is impossible (Chia–Chung–Liu–Yamakawa, FOCS 2021). Ours has 150–200
-    rounds, so that does not apply, but adapting LMS22 to coins revealed round by round is research.
-  - **Design consequence:** the coin-seed commitment would need a 128-bit quantum margin, so SHA-384 or SHA-512, not
-    SHA-256.
+- **Malicious-verifier ZK needs quantum rewinding** of a verifier with quantum state. The closest result, Lombardi–Ma–
+  Spooner (FOCS 2022), proves Goldreich–Kahan (committed challenges) post-quantum ZK, given a collapse-binding,
+  statistically hiding verifier commitment. Constant-round black-box post-quantum ZK is impossible (Chia–Chung–Liu–
+  Yamakawa, FOCS 2021); ours has 150–200 rounds, but adapting LMS22 is research. **Design consequence:** the coin-seed
+  commitment needs a 128-bit quantum margin, so SHA-384 or SHA-512, not SHA-256.
 
 **What a post-quantum statement would take:**
 
-1. **The asymptotic corollary, on paper (small).** Show that Flock is interactive BCS over a public-coin, non-adaptive
-   IOP, and apply CDDGS25 under "SHA-512 is collapsing". It needs a quantum-cryptography reviewer, and it gives
-   `tableError + negl(λ)`, not a number.
-2. **A concrete number (research).** Either interactive BCS in the quantum random-oracle model with concrete terms, or
-   tighter quantum rewinding.
+1. **The asymptotic corollary, on paper (small):** Flock is interactive BCS over a public-coin, non-adaptive IOP, so
+   CDDGS25 applies under "SHA-512 is collapsing". It needs a quantum-cryptography reviewer and gives no number.
+2. **A concrete number (research):** interactive BCS in the quantum random-oracle model with concrete terms, or tighter
+   quantum rewinding.
 3. **Lean.**
    - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, QICLean): states, channels, measurements,
      entropy. They are outside Mathlib and not on our pins.
@@ -594,11 +592,9 @@ The weights are committed once, as Halevi–Micali leaves under a Merkle root re
 later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-root-reuse`.
 
 - **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus the root's straight-line binding
-  once, `t²/2^513`.
-  - The statistical part allows N up to 2^67.5.
-  - The rewinding term needs `N·t ≤ 2^110.7`, about 2^30 tables at `t = 2^80`.
-  - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
-  - **Decision:** state security per table, or as a lifetime budget on `N·t`.
+  once, `t²/2^513`. The statistical part allows N up to 2^67.5; the rewinding term needs `N·t ≤ 2^110.7` (about 2^30
+  tables at `t = 2^80`). So the per-table hash term runs out, not the root; the random-oracle version's is global.
+  **Decision:** state security per table, or as a lifetime budget on `N·t`.
 - **Binding for the root's life.** Proofs publish the leaves' commit strings and paths, so binding is straight-line
   against the adversary's cumulative work. It must hold as long as anyone relies on the root, disputes about old proofs
   included.
@@ -620,14 +616,11 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
     - take coins from a public beacon, which is slower and puts soundness on the beacon;
     - scope it out.
 - **Statement leakage accumulates, and ZK doesn't bound it.** N sessions reveal N statements: workload shapes, timing,
-  the shared root, and each proved predicate's truth.
-  - Weights never appear, and outputs stay committed.
-  - But a predicate over committed outputs gives whoever sees it one bit per proof: over chosen inputs, an oracle to the
-    model.
-  - **Policy needed:** which predicates are public, and how many.
+  the shared root, and each proved predicate's truth. Weights never appear and outputs stay committed, but a predicate
+  over committed outputs gives whoever sees it one bit per proof, an oracle to the model over chosen inputs. **Policy
+  needed:** which predicates are public, and how many.
 - **Linkability** is the point of one root, and it is also a leak: every proof visibly shares one model. Unlinkability
   would need a fresh commitment and an equality proof per run, which means re-hashing the weights each time.
-  - **Theorem to add:** a statistically hiding leaf opens to essentially any row. So "these proofs used the registered
+  - **Knowledge soundness:** a statistically hiding leaf opens to essentially any row. So "these proofs used the registered
     weights" (even one proof) needs each proof's committed witness extracted, then Halevi–Micali binding. That is
-    knowledge soundness, which is not yet planned here, and the circuit-privacy design's composition theorem needs it
-    too.
+    knowledge soundness, now planned (§4.4), and the circuit-privacy design's composition theorem needs it too.
