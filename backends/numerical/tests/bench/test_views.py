@@ -1507,3 +1507,13 @@ def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalSto
     assert res[a]["domain"] == fp_domain
     backend = next(x for x in site["backends"] if x["id"] == res[a]["backend"])
     assert fp_domain in backend["domains"]
+
+
+def test_table1_flags_the_frozen_backend_families_not_actively_developed(store: LocalStore) -> None:
+    """Daniel, 2026-09-26: A-GKR, B-Ligero and SP1 stay in the tables, flagged not actively developed; Flock is the active family."""
+    committed(store, t_total=0.4)
+    site = V.render_entities(V.build(store), rendered_at="2026-09-26T19:30:00Z", commit="abc")
+    fam = {f["id"]: f["development"] for f in site["backend_families"]}
+    assert fam[V._fam("A-GKR")] == fam[V._fam("B-Ligero")] == fam[V._fam("SP1")] == V.NOT_ACTIVE and fam[V._fam("Flock")] == "active"
+    for b in site["backends"]:
+        assert b["development"] == (V.NOT_ACTIVE if b["backend_family"] in {V._fam(x) for x in V.FROZEN} else "active")

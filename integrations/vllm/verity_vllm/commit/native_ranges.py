@@ -2,7 +2,8 @@
 
 `NativeRangeOpenings` is a mixin of `commit.committer.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
 with the boundary siblings of its tree (`open_range`) and verified against the run commitment (`verify_range`); `leaf_span` maps a tensor's
-bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.
+bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.  `open_levels` is one leaf's path from level
+tensors.
 """
 from __future__ import annotations
 
@@ -21,6 +22,21 @@ class RangeOpening:
     hi: int
     value: bytes                # the leaves' bytes, concatenated in leaf order
     path: tuple                 # per level (left sibling | None, right sibling | None) — `merkle.range_path_shape` shape
+    salts: bytes = b""          # the leaves' salts, concatenated, under hm96-sha256/v1 leaves; empty under vllm-v1
+
+
+def open_levels(levels: list, index: int) -> tuple:
+    """Sibling path from level tensors (int32 [n, 8], leaves first) -- the same rule as CMT-2's `hidden_gpu.gpu_open`, device or host."""
+    path: list = []
+    cursor = index
+    for lv in levels[:-1]:
+        n = int(lv.shape[0])
+        if cursor == n - 1 and n % 2 == 1:
+            path.append(None)
+        else:
+            path.append(lv[cursor ^ 1].cpu().numpy().astype("uint32").tobytes())
+        cursor //= 2
+    return tuple(path)
 
 
 def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
@@ -117,11 +133,13 @@ class NativeRangeOpenings:
                 return None
             value = bytes(m.host[(lo - m.first_leaf) * m.chunk:(hi - m.first_leaf) * m.chunk])
             levels = self._levels[step]
-        return RangeOpening(step, lo, hi, value, open_range_levels(levels, lo, hi))
+        return RangeOpening(step, lo, hi, value, open_range_levels(levels, lo, hi), self._salts_of(step, lo, hi))
 
-    def _range_leaves(self, step: int, lo: int, hi: int, value: bytes) -> list[bytes] | None:
-        """The leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes under `verify`'s leaf rules; None when the
-        bytes do not tile the leaves or the run mixes executed and padding leaves."""
+    def _range_leaves(self, step: int, lo: int, hi: int, value: bytes, salts: bytes = b"") -> list[bytes] | None:
+        """The leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes (and salts) under `verify`'s leaf rules;
+        None when the bytes do not tile the leaves or the run mixes executed and padding leaves."""
+        if salts and self.hiding is None:
+            return None
         C, mv = self.chunk, memoryview(value)
         ps = self._padding_leaf(step, lo)
         if ps is not None or self._padding_leaf(step, hi - 1) is not None:
@@ -150,7 +168,7 @@ class NativeRangeOpenings:
             end = m.nbytes - (lo - m.first_leaf) * C
         if len(value) != min((hi - lo) * C, end):
             return None
-        return [scheme.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)]
+        return self._leaf_rule([scheme.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)], salts)
 
     def verify_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None = None) -> bool:
         """`verify` for a range opening: every leaf digest recomputed from the opening's bytes, the run folded with its boundary siblings to
@@ -159,14 +177,14 @@ class NativeRangeOpenings:
         if not 0 <= ro.step < len(run.steps):
             return False
         sc = run.steps[ro.step]
-        if not 0 <= ro.lo < ro.hi <= sc.n_leaves:
+        if not 0 <= ro.lo < ro.hi <= sc.n_leaves or self._unsalted(ro.step, sc.n_leaves):
             return False
         try:
             shape = range_path_shape(sc.n_leaves, ro.lo, ro.hi)
             if len(ro.path) != len(shape) or any((left is None) == need_l or (right is None) == need_r
                                                  for (left, right), (need_l, need_r) in zip(ro.path, shape)):
                 return False
-            leaves = self._range_leaves(ro.step, ro.lo, ro.hi, ro.value)
+            leaves = self._range_leaves(ro.step, ro.lo, ro.hi, ro.value, ro.salts)
             if leaves is None:
                 return False
             merkle = fold_range(leaves, sc.n_leaves, ro.lo, ro.path)

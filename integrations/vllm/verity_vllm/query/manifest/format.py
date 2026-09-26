@@ -37,7 +37,8 @@ IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path",
 FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights", "fa2_hidden_m1_stream", "fa3_hidden_m1_stream", "moe_block_stream",
             "tp_rank_partials",                 # [R15 tp TP-04]
             "sampler_seed",                     # [R15 stoch] additive: only Programs with a stochastic selector emit it  [rel int-3: union, manbind M-0247 T3]
-            "sampler_splits")                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
+            "sampler_splits",                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
+            "norm_scales")                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 

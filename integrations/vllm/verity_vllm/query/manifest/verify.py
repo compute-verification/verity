@@ -35,14 +35,17 @@ def _load(p: str) -> Any:
 
 
 def rebuild(*, program: str | None = None, workload: str | None = None, fixture: str | None = None, programs_root: str | None = None,
-            workload_digest: str | None = None, rank: int = 0, ranks: int = 1, profile: str | None = None, log=None) -> dict[str, Any]:
-    """The manifest of this Program x workload by the query path (`manifest.build` at B=1, `manifest.build_global` at B>=2)."""
+            workload_digest: str | None = None, rank: int = 0, ranks: int = 1, profile: str | None = None, norm_scales: bool = False,
+            log=None) -> dict[str, Any]:
+    """The manifest of this Program x workload by the query path (`manifest.build` at B=1, `manifest.build_global` at B>=2), under the
+    norm-scale policy when the caller's row runs it (`norm_scales`; the policy is the caller's, never read off the manifest checked)."""
     from verity_vllm.pipeline import manifest
     if program:
         wl = _load(workload) if workload else None
-        return manifest.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, log=log)
+        return manifest.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, norm_scales=norm_scales, log=log)
     if fixture and programs_root:
-        return manifest.build_global(_load(fixture), programs_root, workload_digest=workload_digest, rank=rank, ranks=ranks, profile=profile, log=log)
+        return manifest.build_global(_load(fixture), programs_root, workload_digest=workload_digest, rank=rank, ranks=ranks, profile=profile,
+                                     norm_scales=norm_scales, log=log)
     raise SystemExit("manifest_verify: give --program [--workload] (B=1) or --fixture --programs-root [--workload-digest] (B>=2)")
 
 
@@ -84,6 +87,8 @@ class Options:
     profile: str | None = option("--profile", default=None)
     rank: int = option("--rank", type=int, default=0)
     ranks: int = option("--ranks", type=int, default=1)
+    norm_scales: bool = option("--norm-scales", default=False, action="store_true",
+                               help="rebuild under the norm-scale policy (the row runs NORM_TAP=1; opt-in, never the record)")
     out: str | None = option("--out", default=None, help="write the verification record (json)")
 
 
@@ -91,7 +96,7 @@ def main(a: Options) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     used = _load(a.manifest)
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
-                      rank=a.rank, ranks=a.ranks, profile=a.profile, log=log)
+                      rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales, log=log)
     rec = verify(used, rebuilt, manifest_path=a.manifest)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
