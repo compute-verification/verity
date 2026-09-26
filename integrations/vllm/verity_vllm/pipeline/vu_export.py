@@ -273,17 +273,32 @@ DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose
                                                            "RoPE_v1": _decompose_rope}
 
 
+def _gemm_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
+
+
+def _attention_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    dot, inv = _attn_prims(fam, st)
+    return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
+
+
+def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
+    return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+
+
+#: beside `DECOMPOSE`, keyed alike: the template a Definition's Calls are cut into (every other Definition: the row itself)
+TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
+    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "Attention_v3": _attention_template, "Attention_v2": _attention_template,
+    "RoPE_v1": _rope_template}
+
+
 def template_of(spec: str) -> tuple[str, dict[str, Any], int]:
     """A Call's Definition spec -> (subcircuit template, bound parameters, instances per Call): `decompose`'s cut, read off the spec."""
     fam, st = RM.spec_family(spec), RM.spec_statics(spec)
+    t = TEMPLATE_OF.get(fam)
     try:
-        if fam in ("Gemm_v1", "Gemm_v2"):
-            return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
-        if fam in ("Attention_v3", "Attention_v2"):
-            dot, inv = _attn_prims(fam, st)
-            return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
-        if fam == "RoPE_v1":
-            return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+        if t is not None:
+            return t(fam, st)
     except (KeyError, RK.Declined):
         pass
     return fam, st, 1
