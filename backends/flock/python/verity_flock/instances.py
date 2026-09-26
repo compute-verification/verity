@@ -292,9 +292,11 @@ def _row_digests(rows_bytes: list[bytes], leaf: str, role: int) -> list[bytes]:
 
 def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0, hi: int | None = None, leaf: str = "blake3",
               procs: int = 1, y_model: bool = False) -> dict:
-    """VUs ``[lo, hi)`` of a spine input set (``vllm-vu-set/v1`` or ``input-set/v1``: ``x.u16`` / ``w.u16`` K words, ``y.u16``)
+    """VUs ``[lo, hi)`` of a spine input set (``vllm-vu-set/v1`` or ``input-set/v1``; its manifest's ports name the files:
+    ``x.u16`` / ``w.u16`` with ``y.u16`` for BF16, ``x.u8`` / ``w.u8`` with ``y.u32``, the FP32 accumulator word, for E4M3)
     as a ``flock-pure-instances/v1`` file for ``relation`` (a :data:`lowering.PIPES` entry: its unit model chains each row, and
-    the set's recorded y must equal the epilogue of the last accumulator). Rows are written per VU (the unshared statement,
+    the set's recorded y must equal the epilogue of the last accumulator, or the last accumulator itself; the committed y
+    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared statement,
     root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``. ``y_model``: the set
     was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
     that differ from the set's recorded y)."""
@@ -305,18 +307,21 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     d = Path(set_dir)
     man = json.loads((d / "manifest.json").read_text())
     pipe = PIPES[relation]
-    if pipe.word_bits != 16:
-        raise ValueError(f"{relation}: spine sets store 16-bit words (x.u16 / w.u16); {pipe.word_bits}-bit rows have no set layout")
     ports = man.get("ports") or {}
-    K_ = int((ports.get("x") or {}).get("words") or (man.get("relation") or {}).get("statics", {}).get("K"))
-    x_all = np.fromfile(d / "x.u16", dtype="<u2").reshape(-1, K_)
+    dts = {"u8": "u1", "u16": "<u2", "u32": "<u4"}
+    port = {r: (ports.get(r) or {"file": f"{r}.u16", "dtype": "u16"}) for r in "xwy"}
+    wb = {"u1": 8, "<u2": 16}[dts[port["x"]["dtype"]]]
+    if wb != pipe.word_bits or port["w"]["dtype"] != port["x"]["dtype"]:
+        raise ValueError(f"{d.name}: {port['x']['dtype']} rows; {relation} takes {pipe.word_bits}-bit words")
+    K_ = int(port["x"].get("words") or (man.get("relation") or {}).get("statics", {}).get("K"))
+    x_all = np.fromfile(d / port["x"]["file"], dtype=dts[port["x"]["dtype"]]).reshape(-1, K_)
     n_set = x_all.shape[0]
     hi = n_set if hi is None else hi
     if hi > n_set:
         raise ValueError(f"{d.name} holds {n_set} instances; [{lo}, {hi}) would repeat instances")
     x = x_all[lo:hi]
-    w = np.fromfile(d / "w.u16", dtype="<u2").reshape(-1, K_)[lo:hi]
-    y_rec = np.fromfile(d / "y.u16", dtype="<u2")[lo:hi]
+    w = np.fromfile(d / port["w"]["file"], dtype=dts[port["w"]["dtype"]]).reshape(-1, K_)[lo:hi]
+    y_rec = np.fromfile(d / port["y"]["file"], dtype=dts[port["y"]["dtype"]])[lo:hi]
     step = max(1, len(x) // max(1, 4 * procs))
     jobs = [(relation, x[i:i + step], w[i:i + step]) for i in range(0, len(x), step)]
     if procs > 1:
@@ -330,8 +335,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
         raise ValueError(f"{d.name}: {bad} recorded outputs differ from the {relation} model chain")
     digest = man.get("content_digest")
     if leaf == "sha256":
-        da = [sha256_row_digest(r.tolist(), 16, ROLE_X) for r in x]
-        db = [sha256_row_digest(r.tolist(), 16, ROLE_W) for r in w]
+        da = [sha256_row_digest(r.tolist(), wb, ROLE_X) for r in x]
+        db = [sha256_row_digest(r.tolist(), wb, ROLE_W) for r in w]
         schema = SCHEMA_SHA256_ROW
     else:
         da = _row_digests([np.ascontiguousarray(r).tobytes() for r in x], leaf, ROLE_X)
@@ -340,14 +345,16 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     dataset, tier = man.get("set", d.name), f"{man.get('schema', 'input-set/v1')}:{man.get('set', d.name)}"
     if y_model:
         tier += f":y={relation}"
-    st = _frame_v3(dataset, tier, digest, lo, K_, schema, da, db, final, 16)
+    rel = _ligero()[0](relation) if not pipe.epilogue else None
+    y_pub = [int(rel.y_public(v)) for v in final] if rel is not None else final
+    st = _frame_v3(dataset, tier, digest, lo, K_, schema, da, db, y_pub, rel.y_bits if rel is not None else 16)
     ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "set_schema": man.get("schema"),
            "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None),
            **({"y": {"source": f"{relation} model chain", "differ_from_set": bad}} if y_model else {})}
     if y_model:
         ref["source"] = f"{ref['source'] or 'set'} inputs, model y"
-    header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": 16, "units": accs.shape[1],
-              "row_bytes": 2 * K_, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
+    header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": wb, "units": accs.shape[1],
+              "row_bytes": wb * K_ // 8, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
     return _write_file(path, header, np.ascontiguousarray(x).tobytes(), np.ascontiguousarray(w).tobytes(), accs, final, st["y"])
 
 

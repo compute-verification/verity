@@ -32,6 +32,8 @@ def test_unlowered_templates_say_why(family):
 CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-keyed", "bf16-hopper"),
          ("C-Flock", "gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed", "fp8-ada"),
          ("C-Flock", "gemm-coordinate/k1536/sm90-wgmma-e4m3", "frame-v3/blake3-keyed", "fp8-hopper"),
+         ("C-Flock", "gemm-coordinate/k2048/sm89-mma-e4m3", "frame-v3/blake3-keyed", "fp8-ada"),
+         ("C-Flock", "gemm-coordinate/k8192/sm90-wgmma-bf16", "frame-v3/blake3-keyed", "bf16-hopper-wgmma"),
          ("B-Ligero", "gemm-coordinate/k1536/sm90-wgmma-e4m3", "frame-v3/blake3-keyed", "fp8-hopper+blake3"),
          ("B-Ligero", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+sha256"),
          ("A-GKR", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere+blake3"),
@@ -57,15 +59,16 @@ def test_relation_names_are_the_backends_own():
     assert set(L.registry("B-Ligero").module("gemm-coordinate").RELATIONS.values()) <= set(RELATIONS)
 
 
-def test_real_k_and_other_schemes_are_not_supported():
+def test_chunked_real_k_and_other_schemes():
     reg = L.registry("C-Flock")
     k2048 = TM.subcircuit("gemm-coordinate", K=2048)
-    assert "semantics" in reg.supports(k2048, "frame-v3/blake3-keyed")
-    why = reg.supports(TM.subcircuit("gemm-coordinate", K=2048, semantics="sm90.mma.m16n8k16.bf16"), "frame-v3/blake3-keyed")
-    assert "K = 2048" in why
+    assert reg.supports(k2048, "frame-v3/blake3-keyed") is None
+    assert reg.supports(TM.subcircuit("gemm-coordinate", K=2048, semantics="sm90.mma.m16n8k16.bf16"), "frame-v3/blake3-keyed") is None
+    why = reg.supports(TM.subcircuit("gemm-coordinate", K=512, semantics="sm90.mma.m16n8k16.bf16"), "frame-v3/blake3-keyed")
+    assert "CN3" in why
     assert "sha-256" in reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16"), "frame-v3/sha-256")
     with pytest.raises(ValueError):
-        reg.relation(k2048, "frame-v3/blake3-keyed")
+        reg.relation(k2048, "frame-v3/sha-256")
 
 
 def test_missing_and_misnamed_modules(tmp_path):
@@ -85,3 +88,21 @@ def test_support_matrix():
                          ["frame-v3/sha-256"])
     assert m["D-SP1"]["gemm-coordinate/k1536/sm80-mma-bf16+frame-v3/sha-256"] is None
     assert isinstance(m["C-Flock"]["rope-head/d64/neox-bf16+frame-v3/sha-256"], str)
+
+
+def test_flock_stage_writes_an_input_set_range(tmp_path):
+    import json
+
+    import numpy as np
+
+    from verity_numerical.bench import generate as G, input_sets as IS
+
+    sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
+    stage = L.registry("C-Flock").stage(sub)
+    d = tmp_path / "set"
+    G.generate(sub, 4, 7, d)
+    s = IS.InputSet.open(d)
+    out = stage(s, 1, 3, tmp_path / "inst")
+    h = json.loads(out.read_bytes().split(b"\n", 1)[0])
+    assert (h["vus"], h["k"], h["instances"]["range"], h["instances"]["manifest_sha256"]) == (2, 2048, [1, 3], s.content_digest)
+    assert np.fromfile(s.path / "x.u16", dtype="<u2").size == 4 * 2048
