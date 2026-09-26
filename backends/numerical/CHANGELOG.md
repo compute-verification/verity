@@ -1,5 +1,57 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: `views --format entities`, the docs site's render
+
+- `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
+  (schema `verity/tables-entities/v1`; the site's spec is the ontology's "A result" and "Presentation rules"):
+  - `subcircuits`: one per subcircuit, a fully bound subcircuit template. Each has its census id and display name (e.g.
+    `gemm-coordinate/k1536/sm90-wgmma-e4m3`, "GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)"), its
+    `subcircuit_template` with its bound `parameters` (`K`, `datatype`, and `semantics`: the exact instruction),
+    `legacy_target`, `fidelity_notes`, the instance set with its provenance (captured or synthetic), the census hardware
+    line, the datatype display and native N;
+  - `backend_families`: A-GKR, B-Ligero, C-Flock and D-SP1, each with its markdown column header as `column`. The
+    markdown itself is unchanged;
+  - `backends`: one per backend family and interaction mode (`A-fs`, `B-interactive`, `B-fs`, `C-interactive`, `D-fs`),
+    plus composed backends under their own id. Route (a) is `A-route-a`: it renders in the A-GKR column, and its profile
+    adds C-Flock's assumptions and the sigma link's. Each backend's claims are written out in full;
+  - `statements`: one per subcircuit and commitment scheme, `<subcircuit>+<scheme>`: the full committed relation a backend
+    lowers and proves, with its scheme's assumptions. The renderer's configurations are an implementation detail
+    (`implementations` names them) and are not emitted. A backend's profile leaves out statement-commitment hashes, which
+    belong to the statement;
+  - `schemes`: one per scheme, under ids that name the leaf hash (e.g. `frame-v3/blake3-keyed`; `legacy_id` is the
+    renderer's). Each has its tree and leaf hashes, a structured `algebraic` flag, its assumptions (taken from the code)
+    and the `leaf_circuits` that commit it. `blake3-xob` commits keyed BLAKE3's bytes (same schema and params in
+    `ligero-verify`), so it is a circuit of `frame-v3/blake3-keyed`, not a scheme of its own;
+  - `results`: the best result of every admissible backend, not only each family's pick (`best` marks that pick), keyed by
+    backend × statement × instance set × prover hardware. Each result carries:
+    - its `backend`, its `statement` and the `key` of those four;
+    - its full assumption set: the backend's plus the statement's;
+    - `hardware` (the semantics chip, which supplies N) and `prover_hardware` (where the prover ran, which supplies P);
+    - the instance set with its provenance;
+    - its soundness: the whole-cell bound, a union over the sub-batch proofs, plus the backend's per-proof bound where the
+      result records it;
+    - `N` (the native peak: a work-model version plus a census peak id) and `P` (instances per second at the reference
+      network) beside the overhead;
+    - its `interaction` record, enough to recompute the overhead at any network (`formula`):
+      - `rounds`, `rounds_protocol` and `sequential_depth`;
+      - `bytes_up` and `bytes_down`;
+      - `commit_s`, `prover_compute_s` and `verifier_compute_s`;
+      - `measured_rtt` and `loopback_per_round`, each with its method;
+    - its phases: stages, fused stages as one span, "Other" clamped to 0 in [−0.5%, 0) and flagged when it is more
+      negative, with the raw value kept as `other_raw`, and one-time setup in its own field;
+    - its state, artifact and render time;
+  - `best_standard_hash`: for each backend family and subcircuit, the lowest-overhead cell on standard hashes only;
+  - `tables`: Table 1 lists backends (guarantees, assumptions, unmapped texts). Table 2 and 3 carry every printed cell's
+    exact display string, value, marks and footnote; their rows are keyed by statement and prover hardware, and each cell
+    names its backend;
+  - `claims`: the `verity.claims` entries cited; `census`: the `census/` entries as read at render time;
+  - `provenance`: the render time and the verity commit.
+- Ids are stable across renders: subcircuits by census id, backends as `<letter>-<mode>` or a composed backend's own id,
+  statements as `<subcircuit>+<scheme>`, and results as `<backend>@<statement>@<instance set>@<prover hardware>`.
+- The markdown is unchanged byte for byte. Table 2's cells and footnotes and Table 3's rows now come from shared helpers
+  (`table2_grid`, `table3_row`) that both renders use.
+- The steward's `published = "views"` entry also writes `<stamp>-tables.json` (the entities render).
+
 ## 2026-09-25: peaks, networks and instance sets come from the census (`census/`, data only)
 
 - The renderers read these values from `census/` at the repository root:

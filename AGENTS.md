@@ -35,6 +35,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  it with their own utilities; their readers stay out of core. Its tests live
  in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
+ - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
+ such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
+ entities render. Stdlib only; imports no other core module.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the

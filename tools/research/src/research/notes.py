@@ -1229,7 +1229,8 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
     never the published numbers) into <stamp>-tables-preview.md.  An entry with `published = "views"` (the switch, kb/TABLES.md) publishes
-    `.views --published` as <stamp>-tables.md and keeps the frozen `.tables` as the drill-down <stamp>-tables-frozen.md (`preview` is
+    `.views --published` as <stamp>-tables.md, with its entities render (`--format entities`, the docs site's input) as <stamp>-tables.json,
+    and keeps the frozen `.tables` as the drill-down <stamp>-tables-frozen.md (`preview` is
     then moot); `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
     that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
@@ -1272,15 +1273,17 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
                 lines.append(f"{now:%H:%MZ} RENDER-REFRESH-FAILED {key}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
         deadline = time.monotonic() + timeout_s
         if e.get("published", "tables") == "views":
-            mods = [("views", "tables", ["--published"]), ("tables", "tables-frozen", []), ("drilldown", "drilldowns", [])]
+            mods = [("views", "tables", ["--published"], "md"), ("views", "tables", ["--published"], "entities"),
+                    ("tables", "tables-frozen", [], "md"), ("drilldown", "drilldowns", [], "md")]
         else:
-            mods = [("tables", "tables", []), ("drilldown", "drilldowns", [])] + ([("views", "tables-preview", [])] if e.get("preview") is True else [])
-        for mod, suffix, extra in mods:
+            mods = [("tables", "tables", [], "md"), ("drilldown", "drilldowns", [], "md")] + (
+                [("views", "tables-preview", [], "md")] if e.get("preview") is True else [])
+        for mod, suffix, extra, fmt in mods:
             left = deadline - time.monotonic()
-            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", "md", *extra]
+            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", fmt, *extra]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
             if rc == 0:
-                f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.md"
+                f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_text(stdout)
                 lines.append(f"{now:%H:%MZ} RENDERED {_tilde(f)}")
