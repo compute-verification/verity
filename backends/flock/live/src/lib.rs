@@ -1439,8 +1439,9 @@ impl Server {
                     return Err(bad(&format!("{n}: root_b differs from root_b_sha256")));
                 }
                 roots.push((n.clone(), rb));
-                let p = hx(&l["publics"][n], "publics")?;
-                if l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
+                // a statement that commits no public words has no entry for the table (the server records none)
+                let p = if l["publics"][n].is_null() && l["publics_sha256"][n].is_null() { Vec::new() } else { hx(&l["publics"][n], "publics")? };
+                if !(p.is_empty() && l["publics_sha256"][n].is_null()) && l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
                     return Err(bad(&format!("{n}: publics differ from publics_sha256")));
                 }
                 publics.push((n.clone(), p));

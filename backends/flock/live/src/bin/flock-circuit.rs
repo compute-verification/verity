@@ -495,6 +495,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("tail_swapped_circuit_refused", false, false),
     ("coin_seed_opening_forged", false, false),
     ("coin_seed_record_replays", true, false),
+    ("record_replays_offline", true, false),
     ("prover_is_deterministic", true, false),
 ];
 
@@ -595,6 +596,24 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let tampered = flock_live::replay_coin_seed(&bad);
         return json!({"case": name, "expect": "the record replays; swapped indices do not", "accepted": v["accepted"], "requests": honest.as_ref().ok(),
                       "pass": v["accepted"] == true && honest.is_ok() && tampered.is_err(), "why": honest.err().or(tampered.err())});
+    }
+    if name == "record_replays_offline" {
+        // G2 offline: the verifier's record and the two proofs re-verified by Server::from_record + finish (the reference of the
+        // Lean verifier's agreement test); the same record with the reps' proofs swapped is refused
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+        let rec = s0.lock().unwrap().record_json();
+        let replay = |p: [&Vec<u8>; 2]| -> Result<Value, String> {
+            let map = p.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
+            let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+            Ok(Server::from_record(config(st, sigma(st, inst)), v, &rec, map)?.finish())
+        };
+        let (honest, swapped) = (replay([&proofs[0], &proofs[1]]), replay([&proofs[1], &proofs[0]]));
+        let accepted = |r: &Result<Value, String>| matches!(r, Ok(x) if x["accepted"] == true);
+        return json!({"case": name, "expect": "the honest record replays offline; swapped proofs do not", "accepted": v["accepted"],
+                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped),
+                      "why": honest.as_ref().map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e)),
+                      "why_swapped": swapped.map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e))});
     }
     if name == "coin_seed_opening_forged" {
         // an honest session, then its verdict with the revealed seed changed: the prover's step-0 check must refuse it
