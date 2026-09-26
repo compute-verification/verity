@@ -362,6 +362,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Input**: one concrete assignment to a subcircuit's input wires, with the output the chip produced recorded alongside.
 - **Input set**: a batch of inputs for one subcircuit, with their provenance (captured or synthetic).
 - **Commitment scheme**: how serving committed the values being proven, such as frame-v3 rows or `vllm-v1` (`verity.commitments`). Each scheme has a stable id and lists the hash assumptions it rests on.
+- **Hiding leaf**: a leaf whose published data statistically hides the committed value, so a low-entropy value can't be searched from its digest. `hm96-sha256/v1` (`verity.commitments.hm96`) wraps a scheme's SHA-256 leaf digest with a salt stored beside the value; a leaf opens with its value and salt.
 - **Statement**: what a backend proves, the full committed relation: a subcircuit plus the commitment scheme that binds its inputs and outputs. A backend lowers a statement into its own circuit. Changing the scheme changes the statement, not the backend.
 - **Backend family**: A-GKR, B-Ligero, C-Flock or D-SP1. The letter is part of the name.
 - **Backend**: an implementation of the Backend interface, that is, one concrete member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir. A composed backend gets its own id: route (a), A-GKR with C-Flock and a link, is `A-route-a`. A scheme is not part of a backend's identity.
