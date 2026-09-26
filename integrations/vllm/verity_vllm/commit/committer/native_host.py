@@ -2049,8 +2049,8 @@ class NativeHostCommitter(NativeRangeOpenings):
                 "steps_after": len(steps), "bytes_after": sum(s.n_bytes for s in steps), "leaves_after": sum(s.n_leaves for s in steps),
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
-        step_roots = [s.root for s in steps]
-        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots)
+        step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
+        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
@@ -2468,7 +2468,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
             return False
-        return self._run_root(run) == run.run_root
+        return len(run.run_root) == 32 and self._run_root(run) == run.run_root
 
     # ------------------------------------------------------------------ coverage
 

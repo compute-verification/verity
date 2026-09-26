@@ -102,7 +102,7 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
 
 def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     """[R19 admit, F-r18-admit-1 fix (a)] the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
-    is (raw - hidden M1) x levels; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
+    is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
     levels only.  Bounded runs are governed by the bounded HOST BOUND (revb M-0254): recorded here, never refused."""
     sizing, wl, _ = _fixture("b16")
     small = 32 << 30
@@ -110,7 +110,7 @@ def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     raw, hidden = full["scheduled_raw_bytes"], full["scheduled_hidden_bytes"]
     assert 0 < hidden < raw and hidden > 0.5 * raw, (raw, hidden)                 # the M1 stream dominates the stream at this geometry
     kept = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True, retain_exclude={"fa2_hidden_m1", "fa3_hidden_m1"})
-    assert kept["predicted_host_bytes"] == int((raw - hidden) * full["levels_factor"]) < full["predicted_host_bytes"]
+    assert kept["predicted_host_bytes"] == raw - hidden + int(raw * (full["levels_factor"] - 1.0)) < full["predicted_host_bytes"]
     assert kept["admitted"] is True and "bounded HOST BOUND governs" in kept["why"] and kept["staging"]["retain_exclude"] == ["fa2_hidden_m1", "fa3_hidden_m1"]
     # bounded without the exclusion keeps everything; excluding an unrelated family keeps everything too (the rule is by hidden family)
     b_all = ADM.admission(sizing, wl["requests"], small, retain="host", max_num_batched_tokens=5348, lag=1, bounded=True)
@@ -121,7 +121,7 @@ def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     assert lv["predicted_host_bytes"] == int(raw * (full["levels_factor"] - 1.0)) and "levels only" in lv["pool_rule"]
     # the CLI alias hidden_m1 names both tap families
     rule = ADM.predicted_pool_bytes(1000, 600, retain="host", levels_factor=1.25, windowed=True, bounded=True, retain_exclude={"fa2_hidden_m1"})
-    assert rule[0] == 500 and "hidden M1" in rule[1]
+    assert rule[0] == 650 and "hidden M1" in rule[1]
 
 
 def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
@@ -238,3 +238,20 @@ def test_the_commit_admission_covers_the_recorded_peaks(row):
 def test_commit_main_passes_the_resident_bytes():
     src = (REPO / "verity_vllm" / "pipeline" / "commit.py").read_text()
     assert "resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers)" in src
+
+
+def test_row74_both_staging_modes():
+    """#74 (Qwen3-4B-FP8, H100): unbounded, the pool of every window (152,257 MiB raw x 1.25) + resident is over the 251 GB limit and at or
+    above what the run held when it was stopped; bounded with the FA3 hidden stream excluded it admits, and its pool counts the Merkle
+    levels over every leaf (the warm-up primed 59,246 MiB pinned; kept raw x 1.25 alone was 16,058 MiB)."""
+    peaks = json.loads((FIX / "commit_peaks.json").read_text())
+    r, limit, M = peaks["rows"]["74"], peaks["limit_bytes"], 1 << 20
+    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])["bytes"]
+    raw, hid = r["scheduled_raw_mib"] * M, r["scheduled_hidden_mib"] * M
+    unb, _ = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=False, retain_exclude=None)
+    assert unb + res > limit and unb + res >= r["unbounded"]["peak_anon_shmem_mib"] * M
+    bnd, rule = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=True,
+                                         retain_exclude={"fa3_hidden_m1"})
+    assert bnd + res < limit and "levels over every leaf" in rule
+    assert 0.8 <= bnd / (r["bounded_exclude_fa3_hidden_m1"]["warmup_pinned_mib"] * M) <= 1.0
