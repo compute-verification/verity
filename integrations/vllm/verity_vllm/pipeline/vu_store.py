@@ -301,10 +301,36 @@ def verify_store(store: str | Path) -> dict[str, Any]:
     return {"ok": not bad and not missing, "bad_values": bad[:8], "missing_values": missing, "values": len(have)}
 
 
-def _limits_for(out: Path, sr: dict[str, Any]) -> VX.Limits:
+#: below this fraction of the memory limit free, the export runs serial: a forked pool's pages could OOM-kill the Commit before
+#: its summary and verdict are written, which no `except` catches
+HEADROOM_MIN = 0.20
+
+
+def memory_headroom() -> float | None:
+    """Free fraction of this process's memory limit: the cgroup's (v2 `memory.max` / `memory.current`, v1 `limit_in_bytes` /
+    `usage_in_bytes`), else the host's (`MemAvailable` / `MemTotal`); None when none is readable."""
+    for lim_f, cur_f in (("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+                         ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.usage_in_bytes")):
+        try:
+            lim, cur = Path(lim_f).read_text().strip(), int(Path(cur_f).read_text().strip())
+        except (OSError, ValueError):
+            continue
+        if lim.isdigit() and int(lim) < (1 << 60):
+            return max(0.0, 1.0 - cur / int(lim))
+    try:
+        mi = {ln.split(":")[0]: int(ln.split()[1]) for ln in Path("/proc/meminfo").read_text().splitlines() if ln.split()[1:]}
+        return mi["MemAvailable"] / mi["MemTotal"]
+    except (OSError, KeyError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _limits_for(out: Path, sr: dict[str, Any], headroom: float | None = None) -> VX.Limits:
     lim = VX.Limits.from_dir(out)
     if (sr.get("evaluator") or {}).get("retention") == "device":
         lim.workers = 1                                                      # forked children cannot read device-retained blocks
+    free = memory_headroom() if headroom is None else headroom
+    if free is not None and free < HEADROOM_MIN:
+        lim.workers = 1
     return lim
 
 

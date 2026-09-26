@@ -168,7 +168,10 @@ def test_families_are_interleaved_in_the_draw(attn_world):
 def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     a = _export(attn_world, tmp_path / "serial")
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
-    assert VS._limits_for(tmp_path, {"evaluator": {"retention": "device"}}).workers == 1 and VS._limits_for(tmp_path, {}).workers == 8
+    assert VS._limits_for(tmp_path, {"evaluator": {"retention": "device"}}, 0.9).workers == 1 and VS._limits_for(tmp_path, {}, 0.9).workers == 8
+    assert VS._limits_for(tmp_path, {}, 0.1).workers == 1                  # memory-tight: serial, never a pool that could OOM the Commit
+    h = VS.memory_headroom()
+    assert h is None or 0.0 <= h <= 1.0
     assert [(x["set"], x["n"], x["content_digest"]) for x in a["sets"]] == [(x["set"], x["n"], x["content_digest"]) for x in b["sets"]]
 
 
