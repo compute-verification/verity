@@ -353,12 +353,25 @@ pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
     if net.epilogue() { ("u16", 2) } else { ("u32", 4) }
 }
 
+/// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
+pub const MAX_M: usize = 35;
+
 /// What both parties check of an (instances, netlist, layout) triple before any coin:
+/// - CN3: no `Chunk(1)` (a one-chunk row's digest is its ROOT output, which Chunk(n) does not compute);
+/// - CN2: the proof fits m ≤ MAX_M;
 /// - NV2: a netlist with the fp4-nvf4 scale inputs (608 input bits) pairs only with the fp4 layouts, and the reverse;
 /// - NV3: the a / b trees' row schema is the layout's pinned one;
 /// - NV5: the y leaf's schema and width are the relation's (`y_leaf`), and every y word fits it;
 /// - NV1: every VU's circuit output word is the one its committed y word opens (the y root is built from y).
 pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String> {
+    if lay == Layout::Chunk(1) {
+        return Err("CN3: a 1024-byte row is one BLAKE3 chunk, whose last block is the ROOT, and Chunk(n) never sets ROOT".into());
+    }
+    let blocks = lay.blocks_per_vu() * inst.vus;
+    if lay.k_log() + log2ceil(blocks).max(3) > MAX_M {
+        return Err(format!("CN2: {} VUs × {} blocks per VU need m = {} > {MAX_M} (Chunk(n): n × VUs ≤ 32,768)", inst.vus,
+                           lay.blocks_per_vu(), lay.k_log() + log2ceil(blocks).max(3)));
+    }
     if (net.n_in == 608) != lay.is_fp4() {
         return Err(format!("NV2: a netlist with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
     }

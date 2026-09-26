@@ -623,6 +623,12 @@ fn admission_negatives(st: &PureStmt, inst: &Instances) -> Vec<Value> {
     if wide {
         cases.push(("y_word_exceeds_u16_leaf", "NV5", admit(st.lay, &st.net, &y_past_leaf)));
     }
+    // CN2: one VU more than m = 35 holds (the admission refuses before reading any row); CN3: the 1024-byte-row layout
+    let mut too_many = inst.clone();
+    let per = st.lay.blocks_per_vu();
+    too_many.vus = (1usize << (flock_live::pure_block::MAX_M - st.lay.k_log())) / per + 1;
+    cases.push(("batch_past_m35", "CN2", admit(st.lay, &st.net, &too_many)));
+    cases.push(("chunk1_rows", "CN3", admit(Layout::Chunk(1), &st.net, inst)));
     cases
         .into_iter()
         .map(|(name, tag, r)| {
