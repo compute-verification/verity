@@ -1,5 +1,29 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: every served workload's subcircuits bound
+
+- **Census:** every (template, parameters) in every census workload now has a bound subcircuit. That adds 42 subcircuits
+  to #101's:
+  - GEMM coordinates at K 1536–14336 on sm80 mma and sm90 wgmma;
+  - FA2 and FA3 attention heads, each with its key-count range over the workloads it serves (#101's head now spans #11's
+    too: T 1–4607);
+  - RoPE at D 128 and 256;
+  - RMSNorms (fused and Triton, eps 1e-05 and 1e-06, including Qwen3's N = 128 head norm);
+  - SiLU·mul;
+  - greedy selection;
+  - embedding (a commitment opening);
+  - the MoE router, expert coordinates and sum;
+  - the FP8 block-scaled GEMM;
+  - bias-add and the scalar multiply.
+- **Ids and displays:** the bench spine's where it binds the template (`bench.templates.subcircuit`), otherwise its
+  `<template>/<parameters>/<semantics or datatype>` form.
+- **No spine generator yet:** FA3 attention (`sm90.fa3.bf16`), `token-select-greedy`, `embedding-row`, `moe-router-topk`,
+  `moe-expert-coordinate`, `moe-expert-coordinate-weighted`, `moe-sum`, `scaled-mm-fp8-block-coordinate`, `bias-add` and
+  `bf16-mul-scalar`. The list is pinned in `test_headline.NO_SPINE_GENERATOR`.
+- **Headline:** it names every workload's gaps by subcircuit (`no result` or `commitment opening`); `no census subcircuit`
+  no longer occurs.
+- **Unchanged:** tables, raw JSON and parity are byte-identical.
+
 ## 2026-09-26: #101's attention, sampling and embedding subcircuits; an L40S hardware line
 
 - **Census:** #101's remaining templates are bound, with bench-spine's ids:

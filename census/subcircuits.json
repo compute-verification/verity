@@ -246,6 +246,126 @@
             "label": "vLLM's reduction lengths (census/workloads.json: Llama-3.2-1B's Gemm_v1 K = 2048 and 8192); the real-K cells on it (flock-backend 2026-09-26 04:52Z and 06:05Z, bligero-real-k), keyed by statement (docs ontology, 'A result')"
           }
         ]
+      },
+      {
+        "id": "gemm-coordinate/k14336/sm80-mma-bf16",
+        "display": "GemmCoordinate<14336> · sm80 mma · BF16",
+        "parameters": {
+          "K": 14336,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k2304/sm80-mma-bf16",
+        "display": "GemmCoordinate<2304> · sm80 mma · BF16",
+        "parameters": {
+          "K": 2304,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k2560/sm90-wgmma-bf16",
+        "display": "GemmCoordinate<2560> · sm90 wgmma · BF16",
+        "parameters": {
+          "K": 2560,
+          "datatype": "bf16",
+          "semantics": "sm90.wgmma.m64n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k4096/sm80-mma-bf16",
+        "display": "GemmCoordinate<4096> · sm80 mma · BF16",
+        "parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k4096/sm90-wgmma-bf16",
+        "display": "GemmCoordinate<4096> · sm90 wgmma · BF16",
+        "parameters": {
+          "K": 4096,
+          "datatype": "bf16",
+          "semantics": "sm90.wgmma.m64n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #73 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k8960/sm80-mma-bf16",
+        "display": "GemmCoordinate<8960> · sm80 mma · BF16",
+        "parameters": {
+          "K": 8960,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k9216/sm80-mma-bf16",
+        "display": "GemmCoordinate<9216> · sm80 mma · BF16",
+        "parameters": {
+          "K": 9216,
+          "datatype": "bf16",
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "gemm-coordinate/k9728/sm90-wgmma-bf16",
+        "display": "GemmCoordinate<9728> · sm90 wgmma · BF16",
+        "parameters": {
+          "K": 9728,
+          "datatype": "bf16",
+          "semantics": "sm90.wgmma.m64n8k16.bf16"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #73 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
       }
     ]
   },
@@ -321,14 +441,58 @@
         "variable_ranges": {
           "T": {
             "min": 1,
-            "max": 383,
-            "source": "row #101's Attention_v3 strata (census/workloads.json): NB = 1 or 2 with the last block full or partial, NB = 3 partial, at BN = 128; the least is NB = 1 partial (T >= 1), the most NB = 3 partial (T <= 3*128 - 1), by the template's variable_bounds"
+            "max": 4607,
+            "source": "the Attention strata of rows #11, #101 (census/workloads.json), by the template's variable_bounds"
           }
         },
         "fidelity_notes": [],
         "sources": [
           {
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates.attention_head)"
+          }
+        ]
+      },
+      {
+        "id": "attention-head/d128-bn128/sm90-fa3-bf16",
+        "display": "AttentionHead<T,128> · FA3 BN=128 · sm90 wgmma · BF16",
+        "parameters": {
+          "D": 128,
+          "BN": 128,
+          "semantics": "sm90.fa3.bf16"
+        },
+        "variable_ranges": {
+          "T": {
+            "min": 1,
+            "max": 1151,
+            "source": "the Attention strata of rows #73, #74 (census/workloads.json), by the template's variable_bounds"
+          }
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "attention-head/d128-bn64/sm80-fa2-bf16",
+        "display": "AttentionHead<T,128> · FA2 BN=64 · sm80 mma · BF16",
+        "parameters": {
+          "D": 128,
+          "BN": 64,
+          "semantics": "sm80.fa2.bf16"
+        },
+        "variable_ranges": {
+          "T": {
+            "min": 1,
+            "max": 4607,
+            "source": "the Attention strata of rows #39, #60, #67, #68 (census/workloads.json), by the template's variable_bounds"
+          }
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #39, #60, #67, #68 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
           }
         ]
       }
@@ -378,6 +542,32 @@
         "sources": [
           {
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      },
+      {
+        "id": "rope-head/d128/neox-bf16",
+        "display": "RoPEHead<128> · NeoX · BF16",
+        "parameters": {
+          "D": 128
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #39, #60, #67, #68, #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rope-head/d256/neox-bf16",
+        "display": "RoPEHead<256> · NeoX · BF16",
+        "parameters": {
+          "D": 256
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
           }
         ]
       }
@@ -436,6 +626,48 @@
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
           }
         ]
+      },
+      {
+        "id": "rmsnorm-fused-cuda/n4096-eps1e-05/bf16",
+        "display": "RMSNormFusedCuda_v2<4096> · eps 1e-05 · BF16",
+        "parameters": {
+          "N": 4096,
+          "EPS": 1e-05
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rmsnorm-fused-cuda/n1536-eps1e-06/bf16",
+        "display": "RMSNormFusedCuda_v2<1536> · eps 1e-06 · BF16",
+        "parameters": {
+          "N": 1536,
+          "EPS": 1e-06
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rmsnorm-fused-cuda/n2560-eps1e-06/bf16",
+        "display": "RMSNormFusedCuda_v2<2560> · eps 1e-06 · BF16",
+        "parameters": {
+          "N": 2560,
+          "EPS": 1e-06
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
       }
     ]
   },
@@ -492,6 +724,62 @@
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
           }
         ]
+      },
+      {
+        "id": "rmsnorm-triton/n4096-eps1e-05/bf16",
+        "display": "RMSNormTriton_v1<4096> · eps 1e-05 · BF16",
+        "parameters": {
+          "N": 4096,
+          "EPS": 1e-05
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rmsnorm-triton/n128-eps1e-06/bf16",
+        "display": "RMSNormTriton_v1<128> · eps 1e-06 · BF16",
+        "parameters": {
+          "N": 128,
+          "EPS": 1e-06
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rmsnorm-triton/n1536-eps1e-06/bf16",
+        "display": "RMSNormTriton_v1<1536> · eps 1e-06 · BF16",
+        "parameters": {
+          "N": 1536,
+          "EPS": 1e-06
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "rmsnorm-triton/n2560-eps1e-06/bf16",
+        "display": "RMSNormTriton_v1<2560> · eps 1e-06 · BF16",
+        "parameters": {
+          "N": 2560,
+          "EPS": 1e-06
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
       }
     ]
   },
@@ -541,6 +829,58 @@
         "sources": [
           {
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      },
+      {
+        "id": "silu-mul/i1024/bf16",
+        "display": "SiluMul_v1<1024> · BF16",
+        "parameters": {
+          "I": 1024
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "silu-mul/i14336/bf16",
+        "display": "SiluMul_v1<14336> · BF16",
+        "parameters": {
+          "I": 14336
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "silu-mul/i8960/bf16",
+        "display": "SiluMul_v1<8960> · BF16",
+        "parameters": {
+          "I": 8960
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+          }
+        ]
+      },
+      {
+        "id": "silu-mul/i9728/bf16",
+        "display": "SiluMul_v1<9728> · BF16",
+        "parameters": {
+          "I": 9728
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
           }
         ]
       }
@@ -626,7 +966,73 @@
       "bytes_basis": "reads the bf16 logits row (V words); the token id written is a few bytes and not counted; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "the Definition's operands (verity_vllm.program.frontend.rules.vocab: TokenSelect_v1{V}, argmax over the logits row)"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "token-select-greedy/v128256/bf16",
+        "display": "TokenSelect_v1<128256> · greedy argmax · BF16",
+        "parameters": {
+          "V": 128256
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #11 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "token-select-greedy/v151936/bf16",
+        "display": "TokenSelect_v1<151936> · greedy argmax · BF16",
+        "parameters": {
+          "V": 151936
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #39, #73, #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "token-select-greedy/v256000/bf16",
+        "display": "TokenSelect_v1<256000> · greedy argmax · BF16",
+        "parameters": {
+          "V": 256000
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "token-select-greedy/v32768/bf16",
+        "display": "TokenSelect_v1<32768> · greedy argmax · BF16",
+        "parameters": {
+          "V": 32768
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "token-select-greedy/v50304/bf16",
+        "display": "TokenSelect_v1<50304> · greedy argmax · BF16",
+        "parameters": {
+          "V": 50304
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "moe-router-topk",
@@ -670,9 +1076,29 @@
       "bytes_per_input": "2*E + 8*TOPK",
       "bytes_basis": "reads the E router logits (bf16, 2E bytes), writes the TOPK routing weights (f32) and expert ids (i32): 2E + 8*TOPK bytes; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "the Definition's ports (verity_vllm.program.registry.moe.MoeRouterTopK: logits Array(E, BF16) -> (Array(TOPK, F32), Array(TOPK, I32)))",
-      "port_datatypes": {"logits": "bf16", "weights": "f32", "ids": "i32"}
+      "port_datatypes": {
+        "logits": "bf16",
+        "weights": "f32",
+        "ids": "i32"
+      }
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "moe-router-topk/e64-topk8-vpt8/bf16",
+        "display": "MoeRouterTopK_v1<E=64, TOPK=8> · softmax top-k · BF16 logits",
+        "parameters": {
+          "E": 64,
+          "TOPK": 8,
+          "VPT": 8
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "moe-expert-coordinate",
@@ -709,7 +1135,22 @@
       "bytes_basis": "reads the expert's bf16 weight row (K words); the token's activation row is shared by the expert's coordinates and not counted per coordinate (the batch-1 decode reading, as gemm-coordinate)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.moe.MoeExpertCoordinate_v1 = GemmCoordinate_v1 on the routed expert's row)"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "moe-expert-coordinate/e64-k2048/bf16",
+        "display": "MoeExpertCoordinate_v1<E=64, K=2048> · BF16",
+        "parameters": {
+          "E": 64,
+          "K": 2048
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "moe-expert-coordinate-weighted",
@@ -746,7 +1187,22 @@
       "bytes_basis": "reads the expert's bf16 weight row (K words); the activation row is shared and the routed weight is one word, neither counted per coordinate (the batch-1 decode reading, as gemm-coordinate)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.moe.MoeExpertCoordinateW_v1)"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "moe-expert-coordinate-weighted/e64-k1024/bf16",
+        "display": "MoeExpertCoordinateW_v1<E=64, K=1024> · routed weight · BF16",
+        "parameters": {
+          "E": 64,
+          "K": 1024
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "moe-sum",
@@ -785,7 +1241,22 @@
       "bytes_basis": "reads the TOPK expert output rows (TOPK*H bf16 words), writes one row (H words); every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.moe.MoeSum_v1{TOPK,H})"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "moe-sum/topk8-h2048/bf16",
+        "display": "MoeSum_v1<TOPK=8, H=2048> · BF16",
+        "parameters": {
+          "TOPK": 8,
+          "H": 2048
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "scaled-mm-fp8-block-coordinate",
@@ -826,7 +1297,53 @@
       "bytes_basis": "reads the coordinate's e4m3 weight row (K bytes) and its fp32 block scales (K // G words); the activation row and its scales are shared by the row's coordinates and not counted per coordinate (the batch-1 decode reading, as gemm-coordinate)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.fp8.ScaledMmFp8BlockCoordinate_v1)"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "scaled-mm-fp8-block-coordinate/k2560-g128/sm90-wgmma-e4m3",
+        "display": "ScaledMmFp8BlockCoordinate_v1<K=2560, G=128> · sm90 wgmma · FP8 (E4M3), block scales",
+        "parameters": {
+          "K": 2560,
+          "G": 128,
+          "semantics": "sm90.wgmma.m64n8k32.e4m3"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "scaled-mm-fp8-block-coordinate/k4096-g128/sm90-wgmma-e4m3",
+        "display": "ScaledMmFp8BlockCoordinate_v1<K=4096, G=128> · sm90 wgmma · FP8 (E4M3), block scales",
+        "parameters": {
+          "K": 4096,
+          "G": 128,
+          "semantics": "sm90.wgmma.m64n8k32.e4m3"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "scaled-mm-fp8-block-coordinate/k9728-g128/sm90-wgmma-e4m3",
+        "display": "ScaledMmFp8BlockCoordinate_v1<K=9728, G=128> · sm90 wgmma · FP8 (E4M3), block scales",
+        "parameters": {
+          "K": 9728,
+          "G": 128,
+          "semantics": "sm90.wgmma.m64n8k32.e4m3"
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "bias-add",
@@ -859,7 +1376,21 @@
       "bytes_basis": "reads x[N] and the bias b[N], writes out[N]: 3N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.b1.BiasAdd_v1{N})"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "bias-add/n2048/bf16",
+        "display": "BiasAdd_v1<2048> · BF16",
+        "parameters": {
+          "N": 2048
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "bf16-mul-scalar",
@@ -892,7 +1423,21 @@
       "bytes_basis": "reads x[N], writes out[N]: 2N bf16 words; the scalar is one word and not counted; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "the Definition's operands (verity_vllm.program.registry.b1.Bf16MulScalarTensor_v1{N})"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "bf16-mul-scalar/n2304/bf16",
+        "display": "Bf16MulScalarTensor_v1<2304> · BF16",
+        "parameters": {
+          "N": 2304
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "embedding-row",
@@ -949,6 +1494,76 @@
         "sources": [
           {
             "label": "row #101 (Llama-3.2-1B, census/workloads.json); id in bench-spine's <template>/<parameters>/<datatype> form (bench-spine has no embedding template: a commitment opening)"
+          }
+        ]
+      },
+      {
+        "id": "embedding-row/v151936-h1536/bf16",
+        "display": "Embedding_v1<151936, 1536> · BF16",
+        "parameters": {
+          "V": 151936,
+          "H": 1536
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #39 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "embedding-row/v50304-h2048/bf16",
+        "display": "Embedding_v1<50304, 2048> · BF16",
+        "parameters": {
+          "V": 50304,
+          "H": 2048
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #67, #68 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "embedding-row/v256000-h2304/bf16",
+        "display": "Embedding_v1<256000, 2304> · BF16",
+        "parameters": {
+          "V": 256000,
+          "H": 2304
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #57 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "embedding-row/v151936-h2560/bf16",
+        "display": "Embedding_v1<151936, 2560> · BF16",
+        "parameters": {
+          "V": 151936,
+          "H": 2560
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in rows #73, #74 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
+          }
+        ]
+      },
+      {
+        "id": "embedding-row/v32768-h4096/bf16",
+        "display": "Embedding_v1<32768, 4096> · BF16",
+        "parameters": {
+          "V": 32768,
+          "H": 4096
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "served in row #60 (census/workloads.json); id in bench-spine's <template>/<parameters>/<semantics or datatype> form; bench-spine has no generator for it yet"
           }
         ]
       }

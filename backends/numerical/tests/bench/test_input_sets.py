@@ -163,8 +163,10 @@ def test_evaluation_targets_equal_the_definitions():
 
 
 def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
-    ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) if "commitment_opening" not in t for s in t["subcircuits"]]
+    ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) if t["id"] in TM.TEMPLATES for s in t["subcircuits"]]
     for sid in ids:
+        if sid.startswith("attention-head/") and not sid.endswith("/sm80-fa2-bf16"):
+            continue                                            # FA3: the spine binds FA2 only (test_headline.NO_SPINE_GENERATOR)
         sub = TM.parse_subcircuit_id(sid)
         assert sub.id == sid
     sub = TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16")
