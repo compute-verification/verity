@@ -170,6 +170,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--relation", default=None,
                     help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper, fp8-ada, fp8-hopper) instead "
                          "of the frozen --tier")
+    ap.add_argument("--input-set", default=None,
+                    help="VUs [0, --vus) of an A100 BF16 input set (verity_numerical.bench.input_sets) at its K: DIR must be the "
+                         "export at that K (gpu.v2.export circuits --k K); the relation is bf16-ampere-k<K> (verifier/pins.txt)")
+    ap.add_argument("--input-set-art", default=None, help="the input set's art: id, recorded in the fingerprint")
     ap.add_argument("--manifest", default=None, help="the frozen manifest.json (default: <source>/fixtures/bench-instances/v1)")
     ap.add_argument("--tier", default=TIER)
     ap.add_argument("--lo", type=int, default=0)
@@ -238,6 +242,21 @@ def main(argv: list[str] | None = None) -> int:
         if man.get("model") != NVF4_MODEL or man.get("relation") != "fp4-nvf4":
             raise SystemExit(f"bench_result.py: {d} is not the fp4-nvf4 export (python -m gpu.nvf4.circuit export)")
         params, profile, model_name = None, NVFP4_SM120.name, NVF4_MODEL
+    elif args.input_set:
+        from gpu import commit as CM
+        from verity_numerical.bench.input_sets import InputSet
+        from verity_numerical.checker import REAL
+
+        s = InputSet.open(args.input_set)
+        if s.subcircuit.params.get("semantics") != "sm80.mma.m16n8k16.bf16" or args.lo:
+            raise SystemExit(f"bench_result.py: --input-set takes ids [0, --vus) of an sm80 BF16 set, not {s.subcircuit.id} from {args.lo}")
+        if man.get("model", AMPERE_MODEL) != AMPERE_MODEL:
+            raise SystemExit(f"bench_result.py: {d} holds the circuits of {man['model']}, the set is {AMPERE_MODEL}'s")
+        x, w, y, _iset, inst_ref = CM.input_set(s.path, args.vus)
+        y = y.astype(np.uint16)
+        inst_ref = dict(inst_ref, art=args.input_set_art)
+        params, profile, model_name = REAL, contract.PROFILE, AMPERE_MODEL
+        inst_check = {"input_set": s.name, "content_digest": s.content_digest, "source": s.source, "files_ok": not s.check_files()}
     elif args.relation:
         x, w, y, rel = load_relation(args.relation, src_root, args.lo, args.vus, args.threads)
         from backends.direct.ligero import relchain
@@ -314,7 +333,11 @@ def main(argv: list[str] | None = None) -> int:
     bind = bind_info = None
     commitment = commit_info = None
     chain_path, ecirc_s, elayers_s, public_s, epi_extra = d / man.get("chain_file", "chain.txt"), ecirc, elayers, public, None
-    relation = (args.relation or AMPERE_RELATION) + ("+bound" if args.bind else "")   # gpu.bind.BOUND
+    K = K_VU if nvf4 else int(x.shape[1])
+    if args.input_set and (args.bind or args.commit):
+        raise SystemExit("bench_result.py: --input-set runs the bare statement (route (a), tools/cell.py, commits an input set's operands)")
+    base = args.relation or (AMPERE_RELATION if K == K_VU else f"{AMPERE_RELATION}-k{K}")
+    relation = base + ("+bound" if args.bind else "")   # gpu.bind.BOUND
     if args.commit:
         from gpu import commit as CM
         from gpu.bb_export import write_rows
@@ -421,7 +444,7 @@ def main(argv: list[str] | None = None) -> int:
         inst, proof, st, data, tm = one_rep()
         err, tv = verify_py(inst, proof)
         if budget is None:
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU,
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K,
                                                         bind_constraints=st.bind_constraints))
         pf = proofs_dir / f"rep{rep}.bin"
         pf.write_bytes(data)
@@ -515,7 +538,7 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = None
     sw = {"backend": {"name": BACKEND, "commit": source_commit(),
                       "version": f"checker v2 ({epi_name}), proof.bin v2" + ("; operands bound (bind.txt, x.bin, w.bin)" if bind else ""),
-                      "model": f"{model_name} ({params_src})", "relation": args.relation or args.tier,
+                      "model": f"{model_name} ({params_src})", "relation": base if args.input_set else args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": ("gpu/nvf4/witness.py (device generator: B-Ligero's fp4/hints_device chain + the unit's program)"
                                   if nvf4 else "gpu/v2/witness.py (device generator; byte-exact with the CPU export)")
@@ -531,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
                 "zk_statement": "none (no masking)", "by_component_log2": budget["by_component_log2"],
                 "dominant_term": budget["dominant_term"], "source": budget["source"], "union_over": 1}
     fp = contract.fingerprint(
-        profile=profile, domain=contract.DOMAIN, K=K_VU, B=Bn, N_subbatches=1,
+        profile=profile, domain=contract.DOMAIN, K=K, B=Bn, N_subbatches=1,
         proof_class="NON_ZK_PROOF_DIAGNOSTIC", authentication="excluded", zk_mode=contract.ZK_NONE,
         security=security, hardware=hw, software=sw,
         preprocessing=(f"circuit compilation (unit + {epi_name} circuits, GKR layers, chain spec: functions of Params only), "
@@ -584,7 +607,7 @@ def main(argv: list[str] | None = None) -> int:
         contract.measurement("vu.count", Bn),
         contract.measurement("vu.seconds_per_vu", t_total / Bn),
         contract.measurement("vu.per_second", Bn / t_total),
-        *contract.rate_measurements(t_total, Bn, K_VU, profile),
+        *contract.rate_measurements(t_total, Bn, K, profile),
         _m("t_total_min", min(r["t_total"] for r in rows), "s"),
         _m("t_total_max", max(r["t_total"] for r in rows), "s"),
         _m("verify_python_seconds", statistics.median(r["python_verifier_s"] for r in rows), "s"),

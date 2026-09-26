@@ -4,7 +4,7 @@
 # same datacenter.  Runs from the shipped tree (research run --source . --cwd source); KEY=VALUE arguments become the environment.
 #
 #   ROLE=verifier  REL=<rel>+blake3 [SET=<set tarball under inputs/>] [POINTS="1024 2048 4096"] [RUNS=5] [PORT=7200]
-#                  [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
+#                  [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
 #       flock b684b12 + the flock-link patch + this tree's live crate (release), the flock-link selftest at 8 VUs of the set's K,
 #       and the verifier's own statement of every size (leaf digests and prime commitment from the set: tools/cell.py statement
 #       --verifier-side); then, size by size in POINTS order (capped at the set), one `flock-link cell-serve` on PORT serving RUNS
@@ -38,8 +38,7 @@ build_flock() {
     && git apply $REPO/backends/flock/flock-gpu-link-b684b12.patch && cp -r $REPO/backends/flock/live crates/flock-live \
     && { grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml; } \
     && cargo build --release -p flock-live --bin flock-link -j $NT 2>&1 | grep -E '^error|-->|Finished' | head -20 ) || return 1
-  [ -x $F/target/release/flock-link ] || return 1
-  cp $F/target/release/flock-link $B
+  cp ${CARGO_TARGET_DIR:-$F/target}/release/flock-link $B || return 1
 }
 
 # the sizes of the sweep: POINTS, capped at the input set's size (a set is not recycled)
@@ -76,10 +75,13 @@ if [ "$ROLE" = verifier ]; then
     else echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; fi
     mkdir -p $O/statements; cp $V/cell.json $O/statements/cell-$n.json; sha256sum $V/leaf_digests.bin >> $O/statements/digests.sha256
   done
+  first=1
   for n in $SIZES; do
     V=$W/vstmt/c$n; PC=$(python3 -c "import json;print(json.load(open('$V/cell.json'))['prime_commitment'])")
-    say "serve $n VUs on :$PORT ($RUNS sessions, at most ${PER_SIZE_TIMEOUT:-1800} s)"
-    timeout ${PER_SIZE_TIMEOUT:-1800} $B cell-serve --listen 0.0.0.0:$PORT --out $RD/sessions-$n --vus $n --k $K --digests $V/leaf_digests.bin \
+    # the first size waits for the prover's setup and gate too
+    T=$([ $first = 1 ] && echo ${FIRST_SIZE_TIMEOUT:-5400} || echo ${PER_SIZE_TIMEOUT:-1800}); first=0
+    say "serve $n VUs on :$PORT ($RUNS sessions, at most $T s)"
+    timeout $T $B cell-serve --listen 0.0.0.0:$PORT --out $RD/sessions-$n --vus $n --k $K --digests $V/leaf_digests.bin \
       --prime-commitment $PC --operator ${OPERATOR:-agkr-route-a} --sessions $RUNS > $O/serve-$n.log 2>&1
     got=$(cat $RD/sessions-$n/index.jsonl 2>/dev/null | wc -l)
     echo "$n: $got sessions, accepted $(grep -c '"accepted":true' $RD/sessions-$n/index.jsonl 2>/dev/null)"
@@ -103,7 +105,7 @@ fi
 # ---- prover -----------------------------------------------------------------------------------------------------------------
 VERIFIER=${VERIFIER:?}; RTT_TARGET=${RTT_TARGET:?}
 say "bootstrap"
-SRC=$REPO BENCH_INSTANCES=$([ -z "$SET_DIR" ] && echo 1) HEALTH=0 bash backends/direct/ligero/pod_bootstrap.sh > $RD/bootstrap.log 2>&1
+VERIFIER= SRC=$REPO BENCH_INSTANCES=$([ -z "$SET_DIR" ] && echo 1) HEALTH=0 bash backends/direct/ligero/pod_bootstrap.sh > $RD/bootstrap.log 2>&1
 echo "bootstrap rc=$?"; tail -n 4 $RD/bootstrap.log
 source $W/env.sh; cd "$REPO"
 export PYTHONPATH="$PYTHONPATH:$REPO/backends/gkr" PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True MALLOC_MMAP_MAX_=0 \
