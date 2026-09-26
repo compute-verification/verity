@@ -7,11 +7,12 @@
   - the RunPod machine id and `boot_id` are recorded on both pods and differ. The DMI `product_uuid` is compared whenever it is
     read, and a shared one refuses. It may be unreadable only when both pods pass the bare-metal check: RunPod containers
     can't read it, and bare-metal containers share their host's kernel, so the `boot_id` identifies the host (coordinator
-    22:40Z). `separation.product_uuid_read` records whether each pod's uuid was read;
+    22:40Z, red-team-flock-3 U2). The evidence records an unread uuid as `"unreadable"`;
   - both pods are bare metal (S1): no `hypervisor` CPU flag, and a DMI `sys_vendor` that is not a hypervisor's
     (`HYPERVISOR_VENDORS`); a missing flag or vendor refuses;
   - the link is RunPod's global network (S3): `<verifier pod id>.runpod.internal` resolving into 10/8;
-  - a TCP-connect RTT on that route is at least `RTT_FLOOR_MS` = 0.1 ms (S4), where the co-resident pair measured about 0.03 ms.
+  - a TCP-connect RTT on that route is at least `RTT_FLOOR_MS` = 0.1 ms, with all 30 connects succeeding (S4, R1). The
+    co-resident pair measured about 0.03 ms.
     `placement.tcp_rtt` gives the median of 30 kernel-level connects, to the verifier pod's sshd on the same name and address
     (`rtt_target`); it does not use the session port, because the verifiers count every connection on it as a session. The
     session's `net.rtt_ms` and a round trip timed via the public IP do not count.
@@ -20,10 +21,10 @@
 - **`plan`:** when the API shows a shared IP, it probes both pods over ssh (`placement.remote_probe`; the prover's probe includes
   its link and RTT) and applies the full rule. If the pods cannot be probed, the plan is refused.
 - **`register` (S2):** re-checks the rule on the runs' own `placement.json` records and refuses when either run lacks any value
-  (pod id, boot id, hypervisor flag, sys_vendor, and for the prover the link and its RTT), or when a run's DMI uuid or boot
-  id differs from what the plan probed on that pod.
-- **Recording (S5):** `cell.placement.shared_public_ip` and, when it is true, `separation`: the three ids of both pods (with `product_uuid_read`), the shared
-  IP, both pods' bare-metal facts, the link's name and address, the RTT measurement and the floor.
+  (pod id, boot id, hypervisor flag, sys_vendor, and for the prover the link and its RTT), or when a run's boot id differs from what
+  the plan probed on that pod (a reboot since the plan). A run's uuid is not held to the plan's (U3).
+- **Recording (S5):** `cell.placement.shared_public_ip` and, when it is true, `separation`: the three ids of both pods (an unread uuid
+  as `"unreadable"`), the shared IP, both pods' bare-metal facts, the link's name and address, the RTT measurement and the floor.
 
 ## 2026-09-26: class-pin attention cells credited per listed key count
 

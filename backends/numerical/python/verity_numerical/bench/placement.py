@@ -40,7 +40,10 @@ SHARED_KEYS = ("machine_id", "product_uuid", "boot_id", "public_ip")
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
 #: The measured prover-verifier round trip a shared-IP pair must reach: well above the 0.03 ms of two containers on one host.
 RTT_FLOOR_MS = 0.1
+#: How many connects :func:`tcp_rtt` makes; the NAT exception needs every one to succeed (red-team-flock-3 R1).
 RTT_CONNECTS = 30
+#: The evidence's ``product_uuid`` for a pod whose DMI uuid could not be read (every RunPod container).
+UNREADABLE = "unreadable"
 RTT_METHOD = "tcp-connect: median and minimum of 30 kernel-level TCP connects on the session's route (no payload)"
 #: RunPod's global network: a shared-IP pair's only accepted link is ``<verifier pod id>.runpod.internal`` resolving into 10/8.
 RUNPOD_INTERNAL = ".runpod.internal"
@@ -119,14 +122,18 @@ def tcp_rtt(target: str, n: int = RTT_CONNECTS, timeout: float = 5.0) -> dict[st
         out["error"] = f"{type(e).__name__}: {e}"
         return out
     ts = []
+    family = socket.AF_INET6 if ":" in out["target_ip"] else socket.AF_INET
     for _ in range(n):
-        t = time.perf_counter()
+        s = socket.socket(family, socket.SOCK_STREAM)
+        s.settimeout(timeout)
         try:
-            socket.create_connection((out["target_ip"], int(port)), timeout=timeout).close()
+            t = time.perf_counter()
+            s.connect((out["target_ip"], int(port)))
+            ts.append((time.perf_counter() - t) * 1e3)
         except OSError:
             out["failed"] += 1
-            continue
-        ts.append((time.perf_counter() - t) * 1e3)
+        finally:
+            s.close()
     if ts:
         out.update(n=len(ts), median_ms=statistics.median(ts), min_ms=min(ts))
     return out
@@ -218,9 +225,9 @@ def is_hypervisor_vendor(vendor: str | None) -> bool:
 def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
     """Why a pair sharing a public IP does not earn the NAT exception (coordinator 22:00Z; red-team-flock-3 S1-S5, 22:05Z), and its
     evidence: the machine id and boot id recorded and different, and the DMI uuid too unless both pods are bare metal (where it
-    is compared only if read, and ``product_uuid_read`` records whether it was); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
+    is compared only if read, and the evidence says :data:`UNREADABLE` where it was not); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
     ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
-    on that route (median) at least :data:`RTT_FLOOR_MS`."""
+    on that route, all :data:`RTT_CONNECTS` connects succeeding, with a median of at least :data:`RTT_FLOOR_MS`."""
     ip, out = prover["public_ip"], []
     pre = f"prover and verifier share public_ip {ip}"
     metal = True
@@ -256,8 +263,11 @@ def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link:
         out.append(f"{pre}: no TCP-connect RTT of at least {RTT_FLOOR_MS} ms measured on the link's own route (median "
                    f"{rtt.get('median_ms')!r} ms to {rtt.get('target_ip')!r}, method {rtt.get('method')!r}); a co-resident pair measured "
                    "about 0.03 ms")
+    if rtt and not (rtt.get("failed") == 0 and isinstance(rtt.get("n"), int) and rtt["n"] >= RTT_CONNECTS):
+        out.append(f"{pre}: the RTT needs all {RTT_CONNECTS} TCP connects to succeed; {rtt.get('n')!r} did and {rtt.get('failed')!r} failed")
     evidence = {k: [prover.get(k), verifier.get(k)] for k in NAT_IDS}
-    evidence.update({"product_uuid_read": [bool(prover.get("product_uuid")), bool(verifier.get("product_uuid"))], "public_ip": ip, "bare_metal": {role: {k: x.get(k) for k in ("hypervisor", "sys_vendor", "product_name", "cpu_model")}
+    evidence["product_uuid"] = [x or UNREADABLE for x in evidence["product_uuid"]]
+    evidence.update({"public_ip": ip, "bare_metal": {role: {k: x.get(k) for k in ("hypervisor", "sys_vendor", "product_name", "cpu_model")}
                                                      for role, x in (("prover", prover), ("verifier", verifier))},
                      "link": {"name": host or None, "address": peer_ip}, "rtt": {k: rtt.get(k) for k in ("method", "median_ms", "min_ms", "n",
                                                                                                      "failed", "target", "target_ip")},

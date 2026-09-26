@@ -255,8 +255,8 @@ RUN_NAT_KEYS = ("pod_id", "boot_id", "hypervisor", "sys_vendor")
 def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
     """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
     the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own
-    (red-team-flock-3 S2): each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the DMI uuid and
-    boot id the plan probed on that pod, since the machine id is the plan's."""
+    (red-team-flock-3 S2): each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the boot id
+    the plan probed on that pod, since the machine id is the plan's."""
     if not (cell.placement or prover_run or verifier_run):
         return []
     a = run_assessment(cell, prover_run, verifier_run)
@@ -272,9 +272,9 @@ def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path |
                 keys += [f"link.{k}" for k in ("peer", "peer_ip", "rtt") if not link.get(k)]
             if keys:
                 out.append(f"the {role} run did not record {', '.join(keys)}: the NAT exception is re-checked on the runs' own records")
-            for k in ("product_uuid", "boot_id"):
-                if planned.get(k) and rec.get(k) and planned[k] != rec[k]:
-                    out.append(f"the {role} run's {k} {rec[k]} is not the {planned[k]} the plan probed on pod {planned.get('pod_id')}")
+            if planned.get("boot_id") and rec.get("boot_id") and planned["boot_id"] != rec["boot_id"]:
+                out.append(f"the {role} run's boot_id {rec['boot_id']} is not the {planned['boot_id']} the plan probed on pod "
+                           f"{planned.get('pod_id')} (a reboot or another host since the plan)")
     for role, run in (("prover", prover_run), ("verifier", verifier_run)):
         planned, ran = (cell.placement.get(role) or {}).get("pod_id"), (PL.from_job(run) if run else {}).get("pod_id")
         if planned and ran and planned != ran:

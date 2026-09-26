@@ -229,7 +229,7 @@ def test_a_shared_nat_ip_registers_on_the_runs_own_records(tmp_path, probes):
     ({}, {"boot_id": None}, "the verifier run's boot_id"),                                  # job.json's boot id, not the plan's
     ({"pod_id": None}, {}, "the prover run did not record pod_id"),
     ({"link": NAT["link"]}, {}, "the prover run did not record link.rtt"),
-    ({}, {"product_uuid": "uuid-w"}, "product_uuid uuid-w is not the uuid-v the plan probed on pod pod-v"),
+    ({}, {"boot_id": "boot-v2"}, "boot_id boot-v2 is not the boot-v the plan probed on pod pod-v (a reboot"),   # rebooted since
     ({"link": {**PROBES["vy-flock-h100"]["link"], "rtt": {**RTT, "median_ms": 0.03}}}, {}, "no TCP-connect RTT of at least 0.1 ms"),
     ({"link": {"peer": "pod-v.runpod.internal:7400", "peer_ip": "172.24.0.3", "rtt": {**RTT, "target_ip": "172.24.0.3"}}}, {},
      "host bridge"),                                                                        # S3
@@ -342,21 +342,24 @@ NO_UUID = {m: {k: x for k, x in rec.items() if k != "product_uuid"} for m, rec i
 def test_uuid_bare_metal_with_the_uuid_unreadable_is_accepted(tmp_path, monkeypatch):
     p, v, link = _pair(prover__product_uuid=None, verifier__product_uuid=None)
     a = PL.assess(p, v, link)
-    assert a["problems"] == [] and a["evidence"]["product_uuid_read"] == [False, False]
+    assert a["problems"] == [] and a["evidence"]["product_uuid"] == ["unreadable", "unreadable"]
     monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: copy.deepcopy(NO_UUID[m]))
     cell = _nat_cell()
-    assert cell.placement["separation"]["product_uuid"] == [None, None]
+    assert cell.placement["separation"]["product_uuid"] == ["unreadable", "unreadable"]
+    assert "product_uuid" not in cell.placement["prover"]                        # the marker is evidence, never an identity
     q, w = _nat_runs(tmp_path, {"product_uuid": None}, {"product_uuid": None})
     res = C.register(cell, str(q), str(w), tmp_path / "work", dry_run=True)
     assert res["problems"] == [] and "refused" not in res
     sep = json.loads(Path(res["meta"]).read_text())["cell"]["placement"]["separation"]
-    assert sep["product_uuid_read"] == [False, False] and sep["boot_id"] == ["boot-p", "boot-v"]
-    assert PL.assess(*_pair(verifier__product_uuid=None))["evidence"]["product_uuid_read"] == [True, False]   # one side read
+    assert sep["product_uuid"] == ["unreadable", "unreadable"] and sep["boot_id"] == ["boot-p", "boot-v"]
+    assert PL.assess(*_pair(verifier__product_uuid=None))["evidence"]["product_uuid"] == ["uuid-p", "unreadable"]
 
 
 def test_uuid_bare_metal_with_the_uuid_readable_and_equal_is_refused(tmp_path, probes):
     a = PL.assess(*_pair(verifier__product_uuid="uuid-p"))
-    assert any("share product_uuid uuid-p" in x for x in a["problems"]) and a["evidence"]["product_uuid_read"] == [True, True]
+    assert any("share product_uuid uuid-p" in x for x in a["problems"]) and a["evidence"]["product_uuid"] == ["uuid-p", "uuid-p"]
+    a = PL.assess(*_pair(prover__product_uuid=None, verifier__product_uuid=None, verifier__boot_id="boot-p"))
+    assert any("share boot_id boot-p" in x for x in a["problems"])          # with no uuid, one kernel's boot id still refuses
     q, w = _nat_runs(tmp_path, verifier={"product_uuid": "uuid-p"})
     res = C.register(_nat_cell(), str(q), str(w), tmp_path / "work", dry_run=True)
     assert res.get("refused") and any("share product_uuid uuid-p" in x for x in res["problems"]), res["problems"]
@@ -369,6 +372,42 @@ def test_uuid_a_vm_is_refused_whatever_the_uuid(vm, uuids):
     assert any("virtual machine" in x or "are not recorded" in x for x in a["problems"]), a["problems"]
     if uuids:                                                  # off bare metal an unreadable uuid is missing, as before
         assert any("missing: product_uuid" in x for x in a["problems"]), a["problems"]
+
+
+def test_uuid_registration_rechecks_pod_and_boot_id_not_the_uuid(tmp_path, probes):
+    """U3: a run's uuid is not held to the plan's (it is unreadable on RunPod); its pod id and boot id are, so a reboot refuses."""
+    q, w = _nat_runs(tmp_path / "a", verifier={"product_uuid": "uuid-w"})
+    assert C.register(_nat_cell(), str(q), str(w), tmp_path / "wa", dry_run=True)["problems"] == []
+    q, w = _nat_runs(tmp_path / "b", prover={"boot_id": "boot-p2"})
+    res = C.register(_nat_cell(), str(q), str(w), tmp_path / "wb", dry_run=True)
+    assert res.get("refused") and any("boot_id boot-p2 is not the boot-p the plan probed on pod pod-p" in x for x in res["problems"])
+    q, w = _nat_runs(tmp_path / "c", verifier={"pod_id": "pod-elsewhere"})
+    res = C.register(_nat_cell(), str(q), str(w), tmp_path / "wc", dry_run=True)
+    assert res.get("refused") and any("ran on pod pod-elsewhere, the cell planned pod-v" in x for x in res["problems"])
+
+
+@pytest.mark.parametrize("n,failed", [(1, 29), (29, 1), (0, 30), (20, 0)])
+def test_r1_the_nat_rtt_needs_every_connect_to_succeed(n, failed):
+    a = PL.assess(*_pair(rtt__n=n, rtt__failed=failed))
+    assert any("needs all 30 TCP connects to succeed" in x for x in a["problems"]), a["problems"]
+    assert PL.assess(*_pair(rtt__n=30, rtt__failed=0))["problems"] == []
+
+
+def test_r1_a_real_run_of_connects_that_partly_fail_is_refused(listener, monkeypatch):
+    real, calls = socket.socket.connect, []
+
+    def flaky(self, addr):                                     # one connect in 30 refused
+        calls.append(addr)
+        if len(calls) == 7:
+            raise ConnectionRefusedError("refused")
+        return real(self, addr)
+
+    monkeypatch.setattr(socket.socket, "connect", flaky)
+    r = PL.tcp_rtt(listener)
+    assert (r["n"], r["failed"]) == (29, 1) and r["median_ms"] is not None
+    p, v, link = _pair()
+    assert any("29 did and 1 failed" in x for x in PL.separation(p, v, {**link, "rtt": {**r, "target_ip": link["peer_ip"],
+                                                                                     "median_ms": 0.3}}))
 
 
 def test_uuid_the_co_resident_pair_is_refused_without_a_uuid():
