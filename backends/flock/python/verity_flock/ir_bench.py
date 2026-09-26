@@ -96,10 +96,11 @@ def frame_module(template: str):
 
 def stage_point(a, low, input_set, total: int, d: Path) -> tuple[list[tuple[int, int]], float]:
     d.mkdir(parents=True, exist_ok=True)
-    subs = a.klass.subs(total, a.per_proof) if a.klass else subbatches(total, a.per_proof)
+    k = getattr(a, "klass", None)
+    subs = k.subs(total, a.per_proof) if k else subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
-        p = frame_module(a.template).stage(a.klass.lowering(a.klass.T[lo]) if a.klass else low, input_set, lo, hi, d / f"stage-s{i}")
+        p = frame_module(a.template).stage(k.lowering(k.T[lo]) if k else low, input_set, lo, hi, d / f"stage-s{i}")
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
