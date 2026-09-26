@@ -3,6 +3,8 @@
 # verity_flock.bench, prover on the line's GPU, verifier on a separate same-datacenter pod.
 #   ROLE=prover   REL POINTS PER RUNS VERIFIER=host:port  (GPU build; sweep against the verifier)
 #   ROLE=verifier REL POINTS PER RUNS OPERATOR=lane       (CPU build; its own instance files; serves the prover's order on :7400)
+#   SET=name.tgz  a spine input set sent with the run (inputs/name.tgz: manifest.json x.u16 w.u16 y.u16), both roles
+#   K=2048        an 8-bit relation's synthetic E4M3 stream at K words
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/flock-cell}/out; W=/workspace/flock-backend; mkdir -p $O $W
@@ -38,12 +40,18 @@ print(f"{len(built)} rebuilt arrays match the committed manifest; linked into {f
 PYEOF
 fi
 B=/workspace/flock-gpu-link/flock/target/release/flock-pure-gpu; sha256sum $B | tee $O/binary.sha256
+SRC=""
+if [ -n "${SET:-}" ]; then
+  S=$W/set-${SET%.tgz}; rm -rf $S; mkdir -p $S; tar xzf ${RESEARCH_RUN_DIR:?}/inputs/$SET -C $S || exit 5
+  (cd $S && sha256sum manifest.json x.u16 w.u16 y.u16) | tee $O/set.sha256; SRC="--set $S"
+fi
+[ -n "${K:-}" ] && SRC="$SRC --k $K"
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
   python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER --runs $RUNS \
-    --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-backend-verifier-pod} 2>&1 | tee $O/serve-plan.log
+    --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} $SRC --serve-plan --listen 0.0.0.0:7400 --operator ${OPERATOR:-flock-backend-verifier-pod} 2>&1 | tee $O/serve-plan.log
 else
   python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/cell --points "$POINTS" --per-proof $PER --runs $RUNS \
-    --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-backend-verifier-pod} --prove-arg=--gpu ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
+    --procs $TH --leaf ${LEAF:-${SCHEME:-blake3}} $SRC --verifier ${VERIFIER:?} --operator ${OPERATOR:-flock-backend-verifier-pod} --prove-arg=--gpu ${RTT_TARGET:+--rtt-target $RTT_TARGET} ${LOOPBACK:+--loopback} 2>&1 | tee $O/sweep.log | cut -c1-600
 fi
 true

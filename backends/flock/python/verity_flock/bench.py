@@ -32,7 +32,8 @@ from .backend import BACKENDS, FLOCK_FRAME_V3_BLAKE3, lowering_version
 RULE = ("double total VUs from start at fixed per-proof settings until two successive doublings together raise the median "
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
 PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-ada-mma-draft/2026-09-22",
-            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21"}
+            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21",
+            "bf16-hopper-wgmma": "bf16-hopper-mma-draft/2026-09-22", "fp4-nvf4": "nvfp4-sm120-mma-draft/2026-09-22"}
 
 
 def _guard():
@@ -215,6 +216,16 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
     return out
 
 
+def write_instances(a, path: Path, total: int, lo: int, hi: int) -> dict:
+    """One sub-batch's instance file: a spine input set (``--set``), the 8-bit synthetic stream at ``--k``, or the relation's
+    own set."""
+    if a.set:
+        return instances.write_set(path, a.relation, a.set, lo, hi, a.leaf, a.procs)
+    if a.k:
+        return instances.write_synth(path, a.relation, a.k, lo, hi, a.leaf, a.procs)
+    return instances.write(path, a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
+
+
 def point(a, total: int, d: Path, net: Path) -> dict:
     d.mkdir(parents=True, exist_ok=True)
     pin = lowering.PINS[a.relation]
@@ -222,7 +233,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     headers, gen_s = [], 0.0
     for i, (lo, hi) in enumerate(subs):
         t0 = time.time()
-        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf))
+        headers.append(write_instances(a, d / f"instances-s{i}.bin", total, lo, hi))
         gen_s += time.time() - t0
     tg = _guard()
     guard = tg.Guard(sampler=_sampler).start()
@@ -303,7 +314,7 @@ def result(a, p: dict, sweep: dict) -> dict:
     first = timed[0]
     hw = contract.probe_hardware()
     fp = contract.fingerprint(
-        profile=profile, domain="finite", K=instances.K, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
+        profile=profile, domain="finite", K=p["header"]["k"], B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
         zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
@@ -320,7 +331,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=(f"frame-v3/{instances.SCHEMES[a.leaf]}" if a.scheme == "frame-v3" else backend.scheme), statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
+        scheme=(f"frame-v3/{p['header']['schemas']['a']}" if a.scheme == "frame-v3" else backend.scheme), statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"], **({"n_sha256": first["n_sha256"]} if first.get("n_sha256") else {}),
         **({"domain_digests": first["domain_digests"]} if first.get("domain_digests") else {}),
@@ -329,7 +340,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                                                                          "process": "flock-pure serve (separate process)"})
     ms = [contract.measurement("t.total", t_prove), contract.measurement("t.total_live", t_prove), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_prove / n), contract.measurement("vu.per_second", n / t_prove),
-          *contract.rate_measurements(t_prove, n, instances.K, profile),
+          *contract.rate_measurements(t_prove, n, p["header"]["k"], profile),
           {"name": "commit.seconds", "value": t_commit, "unit": "s"},
           {"name": "e2e.seconds", "value": t_e2e, "unit": "s"},
           {"name": "e2e.vu_per_second", "value": n / t_e2e, "unit": "1/s"},
@@ -400,7 +411,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
         d = out / f"p{i}-{total}"
         d.mkdir(parents=True, exist_ok=True)
         for j, (lo, hi) in enumerate(subbatches(total, a.per_proof)):
-            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
+            write_instances(a, d / f"instances-s{j}.bin", total, lo, hi)
             jobs.append((d, j))
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
@@ -434,6 +445,8 @@ def main(argv=None) -> int:
     ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3",
                     help="the commitment scheme the instance files' roots are under (the binary must prove that statement)")
     ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES), help="frame-v3 row-leaf schema of trees a and b")
+    ap.add_argument("--set", default="", help="a spine input set directory (x.u16 / w.u16 / y.u16); batches never exceed it")
+    ap.add_argument("--k", type=int, default=0, help="an 8-bit relation's synthetic E4M3 stream at this K")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)
