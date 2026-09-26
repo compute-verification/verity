@@ -70,14 +70,14 @@ if [ "$ROLE" = verifier ]; then
   $B selftest --vus 8 --k $K > $O/selftest-8.txt 2>&1
   echo "flock-link selftest (8 VUs, K=$K): $(grep -c '"pass":true' $O/selftest-8.txt) passed, $(grep -c '"pass":false' $O/selftest-8.txt) failed; $(grep SELFTEST $O/selftest-8.txt | cut -c1-200)"
   for n in $SIZES; do
-    V=$W/vstmt/c$n
+    V=$W/vstmt/k$K-c$n
     if [ -n "$SET_DIR" ]; then $PY backends/gkr/tools/cell.py statement --cell $V --input-set $SET_DIR --vus $n --verifier-side | tail -1
     else echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; fi
     mkdir -p $O/statements; cp $V/cell.json $O/statements/cell-$n.json; sha256sum $V/leaf_digests.bin >> $O/statements/digests.sha256
   done
   first=1
   for n in $SIZES; do
-    V=$W/vstmt/c$n; PC=$(python3 -c "import json;print(json.load(open('$V/cell.json'))['prime_commitment'])")
+    V=$W/vstmt/k$K-c$n; PC=$(python3 -c "import json;print(json.load(open('$V/cell.json'))['prime_commitment'])")
     # the first size waits for the prover's setup and gate too
     T=$([ $first = 1 ] && echo ${FIRST_SIZE_TIMEOUT:-5400} || echo ${PER_SIZE_TIMEOUT:-1800}); first=0
     say "serve $n VUs on :$PORT ($RUNS sessions, at most $T s)"
@@ -127,14 +127,15 @@ loopback() {  # $1 = cell dir, $2 = vus, $3 = out dir: a verifier on 127.0.0.1:7
   SP=$!; for t in $(seq 240); do grep -q SERVING $3.log 2>/dev/null && break; sleep 0.5; done
 }
 stop_loopback() { kill $SP 2>/dev/null; wait $SP 2>/dev/null; }
-statement() {  # $1 = vus -> $W/cell/c$1
-  local C=$W/cell/c$1
-  [ -f $C/cell.json ] || $PY backends/gkr/tools/cell.py statement --cell $C "${INST[@]}" --vus $1 --flock $B > $O/statement-$1.log 2>&1 || return 1
+statement() {  # $1 = vus -> $W/cell/k$K-c$1, built in this run (its serving commit is this run's commit.seconds)
+  local C=$W/cell/k$K-c$1
+  rm -rf $C
+  $PY backends/gkr/tools/cell.py statement --cell $C "${INST[@]}" --vus $1 --flock $B > $O/statement-$1.log 2>&1 || return 1
   mkdir -p $O/statement-$1; cp -r $C/statement/. $O/statement-$1/; cp $C/cell.json $C/leaf_digests.bin $O/statement-$1/
 }
 
 if [ "${GATE:-1}" = 1 ]; then
-  n=${SIZES%% *}; C=$W/cell/c$n; G=$O/gate; mkdir -p $G
+  n=${SIZES%% *}; C=$W/cell/k$K-c$n; G=$O/gate; mkdir -p $G
   say "gate at $n VUs (loopback verifier)"
   statement $n || { tail $O/statement-$n.log; echo "GATE: statement failed"; exit 4; }
   loopback $C $n $G/sessions
@@ -142,7 +143,7 @@ if [ "${GATE:-1}" = 1 ]; then
     --threads $NT > $G/honest.txt 2>&1; echo "honest rc=$?" | tee -a $G/rc.txt
   mkdir -p $G/honest; cp $C/s0/proof.bin $C/s0/times.json $C/s0/link.txt $C/s0/prime_coins.txt $G/honest/ 2>/dev/null
   for neg in stale fs; do
-    NC=$W/cell/neg-$neg; rm -rf $NC; mkdir -p $NC; cp -r $C/statement $C/cell.json $C/leaf_digests.bin $C/operands.bin $C/y.npy $NC/
+    NC=$W/cell/k$K-neg-$neg; rm -rf $NC; mkdir -p $NC; cp -r $C/statement $C/cell.json $C/leaf_digests.bin $C/operands.bin $C/y.npy $NC/
     X=$([ $neg = stale ] && echo "--neg-stale-round 5" || echo "--prime-coins fs")
     timeout 1800 $PY backends/gkr/tools/cell.py prove --cell $NC --flock $B --verifier 127.0.0.1:7300 --sessions 1 --warmup 0 --rust $VB \
       --threads $NT $X > $G/neg-$neg.txt 2>&1; echo "neg-$neg rc=$? (must be non-zero)" | tee -a $G/rc.txt; tail -2 $G/neg-$neg.txt
@@ -151,7 +152,7 @@ if [ "${GATE:-1}" = 1 ]; then
   # the verifier's records in session order: honest, stale, fs (refused at Hello).  The gate reads the record, never the prover's view:
   # the stale prover's own replay is honest by construction, the record's replay must reject it
   mapfile -t SES < <(ls -d $G/sessions/l* | sort)
-  for pair in "honest:${SES[0]:-}:$G/honest/proof.bin" "stale:${SES[1]:-}:$W/cell/neg-stale/s0/proof.bin"; do
+  for pair in "honest:${SES[0]:-}:$G/honest/proof.bin" "stale:${SES[1]:-}:$W/cell/k$K-neg-stale/s0/proof.bin"; do
     IFS=: read -r name ses proof <<<"$pair"
     [ -n "$ses" ] || { echo "gate $name: no session record" | tee -a $G/rc.txt; continue; }
     $PY backends/gkr/tools/cell_gate.py --session $ses --sigma $C/statement/sigma.txt --producer ${OPERATOR:-agkr-route-a} \
@@ -173,7 +174,7 @@ echo "RTT $RTT ms" | tee $O/rtt.txt
 RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod's sshd ($RTT_TARGET), measured in this run before the sweep"
 i=0; TPS=()
 for n in $SIZES; do
-  P=$O/points/p$i-$n; mkdir -p $P; C=$W/cell/c$n
+  P=$O/points/p$i-$n; mkdir -p $P; C=$W/cell/k$K-c$n
   status() { $PY -c "import json,sys;json.dump({'vus': $n, 'rc': int(sys.argv[1]), 'why': sys.argv[2], 'verifier': '$VERIFIER'}, open('$P/status.json','w'))" "$1" "$2"; }
   say "size $n: statement"
   statement $n || { status 5 "statement: $(tail -1 $O/statement-$n.log | cut -c1-200)"; break; }
@@ -183,8 +184,9 @@ for n in $SIZES; do
     --rust $VB --threads $NT --result $P/result.json --rtt-ms $RTT --rtt-method "$RTT_METHOD" > $P/prove.txt 2>&1
   rc=$?; stop_loopback
   grep -E '^session|^result|CELL-PROVE|Error|error' $P/prove.txt | tail -8 | cut -c1-300
-  why=$(grep -E 'OutOfMemory|out of memory|rejected|Error' $P/prove.txt | tail -1 | cut -c1-200)
-  status $rc "${why:-ok}"
+  why=$(grep -E 'OutOfMemory|out of memory|rejected|Error|exited' $P/prove.txt | tail -1 | cut -c1-200)
+  [ $rc -eq 0 ] && why=ok || why=${why:-"exit $rc without an error line (prove.txt)"}
+  status $rc "$why"
   cp $C/s0/times.json $P/loopback-times.json 2>/dev/null; cp $C/contention.json $P/ 2>/dev/null
   mkdir -p $O/cell-$n; for s in $C/s*; do d=$O/cell-$n/$(basename $s); mkdir -p $d; cp $s/*.json $s/*.txt $s/*.jsonl $s/*.stderr $s/proof.bin $d/ 2>/dev/null; done
   [ $rc -eq 0 ] || break
