@@ -453,6 +453,8 @@ class Rules:
     native_cached: bool = False
     #: a third preview: the workload headline counts a cleared cell on any GPU (N still the served hardware line's)
     headline_any_hardware: bool = False
+    #: a fourth preview: the headline counts a cell whose ``omitted`` label names verifier-evaluated parts (top-p sampling)
+    headline_count_omitted: bool = False
 
 
 SPEC = Rules("spec")
@@ -620,6 +622,7 @@ class Ctx:
     statement_labels: list[Any]
     subcircuit: str | None = None                         #: a statement other than the target's own (:func:`result_subcircuit`)
     input_sets: Mapping[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
+    variables: dict[str, int] = field(default_factory=dict)  #: its per-input work-model variables (attention's T: :func:`input_variables`)
 
 
 def _column(ctx: Ctx, rules: Rules) -> str:
@@ -893,19 +896,66 @@ def is_gemm(sub: str | None) -> bool:
     return sub is None or sub.split("/")[0] == "gemm-coordinate"
 
 
-def native_of(target: Target, sub: str | None, cached: bool = False) -> dict[str, Any]:
+def native_of(target: Target, sub: str | None, cached: bool = False, variables: Mapping[str, int] | None = None) -> dict[str, Any]:
     """``N`` of a row: the GEMM work model (:func:`native`) at the subcircuit's K, or for another template its census
-    memory-bandwidth work model (:func:`memory_native`)."""
-    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub, cached)
+    memory-bandwidth work model (:func:`memory_native`) at the row's per-input ``variables`` (attention's T)."""
+    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub, cached, variables)
 
 
-def memory_native(target: Target, sub: str, cached: bool = False) -> dict[str, Any]:
+def input_variables(meta: Mapping[str, Any], sub: str | None, input_sets: Mapping[str, tuple[str, Mapping[str, Any]]]) -> tuple[dict[str, int], str | None]:
+    """The per-input variables a result's statement fixes (its work model's ``variables`` its expressions use: attention's T) and
+    ``None``; ``({}, why)`` when one is missing or recorded differently in two places; ``({}, None)`` for a template without
+    them.  A value is read wherever a result records it: the fingerprint's or the cell stamp's ``statics`` / ``variables``, the
+    instances ref, the lowered unit's name (flock-ir-lowering's ``attention-head/fa2-bf16/tc-step/d64-bn128/t4``), the input set's
+    name, and the registered set's parameters, relation statics or name."""
+    known = census.SUBCIRCUITS.get(sub or "")
+    wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model if known else None
+    names = [v for v in vars(getattr(wm, "variables", None) or SimpleNamespace()) if v in str(wm.ops_per_input) + str(getattr(wm, "bytes_per_input", ""))]
+    if not names:
+        return {}, None
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    cell = meta.get("cell") if isinstance(meta.get("cell"), Mapping) else {}
+    inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}
+    keys = [inst.get(k) for k in ("art", "set_art", "content_digest", "manifest_sha256")] + [(cell.get("input_set") or {}).get("art")
+                                                                                              if isinstance(cell.get("input_set"), Mapping) else None]
+    reg = next((input_sets[k][1] for k in keys if isinstance(k, str) and k in input_sets), {})
+    out: dict[str, int] = {}
+    for name in names:
+        seen: dict[int, list[str]] = {}
+
+        def put(v: Any, where: str) -> None:
+            if isinstance(v, bool):
+                return
+            if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
+                seen.setdefault(int(v), []).append(where)
+
+        for where, d in (("statics", fp.get("statics")), ("variables", fp.get("variables")), ("instance_statics", fp.get("instance_statics")),
+                         ("cell.statics", cell.get("statics")), ("cell.variables", cell.get("variables")), ("instances", inst),
+                         ("input set parameters", reg.get("parameters")),
+                         ("input set relation statics", (reg.get("relation") or {}).get("statics") if isinstance(reg.get("relation"), Mapping) else None)):
+            if isinstance(d, Mapping):
+                put(d.get(name), where)
+        lname = name.lower()
+        for where, text in (("unit", _get(fp, "software", "backend", "unit")), ("input set", inst.get("tier")), ("input set", inst.get("set")),
+                            ("registered set", reg.get("set"))):
+            m = re.search(rf"(?:^|[-_/.:]){lname}(\d+)$", text) if isinstance(text, str) else None
+            if m:
+                put(m.group(1), where)
+        if not seen:
+            return {}, f"its work model needs {name} (a per-input variable) and the result records none"
+        if len(seen) > 1:
+            return {}, f"{name} is recorded differently: " + "; ".join(f"{v} ({', '.join(w)})" for v, w in sorted(seen.items()))
+        out[name] = next(iter(seen))
+    return out, None
+
+
+def memory_native(target: Target, sub: str, cached: bool = False, variables: Mapping[str, int] | None = None) -> dict[str, Any]:
     """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
     input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
     binding (``ops_per_instance`` is the template's op count, for reference)."""
     known = census.SUBCIRCUITS[sub]
     wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
-    env = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}
+    env = {**{k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}, **(variables or {})}
     expr = getattr(wm, "bytes_per_input_cached", None) if cached else None
     nbytes, ops = census.evaluate(expr or wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
     hw = contract.native_peak_of(target)
@@ -1126,12 +1176,15 @@ class ViewCell:
     instances: dict[str, Any] = field(default_factory=dict)  #: the result's instance ref
     setup_s: float | None = None                          #: one-time setup (``fixed.setup_seconds``), outside the cell
     subcircuit: str | None = None                         #: its statement's subcircuit when not its target's own (a real-K row)
+    variables: dict[str, int] = field(default_factory=dict)  #: the per-input variables its statement fixes (attention's T)
 
     def to_json(self) -> dict[str, Any]:
         d = dataclasses.asdict(self)
         d["legacy"] = self.legacy.to_json()
         if d["subcircuit"] is None:
             del d["subcircuit"]
+        if not d["variables"]:
+            del d["variables"]
         return d
 
 
@@ -1147,6 +1200,7 @@ class Views:
     unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
     admissible: list[ViewCell] = field(default_factory=list)  #: every admissible result as a cell (``cells`` holds each family's best)
     security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
+    omitted_of: dict[str, Any] = field(default_factory=dict)  #: each admissible result's latest ``omitted`` label (what it leaves out)
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
     input_sets: dict[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
@@ -1198,7 +1252,7 @@ def below_bar_entry(art: str, meta: Mapping[str, Any], labels: Sequence[Any], ca
     verified = [lab for lab in T._labels(labels) if lab.key == "verified"]
     inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}
     return {"artifact": art, "backend_family": _fam(cand.id), "definition": _get(fp, "definition", "id"), "gate_family": fp.get("family"),
-            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
+            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "served_row": inst.get("row"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
             "proof_class": fp.get("proof_class"),
             "modes": {mode: {"soundness_bits": num(f"{mode}.soundness_bits"), "prove_seconds": num(f"{mode}.prove_seconds"),
                              "seconds_per_instance": num(f"{mode}.seconds_per_instance"), "proof_bytes": num(f"{mode}.proof_bytes"),
@@ -1248,6 +1302,21 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         sets = V.input_sets = input_set_index(store)
         for c in entries:
             c.subcircuit, c.input_sets = result_subcircuit(c.meta, c.target), sets
+        unmodelled = []
+        for c in entries:
+            c.variables, why = input_variables(c.meta, c.subcircuit, sets)
+            try:
+                if why is None:
+                    native_of(c.target, c.subcircuit, rules.native_cached, c.variables)
+            except KeyError as e:
+                why = f"its work model needs {e.args[0]}, which varies per input, and the result records none"
+            if why is not None:          # a per-input work-model variable (attention's key count T) the result does not fix
+                rid, _ = T._attempt_of(store, c.art)
+                V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id if c.config else None,
+                                   "line": c.target.name, "subcircuit": c.subcircuit, "attempt": rid,
+                                   "codes": [("X", f"native N is not modelled for {c.subcircuit}: {why}")]})
+                unmodelled.append(c)
+        entries = [c for c in entries if c not in unmodelled]
     by_statement: dict[tuple[str | None, str, str | None], list[Any]] = {}
     for c in entries:
         by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).extend(c.labels)
@@ -1260,13 +1329,17 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     def scheme_of(c: Ctx) -> str | None:
         return c.config.scheme if not rules.legacy and c.config is not None and c.config.scheme in line_schemes else None
 
-    Key = tuple[str, str | None, str | None, str]
+    Key = tuple[Any, ...]
+
+    def vkey(c: Ctx) -> tuple[tuple[str, int], ...]:
+        return tuple(sorted(c.variables.items()))
+
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
-        key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules))
+        key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules), vkey(c))
         if not codes and P is not None:
             pools.setdefault(key, []).append((c, P))
             continue
@@ -1277,9 +1350,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                  "scheme": key[2], "column": key[3], "attempt": rid, "codes": codes or [("X", "no positive t.total and batch")]}
         if c.subcircuit:
             entry["subcircuit"] = c.subcircuit
+        if c.variables:
+            entry["variables"] = dict(c.variables)
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native_of(c.target, c.subcircuit, rules.native_cached)["instances_per_second"]
+            n = native_of(c.target, c.subcircuit, rules.native_cached, c.variables)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1292,9 +1367,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                 "hashes": [h.text() for h in (c.config.hashes if c.config else ())], "overhead": N / P["instances_per_second"]}
 
     def make_cell(c: Ctx, P: dict[str, Any], target: Target, scheme: str | None, col: str, N: Mapping[str, Any],
-                  sub: str | None = None) -> ViewCell:
+                  sub: str | None = None, variables: tuple[tuple[str, int], ...] = ()) -> ViewCell:
         vb = T.independent_verification(c.meta, c.labels, c.attempt)
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
+        if _latest(c.labels, "omitted"):
+            V.omitted_of[c.art] = _latest(c.labels, "omitted")
         m = T._measurements(c.meta)
         block = c.meta.get("interaction") if isinstance(c.meta.get("interaction"), Mapping) else c.meta["workload_fingerprint"].get("interaction")
         V.interaction_raw[c.art] = {"rounds_protocol": m.get("rounds.protocol"), "sequential_depth": m.get("rounds.sequential_depth"),
@@ -1313,18 +1390,20 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                         algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
                         instances=dict(c.meta["workload_fingerprint"].get("instances") or {}),
                         setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None,
-                        subcircuit=sub)
+                        subcircuit=sub, variables=dict(variables))
 
     columns = [f.id for f in FAMILIES] + ([f.id + T.AUTH_COLUMN_SUFFIX["included-hash"] for f in FAMILIES] if rules.legacy else [])
-    def add_line(target: Target, sub: str | None, scheme: str | None, N: Mapping[str, Any]) -> None:
+    def add_line(target: Target, sub: str | None, scheme: str | None, N: Mapping[str, Any], variables: tuple[tuple[str, int], ...] = ()) -> None:
         line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
                                 "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
                                 "instruction": target.instruction, "cells": {}, "empty": {}}
         if sub:
             known = census.SUBCIRCUITS.get(sub)
-            line.update(subcircuit=sub, subcircuit_display=known.display if known else sub)
+            line.update(subcircuit=sub, subcircuit_display=(known.display if known else sub) + "".join(f" · {k} = {v}" for k, v in variables))
+        if variables:
+            line["variables"] = dict(variables)
         for col in columns:
-            key = (target.name, sub, scheme, col)
+            key = (target.name, sub, scheme, col, variables)
             hit = best(pools.get(key, []))
             if hit is None:
                 line["cells"][col] = None
@@ -1336,8 +1415,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                         f"hashes {'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")}
                 continue
             c, P = hit
-            cell = make_cell(c, P, target, scheme, col, N, sub)
-            V.admissible += [cell if o.art == c.art else make_cell(o, oP, target, scheme, col, N, sub) for o, oP in pools[key]]
+            cell = make_cell(c, P, target, scheme, col, N, sub, variables)
+            V.admissible += [cell if o.art == c.art else make_cell(o, oP, target, scheme, col, N, sub, variables) for o, oP in pools[key]]
             alt = best(pools.get(key, []) + unfiltered.get(key, []))
             if alt is not None and alt[0].art != c.art:
                 cell.unfiltered = pick(*alt, N["instances_per_second"])
@@ -1350,16 +1429,17 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         for scheme in line_schemes:
             add_line(target, None, scheme, N)
     # statements of their own (another K, or semantics the target's subcircuit does not stand for): a row per scheme with a result
-    own: dict[tuple[str, str], set[str | None]] = {}
+    own: dict[tuple[str, str, tuple[tuple[str, int], ...]], set[str | None]] = {}
     for c in entries:
         if c.subcircuit:
-            own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
+            own.setdefault((c.target.name, c.subcircuit, vkey(c)), set()).add(scheme_of(c))
     for target in LINES.values():
-        for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
-            N = native_of(target, sub, rules.native_cached)
+        for sub, vs in sorted(((x, v) for t, x, v in own if t == target.name),
+                              key=lambda xv: (not is_gemm(xv[0]), subcircuit_k(xv[0]) if is_gemm(xv[0]) else 0, xv[0], xv[1])):
+            N = native_of(target, sub, rules.native_cached, dict(vs))
             for scheme in line_schemes:
-                if scheme in own[(target.name, sub)]:
-                    add_line(target, sub, scheme, N)
+                if scheme in own[(target.name, sub, vs)]:
+                    add_line(target, sub, scheme, N, vs)
     return V
 
 
@@ -1539,6 +1619,20 @@ def _mark_names(c: ViewCell) -> list[str]:
 _MARK_TEXT = {"provisional": "(prov.)", "algebraic": "(alg.)", "under-reverification": f"({T.UNDER_REVERIFICATION})"}
 
 
+#: A live run whose own round trips (rounds x its measured RTT) exceed this share of its measured wall is footnoted: its wall is
+#: the network's, not the prover's (red-team-flock 2026-09-26: the RTX 5090 cells' 3.2 ms separate-verifier RTT).
+RTT_DOMINATES = 0.5
+
+
+def rtt_share(ix: Mapping[str, Any]) -> float | None:
+    """A live result's measured round-trip time (rounds x its own RTT) as a share of its measured wall (prover compute + network
+    wait); ``None`` when not live or not measured."""
+    if not ix.get("live") or not _num(ix.get("rtt_ms")) or not _num(ix.get("rounds")):
+        return None
+    wall = (ix.get("prover_s") or 0.0) + (ix.get("wait_s") or 0.0)
+    return (ix["rounds"] * ix["rtt_ms"] / 1e3) / wall if wall > 0 else None
+
+
 def _cell_note(c: ViewCell, col: str) -> str:
     P, b = c.throughput, c.batching
     text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
@@ -1551,6 +1645,11 @@ def _cell_note(c: ViewCell, col: str) -> str:
     if ixl.get("loopback_s"):
         text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
                  f"({ixl['loopback_method'] or 'method not recorded'})")
+    share = rtt_share(ixl)
+    if share is not None and share > RTT_DOMINATES:
+        text += (f"; separate verifier at {ixl['rtt_ms']:.3g} ms measured RTT: its {ixl['rounds']:.0f} round trips are {100 * min(share, 1):.0f}% of "
+                 f"the measured wall, so that wall is the network's; P is the formula at the 1 ms reference and cells are ranked on it, "
+                 f"never on measured total time")
     if c.provisional:
         text += f"; provisional: {c.provisional}"
     if c.legacy.finding:
@@ -2106,6 +2205,7 @@ def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),
         "loopback_moved_s": ix["loopback_s"], "inputs": P["instances"],
+        "rtt_share": rtt_share(ix), "rtt_dominated": bool((rtt_share(ix) or 0) > RTT_DOMINATES),
         "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / inputs",
     }
 
@@ -2313,7 +2413,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return {
             "id": result_key(c), "key": {"backend": backend, "statement": stmt, "input_set": input_set_id(c), "prover_hardware": prover},
             "backend": backend, "backend_family": _fam(c.column), "statement": stmt, "implementation": c.configuration,
-            "subcircuit": sub_of(c.line, c.subcircuit), "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
+            "subcircuit": sub_of(c.line, c.subcircuit), **({"variables": dict(c.variables)} if c.variables else {}),
+            "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
             "hardware": peak.id, "prover_hardware": prover, "input_set": input_set_of(c),
             "assumptions": {"backend": backend_assumptions.get(backend or "", []), "statement": stmt_assumptions,
                             "all": list(dict.fromkeys([*backend_assumptions.get(backend or "", []), *stmt_assumptions]))},
@@ -2437,6 +2538,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
     ap.add_argument("--preview-any-hardware-headline", action="store_true",
                     help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
+    ap.add_argument("--preview-count-omitted", action="store_true",
+                    help="PREVIEW (pending decision, never published): the headline counts cells whose omitted label names verifier-evaluated parts")
     ap.add_argument("--preview-cached-weights", action="store_true",
                     help="PREVIEW (pending decision, never published): non-GEMM native N on activations only (weights/tables cached)")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
@@ -2486,6 +2589,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
     if ns.preview_any_hardware_headline:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-any-hardware-headline", headline_any_hardware=True)
+    if ns.preview_count_omitted:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-count-omitted", headline_count_omitted=True)
     if ns.preview_cached_weights:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-cached-weights", native_cached=True)
     if ns.standard_hashes_only:

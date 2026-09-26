@@ -1,5 +1,62 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: bench.cell requires the verifier on another machine, not another container
+
+- `bench.placement` identifies machines by the RunPod machine id, the public IP, the DMI `product_uuid`, the kernel `boot_id` and the
+  host CPU model, rather than by container hostname. This follows red-team-flock's 12:00Z ruling that a co-resident verifier is not
+  a separate verifier.
+- **`plan`:** it reads both pods' machine id and public IP from the RunPod API (or from `--placement FILE`), and records them in
+  `cell.placement`. It refuses a pair that shares a machine id, public IP, product uuid or boot id. It also refuses a pair that talks
+  over a host-private address (loopback, link-local, RFC 1918, 100.64/10, ULA) unless both machine ids are known and differ, and a
+  pair whose identity isn't enough to tell the machines apart.
+- **Jobs:** every job first runs the stdlib-only probe, `placement.py probe`, which writes the container's identity (and, on the
+  prover, the route to the verifier) to the run's `placement.json`.
+- **`check` and `register`:** they compare both runs' identities (`placement.json`, else `job.json`'s boot id) merged with the plan's.
+  They flag a run whose pod differs from the plan's, and stamp `cell.placement` into the registered document. The hostname
+  comparison is gone.
+
+## 2026-09-26: attention counted per key count; one verifier-evaluated switch
+
+- **Attention rows per T:** an attention cell's key count T is read wherever the cell records it (`views.input_variables`):
+  - the fingerprint's or the cell stamp's `statics` / `variables`;
+  - the lowered unit's name (flock-ir-lowering's `.../d64-bn128/t4`);
+  - the input set's name;
+  - the registered set's parameters.
+
+  Two differing records reject the cell X. A cell gets a Table 2 row per (subcircuit, T), with N at that T
+  (864 GB/s ÷ (4D + 4TD)). This replaces 89ba3a65's blanket X for attention.
+- **Per-T counts in the census:** batch-1 workloads (#101, #11, #39) give their attention strata `variable_counts`: the VUs
+  at each T. With one request, prefill position p attends T = p + 1 and decode step s attends T = input_len + s, once per
+  layer. For #101 that is T 1–287 with 16 VUs each, matching every stratum's population by phase. Their native work is
+  exact, where it was an interval.
+- **Headline coverage per T:** a cell covers only the units at its own T, weighted by the template mix. The headline shows:
+  - the covered T;
+  - the drawn T (from the registered captured sets of the workload's row);
+  - drawn but uncovered T;
+  - T values the run does not serve.
+
+  Units at other T are uncovered ("not at every T"), never extrapolated. Without per-T counts (the batch-8 and batch-32
+  rows), attention cells are listed as "no per-T counts" and not counted.
+- **Verifier-evaluated parts:** templates record them in the census (`verifier_evaluated`: parts, share, counted, ruling).
+  - Attention's softmax (4–11% of a head's scalar ops, all of its exp2 and reciprocal work) is counted with a † footnote,
+    per red-team-flock-3's grant.
+  - Sampling is not counted, pending Daniel.
+  - The existing switch (`--preview-count-omitted`, `Rules.headline_count_omitted`) flips every not-counted template and
+    every `omitted` label at once.
+- **Unchanged:** tables, raw JSON and parity are byte-identical; only the headline section changes.
+
+## 2026-09-26: an A-route-a bench.cell driver; A-GKR's route (a) at K = 2048 and 8192
+
+- **Driver:** `bench/drivers/a_route_a.py` runs route (a) (A-GKR + C-Flock's keyed-BLAKE3 rows + the sigma link) through
+  `backends/gkr/cell.sh`. The verifier pod builds its own statement of every sweep size from the shipped input set and serves
+  them in order on one port. The prover pod runs the correctness gate, the RTT probe, and per size a warm-up session against a
+  loopback verifier followed by the timed live sessions. `tools/cell.py finish` then writes the plateau's result with the sweep,
+  protocol, loopback, commit and placement blocks, and `tools/cell.py register` stamps the lane. The driver takes input sets only.
+- **Lowering:** A-GKR lowers `gemm-coordinate/k2048` and `k8192` on sm80 BF16 with `frame-v3/blake3-keyed` to
+  `bf16-ampere-k<K>+blake3`. These are the K = 1536 circuit files at `steps` = K / 16, pinned in `backends/gkr/verifier/pins.txt`,
+  and the lowering has a `stage()`.
+- **Unchanged:** the renderers and their rules.
+
 ## 2026-09-26: the spine generates every served template
 
 - `bench.templates` binds and generates every template of every census workload. `test_headline.NO_SPINE_GENERATOR` is empty.

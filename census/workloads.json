@@ -213,7 +213,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 128,
+                "max": 128,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 256) and decode step s attends T = 256 + s (s < 32, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -232,7 +244,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1,
+                "max": 127,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 256) and decode step s attends T = 256 + s (s < 32, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -251,7 +275,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 256,
+                "max": 256,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 256) and decode step s attends T = 256 + s (s < 32, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -270,7 +306,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 129,
+                "max": 255,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 256) and decode step s attends T = 256 + s (s < 32, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -289,7 +337,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 257,
+                "max": 287,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 256) and decode step s attends T = 256 + s (s < 32, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 31 key counts x 16 VUs = 496, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Embedding_v1",
@@ -520,7 +580,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 128,
+                "max": 128,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -539,7 +611,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1,
+                "max": 127,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -558,7 +642,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1280,
+                "max": 1280,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -577,7 +673,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1153,
+                "max": 1279,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -596,7 +704,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1408,
+                "max": 1408,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -615,7 +735,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1281,
+                "max": 1407,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -634,7 +766,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1536,
+                "max": 1536,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -653,7 +797,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1409,
+                "max": 1535,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -672,7 +828,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1664,
+                "max": 1664,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -691,7 +859,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1537,
+                "max": 1663,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -710,7 +890,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1792,
+                "max": 1792,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -729,7 +921,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1665,
+                "max": 1791,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -748,7 +952,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1920,
+                "max": 1920,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -767,7 +983,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1793,
+                "max": 1919,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -786,7 +1014,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2048,
+                "max": 2048,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -805,7 +1045,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1921,
+                "max": 2047,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -824,7 +1076,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2176,
+                "max": 2176,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -843,7 +1107,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2049,
+                "max": 2175,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -862,7 +1138,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2304,
+                "max": 2304,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -881,7 +1169,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2177,
+                "max": 2303,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -900,7 +1200,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2432,
+                "max": 2432,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -919,7 +1231,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2305,
+                "max": 2431,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -938,7 +1262,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 256,
+                "max": 256,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -957,7 +1293,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 129,
+                "max": 255,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -976,7 +1324,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2560,
+                "max": 2560,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -995,7 +1355,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2433,
+                "max": 2559,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1014,7 +1386,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2688,
+                "max": 2688,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1033,7 +1417,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2561,
+                "max": 2687,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1052,7 +1448,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2816,
+                "max": 2816,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1071,7 +1479,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2689,
+                "max": 2815,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1090,7 +1510,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2944,
+                "max": 2944,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1109,7 +1541,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2817,
+                "max": 2943,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1128,7 +1572,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3072,
+                "max": 3072,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1147,7 +1603,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2945,
+                "max": 3071,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1166,7 +1634,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3200,
+                "max": 3200,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1185,7 +1665,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3073,
+                "max": 3199,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1204,7 +1696,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3328,
+                "max": 3328,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1223,7 +1727,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3201,
+                "max": 3327,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1242,7 +1758,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3456,
+                "max": 3456,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1261,7 +1789,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3329,
+                "max": 3455,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1280,7 +1820,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3584,
+                "max": 3584,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1299,7 +1851,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3457,
+                "max": 3583,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1318,7 +1882,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3712,
+                "max": 3712,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1337,7 +1913,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3585,
+                "max": 3711,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1356,7 +1944,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 384,
+                "max": 384,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1375,7 +1975,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 257,
+                "max": 383,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1394,7 +2006,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3840,
+                "max": 3840,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1413,7 +2037,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3713,
+                "max": 3839,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1432,7 +2068,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3968,
+                "max": 3968,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1451,7 +2099,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3841,
+                "max": 3967,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1470,7 +2130,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4096,
+                "max": 4096,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1489,7 +2161,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3969,
+                "max": 4095,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1508,7 +2192,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4224,
+                "max": 4224,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1527,7 +2223,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4097,
+                "max": 4223,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1546,7 +2254,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4352,
+                "max": 4352,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1565,7 +2285,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4225,
+                "max": 4351,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1584,7 +2316,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4480,
+                "max": 4480,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1603,7 +2347,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4353,
+                "max": 4479,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1622,7 +2378,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4481,
+                "max": 4607,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1641,7 +2409,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 512,
+                "max": 512,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1660,7 +2440,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 385,
+                "max": 511,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1679,7 +2471,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 640,
+                "max": 640,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1698,7 +2502,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 513,
+                "max": 639,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1717,7 +2533,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 768,
+                "max": 768,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1736,7 +2564,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 641,
+                "max": 767,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1755,7 +2595,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 896,
+                "max": 896,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1774,7 +2626,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 769,
+                "max": 895,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1793,7 +2657,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1024,
+                "max": 1024,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1812,7 +2688,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 897,
+                "max": 1023,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1831,7 +2719,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1152,
+                "max": 1152,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 1 key counts x 16 VUs = 16, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -1850,7 +2750,19 @@
           "BN": 128,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 32
+        "subcircuits_per_vu": 32,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1025,
+                "max": 1151,
+                "vus_per_value": 16
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 16 layers; within this stratum's bounds that is 127 key counts x 16 VUs = 2032, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Embedding_v1",
@@ -4727,7 +5639,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 64,
+                "max": 64,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4746,7 +5670,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1,
+                "max": 63,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4765,7 +5701,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 640,
+                "max": 640,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4784,7 +5732,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 577,
+                "max": 639,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4803,7 +5763,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 704,
+                "max": 704,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4822,7 +5794,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 641,
+                "max": 703,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4841,7 +5825,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 768,
+                "max": 768,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4860,7 +5856,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 705,
+                "max": 767,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4879,7 +5887,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 832,
+                "max": 832,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4898,7 +5918,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 769,
+                "max": 831,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4917,7 +5949,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 896,
+                "max": 896,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4936,7 +5980,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 833,
+                "max": 895,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4955,7 +6011,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 960,
+                "max": 960,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4974,7 +6042,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 897,
+                "max": 959,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -4993,7 +6073,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1024,
+                "max": 1024,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5012,7 +6104,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 961,
+                "max": 1023,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5031,7 +6135,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1088,
+                "max": 1088,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5050,7 +6166,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1025,
+                "max": 1087,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5069,7 +6197,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1152,
+                "max": 1152,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5088,7 +6228,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1089,
+                "max": 1151,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5107,7 +6259,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1216,
+                "max": 1216,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5126,7 +6290,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1153,
+                "max": 1215,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5145,7 +6321,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 128,
+                "max": 128,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5164,7 +6352,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 65,
+                "max": 127,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5183,7 +6383,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1280,
+                "max": 1280,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5202,7 +6414,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1217,
+                "max": 1279,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5221,7 +6445,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1344,
+                "max": 1344,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5240,7 +6476,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1281,
+                "max": 1343,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5259,7 +6507,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1408,
+                "max": 1408,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5278,7 +6538,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1345,
+                "max": 1407,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5297,7 +6569,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1472,
+                "max": 1472,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5316,7 +6600,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1409,
+                "max": 1471,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5335,7 +6631,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1536,
+                "max": 1536,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5354,7 +6662,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1473,
+                "max": 1535,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5373,7 +6693,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1600,
+                "max": 1600,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5392,7 +6724,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1537,
+                "max": 1599,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5411,7 +6755,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1664,
+                "max": 1664,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5430,7 +6786,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1601,
+                "max": 1663,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5449,7 +6817,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1728,
+                "max": 1728,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5468,7 +6848,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1665,
+                "max": 1727,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5487,7 +6879,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1792,
+                "max": 1792,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5506,7 +6910,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1729,
+                "max": 1791,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5525,7 +6941,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1856,
+                "max": 1856,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5544,7 +6972,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1793,
+                "max": 1855,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5563,7 +7003,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 192,
+                "max": 192,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5582,7 +7034,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 129,
+                "max": 191,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5601,7 +7065,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1920,
+                "max": 1920,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5620,7 +7096,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1857,
+                "max": 1919,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5639,7 +7127,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1984,
+                "max": 1984,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5658,7 +7158,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1921,
+                "max": 1983,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5677,7 +7189,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2048,
+                "max": 2048,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5696,7 +7220,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 1985,
+                "max": 2047,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5715,7 +7251,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2112,
+                "max": 2112,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5734,7 +7282,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2049,
+                "max": 2111,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5753,7 +7313,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2176,
+                "max": 2176,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5772,7 +7344,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2113,
+                "max": 2175,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5791,7 +7375,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2240,
+                "max": 2240,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5810,7 +7406,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2177,
+                "max": 2239,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5829,7 +7437,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2304,
+                "max": 2304,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5848,7 +7468,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2241,
+                "max": 2303,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5867,7 +7499,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2368,
+                "max": 2368,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5886,7 +7530,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2305,
+                "max": 2367,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5905,7 +7561,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2432,
+                "max": 2432,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5924,7 +7592,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2369,
+                "max": 2431,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5943,7 +7623,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2496,
+                "max": 2496,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5962,7 +7654,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2433,
+                "max": 2495,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -5981,7 +7685,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 256,
+                "max": 256,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6000,7 +7716,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 193,
+                "max": 255,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6019,7 +7747,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2560,
+                "max": 2560,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6038,7 +7778,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2497,
+                "max": 2559,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6057,7 +7809,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2624,
+                "max": 2624,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6076,7 +7840,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2561,
+                "max": 2623,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6095,7 +7871,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2688,
+                "max": 2688,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6114,7 +7902,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2625,
+                "max": 2687,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6133,7 +7933,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2752,
+                "max": 2752,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6152,7 +7964,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2689,
+                "max": 2751,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6171,7 +7995,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2816,
+                "max": 2816,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6190,7 +8026,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2753,
+                "max": 2815,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6209,7 +8057,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2880,
+                "max": 2880,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6228,7 +8088,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2817,
+                "max": 2879,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6247,7 +8119,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2944,
+                "max": 2944,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6266,7 +8150,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2881,
+                "max": 2943,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6285,7 +8181,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3008,
+                "max": 3008,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6304,7 +8212,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 2945,
+                "max": 3007,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6323,7 +8243,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3072,
+                "max": 3072,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6342,7 +8274,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3009,
+                "max": 3071,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6361,7 +8305,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3136,
+                "max": 3136,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6380,7 +8336,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3073,
+                "max": 3135,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6399,7 +8367,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 320,
+                "max": 320,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6418,7 +8398,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 257,
+                "max": 319,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6437,7 +8429,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3200,
+                "max": 3200,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6456,7 +8460,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3137,
+                "max": 3199,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6475,7 +8491,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3264,
+                "max": 3264,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6494,7 +8522,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3201,
+                "max": 3263,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6513,7 +8553,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3328,
+                "max": 3328,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6532,7 +8584,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3265,
+                "max": 3327,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6551,7 +8615,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3392,
+                "max": 3392,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6570,7 +8646,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3329,
+                "max": 3391,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6589,7 +8677,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3456,
+                "max": 3456,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6608,7 +8708,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3393,
+                "max": 3455,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6627,7 +8739,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3520,
+                "max": 3520,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6646,7 +8770,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3457,
+                "max": 3519,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6665,7 +8801,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3584,
+                "max": 3584,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6684,7 +8832,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3521,
+                "max": 3583,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6703,7 +8863,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3648,
+                "max": 3648,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6722,7 +8894,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3585,
+                "max": 3647,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6741,7 +8925,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3712,
+                "max": 3712,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6760,7 +8956,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3649,
+                "max": 3711,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6779,7 +8987,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3776,
+                "max": 3776,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6798,7 +9018,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3713,
+                "max": 3775,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6817,7 +9049,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 384,
+                "max": 384,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6836,7 +9080,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 321,
+                "max": 383,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6855,7 +9111,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3840,
+                "max": 3840,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6874,7 +9142,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3777,
+                "max": 3839,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6893,7 +9173,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3904,
+                "max": 3904,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6912,7 +9204,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3841,
+                "max": 3903,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6931,7 +9235,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3968,
+                "max": 3968,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6950,7 +9266,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3905,
+                "max": 3967,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6969,7 +9297,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4032,
+                "max": 4032,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -6988,7 +9328,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 3969,
+                "max": 4031,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7007,7 +9359,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4096,
+                "max": 4096,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7026,7 +9390,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4033,
+                "max": 4095,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7045,7 +9421,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4160,
+                "max": 4160,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7064,7 +9452,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4097,
+                "max": 4159,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7083,7 +9483,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4224,
+                "max": 4224,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7102,7 +9514,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4161,
+                "max": 4223,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7121,7 +9545,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4288,
+                "max": 4288,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7140,7 +9576,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4225,
+                "max": 4287,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7159,7 +9607,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4352,
+                "max": 4352,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7178,7 +9638,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4289,
+                "max": 4351,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7197,7 +9669,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4416,
+                "max": 4416,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7216,7 +9700,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4353,
+                "max": 4415,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7235,7 +9731,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 448,
+                "max": 448,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7254,7 +9762,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 385,
+                "max": 447,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7273,7 +9793,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4480,
+                "max": 4480,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7292,7 +9824,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4417,
+                "max": 4479,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7311,7 +9855,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4544,
+                "max": 4544,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7330,7 +9886,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4481,
+                "max": 4543,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7349,7 +9917,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 4545,
+                "max": 4607,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7368,7 +9948,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 512,
+                "max": 512,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7387,7 +9979,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 449,
+                "max": 511,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7406,7 +10010,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 576,
+                "max": 576,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 1 key counts x 28 VUs = 28, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "Attention_v3",
@@ -7425,7 +10041,19 @@
           "BN": 64,
           "semantics": "sm80.fa2.bf16"
         },
-        "subcircuits_per_vu": 12
+        "subcircuits_per_vu": 12,
+        "variable_counts": {
+          "T": {
+            "runs": [
+              {
+                "min": 513,
+                "max": 575,
+                "vus_per_value": 28
+              }
+            ],
+            "source": "batch 1, one request: prefill query position p attends T = p + 1 keys (p < 4096) and decode step s attends T = 4096 + s (s < 512, executed_prefix.n_exec), once in each of the 28 layers; within this stratum's bounds that is 63 key counts x 28 VUs = 1764, its population (replay_partition.strata by phase)"
+          }
+        }
       },
       {
         "vu_family": "BiasAdd_v1",

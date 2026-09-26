@@ -61,6 +61,11 @@ A bound subcircuit may record `variable_ranges`: the range a per-input variable 
 backend. The per-workload headline lists it as uncovered for that reason and never counts it as covered. `port_datatypes`
 records the datatype of each port a bytes model counts. For example, the MoE router reads bf16 logits.
 
+A template the proof backends only partly prove records `verifier_evaluated`: the parts the verifier checks natively, their
+share of the template, whether the headline counts a cell as covering the template (with a footnote), and the ruling.
+Attention's softmax is counted, per red-team-flock-3's grant. Sampling is not counted until Daniel decides, and one
+renderer switch counts it.
+
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
@@ -75,7 +80,9 @@ subcircuit template bound from its IR Definition, with the number of the templat
 - the other families are one row each.
 
 The captured input sets (vllm-vu-export) sample these counts. They cross-check the mix and are linked to their workload
-once registered; they don't replace the counts. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
+once registered; they don't replace the counts. An attention entry of a batch-1 workload also records `variable_counts`: the VUs at each key count T
+(runs of T with VUs per value). These come from its one request's positions and are checked against the stratum's population
+by phase. The headline weights attention cells by them, one T at a time. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
 that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing

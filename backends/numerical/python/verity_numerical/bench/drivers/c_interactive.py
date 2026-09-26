@@ -1,5 +1,8 @@
 """C-interactive (Flock, live verifier): ``backends/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
 
+A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
+writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
+
 An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``backends/flock/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
 ``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
@@ -64,32 +67,13 @@ def unmet(cell) -> str | None:
     return None
 
 
-def gemm_set_tarball(ref: dict, root: Path = Path(".bench-cell") / "sets") -> Path:
-    """An input set's manifest and port files as one ``.tgz`` sent with both runs (``research run --send``; the pods have no
-    store access), named by the set and its content digest."""
-    d = Path(ref["path"])
-    man = json.loads((d / "manifest.json").read_text())
-    out = (root / f"{ref['id']}-{ref['n']}-{ref['content_digest'][:12]}.tgz").resolve()
-    if not out.exists():
-        out.parent.mkdir(parents=True, exist_ok=True)
-        files = ["manifest.json", *sorted(p["file"] for p in man["ports"].values())]
-        with tarfile.open(out, "w:gz") as tf:
-            for f in files:
-                tf.add(d / f, arcname=f)
-    return out
-
-
 def jobs(cell) -> list[dict]:
     if cell.relation.startswith(IR_PREFIX):
         return ir_jobs(cell)
     leaf = "sha256" if cell.scheme.endswith("sha-256") else "blake3"
+    send = [set_tarball(cell)] if cell.input_set.get("kind") == "set" else []
     common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", f"LEAF={leaf}",
-              *([f"PER={cell.per_proof}"] if cell.per_proof else [])]
-    send = []
-    if cell.input_set.get("kind") == "set":
-        tgz = gemm_set_tarball(cell.input_set)
-        common.append(f"SET={tgz.name}")
-        send = [str(tgz)]
+              *([f"PER={cell.per_proof}"] if cell.per_proof else []), *([f"SET={Path(send[0]).name}"] if send else [])]
     operator = f"OPERATOR={cell.lane}-verifier-pod"
     return [
         {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier", "send": send,

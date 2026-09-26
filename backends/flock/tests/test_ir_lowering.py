@@ -506,8 +506,10 @@ def test_non_gemm_results_carry_no_gemm_target():
 def test_an_ir_cell_plans_through_the_spine():
     from verity_numerical.bench import cell as C
 
+    two_machines = {"prover": {"machine_id": "m-p", "public_ip": "1.2.3.5"}, "verifier": {"machine_id": "m-v", "public_ip": "1.2.3.4"},
+                    "link": {"peer": "1.2.3.4:7400", "peer_ip": "1.2.3.4"}}
     c = C.plan("C-interactive", "rope-head/d64/neox-bf16+frame-v3/blake3-keyed", str(SLICES / "rope-head-d64"), "vy-p", verifier="vy-v",
-               verifier_addr="1.2.3.4:7400", rtt_target="1.2.3.4:22", lane="flock-ir-lowering", points="2 4", runs=5)
+               verifier_addr="1.2.3.4:7400", rtt_target="1.2.3.4:22", lane="flock-ir-lowering", points="2 4", runs=5, placement=two_machines)
     assert c.relation == "irf:rope-head"
     v, p = c.jobs
     assert v["command"][:3] == ["bash", "backends/flock/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
