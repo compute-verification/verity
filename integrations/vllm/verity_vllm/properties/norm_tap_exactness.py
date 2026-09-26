@@ -15,7 +15,10 @@ and NaN):
       value in the `verity.ir.evaluate.evaluate_call` transcript);
   (d) Triton: the installed kernel's source is the pinned one, the copy is that source plus exactly `rms_norm_tap.TAP_LINES`
       (`source_diff`), and at every case's specialization the two kernels' PTX has the same sequence of floating-point, conversion and
-      shuffle instructions (`arith_ops`), the copy adding one global store.
+      shuffle instructions (`arith_ops`), the copy adding one global store;
+  (e) the source (`norm_scale_source`) on vLLM's own norm modules -- `RMSNorm` without and with a residual, a q/k-norm `RMSNorm` over
+      [tokens, heads, head_dim], `GemmaRMSNorm` -- leaves every output bit-identical, acquires nothing outside a committed step,
+      acquires one `<module>/norm_scale` per module inside one, each equal to the model's scale, and restores every patched site.
 
 This module is the property and its record `norm_tap_exactness.json` (environment, both builds' sha256, per-case results, `ok`), whose
 `digest` is the sha256 of the canonical JSON of every other field; `verify_record` re-derives the digest and the verdict without a GPU.
@@ -101,15 +104,14 @@ def twin_scales(kernel: str, x: Any, res: Any, w: Any, eps: float) -> Any:
 
 
 # ------------------------------------------------------------------------------------------------------------------------ Triton
-def source_diff(installed: str, tapped: str) -> dict[str, Any]:
-    """The line diff of the installed kernel's source against the copy's: `ok` when the copy only inserts `TAP_LINES`, in order."""
-    from verity_vllm.acquire.norm_tap_src.rms_norm_tap import TAP_LINES
-
+def source_diff(installed: str, tapped: str, tap_lines: tuple[str, ...]) -> dict[str, Any]:
+    """The line diff of the installed kernel's source against the copy's: `ok` when the copy only inserts `tap_lines`
+    (`rms_norm_tap.TAP_LINES`), in order."""
     a, b = installed.splitlines(keepends=True), tapped.splitlines(keepends=True)
     ops = [(tag, a[i1:i2], b[j1:j2]) for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if tag != "equal"]
     inserted = [line for tag, _old, new in ops if tag == "insert" for line in new]
     return {"changes": [{"op": tag, "removed": old, "added": new} for tag, old, new in ops], "inserted": inserted,
-            "ok": all(tag == "insert" for tag, _o, _n in ops) and tuple(inserted) == tuple(TAP_LINES)}
+            "ok": all(tag == "insert" for tag, _o, _n in ops) and tuple(inserted) == tuple(tap_lines)}
 
 
 _FLOAT_TYPES = (".f32", ".f64", ".f16", ".bf16")
@@ -161,13 +163,19 @@ def triton_source_ok(doc: dict[str, Any]) -> bool:
     return t.get("installed_sha256") == t.get("pinned_sha256") and bool(t.get("pinned_sha256")) and (t.get("diff") or {}).get("ok") is True
 
 
+def source_ok(s: dict[str, Any]) -> bool:
+    return (not s.get("error") and s.get("outputs_equal") is True and s.get("outside_step_acquired") == 0 and s.get("names_ok") is True
+            and s.get("scales_equal") is True and s.get("restored") is True and s.get("errors") == 0)
+
+
 def _verdict(doc: dict[str, Any]) -> bool:
     cs = doc.get("cases") or []
-    return ({c.get("kernel") for c in cs} >= set(KERNELS) and all(map(case_ok, cs)) and triton_source_ok(doc))
+    return ({c.get("kernel") for c in cs} >= set(KERNELS) and all(map(case_ok, cs)) and triton_source_ok(doc)
+            and source_ok(doc.get("source") or {}))
 
 
 def seal(doc: dict[str, Any]) -> dict[str, Any]:
-    """`doc` with `ok` (cases of both kernels, every one ok, the Triton source pinned and diffed) and its `digest`."""
+    """`doc` with `ok` (cases of both kernels, every one ok, the Triton source pinned and diffed, the source check ok) and its `digest`."""
     return seal_record(doc, _verdict(doc))
 
 
@@ -180,6 +188,9 @@ def verify_record(doc: dict[str, Any]) -> list[str]:
     for e in doc.get("cases") or []:
         if bool(e.get("ok")) != case_ok(e):
             problems.append(f"case {e.get('name')}: ok={e.get('ok')} but its fields say {case_ok(e)}")
+    s = doc.get("source") or {}
+    if s and bool(s.get("ok")) != source_ok(s):
+        problems.append(f"source: ok={s.get('ok')} but its fields say {source_ok(s)}")
     if bool(doc.get("ok")) != _verdict(doc):
         problems.append(f"ok={doc.get('ok')} but the entries say {_verdict(doc)}")
     return problems
