@@ -92,8 +92,9 @@ def chunk_header(layout: Any, launch_tag: int, chunk_index: int, chunk_words: in
     block layouts) is the legacy tile, whose header words 8/9 are 0: the CUDA chunk kernels write nothing else there."""
     ix = operator.index
     tile = {} if getattr(layout, "legacy_tile", True) else {"BN": ix(layout.BN), "D": ix(layout.D)}
+    # The kernels write u32 M (M mod 2**32 for a step of 2**32 words or more); the length is bound by the step root's leaf count n.
     return V.chunk_header(launch_tag=ix(launch_tag), chunk_index=ix(chunk_index), chunk_words=ix(chunk_words), src_mask=ix(src_mask),
-                          HB=ix(layout.HB), M=ix(layout.M), NB=ix(layout.NB), **tile)
+                          HB=ix(layout.HB), M=ix(layout.M) & 0xFFFFFFFF, NB=ix(layout.NB), **tile)
 
 
 def thread_header(src_mask: int, slab: int, m_block: int, n_block: int, tidx: int, seqlen_q: int, seqlen_k: int, launch_tag: int,

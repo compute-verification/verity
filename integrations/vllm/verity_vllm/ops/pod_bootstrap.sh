@@ -61,6 +61,9 @@ if [ ! -x "$PY" ]; then
   uv venv "$VENV" --python 3.12 >/dev/null || fail VENV "uv venv --python 3.12 failed"
 fi
 $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail PYTHON "$PY is not Python 3.12: $($PY -V 2>&1)"
+# scripts that set their own PYTHONPATH (gates, rows) still import verity_sampled_proofs: a .pth in the venv's site-packages
+SITE=$VENV/lib/python3.12/site-packages; [ -d "$SITE" ] || fail PTH "no $SITE (the venv is Python 3.12)"
+echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth" || fail PTH "cannot write $SITE/verity-sampled-proofs.pth"
 
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
@@ -166,6 +169,15 @@ check("verity_from_tree", lambda: under("verity.ir", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
 check("sampled_proofs_from_tree", lambda: under("verity_sampled_proofs.law", sampled))   # verity_vllm.commit.challenge imports it
+def sampled_without_pythonpath():
+    # drop only protocols/sampled_proofs from PYTHONPATH: the .pth must supply it; verity (its dependency) stays on the path
+    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.realpath(p) != os.path.realpath(sampled)]
+    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, **({"PYTHONPATH": os.pathsep.join(keep)} if keep else {})}
+    r = subprocess.run([sys.executable, "-c", "import verity_sampled_proofs.law as m; print(m.__file__)"], capture_output=True, text=True, env=env, timeout=60)
+    if r.returncode != 0 or not os.path.realpath(r.stdout.strip()).startswith(os.path.realpath(sampled) + os.sep):
+        raise RuntimeError(f"without protocols/sampled_proofs on PYTHONPATH: rc {r.returncode}, {(r.stdout + r.stderr).strip()[-200:]}")
+    return r.stdout.strip()
+check("sampled_proofs_via_pth", sampled_without_pythonpath)   # the venv's verity-sampled-proofs.pth, for scripts whose PYTHONPATH omits it
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:

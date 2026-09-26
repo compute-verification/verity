@@ -117,7 +117,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import", "no_old_tree_on_path"):
+                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "numpy_import", "no_old_tree_on_path"):
         assert name in checks, name
     for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
@@ -129,6 +129,40 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert "total_bytes" in meas["memory"] and "cgroup_max_bytes" in meas["memory"]
     assert rec["identities"]["torch"] == checks["torch_cpu"]["value"] and rec["identities"]["native"] == {}
     assert rec["identities"]["tree"] == {"integration_root": str(root), "verity_core": str(core), "research": str(research)}
+
+
+def test_bootstrap_writes_the_sampled_proofs_pth_and_readiness_checks_it() -> None:
+    """Gate and row scripts set their own PYTHONPATH: the venv's site-packages carries a .pth for protocols/sampled_proofs, and
+    readiness imports verity_sampled_proofs with PYTHONPATH removed."""
+    text = SCRIPT.read_text()
+    assert 'echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth"' in text
+    assert text.index("verity-sampled-proofs.pth") < text.index("# ---- 5. readiness")
+    assert 'check("sampled_proofs_via_pth"' in _readiness_source()
+
+
+def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path: Path) -> None:
+    """A fresh Python 3.12 venv as bootstrap leaves it: verity-sampled-proofs.pth in site-packages and a PYTHONPATH (core, research,
+    the integration) that omits protocols/sampled_proofs.  The readiness check's function imports verity_sampled_proofs from the
+    tree through the .pth -- its dependency verity from PYTHONPATH -- and fails once the .pth is removed."""
+    uv = shutil.which("uv") or shutil.which(os.path.expanduser("~/.local/bin/uv"))
+    if not uv:
+        pytest.skip("uv not installed")
+    venv = tmp_path / "venv"
+    if subprocess.run([uv, "venv", "-q", "-p", "3.12", str(venv)], capture_output=True, timeout=300).returncode != 0:
+        pytest.skip("no Python 3.12 for uv venv")
+    py, site = venv / "bin" / "python", venv / "lib" / "python3.12" / "site-packages"
+    sampled, core, research = TREE / "protocols" / "sampled_proofs", TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
+    src = _readiness_source()
+    fn = src[src.index("def sampled_without_pythonpath():"):src.index('check("sampled_proofs_via_pth"')]
+    probe = tmp_path / "probe.py"
+    probe.write_text("import os, subprocess, sys\nsampled = sys.argv[1]\n" + fn + "print(sampled_without_pythonpath())\n")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (VLLM, core, research, sampled)))
+    (site / "verity-sampled-proofs.pth").write_text(f"{sampled}\n")
+    ok = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    assert ok.returncode == 0 and ok.stdout.strip().startswith(str(sampled.resolve())), ok.stdout + ok.stderr
+    (site / "verity-sampled-proofs.pth").unlink()
+    bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    assert bad.returncode != 0 and "without protocols/sampled_proofs on PYTHONPATH" in bad.stderr
 
 
 def test_gpu_mode_record_shape_is_unchanged() -> None:

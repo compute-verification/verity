@@ -918,12 +918,12 @@ impl Server {
                 if root_f.is_empty() {
                     return self.refuse("L1/C2: no root_F: the points must follow both sides' roots".into());
                 }
+                if self.cfg.prime_live && self.prime.is_empty() {
+                    return self.refuse("P-live: root_F committed before any live prime coin (the prime proof's coins before root_F are the verifier's)".into());
+                }
                 // A statement with no link points (flock-pure) commits its Σ in root_F's place.
                 if spec.points == 0 && root_f != spec.sigma {
                     return self.refuse("statement: Commit names another statement than the verifier's Σ".into());
-                }
-                if self.cfg.prime_live && self.prime.is_empty() {
-                    return self.refuse("P-live: root_F committed before any live prime coin (the prime proof's coins before root_F are the verifier's)".into());
                 }
                 let roots: BTreeMap<String, Vec<u8>> = roots.into_iter().collect();
                 let publics: BTreeMap<String, Vec<u8>> = publics.into_iter().collect();

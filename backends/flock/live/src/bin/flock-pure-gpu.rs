@@ -604,8 +604,138 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-pure-gpu serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256] ..."),
+        "replay" => {
+            if pin.is_empty() {
+                eprintln!("replay needs --pin (the pinned lowering's sha256)");
+                std::process::exit(2);
+            }
+            let rec: Value = serde_json::from_slice(&std::fs::read(arg("--session", "session.json")).unwrap()).unwrap();
+            let proofs: Vec<Vec<u8>> = arg("--proofs", "").split(',').map(|f| std::fs::read(f).unwrap()).collect();
+            match replay(&st, &inst, &rec, &proofs) {
+                Ok(v) => println!("REPLAY\t{v}"),
+                Err(e) => {
+                    println!("REPLAY\t{}", json!({"accepted": false, "why": e}));
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => eprintln!("usage: flock-pure-gpu serve|prove|selftest|replay --instances FILE --netlist FILE [--pin SHA256] ..."),
     }
+}
+
+/// The honest device prover's y16 and acc publics (`pure_unit_outputs`): the last unit of every real block, both layouts.
+fn last_unit_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<u32>, Vec<u32>) {
+    let cols = st.net.out_cols.clone();
+    let u = st.lay.units() - 1;
+    (0..st.blocks_real)
+        .into_par_iter()
+        .map(|b| {
+            let r = inputs(b, u);
+            let (z, _, _) = st.net.eval64(|bit| {
+                let w = r[bit >> 7];
+                let j = bit & 127;
+                (if j < 64 { w.lo >> j } else { w.hi >> (j - 64) }) & 1
+            });
+            let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
+            (if cols.len() > 1 { word(cols[1], 16) } else { 0 }, word(cols[0], 32))
+        })
+        .unzip()
+}
+
+fn f128_of_hex(s: &str) -> F128 {
+    F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
+}
+
+/// Re-verify a verifier's recorded session from files with this machine's own statement (instance set, pinned lowering,
+/// frame-v3 roots, honest publics): the coins are the recorded ones, so this is not transferable evidence, but every
+/// message the proofs carry must hash to what the verifier recorded before issuing each coin, the link exchange must
+/// hash to the recorded link_sha256, and the Flock verifier must accept both reps on one committed root.
+fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
+    let (digests, roots) = commit(inst);
+    let sig = sigma(st, inst, &roots);
+    if rec["kind"] != "flock-live-session/v1" {
+        return Err("not a flock-live session record".into());
+    }
+    if rec["hello"].as_str() != Some(config(st, sig).hello().as_str()) {
+        return Err("the record's session parameters (Σ, statement digest, profile) are not this statement's".into());
+    }
+    if rec["config"]["require_link"] != true || rec["link_sha256"].is_null() || rec["link_mode"] != "exchange" {
+        return Err("F1: the record is not a session whose statement was committed before any coin".into());
+    }
+    if rec["aborted"].is_string() || rec["verdict"]["accepted"] != true {
+        return Err("the live verifier did not accept this session".into());
+    }
+    let (comps, cvs) = st.compressions(inst);
+    let inputs = |b: usize, u: usize| st.unit_inputs(&comps, b, u, st.c_in(inst, b, u));
+    let (y16, acc) = last_unit_words(st, &inputs);
+    let publics = Publics { cv: cvs, y16, acc }.bytes();
+    if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
+        return Err("C4: the record's committed publics are not this instance set's chunk values, accumulators and outputs".into());
+    }
+    let v = PureVerifier { st: st.clone(), inst: inst.clone(), digests };
+    v.statement_publics(TABLE, &publics)?;
+    let want_proofs: Vec<String> = rec["proof_sha256"].as_array().ok_or("no proofs recorded")?.iter()
+        .map(|x| x["sha256"].as_str().unwrap_or_default().to_string()).collect();
+    if proofs.len() != 2 || want_proofs.len() != 2 || proofs.iter().zip(&want_proofs).any(|(b, w)| hex(&sha256(b)) != *w) {
+        return Err("the proof files are not the recorded proofs".into());
+    }
+    let points: Vec<Vec<F128>> = rec["link"]["points"].as_array().ok_or("no link points")?.iter()
+        .map(|p| p.as_array().unwrap().iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect()).collect();
+    let y: Vec<F128> = rec["link"]["y"].as_array().ok_or("no y")?.iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect();
+    if points.len() != 2 || points.iter().any(|p| p.len() != st.m_pts) || y != [F128::ZERO, F128::ZERO] {
+        return Err("session: two points of the statement's dimension and y = 0 expected".into());
+    }
+    let mut streams = std::collections::BTreeMap::new();
+    let mut stream_roots = std::collections::BTreeMap::new();
+    for s in rec["streams"].as_array().ok_or("no streams")? {
+        let name = s["stream"].as_str().unwrap().to_string();
+        let rounds = s["rounds"].as_array().unwrap().iter().map(|r| RoundRec {
+            sha: unhex(r["msg_sha256"].as_str().unwrap()).try_into().unwrap(),
+            len: r["msg_len"].as_u64().unwrap() as usize,
+            n: r["n"].as_u64().unwrap() as u32,
+            coins: r["coins"].as_array().unwrap().iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect(),
+        }).collect();
+        stream_roots.insert(name.clone(), s["root_sha256"].as_str().map(|x| x.to_string()));
+        streams.insert(name, StreamRec { parent: s["parent"].as_str().unwrap().to_string(), label: s["label"].as_str().unwrap().as_bytes().to_vec(),
+                                         at: s["at"].as_u64().unwrap(), rounds, cap: None });
+    }
+    let record = Arc::new(streams);
+    let ctx = LinkCtx { points: &points, y: &y, publics: &publics };
+    let t = Instant::now();
+    let mut caps: Vec<Vec<u8>> = Vec::new();
+    for rep in 0..2 {
+        let root = rep_stream(TABLE, rep);
+        let mut ch = ReplayChallenger::new(record.clone(), &root, &domain(rep));
+        let cap = v.verify(TABLE, rep, &proofs[rep], &mut ch, &ctx).map_err(|e| match ch.first_failure() {
+            Some(r) => format!("{r} (then the verifier: {e})"),
+            None => e,
+        })?;
+        ch.finish()?;
+        if stream_roots.get(&root).cloned().flatten() != Some(hex(&sha256(&cap))) {
+            return Err(format!("{root}: the proof's root is not the root the session committed"));
+        }
+        caps.push(cap);
+    }
+    if caps[0] != caps[1] {
+        return Err("R1: the reps are on different roots".into());
+    }
+    let root_b = hex(&sha256(&caps[0]));
+    if rec["link"]["root_b_sha256"][TABLE].as_str() != Some(root_b.as_str()) || rec["link"]["root_f_sha256"].as_str() != Some(hex(&sha256(&sig)).as_str()) {
+        return Err("L1: the committed root_F / root_B are not Σ and the proofs' root".into());
+    }
+    let mut lb = sig.to_vec();
+    lb.extend_from_slice(&caps[0]);
+    for p in points.iter().flatten() {
+        lb.extend_from_slice(&f128_bytes(&[*p]));
+    }
+    lb.extend_from_slice(&f128_bytes(&y));
+    if rec["link_sha256"].as_str() != Some(hex(&sha256(&lb)).as_str()) {
+        return Err("L1: the recorded link_sha256 is not root_F || root_B || points || y".into());
+    }
+    Ok(json!({"accepted": true, "statement": "verity/flock-pure-block/v2", "relation": inst.relation, "vus": inst.vus,
+              "instances": inst.header["instances"], "sigma": hex(&sig), "roots": roots.iter().map(|r| hex(r)).collect::<Vec<_>>(),
+              "netlist_sha256": hex(&st.net.sha256), "statement_digest": hex(&st.digest), "root_b_sha256": root_b,
+              "link_sha256": rec["link_sha256"], "proof_sha256": want_proofs, "verify_s": t.elapsed().as_secs_f64()}))
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
