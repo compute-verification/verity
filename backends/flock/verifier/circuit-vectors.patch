@@ -1,6 +1,6 @@
 --- a/backends/flock/live/src/bin/flock-circuit.rs
 +++ b/backends/flock/live/src/bin/flock-circuit.rs
-@@ -844,6 +844,173 @@
+@@ -844,6 +844,280 @@
      }
  }
  
@@ -145,6 +145,113 @@
 +    write("r-break", &forged, &forged_proofs, &verdicts);
 +}
 +
++/// The verifier's public file with one public word changed and its frame-v3 roots recomputed, written as a file: a
++/// self-consistent, false statement whose public hash is the file's own (so an offline verifier derives the same Σ).
++fn write_false_public(st: &Stmt, pub_path: &str, what: &str, out: &std::path::Path) {
++    let mut v = Instances::load(pub_path, &st.c).unwrap();
++    match what {
++        "output" => v.outputs[5] ^= 1,
++        _ => v.digests[1][0] ^= 1,
++    }
++    let text = std::fs::read(pub_path).unwrap();
++    let nl = text.iter().position(|&x| x == b'\n').unwrap();
++    let mut head: Value = serde_json::from_slice(&text[..nl]).unwrap();
++    let fv = head["frame_v3"].clone();
++    let np = st.c.ports.len();
++    for (p, port) in st.c.ports.iter().enumerate() {
++        let dom = hexb(fv["domain_ids"][&port.name].as_str().unwrap()).unwrap();
++        let leaves: Vec<[u8; 32]> = (0..v.n).map(|i| fv3_leaf(&dom, i, b"blake3-keyed/row/v2", &v.digest(i, p, np))).collect();
++        head["frame_v3"]["roots"][&port.name] = json!(hex(&fv3_root(&dom, leaves)));
++    }
++    let n_out: usize = st.c.out_words.iter().sum();
++    let mut at = 0;
++    for x in st.c.meta["out_ports"].as_array().unwrap() {
++        let (name, w) = (x[0].as_str().unwrap(), x[1].as_u64().unwrap() as usize);
++        let dom = hexb(fv["domain_ids"][name].as_str().unwrap()).unwrap();
++        let words: Vec<u16> = (0..v.n).flat_map(|i| v.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
++        let leaves = words.iter().enumerate().map(|(r, x)| fv3_leaf(&dom, r, b"u16", &x.to_be_bytes())).collect();
++        head["frame_v3"]["roots"][name] = json!(hex(&fv3_root(&dom, leaves)));
++        at += w;
++    }
++    let mut b = serde_json::to_vec(&head).unwrap();
++    b.push(b'\n');
++    for d in &v.digests {
++        b.extend_from_slice(d);
++    }
++    for o in &v.outputs {
++        b.extend_from_slice(&o.to_le_bytes());
++    }
++    std::fs::write(out, b).unwrap();
++}
++
++/// `forgeries --instances INST --pub PUB --circuit FILE [--forged FILE] [--tables DIR] --out DIR`: every selftest forgery that
++/// runs a session, recorded by the verifier's own server as a replayable set: `session.json`, `circuit.rep0.bin`,
++/// `circuit.rep1.bin`, `case.json` (the expected verdict, the live and offline verdicts, which public file the verifier
++/// read), and `pub.bin` when it is not the stage's.
++fn forgeries(st: &Arc<Stmt>, inst: &Arc<Instances>, pubi: &Arc<Instances>) {
++    let out = std::path::PathBuf::from(arg("--out", "forgeries"));
++    const GENERIC: &[&str] = &["mask_cells_random", "output_claim_false", "digest_claim_false", "message_byte_differs_from_the_committed_row",
++        "unit_input_differs_from_its_message_bits", "unit_internal_bit_flipped", "chaining_value_forged", "parent_message_forged",
++        "key_substituted", "flags_forged", "coins_before_y", "fast_profile_proofs", "cross_session_replay_both_reps",
++        "prover_file_differs_from_verifier_file", "relabelled_circuit", "private_cut_word_tampered", "tail_swapped",
++        "tail_swapped_circuit_refused"];
++    for &(name, accept, _) in CASES {
++        if !GENERIC.contains(&name) || skipped(st, name) {
++            continue;
++        }
++        let d = out.join(name);
++        std::fs::create_dir_all(&d).unwrap();
++        let mut plan = plan_of(name, false);
++        if name == "cross_session_replay_both_reps" {
++            let s0 = Arc::new(Mutex::new(server(st, pubi)));
++            plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan::default(), ProverSeed::from_os()).1);
++        }
++        let mut public = "stage";
++        let (pst, pinst, vinst): (Arc<Stmt>, Arc<Instances>, Arc<Instances>) = match name {
++            "output_claim_false" | "digest_claim_false" => {
++                let path = d.join("pub.bin");
++                write_false_public(st, &arg("--pub", ""), if name.starts_with("output") { "output" } else { "digest" }, &path);
++                let v = Arc::new(Instances::load(path.to_str().unwrap(), &st.c).unwrap());
++                let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
++                p.public_sha256 = v.public_sha256;
++                public = "pub.bin";
++                (st.clone(), Arc::new(p), v)
++            }
++            "prover_file_differs_from_verifier_file" => {
++                let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
++                p.public_sha256[0] ^= 1;
++                (st.clone(), Arc::new(p), pubi.clone())
++            }
++            "tail_swapped_circuit_refused" => {
++                let text = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).unwrap();
++                let c2 = Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
++                (Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e))), inst.clone(), pubi.clone())
++            }
++            "relabelled_circuit" => {
++                let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
++                let c2 = Composite::parse(&relabel(&text), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
++                (Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e))), inst.clone(), pubi.clone())
++            }
++            _ => (st.clone(), inst.clone(), pubi.clone()),
++        };
++        let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
++        let (v, _) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
++        let (rec, proofs) = {
++            let s = s.lock().unwrap();
++            (s.record_json(), (0..2).map(|r| s.proofs().get(&(TABLE.to_string(), r)).cloned().unwrap_or_default()).collect::<Vec<_>>())
++        };
++        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
++        for (r, p) in proofs.iter().enumerate() {
++            std::fs::write(d.join(format!("{TABLE}.rep{r}.bin")), p).unwrap();
++        }
++        let off = upstream_offline(st, &vinst, &rec, &proofs);
++        let case = json!({"case": name, "expect": if accept {"accept"} else {"reject"}, "live": {"accepted": v["accepted"], "why": v["why"]},
++                          "offline": off, "public": public});
++        std::fs::write(d.join("case.json"), serde_json::to_string_pretty(&case).unwrap()).unwrap();
++        println!("FORGERY\t{case}");
++    }
++}
++
 +/// `export-comp --out FILE`: the BLAKE3 compression circuit (`flock_prover`'s `build_block_r1cs(3)`, the compression slot type)
 +/// as data for the Lean verifier, `flock-r1cs-rows/v1`: one JSON header line (shape, pin, the circuit digest and the layout
 +/// offsets), then A's rows and B's rows, each row `le32 count` then `le32` columns. C is the identity (checked here).
@@ -174,7 +281,7 @@
  fn refuse(why: String) -> ! {
      println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
      std::process::exit(2);
-@@ -851,6 +1018,9 @@
+@@ -851,6 +1125,9 @@
  
  fn main() {
      let cmd = std::env::args().nth(1).unwrap_or_default();
@@ -184,13 +291,17 @@
      if cmd == "replay-coins" {
          let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
          match flock_live::replay_coin_seed(&rec) {
-@@ -906,6 +1076,19 @@
+@@ -906,6 +1183,23 @@
                  println!("LIVE\t{v}");
              }
          }
 +        "vectors" => {
 +            let pubi = Arc::new(Instances::load(&arg("--pub", ""), &st.c).unwrap_or_else(|e| refuse(e)));
 +            vectors(&st, &inst, &pubi)
++        }
++        "forgeries" => {
++            let pubi = Arc::new(Instances::load(&arg("--pub", ""), &st.c).unwrap_or_else(|e| refuse(e)));
++            forgeries(&st, &inst, &pubi)
 +        }
 +        "replay" => {
 +            let a: Vec<String> = std::env::args().collect();

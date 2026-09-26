@@ -7,12 +7,13 @@ import re
 from pathlib import Path
 
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
-TOOLCHAIN = "leanprover/lean4:v4.34.1"
+TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the soundness package's Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
 
 def sources():
-    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts)
+    """The executable's sources (the proofs' package, `soundness/`, has its own dependencies and checks)."""
+    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts and "soundness" not in p.relative_to(LEAN).parts)
 
 
 def test_toolchain_is_pinned():

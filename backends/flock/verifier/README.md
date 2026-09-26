@@ -28,7 +28,8 @@ flock-verify statement [--statement ID] --circuit F --comp comp.rows --public pu
 `flock-live-session/v1` record) and `<table>.rep0.bin`, `<table>.rep1.bin` (the proofs the server received; the table is
 `circuit`, or `nl` for the older tags). The statement is set up once (about 20 s: `D_b3` is recomputed from `comp.rows`). The command prints
 one `VERDICT {"accepted", "session", "why"}` line per session and exits 0 iff all are accepted. The component checks are `field-test`, `hash-test` (SHA-256, SHA-512, BLAKE3), `merkle-test`,
-`hm96-test` (on PR #88's `hm96/vectors.json`) and `comp-check`.
+`hm96-test` (on PR #88's `hm96/vectors.json`) and `comp-check`. The toolchain is v4.34.0, the revision the soundness
+package's Mathlib and ArkLib pin, so that one build covers both.
 
 `backends/flock/tests/test_lean_verifier.py` pins the toolchain and rejects `native_decide`, `implemented_by`, `extern` and
 `unsafe` in the sources.
@@ -80,3 +81,20 @@ session. Recorded runs:
 - `art:78ef0a6e` (`fd02e847`): 27 of 27 agree, with the retained-bytes sessions.
 
 `redigest.py --retain` writes a session with every round's framed bytes retained, and two negatives of it.
+
+Two more inputs feed the agreement check:
+- **Forgeries.** The patch's `forgeries` subcommand records every PR #83 selftest forgery that runs a session as a
+  replayable set, with the expected verdict in `case.json`. A forgery that is a false statement carries its own `pub.bin`,
+  which `agree.py` picks up. RoPE at `fd02e847`: `art:d306dfbd`, 14 of 14 agree.
+- **Fuzzing.** `fuzz.py SESSION_DIR OUT_DIR --seed S --n N` writes seeded single mutations of an honest session: proof
+  bytes, proof values with rebuilt digests, coins, round digests and record fields. Its `fuzz.json` gives `agree.py` the
+  cases that have a fixed expectation.
+
+`ci.py` is the agreement job. It takes every replayable set of `vectors.json` that has an upstream binary, fetches its
+inputs from the store, regenerates the mutants, retained-bytes sessions and fuzz cases, adds its forgeries, and runs
+`agree.py`:
+
+~~~text
+research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
+    --upstream fd02e847=flock-circuit --upstream 9294e161=flock-netlist --work DIR --seed S --fuzz N
+~~~

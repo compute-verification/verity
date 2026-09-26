@@ -3679,7 +3679,8 @@
     "files": [
      "out/rope-head/selftest-gpu.txt",
      "out/silu-mul/selftest-gpu.txt"
-    ]
+    ],
+    "replayable": "art:d306dfbd (RoPE at fd02e847)"
    }
   ],
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
@@ -3904,7 +3905,8 @@
     "tags": "verity/flock-netlist/v1",
     "pr83": "9294e161",
     "generator": "netlist-vectors.patch",
-    "agreement": "art:f1f3c2aa"
+    "agreement": "art:f1f3c2aa",
+    "lean_statement": "verity/flock-netlist/v1"
    },
    {
     "tags": "verity/flock-circuit",
@@ -3940,7 +3942,8 @@
      "tool": "backends/flock/verifier/redigest.py art:b9e86ae1/honest OUT",
      "cases": "as in the first set"
     },
-    "agreement": "art:81645236"
+    "agreement": "art:81645236",
+    "lean_statement": "verity/flock-circuit@19c7269a"
    },
    {
     "tags": "verity/flock-circuit (final format)",
@@ -3975,7 +3978,10 @@
      "tool": "redigest.py art:bd9f7efb/honest OUT; redigest.py --retain art:bd9f7efb/honest OUT",
      "cases": "as in the first set, plus retained, retained-edited (retained-not-digest: intended divergence, upstream ignores the bytes)"
     },
-    "agreement": "art:78ef0a6e (27/27)"
+    "agreement": "art:78ef0a6e (27/27)",
+    "lean_statement": "verity/flock-circuit",
+    "forgeries": "art:d306dfbd",
+    "forgeries_note": "PR #83 selftest forgeries that run a session (prover-side witness attacks, false output/digest statements with their own pub.bin, coins before y, fast profile, cross-session replay, relabelled circuit, prover file differs): 14 on RoPE, expectations in each case.json; Lean and upstream agree 14/14"
    },
    {
     "tags": "verity/flock-circuit (final format)",
@@ -4009,7 +4015,8 @@
     "mutants": {
      "tool": "redigest.py art:77cb4bec/honest OUT",
      "cases": "as in the first set"
-    }
+    },
+    "lean_statement": "verity/flock-circuit"
    }
   ]
  }

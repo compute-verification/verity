@@ -6,22 +6,49 @@
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
-is its directory's basename, and `why` is a prefix of the Lean verifier's reason. Writes DIR/agreement.tsv, the two
+is its directory's basename, and `why` is a prefix of the Lean verifier's reason. A session directory may carry its own
+public file (`pub.bin`, a forgery's false statement) and its expected verdict (`case.json`, from the vectors patch's
+`forgeries` subcommand). Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
 """
 import argparse, json, subprocess, sys
 from pathlib import Path
 
 
+def groups(a):
+    """Sessions by the public file their verifier reads."""
+    g = {}
+    for s in a.sessions:
+        own = Path(s) / "pub.bin"
+        g.setdefault(str(own) if own.exists() else a.public, []).append(s)
+    return g
+
+
 def lean_verdicts(a):
-    cmd = [a.lean, "verify", "--statement", a.statement, "--circuit", a.circuit, "--comp", a.comp, "--public", a.public]
+    out = {}
+    for public, sessions in groups(a).items():
+        out.update(lean_run(a, public, sessions))
+    return out
+
+
+def upstream_verdicts(a):
+    out = {}
+    for public, sessions in groups(a).items():
+        out.update(upstream_run(a, public, sessions))
+    return out
+
+
+def lean_run(a, public, sessions):
+    cmd = [a.lean, "verify", "--statement", a.statement, "--circuit", a.circuit, "--comp", a.comp, "--public", public]
     if a.coins:
         cmd += ["--coins", a.coins]
     if a.tables:
         cmd += ["--tables", a.tables]
-    p = subprocess.run(cmd + ["--session", *a.sessions], capture_output=True, text=True)
-    (a.out / "lean.txt").write_text(p.stdout)
-    (a.out / "lean.err").write_text(p.stderr)
+    p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
+    with open(a.out / "lean.txt", "a") as f:
+        f.write(p.stdout)
+    with open(a.out / "lean.err", "a") as f:
+        f.write(p.stderr)
     out = {}
     for line in p.stdout.splitlines():
         if line.startswith("VERDICT "):
@@ -30,13 +57,15 @@ def lean_verdicts(a):
     return out
 
 
-def upstream_verdicts(a):
+def upstream_run(a, public, sessions):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    p = subprocess.run([a.upstream, "replay", "--instances", a.public, flag, a.circuit, *tables, "--sessions", *a.sessions],
+    p = subprocess.run([a.upstream, "replay", "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
                        capture_output=True, text=True)
-    (a.out / "upstream.txt").write_text(p.stdout)
-    (a.out / "upstream.err").write_text(p.stderr)
+    with open(a.out / "upstream.txt", "a") as f:
+        f.write(p.stdout)
+    with open(a.out / "upstream.err", "a") as f:
+        f.write(p.stderr)
     out = {}
     for line in p.stdout.splitlines():
         if line.startswith("UPSTREAM\t"):
@@ -57,7 +86,13 @@ def main():
     ap.add_argument("--sessions", nargs="+", required=True)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    for f in ("lean.txt", "lean.err", "upstream.txt", "upstream.err"):
+        (a.out / f).write_text("")
     expect = {e["name"]: e["expect"] for f in a.expect for e in json.loads(Path(f).read_text())}
+    for s in a.sessions:
+        case = Path(s) / "case.json"
+        if case.exists():
+            expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
     lean, up = lean_verdicts(a), upstream_verdicts(a)
     rows, bad = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], []
     for s in a.sessions:
