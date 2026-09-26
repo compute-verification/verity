@@ -212,6 +212,12 @@ def provenance(per_value: list[dict[str, Any]], var: str) -> dict[str, Any] | No
                                              f"(the spine generator, source: synthetic), the rest on captured inputs"}
 
 
+#: Templates whose lowering leaves a part to the verifier with no census ``verifier_evaluated`` record: the RMSNorms' row tail
+#: (``supports``: "the row tail evaluated by the verifier").  Only the strict preview reads it; the published headline counts them.
+ROW_TAIL = {t: "the row tail (the sum of squares' reduction, rsqrt and the scale), evaluated by the verifier"
+            for t in ("rmsnorm-fused-cuda", "rmsnorm-triton")}
+
+
 def verifier_evaluated(template: str | None) -> Any:
     """The census's record of a template's verifier-evaluated parts (``verifier_evaluated``: what, how much, whether counted
     and on whose ruling), or ``None``."""
@@ -317,11 +323,15 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                 anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
                 ve = verifier_evaluated(g["template"])
                 count_ve = getattr(V.rules, "headline_count_omitted", False)     # the one switch for verifier-evaluated parts
+                strict = getattr(V.rules, "headline_strict_verifier", False)      # PREVIEW (Daniel 2026-09-26): the verifier evaluates nothing
+                parts = ve.parts if ve is not None else ROW_TAIL.get(g["template"])
 
                 def counted(c: Any, ve: Any = ve, count_ve: bool = count_ve) -> bool:
                     """Verifier-evaluated parts (the template's census record, or the cell's ``omitted`` label) count where the census
                     records a ruling that counts them (attention: red-team-flock-3's grant), else only under the switch."""
                     left = getattr(V, "omitted_of", {}).get(c.artifact)
+                    if strict:
+                        return not (ve is not None or left or g["template"] in ROW_TAIL)
                     if ve is None and not left:
                         return True
                     return count_ve or bool(ve is not None and ve.counted)
@@ -401,7 +411,7 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     elsewhere.append({"artifact": c.artifact, "prover_hardware": h.id if h else None, "prover_gpu": V.prover_gpu.get(c.artifact),
                                       "on_served_hardware": T.same_sku(V.prover_gpu.get(c.artifact), served.device),
                                       "cleared": not c.provisional and not c.legacy.finding,
-                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (ve.parts if ve is not None and not counted(c) else None)})
+                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (parts if parts and not counted(c) else None)})
                 opening = getattr(census.SUBCIRCUIT_TEMPLATES.get(g["template"] or ""), "commitment_opening", None)
                 if opening is not None and not elsewhere:
                     why, code = f"a commitment opening: {opening.note}", "commitment opening"
