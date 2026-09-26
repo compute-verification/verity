@@ -289,6 +289,94 @@ def f32_to_bf16(C, u, nan_word: int):
 
 # --- lookups -------------------------------------------------------------------------------------------------------------
 
+# --- the tensor-core k-step ------------------------------------------------------------------------------------------------
+
+TC_NAN = 0x7FFFFFFF
+
+
+def _classes(C, w, man: int, exp: int):
+    """(nan, inf, zero) of a float word with ``man`` mantissa and ``exp`` exponent bits."""
+    e, m = w[man:man + exp], w[:man]
+    e_all, e_any, m_any = and_reduce(C, e), or_reduce(C, e), or_reduce(C, m)
+    return C.AND(e_all, m_any), C.AND(e_all, NOT(m_any)), NOT(OR(C, e_any, m_any))
+
+
+def _finite_or_zero(C, w, man: int, exp: int):
+    """The word, its exponent and mantissa bits cleared when it is NaN or infinite (a finite stand-in)."""
+    fin = NOT(and_reduce(C, w[man:man + exp]))
+    return [C.AND(fin, x) for x in w[:man + exp]] + w[man + exp:]
+
+
+def tc_dot16(C, acc, a, b, groups=(8, 8), W: int = 25, F: int = -132):
+    """``AmpereBF16TcDot16``: ``acc + sum_k a[k] * b[k]`` as ``mma.sync.m16n8k16`` bf16 computes one accumulator coordinate, on
+    every encoding (``verity.ml.tc.total.tc_dot_total`` on ``AMPERE_BF16_M16N8K16``). The finite part is flock-backend's
+    ``unit.unit`` (the binary census's circuit of ``GroupSum.step``: groups (8, 8), 25-bit truncating adder, floor -132) on
+    operands whose non-finite words are replaced by zero; per group, a NaN term, or infinities of both signs (an overflowed
+    group counts as its infinity), give the canonical 0x7FFFFFFF, and one-signed infinities that infinity. Any non-finite
+    operand makes the result non-finite, so the stand-ins never reach the output."""
+    from . import unit as U
+
+    fmt, k = U.BF16, sum(groups)
+    assert len(a) == len(b) == k
+    rescale = W - 24
+    pc = [(_classes(C, x, 7, 8), _classes(C, y, 7, 8), x[15] ^ y[15]) for x, y in zip(a, b)]
+    p_nan = [OR(C, OR(C, ca[0], cb[0]), OR(C, C.AND(ca[1], cb[2]), C.AND(cb[1], ca[2]))) for ca, cb, _ in pc]
+    p_inf = [C.AND(OR(C, ca[1], cb[1]), NOT(n)) for (ca, cb, _), n in zip(pc, p_nan)]
+    c_nan, c_inf, _ = _classes(C, acc, 23, 8)
+    prods = []
+    for x, y in zip(a, b):
+        sa, ea, siga, nza = _tc_operand(C, fmt, _finite_or_zero(C, x, 7, 8))
+        sb, eb, sigb, nzb = _tc_operand(C, fmt, _finite_or_zero(C, y, 7, 8))
+        S = add(C, ea, eb, width=fmt.exp_bits + 1)
+        S = add(C, S, const_bits((fmt.offset + U.S_BIAS) % 1024, 10), width=10)
+        mag = multiply(C, siga, sigb)[: 2 * fmt.sig_bits]
+        sh = fmt.product_shift + rescale
+        prods.append((sa ^ sb, S, C.AND(nza, nzb), ([ZERO] * sh + mag) if sh >= 0 else mag[-sh:]))
+    c = _finite_or_zero(C, acc, 23, 8)
+    cm, cf, cs = c[:23], c[23:31], c[31]
+    hc = or_reduce(C, cf)
+    cf_eff = [cf[0] ^ C.AND(NOT(cf[0]), NOT(hc))] + cf[1:]
+    mag24 = cm + [hc]
+    state = (cs, add(C, cf_eff, const_bits(127, 10), width=10), OR(C, hc, or_reduce(C, cm)),
+             ([ZERO] * rescale + mag24) if rescale >= 0 else mag24[-rescale:])
+    # the special value entering each group: (nan, +inf, -inf); the accumulator first
+    nan, pos, neg = c_nan, C.AND(c_inf, NOT(acc[31])), C.AND(c_inf, acc[31])
+    sats, start, m24 = [], 0, None
+    for size in groups:
+        for i in range(start, start + size):
+            nan = OR(C, nan, p_nan[i])
+            pos = OR(C, pos, C.AND(p_inf[i], NOT(pc[i][2])))
+            neg = OR(C, neg, C.AND(p_inf[i], pc[i][2]))
+        nan = OR(C, nan, C.AND(pos, neg))
+        s_o, S_o, nz_o, m24 = U.group_sum(C, [state] + prods[start:start + size], W, F)
+        sat = U.saturated(C, S_o, nz_o)
+        sats.append((sat, s_o))
+        # an overflowed finite group is an infinity of its sign (only when the group had no infinite term)
+        fin_sat = C.AND(sat, NOT(OR(C, pos, neg)))
+        pos, neg = OR(C, pos, C.AND(fin_sat, NOT(s_o))), OR(C, neg, C.AND(fin_sat, s_o))
+        state = (s_o, S_o, nz_o, ([ZERO] * rescale + m24) if rescale >= 0 else m24[-rescale:])
+        start += size
+    s_o, S_o, nz_o = state[0], state[1], state[2]
+    field = add(C, S_o[:8], const_bits((-128) % 256, 8), cin=m24[23], width=8)
+    sign_n = C.AND(s_o, nz_o)
+    field_n = [C.AND(nz_o, x) for x in field]
+    sat_any, sat_sign = sats[-1]
+    for sat_g, sgn in reversed(sats[:-1]):
+        sat_sign = mux(C, sat_g, [sgn], [sat_sign])[0]
+        sat_any = OR(C, sat_g, sat_any)
+    finite = [C.AND(NOT(sat_any), x) for x in m24[:23]] + [OR(C, sat_any, x) for x in field_n] + [mux(C, sat_any, [sat_sign], [sign_n])[0]]
+    inf = OR(C, pos, neg)
+    special = select(C, nan, const_bits(TC_NAN, 32), const_bits(F32_INF, 31) + [neg])
+    return select(C, OR(C, nan, inf), special, finite)
+
+
+def _tc_operand(C, fmt, word):
+    """``unit.decode_operand`` without its finiteness assertion (the operand is a finite stand-in here)."""
+    m, e, s = word[: fmt.man_bits], word[fmt.man_bits: fmt.man_bits + fmt.exp_bits], word[fmt.bits - 1]
+    h = or_reduce(C, e)
+    return s, [e[0] ^ C.AND(NOT(e[0]), NOT(h))] + e[1:], m + [h], OR(C, h, or_reduce(C, m))
+
+
 def decode(C, bits):
     """The 2^n minterms of ``bits`` (index i = the assignment with value i), each one committed bit or free."""
     n = len(bits)
