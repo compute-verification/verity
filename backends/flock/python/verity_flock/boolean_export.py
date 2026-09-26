@@ -393,7 +393,7 @@ class Registry:
                 break
             h = ch[0]["ref"]
         vals, bundle = None, {}
-        for h in want:
+        for h in sorted(want):
             rec = self.nodes[h]
             if rec.get("gates") or h not in memo:
                 continue
