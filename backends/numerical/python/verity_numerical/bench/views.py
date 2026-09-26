@@ -1592,6 +1592,32 @@ def instances(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
     return out
 
 
+def scheme_entities(configurations: Sequence[Configuration]) -> list[dict[str, Any]]:
+    """Each commitment scheme (:data:`SCHEMES`) with ``name`` (its label), a one-line ``description`` (the commitment text of
+    the first full-relation configuration that binds it, up to its first ``;``) and the ``assumptions`` it rests on: every
+    statement-commitment hash those configurations declare, as ``verity.claims`` ids with the roles and configurations that
+    declare them (the frame-v3 trees' SHA-256 comes from the code, not the site)."""
+    out = []
+    for sch in SCHEMES:
+        binders = [c for c in configurations if c.scheme == sch.id]
+        rests: dict[str, dict[str, Any]] = {}
+        for c in binders:
+            for h in c.hashes:
+                if h.role != _STMT:
+                    continue
+                prop = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
+                for i in ([f"{prop}/{x}" for x in HASH_INSTANCES.get(h.name, ())] if prop else []) or [None]:
+                    e = rests.setdefault(i or h.text(), {"id": i, "unmapped": i is None, "roles": [], "configurations": []})
+                    for key, v in (("roles", _role(h)), ("configurations", slug(c.id))):
+                        if v not in e[key]:
+                            e[key].append(v)
+        full = next((c for c in binders if c.full_relation), binders[0] if binders else None)
+        out.append({"id": sch.id, "name": sch.label, "description": full.commitment.split(";")[0] if full else None,
+                    "assumptions": [e["id"] for e in rests.values() if e["id"]], "assumption_details": list(rests.values()),
+                    "admissible": sch.admissible, "standard": sch.standard, "core": sch.core, "configurations": [slug(c.id) for c in binders]})
+    return out
+
+
 def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Per family and circuit, the lowest-overhead cell whose commitment scheme is built on standard hashes only and whose
     soundness argument uses no algebraic hash (ties to the lower artifact id)."""
@@ -1610,8 +1636,9 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
 def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
     """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
 
-    * ``circuits`` -- one per subcircuit (``Target``): its census hardware line (id, short name, full device, peak),
-      datatype (id and display: common name, then format), tensor-core step, workload, frozen instance set and native N;
+    * ``circuits`` -- one per subcircuit (``Target``), with the subcircuit kind (id, K, accumulation), the silicon target (its
+      exact instruction) and the internal target id as separate fields; its census hardware line (id, short name, full device, peak),
+      datatype (id and display: common name, then format), tensor-core step, census subcircuit, frozen instance set and native N;
     * ``families`` and ``configurations`` -- Table 1: family, variant, commitment scheme, statement, ZK class (short, with the
       text), soundness bits (the weakest whole-proof bound at its cells) and text, hashes with their class and the algebraic
       flag, interaction and assumption texts as lists; ``claims`` (:func:`claims_of`): each property with the assumptions it
@@ -1619,6 +1646,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       as flat id lists, ``params``, and ``unmapped`` the texts with no id yet;
     * ``instances`` -- the primary shape of Table 1's claims (:func:`instances`): one per family and interaction mode
       (``A-interactive``, ``A-fs``, ..., families A-GKR, B-Ligero, C-Flock, D-SP1), claims written out in full;
+    * ``schemes`` -- each commitment scheme's id, name, one-line description and the hash assumptions it rests on, from the
+      configurations that bind it (:func:`scheme_entities`); a result's ``scheme`` is one of these ids;
     * ``best_standard_hash`` -- per family and circuit, the lowest-overhead cell on standard hashes only (:func:`best_standard_hash`);
     * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
       state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
@@ -1644,8 +1673,10 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         circuits.append({"id": target.name, "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
                          "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
                          "dtype": peak.dtype, "dtype_display": dt.display, "display": f"{peak.name} · {dt.display}",
+                         "subcircuit_kind": {"id": census.GEMM_COORDINATE_K1536.kind, "K": census.GEMM_COORDINATE_K1536.K, "accumulate": peak.accumulate},
+                         "silicon_target": {"instruction": target.instruction}, "target": target.name,
                          "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
-                         "workload": census.VU_K1536.id, "instance_set": sets.get(target.name),
+                         "subcircuit": census.GEMM_COORDINATE_K1536.id, "instance_set": sets.get(target.name),
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
                                     "work_model": N["work_model"]}})
@@ -1708,7 +1739,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             results.append({
                 "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "circuit": c.line, "scheme": c.scheme,
                 "family": _fam(col), "instance": next((x["instance"] for x in configurations if x["variant"] == c.configuration), None),
-                "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "workload": census.VU_K1536.id,
+                "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "subcircuit": census.GEMM_COORDINATE_K1536.id,
                 "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
                 "phases": phases, "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
                 "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"], "display": r3["setup"]} if su else None,
@@ -1741,11 +1772,11 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                        "published": published, "banner": PUBLISHED if published else PREVIEW},
         "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
-        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "networks", "workloads", "instance_sets")},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "instance_sets")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("properties", "assumptions", "models")
                                                                                    for i in c[k]})},
         "circuits": circuits,
-        "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
+        "schemes": scheme_entities(V.configurations),
         "families": families,
         "instances": instances(configurations),
         "configurations": configurations,

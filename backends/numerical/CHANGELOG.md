@@ -4,15 +4,25 @@
 
 - `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
   (schema `verity/tables-entities/v1`):
-  - `circuits`: a census hardware id, the dtype, the tensor-core step, the workload, the instance set and the native N;
+  - `circuits`: the census hardware id, the dtype, the tensor-core step, the census subcircuit, the instance set and the
+    native N;
   - `configurations`: Table 1 from the spec's configurations (route (a) and Flock included). Each has its family, variant,
     scheme, ZK class (a short enum with the text), soundness bits, hash classes with the algebraic flag, and interaction
     and assumption texts as lists. Its `claims` list each property (soundness with its bound, ZK, non-interactive or
     designated-verifier, transparent setup) with the assumptions it rests on, each a `verity.claims` id with its role as
     the code declares it (empty where it declares none) and its text. Text with no id yet is kept and flagged `unmapped`;
-  - `backends`: the primary shape of Table 1's claims. Each backend family has a `shared` block of the properties and
-    assumptions all its configurations have, then `variants`. Each variant is a configuration with its interaction
-    `mode` (interactive or non-interactive) and only what it adds;
+  - `instances`: the primary shape of Table 1's claims. There is one per family and interaction mode: `A-interactive`,
+    `A-fs`, `B-interactive`, `B-fs`, `C-interactive` and `D-fs`, where `fs` means Fiat–Shamir. Each has its member
+    configurations and its claims written out in full;
+  - families are named A-GKR, B-Ligero, C-Flock and D-SP1. Each family entity keeps its markdown column header as
+    `column`, and the markdown itself is unchanged;
+  - `circuits`: each has three separate fields: `subcircuit_kind` (`gemm-coordinate`, K = 1536, FP32 accumulation),
+    `silicon_target` (the exact instruction, e.g. `sm90.wgmma.m64n8k32.e4m3`) and `target` (the internal target id). Each
+    also has the census hardware short name (e.g. "H100 SXM5"), the peak, and the datatype display: the common name, then
+    the format, e.g. `FP8 (E4M3)`;
+  - `schemes`: each commitment scheme's id, name, one-line description and the hash assumptions it rests on, taken from
+    the configurations that bind it (frame-v3's SHA-256 trees included). A result's `scheme` is one of these ids;
+  - `best_standard_hash`: for each family and circuit, the lowest-overhead cell on standard hashes only;
   - `results`: one per Table 2 cell, configuration × circuit. Each has its overhead, the phases that sum to it, one-time
     setup kept apart, its state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
   - `tables`: every Table 1, 2 and 3 cell's exact display string, its numeric value, its marks and its footnote text;
