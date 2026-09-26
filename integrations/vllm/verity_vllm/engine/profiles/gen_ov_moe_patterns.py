@@ -166,8 +166,9 @@ class MoEFusedExperts:
     #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
-    #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`)
-    router: str | None = None
+    #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`);
+    #: a class attribute, not a field, so the profile's canonical form (and its fixtures) are unchanged
+    router = None
     #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
     #: its `TpCollective` here so the collective is resolved (and its Compute appended after `MoeSum`) instead of making the whole scope
@@ -419,7 +420,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
 class MoEFusedExpertsOrdered(MoEFusedExperts):
     """`moe_construction = indexed-read-ordered`: `MoEFusedExperts` with the router stated in the kernel's selection order (`MoeRouterTopKOrdered[Norm]_v1`)."""
 
-    router: str | None = "ordered"
+    router = "ordered"
 
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
