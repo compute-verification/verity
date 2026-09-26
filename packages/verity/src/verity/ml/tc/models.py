@@ -67,6 +67,7 @@ __all__ = [
     "GroupSum",
     "HAWKEYE_AMPERE_GROUPSUM_E4M3_V0",
     "HOPPER_BF16_M16N8K16",
+    "HOPPER_BF16_WGMMA_K16",
     "HOPPER_E4M3_K32",
     "HOPPER_E5M2_K32",
     "MODELS",
@@ -257,6 +258,21 @@ HOPPER_BF16_M16N8K16 = GroupSum(
     width=26,
     zero_exponent=-133,
     validated="Hawkeye (H100); re-measured on the mma.sync path by lane tc-probe-fp8 run r20260922-185339-e337 (25,698,304 elements, 0 mismatches) and on the RTX 5090 by lane fp4-5090 run r20260922-182911-1f10 (204,800/204,800)",
+)
+
+#: One accumulator coordinate of Hopper's ``wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16`` (SASS ``HGMMA.64xNx16.F32.BF16``):
+#: HOPPER_BF16_M16N8K16's parameters under the wgmma instruction's own name, so that the two instructions stay separate registry
+#: entries.  The value does not depend on N, on the coordinate's position in the tile, on whether A comes from shared memory or
+#: registers, or on ``scale-d`` (``0`` behaves as ``acc = +0``), so one k16 step is the primitive.
+HOPPER_BF16_WGMMA_K16 = GroupSum(
+    name="hopper_bf16_wgmma_k16",
+    arch="sm_90",
+    dtype="bf16",
+    operand_bits=16,
+    groups=(16,),
+    width=26,
+    zero_exponent=-133,
+    validated="lane HP campaign, H100 80GB HBM3 (sm_90), 2026-09-07: 37,510 tiles x 8,192 outputs x 3 reps",
 )
 
 HOPPER_E4M3_K32 = GroupSum(
@@ -787,6 +803,7 @@ MODELS: dict[str, Model] = {
     m.name: m
     for m in (
         *PIPELINES.values(),
+        HOPPER_BF16_WGMMA_K16,
         ADA_E5M2_M16N8K32,
         HOPPER_E5M2_K32,
         BLACKWELL_SM120_NVF4,
