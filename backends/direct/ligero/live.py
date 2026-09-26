@@ -1595,7 +1595,10 @@ class Session(threading.Thread):
                     self.proofs_seen.add(i)
                     self.n_proof_frames += 1
                     last = self.n_proof_frames >= self.n_proofs
-                    self.checks.append(self.check_pool.submit(self._on_proof_checked, i, meta, pb))
+                    try:
+                        self.checks.append(self.check_pool.submit(self._on_proof_checked, i, meta, pb))
+                    except RuntimeError:              # the pool is shut down: the session already has its verdict
+                        raise LiveError(f"PROOF {i} arrived after the session closed") from None
                 if last:
                     break
             if last or self.n_proofs == 0:
