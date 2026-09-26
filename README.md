@@ -359,12 +359,13 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 
 - **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity.ml.tc.instructions.INSTRUCTIONS`.
 - **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. A backend proves subcircuits, and a benchmark cell measures one.
-- **Instance set**: the concrete inputs for a subcircuit, with their provenance (captured or synthetic). An **instance** is one of them.
+- **Input**: one concrete assignment to a subcircuit's input wires, with the output the chip produced recorded alongside.
+- **Input set**: a batch of inputs for one subcircuit, with their provenance (captured or synthetic).
 - **Commitment scheme**: how serving committed the values being proven, such as frame-v3 rows or `vllm-v1` (`verity.commitments`). Each scheme has a stable id and lists the hash assumptions it rests on.
 - **Statement**: what a backend proves, the full committed relation: a subcircuit plus the commitment scheme that binds its inputs and outputs. A backend lowers a statement into its own circuit. Changing the scheme changes the statement, not the backend.
 - **Backend family**: A-GKR, B-Ligero, C-Flock or D-SP1. The letter is part of the name.
 - **Backend**: an implementation of the Backend interface, that is, one concrete member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir. A composed backend gets its own id: route (a), A-GKR with C-Flock and a link, is `A-route-a`. A scheme is not part of a backend's identity.
-- **Cell**: one benchmark result, a backend × statement × instance set × prover hardware.
+- **Cell**: one benchmark result, a backend × statement × input set × prover hardware.
 - **Replay unit (RU)** and **verification unit (VU)**: roles that sampled proofs assigns to parts of a Program (`protocols/sampled_proofs/PROTOCOL.md`). "Unit" never names a subcircuit.
 
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
@@ -376,6 +377,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | `verity.proofs.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "configured backend" | backend |
+| "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the census's `instance_sets` and `instance_set` ids, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
 | "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a backend and a statement |
 | `verity.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of VU obligations, not a statement in this sense; a kind is a subcircuit |
 
