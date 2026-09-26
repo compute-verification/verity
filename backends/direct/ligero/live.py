@@ -1012,6 +1012,18 @@ def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> 
 # Verifier side: the server
 # ---------------------------------------------------------------------------------------------------------------------
 
+#: ``LIVE_VERIFY_NICE`` (default 10): the niceness of the verifier's ``ligero-verify`` children.  A session's Rust verifications
+#: (one per core) run while its later proofs and openings still arrive; at the default priority they starved the session's
+#: own receive and control threads (lane bligero-real-k: the proof stream reached ~2.5 Gb/s of a probed ~4 Gb/s and opening
+#: round trips reached 100-200 ms), so the network side keeps the CPU first.
+_VERIFY_NICE = int(os.environ.get("LIVE_VERIFY_NICE", "10") or 0)
+
+
+def _verify_nice() -> None:
+    if _VERIFY_NICE:
+        os.nice(_VERIFY_NICE)
+
+
 class RustVerifier:
     """``ligero-verify`` as a subprocess: ``verify`` per (statement, proof, coins) with the verifier's own coins, ``batch``
     on a session directory.  Wall and CPU time of the child are measured with ``wait4``."""
@@ -1029,7 +1041,7 @@ class RustVerifier:
         """Run the child, read its output (stderr drained on a thread so neither pipe blocks), reap it with ``wait4`` for
         its own CPU time (user + system)."""
         t0 = time.perf_counter()
-        p = subprocess.Popen(argv, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(argv, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=_verify_nice)
         err_box: list[bytes] = []
         th = threading.Thread(target=lambda: err_box.append(p.stderr.read()), daemon=True)
         th.start()
