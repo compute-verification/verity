@@ -8,6 +8,7 @@
     "size": 4096,
     "manifest_sha256": "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea",
     "seed": null,
+    "provenance": "captured",
     "sources": [
       {
         "label": "fixtures/bench-instances/v1/manifest.json (sha256), verity_numerical.bench.instances"
@@ -23,6 +24,7 @@
     "size": 4096,
     "manifest_sha256": "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d",
     "seed": 20260922,
+    "provenance": "synthetic",
     "sources": [
       {
         "label": "sha256 of 'fp8-ada synthetic|seed=20260922|n=4096|K=1536' (backends/direct/ligero/fp8/chain.py)"
@@ -38,6 +40,7 @@
     "size": 4096,
     "manifest_sha256": "2a5babca16e82727611ae483a125b8d853e27e4c9deedda7c35927cc1e456869",
     "seed": 20260922,
+    "provenance": "synthetic",
     "sources": [
       {
         "label": "sha256 of 'bf16-hopper synthetic|seed=20260922|n=4096|K=1536' (backends/direct/ligero/relchain.py)"
@@ -53,6 +56,7 @@
     "size": 4096,
     "manifest_sha256": "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc",
     "seed": 20260922,
+    "provenance": "synthetic",
     "sources": [
       {
         "label": "sha256 of 'fp8-hopper synthetic|seed=20260922|n=4096|K=1536' (backends/direct/ligero/relchain.py)"
@@ -68,6 +72,7 @@
     "size": 4096,
     "manifest_sha256": "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a",
     "seed": 20260922,
+    "provenance": "synthetic",
     "sources": [
       {
         "label": "sha256 of the fp4-nvf4 recipe string with its 14 families (backends/direct/ligero/fp4/chain.py)"

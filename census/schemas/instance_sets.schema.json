@@ -15,7 +15,8 @@
       "size",
       "manifest_sha256",
       "seed",
-      "sources"
+      "sources",
+      "provenance"
     ],
     "properties": {
       "id": {
@@ -75,6 +76,13 @@
             }
           }
         }
+      },
+      "provenance": {
+        "enum": [
+          "captured",
+          "synthetic"
+        ],
+        "description": "captured: instances drawn from real model runs (with adversarial corners); synthetic: generated from a seeded recipe"
       }
     }
   }

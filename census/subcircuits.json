@@ -32,6 +32,7 @@
           "datatype": "bf16",
           "semantics": "sm80.mma.m16n8k16.bf16"
         },
+        "fidelity_notes": [],
         "legacy_target": "first-campaign-target/2026-09-21"
       },
       {
@@ -41,6 +42,16 @@
           "datatype": "bf16",
           "semantics": "sm90.mma.m16n8k16.bf16"
         },
+        "fidelity_notes": [
+          {
+            "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma",
+            "sources": [
+              {
+                "label": "docs ontology, Presentation rules (fidelity notes); verity.proofs.target BF16_HOPPER"
+              }
+            ]
+          }
+        ],
         "legacy_target": "bf16-hopper-mma-draft/2026-09-22"
       },
       {
@@ -50,6 +61,7 @@
           "datatype": "e4m3",
           "semantics": "sm90.wgmma.m64n8k32.e4m3"
         },
+        "fidelity_notes": [],
         "legacy_target": "fp8-hopper-wgmma-draft/2026-09-22"
       },
       {
@@ -59,6 +71,7 @@
           "datatype": "e4m3",
           "semantics": "sm89.mma.m16n8k32.e4m3"
         },
+        "fidelity_notes": [],
         "legacy_target": "fp8-ada-mma-draft/2026-09-22"
       },
       {
@@ -68,6 +81,7 @@
           "datatype": "e2m1",
           "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"
         },
+        "fidelity_notes": [],
         "legacy_target": "nvfp4-sm120-mma-draft/2026-09-22"
       }
     ]
