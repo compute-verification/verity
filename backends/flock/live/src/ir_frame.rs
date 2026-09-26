@@ -58,7 +58,7 @@ use crate::{
     ir_tail::Tables,
 };
 
-pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
+pub const TAG: &[u8] = b"verity/flock-ir-frame/v3";
 pub const PT_LOCAL: usize = 16;
 pub const PIN: usize = b3::Z_CONST_POS;
 const WORD: usize = 128;

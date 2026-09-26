@@ -1,4 +1,4 @@
-"""frame-v3 binding of a lowered IR template: the statement ``verity/flock-ir-frame/v2`` (``live/src/ir_frame.rs``).
+"""frame-v3 binding of a lowered IR template: the statement ``verity/flock-ir-frame/v3`` (``live/src/ir_frame.rs``).
 
 Every input port of every instance is one frame-v3 row leaf, ``blake3-keyed/row/v2`` under the x-row key, one tree per port
 under its own domain; every output word is one ``u16`` word leaf, one tree per output port: the GEMM cells' x, W and y. The
