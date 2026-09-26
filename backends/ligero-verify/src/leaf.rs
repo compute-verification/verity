@@ -681,7 +681,42 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "8330132438e6c6adbb25a1371afb3d0dcf580af3d7a5ce53ecd141c983830479"),
     // gated 2048 VUs (7 honest sub-batches) + 86 negatives, 0 failures, on vy-b-ligero-vllm-v1-h100 r20260925-181202-65f3
     ("fp8-hopper-x4", "vllm-v1", "69054deb439010a356cb4de6873b2d8d7b0e9a27125119d51062c441238a2f36",
-     "23405e55ff9eadc12d638d9ab2555e59c6f049e9bcfa669dcc5cd953779da3d8"),
+     "23405e55ff9eadc12d638d9ab2555e59c6f049e9bcfa669dcc5cd953779da3d8"),    // lane bligero-real-k: the x4 folds at vLLM's reduction lengths (relations._at_k), `hashchain.compose(<fold>-k<K>, leaf)`;
+    // BLAKE3 frames sized to the row (4 / 16 CV slots for BF16 K = 2048 / 8192, 8 for E4M3 K = 8192), SHA-256 unchanged.
+    // Digests of the compiled systems (`ligero-verify system-digest` on `system_bytes(compose(...).sys)`, lane VM, torch-free
+    // compile); gadget gate on the pod: see each row's run in the lane report
+    ("bf16-ampere-x4-k2048", "blake3-xob", "b5ee1ee0b6645eb83d5f973f019c216bdfd0907560f7ab3c3d623447b944c546",
+     "3b9f7d64a550c86efe1be8bc0aeb71db57835e91631b630bfb35c38d4de0f626"),
+    ("bf16-ampere-x4-k2048", "sha256", "232769b4d5b3b8f8a17dbcd887b6332b22642b6722ff086308d1c829b84f7b7f",
+     "b318064545e39fa11a82d3c7e261eff25d63a2b18b5aad2ead7061ed0f4a1612"),
+    ("bf16-ampere-x4-k8192", "blake3-xob", "467774bd04f30dd0bb0edc71da233401967e701494fb73177047e06bb8937b02",
+     "4d0656ccf55389f53e7d3ee7d9beda478fa0368ec984cc7b669ee30dd5631b8b"),
+    ("bf16-ampere-x4-k8192", "sha256", "66f7b5f7dbfaf69875a8fa76c94d5b2a9728bd7262fdf2f8cd3131e1440086ce",
+     "1ebba29494e191fceeb5a7aedddb249d960a062475d507ca75cf74ff827f31f1"),
+    ("bf16-hopper-x4-k2048", "blake3-xob", "97e39093e76e8fabf8e6baa27bb27bc233bbf68676668e3a26399c988545596c",
+     "48a1f6bd689b8d3fc789c2f557bc502961952925eafb7baf4eba7e4b9f30398a"),
+    ("bf16-hopper-x4-k2048", "sha256", "0dff3d58df9d5bb258265186d5875a3e003322063c9744ae3ae6277954416250",
+     "8399ac852779de99f1a1d922e403ed980159d4a3882ae5cd689568ac01f36172"),
+    ("bf16-hopper-x4-k8192", "blake3-xob", "58c3713e8c21bc602d8bf5c3ed53c043fde0c621633efe5041f0ca0bfcf7ee7d",
+     "4057035fc39d84252fa19ba660421b95c5e7de8461c8fd4bc9ee92c002e0e386"),
+    ("bf16-hopper-x4-k8192", "sha256", "de848ba909129bf8d21e8328d3aca3bc93b744e6ddf8d7df5182d75954424109",
+     "0e88fc9a3b8a145764f7fe2471cd7c72e86467f14c9cfec5cb2a0af163bf983c"),
+    ("fp8-ada-x4-k2048", "blake3-xob", "3f1e58f8c4619826b8d9b856d71f6fc9e4587955735b874703032a5d37380c6d",
+     "b1e6f4fe9578cb60a520266d151e876a21b7811bc67c8a0a0a252b69ca080195"),
+    ("fp8-ada-x4-k2048", "sha256", "a3dfdb341bdbf5f1fbe6931f06ea9d7ae625177432fa5a239f48d6e7b7ce37c6",
+     "953e5dc516306bb200a149857d9d08e131315f1bd303a8153fd0ee08479fb4d1"),
+    ("fp8-ada-x4-k8192", "blake3-xob", "103304c5576050eebb276067b999f0bfa72998b6e84e9553626c264ae1be05db",
+     "987ccd8060988fd7835dc76bd3daf8a6e3cd6e0b34fff4d770376bbc38697e1f"),
+    ("fp8-ada-x4-k8192", "sha256", "8219187a7d2740d37201b7969f57993341afad41bdf4115a16f2cc95ded8ee53",
+     "bec158bb520caa606351ce4254c5ff87f486552cab5b3b35fb74e7c57f36a1b4"),
+    ("fp8-hopper-x4-k2048", "blake3-xob", "b6baf112e5c6167ae78274d09a5d6b235c614d06c94f83bc33c8751a86ced044",
+     "2ac49ed575cf6c24043ca8aa056d846c553af34ce7c8549ecdb614f724591b4e"),
+    ("fp8-hopper-x4-k2048", "sha256", "f8c4a2d773133725d0fc21721c10109d475f5d38f851b403fc2d203f3b706bd6",
+     "6a1a3963a5d2ef07a45a1b75368ca97eb786a1dc8034232695577d49666c0207"),
+    ("fp8-hopper-x4-k8192", "blake3-xob", "4f27ff21174ef25d97f8c0e0888b102fe1a7e97cc990c8f338b73d3a52f1d008",
+     "c60bc51fc6f5c6d9d131006eeada3ab1dcd2d222e6f12f2a59ee71407e984193"),
+    ("fp8-hopper-x4-k8192", "sha256", "6058692e9ce6820b3fffa4558831076ed59866759de2d865f899eea97a668ec2",
+     "8eb1dac93fa528313ba46af8d59c869646a164c1cda0447503c6738aa2199996"),
 ];
 
 pub fn names() -> Vec<&'static str> {

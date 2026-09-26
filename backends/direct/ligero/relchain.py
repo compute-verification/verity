@@ -2435,6 +2435,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     )
     if hashed:
         fp["hash"] = R.leaf.hash_name
+        fp["statement_relation"] = R.relation
         fp["leaf"] = {"scheme": R.leaf.name, "suffix": R.leaf_name, "schema": R.leaf.schema, "params_sha256": R.leaf.params_sha256,
                       "digest_elems": R.leaf.digest_elems, "digest_bytes_per_row": len(R.leaf.leaf_bytes(np.asarray(R.digests["a"])[0])),
                       "assumption": R.leaf.assumption, "privacy_note": leaf_privacy_note(R.leaf)}

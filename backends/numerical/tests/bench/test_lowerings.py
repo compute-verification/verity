@@ -35,7 +35,10 @@ CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-key
          ("B-Ligero", "gemm-coordinate/k1536/sm90-wgmma-e4m3", "frame-v3/blake3-keyed", "fp8-hopper+blake3"),
          ("B-Ligero", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+sha256"),
          ("A-GKR", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere+blake3"),
-         ("D-SP1", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+frame-v3")]
+         ("D-SP1", "gemm-coordinate/k1536/sm80-mma-bf16", "frame-v3/sha-256", "bf16-ampere+frame-v3"),
+         ("B-Ligero", "gemm-coordinate/k2048/sm80-mma-bf16", "frame-v3/blake3-keyed", "bf16-ampere-x4-k2048+blake3-xob"),
+         ("B-Ligero", "gemm-coordinate/k8192/sm90-wgmma-bf16", "frame-v3/sha-256", "bf16-hopper-x4-k8192+sha256"),
+         ("B-Ligero", "gemm-coordinate/k8192/sm89-mma-e4m3", "frame-v3/blake3-keyed", "fp8-ada-x4-k8192+blake3-xob")]
 
 
 @pytest.mark.parametrize("family,sid,scheme,relation", CELLS)
@@ -54,7 +57,10 @@ def test_relation_names_are_the_backends_own():
     sys.path.insert(0, str(L.REPO / "backends" / "direct"))
     from ligero.relations import RELATIONS
 
-    assert set(L.registry("B-Ligero").module("gemm-coordinate").RELATIONS.values()) <= set(RELATIONS)
+    mod = L.registry("B-Ligero").module("gemm-coordinate")
+    assert set(mod.RELATIONS.values()) <= set(RELATIONS)
+    assert {f"{b}-x4-k{k}" for b in mod.REAL_K_RELATIONS.values() for k in mod.REAL_KS} <= set(RELATIONS)
+    assert "vllm-v1" in L.registry("B-Ligero").supports(TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16"), "vllm-v1/sha-256")
 
 
 def test_real_k_and_other_schemes_are_not_supported():

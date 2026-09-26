@@ -314,3 +314,17 @@ def test_challenge_stream_refuses_out_of_order_rounds(server):
     sess2._send(live.K_MSG, live.struct.pack("<III", 1, 0, 1) + b"L" + b"uncommitted batch")
     with pytest.raises(live.LiveError):
         sess2.round_future(1, 0).result(timeout=10)
+
+
+def test_probe_pings_the_open_connection_and_idle_exit(server, tmp_path):
+    """``live probe --pings``: round trips on the connection the HELLO opened (the cell's open-connection RTT), written with the
+    one-flow bandwidth to ``--out``; ``serve --idle-exit`` never fires before a session has finished."""
+    import argparse
+    import json
+    srv, url, _ = server
+    out = tmp_path / "probe.json"
+    assert live.cmd_probe(argparse.Namespace(verifier=url, mb=0.25, repeat=2, note="t", pings=7, out=str(out))) == 0
+    d = json.loads(out.read_text())
+    assert len(d["ping_ms"]) == 7 and d["ping_ms_median"] > 0 and "open connection" in d["ping_method"] and d["mbps_median"] > 0
+    quiet = live.Server("127.0.0.1:0", tmp_path / "q", srv.rust, jobs=1, log=lambda m: None, idle_exit=0.0)
+    assert not quiet._idle()
