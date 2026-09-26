@@ -1460,3 +1460,10 @@ def test_a_captured_vu_set_matches_its_statement_by_ir_definition_and_statics() 
     assert not V._captured_set_is({"relation": {"definition": "RoPE_v1", "statics": {"D": 128}}}, "rope-head/d64/neox-bf16")
     rms = {"relation": {"definition": "RMSNormFusedCuda_v2", "statics": {"N": 2048, "EPS": '{"f64":"0x1p-17"}'}}}
     assert V._captured_set_is(rms, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16") and not V._captured_set_is(rms, "rmsnorm-triton/n2048-eps1e-05/bf16")
+
+
+def test_a_gemm_result_proved_on_an_l40s_moves_to_the_l40s_line() -> None:
+    on = lambda gpu: {"workload_fingerprint": {"profile": FIRST.name, "hardware": {"gpu": {"name": gpu}}}}  # noqa: E731
+    assert V.rehome(on("NVIDIA L40S"), FIRST) is V.L40S_BF16                     # prover hardware is its own axis (ontology)
+    assert V.rehome(on("NVIDIA A100-SXM4-80GB"), FIRST) is FIRST                  # its own device: stays
+    assert V.rehome(on("NVIDIA B200"), FIRST) is FIRST                            # no line for that device: stays (then K)
