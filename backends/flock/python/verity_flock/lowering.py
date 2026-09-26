@@ -6,7 +6,8 @@ row i is ``(A_i . z)(B_i . z) = z_i``. Column layout (``flock-unit-io/v1``):
 ~~~text
 [0, 256)      x operand bytes of the unit (k words of `bits` bits, word j at bits [j*bits, (j+1)*bits), LSB first)
 [256, 512)    W operand bytes, the same way
-[512, 544)    accumulator in (FP32 word, LSB first); [544, 640) forced zero
+[512, 544)    accumulator in (FP32 word, LSB first)
+[544, 608)    fp4-nvf4 only: the x then W UE4M3 scale bytes (4 each, LSB first); the rest of [544, 640) forced zero
 [640, ...)    live ANDs in creation order, then one row per assertion (L + z_j) * 1 = z_j
 pad to 128    forced-zero rows
 c_out word    32 copy rows of the output FP32 word, then 96 forced-zero rows
@@ -28,6 +29,7 @@ import random
 from dataclasses import dataclass
 
 from . import unit as U
+from . import unit_fp4
 
 FORMAT = "flock-unit-io/v1"
 K_LOG = 13
@@ -58,6 +60,8 @@ PIPES = {
     "fp8-ada": Pipe("fp8-ada", U.E4M3, (16, 16), 14, -139, False, "ADA_E4M3_M16N8K32"),
     "fp8-hopper": Pipe("fp8-hopper", U.E4M3, (32,), 14, -139, False, "HOPPER_E4M3_K32"),
     "bf16-ampere": Pipe("bf16-ampere", U.BF16, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16"),
+    # BlockScaledAlignAdd (unit_fp4): groups, width and floor are the model's own (frac_bits 27, acc_window 36).
+    "fp4-nvf4": Pipe("fp4-nvf4", U.E2M1, (16, 16, 16, 16), 27, -174, False, "BLACKWELL_SM120_NVF4"),
 }
 
 #: sha256 of :func:`netlist` per relation: the lowering version the verifier re-derives and compares.
@@ -66,19 +70,20 @@ PINS = {
     "fp8-ada": "e66262a08816f03d7dba67860c68b3993adc9ca83f1746d15137b0b757599a7c",
     "fp8-hopper": "904ca664958e3144ec0af862eea3d2124898289f23ea1d065271a27a00539654",
     "bf16-ampere": "e97ecb9ef01d653b550ebe947cc12d92c60392613457b560246b99aff4922247",
+    "fp4-nvf4": "fb52a87c01a8a41f0e3460a10c62dcac4c346eb0c4540a86e0921845738666b3",
 }
 
 
 def _layout(pipe: Pipe):
-    C = U.unit(pipe.fmt, pipe.groups, pipe.width, pipe.floor, epilogue=pipe.epilogue)
+    C = unit_fp4.unit() if pipe.fmt is U.E2M1 else U.unit(pipe.fmt, pipe.groups, pipe.width, pipe.floor, epilogue=pipe.epilogue)
     live = C.live()
-    ins = [w for nm in ("x", "w", "c") for w in C.inputs[nm]]
-    assert len(ins) == 544, len(ins)
+    ins = [w for nm in ("x", "w", "c", "sx", "sw") if nm in C.inputs for w in C.inputs[nm]]
+    assert len(ins) in (544, 608), len(ins)
     col = {}
     for w in ins:
         col[next(iter(w.s))] = len(col)
-    rows_a: list[list] = [[i] for i in range(544)]
-    rows_b: list[list] = [[i] for i in range(544)]
+    rows_a: list[list] = [[i] for i in range(len(ins))]
+    rows_b: list[list] = [[i] for i in range(len(ins))]
     zero = lambda: (rows_a.append([]), rows_b.append([]))  # noqa: E731
     while len(rows_a) < 640:
         zero()
@@ -137,7 +142,7 @@ def netlist(relation: str) -> str:
     """The lowered unit of ``relation`` as ``flock-unit-io/v1`` text."""
     pipe = PIPES[relation]
     _, ra, rb, const, outs = _layout(pipe)
-    head = [FORMAT, relation, len(ra), const, 544, len(IN_COLS), *IN_COLS, len(outs), *outs]
+    head = [FORMAT, relation, len(ra), const, 608 if pipe.fmt is U.E2M1 else 544, len(IN_COLS), *IN_COLS, len(outs), *outs]
     lines = [" ".join(map(str, head))]
     for a, b in zip(ra, rb):
         lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
@@ -148,7 +153,7 @@ def digest(relation: str) -> str:
     return hashlib.sha256(netlist(relation).encode()).hexdigest()
 
 
-def evaluate(relation: str, x: list[int], w: list[int], c: int) -> tuple[int, int | None, bool]:
+def evaluate(relation: str, x: list[int], w: list[int], c: int, sx: list[int] = (), sw: list[int] = ()) -> tuple[int, int | None, bool]:
     """Run the lowered rows on one unit: ``(c_out, y16 or None, every row satisfied)`` (a failed assertion leaves a row
     unsatisfiable, so it shows as False)."""
     pipe = PIPES[relation]
@@ -158,8 +163,11 @@ def evaluate(relation: str, x: list[int], w: list[int], c: int) -> tuple[int, in
         for v in arr:
             bits += [(v >> i) & 1 for i in range(pipe.word_bits)]
     bits += [(c >> i) & 1 for i in range(32)]
+    for arr in (sx, sw):
+        for v in arr:
+            bits += [(v >> i) & 1 for i in range(8)]
     z = [0] * len(ra)
-    z[:544] = bits
+    z[:len(bits)] = bits
     z[const] = 1
 
     def ev(r):
@@ -189,6 +197,13 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     pipe = PIPES[relation]
     model = getattr(models, pipe.model)
     rng = random.Random(seed)
+    if pipe.fmt is U.E2M1:
+        from .unit_fp4_check import cases
+        bad = 0
+        for c, x, w, sx, sw in cases(rng, n):
+            got, _, ok = evaluate(relation, x, w, c, sx, sw)
+            bad += not ok or got != model.step_scaled(c, x, w, sx, sw)
+        return bad
     bits = pipe.word_bits
     finite = (lambda w: (w >> 7) & 0xFF != 0xFF) if bits == 16 else (lambda w: w & 0x7F != 0x7F)
     bad = 0
