@@ -259,6 +259,11 @@ def write(pl: Plan, input_set, lo: int, hi: int, path, cuts: np.ndarray | None =
     return head
 
 
+def serve_args(path) -> list[str]:
+    """Extra ``flock-ir-frame serve`` arguments for a staged file: none for this statement."""
+    return []
+
+
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, k_max: int = K_MAX) -> Path:
     """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the unit netlist as ``<out_dir>/net.txt``: the
     verifier's own staging (red-team-flock-2 IR2)."""

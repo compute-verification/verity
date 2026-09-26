@@ -22,6 +22,14 @@
 //! each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
 //! words, against the frame-v3 roots it recomputes. An empty run slot (padding) hashes `nb` zero blocks from the key at
 //! counter 0, flags KEYED_HASH | CHUNK_START (first) | CHUNK_END (last).
+//!
+//! `verity/flock-ir-sampling/v1` (format `flock-ir-sampling/v1`, lane flock-ir-sampling; `verity_flock.ir_sampling` stages
+//! it) is this layout for `GumbelTopPTokenSelect_v1{V}`'s lanes, with four differences: a row's last chunk may be shorter
+//! (whole blocks: `chunk_blocks`, its CHUNK_END at its own last block); the scalar operands are public ports, their frame-v3
+//! row digests (keyed BLAKE3 of their 32-bit words) computed natively; a unit returns no output word (the token is a cut word,
+//! `out_cut`, committed as a `u64` word leaf); and every cut word no unit computes is native (the netlist's CUT line names
+//! the statement): the verifier checks the row words natively here ([`check_sampling_words`]) and the lane words (top-p keep
+//! bits, Gumbel noise) with `verity_flock.ir_sampling.check_native` before any session (`serve --native-checked`).
 
 use std::{
     array::from_fn,
@@ -49,6 +57,7 @@ use crate::{
 };
 
 pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
+pub const TAG_SAMPLING: &[u8] = b"verity/flock-ir-sampling/v1";
 pub const PT_LOCAL: usize = 16;
 pub const PIN: usize = b3::Z_CONST_POS;
 const WORD: usize = 128;
@@ -86,6 +95,15 @@ pub struct Layout {
     pub ret_words: usize,
     pub ret_cols: Vec<usize>,
     pub out_leaf: Vec<Vec<usize>>,
+    /// blocks in each chunk of the row (sampling; empty: every chunk `chunk_nb`)
+    pub chunk_blocks: Vec<usize>,
+}
+
+impl Layout {
+    /// Blocks in chunk `c` of a row.
+    pub fn blocks_in(&self, c: usize) -> usize {
+        self.chunk_blocks.get(c).copied().unwrap_or(self.chunk_nb)
+    }
 }
 
 /// A run slot's contents: (instance, input port, chunk index in the row, run index in the chunk).
@@ -108,8 +126,17 @@ pub struct FrameInstances {
     /// every instance's cut words (`cut_words` each)
     pub cuts: Vec<u32>,
     pub key: [u8; 32],
-    /// sha256 of every public byte (header, row digests, output words, cut words): what Σ binds; the rows are not in it.
+    /// sha256 of every public byte (header, row digests, output words, public port words, cut words): what Σ binds; the rows
+    /// are not in it.
     pub public_sha256: [u8; 32],
+    /// a `flock-ir-sampling/v1` file
+    pub sampling: bool,
+    /// public ports: (name, 32-bit words per instance)
+    pub public_ports: Vec<(String, usize)>,
+    /// every instance's public port words (instance-major, ports in order)
+    pub public: Vec<u32>,
+    /// output ports whose one word per instance is a cut word: (name, cut word)
+    pub out_cut: Vec<(String, usize)>,
 }
 
 impl FrameInstances {
@@ -117,8 +144,12 @@ impl FrameInstances {
         let b = std::fs::read(path).map_err(|e| format!("instances: {e}"))?;
         let nl = b.iter().position(|&c| c == b'\n').ok_or("no header line")?;
         let header: Value = serde_json::from_slice(&b[..nl]).map_err(|e| format!("header: {e}"))?;
-        if header["format"] != "flock-ir-frame/v2" {
-            return Err("not a flock-ir-frame/v2 instance file".into());
+        let sampling = header["format"] == "flock-ir-sampling/v1";
+        if header["format"] != "flock-ir-frame/v2" && !sampling {
+            return Err("not a flock-ir-frame/v2 or flock-ir-sampling/v1 instance file".into());
+        }
+        if sampling && header["statement"] != "verity/flock-ir-sampling/v1" {
+            return Err("a flock-ir-sampling/v1 file names another statement".into());
         }
         let (n, upi, units) = (g_usize(&header, "instances")?, g_usize(&header, "units_per_instance")?, g_usize(&header, "units")?);
         if units != n * upi {
@@ -149,7 +180,12 @@ impl FrameInstances {
             ret_words: l["ret_group"][1].as_u64().ok_or("no ret_group")? as usize,
             ret_cols: usizes(&l["ret_cols"]),
             out_leaf: l["out_leaf"].as_array().ok_or("no out_leaf")?.iter().map(usizes).collect(),
+            chunk_blocks: if sampling { usizes(&l["chunk_blocks"]) } else { vec![] },
         };
+        let named = |k: &str| -> Vec<(String, usize)> {
+            header[k].as_array().map(|a| a.iter().map(|p| (p[0].as_str().unwrap_or("").to_string(), p[1].as_u64().unwrap_or(0) as usize)).collect()).unwrap_or_default()
+        };
+        let (public_ports, out_cut) = if sampling { (named("public_ports"), named("out_cut")) } else { (vec![], vec![]) };
         let blocks = header["blocks"].as_array().ok_or("no blocks")?.iter().map(|bl| {
             let chunks = bl[0].as_array().map(|a| a.iter().map(|c| c.as_array().map(|x| {
                 let f = |k: usize| x.get(k).and_then(|v| v.as_u64()).unwrap_or(u64::MAX) as usize;
@@ -170,8 +206,13 @@ impl FrameInstances {
         let digests: Vec<[u8; 32]> = take(32 * n * in_ports.len())?.chunks(32).map(|c| c.try_into().unwrap()).collect();
         let outputs: Vec<F128> = take(16 * units * lay.ret_words)?.chunks(16)
             .map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect();
+        let pw: usize = public_ports.iter().map(|p| p.1).sum();
+        let public: Vec<u32> = take(4 * n * pw)?.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect();
         let kc = g_usize(&header, "cut_words").unwrap_or(0);
         let cuts: Vec<u32> = take(4 * n * kc)?.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect();
+        if out_cut.iter().any(|o| o.1 >= kc) {
+            return Err("an output port names a cut word the file does not have".into());
+        }
         if at != b.len() {
             return Err("instance file length".into());
         }
@@ -181,7 +222,7 @@ impl FrameInstances {
         h.update(&b[pub_start..]);
         let public_sha256: [u8; 32] = h.finalize().into();
         Ok(FrameInstances { unit: header["unit"].as_str().unwrap_or("").to_string(), header, n, upi, units, in_ports, out_ports, lay, blocks, rows,
-                            digests, outputs, cuts, key, public_sha256 })
+                            digests, outputs, cuts, key, public_sha256, sampling, public_ports, public, out_cut })
     }
 
     pub fn row_bytes(&self) -> usize {
@@ -206,6 +247,29 @@ impl FrameInstances {
     pub fn chunks_of(&self, p: usize) -> usize {
         (2 * self.in_ports[p].1).div_ceil(1024)
     }
+
+    /// Instance `i`'s words of public port `p`.
+    pub fn public_words(&self, i: usize, p: usize) -> &[u32] {
+        let per: usize = self.public_ports.iter().map(|q| q.1).sum();
+        let off: usize = self.public_ports[..p].iter().map(|q| q.1).sum();
+        &self.public[i * per + off..i * per + off + self.public_ports[p].1]
+    }
+
+    /// Instance `i`'s cut words.
+    pub fn cut_words_of(&self, i: usize) -> &[u32] {
+        let kc = self.cuts.len() / self.n.max(1);
+        &self.cuts[i * kc..(i + 1) * kc]
+    }
+}
+
+/// The keyed BLAKE3 digest of a message of at most one block (a public port's row: its words little-endian).
+pub fn blake3_keyed_short(key: &[u8; 32], msg: &[u8]) -> [u8; 32] {
+    assert!(msg.len() <= 64, "a one-block message");
+    let mut block = [0u8; 64];
+    block[..msg.len()].copy_from_slice(msg);
+    let words: [u32; 16] = from_fn(|w| u32::from_le_bytes(block[4 * w..4 * w + 4].try_into().unwrap()));
+    let out = blake3_compress(&key_words(key), &words, 0, msg.len() as u32, KEYED_HASH | CHUNK_START | CHUNK_END | ROOT);
+    from_fn(|k| (out[k / 4] >> (8 * (k % 4))) as u8)
 }
 
 fn hexb(s: &str) -> Result<Vec<u8>, String> {
@@ -282,6 +346,36 @@ pub fn check_roots(inst: &FrameInstances) -> Result<(), String> {
             return Err(format!("input port {name}: the row digests do not hash to the header's frame-v3 root"));
         }
     }
+    for (p, (name, _)) in inst.public_ports.iter().enumerate() {
+        let dom = get("domain_ids", name)?;
+        let schema = fv["schemas"][name].as_str().ok_or("schema")?;
+        if schema != "blake3-keyed/row/v2" {
+            return Err(format!("public port {name}: schema {schema}, not blake3-keyed/row/v2"));
+        }
+        let leaves: Vec<[u8; 32]> = (0..inst.n).into_par_iter().map(|i| {
+            let bytes: Vec<u8> = inst.public_words(i, p).iter().flat_map(|w| w.to_le_bytes()).collect();
+            fv3_hash(b"leaf", &[&dom, &uint(i), &uint(i), schema.as_bytes(), &blake3_keyed_short(&inst.key, &bytes)])
+        }).collect();
+        if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
+            return Err(format!("public port {name}: its words do not hash to the header's frame-v3 root"));
+        }
+    }
+    for (name, k) in &inst.out_cut {
+        let dom = get("domain_ids", name)?;
+        if fv["schemas"][name] != "u64" {
+            return Err(format!("output port {name}: not u64 word leaves"));
+        }
+        let leaves: Vec<[u8; 32]> = (0..inst.n).into_par_iter().map(|r| {
+            let v = inst.cut_words_of(r)[*k] as u64;
+            fv3_hash(b"leaf", &[&dom, &uint(r), &uint(r), b"u64", &v.to_be_bytes()])
+        }).collect();
+        if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
+            return Err(format!("output port {name}: its cut words do not hash to the header's frame-v3 root"));
+        }
+    }
+    if inst.sampling {
+        return Ok(());
+    }
     let outs = instance_outputs(inst)?;
     for (p, (name, _)) in inst.out_ports.iter().enumerate() {
         let dom = get("domain_ids", name)?;
@@ -302,12 +396,19 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
         return Err("the run and component counts are not a flock-ir-frame/v2 layout".into());
     }
     for (p, (name, w)) in inst.in_ports.iter().enumerate() {
-        let full = if inst.chunks_of(p) == 1 { 2 * w == 64 * lay.chunk_nb } else { (2 * w) % 1024 == 0 && lay.chunk_nb == 16 };
+        let full = if inst.sampling {
+            let want: Vec<usize> = (0..inst.chunks_of(p)).map(|c| (2 * w - 1024 * c).min(1024) / 64).collect();
+            inst.in_ports.len() == 1 && (2 * w) % 64 == 0 && lay.chunk_nb == 16 && lay.chunk_blocks == want && want.iter().all(|b| b % lay.nb == 0)
+        } else if inst.chunks_of(p) == 1 {
+            2 * w == 64 * lay.chunk_nb
+        } else {
+            (2 * w) % 1024 == 0 && lay.chunk_nb == 16
+        };
         if !full {
             return Err(format!("input port {name}: its {}-byte rows are not whole chunks of {} blocks", 2 * w, lay.chunk_nb));
         }
     }
-    let runs = lay.chunk_nb / lay.nb;
+    let runs = |c: usize| lay.blocks_in(c) / lay.nb;
     let mut seen_c = BTreeSet::new();
     let mut seen_u = BTreeSet::new();
     for (b, (chunks, units)) in inst.blocks.iter().enumerate() {
@@ -332,13 +433,13 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
         }
         for (q, c) in chunks.iter().enumerate() {
             if let Some((i, p, ci, r)) = c {
-                if *p >= inst.in_ports.len() || *ci >= inst.chunks_of(*p) || *i >= inst.n || *r >= runs || !seen_c.insert((*i, *p, *ci, *r)) {
+                if *p >= inst.in_ports.len() || *ci >= inst.chunks_of(*p) || *i >= inst.n || *r >= runs(*ci) || !seen_c.insert((*i, *p, *ci, *r)) {
                     return Err(format!("block {b}: run slot {q} holds a run outside the rows or twice"));
                 }
             }
         }
     }
-    let want_c: usize = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p)).sum::<usize>() * inst.n * runs;
+    let want_c: usize = (0..inst.in_ports.len()).map(|p| (0..inst.chunks_of(p)).map(runs).sum::<usize>()).sum::<usize>() * inst.n;
     if seen_c.len() != want_c || seen_u.len() != inst.units {
         return Err("the blocks do not hold every run of every row chunk and every unit".into());
     }
@@ -351,6 +452,12 @@ pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result
     if cm.words == 0 {
         return Ok(());
     }
+    if cm.native != inst.sampling {
+        return Err("native cut words belong to verity/flock-ir-sampling/v1 files only".into());
+    }
+    if cm.native {
+        return check_sampling_words(inst, t);
+    }
     let produced: BTreeSet<usize> = cm.unit_out.iter().flatten().map(|p| p.1).collect();
     for i in 0..inst.n {
         let file = &inst.cuts[i * cm.words..(i + 1) * cm.words];
@@ -358,6 +465,23 @@ pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result
         crate::ir_tail::eval(&cm.tail, &mut slots, t);
         if let Some(k) = (0..cm.words).find(|&k| slots[k] != Some(file[k])) {
             return Err(format!("instance {i}: cut word {k} is not what the tail computes from the units' words"));
+        }
+    }
+    Ok(())
+}
+
+/// The sampling statement's row words, natively: cut words 0..7 are `temp` (the public `in4` word), `DivFullRcp(temp)`,
+/// `temp in {0, 1}`, `temp != 0` (IEEE: ±0 equal) and the initial carry (0, 0, 0). The lane words the units do not compute
+/// (keep bits, noise) are `verity_flock.ir_sampling.check_native`'s.
+pub fn check_sampling_words(inst: &FrameInstances, t: &Tables) -> Result<(), String> {
+    let p = inst.public_ports.iter().position(|q| q.0 == "in4" && q.1 == 1).ok_or("no public temperature word (in4)")?;
+    for i in 0..inst.n {
+        let temp = inst.public_words(i, p)[0];
+        let zero = temp & 0x7FFF_FFFF == 0;
+        let rcp = crate::ir_tail::apply(crate::ir_tail::Prim::DivFullRcp, &[temp], t);
+        let want = [temp, rcp, (zero || temp == 0x3F80_0000) as u32, (!zero) as u32, 0, 0, 0];
+        if inst.cut_words_of(i).get(..7) != Some(&want[..]) {
+            return Err(format!("instance {i}: the row words are not what the public temperature gives"));
         }
     }
     Ok(())
@@ -516,7 +640,7 @@ impl FrameStmt {
         let lay = inst.lay.clone();
         let pow2 = |x: usize| x.is_power_of_two();
         if !(pow2(lay.nb) && pow2(lay.chunks) && lay.comp_slots == lay.chunks * lay.nb && pow2(lay.units) && lay.unit_pos0 % lay.units == 0
-            && lay.chunk_nb % lay.nb == 0 && lay.unit_log == net.unit_log && lay.comp_slots << b3::K_LOG <= lay.unit_pos0 << lay.unit_log
+            && lay.chunk_nb % lay.nb == 0 && lay.chunk_blocks.iter().all(|b| b % lay.nb == 0) && lay.unit_log == net.unit_log && lay.comp_slots << b3::K_LOG <= lay.unit_pos0 << lay.unit_log
             && (lay.unit_pos0 + lay.units) << lay.unit_log <= 1 << lay.k_log && lay.wiring.len() == lay.units
             && lay.wiring.iter().all(|w| w.len() == lay.leaf_cols.len()))
         {
@@ -525,16 +649,22 @@ impl FrameStmt {
         if lay.wiring.iter().flatten().any(|&(q, off)| q >= lay.chunks || off % 2 == 1 || off >= 64 * lay.nb) {
             return Err("a unit reads outside its block's runs".into());
         }
-        if net.out_groups.is_empty() || net.out_groups[0].col != lay.ret_col || net.out_groups[0].words != lay.ret_words {
+        let ret = lay.ret_words > 0;
+        if ret == inst.sampling || net.out_groups.is_empty() || ret && (net.out_groups[0].col != lay.ret_col || net.out_groups[0].words != lay.ret_words) {
             return Err("the returned-output group is not the netlist's first output group".into());
         }
         let cm = cut_map_of(&net, &inst.header, inst.units)?;
+        if cm.native != inst.sampling || inst.sampling && cm.words == 0 {
+            return Err("native cut words belong to verity/flock-ir-sampling/v1 files, and such a file has them".into());
+        }
         let groups = 1 + (cm.words > 0) as usize;
         let leaf_cols: Vec<usize> = {
             let g = &net.in_groups[0];
             g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some(c) }).collect()
         };
-        if leaf_cols != lay.leaf_cols || net.in_groups[0].bits.iter().any(|&w| w != 16) || net.in_groups.len() != groups || net.out_groups.len() != groups {
+        if leaf_cols != lay.leaf_cols || net.in_groups[0].bits.iter().any(|&w| w != 16) || net.in_groups.len() != groups
+            || net.out_groups.len() != ret as usize + (cm.words > 0) as usize
+        {
             return Err("the unit's port groups are not a leaf input group of 16-bit ports and a returned-output group (and a cut group each)".into());
         }
         let blocks_real = inst.blocks.len();
@@ -562,11 +692,13 @@ impl FrameStmt {
             mk(Region::Params, [bits(0, 7), bits(b3::K_LOG, lc)].concat(), b3::T_LO_BASE as u32),
             mk(Region::CvIn, [bits(0, 8), bits(b3::K_LOG + lnb, lq)].concat(), b3::CV_BASE as u32),
             mk(Region::Cv, [bits(0, 8), bits(b3::K_LOG + lnb, lq)].concat(), (b3::OUT_LO_BASE as u32) | (((lay.nb - 1) as u32) << b3::K_LOG)),
-            unit_group(Region::Out, &net.out_groups[0]),
         ];
+        if ret {
+            regions.push(unit_group(Region::Out, &net.out_groups[0]));
+        }
         if cm.words > 0 {
             regions.push(unit_group(Region::CutIn, &net.in_groups[1]));
-            regions.push(unit_group(Region::CutOut, &net.out_groups[1]));
+            regions.push(unit_group(Region::CutOut, net.out_groups.last().unwrap()));
         }
         let single: Vec<bool> = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p) == 1).collect();
         let mut run_at = BTreeMap::new();
@@ -583,12 +715,22 @@ impl FrameStmt {
         }
         let o = net.outputs(&vec![F128::ZERO; net.in_words]);
         let dummy_out = o[..lay.ret_words].to_vec();
-        let dummy_cut_out = match net.out_groups.get(1) {
+        let dummy_cut_out = match net.out_groups.last() {
             Some(g) if cm.words > 0 => o[g.col - net.out_groups[0].col..g.col - net.out_groups[0].col + g.words].to_vec(),
             _ => vec![],
         };
         let mut h = Sha256::new();
-        h.update(TAG);
+        h.update(if inst.sampling { TAG_SAMPLING } else { TAG });
+        if inst.sampling {
+            for x in lay.chunk_blocks.iter().chain([inst.public_ports.len(), inst.out_cut.len()].iter()) {
+                h.update((*x as u64).to_le_bytes());
+            }
+            for (name, k) in inst.public_ports.iter().chain(&inst.out_cut) {
+                h.update((name.len() as u64).to_le_bytes());
+                h.update(name.as_bytes());
+                h.update((*k as u64).to_le_bytes());
+            }
+        }
         h.update(comp().statement_digest());
         h.update(net.sha256);
         h.update(inst.key);
@@ -649,7 +791,7 @@ impl FrameStmt {
         let mut cv = cv;
         (0..lay.nb).map(|j| {
             let (msg, ctr, f) = match run {
-                Some((i, p, c, r)) => (Self::message(inst, i, p, c, r * lay.nb + j), c as u64, flags_of(r * lay.nb + j, lay.chunk_nb, self.single[p])),
+                Some((i, p, c, r)) => (Self::message(inst, i, p, c, r * lay.nb + j), c as u64, flags_of(r * lay.nb + j, lay.blocks_in(c), self.single[p])),
                 None => ([0; 16], 0, flags_of(j, lay.nb, false)),
             };
             let x = (cv, msg, ctr, 64, f);
@@ -663,7 +805,7 @@ impl FrameStmt {
         let mut cv = self.key;
         if let Some((i, p, c, r)) = run {
             for jj in 0..r * self.lay.nb {
-                let f = flags_of(jj, self.lay.chunk_nb, self.single[p]);
+                let f = flags_of(jj, self.lay.blocks_in(c), self.single[p]);
                 cv = blake3_compress(&cv, &Self::message(inst, i, p, c, jj), c as u64, 64, f)[..8].try_into().unwrap();
             }
         }
@@ -787,7 +929,7 @@ impl FrameStmt {
             Region::Params => (0..lay.comp_slots).flat_map(|s| {
                 let (q, j) = (s / lay.nb, s % lay.nb);
                 let (ctr, f) = match bl.and_then(|x| x.0[q]) {
-                    Some((_, p, c, r)) => (c as u64, flags_of(r * lay.nb + j, lay.chunk_nb, self.single[p])),
+                    Some((_, p, c, r)) => (c as u64, flags_of(r * lay.nb + j, lay.blocks_in(c), self.single[p])),
                     None => (0, flags_of(j, lay.nb, false)),
                 };
                 [ctr.to_le_bytes().to_vec(), 64u32.to_le_bytes().to_vec(), f.to_le_bytes().to_vec()].concat()
@@ -815,7 +957,7 @@ impl FrameStmt {
                 })).collect()
             }
             Region::CutOut => {
-                let gr = &self.net.out_groups[1];
+                let gr = self.net.out_groups.last().unwrap();
                 let base = (gr.col - self.net.out_groups[0].col) * WORD;
                 (0..lay.units).flat_map(|u| words(match bl.and_then(|x| x.1[u]) {
                     Some(g) => self.cut_group_words(inst, g, &self.cm.unit_out[g % inst.upi], gr.words, base),
@@ -886,12 +1028,11 @@ impl FrameStmt {
     /// C4: each row's chunk values (each chunk's last run's output value) fold (natively, BLAKE3's keyed parent tree; a one-chunk
     /// row's value is its ROOT output) into the row digest the verifier's file commits under its frame-v3 root.
     pub fn check_digests(&self, inst: &FrameInstances, cvs: &[Vec<[u32; 8]>]) -> Result<(), String> {
-        let last = self.lay.chunk_nb / self.lay.nb - 1;
         let mut rows: BTreeMap<(usize, usize), BTreeMap<usize, [u32; 8]>> = BTreeMap::new();
         for (b, (chunks, _)) in inst.blocks.iter().enumerate() {
             for (q, c) in chunks.iter().enumerate() {
                 if let Some((i, p, ci, r)) = c
-                    && *r == last
+                    && *r + 1 == self.lay.blocks_in(*ci) / self.lay.nb
                 {
                     rows.entry((*i, *p)).or_default().insert(*ci, cvs[b][q]);
                 }

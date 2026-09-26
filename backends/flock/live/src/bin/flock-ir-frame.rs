@@ -3,6 +3,7 @@
 //! Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu.
 //!
 //!   flock-ir-frame serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
+//!                           [--native-checked SHA256]   (a flock-ir-sampling/v1 file: its public sha256, once check_native passed)
 //!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
 //!   flock-ir-frame selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
 //!
@@ -37,10 +38,18 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const TABLE: &str = "irf";
-const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v2";
-const STATEMENT: &str = "verity/flock-ir-frame/v2";
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
+/// The statement of the loaded file: `verity/flock-ir-frame/v2`, or `verity/flock-ir-sampling/v1` (a `flock-ir-sampling/v1` file).
+static SAMPLING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+fn sampling() -> bool {
+    *SAMPLING.get().unwrap_or(&false)
+}
+
+fn statement() -> &'static str {
+    if sampling() { "verity/flock-ir-sampling/v1" } else { "verity/flock-ir-frame/v2" }
+}
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -56,7 +65,7 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 }
 
 fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-ir-frame-v2/fast100x2/rep{rep}").into_bytes()
+    if sampling() { format!("flock-ir-sampling-v1/fast100x2/rep{rep}").into_bytes() } else { format!("flock-ir-frame-v2/fast100x2/rep{rep}").into_bytes() }
 }
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
@@ -65,7 +74,7 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 
 fn sigma(st: &FrameStmt, inst: &FrameInstances) -> [u8; 32] {
     let mut h = Sha256::new();
-    h.update(SIGMA_TAG);
+    h.update(if sampling() { b"verity/flock-ir-sampling/sigma/v1".as_slice() } else { b"verity/flock-ir-frame/sigma/v2".as_slice() });
     h.update(inst.unit.as_bytes());
     h.update([0]);
     h.update(st.net.sha256);
@@ -328,7 +337,7 @@ fn session(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, t: SharedTransport, 
     let (ws, wr, calls) = t.lock().unwrap().stats();
     let wait_s = t.lock().unwrap().wait_s();
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": "frame-v3/blake3-keyed",
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": statement(), "scheme": "frame-v3/blake3-keyed",
                "prover": if plan.gpu {"flock-cuda-block"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": inst.unit, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": inst.n, "units_real": inst.units, "units_per_block": st.lay.units,
                "chunks_per_block": st.lay.chunks, "n_blake3": st.lay.comp_slots * st.blocks_real, "n_units": inst.units,
@@ -364,12 +373,15 @@ const CASES: &[(&str, bool, bool)] = &[
     ("cut_input_differs_from_the_cut_word", false, true),
 ];
 
-/// Cases that only a cut template has, and one that needs a chunk split into several runs.
+/// Cases that only a cut template has, one that needs a chunk split into several runs, and the ones that need a tail program
+/// (a template whose unit-less cut words are native has none).
 const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_tail_words", "aggregate_forged_with_its_scalar", "cut_input_differs_from_the_cut_word"];
 const RUNS_ONLY: &[&str] = &["chained_run_input_forged"];
+const TAIL_ONLY: &[&str] = &["eps_forged_tail_words", "aggregate_forged_with_its_scalar"];
 
 fn skipped(st: &FrameStmt, name: &str) -> bool {
     (st.cm.words == 0 && CUT_ONLY.contains(&name)) || (st.lay.nb == st.lay.chunk_nb && RUNS_ONLY.contains(&name))
+        || (st.cm.native && TAIL_ONLY.contains(&name))
 }
 
 /// The verifier's file with instance 0's cut word `flip.0` changed by `flip.1`, then every instance's tail words recomputed by
@@ -398,7 +410,7 @@ fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
     let (v, consistent) = match name {
         "row_scalar_forged" => {
             let mut v = load(&arg("--instances", ""));
-            v.cuts[st.cm.words - 1] ^= 1;
+            v.cuts[if st.cm.native { 1 } else { st.cm.words - 1 }] ^= 1;
             (v, true)
         }
         "eps_forged_tail_words" => {
@@ -409,7 +421,7 @@ fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
                 .expect("a positive tail constant");
             *eps = (f32::from_bits(*eps) * 100.0).to_bits();
             let v = retail(st, &tail, None);
-            let forged = flock_live::ir_block::CutMap { words: st.cm.words, tail, unit_in: st.cm.unit_in.clone(), unit_out: st.cm.unit_out.clone() };
+            let forged = flock_live::ir_block::CutMap { words: st.cm.words, tail, unit_in: st.cm.unit_in.clone(), unit_out: st.cm.unit_out.clone(), native: false };
             let ok = check_cut_words(&v, &forged, t).is_ok();
             (v, ok)
         }
@@ -454,6 +466,12 @@ fn run_case(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, name: &str, gpu: bo
     }
     let reload = || load(&arg("--instances", ""));
     let (pinst, vinst) = match name {
+        "output_claim_false" if st.lay.ret_words == 0 => {
+            let mut v = reload();
+            let k = st.cm.unit_out[7 % v.upi][0].1;
+            v.cuts[k] ^= 1;
+            (inst.clone(), Arc::new(v))
+        }
         "output_claim_false" => {
             let mut v = reload();
             v.outputs[7 * v.lay.ret_words].lo ^= 1;
@@ -518,7 +536,7 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": STATEMENT, "scheme": "frame-v3/blake3-keyed", "unit": inst.unit, "subcircuit": inst.header["subcircuit"],
+    println!("SELFTEST\t{}", json!({"statement": statement(), "scheme": "frame-v3/blake3-keyed", "unit": inst.unit, "subcircuit": inst.header["subcircuit"],
         "instances": inst.n, "units": inst.units, "run": [st.lay.nb, st.lay.chunk_nb], "k_log": st.lay.k_log, "m": st.m, "cut_words": st.cm.words,
         "gpu": gpu, "all_pass": all}));
 }
@@ -573,7 +591,7 @@ fn serve_loop(make: impl Fn() -> Server) {
 }
 
 fn refuse(why: String) -> ! {
-    println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
+    println!("REFUSED\t{}", json!({"statement": statement(), "why": why}));
     std::process::exit(2);
 }
 
@@ -581,6 +599,10 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(load(&arg("--instances", "frame.bin")));
+    SAMPLING.set(inst.sampling).unwrap();
+    if cmd == "serve" && inst.sampling && arg("--native-checked", "") != hex(&inst.public_sha256) {
+        refuse("serve of a flock-ir-sampling/v1 file needs --native-checked <its public sha256>: verity_flock.ir_sampling.check_native first".into());
+    }
     let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
@@ -598,7 +620,11 @@ fn main() {
         }
     }
     let st = Arc::new(FrameStmt::new(net, &inst).unwrap_or_else(|e| refuse(e)));
-    let tables = TABLES.get_or_init(|| Tables::load(&arg("--tables", "tables"), &tables_needed(&st.cm.tail)).unwrap_or_else(|e| refuse(e)));
+    let mut need = tables_needed(&st.cm.tail);
+    if st.cm.native {
+        need.insert("rcp");
+    }
+    let tables = TABLES.get_or_init(|| Tables::load(&arg("--tables", "tables"), &need).unwrap_or_else(|e| refuse(e)));
     if let Err(e) = check_cut_words(&inst, &st.cm, tables) {
         refuse(e);
     }

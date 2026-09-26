@@ -99,9 +99,10 @@ def _value(word) -> int:
     return sum(w.c << i for i, w in enumerate(word))
 
 
-def lower_gates(C: Circuit, gates, wires: dict[int, list]) -> dict[int, list]:
+def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None) -> dict[int, list]:
     """Lower ``gates`` (``verity.ir.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
-    -> word) and writing each gate's output word there."""
+    -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces."""
+    pieces = PIECES if pieces is None else pieces
     for g in gates:
         prim = g.prim
         fam = getattr(prim, "family", None)
@@ -113,7 +114,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list]) -> dict[int, list]:
         if fam == "Const" or all(_is_const(o) for o in ops):
             wires[g.index] = const_bits(prim.evaluate(*[_value(o) for o in ops]), _width(prim))
             continue
-        piece = PIECES.get(prim.id)
+        piece = pieces.get(prim.id)
         if piece is None:
             raise NoPiece(f"C-Flock has no circuit piece for the IR primitive {prim.id}")
         out = piece(C, *ops)

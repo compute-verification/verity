@@ -20,8 +20,9 @@ def test_one_module_per_template(family):
     assert set(reg.modules()) == set(TM.TEMPLATES)
 
 
-#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v2).
-LOWERED = {"C-Flock": {"rope-head", "silu-mul", "rmsnorm-fused-cuda", "rmsnorm-triton"}}
+#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v2; sampling under
+#: verity/flock-ir-sampling/v1).
+LOWERED = {"C-Flock": {"rope-head", "silu-mul", "rmsnorm-fused-cuda", "rmsnorm-triton", "gumbel-top-p-token-select"}}
 
 
 @pytest.mark.parametrize("family", FAMILIES)
