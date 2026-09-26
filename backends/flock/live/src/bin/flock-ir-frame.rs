@@ -615,7 +615,7 @@ fn main() {
     let tb = Instant::now();
     let inst = Arc::new(load(&arg("--instances", "frame.bin")));
     SAMPLING.set(inst.sampling).unwrap();
-    if cmd == "serve" && inst.sampling && arg("--native-checked", "") != hex(&inst.public_sha256) {
+    if (cmd == "serve" || cmd == "replay") && inst.sampling && arg("--native-checked", "") != hex(&inst.public_sha256) {
         refuse("serve of a flock-ir-sampling/v1 file needs --native-checked <its public sha256>: verity_flock.ir_sampling.check_native first".into());
     }
     let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist"));
