@@ -1,5 +1,24 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the markdown tables are retired; backend profiles match main
+
+- The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
+  `[[render]]` entry is now `published = "entities"`: it renders only the entities JSON as `<stamp>-tables.json`, and runs
+  `views --parity` as an internal gate that publishes nothing (a difference is a `RENDER-FAILED` line). The markdown
+  renderers stay as developer tools.
+- Entities backend profiles, following the docs site's gaps note of 20260926T0210Z:
+  - the SHA-256 binding the live transcript (and route (a)'s `root_F`) maps to `cr/sha-256`;
+  - Flock's Ligerito Merkle trees are a proof-internal hash: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA
+    (`cr/blake3`, `cr/sha-256`);
+  - B-Ligero's malicious-verifier ZK also rests on `random-oracle`, because its Merkle leaves are unsalted
+    (ligero PROTOCOL.md, red-team-zk-2 G3);
+  - an `unknown` ZK text (SP1) maps to `no-zk`: Verity claims no ZK for it;
+  - B-fs's `honest-verifier` has the role "zero knowledge only (soundness does not rest on it)";
+  - a backend's claims and `implementations` cover only its configurations with a result in the render, when any has one;
+    the others are listed as `declared_without_results`, such as SP1's committed guests, which aren't on main yet.
+- Poseidon2 row leaves are admissible, flagged as algebraic, and never count toward a standard-hash claim. The render
+  already did this; `verity.commitments.rowleaf`'s wording now matches.
+
 ## 2026-09-26: file-verified interactive results pay their protocol's rounds
 
 - Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round
