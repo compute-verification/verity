@@ -83,3 +83,20 @@ def test_template_of_is_the_exporters_cut():
     t, p, m = VX.template_of("Attention_v3{T=5,NH=32,KVH=8,D=64,BN=128}")
     assert (t, p["D"], m) == ("AttentionHead", 64, 32)
     assert VX.template_of("SiluMul_v1{I=8192}") == ("SiluMul_v1", {"I": 8192}, 1)
+
+
+def test_sampler_vus_are_placed_by_their_requests_program(tmp_path):
+    world = _world(attn=True)
+    _export(world, tmp_path / "exp", limits=VX.Limits(per_family=64, workers=1))
+    paths = []
+    for d in ("reqA", "reqB"):
+        (tmp_path / d).mkdir()
+        paths.append(_write(world.inst, tmp_path / d / "instances.json.gz"))
+    vus = tmp_path / "exp" / "vus.jsonl"
+    exported = sum(1 for line in vus.read_text().splitlines() if json.loads(line)["result"] is True)
+    unmapped = PG.program_graph(paths, vus_jsonl=vus)
+    mapped = PG.program_graph(paths, vus_jsonl=vus, request_programs={"r0": str(tmp_path / "reqA"), "r1": str(tmp_path / "reqB")})
+    placed = lambda g: sum(x["exported_vus"] or 0 for x in g["groups"])  # noqa: E731
+    assert placed(mapped) == exported > placed(unmapped)
+    store = PG.request_programs_of(tmp_path / "exp" / "store")
+    assert set(store) <= {"r0", "r1"}

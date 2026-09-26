@@ -272,8 +272,10 @@ def units_from_strata(strata: dict[str, dict], acc: _Acc, prefix: str) -> dict[t
     return dict(out)
 
 
-def exported_from_vus(vus_jsonl: str | Path, acc: _Acc, prefix: str) -> dict[tuple[str, str], int]:
-    """Exported VUs per group: by (op_path, spec); with one request Program, a VU whose op_path is no module is placed by its Call id."""
+def exported_from_vus(vus_jsonl: str | Path, acc: _Acc, prefix: str, request_programs: dict[str, str] | None = None) -> dict[tuple[str, str], int]:
+    """Exported VUs per group: by (op_path, spec); a VU whose op_path is no module (the sampler's) by its Call id in its request's
+    Program -- the one Program, or the one `request_programs` (request -> Build dir, the VU store's `program.json`) names."""
+    label_ix = {p["label"]: k for k, p in enumerate(acc.programs)}
     out: Counter = Counter()
     for line in Path(vus_jsonl).read_text().splitlines():
         e = json.loads(line)
@@ -286,22 +288,24 @@ def exported_from_vus(vus_jsonl: str | Path, acc: _Acc, prefix: str) -> dict[tup
                 out[key] += 1
                 break
         else:
-            if len(acc.call_keys) == 1 and 0 <= int(e["i"]) < len(acc.call_keys[0]):
-                out[acc.call_keys[0][int(e["i"])]] += 1
+            d = (request_programs or {}).get(str(e.get("request")))
+            k = label_ix.get(Path(d).name) if d else (0 if len(acc.call_keys) == 1 else None)
+            if k is not None and 0 <= int(e["i"]) < len(acc.call_keys[k]):
+                out[acc.call_keys[k][int(e["i"])]] += 1
     return dict(out)
 
 
 def program_graph(instance_paths: Iterable[str | Path], *, row: dict[str, Any] | None = None, strata: dict[str, dict] | None = None,
-                  vus_jsonl: str | Path | None = None) -> dict[str, Any]:
+                  vus_jsonl: str | Path | None = None, request_programs: dict[str, str] | None = None) -> dict[str, Any]:
     """The row's graph over its request Programs (`instances.json.gz` paths), with the run's units (`strata`, a replay record's)
-    and exported VUs (`vus_jsonl`, a VU export's) when given."""
+    and exported VUs (`vus_jsonl`, a VU export's; `request_programs` from its store) when given."""
     acc = _Acc()
     for p in instance_paths:
         hdr = _read_instance_header(str(p))
         acc.add(from_instances(str(p)), hdr.get("digest"), Path(p).parent.name)
     prefix = wrapper_prefix(strata, acc) if strata else ""
     units = units_from_strata(strata, acc, prefix) if strata else None
-    exported = exported_from_vus(vus_jsonl, acc, prefix) if vus_jsonl else None
+    exported = exported_from_vus(vus_jsonl, acc, prefix, request_programs) if vus_jsonl else None
     return {"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)}
 
 
@@ -313,6 +317,7 @@ class Options:
     instances: list[str] = option("instances", nargs="+", help="the row's request Programs (instances.json.gz)")
     strata: str | None = option("--strata", default=None, help="a replay record (sampled_replay_p0.json, or a regression record) for the run's units")
     vus: str | None = option("--vus", default=None, help="a VU export's vus.jsonl for the exported VUs")
+    store: str | None = option("--store", default=None, help="the VU export's store (<export>/store): request -> Program, to place sampler VUs")
     row: str | None = option("--row", default=None, help="JSON object: the row block (row number, serving config, run)")
 
 
@@ -321,6 +326,15 @@ def main(a: Options) -> int:
     if a.strata:
         rec = json.loads(Path(a.strata).read_text())
         strata = (rec.get("sampled_replay") or (rec.get("replay_partition") or {})).get("strata")
-    g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus)
+    g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus,
+                      request_programs=request_programs_of(a.store) if a.store else None)
     Path(a.out).write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
     return 0
+
+
+def request_programs_of(store: str | Path) -> dict[str, str]:
+    """request -> Build dir of its Program, from a VU store's `programs/*/program.json`."""
+    out: dict[str, str] = {}
+    for p in Path(store).glob("programs/*/program.json"):
+        out.update({r: d for r, d in (json.loads(p.read_text()).get("build_dirs") or {}).items() if d})
+    return out
