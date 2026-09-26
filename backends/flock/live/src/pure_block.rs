@@ -376,6 +376,9 @@ pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
     if net.epilogue() { ("u16", 2) } else { ("u32", 4) }
 }
 
+/// The most region claims the CUDA prover takes (`max_extra` in `cuda/prove_chunk.cuh`): two per public region.
+pub const MAX_EXTRA_CLAIMS: usize = 64;
+
 /// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
 pub const MAX_M: usize = 35;
 
@@ -794,6 +797,7 @@ impl PureStmt {
             }
         };
         let regions: Vec<RegionShape> = list.into_iter().map(|r| shape(r, &net, lay)).collect();
+        assert!(2 * regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?}: {} region claims, the GPU prover takes {MAX_EXTRA_CLAIMS}", 2 * regions.len());
         // dummy blocks: zero messages; bf16 under a zero key and counter 0, fp8 under the per-slot constants
         let dummy_cv: Vec<[u32; 8]> = if lay.is_sha() {
             (0..2)
@@ -1248,5 +1252,36 @@ impl PureStmt {
             .zip(values)
             .map(|(pt, value)| ExtraClaim { value, skip_weights: eq_skip_weights(&pt[..6]), x_full: pt[6..].to_vec() })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A lowered unit's shape without its logic: input rows, one output word (two with the epilogue), the constant.
+    fn shape_net(n_in: usize, epilogue: bool) -> UnitNet {
+        let useful = 1024;
+        let (mut a, mut b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = (0..useful).map(|i| (if i < n_in { vec![i] } else { vec![] }, if i < n_in { vec![i] } else { vec![] })).unzip();
+        a[useful - 1] = vec![useful - 1];
+        b[useful - 1] = vec![useful - 1];
+        UnitNet { relation: "shape".into(), useful, const_pos: useful - 1, n_in, out_cols: if epilogue { vec![5, 6] } else { vec![5] }, a, b, sha256: [0; 32] }
+    }
+
+    /// Every layout's region claims fit the GPU prover (ChunkTail with the epilogue once had 18 against a cap of 16).
+    #[test]
+    fn region_claims_fit_the_gpu_prover() {
+        let layouts = [Layout::Chunk(3), Layout::Chunk(16), Layout::ChunkTail(4), Layout::ChunkTail(17), Layout::Fp8, Layout::ShaBf16, Layout::ShaFp8];
+        for lay in layouts {
+            for epilogue in [false, true] {
+                let st = PureStmt::new(shape_net(544, epilogue), 8, lay);
+                assert!(2 * st.regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?} epilogue {epilogue}");
+            }
+        }
+        for lay in [Layout::Fp4, Layout::ShaFp4] {
+            let st = PureStmt::new(shape_net(608, false), 8, lay);
+            assert!(2 * st.regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?}");
+        }
+        assert_eq!(PureStmt::new(shape_net(544, true), 8, Layout::ChunkTail(4)).regions.len(), 9);
     }
 }
