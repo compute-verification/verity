@@ -1018,13 +1018,13 @@ def model_key_for_row(row_id: str) -> str:
     return key
 
 
-def row_config_from_workload(workload_path: str, row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
+def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
                              host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
                              stages: str = "build,match,commit") -> RowConfig:
-    """Plan-time config from the sweep workload (workloads/<row>.json): the same facts row_pod.sh reads for B/I/O/LP/T."""
-    w = json.loads(Path(workload_path).read_text())
+    """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
+    w = workload_path if isinstance(workload_path, dict) else json.loads(Path(workload_path).read_text())
     sw = w.get("sweep") or {}
-    row = row_id or sw.get("row_id") or Path(workload_path).stem
+    row = row_id or sw.get("row_id") or ("" if isinstance(workload_path, dict) else Path(workload_path).stem)
     reqs = w.get("requests") or []
     prompt = sum(int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_input", 1024))
     decode = sum(int(r.get("max_tokens") or 0) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_output", 128))

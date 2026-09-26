@@ -1,0 +1,28 @@
+{
+ "what": "Commit host peaks of record against the F-dA-15 admission: cgroup anon + shmem at the Commit's peak, from each run's resources.jsonl (telemetry/resources/v0.1), on 251 GB (239,372 MiB) cgroups",
+ "limit_bytes": 250999996416,
+ "rows": {
+  "23": {
+   "row_id": "llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager",
+   "run": "r20260926-033729-b866",
+   "outcome": "OOM-killed (rc 137) at the limit after 3435 s, 90 s after forking 32 replay workers: the peak is a lower bound",
+   "peak_is_lower_bound": true,
+   "peak_anon_shmem_mib": 226996,
+   "pool_mib": 182765,
+   "pool_source": "the run's commit/admission_native_collect_v2b.json (predicted_host_bytes; admitted)",
+   "pairs": 1,
+   "replay_workers": 32
+  },
+  "67": {
+   "row_id": "olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager",
+   "run": "r20260925-233854-42c8",
+   "outcome": "Commit DONE (manifest verified), 32 replay workers",
+   "peak_is_lower_bound": false,
+   "peak_anon_shmem_mib": 176321,
+   "pool_mib": 86720,
+   "pool_source": "the row planner's commit.pinned_pool (the run's own F-dA-15 JSON was not copied off the pod)",
+   "pairs": 1,
+   "replay_workers": 32
+  }
+ }
+}

@@ -203,3 +203,38 @@ def test_the_commit_admission_counts_the_declared_lag():
     for declared, lag in ((False, 0), (True, 1)):
         assert C.admission_lag(dict(wl, target={**(wl.get("target") or {}), "async_scheduling": declared})) == lag
     assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
+
+
+def test_the_resident_bytes_add_to_the_pool_and_can_refuse():
+    """The Commit's peak is the pinned pool plus what it holds beside it; a pool that fits alone can still be refused."""
+    sizing, wl, _ = _fixture("b16")
+    base = ADM.admission(sizing, wl["requests"], None, retain="host", max_num_batched_tokens=5348, lag=1)
+    pool = base["predicted_host_bytes"]
+    cap = pool + (4 << 30)
+    alone = ADM.admission(sizing, wl["requests"], cap, retain="host", max_num_batched_tokens=5348, lag=1)
+    both = ADM.admission(sizing, wl["requests"], cap, retain="host", max_num_batched_tokens=5348, lag=1, resident={"bytes": 8 << 30})
+    assert alone["admitted"] is True and alone["pool_bytes"] == pool
+    assert both["pool_bytes"] == pool and both["predicted_host_bytes"] == pool + (8 << 30)
+    assert both["admitted"] is False and "resident beside it 8192 MiB" in both["why"]
+
+
+@pytest.mark.parametrize("row", ["23", "67"])
+def test_the_commit_admission_covers_the_recorded_peaks(row):
+    """#23 OOM'd at the 239,372 MiB limit with its 182,765 MiB pool admitted; #67 completed.  Pool + resident covers both peaks, refuses
+    #23 and admits #67 within 25 % of its peak; the pool alone is under both."""
+    peaks = json.loads((FIX / "commit_peaks.json").read_text())
+    r, limit = peaks["rows"][row], peaks["limit_bytes"]
+    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])
+    pool, peak = r["pool_mib"] << 20, r["peak_anon_shmem_mib"] << 20
+    predicted = pool + res["bytes"]
+    assert pool < peak <= predicted
+    assert res["peak_point"] == "p0.replay" and "commit.c2.replay_workers" in res["live_at_peak_mib"]
+    assert (predicted > limit) is (row == "23")
+    if not r["peak_is_lower_bound"]:
+        assert predicted <= 1.25 * peak
+
+
+def test_commit_main_passes_the_resident_bytes():
+    src = (REPO / "verity_vllm" / "pipeline" / "commit.py").read_text()
+    assert "resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers)" in src
