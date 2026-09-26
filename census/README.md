@@ -10,6 +10,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
 | `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") | `schemas/subcircuits.schema.json` |
+| `workloads.json` | served configurations: the model, the serving config (engine, batch, TP, datatype, hardware class) and the template mix, the verification units per subcircuit template and bound parameters, with the source run | `schemas/workloads.schema.json` |
 | `input_sets.json` | the frozen input set of each subcircuit (an input is one instance of the subcircuit): dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its inputs are of | `schemas/input_sets.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
@@ -21,7 +22,9 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 - A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`. The dtype is named as
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
-  `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`: the semantics are the exact
+  `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`,
+  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms bench-spine's generator writes). The
+  params and semantics segments are lowercase and may contain `.`, `_` and `-`. For GEMM, the semantics are the exact
   instruction's architecture, operation and types without its shape, and the full instruction is its `semantics` parameter; `legacy_target` keeps the
   target name it was known by, and `fidelity_notes` record known gaps from what production runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
@@ -35,6 +38,31 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
 "Instance set" is now "input set", and a single instance is an "input". Recorded names keep the old word: the
 `instance-equiv/v1` artifact kind, a result's `instances` ref, and the `tier` field (`vu-k1536…`) are what fixtures and
 recorded results carry, so they are unchanged.
+
+## Work models
+
+Each subcircuit template carries a `work_model`: the arithmetic operations per input (one subcircuit instance) as an
+integer expression over its bound parameters, for example `2*K` for `gemm-coordinate` and `3*N` plus one rsqrt for
+`rmsnorm-triton`. An FMA counts as 2 ops, and special functions are counted apart in `special_per_input`. `variables`
+names per-input quantities that are not parameters, such as an attention head's key count `T`. `version` is the one the
+tables' native N uses (`work-model/v0`), `source` cites the IR definition or kernel, and `basis` says what is counted.
+Weighting a workload's template mix by these counts gives its real work. Counting verification units or inputs does not.
+
+## Workloads
+
+A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
+counts the verification units per VU family and bound parameters (`replay_partition.strata`), the complete counts of
+the run. This is the mix that weights backend overheads into a per-workload headline. Every family maps to a census
+subcircuit template bound from its IR Definition, with the number of the template's subcircuits one VU holds:
+- `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
+- `Attention_v3` and `Attention_v2` are NH `attention-head` (FA2 or FA3);
+- `RoPE_v1` is NHEADS `rope-head`;
+- the MoE expert GEMMs and the FP8 block-scaled GEMM are N coordinates;
+- the other families are one row each.
+
+The captured input sets (vllm-vu-export) sample these counts. They cross-check the mix and are linked to their workload
+once registered; they don't replace the counts. `source` names the row, its expected file and records artifact, and the commit it was read at. A VU is a role
+that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing
 

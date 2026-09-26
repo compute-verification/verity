@@ -48,7 +48,7 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
-    assert m.spec_peak("NVIDIA L40S", "bf16") == (None, None)
+    assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
     # RTX 5090 (lane fp4-proof): the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
     assert m.spec_peak("NVIDIA GeForce RTX 5090", "nvfp4")[0] == 1676.0e12 and m.spec_peak("NVIDIA GeForce RTX 5090", "e4m3")[0] == 419.0e12
     assert m.spec_peak("NVIDIA GeForce RTX 4090", "nvfp4")[0] is None and "nvfp4" in m.DTYPES
@@ -140,7 +140,7 @@ def test_spec_peaks_agree_with_every_census_line():
     """The pod-side table stays standalone (nothing to read on a pod); it must quote census/hardware.json's peak for every line."""
     m = _measure()
     hardware = json.loads((REPO / "census" / "hardware.json").read_text(encoding="utf-8"))
-    smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3"}
+    smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
     for h in hardware:
         assert m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])[0] == h["flop_per_second"], h["id"]

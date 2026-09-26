@@ -52,6 +52,8 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
      "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
+    (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
+     "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
     (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
      "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]

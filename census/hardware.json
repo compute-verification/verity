@@ -78,5 +78,37 @@
       }
     ],
     "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  },
+  {
+    "id": "l40s-48gb/bf16",
+    "name": "L40S",
+    "device": "NVIDIA L40S 48GB",
+    "dtype": "bf16",
+    "rate": "bf16 dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 362.05e12,
+    "accumulate": "fp32",
+    "memory_bytes": 51539607552,
+    "sources": [
+      {
+        "label": "NVIDIA L40S GPU datasheet: BFLOAT16 Tensor Core 362.05 | 733* TFLOPS, FP8 Tensor Core 733 | 1,466* TFLOPS (* with sparsity); 48 GB GDDR6"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak; an FMA counts as two FLOP; sparsity figures never used. The datasheet does not state the accumulate width: FP32 accumulate at full rate is assumed for this professional Ada part (unlike the GeForce RTX 4090, which halves FP8 with FP32 accumulate), to be confirmed by a native-peak/v1 measurement"
+  },
+  {
+    "id": "l40s-48gb/e4m3",
+    "name": "L40S",
+    "device": "NVIDIA L40S 48GB",
+    "dtype": "e4m3",
+    "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 733e12,
+    "accumulate": "fp32",
+    "memory_bytes": 51539607552,
+    "sources": [
+      {
+        "label": "NVIDIA L40S GPU datasheet: BFLOAT16 Tensor Core 362.05 | 733* TFLOPS, FP8 Tensor Core 733 | 1,466* TFLOPS (* with sparsity); 48 GB GDDR6"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak; an FMA counts as two FLOP; sparsity figures never used. The datasheet does not state the accumulate width: FP32 accumulate at full rate is assumed for this professional Ada part (unlike the GeForce RTX 4090, which halves FP8 with FP32 accumulate), to be confirmed by a native-peak/v1 measurement"
   }
 ]

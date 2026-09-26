@@ -868,7 +868,7 @@ def test_entity_ids_are_stable_across_renders(store: LocalStore) -> None:
     ids = [c["id"] for c in V.configuration_records(views)]
     assert len(ids) == len(set(ids)) == len(V.CONFIGURATIONS)
     assert len({r["id"] for r in a["results"]}) == len(a["results"])
-    assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["subcircuits"]}
+    assert set(a["census"]["hardware"]) >= {c["hardware"] for c in a["subcircuits"]}
 
 
 def test_configuration_records_carry_lists_and_a_short_zk_class_and_table1_lists_backends() -> None:
