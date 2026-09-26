@@ -49,6 +49,9 @@ pub const INST_FORMAT: &str = "flock-netlist-inst/v1";
 pub const STATEMENT: &str = "verity/flock-netlist/v1";
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
+/// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees (swappable: the salted
+/// leaf and HM96 are separate ids, and the netlist reserves their room).
+pub const LEAF_SCHEME: &str = "flock-leaf/sha256-unsalted/v0";
 const WORD: usize = 128;
 const SUB_LOG: usize = b3::K_LOG;
 const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
@@ -406,7 +409,7 @@ impl Composite {
         if self.dummy_digests.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
-        if self.leaf_scheme != "flock-leaf/salted-sha256/v1" {
+        if self.leaf_scheme != LEAF_SCHEME {
             return Err(format!("leaf-commitment scheme {:?} is not one this verifier implements", self.leaf_scheme));
         }
         Ok(())

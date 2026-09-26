@@ -41,9 +41,11 @@ STATEMENT = "verity/flock-netlist/v1"
 SCHEME = "frame-v3/blake3-keyed"
 INST_FORMAT = "flock-netlist-inst/v1"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity; the reserved sizes are what Halevi–Micali (HM96, the O(k) variant as in B-Ligero's leaves) needs, so it drops in
-#: without changing the layout: randomness x of 6k + 4 bits at k = 160 (121 bytes), a universal hash key of (|x| + 256) bits.
-LEAF_SCHEME = {"id": "flock-leaf/salted-sha256/v1", "salt_bytes": 32, "reserved_salt_bytes": 128, "reserved_key_bytes": 160}
+#: identity and swappable: ``flock-leaf/sha256-unsalted/v0`` is Flock's own leaf (SHA-256 of the opened row) until the salted
+#: leaf (``flock-leaf/salted-sha256/v1``: H(salt || row), salt from the prover's OS-seeded randomness) lands; the target is
+#: Halevi–Micali (HM96, the O(k) variant as in B-Ligero's leaves). The reserved sizes are what HM96 needs, so it drops in without
+#: changing the layout: randomness x of 6k + 4 bits at k = 160 (121 bytes), a universal hash key of (|x| + 256) bits (160 bytes).
+LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted/v0", "salt_bytes": 0, "reserved_salt_bytes": 128, "reserved_key_bytes": 160}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14
