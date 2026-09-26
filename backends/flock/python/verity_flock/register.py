@@ -127,6 +127,9 @@ def main(argv=None) -> int:
     raw = json.loads((pd / "result.json").read_text())
     point = pd / raw["artifacts"][0]
     doc = patch(raw, _run(pd), _run(vd), a)
+    inst = doc["workload_fingerprint"].get("instances") or {}
+    if inst.get("set_schema") and "content_digest" not in inst:
+        inst["content_digest"] = inst.get("manifest_sha256")   # a spine set's manifest digest is its content digest
     if any(point.glob("prove-s*.txt")):
         doc = correct_waits(doc, coin_waits(point))
     else:

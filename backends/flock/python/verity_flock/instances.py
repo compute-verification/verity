@@ -350,7 +350,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     rel = _ligero()[0](relation) if not pipe.epilogue else None
     y_pub = [int(rel.y_public(v)) for v in final] if rel is not None else final
     st = _frame_v3(dataset, tier, digest, lo, K_, schema, da, db, y_pub, rel.y_bits if rel is not None else 16)
-    ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "set_schema": man.get("schema"),
+    ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "content_digest": digest,
+           "set_schema": man.get("schema"),
            "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None),
            **({"y": {"source": f"{relation} model chain", "differ_from_set": bad}} if y_model else {})}
     if y_model:
@@ -409,6 +410,7 @@ def _write_set_fp4(path, d: Path, man: dict, lo: int, hi: int | None, leaf: str,
     dataset, tier = man.get("set", d.name), f"{man.get('schema', 'input-set/v1')}:{man.get('set', d.name)}"
     st = _frame_v3(dataset, tier, man["content_digest"], lo, K_, schema, da, db, y, 32)
     ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": man["content_digest"],
+           "content_digest": man["content_digest"],
            "set_schema": man.get("schema"), "source": (man.get("provenance") or {}).get("source")}
     header = {"format": FORMAT, "relation": "fp4-nvf4", "vus": hi - lo, "k": K_, "word_bits": 4, "units": accs.shape[1],
               "row_bytes": K_ // 2 + K_ // 16, "epilogue": False, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
