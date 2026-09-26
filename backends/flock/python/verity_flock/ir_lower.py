@@ -239,11 +239,12 @@ def reduction_cut(width: int) -> Callable:
     return cut
 
 
-def units(target, cut: Callable | None = None) -> Units:
+def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     """Split ``target``'s one-call Program (its live gates) into the connected components of its gate graph, input leaves
     included and edges out of cut gates removed (``cut(gates, args, returns)`` returns the cut gate indices; default none).
-    Every component that reads an input leaf is a unit and must have the same signature (primitive ids and operand wiring
-    relative to the component, cut words as ports), else ValueError; the others form the native tail."""
+    ``group`` consecutive components that read input leaves form one unit. Every unit must have the same signature
+    (primitive ids and operand wiring relative to the unit, cut words as ports), else ValueError; the components that read
+    no input leaf form the native tail."""
     _prog, call = standalone(target)
     args = list(call.args)
     rets = list(call.returns)
@@ -272,6 +273,12 @@ def units(target, cut: Callable | None = None) -> Units:
     for g in gates:
         comps.setdefault(find(g.index), []).append(g)
     groups = sorted(comps.values(), key=lambda gs: gs[0].index)
+    if group > 1:
+        reading = [gs for gs in groups if any(o in arg_pos for g in gs for o in g.operands)]
+        rest = [gs for gs in groups if not any(o in arg_pos for g in gs for o in g.operands)]
+        if len(reading) % group:
+            raise ValueError(f"{len(reading)} components do not group by {group}")
+        groups = [sorted([g for gs in reading[i:i + group] for g in gs], key=lambda g: g.index) for i in range(0, len(reading), group)] + rest
     sigs, ins, outs, unit_groups, tail = [], [], [], [], []
     for gs in groups:
         local = {g.index: k for k, g in enumerate(gs)}
@@ -599,10 +606,10 @@ class Lowering:
         return res, cut_out, ok
 
 
-def lowering(definition, name: str, cut: Callable | None = None) -> Lowering:
+def lowering(definition, name: str, cut: Callable | None = None, group: int = 1) -> Lowering:
     """The template's units, their circuit and layout; cut words form their own port groups (after the leaf inputs and after
     the returned outputs), so private inputs, public outputs and cut words are separate aligned regions."""
-    U = units(definition, cut)
+    U = units(definition, cut, group)
     C = U.circuit()
     n_leaf = sum(1 for k, _ in U.in_src[0] if k == "leaf")
     n_ret = sum(1 for k, _ in U.out_src[0] if k == "ret")

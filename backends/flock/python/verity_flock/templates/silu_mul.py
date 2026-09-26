@@ -18,6 +18,17 @@ def lowering(subcircuit):
     return ir_lower.lowering(definition(subcircuit), UNIT)
 
 
+#: Components per unit in the frame-v3 statement (a block holds at most 256 unit slots and every chunk its units read).
+FRAME_GROUP = 2
+FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
+
+
+def frame_lowering(subcircuit):
+    from verity_flock import ir_lower
+
+    return ir_lower.lowering(definition(subcircuit), UNIT + (f"/x{FRAME_GROUP}" if FRAME_GROUP > 1 else ""), group=FRAME_GROUP)
+
+
 def supports(subcircuit, scheme):
     return (f"C-Flock lowers {subcircuit.id} exactly (verity_flock.templates.silu_mul: unit {UNIT}) and proves it with public "
             f"unit inputs and outputs (verity/flock-ir-block/v1); binding its rows under {scheme} is not wired yet")
