@@ -1,4 +1,4 @@
-//! Candidate B build lane, wave 1: the WP2 transition-unit contracts as direct AIR constraints over Goldilocks,
+//! B-Ligero build lane, wave 1: the WP2 transition-unit contracts as direct AIR constraints over Goldilocks,
 //! proved with Plonky3 `uni-stark` (FRI + Keccak Merkle).  `NON_ZK_PROOF_DIAGNOSTIC`, `authentication = excluded`.
 //!
 //! * `params`  the frozen widths (mirrors `checker/params.py::REAL`)

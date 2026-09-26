@@ -1,4 +1,4 @@
-"""Candidate A's eq-weighted degree-3 GKR sumcheck over BabyBear^6 as INT8 tensor-core matmuls, with ``k`` base-field
+"""A-GKR's eq-weighted degree-3 GKR sumcheck over BabyBear^6 as INT8 tensor-core matmuls, with ``k`` base-field
 ("packed") rounds first.  torch; CUDA or CPU (the CPU path is the laptop test path).
 
 Algorithm: ``reference.packed_prover`` (DESIGN.md 3).  Layout: TensorZKP 4.1 with balanced signed limbs (lane

@@ -298,7 +298,7 @@ CATALOG: dict[str, Design] = {
 }
 
 
-# --- Candidate A: depth-reduction options (costed, not implemented) --------------------------------------------------
+# --- A-GKR: depth-reduction options (costed, not implemented) --------------------------------------------------
 #
 # A's critical path (measured by the transcript's trip counter, backends/gkr/src/main.rs) is
 #     depth = 1 (message 2a) + max(lookup chain, checker chain) + 2 (Ligero r, Q)

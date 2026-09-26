@@ -61,7 +61,7 @@ TC_PROBE = Tool(
     parse=parse,
 )
 
-# --- instances_hw: frozen instance sets replayed on silicon (lane instances-hw) --------------------------------------------------------
+# --- instances_hw: frozen input sets replayed on silicon (lane instances-hw) --------------------------------------------------------
 
 INSTANCES_SCRIPT = "instances_hw.py"
 

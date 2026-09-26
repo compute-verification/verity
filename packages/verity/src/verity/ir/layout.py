@@ -1,4 +1,4 @@
-"""Canonical layout, root-scoped value references, and the three subcircuit classes (IR §4.4, §6, §D).
+"""Canonical layout, root-scoped value references, and the three gate-selection classes (IR §4.4, §6, §D).
 
 Layout: a function body is laid out in body order; each node is one interval; `batch` members and `scan`
 iterations are consecutive in structural order. Gate counts and offsets are *intrinsic summaries* cached per
@@ -10,7 +10,7 @@ Canonical reference of a produced value = its producing gate's root-scoped index
 
 Three classes (IR §D.1/§D.2), not synonyms:
 
-* `Subcircuit` — any selected set of gates of the root circuit + the wiring among them + its induced
+* `GateSelection` — any selected set of gates of the root circuit + the wiring among them + its induced
   boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (the boundary gates
   entering from outside: distinct gates outside S with a wire into S), `S.out` (the boundary gates leaving:
   distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
@@ -18,13 +18,13 @@ Three classes (IR §D.1/§D.2), not synonyms:
   boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
   the compact per-part analysis in `verity.ir.boundary` (`in_gates` / `out_gates` / `w_out`).
 * `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
-* `FunctionCall` — a hierarchy-defined subcircuit (always a region in this layout) **plus** the declared interface
+* `FunctionCall` — a hierarchy-defined gate selection (always a region in this layout) **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
   `(t, a, t)` has `args = [v, v]`, `returns = [t, v, t]`, `in_ = [v]`, `out = [t]` (if only `t` escapes).
 
 Intrinsic vs contextual summaries: gate count, interface types and offsets are intrinsic to a specialized
 definition and cached on it. Anything depending on consumers, enclosing wiring, protected outputs or a plan
-(`S.out` of an arbitrary subcircuit, reachability, cuts) is contextual and is computed per instance, never
+(`S.out` of an arbitrary gate selection, reachability, cuts) is contextual and is computed per instance, never
 cached by definition.
 """
 
@@ -228,11 +228,11 @@ class Gate:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Subcircuit / Region / FunctionCall
+# GateSelection / Region / FunctionCall
 # ---------------------------------------------------------------------------------------------------------
 
 
-class Subcircuit:
+class GateSelection:
     """A selected set of gates of the root circuit + wiring among them + induced boundary (IR §D.1).
     Constructed explicitly from a gate set; intended for small/flattened circuits (cones, hand-picked sets).
     `in_`/`out` are *contextual*: computed on demand, never cached by definition."""
@@ -293,13 +293,13 @@ class Subcircuit:
         return tuple(sorted(used))
 
     def __repr__(self) -> str:
-        return f"Subcircuit({self.size} gates)"
+        return f"GateSelection({self.size} gates)"
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, Subcircuit) and self.circuit is other.circuit and self._gates == other._gates
+        return isinstance(other, GateSelection) and self.circuit is other.circuit and self._gates == other._gates
 
 
-class Region(Subcircuit):
+class Region(GateSelection):
     """`C[i:j]`: the contiguous special case; addressable without materialising the gate set."""
 
     def __init__(self, circuit: "Circuit", lo: int, hi: int) -> None:
@@ -543,8 +543,8 @@ class Circuit:
     def region(self, lo: int, hi: int) -> Region:
         return Region(self, lo, hi)
 
-    def subcircuit(self, gates: Sequence[int]) -> Subcircuit:
-        return Subcircuit(self, gates)
+    def gate_selection(self, gates: Sequence[int]) -> GateSelection:
+        return GateSelection(self, gates)
 
     def root_calls(self, primitive_batches: "str | None" = None) -> Iterator[FunctionCall]:
         yield from _node_calls(self, self.root_scope, primitive_batches)

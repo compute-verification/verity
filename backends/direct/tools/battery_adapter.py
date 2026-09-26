@@ -1,4 +1,4 @@
-"""Run the red team's BabyBear forgery battery against Candidate B's AIR constraints.
+"""Run the red team's BabyBear forgery battery against B-Ligero's AIR constraints.
 
 Every battery case (``fixtures/redteam/babybear-battery/v1``, 83 cases, expected verdict *reject*) is an adversarial
 witness in the WP2 hint layout.  This adapter turns each case into B's row format -- the case's hints imposed by

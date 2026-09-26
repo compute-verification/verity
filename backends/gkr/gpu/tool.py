@@ -1,4 +1,4 @@
-"""Store declaration for Candidate A's GPU prover (research.store README §6.1).
+"""Store declaration for A-GKR's GPU prover (research.store README §6.1).
 
     research run --tool a_gpu_prove --project verity --scratch triton -- python -m gpu.run prove /workspace/bb/pos4096 --vus 4096 --reps 3 --warmup 1
     research run --on vy-agkr-a100 --project verity --source . --cwd source/backends/gkr --tool a_gpu_prove --scratch triton -- \

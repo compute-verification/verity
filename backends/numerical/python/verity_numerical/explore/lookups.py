@@ -1,7 +1,7 @@
 """Costing the lookup argument alternatives for the frozen target, through the accountant.
 
 The 16-bit range lookups (``T_range16``, 284 of the 306 queries per unit, 65 536 rows) are the largest census line and
-set Candidate A's sequential depth (the fractional GKR over a hypercube of dimension ``ceil(log2(N + |T|))``).  This
+set A-GKR's sequential depth (the fractional GKR over a hypercube of dimension ``ceil(log2(N + |T|))``).  This
 module costs, at ``B in {1, 64, 4096}``, ``K = 1536``, Goldilocks with the cubic extension (``2^-128``) and the
 quadratic extension (``2^-80``):
 
@@ -235,7 +235,7 @@ def _sharded(N: int, rows: int, s: int) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Additive lookup-argument models (replace T_range16's logUp in Candidate A)
+# Additive lookup-argument models (replace T_range16's logUp in A-GKR)
 # ---------------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -366,7 +366,7 @@ def _range_N(B: int) -> int:
 
 def cost_a(option: str, B: int, point: OperatingPoint = POINTS["2^-128"],
            depth: acc.DepthOptions = NO_DEPTH_OPTIONS) -> dict[str, float]:
-    """The contract columns of Candidate A under ``option`` (one of :data:`OPTIONS_A`), plus ``soundness.log2_total``,
+    """The contract columns of A-GKR under ``option`` (one of :data:`OPTIONS_A`), plus ``soundness.log2_total``,
     ``soundness.meets``, ``lookup.hypercube_dim`` (of the range-table argument), ``lookup.chain``,
     ``lookup.committed_extra`` (committed elements the lookup argument adds beyond multiplicities)."""
     ext = point.extension
@@ -407,7 +407,7 @@ def cost_a(option: str, B: int, point: OperatingPoint = POINTS["2^-128"],
 
 
 def cost_b(option: str, B: int, point: OperatingPoint = POINTS["2^-128"]) -> dict[str, float]:
-    """Candidate B (``helper_columns`` mode, depth 3) under ``option`` (one of :data:`OPTIONS_B`).  The non-logUp
+    """B-Ligero (``helper_columns`` mode, depth 3) under ``option`` (one of :data:`OPTIONS_B`).  The non-logUp
     arguments have no sumcheck in B: their grand products become committed running-product columns (``L`` F_c
     elements per product of ``L`` factors), priced like helpers."""
     ext = point.extension

@@ -1,4 +1,4 @@
-"""Export of the WP2 checker as a layered arithmetic circuit for Candidate A (``backends/gkr``).
+"""Export of the WP2 checker as a layered arithmetic circuit for A-GKR (``backends/gkr``).
 
 The gadgets of ``verity_numerical.checker`` are executed once on symbolic values (:class:`CircuitCtx`) so that the
 five predicates become: quadratic gates (``mul``, ``boolean``, the ``lt_pow`` products), linear assertions

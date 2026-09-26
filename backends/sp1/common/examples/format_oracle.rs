@@ -1,4 +1,4 @@
-//! The native oracle of the per-format arithmetic over a frozen instance set:
+//! The native oracle of the per-format arithmetic over a frozen input set:
 //! every VU's public word recomputed from its x and W rows must equal the
 //! model-recorded y of the `sp1-format-instances/v1` file
 //! (`verity_sp1.format_instances`), bit for bit.

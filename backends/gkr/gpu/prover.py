@@ -1,4 +1,4 @@
-"""Candidate A end to end on the device (``backends/gkr/src/main.rs`` ported to torch over BabyBear^6).
+"""A-GKR end to end on the device (``backends/gkr/src/main.rs`` ported to torch over BabyBear^6).
 
 Instance = segments (data-parallel circuits over ``units`` rows of committed columns) + optional VU chain
 (PROTOCOL.md §12).  Proof = Ligero root, the extension messages, the Ligero opening.  Order of the protocol

@@ -398,7 +398,7 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
 # ``--backend sp1-bare`` runs a ``relation-bare`` host (``backends/sp1/host --features relation-bare``, or any SP1 variant
 # with the same ``bare-*`` CLI: ``--host``, ``--backend-name``) on a range of a frozen VU set -- the BF16 fixture
 # (``--instances DIR``, the A100 row) or a ``verity_sp1.format_instances`` file (``--batch FILE``, the other rows) -- and
-# writes one ``bench-result/v1``: public = format + instance-set identity + y, private = x and W (authentication
+# writes one ``bench-result/v1``: public = format + input-set identity + y, private = x and W (authentication
 # excluded).  Steps: the arrays against their digests; negatives through the executor (the 52 committed ``vu-k1536-neg``
 # instances, or ``--flip-y`` on a batch); ``bare-prove`` (an executor pass for exact cycles, setup, a warm-up proof,
 # ``--reps`` proofs, each dumped under ``proofs/`` and verified in process); ``verify --proof --statement`` per proof in

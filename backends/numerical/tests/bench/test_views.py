@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import random
 from typing import Any
 
@@ -223,7 +224,7 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     md = V.render_markdown(views)
     assert V.PREVIEW in md and "## Table 1" in md and "## Table 2" in md and "## Table 3" in md
     assert f"{T.fmt_overhead(cell.overhead)} (prov.)" in md
-    # Table 3: commitment and the proving buckets per instance, with shares of end to end
+    # Table 3: commitment and the proving buckets per input, with shares of end to end
     rows = [r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero")]
     row3, drill, _ = rows                                # Table 3, its seconds-per-instance drill-down, the interaction drill-down
     serving, proving = V.overheads(cell)
@@ -384,16 +385,17 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
-                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A}
+                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
+                    V.FLOCK_VLLM_CONFIG.id}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
-        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)"]
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -665,6 +667,13 @@ def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
     assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md
 
 
+def test_markdown_prints_family_names_while_column_ids_stay_the_cell_keys() -> None:
+    md = V.render_markdown(V.Views(rules=V.SPEC))
+    assert "| Subcircuit · hardware · scheme | Native N | A-GKR | B-Ligero | D-SP1 | C-Flock |" in md
+    assert "| **D-SP1** |" in md and "| **C-Flock** |" in md and "| **SP1** |" not in md
+    assert V.Views(rules=V.SPEC).columns() == ["A-GKR", "B-Ligero", "SP1", "Flock"]
+    assert V.column_header("SP1 + in-proof hash") == "D-SP1 + in-proof hash" and V.column_header("Ligerito") == "Ligerito"
+
 FLOCK_LIVE = {"rounds.sequential_depth": 1070, "net.bytes_out": 922_000.0, "net.bytes_in": 34_240.0, "net.rtt_ms": 0.9,
               "rtt_method": "median of the session's coin round trips (same datacenter)", "net.wait_seconds": 1.071}
 
@@ -682,21 +691,51 @@ def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(sto
     assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 100e9)
 
 
-def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
-    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
-    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 100 Gb/s -- and Table 3 keeps that transfer
-    as the interaction stage, footnoted."""
+def test_a_file_verified_interactive_result_pays_its_protocols_sequential_depth_and_its_bytes(store: LocalStore) -> None:
+    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = the
+    protocol's sequential depth (3 per proof x the sub-batch proofs run one after another: ceil(N_subbatches / pipeline) waves),
+    bytes = proof + statement bytes, network time = rounds x 1 ms + bytes / 100 Gb/s -- and Table 3 keeps it as the interaction
+    stage, footnoted (root's ruling 2026-09-26)."""
     art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
                                                                  "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
+    fp = store.get_manifest(art).meta["workload_fingerprint"]
+    waves = math.ceil(fp.get("N_subbatches", 1) / (fp["software"]["backend"].get("pipeline") or fp.get("N_subbatches", 1)))
     views = V.build(store)
     cell = line(views)["cells"]["B-Ligero"]
     assert cell is not None and cell.artifact == art
     ix = cell.throughput["interaction"]
-    assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
-    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 100e9)
+    assert ix["derived"] and not ix["live"] and ix["rounds"] == 3 * waves and ix["rounds_source"] == "derived: file-verified"
+    assert ix["rtt_ms"] is None and ix["bytes_up"] == 1.255e9
+    assert cell.throughput["interaction_s"] == pytest.approx(3 * waves * 0.001 + 1.255e9 * 8 / 100e9)
     md = V.render_markdown(views)
     share = 100 * V.stages(cell)["interaction"] / cell.overhead
-    assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
+    assert f"That interaction is {share:.0f}–{share:.0f}% of those cells" in md and f"{3 * waves} (derived)" in md and "— (file-verified)" in md
+
+
+def test_file_verified_rounds_multiply_by_the_sequential_sub_batch_waves() -> None:
+    fp = {"B": 32768, "N_subbatches": 193, "software": {"backend": {"name": "ligero", "pipeline": 4}}}
+    meta = {"workload_fingerprint": fp, "measurements": [{"name": "t.total", "value": 7.0, "unit": "s"},
+                                                         {"name": "rounds.sequential_depth", "value": 3, "unit": "count"}]}
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 49
+    fp["software"]["backend"].pop("pipeline")
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 193
+    fs = V.interaction(meta)
+    assert fs["rounds"] == 0 and fs["rounds_source"] == "fiat-shamir" and fs["derived"]
+
+
+def test_the_published_rtt_method_is_an_enum_never_the_recorded_text() -> None:
+    assert V.rtt_method_enum("median of 20 TCP connects to the verifier pod's ssh port (10.0.0.1:2222)") == "tcp-connect"
+    assert V.rtt_method_enum("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the verifier") \
+        == "open-connection-ping"
+    assert V.rtt_method_enum("iperf") == "unclassified" and V.rtt_method_enum(None) is None
+    assert set(V.RTT_METHODS) == {"tcp-connect", "open-connection-ping", "unclassified"}
+
+
+def test_a_flock_vllm_v1_result_binds_the_vllm_v1_scheme_not_keyed_blake3() -> None:
+    meta = lambda name: {"workload_fingerprint": {"software": {"backend": {"name": name}}}}  # noqa: E731
+    assert V.configuration_of(meta("flock-vllm-v1")) is V._CONFIG[V.FLOCK_VLLM_CONFIG.id]
+    assert V.FLOCK_VLLM_CONFIG.scheme == "vllm-v1" and V.FLOCK_VLLM_CONFIG.family == "Flock"
+    assert V.configuration_of(meta("flock (flock-128-r2)")).id == V.FLOCK_CONFIG.id
 
 
 def test_flocks_declared_class_is_non_zk_proof() -> None:
@@ -785,7 +824,7 @@ def test_entities_print_every_table2_cell_and_footnote_exactly_as_the_markdown(s
             assert f" {cell['display']} [{cell['footnote']}] |" in md
             assert (cell["value"] is None) == (cell["result"] is None) == (cell["state"] != "cell")
     assert ent["axes"]["backend_families"] == t2["columns"][1:] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"]
-    assert t2["column_labels"] == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
+    assert t2["column_labels"] == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "C-Flock", "D-SP1": "D-SP1"}
     assert ent["axes"]["subcircuits"] == [c["id"] for c in ent["subcircuits"]]
     assert [c["legacy_target"] for c in ent["subcircuits"]] == list(TARGETS)
 
@@ -803,7 +842,7 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
         assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
     assert b3["id"] == "B-interactive@gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed@bench-instances-fp8-ada-v1@rtx-4090/e4m3"
     assert b3["key"] == {"backend": "B-interactive", "statement": "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed",
-                         "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+                         "input_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
     assert b3["implementation"] == "B-Ligero + BLAKE3 in circuit" and b3["backend"] == "B-interactive" and b3["best"]
     assert "configuration" not in b3 and "configurations" not in ent
     assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["N"]["value"] / 4096)
@@ -882,7 +921,8 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     # interactive B-Ligero: statistical soundness on its hashes and bounds; ZK on the coin commitment; designated verifier
     v1 = by("B-Ligero v1")
     assert list(v1) == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
-    assert [(a["id"], a["role"]) for a in v1["malicious-verifier-zk"]] == [("cr/blake2b", "Fiat–Shamir / coins (coin commitments)")]
+    assert [(a["id"], a["role"]) for a in v1["malicious-verifier-zk"]] == [("cr/blake2b", "Fiat–Shamir / coins (coin commitments)"),
+                                                                          ("random-oracle", V._LIGERO_MERKLE_HIDING[0])]
     roles = {a["id"]: a["role"] for a in v1["statistical-soundness"] if a["id"]}
     assert roles["cr/blake3"] == "proof-internal commitment" and roles["xof/shake-256"] == "Fiat–Shamir / coins (PRG of the verifier's coins)"
     assert roles["rs-proximity-udr"] == "Ligero column tests (interleaved RS, rate 1/4)"
@@ -891,18 +931,20 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     # its Fiat–Shamir sibling is a separate entry: computational soundness, HVZK on an honest verifier, non-interactive on the oracle
     fs = by("B-Ligero Fiat–Shamir (HVZK)")
     assert list(fs) == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"]
-    assert fs["hvzk"] == [{"id": "honest-verifier", "role": "", "text": cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["text"], "unmapped": False}]
+    assert fs["hvzk"] == [{"id": "honest-verifier", "role": "zero knowledge only (soundness does not rest on it)", "text": cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["text"], "unmapped": False}]
     assert {a["id"] for a in fs["non-interactive"]} == {"random-oracle"} and len(fs["non-interactive"]) == 2
     assert [a["role"] for a in fs["non-interactive"]] == ["Fiat–Shamir / coins (Fiat–Shamir)", "Fiat–Shamir / coins"]
     assert fs["non-interactive"] == [a for a in fs["computational-soundness"] if a["id"] == "random-oracle"]
-    # an in-circuit configuration whose ZK text names no coin commitment rests its ZK on nothing the code declares
-    assert by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"] == []
+    # an in-circuit configuration whose ZK text names no coin commitment rests its ZK only on the unsalted Merkle leaves' hiding
+    assert [a["id"] for a in by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"]] == ["random-oracle"]
     rt = cfgs[V.ROUTE_A]
     assert {"cr/sha-256", "cr/blake3", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
     assert rt["properties"] == ["statistical-soundness", "no-zk", "designated-verifier", "transparent-setup"]
-    assert "SHA-256 (Fiat–Shamir / coins; live transcript and root_F binding; standard)" in rt["unmapped"]
+    assert not any(t.startswith("SHA-256 (Fiat–Shamir / coins") for t in rt["unmapped"])
+    assert "cr/blake3" in cfgs[V.FLOCK_CONFIG.id]["assumptions"] and "cr/sha-256" in cfgs[V.FLOCK_CONFIG.id]["assumptions"]
     sp1 = cfgs["SP1 stock (relation-only / bare guest)"]
-    assert sp1["properties"] == ["computational-soundness", "non-interactive", "transparent-setup"] and sp1["claims"][1]["property"]["unmapped"]
+    assert sp1["properties"] == ["computational-soundness", "no-zk", "non-interactive", "transparent-setup"]
+    assert sp1["claims"][1]["property"]["texts" if "texts" in sp1["claims"][1]["property"] else "text"]
     assert sp1["assumptions"][:1] == ["cr/poseidon2-koalabear"] and "random-oracle" in sp1["assumptions"]
     assert "logup" in cfgs["A-GKR CPU (Rust)"]["assumptions"]
     assert set(ent["claims"]) == {*(i for b in ent["backends"] for k in ("properties", "assumptions") for i in b[k]),
@@ -919,7 +961,7 @@ def test_entities_backends_are_backend_families_by_interaction_mode_with_their_c
     inst = {i["id"]: i for i in ent["backends"]}
     assert list(inst) == ["A-route-a", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
     assert [f["id"] for f in ent["backend_families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["backend_families"]
-    assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
+    assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "C-Flock", "D-SP1": "D-SP1"}
     for i in inst.values():
         assert i["display"] == i["id"] and (i["id"] == f"{i['backend_family'][0]}-{i['mode']}" or i["composed"])
         members = [cfgs[c] for c in i["implementations"]]
@@ -939,14 +981,16 @@ def test_entities_backends_are_backend_families_by_interaction_mode_with_their_c
     zk = next(a for a in b["claims"][1]["assumptions"] if a["id"] == "cr/blake2b")
     assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "B-Ligero v1" in zk["implementations"]
     assert inst["A-route-a"]["implementations"] == [V.ROUTE_A] and len(inst["A-fs"]["implementations"]) == 2
-    assert "cr/blake3" not in inst["C-interactive"]["assumptions"]                 # C-Flock's BLAKE3 rows are its statement's
+    c_rests = {a["id"]: a for a in inst["C-interactive"]["claims"][0]["assumptions"] if a["id"]}
+    assert c_rests["cr/blake3"]["roles"] == ["proof-internal commitment (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"]
+    assert not any(r.startswith("statement commitment") for a in c_rests.values() for r in a["roles"])   # the rows are its statement's
     ra = inst["A-route-a"]
     assert ra["composed"] and ra["backend_family"] == "A-GKR" and ra["column"] == "A-GKR" and ra["components"] == ["C-Flock", "link"]
     froms = {a["from"] for a in ra["claims"][0]["assumptions"]}
     assert {"C-Flock", "link"} <= froms
     link = [a for a in ra["claims"][0]["assumptions"] if a["from"] == "link"]
     assert any("root_F" in a["texts"][0] for a in link) and any(a["texts"][0].startswith("sigma link 2^-243.9") for a in link)
-    assert inst["D-fs"]["claims"][1]["property"]["unmapped"] and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
+    assert inst["D-fs"]["claims"][1]["property"]["id"] == "no-zk" and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
     c0 = next(c for c in ent["subcircuits"] if c["legacy_target"] == NVFP4_SM120.name)
     assert (c0["hardware_name"], c0["dtype_display"], c0["hardware_display"]) == ("RTX 5090", "FP4 (NVFP4, E2M1)", "RTX 5090 · FP4 (NVFP4, E2M1)")
     assert c0["peak"] == {"value": 1676e12, "unit": "FLOP/s", "display": "1676 T"}
@@ -998,13 +1042,13 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
 
 
-def test_entities_results_are_every_admissible_backends_best_with_keys_instance_sets_soundness_and_phases(store: LocalStore) -> None:
+def test_entities_results_are_every_admissible_backends_best_with_keys_input_sets_soundness_and_phases(store: LocalStore) -> None:
     arts = _entities_store(store)
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     by_art = {r["artifact"]: r for r in ent["results"]}
     b3 = by_art[arts["blake3"]]
     stmt = "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed"
-    assert b3["key"] == {"backend": "B-interactive", "statement": stmt, "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+    assert b3["key"] == {"backend": "B-interactive", "statement": stmt, "input_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
     st = {x["id"]: x for x in ent["statements"]}
     assert st[stmt]["subcircuit"] == "gemm-coordinate/k1536/sm89-mma-e4m3" and st[stmt]["scheme"] == "frame-v3/blake3-keyed"
     assert st[stmt]["assumptions"] == ["cr/sha-256", "cr/blake3"] and b3["assumptions"]["statement"] == st[stmt]["assumptions"]
@@ -1015,7 +1059,7 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["N"]["peak"] == "rtx-4090/e4m3"
     assert b3["N"]["work_model"] == "work-model/v0" and b3["P"]["value"] == b3["throughput"]["instances_per_second"]
     assert b3["overhead"]["value"] == pytest.approx(b3["N"]["value"] / b3["P"]["value"])
-    assert b3["instance_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
+    assert b3["input_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
     assert b3["soundness"]["cell_log2"] == b3["soundness"]["cell_bits"] * -1 and b3["soundness"]["proofs"] == b3["batching"]["proofs"]
     assert "per_proof_log2" in b3["soundness"]
     kinds = {p["id"]: p["kind"] for p in b3["phases"]}
@@ -1036,7 +1080,7 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["statement"] == stmt
     sub = {s["id"]: s for s in ent["subcircuits"]}
     assert sub["gemm-coordinate/k1536/sm90-mma-bf16"]["fidelity_notes"][0]["note"].startswith("H100 BF16 models mma")
-    assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["instance_set_provenance"] == "captured"
+    assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["input_set_provenance"] == "captured"
 
 
 def test_a_second_admissible_result_of_another_backend_is_emitted_beside_the_familys_best(store: LocalStore) -> None:
@@ -1104,7 +1148,7 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
         r = by_art[art]
         ix = r["interaction"]
         at = lambda rtt_s, bw: r["N"]["value"] * (ix["commit_s"] + ix["prover_compute_s"] + ix["verifier_compute_s"] + ix["rounds"] * rtt_s  # noqa: E731
-                                                   + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bw) / ix["instances"]
+                                                   + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bw) / ix["inputs"]
         assert at(0.001, 100e9) == pytest.approx(r["overhead"]["value"], rel=1e-9)
         for n in ("rtt-20ms-100gbps", "dc-1ms-10gbps"):
             prof = ent["census"]["networks"][n]
@@ -1112,9 +1156,10 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     ix = by_art[live]["interaction"]
     assert ix["live"] and ix["rounds"] == ix["sequential_depth"] == rounds and ix["rounds_protocol"] == 2 * rounds
     assert (ix["bytes_up"], ix["bytes_down"]) == (2_058_029, 165_825)
-    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "median of 20 TCP connects"}
+    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "tcp-connect"}
     assert ix["loopback_per_round"] == {"s": 0.0001, "method": "measured on loopback, this run"}
     assert ix["loopback_moved_s"] == pytest.approx(rounds * 0.0001)
     assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0
+    assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
-    assert fx["derived"] and fx["rounds"] == 0 and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
+    assert fx["derived"] and fx["rounds_source"] == "derived: file-verified" and fx["measured_rtt"] is None and fx["loopback_per_round"] is None

@@ -109,7 +109,8 @@ veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)
 
 Prose, docstrings and Notion use these words.  Serialized field names (`member`, `op_path`, `output_member`, `query: Q_module_v1`,
-`weights_pin`, ...) are not renamed: a header string inside a digested document changes its digest.
+`weights_pin`, ...) are not renamed: a header string inside a digested document changes its digest.  Subcircuit template,
+subcircuit, backend family and backend mean what the root README's Glossary says.
 
 Core (Verity semantics, `packages/verity`):
 

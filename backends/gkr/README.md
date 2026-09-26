@@ -1,4 +1,4 @@
-# Candidate A: GKR + lookups (`verity-gkr`)
+# A-GKR: GKR + lookups (`verity-gkr`)
 
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as a layered arithmetic
 circuit exported from the WP2 gadget contracts, proved data-parallel over `B` units with sumcheck GKR, LogUp fractional-sum

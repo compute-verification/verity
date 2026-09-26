@@ -21,6 +21,73 @@
   probes, statement and instance set) and registers it with the cell stamped and the running lane as its producer.
 - `bench.lowerings`: each family (A-GKR, B-Ligero, C-Flock, D-SP1) keeps one module per template under `templates/`
   (`supports(subcircuit, scheme)` with the reason, `relation`, optional `stage`); the reason is the cell's `n/s`.
+## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
+
+- The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family
+  to it, and `backend_families[].column` is that name (`SP1` is now `D-SP1`, `Flock` is now `C-Flock`; A-GKR and B-Ligero
+  are unchanged).
+- The markdown developer render prints the same names in Table 2's header, Table 3's cell labels and Table 1's family rows.
+- Column ids stay `SP1` and `Flock`: they key the cells, `--format json`'s `table2.columns` and the parity gate against
+  the frozen tables (`tables.py`, whose own headers are unchanged), so `views --parity` is unaffected. The first published
+  entities render after this change differs from the previous one only in those two fields.
+
+## 2026-09-26: the markdown tables are retired; backend profiles match main
+
+- The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
+  `[[render]]` entry is now `published = "entities"`: it renders only the entities JSON as `<stamp>-tables.json`, and runs
+  `views --parity` as an internal gate that publishes nothing (a difference is a `RENDER-FAILED` line). The markdown
+  renderers stay as developer tools.
+- Entities backend profiles, following the docs site's gaps note of 20260926T0210Z:
+  - the SHA-256 binding the live transcript (and route (a)'s `root_F`) maps to `cr/sha-256`;
+  - Flock's Ligerito Merkle trees are a proof-internal hash: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA
+    (`cr/blake3`, `cr/sha-256`);
+  - B-Ligero's malicious-verifier ZK also rests on `random-oracle`, because its Merkle leaves are unsalted
+    (ligero PROTOCOL.md, red-team-zk-2 G3);
+  - an `unknown` ZK text (SP1) maps to `no-zk`: Verity claims no ZK for it;
+  - B-fs's `honest-verifier` has the role "zero knowledge only (soundness does not rest on it)";
+  - a backend's claims and `implementations` cover only its configurations with a result in the render, when any has one;
+    the others are listed as `declared_without_results`, such as SP1's committed guests, which aren't on main yet.
+- Poseidon2 row leaves are admissible, flagged as algebraic, and never count toward a standard-hash claim. The render
+  already did this; `verity.commitments.rowleaf`'s wording now matches.
+
+## 2026-09-26: the README Glossary's terms in docstrings and help
+
+- Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
+  configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
+  `instances`) and the frozen tables' headers keep their names, mapped in the Glossary.
+
+## 2026-09-26: file-verified interactive results pay their protocol's rounds
+
+- Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round
+  interactive protocol, verified from its replayed transcript) were modelled as non-interactive. The reference network
+  undercharged them and RTT sweeps left them flat.
+- Root's ruling (2026-09-26): a file-verified result of an interactive protocol (its configuration is not transferable) uses the
+  protocol's sequential depth as its rounds: the per-proof depth (`rounds.sequential_depth`, else `rounds.protocol`) times the
+  sub-batch proofs that run one after another. With `software.backend.pipeline` proofs in flight, that is
+  ceil(`N_subbatches` / pipeline) waves; without a pipeline, all `N_subbatches`. The measured RTT stays null. Fiat–Shamir
+  results (A-GKR, SP1, B-Ligero FS) keep 0.
+- The interaction record, and the entities render's `interaction`, gain `rounds_source`: `measured`,
+  `derived: file-verified` or `fiat-shamir`. Markdown shows `<rounds> (derived)`, and the Table 3 interaction note now
+  counts rounds × 1 ms.
+- Effect at the reference network: the 14 B-interactive results rise by 0.9–5.5% (12 to 147 rounds each). The legacy
+  parity is unchanged.
+- Entities: `throughput.instances` is now `throughput.inputs`, following `interaction.inputs`.
+- Entities: `interaction.measured_rtt.method` is now an enum (`views.RTT_METHODS`: `tcp-connect`,
+  `open-connection-ping`, `unclassified`). The recorded `rtt_method` text names hosts and ports, so it stays in the result's
+  own record in the evidence store. The markdown still prints the recorded text and is byte-identical.
+
+## 2026-09-26: "instance set" becomes "input set"
+
+- `census/instance_sets.json` and its schema are now `census/input_sets.json` and `schemas/input_sets.schema.json`. The
+  reader's `census.INSTANCE_SETS` is now `census.INPUT_SETS`.
+- In the entities render:
+  - results, their `key` and subcircuits carry `input_set` (and `input_set_provenance`) instead of `instance_set`;
+  - a result's `interaction.instances` (the inputs per timed run) is now `interaction.inputs`;
+  - the embedded census section is now `input_sets`;
+  - result ids are unchanged in shape: `<backend>@<statement>@<input set>@<prover hardware>`.
+- Recorded names keep the old word, because fixtures and results carry them: the `instance-equiv/v1` artifact kind, a
+  result's `instances` ref, and the `tier` field. Printed markdown strings such as reason I, "another instance set", are
+  also unchanged, so renders stay byte-identical.
 
 ## 2026-09-25: `views --format entities`, the docs site's render
 

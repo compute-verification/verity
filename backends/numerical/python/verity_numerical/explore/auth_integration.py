@@ -29,7 +29,7 @@ Options (report section 2; ``OPTIONS``)
 (e)                         the ZK verdict per option is in ``PRIVACY`` and the report.
 
 Sharing (:func:`sharing_from_bench`).  Leaf hashing / row binding is paid once per *distinct* leaf, and the frozen
-instance set has a structure: 24 captured activation rows x 144 weight rows each (3 456 real VUs) + 640 corners; 2 598
+input set has a structure: 24 captured activation rows x 144 weight rows each (3 456 real VUs) + 640 corners; 2 598
 distinct weight rows in 18 weight matrices; every real VU's ``y`` is one word of one of 24 output rows.  Three regimes
 are priced: ``bench`` (that structure extrapolated to 4 096 real VUs), ``decode_step`` (one token, 4 096 coordinates of
 one projection: x and y shared by all, w all distinct) and ``worst`` (nothing shared).
@@ -108,9 +108,9 @@ CITATIONS: dict[str, str] = {
 class Gadget:
     """One hash invocation (a SHA-256 compression or a Poseidon2 permutation) as proof work.
 
-    ``gates_a``: sumcheck elements Candidate A's GKR sweeps per invocation (one per constraint / trace cell);
+    ``gates_a``: sumcheck elements A-GKR's GKR sweeps per invocation (one per constraint / trace cell);
     ``lookups_a``: logUp leaves (fractional-GKR) per invocation; ``committed_a``: elements A commits (hints);
-    ``committed_b``: elements Candidate B's Ligero commits (trace cells, helper columns x extension degree for lookups);
+    ``committed_b``: elements B-Ligero's Ligero commits (trace cells, helper columns x extension degree for lookups);
     ``products_b``: quadratic rows' worth of products; ``payload_bytes``: message bytes absorbed per invocation;
     ``layers``: multiplicative depth per invocation (A's sequential depth if the chain is not hinted)."""
 
@@ -195,7 +195,7 @@ class Sharing:
 
 
 def sharing_from_bench(B: int = B_TARGET, Rs: Sequence[int] = (1, 16, 64, 256, 4096)) -> Sharing:
-    """The frozen instance set's real structure, extrapolated from its 3 456 real VUs to ``B`` real VUs (the 640
+    """The frozen input set's real structure, extrapolated from its 3 456 real VUs to ``B`` real VUs (the 640
     corners are synthetic and have no Verity leaves)."""
     index = json.loads((BENCH / "vu-k1536.index.json").read_text())
     seeds = json.loads((BENCH / "seeds" / "seeds.json").read_text())["seeds"]

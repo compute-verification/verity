@@ -1,4 +1,4 @@
-# Fused sumcheck rounds for Candidate A on the GPU (a-fused lane)
+# Fused sumcheck rounds for A-GKR on the GPU (a-fused lane)
 
 One Triton kernel per sumcheck round: load the tables' u32 limbs for a tile, fold with the previous challenge, evaluate the
 degree-3 round polynomial at 4 points, write the folded tables -- nothing else touches HBM.  Measured on an RTX 4090

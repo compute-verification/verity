@@ -162,7 +162,7 @@ def test_call_interface_vs_boundary():
     assert reg.in_ == (0, 1, 4, 5)
     assert reg.out == (17,)  # the Relu16 output is a root output
     # a non-contiguous subcircuit: the two Mul16 gates of Row #0
-    S = C.subcircuit([15, 14])
+    S = C.gate_selection([15, 14])
     assert S.size == 2 and S[0].index == 14 and S[1].index == 15
     assert S.in_ == (0, 1, 4, 5)
     assert S.out == (14, 15)

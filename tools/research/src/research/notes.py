@@ -1231,7 +1231,9 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     never the published numbers) into <stamp>-tables-preview.md.  An entry with `published = "views"` (the switch, kb/TABLES.md) publishes
     `.views --published` as <stamp>-tables.md, with its entities render (`--format entities`, the docs site's input) as <stamp>-tables.json,
     and keeps the frozen `.tables` as the drill-down <stamp>-tables-frozen.md (`preview` is
-    then moot); `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
+    then moot).  `published = "entities"` (the docs site replaced the markdown tables, Daniel 2026-09-26) renders only the entities JSON
+    as <stamp>-tables.json and the parity check (`.views --parity`, an internal correctness gate that publishes nothing: a
+    difference is a RENDER-FAILED line) as <stamp>-parity.md.  `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
     that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
     and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  The snapshot
@@ -1253,7 +1255,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
         at, out = str(e.get("at", "")), str(e.get("out", ""))
         key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
         bad = ("an entry needs at = \"HH:MMZ\", source and out" if not (m and out and e.get("source")) else
-               f"published = {e['published']!r}: \"tables\" or \"views\"" if e.get("published", "tables") not in ("tables", "views") else None)
+               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else None)
         if bad:
             if done.get(key) != "invalid":
                 done[key] = "invalid"
@@ -1272,7 +1274,9 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
             if rc != 0:
                 lines.append(f"{now:%H:%MZ} RENDER-REFRESH-FAILED {key}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
         deadline = time.monotonic() + timeout_s
-        if e.get("published", "tables") == "views":
+        if e.get("published") == "entities":
+            mods = [("views", "tables", ["--published"], "entities"), ("views", "parity", ["--parity"], "md")]
+        elif e.get("published", "tables") == "views":
             mods = [("views", "tables", ["--published"], "md"), ("views", "tables", ["--published"], "entities"),
                     ("tables", "tables-frozen", [], "md"), ("drilldown", "drilldowns", [], "md")]
         else:

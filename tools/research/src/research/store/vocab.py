@@ -13,7 +13,7 @@ Three groups, by asserter:
 
     result        the producing lane, about its own result / ledger row (`ledger_to_store`, or `research data label` by hand)
     verification  an independent verifier, never the producer (a table counts it only when `by` is not a producer)
-    evidence      a probe or instance-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
+    evidence      a probe or input-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
 
 Value forms: `enum` (one of `values`), `bool` (`true` | `false`), `int`, `number`, `text`, `list` (of strings).  Enum and bool
 values are compared as the catalog stores them (`index.scalar_text`: strings raw, everything else JSON), so `true` and `"true"`
@@ -77,7 +77,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 OUTCOME = "outcome"
 
-# ---- evidence labels: probe captures and instance sets --------------------------------------------------------------------------------
+# ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
 INSTRUCTION = "instruction"
 MODEL = "model"

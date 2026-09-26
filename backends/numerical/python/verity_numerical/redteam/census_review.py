@@ -6,7 +6,7 @@ same symbolic execution through a subclass of ``CensusCtx`` that additionally re
     duplicated products      the same (operand, operand) pair multiplied twice (the census counts both; a compiler
                              may share them: a lower bound on what sharing saves)
     range chunk columns      a w-bit range check with w > 16 is ceil(w/16) lookups + 1 split; the chunks are new
-                             committed columns (Candidate A commits them or recomputes them as wires, B commits them)
+                             committed columns (A-GKR commits them or recomputes them as wires, B commits them)
     scaled small ranges      a w-bit check with w < 16 through the one 16-bit table looks up x * 2^(16-w): a *computed*
                              wire even when x is a column -- in a Ligero layout (B) the queried value must be a row
     unit chaining            in a trace the next unit's ``c`` is a column bound to the previous word: 1 lin + 1 column

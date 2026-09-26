@@ -1,4 +1,4 @@
-"""Differential tests of `verity.ir.boundary` on the registry's Programs against the explicit oracle `Subcircuit.out` / `Subcircuit.in_`.
+"""Differential tests of `verity.ir.boundary` on the registry's Programs against the explicit oracle `GateSelection.out` / `GateSelection.in_`.
 
 Every exact answer must equal the oracle on the expanded circuit; every bound must be >= the exact `w_out`; every
 `Unsupported` must be on a case named here (in the natural fixtures there are none; the named ones are produced by
@@ -17,7 +17,7 @@ import pytest
 from verity.ir import boundary as B
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ir.liveness import Liveness
-from verity.ir.layout import FunctionCall, Scope, Subcircuit
+from verity.ir.layout import FunctionCall, Scope, GateSelection
 from verity.ir.parts import Limits, Part, Unsupported, n_members
 from verity.ir.program import Program
 from verity.ir.refs import Coll, array_of, strided_view, tuple_of
@@ -32,9 +32,9 @@ from verity.ir.types import Array, Tuple
 
 
 class Oracle:
-    """`Subcircuit.in_` / `.out` computed from the expanded circuit's operands, cached once per program.  The formula is
+    """`GateSelection.in_` / `.out` computed from the expanded circuit's operands, cached once per program.  The formula is
     the oracle's (`layout.py`): out = gates of S consumed by a gate outside S or protected; in = operands of S outside S.
-    `explicit()` re-checks a part against `Subcircuit` itself."""
+    `explicit()` re-checks a part against `GateSelection` itself."""
 
     def __init__(self, program: Program) -> None:
         C = program.circuit
@@ -59,7 +59,7 @@ class Oracle:
         return frozenset(o for g in gates for o in self.ops[g] if o not in gates)
 
     def explicit(self, gates: frozenset[int]) -> None:
-        sub = Subcircuit(self.C, sorted(gates))
+        sub = GateSelection(self.C, sorted(gates))
         assert frozenset(sub.out) == self.out(gates)
         assert frozenset(sub.in_) == self.in_(gates)
 

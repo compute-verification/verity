@@ -1,6 +1,6 @@
 """Live soundness budget of the GPU prover's proof: ``security.accounting.account_candidate_a`` on the instance proved.
 
-Model: the interactive protocol of PROTOCOL.md (Candidate A, "Fiat-Shamir is not used"): the verifier's coins are
+Model: the interactive protocol of PROTOCOL.md (A-GKR, "Fiat-Shamir is not used"): the verifier's coins are
 live.  The benchmark harness derives them as SHA-256(statement, transcript prefix) so that a proof file can be
 re-checked offline (``verity-gkr-verify``); no Fiat-Shamir soundness is claimed for that file (under the campaign's
 ``q x eps`` rule every statistical term below would be multiplied by 2^60).  Terms, BabyBear^6 challenges

@@ -1,4 +1,4 @@
-//! The frozen instance sets an operands-bound statement may name (`instances.txt`): per (relation, lo, vus) the
+//! The frozen input sets an operands-bound statement may name (`instances.txt`): per (relation, lo, vus) the
 //! model whose circuits prove it and the SHA-256 of the operand words (`x.bin`, `w.bin`, little-endian, VU-major)
 //! and of the public words at their width.  The verifier compares the statement's files against this table, so the
 //! prover's harness cannot substitute operands.  A bound relation is `R+bound` for a relation `R` of `pins.txt`: its

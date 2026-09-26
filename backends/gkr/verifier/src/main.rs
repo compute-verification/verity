@@ -1,4 +1,4 @@
-//! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
+//! Independent verifier for A-GKR's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
 //!
 //!   verity-gkr-verify verify    --dir D --proof P (--relation R | --allow-any-circuit) [--vus N] [--threads T] [--json OUT] [--trace-logup]
 //!                               [--require-bound] [--allow-unpinned-instances] [--require-commitment] [--allow-unpinned-commitment]
@@ -23,7 +23,7 @@
 //!
 //! With a `commitment.txt` the statement is operands-committed (commitments.rs): its public words carry each VU's
 //! x row and W column digests after the `y` words, and the verifier rebuilds the scheme's trees from them and compares
-//! the roots with the pinned roots of the instance set.  It is claimed as `R+sha256` / `R+blake3`, whose circuit set
+//! the roots with the pinned roots of the input set.  It is claimed as `R+sha256` / `R+blake3`, whose circuit set
 //! (the hash layers binding the digests to the operand columns) is pinned under that name.  Under
 //! `--allow-any-circuit` only, `--require-commitment` refuses an uncommitted statement and `--allow-unpinned-commitment`
 //! skips the root pin.
