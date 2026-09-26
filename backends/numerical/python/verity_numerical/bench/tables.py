@@ -129,8 +129,8 @@ __all__ = [
 # --- caption constants (frozen) -----------------------------------------------------------------------------------------
 
 FROZEN_ON = "2026-09-22"
-K = census.GEMM_COORDINATE_K1536.K
-B = census.GEMM_COORDINATE_K1536.batch
+K = census.subcircuit_of(FIRST.name).parameters.K
+B = census.GEMM_COORDINATE.reference_batch
 #: log2 of the soundness error: the target AND the achieved (union-bounded over sub-batches) must both be <= this.
 SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"

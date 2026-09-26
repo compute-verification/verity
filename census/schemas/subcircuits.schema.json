@@ -1,45 +1,67 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "census/schemas/subcircuits.schema.json",
-  "title": "Census subcircuits: the benchmark subcircuits a table row measures (kinds and sizes, never units)",
+  "title": "Census subcircuit templates (typed parameters) with the subcircuits (fully bound templates) under each; never units",
   "type": "array",
   "items": {
     "type": "object",
     "additionalProperties": false,
     "required": [
       "id",
-      "kind",
       "name",
-      "K",
-      "batch",
       "description",
-      "sources"
+      "parameters",
+      "accumulate",
+      "reference_batch",
+      "sources",
+      "subcircuits"
     ],
     "properties": {
       "id": {
         "type": "string",
-        "pattern": "^subcircuit/[a-z0-9]+(-[a-z0-9]+)*$"
-      },
-      "kind": {
-        "type": "string",
-        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$"
       },
       "name": {
         "type": "string",
         "minLength": 1
       },
-      "K": {
-        "type": "integer",
-        "minimum": 1
-      },
-      "batch": {
-        "type": "integer",
-        "minimum": 1,
-        "description": "the reference batch"
-      },
       "description": {
         "type": "string",
         "minLength": 1
+      },
+      "parameters": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "type",
+            "description"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "integer",
+                "string"
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "accumulate": {
+        "type": "string",
+        "enum": [
+          "fp32"
+        ]
+      },
+      "reference_batch": {
+        "type": "integer",
+        "minimum": 1
       },
       "sources": {
         "type": "array",
@@ -58,6 +80,34 @@
             "href": {
               "type": "string",
               "format": "uri"
+            }
+          }
+        }
+      },
+      "subcircuits": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(_[a-z0-9]+)*/.+$",
+              "description": "<template>/<bound parameters>"
+            },
+            "parameters": {
+              "type": "object",
+              "minProperties": 1
+            },
+            "legacy_target": {
+              "type": "string",
+              "minLength": 1,
+              "description": "the verity.proofs.target name it was known by"
             }
           }
         }

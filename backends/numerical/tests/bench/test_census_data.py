@@ -22,7 +22,7 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
-    "subcircuits": {"subcircuit/gemm-coordinate-k1536": (1536, 4096)},
+    "subcircuit_templates": {"gemm_coordinate": ("K", "semantics")},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
@@ -56,7 +56,8 @@ def test_the_census_is_data_only() -> None:
 def test_ids_are_pinned_with_their_values() -> None:
     assert {k: h.flop_per_second for k, h in census.HARDWARE.items()} == PINNED["hardware"]
     assert {k: (n.rtt_s, n.bandwidth_bps) for k, n in census.NETWORKS.items()} == PINNED["networks"]
-    assert {k: (w.K, w.batch) for k, w in census.SUBCIRCUITS.items()} == PINNED["subcircuits"]
+    assert {k: tuple(vars(t.parameters)) for k, t in census.SUBCIRCUIT_TEMPLATES.items()} == PINNED["subcircuit_templates"]
+    assert census.GEMM_COORDINATE.reference_batch == 4096 and census.GEMM_COORDINATE.accumulate == "fp32"
     assert set(census.INSTANCE_SETS) == PINNED["instance_sets"]
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
@@ -99,8 +100,18 @@ def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> 
     assert {h.id for h in lines.values()} == set(census.HARDWARE)
     sets = [s.target for s in census.INSTANCE_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
-    assert all(s.size == census.SUBCIRCUITS[s.subcircuit].batch and re.fullmatch(r"[0-9a-f]{64}", s.manifest_sha256)
+    assert all(s.size == census.SUBCIRCUIT_TEMPLATES[census.SUBCIRCUITS[s.subcircuit].template].reference_batch
+               and census.SUBCIRCUITS[s.subcircuit].legacy_target == s.target and re.fullmatch(r"[0-9a-f]{64}", s.manifest_sha256)
                for s in census.INSTANCE_SETS.values())
+
+
+def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
+    """A subcircuit is a fully bound template: gemm_coordinate with K and semantics (the exact instruction) for each target."""
+    for t in TARGETS.values():
+        s = census.subcircuit_of(t.name)
+        assert s.template == "gemm_coordinate" and vars(s.parameters) == {"K": 1536, "semantics": t.instruction}
+        assert s.id == f"gemm_coordinate/k1536/{t.instruction}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
+    assert len(census.SUBCIRCUITS) == len(TARGETS)
 
 
 def test_native_seconds_per_instance() -> None:
