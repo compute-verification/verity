@@ -269,6 +269,29 @@ def _picks_by_request_step(results: list) -> dict[str, dict[str, list[int]]]:
     return {r: {str(s): v for s, v in sorted(d.items())} for r, d in sorted(picks_by_step.items())}
 
 
+#: the replay's own population, kept for one reader after it (the VU exporter, `pipeline.vu_store`, which arms `keep_population`
+#: and takes it right after the replay record); never read by the replay or a verdict
+_POPULATION: dict[str, Any] = {}
+_KEEP = [False]
+
+
+def keep_population(on: bool) -> None:
+    _KEEP[0] = bool(on)
+
+
+def take_population() -> dict[str, Any]:
+    """The last replay's {indices (request -> ProgramIndex), vus, pool, not_executed}, emptied here ({} when none was kept)."""
+    out = dict(_POPULATION)
+    _POPULATION.clear()
+    return out
+
+
+def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dict]) -> tuple[list[dict], list[dict]]:
+    if _KEEP[0]:
+        _POPULATION.update(indices={k: v for k, v in indices.items() if isinstance(k, str)}, vus=all_vus, pool=split[0], not_executed=split[1])
+    return split
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
@@ -314,7 +337,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         not_ev.update(ne)
         not_ev_fam.update(nef)
         indices[rid] = pi
-    pool_vus, not_exec_vus = split_not_executed(all_vus, executed_prefix)          # [R17-26] classified out of the pool, counted below
+    pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
     picked_all, strata, tgt = sample(pool_vus, per_stratum, seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
     cap = max(int(max_evaluate), len(strata))                                     # never below one VU per stratum

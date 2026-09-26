@@ -70,7 +70,7 @@ class Limits:
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written
     max_seconds: float = 600.0               # evaluation budget: the draw stops (named, per family) once it is spent
-    max_population_seconds: float = 3600.0   # population-build budget, checked between request Programs (the rest named)
+    max_population_seconds: float = 900.0    # population-build budget when the replay's is not reused, checked between Programs
     workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
     @classmethod
