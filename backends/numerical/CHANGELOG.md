@@ -8,8 +8,9 @@
   - K and B;
   - the frozen instance sets.
 
-  `census/` is data only: four JSON files, each with a JSON Schema, and a README. Each entry has a stable id, such as
-  `a100-sxm4-80gb/bf16`, `dc-1ms-100gbps` or `subcircuit/gemm-coordinate-k1536`, and its sources.
+  `census/` is data only: five JSON files, each with a JSON Schema, and a README. Each entry has a stable id, such as
+  `a100-sxm4-80gb/bf16`, `dc-1ms-100gbps` or the subcircuit template `gemm_coordinate` with its bound subcircuits, and
+  its sources.
 - `verity_numerical.bench.census` reads the files directly (`$VERITY_CENSUS` overrides the location), and
   `tests/bench/test_census_data.py` validates them against their schemas.
 - No value changed. Renders are byte-identical, and `--parity` is unchanged.
