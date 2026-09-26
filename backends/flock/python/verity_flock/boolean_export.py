@@ -250,7 +250,7 @@ class Registry:
             n[sc[i][1]] += n[i]
         return sum(n[i] != self.nodes[s[0]]["and"] for i, s in enumerate(sc))
 
-    def analyse(self, C: Circuit, root: _Call, name: str, kind: str) -> str:
+    def analyse(self, C: Circuit, root: _Call, name: str, kind: str, list_root: bool = False) -> str:
         live = C.live()
         is_and = [k == "and" for k in C.kind]
         data = C.data
@@ -363,12 +363,13 @@ class Registry:
         rid, _ = visit(root)
         rec = self.nodes[rid]
         rec["name"], rec["kind"] = name, kind
-        self._gate_lists(C, root, rid, memo, owner, hid_of)
+        self._gate_lists(C, root, rid, memo, owner, hid_of, list_root)
         return rid
 
-    def _gate_lists(self, C, root, rid, memo, owner, hid_of):
+    def _gate_lists(self, C, root, rid, memo, owner, hid_of, list_root=False):
         """Write the gate list of every node type that is at most GATE_LIMIT gates and whose parent is larger (or is a root),
-        once; verify each against the circuit on random inputs."""
+        once, and with ``list_root`` also the root's (and its lone child's, when that is the whole root) whatever the size;
+        verify each against the circuit on random inputs."""
         want = set()
 
         def total(h):
@@ -384,6 +385,13 @@ class Registry:
                 walk(c["ref"], not small)
 
         walk(rid, True)
+        h = rid
+        while list_root:
+            want.add(h)
+            ch = self.nodes[h]["children"]
+            if len(ch) != 1 or ch[0]["count"] != 1 or total(ch[0]["ref"]) != total(h):
+                break
+            h = ch[0]["ref"]
         vals, bundle = None, {}
         for h in want:
             rec = self.nodes[h]
@@ -823,7 +831,7 @@ class Walker:
                 C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                 return C
             C, root = trace(build)
-            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "proof-unit")
+            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "proof-unit", list_root=True)
         return self.cache[key]
 
     def prim(self, pid: str, consts: tuple):
@@ -1218,7 +1226,9 @@ def main(argv=None) -> int:
                             "width]: bits src_port+i -> dst_port+i; part -1 = the subcircuit's inputs (as source) / outputs (as "
                             "destination), -2 = a constant (port = its value; -1 = its value differs between instances), "
                             "-3 = the subcircuit's own gates (port -1, unnumbered)",
-             "gate_limit": GATE_LIMIT, "subcircuits": len(reg.nodes), "gate_lists": len(gates),
+             "gate_limit": GATE_LIMIT,
+             "gate_lists_also": "the tensor-core k-step units and their k-step subcircuit, whatever their size",
+             "subcircuits": len(reg.nodes), "gate_lists": reg.verified, "gate_list_bundles": len(gates),
              "gate_lists_bytes": sum(p.stat().st_size for p in gates),
              "verification": f"every gate list evaluated against its circuit (gf2 bit-sliced, 64 random vectors): {reg.verified} checked, 0 differ",
              "wiring_verification": f"every instance's wiring computed and compared with its type's: {reg.wiring_compared} further "
