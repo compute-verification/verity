@@ -1346,6 +1346,18 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     return lines
 
 
+def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
+    """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
+    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent."""
+    from . import notes_sync  # noqa: PLC0415
+
+    if srep["rc"]:
+        ab = notes_sync.lag(root)
+        where = f"ahead {ab[0]} behind {ab[1]}" if ab else "lag unknown"
+        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}"]
+    return [f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []
+
+
 def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[str]:
     """One rule's lines; an exception becomes a `STEWARD-ERROR <rule>` line instead of stopping the watcher (a launchd service)."""
     try:
@@ -2002,8 +2014,7 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             from . import notes_sync  # noqa: PLC0415
 
             srep = notes_sync.sync(root)
-            if srep.get("commit") or srep["rc"]:
-                more.append(f"{now:%H:%MZ} {notes_sync.render_sync(srep)}")
+            more += sync_lines(root, srep, now)
         elif ns.sync:                                       # standby: read the others' notes, write nothing
             _git(root, "pull", "-q", "--ff-only", timeout=300)
         elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:
