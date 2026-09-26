@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
+
+- The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family
+  to it, and `backend_families[].column` is that name (`SP1` is now `D-SP1`, `Flock` is now `C-Flock`; A-GKR and B-Ligero
+  are unchanged).
+- The markdown developer render prints the same names in Table 2's header, Table 3's cell labels and Table 1's family rows.
+- Column ids stay `SP1` and `Flock`: they key the cells, `--format json`'s `table2.columns` and the parity gate against
+  the frozen tables (`tables.py`, whose own headers are unchanged), so `views --parity` is unaffected. The first published
+  entities render after this change differs from the previous one only in those two fields.
+
 ## 2026-09-26: the markdown tables are retired; backend profiles match main
 
 - The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
