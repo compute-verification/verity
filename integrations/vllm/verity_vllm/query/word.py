@@ -1,26 +1,28 @@
-"""`Q_word_v1{X,W}`: a partition of every Call's gates into the largest units S with |out(S)| <= X bits, or one boundary gate of at
-most W bits, whose inputs are committed values.
+"""`Q_word_v1{X,W,R=no-recompute}`: every Call's circuit cut into proof units whose committed outputs are at most X bits, or one value
+of at most W bits, over values serving commits.
 
-The rule:
+The rule (no recomputes):
 
-  * **Partition.** Every gate belongs to exactly one unit.  A value more than one unit needs is committed as its own unit -- unless
-    it is a trivial recompute (at most `TRIVIAL_GATES` gates) of committed values, which is then its own unit but not a commitment.
-  * **Width** is the IR's own: `out(S)` is the gates of S read by a gate outside S or returned (`verity.ir.parts`, `layout.py`), and
-    |out(S)| is the sum of their declared widths in bits.  A unit passes at |out(S)| <= X (16: where the word allows it), or when
-    out(S) is ONE gate of at most W bits (32: float interiors such as a norm scale, attention's max, sum and inverse sum).  No dtype
-    is read: when gates become single bits the invariant is unchanged.
+  * A gate is interior to exactly one unit or on the boundary of one or more units; each gate is **computed in exactly one unit**.
+  * For every computation gate exactly one unit certifies it: its proof being valid implies the gate is the correct function of the
+    committed values the unit reads.  A value read across units is **committed once at serving**, and every reader reuses it.  There
+    are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values.  Constants and
+    wiring (`WIRING`: bit rearrangement, such as BF16 -> FP32 zero-extension) are circuit structure: hardwired into each unit's
+    statement, never committed, not counted as gates; a unit reads through wiring to its source.
+  * **Width** counts committed elements: a unit passes at |out(S)| <= X (16, where the word allows it), or when out(S) is ONE value of at
+    most W bits (32: float interiors such as a norm scale, attention's max, sum and inverse sum).  No dtype is read.
   * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
 
-The partition of one Call activation (`partition`), on its explicit gates:
+The cut of one Call (`partition`), on its computing gates (`Graph`: wiring and constants removed, reads through them re-pointed):
 
-  1. The Call's returned gates, in return order, packed into targets of at most X declared bits (a wider gate is a target alone).
-  2. Backward over the gates (the canonical layout is topological): a gate belongs to the unit of its consumers when they all
-     belong to one unit.  A gate whose consumers belong to different units is needed by more than one unit; those of them read
-     by a unit directly are promoted to targets (committed interior values), and the pass repeats until every gate has one owner.
-  3. Gates no returned value depends on (dead gates) join the one unit whose gates they read, else form a unit of their own.
+  1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
+  2. Backward over the gates (the layout is topological): a gate joins its consumers' unit when they all belong to one; a gate
+     several units read is committed as its own unit, and the pass repeats.
+  3. A gate no returned value depends on (dead) joins the one unit it reads, else heads a dead unit; any value such a gate reads
+     across units is committed too.
 
-The committed interior values it derives are what a tap must acquire: attention's S, P, row max / sum and inverse sum are exactly
-such values, and so is a norm's scale.  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
+`verity.ir.partition.validate_unit_cut` checks every Call's cut; the committed interior values are what serving must acquire (a tap
+where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
 """
 from __future__ import annotations
 
@@ -37,17 +39,21 @@ from verity.ir.refs import Affine
 
 QUERY_ID = "Q_word_v1"
 
-#: a shared value computed from committed values by at most this many gates is recomputed by its readers' verifier, not committed
-TRIVIAL_GATES = 2
+#: primitives that only rearrange bits (each output bit a constant or a copy of one input bit; `tests/query/test_word.py` checks it):
+#: wiring, like constants, is computed in no unit, may be read by any, and is never committed
+WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
-_KINDS = ("output", "committed", "recompute", "literal", "dead", "interior")
+#: the rule's name in the query id
+RULE = "no-recompute"
+
+_KINDS = ("output", "committed", "dead")
 
 #: Calls with more gates than this are not partitioned explicitly (`check_calls` names them)
 MAX_GATES = 24_000_000
 
 
 def query_id(X: int = 16, W: int = 32, extras: int = 0) -> str:
-    return f"{QUERY_ID}{{X={int(X)},W={int(W)}" + (f",EXTRAS={int(extras)}" if extras else "") + "}"
+    return f"{QUERY_ID}{{X={int(X)},W={int(W)}" + (f",EXTRAS={int(extras)}" if extras else "") + f",R={RULE}}}"
 
 
 def parse(spec: str) -> tuple[int, int, int]:
@@ -122,44 +128,84 @@ def _wide_operands(gate: Any, call: Any) -> Iterable[int]:
 
 
 class Graph:
-    """The explicit gates of one Call activation (local index = root index - the Call's offset): declared width, primitive and
-    activation per gate, whether it reads a Call parameter, and the wires between its gates (`src[e]` -> `dst[e]`, grouped by
-    consumer in gate order).  `outputs`: the returned gates in return order."""
+    """The explicit gates of one Call activation that COMPUTE (local index), with wiring and constants removed: declared width,
+    primitive and activation per gate, whether it reads a Call parameter, and the wires between them (`src[e]` -> `dst[e]`), a read
+    through wiring standing for reads of the wiring's source gates.  `outputs`: the returned gates in return order (a returned wiring
+    value: its sources; a returned constant: nothing).  `total` / `free` / `free_by_prim`: the Call's gates, and the free ones."""
 
     def __init__(self, fn: Any) -> None:
         c, call = _call_scope(fn)
         lo, n = call.offset, fn.gates
-        self.n = n
-        self.width = np.empty(n, np.int64)
-        self.prim = np.empty(n, np.int64)
-        self.scope = np.empty(n, np.int64)
-        self.external = np.zeros(n, bool)
+        width = np.empty(n, np.int64)
+        prim = np.empty(n, np.int64)
+        scope = np.empty(n, np.int64)
+        external = np.zeros(n, bool)
+        free = np.zeros(n, bool)
         self.prims: dict[str, int] = {}
         self.scopes: dict[str, int] = {}
-        src, dst = array("q"), array("q")
+        ops: list[list[int]] = []
+        inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
         for j in range(n):
             g = c.gate(lo + j)
-            self.width[j] = g.prim.ret.w
-            self.prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
-            self.scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
-            ops = g.operands
+            width[j] = g.prim.ret.w
+            prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
+            scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
+            free[j] = g.prim.id in WIRING or not g.prim.params
+            it = g.operands
             ext = False
-            if len(ops) > WIDE_FAN_IN:
-                ops = _wide_operands(g, call)
+            if len(it) > WIDE_FAN_IN:
+                it = _wide_operands(g, call)
                 ext = True
-            for o in ops:
-                o -= lo
-                if 0 <= o < n:
-                    src.append(o)
-                    dst.append(j)
+            mine = []
+            for o in it:
+                if 0 <= o - lo < n:
+                    mine.append(o - lo)
                 else:
                     ext = True
-            self.external[j] = ext
+                    mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
+            external[j] = ext
+            ops.append(mine)
+        srcs: dict[int, tuple[int, ...]] = {}
+        for j in np.flatnonzero(free).tolist():
+            s: set[int] = set()
+            for o in ops[j]:
+                s.update(srcs[o] if o >= 0 and free[o] else (o,))
+            srcs[j] = tuple(sorted(s))
+        keep = np.flatnonzero(~free)
+        idx = np.full(n, -1, np.int64)
+        idx[keep] = np.arange(len(keep))
+        src, dst = array("q"), array("q")
+        self.input_reads: list[tuple[int, int]] = []                 # (input index, computing gate)
+        for j in keep.tolist():
+            seen: set[int] = set()
+            for o in ops[j]:
+                for u in (srcs[o] if o >= 0 and free[o] else (o,)):
+                    if u in seen:
+                        continue
+                    seen.add(u)
+                    if u < 0:
+                        self.input_reads.append((-1 - u, int(idx[j])))
+                    else:
+                        src.append(int(idx[u]))
+                        dst.append(int(idx[j]))
+        self.input_ids = sorted(inputs, key=inputs.__getitem__)       # root gate id of each input gate read
+        self.total, self.free = n, int(free.sum())
+        self.free_by_prim = Counter()
+        for k, v in zip(*np.unique(prim[free], return_counts=True)):
+            self.free_by_prim[k] = int(v)
+        self.n = len(keep)
+        self.keep = keep                                           # computation gate -> the Call's gate id
+        self.width, self.prim, self.scope, self.external = width[keep], prim[keep], scope[keep], external[keep]
         self.src = np.frombuffer(src, np.int64) if len(src) else np.zeros(0, np.int64)
         self.dst = np.frombuffer(dst, np.int64) if len(dst) else np.zeros(0, np.int64)
-        self.outputs = [g - lo for g in (resolve(call, r) for r in fn.body.ret) if lo <= g < lo + n]
+        outs: list[int] = []
+        for g in (resolve(call, r) - lo for r in fn.body.ret):
+            if 0 <= g < n:
+                outs += [int(idx[u]) for u in (srcs[g] if free[g] else (g,)) if u >= 0]
+        self.outputs = outs
         self.prim_names = {v: k for k, v in self.prims.items()}
         self.scope_names = {v: k for k, v in self.scopes.items()}
+        self.free_by_prim = Counter({self.prim_names[k]: v for k, v in self.free_by_prim.items()})
 
 
 def _targets(G: Graph, X: int) -> list[list[int]]:
@@ -180,17 +226,16 @@ def _targets(G: Graph, X: int) -> list[list[int]]:
     return out
 
 
-def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str]]:
-    """(owner per gate, kind per unit): kinds "output" (returned values), "interior" (a value more than one unit reads), "dead"."""
+def _owners(G: Graph, head: np.ndarray, kinds: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """Owner per gate for the given heads: backward, a gate joins its consumers' unit when they agree; a gate several units read
+    directly becomes a head (committed); a gate no returned value depends on (dead) joins the one live unit it reads, else heads a
+    dead unit.  Loops until every gate a unit reads from another unit is a head: the committed set is the boundary set."""
     n = G.n
-    head = np.full(n, -1, np.int64)
-    kinds: list[str] = []
-    for t in _targets(G, X):
-        head[t] = len(kinds)
-        kinds.append("output")
     order = np.argsort(G.src, kind="stable")
     cons = array("q", G.dst[order].tobytes())                 # consumers of gate g: cons[start[g]:start[g + 1]]
     start = array("q", np.searchsorted(G.src[order], np.arange(n + 1)).tobytes())
+    by_consumer = np.argsort(G.dst, kind="stable")
+    dstart = np.searchsorted(G.dst[by_consumer], np.arange(n + 1))
     while True:
         owner = array("q", head.tobytes())                     # -1: no returned value depends on it; -2: several units
         for g in range(n - 1, -1, -1):
@@ -207,55 +252,44 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str]]:
                     o = -2
                     break
             owner[g] = o
-        own = np.frombuffer(owner, np.int64)
+        own = np.frombuffer(owner, np.int64).copy()
         s_, d_ = G.src[order], G.dst[order]
         promote = np.unique(s_[(own[s_] == -2) & (own[d_] >= 0)])
         if not len(promote):
-            break
-        head[promote] = np.arange(len(kinds), len(kinds) + len(promote))
-        kinds += ["interior"] * len(promote)
-    own = np.frombuffer(owner, np.int64).copy()
-    dead = np.flatnonzero(own == -1)
-    if len(dead):
-        # a dead gate joins the one live unit it reads, taking the dead-only units it reads along; reading several live units, or
-        # none, it heads a dead unit
-        by_consumer = np.argsort(G.dst, kind="stable")
-        dstart = np.searchsorted(G.dst[by_consumer], np.arange(n + 1))
-        live = len(kinds)
-        parent: dict[int, int] = {}
-
-        def find(u: int) -> int:
-            while u in parent:
-                u = parent[u]
-            return u
-
-        for g in dead:
-            us = {find(int(own[G.src[by_consumer[e]]])) for e in range(dstart[g], dstart[g + 1])}
-            alive = {u for u in us if u < live}
-            if len(alive) == 1:
-                (a,) = alive
-                for u in us - alive:
-                    parent[u] = a
-                own[g] = a
-            else:
+            live = len(kinds)
+            for g in np.flatnonzero(own == -1).tolist():
+                us = {int(own[G.src[by_consumer[e]]]) for e in range(dstart[g], dstart[g + 1])}
+                alive = {u for u in us if 0 <= u < live}
+                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
+            for g in np.flatnonzero(own == -1).tolist():
                 own[g] = len(kinds)
                 kinds.append("dead")
-        if parent:
-            for g in dead:
-                own[g] = find(int(own[g]))
-            keep = sorted(set(range(len(kinds))) - set(parent))
-            remap = np.full(len(kinds), -1, np.int64)
-            remap[keep] = np.arange(len(keep))
-            own = remap[own]
-            kinds = [kinds[u] for u in keep]
-    return own, kinds
+            cross = own[G.src] != own[G.dst]
+            promote = np.unique(G.src[cross][head[G.src[cross]] < 0])
+            if not len(promote):
+                return own, head
+            del kinds[live:]
+        head[promote] = np.arange(len(kinds), len(kinds) + len(promote))
+        kinds += ["committed"] * len(promote)
+
+
+def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
+    """(owner per gate, kind per unit, head per gate): "output" (returned values), "committed" (a value another unit reads), "dead"
+    (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the returned ones and every value read across units."""
+    head = np.full(G.n, -1, np.int64)
+    kinds: list[str] = []
+    for t in _targets(G, X):
+        head[t] = len(kinds)
+        kinds.append("output")
+    own, head = _owners(G, head, kinds)
+    return own, kinds, head
 
 
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
-    """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned),
-    the units it reads, and its kind refined -- an interior unit is "literal" (reads nothing), "recompute" (at most
-    `TRIVIAL_GATES` gates reading only committed values, and at most one other such value depends on it), else "committed"."""
-    owner, kinds = partition(G, X)
+    """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned), and
+    the partition invariant's check (`verity.ir.partition.validate_unit_cut` over the gates the cut commits; violations by gate id)."""
+    from verity.ir.partition import INPUT_UNIT, validate_unit_cut
+    owner, kinds, head = partition(G, X)
     U = len(kinds)
     gates = np.bincount(owner, minlength=U)
     cross = owner[G.src] != owner[G.dst]
@@ -269,30 +303,19 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     bidx = np.flatnonzero(boundary)
     uu, pos = np.unique(bo, return_index=True)
     first[uu] = bidx[pos]
-    last = np.zeros(U, np.int64)
-    np.maximum.at(last, owner, np.arange(G.n))
-    external = np.bincount(owner[G.external], minlength=U) > 0
-    pairs = np.unique(np.stack([owner[G.dst[cross]], owner[G.src[cross]]], 1), axis=0) if cross.any() else np.zeros((0, 2), np.int64)
-    reads: dict[int, list[int]] = {}
-    readers: dict[int, list[int]] = {}
-    for r, w in pairs.tolist():
-        reads.setdefault(r, []).append(w)
-        readers.setdefault(w, []).append(r)
-    committed = [k == "output" for k in kinds]
-    small = gates <= TRIVIAL_GATES
-    for u in sorted((u for u in range(U) if kinds[u] == "interior"), key=lambda u: last[u]):
-        ins = reads.get(u, [])
-        if not ins and not external[u]:
-            kinds[u] = "literal"
-            committed[u] = True
-        elif small[u] and all(committed[v] for v in ins) and \
-                sum(1 for r in readers.get(u, ()) if kinds[r] == "interior" and small[r]) <= 1:
-            kinds[u] = "recompute"
-        else:
-            kinds[u] = "committed"
-            committed[u] = True
+    # the Call's parameters stand in for the input unit: values committed outside the Call (the Program's inputs under their roots, or
+    # another Call's committed outputs; `check_calls` requires each to be a required value)
+    k = len(G.input_ids)
+    reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
+    committed = np.flatnonzero(head >= 0).tolist() + list(range(G.n, G.n + k))
+    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs, committed, range(G.n, G.n + k))
+    if not cut.ok:                                                 # the Call's gate ids (its canonical layout), not the compacted ones
+        ids = G.keep.tolist() + [f"input:{g}" for g in G.input_ids]
+        for k in cut.codes:
+            if k != "gate-count":
+                cut.detail[k]["gates"] = [[ids[a] for a in x] if isinstance(x, list) else ids[x] for x in cut.detail[k]["gates"]]
     ok = (out_bits <= X + extras) | ((out_gates == 1) & (out_bits <= W + extras))
-    return {"owner": owner, "kinds": kinds, "gates": gates, "out_bits": out_bits, "out_gates": out_gates, "ok": ok,
+    return {"owner": owner, "kinds": kinds, "gates": gates, "out_bits": out_bits, "out_gates": out_gates, "ok": ok, "cut": cut,
             "head_prim": np.where(first >= 0, G.prim[np.maximum(first, 0)], -1),
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
 
@@ -321,7 +344,7 @@ def _separable(fn: Any) -> list[tuple[Any, int]] | None:
 
 def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: int, W: int, extras: int) -> dict[str, Any]:
     agg: dict[tuple, dict[str, Any]] = {}
-    interior = Counter()
+    interior, ibits = Counter(), Counter()
     viol: dict[str, dict[str, Any]] = {}
     for r, m in parts:
         for c in r["classes"]:
@@ -332,12 +355,20 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
             a["count"] += c["count"] * m
         for i in r["committed_interior"]:
             interior[(i["scope"], i["head"])] += i["words"] * m
+            ibits[(i["scope"], i["head"])] += i.get("bits", 32 * i["words"]) * m
         for v in r["violations"]:
             e = viol.setdefault(v["class"], dict(v, units=0))
             e["units"] += v.get("units", 1) * m
     classes = sorted(agg.values(), key=lambda c: (-c["count"], c["kind"], str(c["scope"])))
-    rule = _finish(fid, gates, classes, [{"scope": s, "head": p, "words": w} for (s, p), w in interior.most_common()], X, W, extras)
+    rule = _finish(fid, gates, classes, [{"scope": s, "head": p, "words": w, "bits": ibits[(s, p)]} for (s, p), w in interior.most_common()],
+                   X, W, extras)
     rule["violations"] = [dict(v, definition=fid) for v in viol.values()]
+    rule["free_gates"] = sum(r.get("free_gates", 0) * m for r, m in parts)
+    free = Counter()
+    for r, m in parts:
+        for k, v in (r.get("free_by_prim") or {}).items():
+            free[k] += v * m
+    rule["free_by_prim"] = dict(free.most_common(8))
     return rule
 
 
@@ -351,7 +382,10 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
     if key in memo:
         return memo[key]
     cap = X + extras
-    if isinstance(fn, PrimitiveDefinition):
+    if isinstance(fn, PrimitiveDefinition) and (not fn.params or fn.id in WIRING):
+        rule = _finish(fn.id, 1, [], [], X, W, extras)
+        rule["free_gates"], rule["free_by_prim"] = 1, {fn.id: 1}
+    elif isinstance(fn, PrimitiveDefinition):
         bits = fn.ret.w
         classes = [] if not fn.params else [{"kind": "output", "head": fn.id, "scope": fn.id, "gates": 1, "out_bits": bits, "count": 1,
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
@@ -364,6 +398,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
     else:
         G = Graph(fn)
         R = units(G, X, W, extras)
+        cut = R["cut"]
         kinds = np.array([_KINDS.index(k) for k in R["kinds"]], np.int64)
         cols = np.stack([kinds, R["head_prim"], R["head_scope"], R["gates"], R["out_bits"], R["out_gates"]], 1)
         keys, first, count = np.unique(cols, axis=0, return_index=True, return_counts=True)
@@ -379,11 +414,17 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
             classes.append({"kind": _KINDS[kd], "head": G.prim_names.get(hp), "scope": G.scope_names.get(hs), "gates": g, "out_bits": ob,
                             "out_gates": og, "count": k, "ok": bool(R["ok"][u]), "nodes": dict(nodes.get(u, Counter()).most_common(8))})
         classes.sort(key=lambda c: (-c["count"], c["kind"], str(c["scope"])))
-        interior = Counter()
+        interior, ibits = Counter(), Counter()
         for c in classes:
             if c["kind"] == "committed":
                 interior[(c["scope"], c["head"])] += c["out_gates"] * c["count"]
-        rule = _finish(fn.id, G.n, classes, [{"scope": s, "head": p, "words": w} for (s, p), w in interior.most_common()], X, W, extras)
+                ibits[(c["scope"], c["head"])] += c["out_bits"] * c["count"]
+        rule = _finish(fn.id, G.total, classes, [{"scope": s, "head": p, "words": w, "bits": ibits[(s, p)]} for (s, p), w in interior.most_common()],
+                       X, W, extras)
+        rule["free_gates"] = G.free
+        rule["free_by_prim"] = dict(G.free_by_prim.most_common(8))
+        if not cut.ok:
+            rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})
     memo[key] = rule
     return rule
 
@@ -397,6 +438,33 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
     return {"definition": fid, "query": query_id(X, W, extras), "gates": gates, "units_per_call": sum(by_kind.values()),
             "by_kind": dict(by_kind), "committed_interior_words": sum(i["words"] for i in interior), "committed_interior": interior,
             "max_out_bits": max((c["out_bits"] for c in classes), default=0), "classes": classes, "violations": viol}
+
+
+#: where serving commits each committed interior value today, by (activation family, primitive of the value): the FA2 / FA3 hidden
+#: stream's fields (`commit/hidden_stream.py` StreamLayout; S after the softcap), else None -- a new tap
+_ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
+_STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
+           "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
+           "F32MulFtz_v1": "ROW step (max * scale)", "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums",
+           "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+#: the kernel a new tap goes in, by the Definition family holding the value
+_TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
+               "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
+               "RMSNormTriton": "vLLM batch-invariant Triton _rms_norm_kernel", "RMSNormFusedCuda": "vLLM CUDA fused_add_rms_norm_kernel<bf16, 0, true>",
+               "MoeRouterTopK": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)", "MoeRouterTopKNorm": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)"}
+
+
+def committed_today(scope: str | None, head: str | None) -> str | None:
+    """Where serving commits a committed interior value today (a hidden-stream field), or None: the value needs a new tap."""
+    fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
+    if fam in _ATTENTION:
+        return _STREAM.get(head or "")
+    return None
+
+
+def tap_kernel(scope: str | None) -> str:
+    fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
+    return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
@@ -477,5 +545,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
     return check_calls(call_groups(P, Q), X, W, extras, strict=strict)
 
 
-__all__ = ["QUERY_ID", "TRIVIAL_GATES", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
+__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
            "unit_rule", "check_calls", "call_groups", "check_query"]
