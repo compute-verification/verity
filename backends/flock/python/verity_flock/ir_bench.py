@@ -105,6 +105,22 @@ def stage_point(a, low, input_set, total: int, d: Path) -> tuple[list[tuple[int,
     return subs, time.time() - t0
 
 
+def _gpu_released(limit_s: float = 20.0) -> None:
+    """After our prover exits, NVML can list its context for a while (under another pid namespace, so the guard can't tell it is
+    ours). Wait until no compute process is listed, up to ``limit_s``, before the next sub-batch: a process the guard sees after
+    that is not ours. The wait is between sub-batches, outside every timed session."""
+    t0 = time.time()
+    while time.time() - t0 < limit_s:
+        try:
+            out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"], capture_output=True, text=True,
+                                 timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        if not out.strip():
+            return
+        time.sleep(0.5)
+
+
 def _sum_buckets(r: dict) -> dict:
     out = {"t.witness": 0.0, "t.encoding_commitment": 0.0, "t.arithmetic": 0.0}
     for rep in r.get("buckets") or []:
@@ -164,7 +180,7 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             _OURS.add(pr.pid)
             try:
                 rcs.append(pr.wait())
-                time.sleep(2)
+                _gpu_released()
             finally:
                 _OURS.discard(pr.pid)
         finally:
