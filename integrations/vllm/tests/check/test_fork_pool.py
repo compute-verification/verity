@@ -34,9 +34,12 @@ def _alive(pid: int) -> bool:
 
 
 def _workers_after_parent_sigkill(kind: str) -> tuple[list[int], list[int]]:
-    p = subprocess.run([sys.executable, "-c", PARENT, kind], capture_output=True, text=True, timeout=60)
-    assert p.returncode == -signal.SIGKILL, p.stderr
-    pids = [int(x) for x in p.stdout.split()]
+    # read the pid line and wait for the parent only: orphaned workers keep the stdout pipe open, so EOF may never come
+    p = subprocess.Popen([sys.executable, "-c", PARENT, kind], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    line = p.stdout.readline()
+    assert p.wait(timeout=60) == -signal.SIGKILL
+    p.stdout.close()
+    pids = [int(x) for x in line.split()]
     assert len(pids) == 3
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and any(_alive(q) for q in pids):
