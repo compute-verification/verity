@@ -1730,7 +1730,8 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
 
 def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
     """A result's interaction record, enough to recompute its overhead at any network:
-    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / instances``.
+    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / inputs``
+    (``inputs``: the inputs per timed run).
     ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; 0 for a file-verified result);
     ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``)."""
     num = lambda v: float(v) if _num(v) else None  # noqa: E731
@@ -1743,13 +1744,13 @@ def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping
         "measured_bandwidth_bps": ix.get("bandwidth_bps"),
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),
-        "loopback_moved_s": ix["loopback_s"], "instances": P["instances"],
-        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / instances",
+        "loopback_moved_s": ix["loopback_s"], "inputs": P["instances"],
+        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / inputs",
     }
 
 
 def best_per_key(cells: Sequence[ViewCell], key: Callable[[ViewCell], str]) -> list[ViewCell]:
-    """Every admissible result, one per key (backend x statement x instance set x prover hardware): the highest ``P``, ties to
+    """Every admissible result, one per key (backend x statement x input set x prover hardware): the highest ``P``, ties to
     the lower artifact id.  Unlike Table 2's cell (each family's best), every backend's best is kept."""
     best: dict[str, ViewCell] = {}
     for c in cells:
@@ -1810,7 +1811,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     * ``schemes`` -- each commitment scheme's id, name, one-line description and the hash assumptions it rests on, from the
       configurations that bind it (:func:`scheme_entities`); a result's ``scheme`` is one of these ids;
     * ``results`` -- every admissible backend's best result per subcircuit and scheme: its backend and backend family, its
-      row ``key`` (subcircuit, template, parameters, hardware, instance set, scheme), ``hardware`` (the semantics chip, which
+      row ``key`` (backend, statement, input set, prover hardware), ``hardware`` (the semantics chip, which
       supplies N) and ``prover_hardware`` (where the prover ran, which supplies P), overhead, the phases
       that sum to it, one-time setup apart, state (provisional, algebraic, verified, under re-verification), the artifact
       and the render time;
@@ -1820,13 +1821,13 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
     Ids: subcircuits by their census id, backends ``<letter>-<mode>`` (or a composed backend's own id), statements
-    ``<subcircuit>+<scheme>``, results ``<backend>@<statement>@<instance set>@<prover hardware>``, census entries by their
+    ``<subcircuit>+<scheme>``, results ``<backend>@<statement>@<input set>@<prover hardware>``, census entries by their
     census id."""
 
     rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     grid = table2_grid(V)
     cfg_of = {c.id: c for c in V.configurations}
-    sets = {s.target: s.id for s in census.INSTANCE_SETS.values()}
+    sets = {s.target: s.id for s in census.INPUT_SETS.values()}
     circuits = []
     for target in TARGETS.values():
         N = native(target)
@@ -1838,8 +1839,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                          "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
                          "dtype": peak.dtype, "dtype_display": dt.display, "hardware_display": f"{peak.name} · {dt.display}",
                          "accumulate": census.SUBCIRCUIT_TEMPLATES[sub.template].accumulate, "step": target.transition_unit,
-                         "status": target.status, "instance_set": sets.get(target.name),
-                         "instance_set_provenance": census.INSTANCE_SETS[sets[target.name]].provenance if target.name in sets else None,
+                         "status": target.status, "input_set": sets.get(target.name),
+                         "input_set_provenance": census.INPUT_SETS[sets[target.name]].provenance if target.name in sets else None,
                          "fidelity_notes": [{"note": n.note, "sources": [vars(x) for x in n.sources]} for n in sub.fidelity_notes],
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
@@ -1848,7 +1849,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     configurations = configuration_records(V)
 
     backend_by_cfg = {c.id: backend_of(c) for c in V.configurations}
-    sets_by_ref = {(x.dataset, x.tier): x for x in census.INSTANCE_SETS.values()}
+    sets_by_ref = {(x.dataset, x.tier): x for x in census.INPUT_SETS.values()}
 
     backend_list = backends(configurations)
     backend_assumptions = {b["id"]: b["assumptions"] for b in backend_list}
@@ -1869,15 +1870,15 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return {"statement": statement_id(target_name, legacy_scheme), "subcircuit": sub.id, "subcircuit_template": sub.template,
                 "parameters": vars(sub.parameters), "scheme": scheme_id(legacy_scheme), "prover_hardware": prover}
 
-    def instance_set_id(c: ViewCell) -> str | None:
+    def input_set_id(c: ViewCell) -> str | None:
         return (sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier"))) or SimpleNamespace(id=None)).id
 
     def result_key(c: ViewCell) -> str:
-        """backend x statement x instance set x prover hardware."""
+        """backend x statement x input set x prover hardware."""
         return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme)}"
-                f"@{instance_set_id(c)}@{prover_of(c)}")
+                f"@{input_set_id(c)}@{prover_of(c)}")
 
-    def instance_set_of(c: ViewCell) -> dict[str, Any] | None:
+    def input_set_of(c: ViewCell) -> dict[str, Any] | None:
         x = sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier")))
         if x is None:
             return None
@@ -1910,10 +1911,10 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme)
         stmt_assumptions = scheme_by_id[scheme_id(c.scheme)]["assumptions"] if scheme_id(c.scheme) in scheme_by_id else []
         return {
-            "id": result_key(c), "key": {"backend": backend, "statement": stmt, "instance_set": instance_set_id(c), "prover_hardware": prover},
+            "id": result_key(c), "key": {"backend": backend, "statement": stmt, "input_set": input_set_id(c), "prover_hardware": prover},
             "backend": backend, "backend_family": _fam(c.column), "statement": stmt, "implementation": c.configuration,
             "subcircuit": subcircuit_id(c.line), "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
-            "hardware": peak.id, "prover_hardware": prover, "instance_set": instance_set_of(c),
+            "hardware": peak.id, "prover_hardware": prover, "input_set": input_set_of(c),
             "assumptions": {"backend": backend_assumptions.get(backend or "", []), "statement": stmt_assumptions,
                             "all": list(dict.fromkeys([*backend_assumptions.get(backend or "", []), *stmt_assumptions]))},
             "best": any(b.artifact == c.artifact and b.line == c.line and b.scheme == c.scheme for b in V.cells),
@@ -1985,7 +1986,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "axes": {"subcircuits": [c["id"] for c in circuits], "schemes": [scheme_id(s.id) for s in SCHEMES if s.admissible],
                  "statements": list(statements), "backends": [b["id"] for b in backend_list], "backend_families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
-        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "instance_sets")},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({*(i for b in backend_list for k in ("properties", "assumptions")
                                                                                      for i in b[k]),
                                                                                    *(i for st in statements.values() for i in st["assumptions"])})},

@@ -163,12 +163,12 @@ NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
 NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
                       "footnote; an instruction-level microbenchmark only when no GEMM measurement exists, and then said so")
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
-BF16_INSTANCES_MANIFEST_SHA256 = census.INSTANCE_SETS["bench-instances-v1"].manifest_sha256
+BF16_INSTANCES_MANIFEST_SHA256 = census.INPUT_SETS["bench-instances-v1"].manifest_sha256
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
 #: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
-#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``census/instance_sets.json``).
+#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``census/input_sets.json``).
 FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
-    s.target: contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset) for s in census.INSTANCE_SETS.values()}
+    s.target: contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset) for s in census.INPUT_SETS.values()}
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
 #: label by any of them, or by the producing attempt's ``execution.campaign``, is a self-assertion and does not count.

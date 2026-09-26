@@ -31,7 +31,7 @@ NETWORKS = load("networks")
 SUBCIRCUIT_TEMPLATES = load("subcircuits")
 #: Every subcircuit (a fully bound template) by id, with ``template`` naming its template.
 SUBCIRCUITS = {s.id: SimpleNamespace(**vars(s), template=t.id) for t in SUBCIRCUIT_TEMPLATES.values() for s in t.subcircuits}
-INSTANCE_SETS = load("instance_sets")
+INPUT_SETS = load("input_sets")
 REFERENCE_NETWORK = next(n for n in NETWORKS.values() if n.role == "reference")
 SENSITIVITY_NETWORKS = tuple(n for n in NETWORKS.values() if n.role == "sensitivity")
 GEMM_COORDINATE = SUBCIRCUIT_TEMPLATES["gemm-coordinate"]

@@ -186,7 +186,7 @@ REQUIRED_FIELDS = (
     "preprocessing", "retention", "instances",
 )
 #: The frozen instance set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
-INSTANCES_DATASET = census.INSTANCE_SETS["bench-instances-v1"].dataset
+INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: The frozen FP8 Ada instance set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
@@ -194,7 +194,7 @@ INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
 #: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
 #: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
-_FP8_ADA = census.INSTANCE_SETS["bench-instances-fp8-ada-v1"]
+_FP8_ADA = census.INPUT_SETS["bench-instances-fp8-ada-v1"]
 FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
 FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
 #: The frozen Hopper instance sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
@@ -204,10 +204,10 @@ FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manif
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
 #: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
 #: recipe is a new tier.
-_BF16_HOPPER = census.INSTANCE_SETS["bench-instances-bf16-hopper-v1"]
+_BF16_HOPPER = census.INPUT_SETS["bench-instances-bf16-hopper-v1"]
 BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier
 BF16_HOPPER_INSTANCES_SEED, BF16_HOPPER_INSTANCES_DIGEST = _BF16_HOPPER.seed, _BF16_HOPPER.manifest_sha256
-_FP8_HOPPER = census.INSTANCE_SETS["bench-instances-fp8-hopper-v1"]
+_FP8_HOPPER = census.INPUT_SETS["bench-instances-fp8-hopper-v1"]
 FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
 FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
 #: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
@@ -216,7 +216,7 @@ FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
 #: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
 #: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
-_NVFP4 = census.INSTANCE_SETS["bench-instances-nvfp4-sm120-v1"]
+_NVFP4 = census.INPUT_SETS["bench-instances-nvfp4-sm120-v1"]
 NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
 NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
