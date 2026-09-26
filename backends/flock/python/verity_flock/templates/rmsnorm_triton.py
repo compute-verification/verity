@@ -41,7 +41,7 @@ def supports(subcircuit, scheme):
         return f"C-Flock lowers RMSNormTriton_v1 when its warps are identical units (N a multiple of 1024), not N = {n}"
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v2: unit {UNIT}, the row tail "
+    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: unit {UNIT}, the row tail "
             f"evaluated by the verifier); binding its rows under {scheme} is not wired yet")
 
 

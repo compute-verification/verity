@@ -1,4 +1,4 @@
-//! flock-ir-frame: an IR template's units bound to their frame-v3 rows (`flock_live::ir_frame`, `verity/flock-ir-frame/v2`),
+//! flock-ir-frame: an IR template's units bound to their frame-v3 rows (`flock_live::ir_frame`, `verity/flock-ir-frame/v3`),
 //! proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a flock-128-r2 live session.
 //! Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu.
 //!
