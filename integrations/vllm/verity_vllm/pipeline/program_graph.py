@@ -306,7 +306,103 @@ def program_graph(instance_paths: Iterable[str | Path], *, row: dict[str, Any] |
     prefix = wrapper_prefix(strata, acc) if strata else ""
     units = units_from_strata(strata, acc, prefix) if strata else None
     exported = exported_from_vus(vus_jsonl, acc, prefix, request_programs) if vus_jsonl else None
-    return {"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)}
+    return with_definitions({"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)})
+
+
+FOLD_MIN = 3
+
+
+def _node_reads(v: Any) -> set[int]:
+    """The body nodes an encoded node's refs read (every `["n", k, ...]` run in the codec's ref forms)."""
+    out: set[int] = set()
+    if isinstance(v, list):
+        if len(v) >= 2 and v[0] == "n" and isinstance(v[1], int):
+            out.add(v[1])
+        for x in v:
+            out |= _node_reads(x)
+    elif isinstance(v, dict):
+        for x in v.values():
+            out |= _node_reads(x)
+    return out
+
+
+def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Runs of >= FOLD_MIN consecutive body nodes of one callee and form; `chained` when every node of the run reads the one before
+    it (DotBf16's k16 accumulator chain), else the run is parallel (a norm's per-thread partials)."""
+    runs, k = [], 0
+    while k < len(nodes):
+        j = k + 1
+        while j < len(nodes) and nodes[j]["fn"] == nodes[k]["fn"] and nodes[j]["form"] == nodes[k]["form"]:
+            j += 1
+        if j - k >= FOLD_MIN:
+            chained = all((i - 1) in _node_reads(nodes[i]["args"]) for i in range(k + 1, j))
+            runs.append({"start": k, "count": j - k, "fn": nodes[k]["fn"], "form": nodes[k]["form"], "chained": chained})
+        k = j
+    return runs
+
+
+def _specialization(fam: str, statics: dict[str, Any]):
+    """The registered Definition a group names, bound to its statics (a primitive as it is)."""
+    from verity.ir.codec import lookup_primitive
+    from verity_vllm.query.program_view import _registry
+    reg, _errors = _registry()
+    d = reg.defs.get(fam)
+    if d is None:
+        return lookup_primitive(reg, fam)
+    return d.bind(**statics) if hasattr(d, "bind") else d
+
+
+def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> dict[str, dict[str, Any]]:
+    """Every specialization the roots use, down to primitives, in the codec's v0 node form (`verity.ir.codec._encode_definition`),
+    each composite with its fold hints: {spec id: definition}.  A root the registry cannot bind is recorded with its error."""
+    from verity.ir.codec import _encode_definition, _spec_id
+    from verity.ir.defs import PrimitiveDefinition
+    out: dict[str, dict[str, Any]] = {}
+
+    def visit(fn) -> str:
+        fid = _spec_id(fn)
+        if fid in out:
+            return fid
+        out[fid] = {}
+        if not isinstance(fn, PrimitiveDefinition):
+            for n in fn.body.nodes:
+                visit(n.fn)
+        enc = _encode_definition(fn)
+        if enc.get("form") == "composite":
+            enc["fold"] = fold_hints(enc["body"]["nodes"])
+        out[fid] = enc
+        return fid
+
+    for fam, st in roots:
+        try:
+            visit(_specialization(fam, st))
+        except (KeyError, TypeError, ValueError) as e:
+            out[f"{fam}{json.dumps(st, sort_keys=True, default=str)}"] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
+    return out
+
+
+def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
+    """`g` with a `definitions` section and each group's `definition` (its specialization id): a group of one spec names that spec;
+    a group whose statics vary (attention's T) names two representatives, the smallest and the largest value of each varying static."""
+    from verity.ir.codec import _spec_id
+    roots: list[tuple[str, dict[str, Any]]] = []
+    for x in g["groups"]:
+        reps = [dict(x["statics"])]
+        if x.get("varying"):
+            reps = [dict(x["statics"], **{a: v[0] for a, v in x["varying"].items()}), dict(x["statics"], **{a: v[1] for a, v in x["varying"].items()})]
+        ids = []
+        for st in reps:
+            roots.append((x["definition"], st))
+            try:
+                ids.append(_spec_id(_specialization(x["definition"], st)))
+            except (KeyError, TypeError, ValueError):
+                ids.append(None)
+        x["definition_ids"] = ids
+    g["definitions"] = definitions(roots)
+    g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
+                                                 "(verity.ir.codec._encode_definition) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "chained when each reads the one before; a varying group names its smallest and largest representative")
+    return g
 
 
 @dataclass(frozen=True, kw_only=True)
