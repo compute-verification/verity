@@ -9,7 +9,7 @@ t, t + T, ... with T = min(N, 1024) threads); when T does not divide N the warps
 unit netlist is pinned per N by :data:`PINS`."""
 TEMPLATE = "rmsnorm-fused-cuda"
 UNIT = "rmsnorm-fused-cuda/bf16/warp"
-PINS = {2048: "a1baf2bae370234548f1259f2efb3f7b8374dd141187c9debad54e19e588f538"}
+PINS = {2048: "9dbeb747d8a9f3afbabc4dbb990818adc45a1bbc363c298d04b9dbd1d3e1cf32"}
 
 
 def width(n: int) -> int | None:

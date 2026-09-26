@@ -3,9 +3,14 @@
 //! live session. Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu, minus the frame-v3
 //! commitments (the unit inputs and outputs are public, read by the verifier from its own instance file).
 //!
-//!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-ir-block prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W]
-//!   flock-ir-block selftest --instances FILE --netlist FILE [--gpu] [--only CASE]
+//!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
+//!   flock-ir-block prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W]
+//!   flock-ir-block selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
+//!
+//! Before anything, the instance file is checked against the netlist (`ir_block::cut_map`, `check_cuts`): a cut template's
+//! cut words must be exactly what the native tail computes from the units' words, evaluated here (`ir_tail`, the MUFU
+//! tables under `--tables`, pinned by sha256); a file with a cut word the netlist and tail do not account for is refused.
+//! The instance file is the verifier's own staging of the input set (`verity_flock.ir_lower.stage`), never a producer's.
 //!
 //! Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, no publics)`, two verifier points (the regions' claims),
 //! `Link(y = 0, 0)`, then Flock's coins.
@@ -23,7 +28,7 @@ use flock_core::{
     verifier::verify_ligerito_extra,
 };
 use flock_field::F128;
-use flock_live::{ir_block::*, *};
+use flock_live::{ir_block::*, ir_tail::{Tables, tables_needed}, *};
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -288,7 +293,60 @@ const CASES: &[(&str, bool, bool)] = &[
     ("reps_with_different_witness", false, false),
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
+    ("cut_claimed_without_its_tail", false, false),
+    ("row_scalar_forged", false, false),
+    ("aggregate_forged_with_its_scalar", false, true),
+    ("prover_file_differs_from_verifier_file", false, false),
 ];
+
+/// Cases that only a cut template has.
+const CUT_ONLY: &[&str] = &["row_scalar_forged", "aggregate_forged_with_its_scalar"];
+
+/// A copy of the file with different bytes (its sha256 changes with them).
+fn altered(inst: &IrInstances, f: impl FnOnce(&mut IrInstances)) -> IrInstances {
+    let mut x = inst.clone();
+    f(&mut x);
+    x.sha256[0] ^= 1;
+    x
+}
+
+fn set_word32(words: &mut [F128], col: usize, v: u32) {
+    let w = &mut words[col / 128];
+    let t = col % 128;
+    let m = 0xFFFF_FFFFu64;
+    if t < 64 { w.lo = (w.lo & !(m << t)) | ((v as u64) << t) } else { w.hi = (w.hi & !(m << (t - 64))) | ((v as u64) << (t - 64)) }
+}
+
+fn get_word32(words: &[F128], col: usize) -> u32 {
+    let w = &words[col / 128];
+    let t = col % 128;
+    (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) as u32
+}
+
+/// Instance 0 with unit 0's first cut output (a warp aggregate) off by one bit and every cut word the tail computes from it
+/// rewritten into every unit's cut inputs: a self-consistent forgery the cut checks accept, which only the proof refutes.
+fn forge_aggregate(inst: &IrInstances, cm: &CutMap, t: &Tables) -> IrInstances {
+    altered(inst, |x| {
+        let (c0, _) = cm.unit_out[0][0];
+        let ow = x.out_words;
+        let v = get_word32(&x.outputs[..ow], c0) ^ (1 << 12);
+        set_word32(&mut x.outputs[..ow], c0, v);
+        let upi = cm.unit_in.len();
+        let mut slots: Vec<Option<u32>> = vec![None; cm.words];
+        for u in 0..upi {
+            for &(c, k) in &cm.unit_out[u] {
+                slots[k] = Some(get_word32(&x.outputs[u * ow..(u + 1) * ow], c));
+            }
+        }
+        flock_live::ir_tail::eval(&cm.tail, &mut slots, t);
+        let iw = x.in_words;
+        for u in 0..upi {
+            for &(c, k) in &cm.unit_in[u] {
+                set_word32(&mut x.inputs[u * iw..(u + 1) * iw], c, slots[k].unwrap());
+            }
+        }
+    })
+}
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
     let h = Plan::honest(gpu);
@@ -309,16 +367,66 @@ fn false_claim(inst: &IrInstances) -> IrInstances {
     bad
 }
 
-fn run_case(st: &Arc<IrStmt>, inst: &Arc<IrInstances>, name: &str, gpu: bool) -> Value {
+struct Ctx {
+    st: Arc<IrStmt>,
+    inst: Arc<IrInstances>,
+    net_text: String,
+    cm: CutMap,
+    tables: Tables,
+}
+
+/// A load-time case: pass iff the checks refuse the altered file (or, for the forgery, accept it).
+fn load_case(ctx: &Ctx, name: &str) -> Option<Value> {
+    let net = IrUnitNet::parse(&ctx.net_text);
+    let verdict = |x: &IrInstances| -> Result<(), String> {
+        let cm = cut_map(x, &net)?;
+        check_cuts(x, &cm, &ctx.tables)
+    };
+    let r = match name {
+        "cut_claimed_without_its_tail" => verdict(&altered(&ctx.inst, |x| {
+            if ctx.cm.words == 0 { x.header["cut_words"] = json!(1) } else { x.header["cut"]["tail"] = json!([]) }
+        })),
+        "row_scalar_forged" => verdict(&altered(&ctx.inst, |x| {
+            let (c, _) = ctx.cm.unit_in[0][0];
+            let iw = x.in_words;
+            let v = get_word32(&x.inputs[..iw], c) ^ 1;
+            set_word32(&mut x.inputs[..iw], c, v);
+        })),
+        _ => return None,
+    };
+    Some(json!({"case": name, "expect": "refused at load", "refused": r.is_err(), "pass": r.is_err(), "why": r.err()}))
+}
+
+fn run_case(ctx: &Ctx, name: &str, gpu: bool) -> Value {
+    let (st, inst) = (&ctx.st, &ctx.inst);
+    if let Some(v) = load_case(ctx, name) {
+        return v;
+    }
     let want = CASES.iter().find(|c| c.0 == name).expect("case");
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan::honest(gpu)).1);
     }
-    let vinst = if name == "output_claim_false" { Arc::new(false_claim(inst)) } else { inst.clone() };
-    let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, inst)), Box::new(IrVerifier { st: st.clone(), inst: vinst }))));
-    let (v, _) = session(st, inst, shared(InProc(s.clone())), &plan);
+    // (the prover's file, the verifier's file, the Σ the verifier expects)
+    let (pinst, vinst, vsig_of) = match name {
+        "output_claim_false" => (inst.clone(), Arc::new(false_claim(inst)), inst.clone()),
+        "prover_file_differs_from_verifier_file" => {
+            let p = Arc::new(altered(inst, |x| x.outputs[7 * x.out_words].lo ^= 1));
+            (p, inst.clone(), inst.clone())
+        }
+        "aggregate_forged_with_its_scalar" => {
+            let f = Arc::new(forge_aggregate(inst, &ctx.cm, &ctx.tables));
+            let net = IrUnitNet::parse(&ctx.net_text);
+            if let Err(e) = cut_map(&f, &net).and_then(|cm| check_cuts(&f, &cm, &ctx.tables)) {
+                return json!({"case": name, "pass": false, "why": format!("the self-consistent forgery was refused at load: {e}")});
+            }
+            (f.clone(), f.clone(), f)
+        }
+        _ => (inst.clone(), inst.clone(), inst.clone()),
+    };
+    let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vsig_of)), Box::new(IrVerifier { st: st.clone(), inst: vinst }))));
+    let (v, _) = session(st, &pinst, shared(InProc(s.clone())), &plan);
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap().record_json();
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
@@ -347,20 +455,24 @@ fn precheck(st: &IrStmt, inst: &IrInstances) -> Value {
     json!({"units": inst.units, "outputs_differ": bad, "regions": regions})
 }
 
-fn selftest(st: &Arc<IrStmt>, inst: &Arc<IrInstances>, gpu: bool) {
+fn selftest(ctx: &Ctx, gpu: bool) {
+    let (st, inst) = (&ctx.st, &ctx.inst);
     if flag("--precheck") {
         println!("PRECHECK\t{}", precheck(st, inst));
     }
     let only = arg("--only", "");
     if !only.is_empty() {
-        println!("NEG\t{}", run_case(st, inst, &only, gpu));
+        println!("NEG\t{}", run_case(ctx, &only, gpu));
         return;
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        let v = if gpu {
+        if ctx.cm.words == 0 && CUT_ONLY.contains(&name) {
+            continue;
+        }
+        let v = if gpu && load_case(ctx, name).is_none() {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -374,13 +486,13 @@ fn selftest(st: &Arc<IrStmt>, inst: &Arc<IrInstances>, gpu: bool) {
                 }
             }
         } else {
-            run_case(st, inst, name, gpu)
+            run_case(ctx, name, gpu)
         };
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
     println!("SELFTEST\t{}", json!({"statement": STATEMENT, "unit": inst.unit, "subcircuit": inst.header["subcircuit"], "units": inst.units,
-        "m": st.m, "gpu": gpu, "all_pass": all}));
+        "m": st.m, "cut_words": ctx.cm.words, "gpu": gpu, "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -431,23 +543,44 @@ fn serve_loop(make: impl Fn() -> Server) {
     }
 }
 
+fn refuse(why: String) -> ! {
+    println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
+    std::process::exit(2);
+}
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(IrInstances::load(&arg("--instances", "instances.bin")));
-    let net = IrUnitNet::load(&arg("--netlist", "net.txt"));
+    let net_text = std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist");
+    let net = IrUnitNet::parse(&net_text);
     let pin = arg("--pin", "");
-    if !pin.is_empty() {
-        assert_eq!(hex(&net.sha256), pin, "the netlist's sha256 is not the pinned lowering");
+    if cmd == "serve" && pin.is_empty() {
+        refuse("serve needs --pin (the pinned lowering's sha256)".into());
     }
-    assert_eq!(inst.unit, net.name, "instances and netlist name different units");
-    assert_eq!(inst.header["unit_sha256"].as_str(), Some(hex(&net.sha256).as_str()), "the instance file was staged for another netlist");
-    assert_eq!((inst.in_words, inst.out_words), (net.in_words, net.out_cols.len()), "instance words do not match the netlist's IO");
+    if !pin.is_empty() && hex(&net.sha256) != pin {
+        refuse(format!("the netlist's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
+    }
+    if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
+        refuse("the instance file was staged for another unit netlist".into());
+    }
+    if (inst.in_words, inst.out_words) != (net.in_words, net.out_cols.len()) {
+        refuse("instance words do not match the netlist's IO".into());
+    }
+    if let Err(e) = check_order(&net) {
+        refuse(e);
+    }
+    let cm = cut_map(&inst, &net).unwrap_or_else(|e| refuse(e));
+    let tables = Tables::load(&arg("--tables", "tables"), &tables_needed(&cm.tail)).unwrap_or_else(|e| refuse(e));
+    if let Err(e) = check_cuts(&inst, &cm, &tables) {
+        refuse(e);
+    }
     let st = Arc::new(IrStmt::new(net, inst.units));
-    eprintln!("statement {} units={} per_block={} unit_log={} k_log={} nbl={} m={} built in {:.2}s", inst.unit, inst.units, st.units, st.unit_log,
-              st.k_log, st.nbl, st.m, tb.elapsed().as_secs_f64());
+    eprintln!("statement {} units={} per_block={} unit_log={} k_log={} nbl={} m={} cut_words={} built in {:.2}s", inst.unit, inst.units, st.units,
+              st.unit_log, st.k_log, st.nbl, st.m, cm.words, tb.elapsed().as_secs_f64());
+    let ctx = Ctx { st: st.clone(), inst: inst.clone(), net_text, cm, tables };
     match cmd.as_str() {
-        "selftest" => selftest(&st, &inst, flag("--gpu")),
+        "selftest" => selftest(&ctx, flag("--gpu")),
         "serve" => serve_loop(move || server(&st, &inst)),
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();

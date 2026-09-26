@@ -9,7 +9,7 @@ A warp's input leaves (:func:`width`): 32 threads x 8 columns of x, when every l
 columns (N a multiple of 1024); otherwise the warps differ. The unit netlist is pinned per N by :data:`PINS`."""
 TEMPLATE = "rmsnorm-triton"
 UNIT = "rmsnorm-triton/bf16/warp"
-PINS = {2048: "d9d484ba7eb6a4a45655e4f4f0f4bfbe8d40396c07cb7a72fa876f1468db7e2b"}
+PINS = {2048: "b2155f3f16b2de341d5fc6c22359fe357a4de0f2883b18aec79e02ee7c4d9c66"}
 
 
 def width(n: int) -> int | None:

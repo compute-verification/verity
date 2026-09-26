@@ -5,7 +5,7 @@ the primitive's own helpers, then an f32 multiply and the torch bf16 cast.
 The unit's ``flock-ir-unit/v1`` netlist does not depend on I and is pinned by :data:`PIN`."""
 TEMPLATE = "silu-mul"
 UNIT = "silu-mul/bf16/element"
-PIN = "5bb4a943ff542becf69b56b80b9596107b90b23926df191b6fe419a96bade0fd"
+PIN = "3b1ed294ef438c1e4eb1b7d61eacd3b7a88ed78d1713e5a72752c35d6f5f96f7"
 
 
 def definition(subcircuit):

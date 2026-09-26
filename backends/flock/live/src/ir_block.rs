@@ -476,3 +476,137 @@ impl IrStmt {
             .collect()
     }
 }
+
+/// The cut words of a cut template's instance file: per instance-local unit, the (column, cut word) of each cut input port
+/// and each cut output port, and the native tail. Red-team-flock-2 IR1: the verifier accepts no cut word it does not
+/// account for itself.
+pub struct CutMap {
+    pub words: usize,
+    pub tail: Vec<crate::ir_tail::Op>,
+    pub unit_in: Vec<Vec<(usize, usize)>>,
+    pub unit_out: Vec<Vec<(usize, usize)>>,
+}
+
+fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
+    v.as_array()
+        .ok_or("cut ports are not a list")?
+        .iter()
+        .map(|u| {
+            u.as_array()
+                .ok_or("a unit's cut ports are not a list")?
+                .iter()
+                .map(|p| match p.as_array().map(|x| (x.first().and_then(|a| a.as_u64()), x.get(1).and_then(|a| a.as_u64()))) {
+                    Some((Some(c), Some(k))) => Ok((c as usize, k as usize)),
+                    _ => Err("a cut port is not [column, cut word]".to_string()),
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Check the instance file's shape and cut words against the netlist: units = instances x units per instance; no cut word
+/// (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
+/// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
+pub fn cut_map(inst: &IrInstances, net: &IrUnitNet) -> Result<CutMap, String> {
+    let h = &inst.header;
+    let g = |k: &str| h[k].as_u64().map(|x| x as usize);
+    let (n, upi) = (g("instances").ok_or("no instances count")?, g("units_per_instance").ok_or("no units_per_instance")?);
+    if inst.units != n * upi {
+        return Err(format!("{} units, but {n} instances x {upi} units each", inst.units));
+    }
+    let words = g("cut_words").unwrap_or(0);
+    let cut = &h["cut"];
+    if words == 0 {
+        let empty = |v: &serde_json::Value| v.is_null() || v.as_array().is_some_and(|a| a.iter().all(|x| x.as_array().is_some_and(|y| y.is_empty())));
+        if !(empty(&cut["tail"]) && empty(&cut["in"]) && empty(&cut["out"])) || net.in_groups.len() != 1 || net.out_groups.len() != 1 {
+            return Err("cut ports or a tail without cut words (or a netlist with cut groups)".into());
+        }
+        return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi] });
+    }
+    if net.in_groups.len() != 2 || net.out_groups.len() != 2 {
+        return Err(format!("{words} cut words, but the netlist has no cut port groups"));
+    }
+    let (unit_in, unit_out) = (pairs(&cut["in"])?, pairs(&cut["out"])?);
+    if unit_in.len() != upi || unit_out.len() != upi {
+        return Err("the cut ports do not list every unit of an instance".into());
+    }
+    let group_cols = |g: &Group, base: usize| -> Result<Vec<usize>, String> {
+        if g.bits.iter().any(|&b| b != 32) {
+            return Err("a cut port is not 32 bits".into());
+        }
+        Ok((0..g.bits.len()).map(|j| g.col * WORD - base + 32 * j).collect())
+    };
+    let (cin, cout) = (group_cols(&net.in_groups[1], 0)?, group_cols(&net.out_groups[1], net.out_cols[0] * WORD)?);
+    let mut produced = std::collections::BTreeSet::new();
+    for u in 0..upi {
+        if unit_in[u].iter().map(|p| p.0).collect::<Vec<_>>() != cin || unit_out[u].iter().map(|p| p.0).collect::<Vec<_>>() != cout {
+            return Err(format!("unit {u}'s cut ports are not the netlist's cut groups"));
+        }
+        for &(_, k) in unit_in[u].iter().chain(&unit_out[u]) {
+            if k >= words {
+                return Err(format!("unit {u} names cut word {k} of {words}"));
+            }
+        }
+        for &(_, k) in &unit_out[u] {
+            if !produced.insert(k) {
+                return Err(format!("cut word {k} is computed by two units"));
+            }
+        }
+    }
+    let tail = crate::ir_tail::parse(&cut["tail"], words, &produced)?;
+    if tail.iter().any(|o| o.out < words && produced.contains(&o.out)) {
+        return Err("a cut word is computed by a unit and by the tail".into());
+    }
+    Ok(CutMap { words, tail, unit_in, unit_out })
+}
+
+fn word32(words: &[F128], col: usize) -> u32 {
+    let w = &words[col / WORD];
+    let t = col % WORD;
+    (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) as u32
+}
+
+/// Per instance: the units' cut output words, the tail evaluated on them, and every unit's cut input words equal to the
+/// words so computed.
+pub fn check_cuts(inst: &IrInstances, cm: &CutMap, t: &crate::ir_tail::Tables) -> Result<(), String> {
+    if cm.words == 0 {
+        return Ok(());
+    }
+    let upi = cm.unit_in.len();
+    for i in 0..inst.units / upi {
+        let mut slots: Vec<Option<u32>> = vec![None; cm.words];
+        for u in 0..upi {
+            for &(c, k) in &cm.unit_out[u] {
+                slots[k] = Some(word32(inst.output(i * upi + u), c));
+            }
+        }
+        crate::ir_tail::eval(&cm.tail, &mut slots, t);
+        for u in 0..upi {
+            for &(c, k) in &cm.unit_in[u] {
+                if Some(word32(inst.input(i * upi + u), c)) != slots[k] {
+                    return Err(format!("instance {i}: unit {u}'s cut word {k} is not what the tail computes from the units' words"));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Topological order: every AND row reads only earlier columns or the constant, and no row past the inputs is free.
+pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
+    for i in net.in_words * WORD..net.useful {
+        if i == net.const_pos {
+            continue;
+        }
+        let assertion = net.b[i] == [net.const_pos] && net.a[i].contains(&i);
+        for &c in net.a[i].iter().chain(&net.b[i]) {
+            if c >= i && c != net.const_pos && !(assertion && c == i) {
+                return Err(format!("unit row {i} reads column {c}, not an earlier one"));
+            }
+        }
+        if net.a[i] == [i] && net.b[i] == [i] {
+            return Err(format!("unit row {i} is a free row"));
+        }
+    }
+    Ok(())
+}

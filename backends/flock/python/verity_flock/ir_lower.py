@@ -625,6 +625,53 @@ def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     return out
 
 
+# --- the native tail, as the verifier evaluates it --------------------------------------------------------------------------
+
+#: The measured MUFU tables the tail primitives read, as raw u32 LE files (``write_tables``): their sha256s, pinned in the Rust
+#: verifier too (``live/src/ir_tail.rs``); they are ``verity_vllm``'s ``rms_relation.tables("cuda")``, whose xz files that
+#: module pins.
+TABLES = {"rsq": "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
+          "sqrt": "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
+          "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55"}
+#: The primitives the Rust tail interpreter implements.
+TAIL_PRIMS = ("F32Add_v1", "F32Mul_v1", "F32Fma_v1", "F32Div_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1", "DivFullRcp_v1", "DivFullScaleA_v1")
+
+
+def tail_program(low: Lowering) -> list[list]:
+    """The native tail as ops ``[out slot, primitive id, operand slots...]`` in canonical order over slots ``[cut words |
+    temporaries]`` (constants ``[slot, "Const", value]``): what the verifier evaluates on the units' cut words."""
+    U = low.units
+    slot = {g: k for k, g in enumerate(U.cut)}
+    prog = []
+    for g in U.tail:
+        if g.index not in slot:
+            slot[g.index] = len(slot)
+        if getattr(g.prim, "family", None) == "Const":
+            prog.append([slot[g.index], "Const", int(g.prim.evaluate())])
+        elif g.prim.id in TAIL_PRIMS:
+            prog.append([slot[g.index], g.prim.id, *[slot[o] for o in g.operands]])
+        else:
+            raise NoPiece(f"the native tail's primitive {g.prim.id} has no verifier implementation")
+    return prog
+
+
+def write_tables(out_dir) -> dict:
+    """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``) for the verifier; checks :data:`TABLES`."""
+    from pathlib import Path
+
+    from verity_vllm.program.kernels import rms_relation
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    t = rms_relation.tables("cuda")
+    for name, want in TABLES.items():
+        b = np.ascontiguousarray(getattr(t, name), dtype="<u4").tobytes()
+        if hashlib.sha256(b).hexdigest() != want:
+            raise ValueError(f"MUFU table {name}: sha256 differs from the pinned one")
+        (out / f"{name}.u32").write_bytes(b)
+    return dict(TABLES)
+
+
 # --- instance files ----------------------------------------------------------------------------------------------------------
 
 INSTANCES_FORMAT = "flock-ir-instances/v1"
@@ -658,15 +705,35 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
     lay, U = low.layout, low.units
     if U.cut and cuts is None:
         raise ValueError(f"{low.name}: the units read or compute cut words; pass cuts=cut_words(...)")
+    cut = {"words": len(U.cut), "tail": tail_program(low) if U.cut else [],
+           "in": [[[lay.in_port_cols[j], p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.in_src],
+           "out": [[[lay.out_port_cols[j] - lay.out_col * WORD, p] for j, (k, p) in enumerate(src) if k == "cut"] for src in U.out_src]}
     head = {"format": INSTANCES_FORMAT, "unit": low.name, "unit_sha256": low.sha256, "instances": n, "units_per_instance": U.n,
             "units": n * U.n, "in_words": lay.in_words, "in_bits": lay.in_bits, "out_words": lay.out_words, "out_bits": lay.out_bits,
-            "cut_words": len(U.cut), **meta}
+            "cut_words": len(U.cut), "cut": cut, **meta}
     body = _pack_words(low.unit_inputs(flat_in, cuts), lay.in_bits, lay.in_words, lay.in_port_cols)
     body += _pack_words(low.unit_outputs(flat_out, cuts), lay.out_bits, lay.out_words, [c - lay.out_col * WORD for c in lay.out_port_cols])
     with open(path, "wb") as f:
         f.write(json.dumps(head, sort_keys=True).encode() + b"\n")
         f.write(body)
     return head
+
+
+def check_staged(low: Lowering, input_set, path) -> list[str]:
+    """What differs between the instance file at ``path`` and the verifier's own staging of the same range of ``input_set``
+    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's (red-team-flock-2 IR2)."""
+    import tempfile
+    from pathlib import Path
+
+    head = json.loads(Path(path).read_bytes().split(b"\n", 1)[0])
+    lo, hi = head.get("range") or [0, head.get("instances", 0)]
+    with tempfile.TemporaryDirectory() as d:
+        mine = stage(low, input_set, lo, hi, d)
+        if mine.read_bytes() == Path(path).read_bytes():
+            return []
+        a, b = mine.read_bytes().split(b"\n", 1), Path(path).read_bytes().split(b"\n", 1)
+        return [f"{what} differs from the verifier's own staging of {input_set.name} [{lo}, {hi})"
+                for what, x, y in (("header", a[0], b[0]), ("body", a[1], b[1])) if x != y]
 
 
 def stage(low: Lowering, input_set, lo: int, hi: int, out_dir):

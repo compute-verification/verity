@@ -303,6 +303,46 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
     assert (good != bad).any(axis=1).all()
 
 
+def test_the_instance_file_accounts_for_every_cut_word(tmp_path):
+    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the header lists each unit's cut
+    ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined before."""
+    import json
+
+    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
+    s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
+    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
+    head = json.loads(REG.module("rmsnorm-fused-cuda").stage(s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
+    cut = head["cut"]
+    assert head["cut_words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
+    produced = [k for unit in cut["out"] for _, k in unit]
+    tail_out = [op[0] for op in cut["tail"] if op[0] < head["cut_words"]]
+    assert sorted(produced + tail_out) == list(range(head["cut_words"]))
+    defined = set(produced)
+    for op in cut["tail"]:
+        assert set(op[2:] if op[1] != "Const" else []) <= defined
+        defined.add(op[0])
+    assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
+    rope = json.loads(REG.module("rope-head").stage(InputSet.open(SLICES / "rope-head-d64"), 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
+    assert rope["cut_words"] == 0 and rope["cut"]["tail"] == [] and all(not u for u in rope["cut"]["in"] + rope["cut"]["out"])
+
+
+def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
+    """IR2: the verifier stages its own file; a producer's file with one output word changed differs from it."""
+    s = InputSet.open(SLICES / "rope-head-d64")
+    low = REG.module("rope-head").lowering(s.subcircuit)
+    path = REG.module("rope-head").stage(s, 0, 2, tmp_path)
+    assert IL.check_staged(low, s, path) == []
+    b = bytearray(path.read_bytes())
+    b[-3] ^= 1
+    path.write_bytes(bytes(b))
+    assert IL.check_staged(low, s, path) == [f"body differs from the verifier's own staging of {s.name} [0, 2)"]
+
+
+def test_the_tables_are_the_pinned_ones(tmp_path):
+    assert IL.write_tables(tmp_path) == IL.TABLES
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["rcp.u32", "rsq.u32", "sqrt.u32"]
+
+
 @SLOW
 @pytest.mark.parametrize("template", sorted(RMS))
 def test_rmsnorm_captured_slices_and_pins(template):
