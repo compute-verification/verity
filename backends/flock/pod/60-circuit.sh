@@ -6,6 +6,7 @@
 #   MODE=bench      loopback sessions (a verifier process on 127.0.0.1 serving its own public file) at each of POINTS
 #   MODE=build      nothing more
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
+#      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=/workspace/flock-circuit; mkdir -p $O $W
@@ -36,10 +37,10 @@ for tarf in $I/*.tar; do
     N=${SELF_N:-4}
     python3 -m verity_flock.circuit --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
     if [ "${CPU_SELF:-1}" = 1 ]; then
-      $B selftest --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
+      $B selftest --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-cpu} > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
       grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
     fi
-    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
+    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-gpu} > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
                     grep SELFTEST $D/selftest-gpu.txt; grep '"pass":false' $D/selftest-gpu.txt | cut -c1-300; grep -h GPUPHASE $D/selftest-gpu.err | head -2 | cut -c1-600; }
   fi
   if [ "$MODE" = bench ]; then
