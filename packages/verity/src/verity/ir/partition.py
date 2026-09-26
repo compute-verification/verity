@@ -21,6 +21,11 @@ decomposition of a Program into verification units.  Three checks, one verdict e
   specialization and primitive (`Const64[..]` in the Gumbel body, `Input64`).  This is a Program property separate from
   the boundary condition; 32 is a protocol parameter (`w_max`), not a language constant.
 
+A decomposition may have several levels, coarse to fine (a `Hierarchy` of named `Level`s, e.g. replay units and the
+verification units inside them).  `validate_refinement` checks that each level's sets nest inside the level above and
+counts them per parent (`members_per_parent`); `validate_partition(..., within=S)` checks a level that partitions only
+the gates S (a level leaving out Inputs checked elsewhere).
+
 Codes (`PartitionVerdict.codes`, `WidthVerdict.detail["codes"]`):
     tiling-unassigned        a refined body has a node no entry covers                     -> gap
     tiling-members-gap       a node's entries leave members of [0, n) uncovered            -> gap
@@ -28,7 +33,7 @@ Codes (`PartitionVerdict.codes`, `WidthVerdict.detail["codes"]`):
     tiling-malformed         the description could not be interpreted (a zip group of unequal n, a descent on a
                              primitive or into the wrong specialization, an unknown rule): fallback to the sweep
     tiling-count-mismatch    the tiling's structural count != Family.count() (fallback to sweep)
-    sweep-overlap / sweep-gap / limit-intervals / empty-set
+    sweep-overlap / sweep-gap / sweep-outside (with `within`) / limit-intervals / empty-set
     width: limit-members-exact, limit-members-bound, multi-part-exact, boundary-unsupported, limit-sets
 
 The tiling read by the fast path is `query_ast.Tiling`: `Tiling(root: plan key, bodies: Mapping[plan key,
@@ -44,11 +49,13 @@ Nothing here touches `program_digest`.
 """
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator, Literal, Mapping
 
 from . import boundary
 from .defs import PrimitiveDefinition, SpecializedDefinition
+from .intervals import Intervals, complement, isect, norm
 from .layout import Scope
 from .parts import Limits, Part, Unsupported, n_members
 from .query_ast import GateSet, evaluate
@@ -56,7 +63,7 @@ from .query_ast import GateSet, evaluate
 if TYPE_CHECKING:  # pragma: no cover
     from .program import Program
 
-PartitionStatus = Literal["exact", "overlap", "gap", "unsupported"]
+PartitionStatus = Literal["exact", "overlap", "outside", "gap", "unsupported"]
 
 _MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals are always reported)
 
@@ -68,9 +75,10 @@ _MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals ar
 
 @dataclass(frozen=True)
 class PartitionVerdict:
-    """`status`: "exact" (a partition), "overlap", "gap" (overlap wins when both occur; both codes are listed),
-    "unsupported" (the check exceeded `Limits`; not a verdict).  `detail` is JSON-serialisable: the path taken
-    ("tiling" | "sweep"), counts, and bounded examples of the offending nodes / gate intervals."""
+    """`status`: "exact" (a partition), "overlap", "outside" (only with `within`: a set reaches a gate outside it),
+    "gap" (the first applicable wins; every code is listed), "unsupported" (the check exceeded `Limits`; not a
+    verdict).  `detail` is JSON-serialisable: the path taken ("tiling" | "sweep"), counts, and bounded examples of the
+    offending nodes / gate intervals."""
     status: PartitionStatus
     codes: tuple[str, ...]
     detail: dict
@@ -516,11 +524,17 @@ def _family_count(fam: Any) -> int | None:
         return None
 
 
-def validate_partition(program: "Program", fam, limits: Limits = Limits()) -> PartitionVerdict:
+def validate_partition(program: "Program", fam, limits: Limits = Limits(), *, within: Any = None) -> PartitionVerdict:
     """Is `fam` an exact partition of every gate of `program` (Input and constant gates included)?
 
     Fast path from `fam.tiling()` by per-body induction; fallback interval sweep over materialised intervals up to
-    `limits.max_intervals`; beyond that "unsupported" (never a verdict).  See the module docstring."""
+    `limits.max_intervals`; beyond that "unsupported" (never a verdict).  See the module docstring.
+
+    `within` (a `GateSet`, or `(lo, hi)` root gate intervals) asks instead whether `fam` partitions exactly those
+    gates: each of them in one set, and no set reaching outside them ("outside", code `sweep-outside`).  It is how a
+    level leaves out the Inputs checked outside the draws.  This mode always sweeps."""
+    if within is not None:
+        return _sweep(program, fam, limits, _gate_intervals(within, program.gates))
     tiling = family_tiling(fam)
     fallback_codes: list[str] = []
     fallback_detail: dict = {}
@@ -571,8 +585,17 @@ def _tiling_verdict(program: "Program", t: CheckedTiling, count: int) -> Partiti
     return PartitionVerdict(status, codes, detail)
 
 
-def _sweep(program: "Program", fam, limits: Limits) -> PartitionVerdict:
+def _gate_intervals(gates: Any, size: int) -> Intervals:
+    raw = gates.intervals() if hasattr(gates, "intervals") else gates
+    ivs = norm((int(lo), int(hi)) for lo, hi in raw)
+    if ivs and (ivs[0][0] < 0 or ivs[-1][1] > size):
+        raise ValueError(f"gate intervals {ivs[0]} .. {ivs[-1]} outside the program's {size} gates")
+    return ivs
+
+
+def _sweep(program: "Program", fam, limits: Limits, within: Intervals | None = None) -> PartitionVerdict:
     size = program.gates
+    target = within if within is not None else ((0, size),) if size else ()
     ivs: list[tuple[int, int, int]] = []
     n_sets = 0
     empty: list[int] = []
@@ -594,35 +617,43 @@ def _sweep(program: "Program", fam, limits: Limits) -> PartitionVerdict:
     expected = 0
     prev_set = -1
     overlaps: list[dict] = []
-    gaps: list[dict] = []
-    n_over = n_gap = 0
+    covered: list[tuple[int, int]] = []
+    n_over = 0
     for lo, hi, i in ivs:
         if lo < expected:
             n_over += 1
             if len(overlaps) < _MAX_LISTED:
                 overlaps.append({"gates": [lo, min(hi, expected)], "sets": [prev_set, i]})
-        elif lo > expected:
-            n_gap += 1
-            if len(gaps) < _MAX_LISTED:
-                gaps.append({"gates": [expected, lo]})
+        if covered and lo <= covered[-1][1]:
+            covered[-1] = (covered[-1][0], max(covered[-1][1], hi))
+        else:
+            covered.append((lo, hi))
         if hi >= expected:
             expected, prev_set = hi, i
-    if expected < size:
-        n_gap += 1
-        if len(gaps) < _MAX_LISTED:
-            gaps.append({"gates": [expected, size]})
+    union = tuple(covered)
+    missing = isect(target, tuple(complement(union, size)))
+    outside = isect(union, tuple(complement(target, size))) if within is not None else ()
+    n_gap, n_out = len(missing), len(outside)
+    gaps = [{"gates": [lo, hi]} for lo, hi in missing[:_MAX_LISTED]]
     codes: list[str] = []
     if n_over:
         codes.append("sweep-overlap")
+    if n_out:
+        codes.append("sweep-outside")
     if n_gap:
         codes.append("sweep-gap")
     if empty:
         codes.append("empty-set")
-    status: PartitionStatus = "overlap" if n_over else "gap" if n_gap else "exact"
+    status: PartitionStatus = "overlap" if n_over else "outside" if n_out else "gap" if n_gap else "exact"
     detail: dict = {"path": "sweep", "gates": size, "sets": n_sets, "intervals": len(ivs)}
+    if within is not None:
+        detail["within"] = sum(hi - lo for lo, hi in target)
     if n_over:
         detail["overlaps"] = overlaps
         detail["overlap_count"] = n_over
+    if n_out:
+        detail["outside"] = [{"gates": [lo, hi]} for lo, hi in outside[:_MAX_LISTED]]
+        detail["outside_count"] = n_out
     if n_gap:
         detail["gaps"] = gaps
         detail["gap_count"] = n_gap
@@ -924,12 +955,121 @@ def readiness_32bit(program: "Program") -> ReadinessReport:
 
 
 # ---------------------------------------------------------------------------------------------------------
+# hierarchies: levels, refinement, members per parent
+# ---------------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Level:
+    """One level of a partition hierarchy.  `name` is its owner's label ("replay", "check", "matmul", ...), never
+    interpreted here; `query` is the id (`query_ast.query_id`) of the query whose family is this level's members, or
+    None for a level not bound to a Program."""
+    name: str
+    query: str | None = None
+
+
+Hierarchy = tuple[Level, ...]
+"""Levels coarse to fine; each level's members refine the level above (`validate_refinement`)."""
+
+
+@dataclass(frozen=True)
+class RefinementVerdict:
+    """Does every set of a finer family lie inside exactly one set of a coarser one?  `status`: "ok", "violation"
+    (codes: `refine-crosses`, a fine set meets two coarse sets; `refine-outside`, a fine set reaches gates in no
+    coarse set; `refine-empty`, a fine set with no gates; `refine-coarse-overlap`, the coarse sets overlap), or
+    "unsupported" (`limit-intervals`; not a verdict).  `counts[i]` is the number of fine sets inside coarse set i,
+    in family order, when the status is "ok" (empty otherwise)."""
+    status: str
+    codes: tuple[str, ...]
+    counts: tuple[int, ...]
+    detail: dict
+
+    def to_json(self) -> dict:
+        return {"status": self.status, "codes": list(self.codes), "counts": list(self.counts), "detail": self.detail}
+
+
+def validate_refinement(program: "Program", coarse, fine, limits: Limits = Limits()) -> RefinementVerdict:
+    """Is `fine` a refinement of `coarse`: every set of `fine` inside exactly one set of `coarse`?  Containment
+    only; whether each level covers its gates is `validate_partition`'s question.  Families built with
+    `each(F, G)` nest by construction; others need this check.  Interval sweep over both families' materialised
+    intervals, up to `limits.max_intervals` in total."""
+    size = program.gates
+    runs: list[tuple[int, int, int]] = []
+    n_coarse = 0
+    for c, s in enumerate(coarse):
+        n_coarse += 1
+        runs.extend((lo, hi, c) for lo, hi in _gate_intervals(s, size))
+        if len(runs) > limits.max_intervals:
+            return _refinement_unsupported(len(runs), limits)
+    runs.sort()
+    overlaps = [(runs[t - 1][2], runs[t][2]) for t in range(1, len(runs)) if runs[t][0] < runs[t - 1][1]]
+    if overlaps:
+        return RefinementVerdict("violation", ("refine-coarse-overlap",), (),
+                                 {"coarse_sets": n_coarse, "overlap_count": len(overlaps),
+                                  "overlaps": [list(o) for o in overlaps[:_MAX_LISTED]]})
+    starts = [lo for lo, _, _ in runs]
+    counts = [0] * n_coarse
+    problems: dict[str, list[int]] = {}
+    n_fine = seen = 0
+    for f, s in enumerate(fine):
+        n_fine += 1
+        ivs = _gate_intervals(s, size)
+        seen += len(ivs)
+        if seen + len(runs) > limits.max_intervals:
+            return _refinement_unsupported(seen + len(runs), limits)
+        parents: set[int] = set()
+        outside = False
+        for lo, hi in ivs:
+            t = max(bisect.bisect_right(starts, lo) - 1, 0)
+            pos = lo
+            while pos < hi and t < len(runs):
+                rlo, rhi, c = runs[t]
+                if rhi <= pos:
+                    t += 1
+                    continue
+                if rlo > pos:
+                    outside = True
+                    pos = min(rlo, hi)
+                    continue
+                parents.add(c)
+                pos = min(rhi, hi)
+                t += 1
+            outside |= pos < hi
+        code = ("refine-empty" if not ivs else "refine-outside" if outside else
+                "refine-crosses" if len(parents) > 1 else None)
+        if code is None:
+            counts[parents.pop()] += 1
+        else:
+            problems.setdefault(code, []).append(f)
+    detail: dict = {"coarse_sets": n_coarse, "fine_sets": n_fine}
+    if problems:
+        for code, sets in problems.items():
+            detail[code] = {"count": len(sets), "sets": sets[:_MAX_LISTED]}
+        return RefinementVerdict("violation", tuple(sorted(problems)), (), detail)
+    return RefinementVerdict("ok", (), tuple(counts), detail)
+
+
+def _refinement_unsupported(seen: int, limits: Limits) -> RefinementVerdict:
+    return RefinementVerdict("unsupported", ("limit-intervals",), (),
+                             {"intervals_seen": seen, "max_intervals": limits.max_intervals})
+
+
+def members_per_parent(program: "Program", coarse, fine, limits: Limits = Limits()) -> tuple[int, ...]:
+    """The number of `fine` sets inside each `coarse` set, in `coarse`'s order; `ValueError` unless `fine` refines
+    `coarse` (`validate_refinement`)."""
+    v = validate_refinement(program, coarse, fine, limits)
+    if v.status != "ok":
+        raise ValueError(f"not a refinement ({v.status}: {', '.join(v.codes)})")
+    return v.counts
+
+
+# ---------------------------------------------------------------------------------------------------------
 # composition
 # ---------------------------------------------------------------------------------------------------------
 
 
 def vu_status(partition: PartitionVerdict, width: WidthVerdict, readiness: ReadinessReport) -> str:
-    if partition.status in ("overlap", "gap") or width.status == "violation":
+    if partition.status in ("overlap", "outside", "gap") or width.status == "violation":
         return "fail"
     if not readiness.ok:
         return "not-ready"
@@ -958,4 +1098,5 @@ def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdi
 
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition"]
+           "validate_vu_family", "validate_vu_partition",
+           "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]

@@ -15,8 +15,9 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 5. Each checked VU is established on its authenticated boundary values.
 6. An accepted audit emits a `verity.proofs.profile.IntegrityProfile` per RU class (`TwoStageLaw.profile`). It
    holds the exhaustively checked facts: the evaluated Programs, the prescribed families, linkage, and the families
-   covered on every audit (`VerificationPlan.covered`). It also holds the law (`n_r, n_v, p, k`), what was
-   replayed, and `delta`. Resource accounting, policies and PoUW each read what they need off it, passing their own
+   covered on every audit (`VerificationPlan.covered`). It also holds the law as two named levels, `replay`
+   (the `n_r` RUs, drawn `Bernoulli(p)`) and `check` (the `n_v` VUs in each, drawn `Subset(k)`), the counts
+   drawn at each, and `delta`. Resource accounting, policies and PoUW each read what they need off it, passing their own
    utility to `worst_case`. The application counts `delta` once.
 
 ## Randomness
@@ -47,4 +48,6 @@ Obligations are built from a call's declared interface (`args`, `returns`). The 
   version is on `cursor/protocol-prototype-9816`. It lands with the first real consumer of the full lifecycle. Today
   that is vLLM, whose replay runs on one post-commit challenge, with its strata as RUs at `p = 1`.
 - **The security function** and the red-team review (decision 41).
-- **Composition checks:** for example, PoUW's tiles per VU must match this partition (item 26). They wait for PoUW.
+- **Composition checks:** for example, PoUW's tiles per VU must match this partition (item 26). The IR can check
+  that one level refines another and count members per parent (`verity.ir.partition.validate_refinement`); wiring
+  it to PoUW's levels waits for PoUW.

@@ -18,7 +18,10 @@ from fractions import Fraction
 from typing import Any
 
 from verity.randomness import Key, Part, derive
-from verity.proofs.profile import IntegrityProfile
+from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+
+REPLAY, CHECK = "replay", "check"
+"""The profile's level names for the replay units and the verification units checked inside them."""
 
 RU_DOMAIN = "verity/sampled-proofs/ru-sample/v1"
 VU_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
@@ -60,10 +63,12 @@ class TwoStageLaw:
             raise KeyError(f"the law has no stage for replay-unit class {cls!r}") from None
 
     def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, **facts: Any) -> IntegrityProfile:
-        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs; `facts` are
-        the exhaustively checked fields (`programs`, `prescribed`, `linked`, `covered`, `replayed`)."""
+        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs: level
+        `REPLAY` drawn `Bernoulli(p)`, level `CHECK` drawn `Subset(k)`.  `facts` are the exhaustively checked fields
+        (`programs`, `prescribed`, `linked`, `covered`) and `drawn` ({`REPLAY`: RUs, `CHECK`: VUs} checked)."""
         stage = self.stage(cls)
-        return IntegrityProfile(n_r=n_r, n_v=n_v, p=Fraction(stage.p), k=stage.checked(n_v), delta=delta, **facts)
+        draws = {REPLAY: Bernoulli(stage.p), CHECK: Subset(stage.checked(n_v))}
+        return IntegrityProfile((REPLAY, CHECK), (n_r, n_v), draws, delta, **facts)
 
     def to_json(self) -> dict:
         return {name: stage.to_json() for name, stage in sorted(self.stages.items())}
@@ -117,5 +122,5 @@ def check_probability(law: TwoStageLaw, cls: str, n_v: int) -> Fraction:
     return Fraction(stage.p) * Fraction(stage.checked(n_v), n_v) if n_v else Fraction(0)
 
 
-__all__ = ["RU_DOMAIN", "VU_DOMAIN", "ReplayUnit", "Stage", "TwoStageLaw", "check_probability", "ru_key",
-           "select_replay_units", "select_verification_units", "vu_key"]
+__all__ = ["CHECK", "REPLAY", "RU_DOMAIN", "VU_DOMAIN", "ReplayUnit", "Stage", "TwoStageLaw", "check_probability",
+           "ru_key", "select_replay_units", "select_verification_units", "vu_key"]

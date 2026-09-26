@@ -32,7 +32,8 @@ from .backend import BACKENDS, FLOCK_FRAME_V3_BLAKE3, lowering_version
 RULE = ("double total VUs from start at fixed per-proof settings until two successive doublings together raise the median "
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
 PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-ada-mma-draft/2026-09-22",
-            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22"}
+            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21",
+            "bf16-hopper-wgmma": "bf16-hopper-mma-draft/2026-09-22", "fp4-nvf4": "nvfp4-sm120-mma-draft/2026-09-22"}
 
 
 def _guard():
@@ -68,10 +69,17 @@ def _quota() -> int:
 
 
 def _lines(path: Path, tag: str) -> list[dict]:
+    """The tagged JSON lines. A LIVE record's ``wait_s`` is the transport's wait read after ``Finish``, so it includes the
+    verifier's end-of-session replay (``verdict.verify_s``), which ``e2e_s`` does not: that is taken out here (the raw figure
+    stays as ``wait_s_raw``)."""
     out = []
     for line in path.read_text().splitlines():
         if line.startswith(tag + "\t"):
-            out.append(json.loads(line.split("\t", 1)[1]))
+            r = json.loads(line.split("\t", 1)[1], strict=False)
+            if tag == "LIVE" and "wait_s" in r and isinstance(r.get("verdict"), dict) and r["verdict"].get("verify_s") is not None:
+                r["wait_s_raw"] = r["wait_s"]
+                r["wait_s"] = max(0.0, r["wait_s"] - r["verdict"]["verify_s"])
+            out.append(r)
     return out
 
 
@@ -180,7 +188,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path) -> dict:
                 per.append(r["wait_s"] / r["calls"])
     return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
             "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's "
-                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
+                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait ((wait_s - verify_s) / calls)"}
 
 
 def _merge(parts: list[list[dict]]) -> list[dict]:
@@ -194,7 +202,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover", "domain_digests", "scheme"):
+        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover", "open_rtt_ms", "domain_digests", "scheme"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["units"] = runs[0].get("units")
         m["n_blake3"] = sum(r.get("n_blake3") or 0 for r in runs)
@@ -208,6 +216,16 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
     return out
 
 
+def write_instances(a, path: Path, total: int, lo: int, hi: int) -> dict:
+    """One sub-batch's instance file: a spine input set (``--set``), the 8-bit synthetic stream at ``--k``, or the relation's
+    own set."""
+    if a.set:
+        return instances.write_set(path, a.relation, a.set, lo, hi, a.leaf, a.procs, a.y_model)
+    if a.k:
+        return instances.write_synth(path, a.relation, a.k, lo, hi, a.leaf, a.procs)
+    return instances.write(path, a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
+
+
 def point(a, total: int, d: Path, net: Path) -> dict:
     d.mkdir(parents=True, exist_ok=True)
     pin = lowering.PINS[a.relation]
@@ -215,7 +233,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     headers, gen_s = [], 0.0
     for i, (lo, hi) in enumerate(subs):
         t0 = time.time()
-        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme))
+        headers.append(write_instances(a, d / f"instances-s{i}.bin", total, lo, hi))
         gen_s += time.time() - t0
     tg = _guard()
     guard = tg.Guard(sampler=_sampler).start()
@@ -285,6 +303,9 @@ def result(a, p: dict, sweep: dict) -> dict:
     t_e2e, t_commit = statistics.median(e2e), med("commit_s")
     t_prove = t_e2e - t_commit
     net_wait = max(0.0, statistics.median(r["wait_s"] - r["verdict"].get("handle_s", 0.0) for r in timed))
+    rtts = [x for r in timed for x in (r["open_rtt_ms"] if isinstance(r.get("open_rtt_ms"), list) else [r.get("open_rtt_ms")])
+            if isinstance(x, (int, float)) and x == x]
+    open_rtt = statistics.median(rtts) if rtts else None
     n = p["total"]
     profile = PROFILES[a.relation]
     binary = Path(a.bin).name
@@ -293,7 +314,7 @@ def result(a, p: dict, sweep: dict) -> dict:
     first = timed[0]
     hw = contract.probe_hardware()
     fp = contract.fingerprint(
-        profile=profile, domain="finite", K=instances.K, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
+        profile=profile, domain="finite", K=p["header"]["k"], B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
         zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
@@ -310,7 +331,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=backend.scheme, statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
+        scheme=(f"frame-v3/{p['header']['schemas']['a']}" if a.scheme == "frame-v3" else backend.scheme), statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"], **({"n_sha256": first["n_sha256"]} if first.get("n_sha256") else {}),
         **({"domain_digests": first["domain_digests"]} if first.get("domain_digests") else {}),
@@ -319,7 +340,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                                                                          "process": "flock-pure serve (separate process)"})
     ms = [contract.measurement("t.total", t_prove), contract.measurement("t.total_live", t_prove), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_prove / n), contract.measurement("vu.per_second", n / t_prove),
-          *contract.rate_measurements(t_prove, n, instances.K, profile),
+          *contract.rate_measurements(t_prove, n, p["header"]["k"], profile),
           {"name": "commit.seconds", "value": t_commit, "unit": "s"},
           {"name": "e2e.seconds", "value": t_e2e, "unit": "s"},
           {"name": "e2e.vu_per_second", "value": n / t_e2e, "unit": "1/s"},
@@ -334,7 +355,8 @@ def result(a, p: dict, sweep: dict) -> dict:
           {"name": "live.verifier_round_seconds", "value": statistics.median(r["verdict"].get("handle_s", 0.0) for r in timed), "unit": "s"},
           {"name": "live.network_wait_seconds", "value": net_wait, "unit": "s"},
           {"name": "live.coin_wait_per_round_ms", "value": 1e3 * net_wait / max(1, int(first["calls"])), "unit": "ms"},
-          *([contract.measurement("net.rtt_ms", a.tcp["median_ms"])] if getattr(a, "tcp", None) else []),
+          *([contract.measurement("net.rtt_ms", open_rtt)] if open_rtt is not None else []),
+          *([{"name": "live.tcp_connect_rtt_ms", "value": a.tcp["median_ms"], "unit": "ms"}] if getattr(a, "tcp", None) else []),
           *([{"name": "live.loopback_round_seconds", "value": p["loopback"]["seconds_per_round"], "unit": "s"}]
             if p.get("loopback", {}).get("seconds_per_round") else []),
           {"name": "live.prover_compute_seconds", "value": t_prove - med("wait_s"), "unit": "s"},
@@ -356,8 +378,11 @@ def result(a, p: dict, sweep: dict) -> dict:
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
-           "interaction": {"rtt_method": (f"net.rtt_ms = TCP connect time from the prover pod to the verifier pod ({a.tcp['target']}, its sshd), "
-                                          f"median of {a.tcp['n']}, measured in this run before the sweep") if getattr(a, "tcp", None) else None,
+           "interaction": {"rtt_method": ("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the "
+                                          "verifier (answered Ok by the verifier's server, no session state), 30 probes right after "
+                                          "connecting and before Hello, in every timed session; median over all of them") if open_rtt is not None else None,
+                           "tcp_connect_method": (f"live.tcp_connect_rtt_ms = TCP connect time to the verifier pod's sshd ({a.tcp['target']}), "
+                                                  f"median of {a.tcp['n']}, before the sweep") if getattr(a, "tcp", None) else None,
                            "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / "
                                                "round trips, median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
                            "loopback_method": p.get("loopback", {}).get("method"),
@@ -386,7 +411,7 @@ def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
         d = out / f"p{i}-{total}"
         d.mkdir(parents=True, exist_ok=True)
         for j, (lo, hi) in enumerate(subbatches(total, a.per_proof)):
-            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme)
+            write_instances(a, d / f"instances-s{j}.bin", total, lo, hi)
             jobs.append((d, j))
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j in jobs:
@@ -419,6 +444,10 @@ def main(argv=None) -> int:
     ap.add_argument("--loopback", action="store_true", help="after the sweep, a loopback probe at the plateau point")
     ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3",
                     help="the commitment scheme the instance files' roots are under (the binary must prove that statement)")
+    ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES), help="frame-v3 row-leaf schema of trees a and b")
+    ap.add_argument("--set", default="", help="a spine input set directory (x.u16 / w.u16 / y.u16); batches never exceed it")
+    ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output (a set captured on other silicon)")
+    ap.add_argument("--k", type=int, default=0, help="an 8-bit relation's synthetic E4M3 stream at this K")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)

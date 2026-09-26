@@ -6,8 +6,9 @@ from fractions import Fraction
 
 import pytest
 
-from verity_sampled_proofs.law import (ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key, select_replay_units,
-                                       select_verification_units, vu_key)
+from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+from verity_sampled_proofs.law import (CHECK, REPLAY, ReplayUnit, Stage, TwoStageLaw, check_probability, ru_key,
+                                       select_replay_units, select_verification_units, vu_key)
 
 BIND = {"program": b"\x01" * 32, "boundary_root": b"\x02" * 32}
 LAW = TwoStageLaw({"decode": Stage(Fraction(1, 4), 2), "prefill": Stage(Fraction(1), None), "off": Stage(Fraction(0), 3)})
@@ -94,11 +95,20 @@ def test_bernoulli_is_the_single_unit_law():
     assert check_probability(law, "x", 1) == Fraction(1, 10)
     assert check_probability(LAW, "decode", 6) == Fraction(1, 4) * Fraction(2, 6)
     a = law.profile("x", n_r=100, n_v=1, delta=0.01)
-    assert (a.n_v, a.k, a.p) == (1, 1, Fraction(1, 10))
+    assert (a.sizes[1], a.draws[CHECK].k, a.draws[REPLAY].p) == (1, 1, Fraction(1, 10))
 
 
 def test_profile_carries_the_class_law_and_covered_families():
     a = LAW.profile("decode", n_r=512, n_v=6, delta=0.01, covered=["Input"])
-    assert (a.n_r, a.n_v, a.p, a.k, a.delta, a.covered) == (512, 6, Fraction(1, 4), 2, 0.01, frozenset({"Input"}))
-    assert LAW.profile("prefill", n_r=3, n_v=5, delta=0.01).k == 5
+    assert (*a.sizes, a.draws[REPLAY].p, a.draws[CHECK].k, a.delta, a.covered) == (512, 6, Fraction(1, 4), 2, 0.01,
+                                                                                  frozenset({"Input"}))
+    assert LAW.profile("prefill", n_r=3, n_v=5, delta=0.01).draws[CHECK].k == 5
     assert LAW.to_json()["decode"] == {"p": "1/4", "k": 2}
+
+
+def test_the_profile_is_two_named_levels_and_keeps_the_prototype_numbers():
+    """The protocol prototype's composed toy through the law: 26.6 incorrect VUs for PoUW, 16.0 touched RUs for KV."""
+    a = TwoStageLaw({"u": Stage(Fraction(1, 2), 2)}).profile("u", n_r=512, n_v=4, delta=0.01, drawn={REPLAY: 3, CHECK: 6})
+    assert a == IntegrityProfile((REPLAY, CHECK), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), CHECK: Subset(2)}, 0.01,
+                                 drawn={REPLAY: 3, CHECK: 6})
+    assert round(a.worst_case(lambda m: m), 1) == 26.6 and round(a.worst_case(lambda m: 1), 1) == 16.0

@@ -2315,7 +2315,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_export as VUX
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_store as VUX
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()

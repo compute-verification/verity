@@ -1,6 +1,7 @@
 """The benchmark entry point (``bench.cell``): planning a cell into its backend's jobs, the reasons a cell cannot run, the protocol
 check on two real Flock cells (``data/flock-cells``: art:6d1295ed and art:d1961ba4, the registered bench-result/v1 documents,
-both independently replayed) and their mutations, and registration through ``verity_flock.register``."""
+both independently replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind
+art:1589ffe1 (``data/flock-runs``)."""
 from __future__ import annotations
 
 import copy
@@ -160,12 +161,13 @@ def _run(d: Path, host: str, result: dict | None) -> Path:
 
 
 RUNS = DATA / "flock-runs"
-PROVER_RUN, VERIFIER_RUN = "r20260925-220115-3522", "r20260925-220103-b7c0"
+PROVER_RUN, VERIFIER_RUN = "r20260925-233831-a064", "r20260925-233818-a37e"
 
 
 def _real_runs(tmp_path: Path, mutate=None) -> tuple[Path, Path]:
-    """art:6d1295ed's prover and verifier runs as ``verity_flock.register`` reads them: job.json, out/binary.sha256, the prover's
-    result.json (artifacts naming its plateau point) and that point's session logs (prove-s0 and loopback-prove-s0)."""
+    """The runs behind art:1589ffe1 (H100 BF16, the open-connection re-run) as ``verity_flock.register`` reads them: job.json,
+    out/binary.sha256, the prover's result.json (``artifacts`` naming its plateau point p4-16384, as bench.py writes it in the run
+    directory) and that point's session logs (prove-s0/s1, loopback-prove-s0/s1)."""
     shutil.copytree(RUNS, tmp_path / "runs")
     p, v = tmp_path / "runs" / PROVER_RUN, tmp_path / "runs" / VERIFIER_RUN
     if mutate is not None:
@@ -179,13 +181,13 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
     p, v = _real_runs(tmp_path)
     res = C.register(_cell(), str(p), str(v), tmp_path / "work", dry_run=True)
     doc = json.loads(Path(res["meta"]).read_text())
-    assert res["problems"] == C.check(_cell(), doc, p, v) == doc["validation"]["cell_problems"]
-    assert ("refused" in res) is bool(res["problems"])
+    assert res["problems"] == C.check(_cell(), doc, p, v) == doc["validation"]["cell_problems"] == []
+    assert "refused" not in res
     assert doc["cell"]["backend"] == "C-interactive" and doc["cell"]["statement"] == BF16[0]
     assert doc["cell"]["input_set"]["id"] == BF16[1]
     assert (doc["lane"], doc["registered_by"]) == ("bench-spine", "bench-spine")                # the lane that ran it is the producer
     assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after flock-backend's --lane
-    assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "55aa071446d4"        # verity_flock.register's patch
+    assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "5f0e35820d06"        # verity_flock.register's patch
     assert doc["workload_fingerprint"]["software"]["verifier"]["run"] == VERIFIER_RUN
     put = res["put"]
     assert put[:5] == ["research", "data", "put", "--kind", "bench-result/v1"] and put[-1] == "--preserve"

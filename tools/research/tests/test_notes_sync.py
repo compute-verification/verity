@@ -94,6 +94,23 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
     assert not (b / ".git" / "rebase-merge").exists()
 
 
+def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
+    import datetime as dt
+
+    origin, a, b = machines
+    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
+    for i in range(3):
+        _insert_after(a / DOC, "<!-- a -->", f"a says yes {i}")
+        assert NS.sync(a, secrets=[])["pushed"]
+    _insert_after(b / DOC, "<!-- a -->", "b says no")
+    rep = NS.sync(b, secrets=[])
+    assert rep["rc"] == 3 and NS.lag(b) == (1, 3)
+    (line,) = notes.sync_lines(b, rep, now)
+    assert line.startswith("04:50Z SYNC-FAILED ahead 1 behind 3: ") and DOC in line
+    assert notes.sync_lines(b, NS.sync(b, secrets=[]), now)[0].startswith("04:50Z SYNC-FAILED")     # again, while it lasts
+    assert notes.sync_lines(a, NS.sync(a, secrets=[]), now) == []                                    # a clean pass says nothing
+
+
 def test_key_material_is_refused_before_anything_is_pushed(machines):
     origin, a, _ = machines
     before = _git(origin, "rev-parse", "main")

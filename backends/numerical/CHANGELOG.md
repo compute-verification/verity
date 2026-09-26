@@ -1,5 +1,19 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: FP8 GEMM coordinate input sets (fp8-ada, fp8-hopper)
+
+- `gemm-coordinate` generates the two FP8 lines, `sm89.mma.m16n8k32.e4m3` (RTX 4090) and `sm90.wgmma.m64n8k32.e4m3` (H100), at any
+  K that is a multiple of 32.
+  - Ports: `x` and `w` are E4M3 bytes (`u8`), uniform over the 254 finite codes; `y` is the FP32 accumulator word (`u32`). There is
+    no epilogue, as the backends' fp8 relations take it.
+  - The relation's `definition` is `GemmAccumulatorE4m3`, and its `dot` names the IR reference.
+  - Outputs come from `verity.ml.kernels.HOPPER_E4M3_DOT` and from the new `ADA_E4M3_DOT` (sm_89's step, finite domain, over
+    `models.ADA_E4M3_M16N8K32`). Both equal the `verity.ml.tc` chains the backends use.
+  - A scalar reference's provenance entry is `templates.reference_digest`: the sha256 of its id, bindings and core sources.
+- `generate --suite fp8` covers both lines at K = 2048 and 8192, at the captured #101 sizes (6,272 and 1,920) and at the RTX 4090's
+  largest batches (16,384 and 8,192). Each smaller set is the larger one's prefix.
+- `generate --suite` writes each set under `<out>/n<n>/sets/<name>/`, so a suite can hold one subcircuit at several sizes.
+
 ## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
 
 - The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family
@@ -34,6 +48,38 @@
 - Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
   configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
   `instances`) and the frozen tables' headers keep their names, mapped in the Glossary.
+## 2026-09-26: census workloads (served configurations and their template mix)
+
+- `census/workloads.json` and its schema hold the served configurations. There are nine vLLM regression rows with a
+  replay partition: #11, #39, #57, #60, #67, #68, #73, #74 and #101. Each entry records:
+  - the model;
+  - the serving config: engine, batch, TP, datatype, hardware class (`hardware` is null for L40S, which the census has no
+    line for), input and output lengths, arrivals, sampling and mode;
+  - the template mix: the verification units per VU family and bound parameters. `Gemm_v1{K,N}` maps to
+    `gemm-coordinate`, with N coordinates per VU;
+  - the source run: row, expected file, records and programs artifacts, program digest, reference, and the commit it
+    was read at.
+- The reader is `census.WORKLOADS`. A test keeps the file equal to the regression expectations (#101: 46,558 VUs, 18,400
+  of them `Gemm_v1`).
+- Every VU family in the mix maps to a census subcircuit template. `subcircuits.json` adds 15 templates beside
+  `gemm-coordinate`, each with typed parameters, a one-line definition and its IR Definitions:
+  - `attention-head` (FA2 and FA3), `rope-head`, `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and
+    `gumbel-top-p-token-select`, the ids bench-spine's generator keys on (PR #47);
+  - `token-select-greedy`, `moe-router-topk`, `moe-expert-coordinate`, `moe-expert-coordinate-weighted`, `moe-sum`,
+    `scaled-mm-fp8-block-coordinate`, `bias-add`, `bf16-mul-scalar` and `embedding-row`.
+
+  Hopper `Gemm_v2` binds `gemm-coordinate` with semantics `sm90.wgmma.m64n8k16.bf16`.
+- Each template carries a `work_model`: ops per input as an expression over its bound parameters (`gemm-coordinate` 2K;
+  `rmsnorm-triton` 3N plus one rsqrt), with special functions apart. Its version, `work-model/v0`, is the one the
+  tables' N uses, and it cites its IR definition. A test evaluates every mix's parameters and checks GEMM against N
+  (3,072 ops at K = 1536).
+- Bound subcircuit ids validate as `<template>/<params>/<semantics>` for every template, not only GEMM (e.g.
+  `attention-head/d64-bn128/sm80-fa2-bf16`). `input_sets.json`'s subcircuit field uses the same pattern.
+- `hardware.json` adds the L40S 48GB lines from NVIDIA's datasheet, with dense figures: BF16 362.05 TFLOPS and FP8 733
+  TFLOPS. The datasheet does not state the accumulate width; its methodology records full-rate FP32 accumulate as an
+  assumption, to be confirmed by a measurement. The L40S workloads carry `l40s-48gb/bf16`. `tools/native_peak` quotes the
+  same figures.
+- Nothing renders workloads yet. The per-workload headline (backend overheads weighted by the mix) is a later change.
 
 ## 2026-09-26: file-verified interactive results pay their protocol's rounds
 

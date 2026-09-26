@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
 
 from verity_flock import instances, lowering
 from verity_flock.backend import FLOCK_FRAME_V3_BLAKE3 as FLOCK, GemmSub, Supported, Unavailable, Unsupported
@@ -39,7 +39,8 @@ def test_io_words_are_aligned_and_zero_padded():
 def test_supports():
     for t in (BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA):
         assert isinstance(FLOCK.supports(GemmSub(t)), (Supported, Unavailable))
-    assert isinstance(FLOCK.supports(GemmSub(FIRST)), Unsupported)
+    assert isinstance(FLOCK.supports(GemmSub(FIRST)), (Supported, Unavailable))
+    assert isinstance(FLOCK.supports(GemmSub(NVFP4_SM120)), Unsupported)
     assert isinstance(FLOCK.supports(GemmSub(BF16_HOPPER, 1000)), Unsupported)
     assert isinstance(FLOCK.supports(GemmSub(FP8_ADA_MMA, 512)), Unsupported)
 
@@ -86,13 +87,14 @@ def test_register_adds_the_union_bound_and_the_verifier(tmp_path):
     doc = {"workload_fingerprint": {"N_subbatches": 4, "security": {"achieved_log2": -195.5}, "software": {"backend": {}}},
            "measurements": [{"name": "net.rtt_ms", "value": 1.42, "unit": "ms"}], "interaction": {"rtt_method": "coin wait"},
            "validation": {}}
-    a = argparse.Namespace(rtt_ms=0.68, rtt_method="tcp", loopback_seconds=0.00083, loopback_method="BORROWED from r1", supersedes="art:x")
+    a = argparse.Namespace(rtt_ms=0.68, rtt_method="tcp", loopback_seconds=0.00083, loopback_method="BORROWED from r1", supersedes="art:x", lane="some-lane")
     out = patch(doc, {"run": "p", "commit": "c1", "binary_sha256": "s1", "host": "h"}, {"run": "v", "commit": "c2", "binary_sha256": "s2", "host": "h2"}, a)
     assert out["workload_fingerprint"]["security"]["achieved_log2"] == -193.44
     ms = {m["name"]: m["value"] for m in out["measurements"]}
     assert ms["net.rtt_ms"] == 0.68 and ms["live.coin_wait_per_round_ms"] == 1.42 and ms["live.loopback_round_seconds"] == 0.00083
     assert out["workload_fingerprint"]["software"]["verifier"]["binary_sha256"] == "s2"
     assert out["interaction"]["loopback_method"].startswith("BORROWED")
+    assert out["lane"] == out["registered_by"] == "some-lane"
 
 
 def test_vllm_v1_instance_roots_are_step_roots_under_b_ligeros_domains(tmp_path):

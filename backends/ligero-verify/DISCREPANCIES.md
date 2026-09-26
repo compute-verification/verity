@@ -86,16 +86,7 @@ verifiers reject a Fiat-Shamir transcript that carries them ("fiat-shamir transc
 
 ## D4. The Python verifier is interactive; a file verifier checks a Fiat-Shamir transcript -- SUPERSEDED by D7
 
-Superseded by D7 after b-zk-fix F2: interactive-mode challenges are functions of `(stmt, c1, c2, r_i)` alone, so a
-prover-chosen-coins file has no soundness.  Full text: this file at `cc885b2`.
-
-~~~json
-{"id": "BV-D4", "issue": "the transferable-proof verifier cannot check 'coins are this verifier's coins'; it checks the FS chain",
- "document": "PROTOCOL.md 8c (interactive, V draws r_i)", "code": "protocol.py verify(): coins compared to its own",
- "verifier": "checks c_i = H(tag||r_i||s_i) and both challenge derivations; treats the file as a Fiat-Shamir transcript",
- "status": "excluded", "owner": "b-verifier-2", "resolution": "superseded by BV-D7 after b-zk-fix F2: the FS-chain reading no longer holds for interactive-mode files; it holds for --mode fiat-shamir files",
- "evidence": ["README.md 'What it does NOT do'", "BV-D7"]}
-~~~
+Superseded by D7 after b-zk-fix F2 (`BV-D4`: status excluded, owner b-verifier-2).  Full text and block: this file at `cc885b2`.
 
 ## D5. Things the document does not say that a verifier needs (taken from the code, now written down)
 
@@ -286,10 +277,8 @@ dataset manifest + word range).  Facts a verifier needs that PROTOCOL.md does no
 
 ## D10. No verifier enforced the union bound across sub-batches -- RESOLVED by b-batch-bound
 
-Resolved: both verifiers check the union bound `union_log2 = per_proof_log2 + log2(n_proofs)` over the `N` sub-batches
-presented, with `n_proofs` read from the statement header and required to equal `N` (`protocol.batch_bound` /
-`verify_batch`, `serialize verify-batch --dir DIR --target-bits T`; Rust `verify::batch_bound`, `ligero-verify batch
---target-bits T`, default 128).  Full text and evidence:
+Resolved: both verifiers check `union_log2 = per_proof_log2 + log2(n_proofs)`, with `n_proofs` from the statement header equal
+to the `N` sub-batches presented (`protocol.batch_bound`; Rust `verify::batch_bound`).  Full text and evidence:
 `note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies`.
 
 ## D11. Relations beyond the Ampere BF16 unit (lane `ligero-verify-relations`): what a statement does not say, and the per-relation pin
