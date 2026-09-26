@@ -14,6 +14,9 @@
 
 ## 2026-09-26: a `SUPERSEDED …` finding rejects a result
 
+- Any `superseded_by` label, the vocabulary's key naming the replacement, rejects the result the same way in `tables` and
+  the views. `store_tables` keeps its frozen rows and flags them "superseded by …".
+
 - A `finding` label starting with `SUPERSEDED` now rejects the result (reason D), as `PULLED` does. Its producer uses it when
   a re-run replaces a cell, for example flock-backend's four FP8 real-K cells re-run on the spine's input sets. Without the
   rejection, the old and new results would both publish, because their input sets differ.

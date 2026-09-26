@@ -480,6 +480,13 @@ def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) 
     assert V.parity(store) == [] and pulled not in {c.artifact for c in V.build(store, V.LEGACY).cells}
 
 
+def test_a_superseded_by_label_rejects_the_result_in_both_renderers(store: LocalStore) -> None:
+    old = committed(store, t_total=0.4, labels=[("superseded_by", "art:" + "5" * 64, "red-team-flock", "2026-09-26T06:40:00Z")])
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, old)[-1] == "D"
+    assert T.cell_finding(store.labels(old))[0] == "pulled"
+
+
 def test_a_superseded_finding_rejects_the_result_like_a_pull(store: LocalStore) -> None:
     old = committed(store, t_total=0.4, labels=[("finding", "SUPERSEDED: provenance: backend-generated inputs", "flock-backend",
                                                   "2026-09-26T06:00:00Z")])
