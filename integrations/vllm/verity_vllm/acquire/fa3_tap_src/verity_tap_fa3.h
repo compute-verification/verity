@@ -10,6 +10,8 @@
  *   VERITY_MAT_SRC bitmask: 1 S (masked fp32 scores, before softmax), 2 P fp32 (after exp2, un-normalised), 4 rP bf16 (the
  *   packed bf16 P fed to the P.V wgmma; u32 words of column pairs), 8 per-block row state (row_max, rescale, step, lane sums
  *   l0..l3), 16 acc_o after the P.V wgmma of each block (fp32, un-normalised), 32 epilogue (sum, inv_sum, final row_max, lse).
+ *   VERITY_ROW_GUARD 1 = the guarded-max build: word 3 of the row state holds GuardNegInfZero(row_max) at every key block after the first a
+ *   row visits (0 at the first); 0 (default) = word 3 is never written.  `verity_tap_row3()` reports it.
  *
  * What differs from FA2 and how it is handled:
  *   * accumulator fragments are wgmma m64nNk16 C fragments ((2, 2, N/8), MMA_M=1, MMA_N=1) instead of mma.sync m16n8k16; the
@@ -132,7 +134,9 @@ struct Verity_mat_ctx_sm90 {
             }
         }
     }
-    // per-block row state: [slab][row][nblk][8] = row_max, rescale, step, (unused), l0, l1, l2, l3 (this lane's partial sum in its slot)
+    // per-block row state: [slab][row][nblk][8] = row_max, rescale, step, word 3, l0, l1, l2, l3 (this lane's partial sum in its slot).
+    // Word 3 as in FA2 v8: never written, except by the guarded-max build (VERITY_ROW_GUARD=1): GuardNegInfZero(row_max) at every block
+    // after the first (step > 0), 0 at the first.
     template <typename TensorR>
     __device__ __forceinline__ void rowstat(TensorR const &row_max, TensorR const &scale, TensorR const &row_sum, const int nblk, const int step) {
         float *plane = buf + L.off_row + (long)slab * L.M * L.NB * 8;
@@ -141,7 +145,10 @@ struct Verity_mat_ctx_sm90 {
             const int row = mi == 0 ? row0 : row1;
             if (row < rows_valid) {
                 float *dst = plane + ((long)row * L.NB + nblk) * 8;
-                if (lane % 4 == 0) { dst[0] = row_max(mi); dst[1] = scale(mi); dst[2] = __int_as_float(step); }   // word 3 unused (as FA2 v8)
+                if (lane % 4 == 0) { dst[0] = row_max(mi); dst[1] = scale(mi); dst[2] = __int_as_float(step); }
+#if defined(VERITY_ROW_GUARD) && VERITY_ROW_GUARD
+                if (lane % 4 == 0) { dst[3] = step > 0 && row_max(mi) != -INFINITY ? row_max(mi) : 0.f; }
+#endif
                 dst[4 + (lane % 4)] = row_sum(mi);
             }
         }
