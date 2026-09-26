@@ -8,7 +8,7 @@
     python -m verity_numerical.bench.cell check    --cell cell.json --prover-run RUN [--verifier-run RUN] [--result FILE]
     python -m verity_numerical.bench.cell register --cell cell.json --prover-run RUN [--verifier-run RUN] [--dry-run]
 
-``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census instance set id (a
+``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census input set id (a
 backend's frozen set), an input-set directory, or an ``art:`` id of one (``input_sets``).  ``plan`` resolves the cell: the
 backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``bench.lowerings``: why
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the

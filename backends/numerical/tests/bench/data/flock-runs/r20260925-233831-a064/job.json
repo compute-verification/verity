@@ -1,17 +1,17 @@
 {
  "schema": "telemetry/job/v0.2",
- "written_utc": "2026-09-25T22:01:24.767Z",
- "writer_stream": "83f0d6808dd6:9615:19466302",
+ "written_utc": "2026-09-25T23:39:12.215Z",
+ "writer_stream": "f7006529acff:323:2064970779",
  "ownership": {
   "project": "verity",
   "task": null,
-  "job": "r20260925-220115-3522",
+  "job": "r20260925-233831-a064",
   "attempt": 1,
   "lane": null,
   "generation": 1
  },
  "computation": {
-  "tree_sha": "a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
+  "tree_sha": "0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a",
   "tree_sha_reason": null,
   "release_tag": null,
   "workload_digest": null,
@@ -24,15 +24,15 @@
  },
  "environment": {
   "pod_id": null,
-  "hostname": "83f0d6808dd6",
-  "boot_id": "46304d4d-2765-42e6-9bb5-10b8acb478cb",
+  "hostname": "f7006529acff",
+  "boot_id": "6932ff22-b00c-4386-9b9e-322743f90ce7",
   "kernel": "6.8.0-90-generic",
   "machine": "x86_64",
   "python": "3.11.10",
   "cpu_count": 208,
   "cpu_count_note": "CPUs this process may run on (affinity/cpuset), not the host's",
   "cpu_count_host": 208,
-  "host_memory_total_bytes": 2164111163392,
+  "host_memory_total_bytes": 2164110815232,
   "host_memory_note": "host total, not the job's bound; the bound is cgroup.effective_memory_max_bytes",
   "host_class": "gpu",
   "gpu": {
@@ -41,10 +41,10 @@
    "devices": [
     {
      "index": "0",
-     "uuid": "GPU-2f58df54-639b-5794-50aa-48869abaac50",
+     "uuid": "GPU-920410a5-af00-ad3f-216d-524ad8397b27",
      "name": "NVIDIA H100 80GB HBM3",
      "memory_total_bytes": 85520809984,
-     "driver": "595.91.07"
+     "driver": "580.126.09"
     }
    ],
    "cuda_visible_devices": null
@@ -92,10 +92,10 @@
    "backends/flock/pod/30-cell.sh",
    "ROLE=prover",
    "REL=bf16-hopper",
-   "VERIFIER=216.243.220.199:10661",
-   "RTT_TARGET=216.243.220.199:10659",
+   "VERIFIER=64.247.206.241:19127",
+   "RTT_TARGET=64.247.206.241:19125",
    "LOOPBACK=1",
-   "POINTS=1024 2048 4096 8192 16384 32768 65536"
+   "POINTS=1024 2048 4096 8192 16384 32768"
   ],
   "command_redacted": [],
   "declared_outputs": [],
@@ -135,34 +135,34 @@
   "classifier_version": "0.1.3"
  },
  "run": {
-  "id": "r20260925-220115-3522",
+  "id": "r20260925-233831-a064",
   "runs_root": "/workspace/research/runs",
-  "created_utc": "2026-09-25T22:01:24.769Z",
-  "launched_from": "83f0d6808dd6",
+  "created_utc": "2026-09-25T23:39:12.220Z",
+  "launched_from": "f7006529acff",
   "remote": {
-   "machine": "vy-flock-backend-h100b",
-   "pod_id": "8x7wduy7ydfrhj",
-   "pod_name": "vy-flock-backend-h100b-veritor-campaign",
-   "host": "216.243.220.216",
-   "port": 18956,
+   "machine": "vy-flock-backend-h100d",
+   "pod_id": "70tayjkf9joizu",
+   "pod_name": "vy-flock-backend-h100d-veritor-campaign",
+   "host": "64.247.201.52",
+   "port": 17943,
    "root": "/workspace/research",
    "tool": "/workspace/research/tool/76d400cc8f881bca",
    "tool_identity": "677f73ea51f283b9",
-   "source_sha": "a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
-   "source_dir": "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
-   "source_archive_sha256": "e7113314b081dea28654323c927c9d0fab52ee974caf1612cebe03c86d04ddc2",
+   "source_sha": "0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a",
+   "source_dir": "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a",
+   "source_archive_sha256": "71c38959e0340f62ecbc9067fdbdd7429037b73a6ed4e5eb175b9950e3368868",
    "source_files": 3212,
    "source_verified": "git-push+tree+file-sha256",
    "source_transport": "git",
    "launched_from": "cursor",
-   "request": "/workspace/research/requests/r20260925-220115-3522/request.json",
+   "request": "/workspace/research/requests/r20260925-233831-a064/request.json",
    "pythonpath": [
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/tools/research/src",
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/packages/verity/src",
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/backends/sp1/python",
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/backends/numerical/python",
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/integrations/vllm",
-    "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7/backends/flock/python",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/tools/research/src",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/packages/verity/src",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/backends/sp1/python",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/backends/numerical/python",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/integrations/vllm",
+    "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a/backends/flock/python",
     "/workspace/research/tool/76d400cc8f881bca"
    ],
    "pythonpath_derived": {
@@ -182,7 +182,7 @@
     "path": "/workspace/research/tool/76d400cc8f881bca/research"
    }
   },
-  "cwd": "/workspace/research/src/a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
+  "cwd": "/workspace/research/src/0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a",
   "cwd_basis": "source"
  },
  "workload_fingerprint": {
@@ -191,11 +191,11 @@
  },
  "cost": {
   "provider": "runpod",
-  "pod_id": "8x7wduy7ydfrhj",
-  "machine": "vy-flock-backend-h100b",
+  "pod_id": "70tayjkf9joizu",
+  "machine": "vy-flock-backend-h100d",
   "currency": "USD",
   "rate_usd_per_hour": 3.49,
-  "rate_observed_utc": "2026-09-25T22:01:15.796Z",
+  "rate_observed_utc": "2026-09-25T23:38:32.350Z",
   "reason": null,
   "shared": false,
   "concurrent_runs_at_launch": []
@@ -206,7 +206,7 @@
    "version": null,
    "spec": null
   },
-  "derivation": "drv:f8616df572dbff415c8747a42ab551a15a03aa818d35e263c972f2800b404872",
+  "derivation": "drv:57bf261f15d9c3a14c6e4f797bab67a0abaac67f8cb5d5dab956d6b139c934ae",
   "reuse_key": null,
   "key_params": [
    "argv"
@@ -218,10 +218,10 @@
     "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
-    "VERIFIER=216.243.220.199:10661",
-    "RTT_TARGET=216.243.220.199:10659",
+    "VERIFIER=64.247.206.241:19127",
+    "RTT_TARGET=64.247.206.241:19125",
     "LOOPBACK=1",
-    "POINTS=1024 2048 4096 8192 16384 32768 65536"
+    "POINTS=1024 2048 4096 8192 16384 32768"
    ]
   },
   "key_params_resolved": {
@@ -230,25 +230,25 @@
     "backends/flock/pod/30-cell.sh",
     "ROLE=prover",
     "REL=bf16-hopper",
-    "VERIFIER=216.243.220.199:10661",
-    "RTT_TARGET=216.243.220.199:10659",
+    "VERIFIER=64.247.206.241:19127",
+    "RTT_TARGET=64.247.206.241:19125",
     "LOOPBACK=1",
-    "POINTS=1024 2048 4096 8192 16384 32768 65536"
+    "POINTS=1024 2048 4096 8192 16384 32768"
    ]
   },
   "inputs": {},
   "closure": {},
   "conditions": {
-   "source.commit": "a6a6e5488ea897ab11b3ee143e0307c5b5ececd7",
-   "source.tree": "e2abbef923f7a36f03c93202327aec35193bfac7",
+   "source.commit": "0864d146fef8fe4eb2ac5210d0c1cfadc0948d3a",
+   "source.tree": "734024d6af6bd68db18ac2e9cf155f23f8e2a38d",
    "source.dirty": false,
    "source.dirty_digest": null,
    "rt.os": "Linux",
    "rt.kernel": "6.8.0-90-generic",
    "rt.python": "3.11.10",
    "rt.rust": null,
-   "rt.cuda": "13.2",
-   "rt.driver": "595.91.07",
+   "rt.cuda": "13.0",
+   "rt.driver": "580.126.09",
    "rt.torch": "2.4.1+cu124",
    "rt.triton": "3.0.0",
    "rt.nvcc": null,
@@ -257,9 +257,9 @@
    "hw.count": 1,
    "hw.vram_mb": 81559,
    "hw.cpu": "Intel(R) Xeon(R) Platinum 8470 x208",
-   "hw.hostname": "83f0d6808dd6",
+   "hw.hostname": "f7006529acff",
    "exec.exclusive": false,
-   "exec.load_start": 35.11,
+   "exec.load_start": 14.94,
    "exec.load_end": null,
    "exec.project": "verity",
    "exec.campaign": "flock-backend",
