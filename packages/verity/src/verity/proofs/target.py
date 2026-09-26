@@ -1,4 +1,5 @@
-"""The first campaign target, frozen: exactly which function the proof backends are asked to prove.
+"""The first campaign subcircuit, frozen: exactly which function the proof backends are asked to prove.  A :class:`Target` is
+the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; README Glossary).
 
 Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
 Another engineer must be able to read this module and state the function without asking anyone; the test
@@ -53,7 +54,7 @@ Two objects, deliberately distinct (closed 2026-09-21):
 * The **Verity verification unit** (what the outer sampler selects and what a proof must establish in full) is
   ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
 
-Candidate backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
+Backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
 function and the VU endpoints; they need not agree on auxiliary witness layouts.
 
 References and the log of disagreements
@@ -68,12 +69,12 @@ References and the log of disagreements
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
   reference implementation.
 
-Reference instances
-===================
+Reference inputs
+================
 
 Recorded under ``fixtures/typed-obligation-v0`` with the public values a correct prover produced:
 
-* :data:`K16_VECTOR` -- ``K = 16``, one step, the smallest instance; the SP1 baseline proof.
+* :data:`K16_VECTOR` -- ``K = 16``, one step, the smallest input; the SP1 baseline proof.
 * :data:`K1536_VECTOR` -- ``K = 1536``, 96 chained steps, one real coordinate of a captured vLLM ``qkv_proj`` decode
   step; the campaign's realistic size.
 
@@ -211,7 +212,7 @@ Status = Literal["frozen", "draft"]
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes, the
+    """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
     conformance device its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
     and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.tc.instructions.INSTRUCTIONS``)."""

@@ -1,5 +1,11 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the README Glossary's terms in docstrings and help
+
+- Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
+  configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
+  `instances`), census ids (`instance_sets`) and the frozen tables' headers keep their names, mapped in the Glossary.
+
 ## 2026-09-25: `views --format entities`, the docs site's render
 
 - `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
