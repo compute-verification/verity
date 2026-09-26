@@ -1,7 +1,7 @@
 """`Q_word_v1{X,W}`: a partition of every Call's gates into the largest units S with |out(S)| <= X bits, or one boundary gate of at
 most W bits, whose inputs are committed values.
 
-The rule (Daniel, 2026-09-26):
+The rule:
 
   * **Partition.** Every gate belongs to exactly one unit.  A value more than one unit needs is committed as its own unit -- unless
     it is a trivial recompute (at most `TRIVIAL_GATES` gates) of committed values, which is then its own unit but not a commitment.
