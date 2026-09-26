@@ -684,7 +684,8 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "23405e55ff9eadc12d638d9ab2555e59c6f049e9bcfa669dcc5cd953779da3d8"),    // lane bligero-real-k: the x4 folds at vLLM's reduction lengths (relations._at_k), `hashchain.compose(<fold>-k<K>, leaf)`;
     // BLAKE3 frames sized to the row (4 / 16 CV slots for BF16 K = 2048 / 8192, 8 for E4M3 K = 8192), SHA-256 unchanged.
     // Digests of the compiled systems (`ligero-verify system-digest` on `system_bytes(compose(...).sys)`, lane VM, torch-free
-    // compile); gadget gate on the pod: see each row's run in the lane report
+    // compile), equal to the pod's fixture system.bin digests; gadget gate r20260926-042639-c562 (vy-bligero-real-k-gate, L40S):
+    // every system 8 honest sub-batches accepted + 86 negatives rejected, 0 failures, and its fixture verified pinned
     ("bf16-ampere-x4-k2048", "blake3-xob", "b5ee1ee0b6645eb83d5f973f019c216bdfd0907560f7ab3c3d623447b944c546",
      "3b9f7d64a550c86efe1be8bc0aeb71db57835e91631b630bfb35c38d4de0f626"),
     ("bf16-ampere-x4-k2048", "sha256", "232769b4d5b3b8f8a17dbcd887b6332b22642b6722ff086308d1c829b84f7b7f",
