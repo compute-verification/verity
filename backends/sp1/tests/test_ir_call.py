@@ -9,7 +9,6 @@ constant, so the constants leaf, the arguments and a tuple of returns are all ex
 from __future__ import annotations
 
 import pytest
-
 from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import tuple_of
 from verity.ir.types import Array, Tuple

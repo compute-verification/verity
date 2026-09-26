@@ -53,8 +53,8 @@ for candidate, module in (
     except ImportError:
         sys.path.insert(0, str(candidate))
 
-from verity.proofs.binding import bound_public_values  # noqa: E402
-from verity.proofs.typed_obligation import TypedObligationSet, object_digest  # noqa: E402
+from verity.proofs.binding import bound_public_values
+from verity.proofs.typed_obligation import TypedObligationSet, object_digest
 
 SP1_SECURITY_BITS = 100
 NEGATIVES = ("wrong-first-output-word", "wrong-last-output-word", "tampered-output-leaf")
@@ -96,7 +96,6 @@ def _instances(spec, set_dir: Path, manifest: dict, lo: int, hi: int):
     return ports ``out*`` in order."""
 
     import numpy as np
-
     from verity_sp1.ir_call import Instance
 
     ports = manifest["ports"]
@@ -108,13 +107,15 @@ def _instances(spec, set_dir: Path, manifest: dict, lo: int, hi: int):
 
 
 def _python_verdict(lowered) -> bool:
+    from verity.errors import ProtocolError
+    from verity.proofs.codes import Reject
     from verity.proofs.lowering import check_relations
     from verity.proofs.packed import check_packed_openings, decode_packed_witness
     from verity.proofs.wire import decode_any_statement
 
     try:
         words = check_packed_openings(decode_any_statement(lowered.statement).expand(), decode_packed_witness(lowered.witness))
-    except Exception:
+    except (Reject, ProtocolError):
         return False
     return check_relations(lowered.obj, words)
 
@@ -156,7 +157,7 @@ def prepare(a) -> int:
     }
     one = lower_call(spec, instances[:1], tables=tables, session=session, compiled=compiled)
     # one byte of the first output leaf's value, flipped: the leaf no longer authenticates
-    out_width = one.obj.leaves[[v.id for v in one.obj.leaves].index("u%06d/out/0" % first.unit)].layout.length
+    out_width = one.obj.leaves[[v.id for v in one.obj.leaves].index(f"u{first.unit:06d}/out/0")].layout.length
     leaf_bytes = b"".join(w.to_bytes(2, "little") for w in first.returns[:out_width])
     witness = bytearray(one.witness)
     at = witness.find(leaf_bytes)

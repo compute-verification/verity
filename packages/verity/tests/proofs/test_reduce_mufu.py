@@ -7,7 +7,6 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
 from verity.proofs import reduce_mufu as R
 from verity.proofs.typed_obligation import family_gate_set
 
@@ -61,7 +60,6 @@ def test_fma_is_one_rounding_of_the_exact_value():
         if R._exp(got) == 0xFF:
             continue
         # the result is the float nearest the exact value: no float lies strictly between them
-        lo, hi = sorted((_value(got), exact))
         for neighbour in ((got & 0x7FFF_FFFF) - 1, (got & 0x7FFF_FFFF) + 1):
             if 0 <= neighbour < 0x7F80_0000:
                 n = _value(neighbour | (got & 0x8000_0000))

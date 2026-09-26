@@ -24,11 +24,11 @@ __all__ = [
     "REDUCE_MUFU_DIGEST",
     "REDUCE_MUFU_NAME",
     "REDUCE_MUFU_VERSION",
+    "div_full_rcp_index",
     "make_reduce_mufu_gate_set",
     "mufu_rcp_index",
     "mufu_sqrt_index",
     "rsqrt_approx_index",
-    "div_full_rcp_index",
 ]
 
 REDUCE_MUFU_NAME = "veritor.reduce-mufu"
@@ -354,7 +354,7 @@ def _gate(name: str, fn, width: int, arg_widths: tuple[int, ...]) -> Gate:
 def make_reduce_mufu_gate_set() -> GateSet:
     """The gate set ``veritor.reduce-mufu@1`` (statement width 32; sources 64-bit)."""
 
-    select = lambda c, a, b: a if c & 1 else b  # noqa: E731
+    select = lambda c, a, b: a if c & 1 else b
     return GateSet(
         (
             _gate("bf16_add_f2fp", bf16_add_f2fp, 16, (16, 16)),
