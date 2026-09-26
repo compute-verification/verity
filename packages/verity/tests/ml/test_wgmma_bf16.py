@@ -1,6 +1,7 @@
 """``sm90.wgmma.m64n8k16.bf16`` against lane wgmma-bf16's H100 capture (``fixtures/tc-hopper-wgmma-bf16-2026-09-26``, see the
 fixtures README): every recorded word reproduces through the registered model's total step, one wgmma per record or four
-chained on one accumulator, on both A operand paths; the Ampere pipeline does not."""
+chained on one accumulator, on both A operand paths; the Ampere pipeline does not.  A run of the legacy ``mma.sync.m16n8k16``
+on a second H100 against the same model shows the two instructions compute the same words, non-finite ones included."""
 
 from __future__ import annotations
 
@@ -36,14 +37,15 @@ def test_the_instruction_is_registered_with_its_own_model() -> None:
 
 
 def test_every_captured_word_reproduces() -> None:
-    by_path: dict[str, int] = {}
+    by_path: dict[tuple[str, str], int] = {}
     for r in DOC["records"]:
         a, b, acc, d = _words(r["a"]), _words(r["b"]), int(r["acc"], 16), int(r["d"], 16)
         assert len(a) == len(b) == 16 * r["steps"]
         assert _step_total(HOPPER_BF16_WGMMA_K16, acc, a, b) == d, r
-        path = DOC["runs"][r["run"]]["a_source"]
-        by_path[path] = by_path.get(path, 0) + 1
-    assert set(by_path) == {"smem", "registers"} and min(by_path.values()) > 6_000
+        run = DOC["runs"][r["run"]]
+        by_path[run["instruction"], run["a_source"]] = by_path.get((run["instruction"], run["a_source"]), 0) + 1
+    assert set(by_path) == {("sm90.wgmma.m64n8k16.bf16", "smem"), ("sm90.wgmma.m64n8k16.bf16", "registers"), ("sm90.mma.m16n8k16.bf16", "n/a")}
+    assert min(by_path.values()) > 6_000
 
 
 def test_finite_chains_agree_with_tc_dot_chain() -> None:
@@ -69,10 +71,38 @@ def test_the_capture_separates_hopper_from_ampere() -> None:
     assert wrong > 100
 
 
+def test_mma_and_wgmma_write_the_same_words_on_the_h100() -> None:
+    """The specials family has the same inputs on every BF16 k16 instruction: its words, NaN and infinity outputs included, are the
+    same on mma.sync (one H100) and on wgmma with A from shared memory or registers (another H100)."""
+    words: dict[str, dict[tuple, int]] = {}
+    for r in DOC["records"]:
+        if r["family"] == "specials/all":
+            run = DOC["runs"][r["run"]]
+            words.setdefault(f"{run['instruction']}/{run['a_source']}", {})[r["acc"], r["a"], r["b"]] = int(r["d"], 16)
+    mma = words.pop("sm90.mma.m16n8k16.bf16/n/a")
+    assert set(words) == {"sm90.wgmma.m64n8k16.bf16/smem", "sm90.wgmma.m64n8k16.bf16/registers"}
+    assert sum(((d >> 23) & 0xFF) == 0xFF for d in mma.values()) > 1_000
+    for other in words.values():
+        assert other == mma
+
+
+def test_the_mma_run_agrees_with_the_wgmma_model_everywhere() -> None:
+    (run,) = [v for v in DOC["runs"].values() if v["instruction"] == "sm90.mma.m16n8k16.bf16"]
+    hyp = HOPPER_BF16_WGMMA_K16.name + "[HYPOTHESIS]"
+    assert run["sass"] == ["HMMA.16816.F32.BF16"] and run["sass_count"] == 1 and run["failures"] == [] and run["chain"] is None
+    assert run["declared_model"] == HOPPER_BF16_M16N8K16.name and run["device"] == "NVIDIA H100 80GB HBM3"
+    assert sum(f["elements"] for f in run["sweep"].values()) >= 25_000_000
+    assert all(f["mismatches"][hyp] == 0 for f in run["sweep"].values())   # specials included (the finite model raises there)
+    assert run["sweep"]["specials"]["mismatches"][HOPPER_BF16_M16N8K16.name] > 0
+    cap = run["capture_replay"]   # veritor's wgmma-recorded words, re-executed through mma.sync
+    assert cap["records"] == 44_046 and cap["model"] == hyp and cap["mismatches"] == cap["model_mismatches"] == cap["other_positions_nonzero"] == 0
+
+
 def test_the_runs_behind_the_fixture_saw_no_mismatch() -> None:
     """The fixture is a sample; the runs' own counts (from probe_results.json) cover every element."""
-    assert {v["a_source"] for v in DOC["runs"].values()} == {"smem", "registers"}
-    for run, v in DOC["runs"].items():
+    wgmma = {r: v for r, v in DOC["runs"].items() if v["instruction"] == "sm90.wgmma.m64n8k16.bf16"}
+    assert {v["a_source"] for v in wgmma.values()} == {"smem", "registers"}
+    for run, v in wgmma.items():
         assert v["device"] == "NVIDIA H100 80GB HBM3" and v["arch"] == "sm_90a" and v["failures"] == [], run
         assert v["sass"] == ["HGMMA.64x8x16.F32.BF16"] and v["sass_count"] == 1
         model = v["declared_model"]

@@ -146,6 +146,11 @@ _H100_WGMMA_BF16 = (
     "0 mismatches; the Ampere pipeline misses 3.15M.  Words identical to the first pair (r20260926-015601-b530, -015605-bc89; same "
     "seeds).  Canary r20260926-021005-456c art:4ca1294d1cf34183e57d638873ea6cbee75ee42054e88c6b105ac61e0f49b513 (26,624, 0)"
 )
+_H100_MMA_EQ_WGMMA = (
+    "lane wgmma-bf16 r20260926-023321-ecb5 (a second H100 80GB HBM3, GPU-7e095246-1454-01f4-2b76-197d7ab9d18b, driver 580.126.09): "
+    "mma.sync.m16n8k16 bf16, 25,833,472 swept elements, specials included, 0 mismatches against HOPPER_BF16_WGMMA_K16's total step; the "
+    "specials words equal the wgmma runs' word for word; veritor's 44,046 wgmma-recorded words re-executed through mma.sync, 0 mismatches"
+)
 _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
     "570.195.03, SASS 166a24a0...): lockfile records 1,574,998/1,574,998 dot statements bit-exact under model5 "
@@ -237,7 +242,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=HOPPER_BF16_M16N8K16,
             status="pinned",
             dossier="art:0664d5c367791927273cf038f0f6caa326a00801a3d563210c1969f159d3afff",
-            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16),
+            evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16,
+                      _H100_MMA_EQ_WGMMA),
         ),
         # --- BF16 Hopper wgmma -----------------------------------------------------------------------------------
         _i(
