@@ -1,4 +1,4 @@
-"""The frozen instance sets of the four non-A100 Table 2 rows as one binary file each, for the SP1 format guests.
+"""The frozen input sets of the four non-A100 Table 2 rows as one binary file each, for the SP1 format guests.
 
     python -m verity_sp1.format_instances --format fp8-ada --n 4096 --procs 16 --out DIR/fp8-ada.bin
 

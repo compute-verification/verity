@@ -1,12 +1,12 @@
 # hash_gpu -- GPU Merkle commitments for the proof-internal commitment layer
 
-Shared component (hash-gpu lane, 2026-09-22) for the Candidate A / B GPU lanes: commit an `(R, N)` matrix of BabyBear
+Shared component (hash-gpu lane, 2026-09-22) for the A-GKR / B-Ligero GPU lanes: commit an `(R, N)` matrix of BabyBear
 elements column-wise (Ligero layout: one leaf per codeword column, binary tree over the `N` leaves) with SHA-256, Blake3 or
 Poseidon2/BabyBear on the device, and open columns with authentication paths. Every GPU hash is bit-exact against a CPU
 reference. This is *not* Verity's external commitment hash (`verity.commitments.merkle`, unchanged).
 
 Measured rates (RTX 4090, run `r20260922-054241-b966`) are in `note:r20-proof/hash-gpu/20260922T0554Z-report-hash-gpu`; headline: full
-tree over Candidate B's 20.36 GB commitment in 45.6 ms with SHA-256 (446 GB/s), 56.6 ms with Blake3 (359 GB/s), 353 ms with
+tree over B-Ligero's 20.36 GB commitment in 45.6 ms with SHA-256 (446 GB/s), 56.6 ms with Blake3 (359 GB/s), 353 ms with
 Poseidon2-16 (58 GB/s); the torch Poseidon2 variants (int64 elementwise, INT8 tensor-core MDS) are 0.3-0.4 GB/s.
 
 ## Layout
@@ -73,8 +73,8 @@ use; `/usr/local/cuda-12.4/bin` on vy-g2).
 
 ## Results (RTX 4090, driver 580.159.04, CUDA 12.9 runtime, torch 2.4.1+cu124, cupy 14.2.0; run `r20260922-054241-b966`)
 
-Ligero shapes at B = 4096, K = 1536, BabyBear, 2^-128: N = 16,384 columns; Candidate B R = 310,602 rows (20.36 GB),
-Candidate A R = 48,873 rows (3.20 GB). Full tree build, median of 5.
+Ligero shapes at B = 4096, K = 1536, BabyBear, 2^-128: N = 16,384 columns; B-Ligero R = 310,602 rows (20.36 GB),
+A-GKR R = 48,873 rows (3.20 GB). Full tree build, median of 5.
 
 | hash | B GB/s | B ms | B us/VU | A GB/s | A ms | peak device mem (B shape) |
 |---|---|---|---|---|---|---|
@@ -118,7 +118,7 @@ states, width 16: `blocks` 12.2 M perm/s (MDS-only 4.4 ms), `fp64` 16.4 M (1.9 m
 INT8-limb MDS does **not** beat the int64 elementwise MDS; the limb split, recombination and deferred reduction cost more than
 the 16x16 multiply they remove.
 
-Re-pricing (`reprice.py`, utilisation 0.172): with the measured SHA-256 rate the hash bucket is 9% of Candidate B's time on the
+Re-pricing (`reprice.py`, utilisation 0.172): with the measured SHA-256 rate the hash bucket is 9% of B-Ligero's time on the
 4090 (the model's assumed 50 GB/s made it 70%); B becomes matmul-bound. With Poseidon2-16 it is 44%. A100/H100 rows in
 `notes-asset:campaigns/r20-proof/assets/hash-gpu/reports/hash_gpu.json` scale the 4090 rate by the bandwidth ratio (x2.02 / x3.32) and are labelled as a SCALING -- an upper bound,
 since the SHA-256/Blake3 kernels are compute-bound at 1 TB/s.

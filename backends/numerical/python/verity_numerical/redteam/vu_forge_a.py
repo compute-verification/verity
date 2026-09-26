@@ -1,4 +1,4 @@
-"""Adversarial VU batches for the Candidate A full-VU prover (``verity-gkr run-vu``): chain-linkage forgeries.
+"""Adversarial VU batches for the A-GKR full-VU prover (``verity-gkr run-vu``): chain-linkage forgeries.
 
 Every case is a complete ``run-vu`` directory (``circuit.txt``, ``epilogue.txt``, ``units.bin``, ``epilogue.bin``,
 ``public.bin``) built from real K=1536 VUs (the bases of ``vu-k1536-neg`` with their *correct* words, so no fixture

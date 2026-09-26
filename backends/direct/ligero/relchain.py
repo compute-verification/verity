@@ -491,8 +491,8 @@ def hashauth_vshape(rel: Relation, hr, leaf) -> tuple[int, int, int] | None:
 
 
 def commit_bindings(rel: Relation, leaf, *, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int) -> dict[str, bytes]:
-    """Each tree's ``binding``: the frame-v3 binding digest (instance set, range, K, leaf schema), or under ``vllm-v1`` the
-    port's ctx digest (``vllm_tree.ctx_digest``: instance set and range; the rest of the domain is the verifier's)."""
+    """Each tree's ``binding``: the frame-v3 binding digest (input set, range, K, leaf schema), or under ``vllm-v1`` the
+    port's ctx digest (``vllm_tree.ctx_digest``: input set and range; the rest of the domain is the verifier's)."""
     from . import hashauth, vllm_tree
     if hashauth.is_vllm(leaf):
         return {n: vllm_tree.ctx_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=lo, hi=hi, tree=n)

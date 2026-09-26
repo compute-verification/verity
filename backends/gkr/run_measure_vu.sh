@@ -77,7 +77,7 @@ if [ "${GATE:-0}" = "1" ]; then
     fi
     exit 0
 fi
-# a box that has never run the VU tiers (vy-cpu) lacks the frozen instance set: rebuild it from the recipe and check
+# a box that has never run the VU tiers (vy-cpu) lacks the frozen input set: rebuild it from the recipe and check
 # it against the pinned manifest (bench-instances/v1 README) before any export
 if [ ! -f "$INSTANCES_ROOT/vu-k1536-neg.index.json" ] || [ ! -f "$INSTANCES_ROOT/vu-k1536.index.json" ]; then
     mkdir -p "$INSTANCES_ROOT"

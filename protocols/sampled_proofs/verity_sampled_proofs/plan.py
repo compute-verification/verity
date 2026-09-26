@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any
 
-from verity.ir.layout import FunctionCall, Gate, Subcircuit
+from verity.ir.layout import FunctionCall, Gate, GateSelection
 from verity.ir.program import Program
 
 from .law import ReplayUnit, Stage, TwoStageLaw
@@ -110,7 +110,7 @@ class VerificationPlan:
         """Whether some unconditional obligation covers `gate` (checked on every audit)."""
         return any(ob.gate_class.selector(gate) for ob in self.unconditional)
 
-    def expected_checked(self, sub: Subcircuit) -> Fraction:
+    def expected_checked(self, sub: GateSelection) -> Fraction:
         """Expected number of checked gates in `sub` under this plan (explicit enumeration)."""
         return sum((self.check_probability(g) for g in sub), Fraction(0))
 
@@ -168,10 +168,10 @@ class AuthenticationLocation:
 
 @dataclass
 class Obligation:
-    """One sampled verification unit: a subcircuit of the canonical circuit (here always a `FunctionCall` or
+    """One sampled verification unit: a gate selection of the canonical circuit (here always a `FunctionCall` or
     `Region`), its boundary values with their authentication locations, and the plan that selected it."""
 
-    subcircuit: Subcircuit
+    selection: GateSelection
     plan: VerificationPlan
     boundary_in: dict[int, AuthenticationLocation | None]  # gate index -> location (None: opened directly)
     boundary_out: dict[int, AuthenticationLocation | None]
@@ -185,16 +185,16 @@ class Obligation:
     def to_json(self) -> dict:
         d: dict[str, Any] = {
             "schema": "verity-ir/obligation/v0",
-            "subcircuit": {"gates": list(self.subcircuit.gate_indices())} if not hasattr(self.subcircuit, "lo")
-            else {"region": [self.subcircuit.lo, self.subcircuit.hi]},  # type: ignore[attr-defined]
+            "subcircuit": {"gates": list(self.selection.gate_indices())} if not hasattr(self.selection, "lo")
+            else {"region": [self.selection.lo, self.selection.hi]},  # type: ignore[attr-defined]
             "in": [{"gate": g, "location": None if loc is None else loc.to_json()} for g, loc in sorted(self.boundary_in.items())],
             "out": [{"gate": g, "location": None if loc is None else loc.to_json()} for g, loc in sorted(self.boundary_out.items())],
             "plan": self.plan.name,
             "statement": self.statement,
         }
-        if isinstance(self.subcircuit, FunctionCall):
-            d["function_call"] = {"id": self.subcircuit.id, "args": list(self.subcircuit.args),
-                                  "returns": list(self.subcircuit.returns)}
+        if isinstance(self.selection, FunctionCall):
+            d["function_call"] = {"id": self.selection.id, "args": list(self.selection.args),
+                                  "returns": list(self.selection.returns)}
         return d
 
 

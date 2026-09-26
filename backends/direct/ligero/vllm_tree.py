@@ -6,8 +6,8 @@ odd trailing child ``lift``, no padding) whose published root is its **step-root
 The domain of a port (PROTOCOL.md §9.1) is built from the verifier's own data only:
 
 * ``program``: the subcircuit (a GEMM coordinate of ``K`` words) and the scheme;
-* ``ctx``: the instance set (dataset, tier, manifest digest) and the committed range ``[lo, hi)``, per port -- the
-  :class:`~.auth.TreeRef` ``binding`` field, recomputed from the instance set by every re-verifier (``reverify.py``) as
+* ``ctx``: the input set (dataset, tier, manifest digest) and the committed range ``[lo, hi)``, per port -- the
+  :class:`~.auth.TreeRef` ``binding`` field, recomputed from the input set by every re-verifier (``reverify.py``) as
   the frame-v3 binding is;
 * ``geo``: ``K`` and the value widths;
 * ``layout``: the port, its leaf rule (``pos-leaf``, §9.3), what a value is and its exact length (§9.4);
@@ -58,7 +58,7 @@ def value_len(tree: str, *, K: int, word_bits: int, y_bytes: int) -> int:
 
 
 def ctx_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, tree: str) -> bytes:
-    """The port's context: the instance set and range it commits (the tree reference's ``binding``)."""
+    """The port's context: the input set and range it commits (the tree reference's ``binding``)."""
     if tree not in VALUES:
         raise ValueError(f"unknown tree {tree!r}")
     return _d("ctx", {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256, "lo": int(lo), "hi": int(hi),

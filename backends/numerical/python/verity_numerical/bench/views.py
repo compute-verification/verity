@@ -7,31 +7,31 @@
 Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`verity_numerical.bench.tables` and
 :mod:`~verity_numerical.bench.drilldown`; these views are previews and are never shown as the published numbers.
 
-* **Table 1** -- backend configurations and their security, one entry per backend family followed by its configurations
-  (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
+* **Table 1** -- backends and statements with their security, one entry per backend family followed by one row per backend
+  and statement (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
   y; the commitment scheme (:data:`SCHEMES`); every hash of the soundness argument with its role, property and class; ZK class
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
   proximity bounds (regime, proven or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
-  ``verity.proofs.target.TARGETS`` entry and scheme some configuration declares), a native column, one column per
+  ``verity.proofs.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
-  compute-bound datasheet estimate (:func:`native`); ``P`` is instances per second end to end, committing the batch's values and
-  then proving (:func:`throughput`).  A cell is the family's best admissible configuration (highest ``P``, ties to the lower
+  compute-bound datasheet estimate (:func:`native`); ``P`` is inputs per second end to end, committing the batch's values and
+  then proving (:func:`throughput`).  A cell is the family's best admissible backend and statement (highest ``P``, ties to the lower
   artifact id) that proves the full relation over a core-defined scheme and passes the view's filters (:class:`Rules`: by
-  default a whole-proof bound of 2^-128), marked ``(prov.)`` while its configuration's statement has no red-team clearance on
+  default a whole-proof bound of 2^-128), marked ``(prov.)`` while its statement has no red-team clearance on
   that subcircuit and ``(alg.)`` when its soundness argument uses an algebraic hash (flagged in Table 1).
-* **Table 3** -- where the time goes: seconds per instance of commitment and of each proving bucket, with shares of end to end,
+* **Table 3** -- where the time goes: seconds per input of commitment and of each proving bucket, with shares of end to end,
   and the cell split into serving overhead (commitment x N) and proving overhead (proving x N).
 
 Every rejected result is listed with its first reason (:data:`REASON_LETTERS`, the spec's order); ``--format json`` has them all.
 
-The v1 adapter: ``bench-result/v1`` results carry no configuration id, so their configuration is the ``drilldown.VARIANTS`` entry
+The v1 adapter: ``bench-result/v1`` results carry no ``configuration`` id (a backend and statement), so theirs is the ``drilldown.VARIANTS`` entry
 that recognises them (:func:`configuration_of`) and their family the ``tables.CANDIDATES`` entry; name recognisers live nowhere
 else in these views.  A result names its commitment time as the measurement :data:`COMMIT` and its
 protocol as the ``protocol`` / ``sweep`` blocks (``benchmark-standard`` §6.1, ``bench-result/v2``); no v1 result records the
 protocol, so no v1 result meets it (reason M).
 
-``--rules legacy`` renders with today's parameters (2^-128 on target and achieved, B = 4096, K = 1536, the frozen instance range,
+``--rules legacy`` renders with today's parameters (2^-128 on target and achieved, B = 4096, K = 1536, the frozen input range,
 the bare and ``+ in-proof hash`` columns, proving time only): the switch's parity gate, which ``--parity`` checks against a
 fresh :func:`tables.build` of the same store (and, with ``--snapshot NAME``, against that ``tables --snapshot``'s members).
 """
@@ -117,7 +117,7 @@ SCHEMES: tuple[Scheme, ...] = (
 _SCHEME = {s.id: s for s in SCHEMES}
 
 
-# --- Table 1: families and configurations ------------------------------------------------------------------------------------------
+# --- Table 1: families, backends and statements ------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -132,14 +132,14 @@ class Family:
     note: str = ""
 
 
-#: Which composite configurations a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
+#: Which composed backends a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
 FAMILY_NOTES = {
     "A-GKR": "route (a), the A-GKR prime side with Flock's keyed-BLAKE3 row hashes and the sigma link in one live session, is an "
              "A-GKR configuration and fills this column",
     "Flock": "pure Flock only: the relation and its row hashes in one binary-field circuit; route (a) is in the A-GKR column",
 }
 
-#: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its candidate lives here.  The
+#: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its family is declared here.  The
 #: v1 adapter recognises it by ``software.backend.name`` starting ``flock``.  Declared class NON_ZK_PROOF: Flock is not zero-knowledge
 #: yet (the Flock lane may change it).
 FLOCK = T.Candidate(
@@ -188,7 +188,7 @@ class Proximity:
 
 
 FULL = "full relation"
-#: Route (a): A-GKR's prime proof with Flock's keyed-BLAKE3 rows and the sigma link (drilldown's variant of the same id).
+#: Route (a): A-GKR's prime proof with Flock's keyed-BLAKE3 rows and the sigma link (drilldown's ``VARIANTS`` entry of the same id).
 ROUTE_A = "A-GKR route (a): prime + Flock rows + sigma link"
 _WEAK_PUBLIC = "weaker: operands public, no commitment (the verifier could recompute y)"
 _WEAK_PRIVATE = "weaker: operands private and bound to nothing"
@@ -213,8 +213,8 @@ _AGKR_DOMINANT = "IRS query term (2^-130.2 at t = 192) and the LogUp identity te
 
 @dataclass(frozen=True)
 class Configuration:
-    """One Table 1 row.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry no configuration id); the ZK and
-    per-proof soundness words are that entry's.  ``scheme`` is the :data:`SCHEMES` id its statements bind (``None``: the statement
+    """One Table 1 row: a backend and a statement.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry
+    no ``configuration`` id); the ZK and per-proof soundness words are that entry's.  ``scheme`` is the :data:`SCHEMES` id its statements bind (``None``: the statement
     commits nothing); ``hashes`` is every hash the soundness argument relies on.  ``unsupported`` maps a target name to the
     backend's declared reason (``n/s``)."""
 
@@ -419,7 +419,7 @@ WORK_MODEL = "work-model/v0: K/16 tensor-core steps x 32 FLOP (+1 conversion, no
 
 
 def native(target: Target, K: int = T.K) -> dict[str, Any]:
-    """``N`` for the target's subcircuit on its hardware class: instances per second = 1 / max over units of ops / peak, the
+    """``N`` for the target's subcircuit on its hardware class: inputs per second = 1 / max over units of ops / peak, the
     tensor cores being the busiest unit of a GEMM coordinate; with the busiest unit, the peak entry and the work model."""
 
     steps, flop = K // 16, (K // 16) * 32
@@ -689,7 +689,7 @@ def _recipe(text: str) -> Callable[[int], str]:
 #: The synthetic sets as streams: instance i is a function of (generator, seed, i) alone (``relchain._instance``,
 #: ``fp4.chain.instances_fp4``), so the set over [0, n) is a prefix-consistent extension of the frozen [0, 4096).  Their
 #: ``manifest_sha256`` hashes the generator, seed and n (``relchain.instances_digest``, ``fp4.chain.instances_digest``); each
-#: recipe here reproduces the digest ``contract`` pins at n = 4096 (tested).  The A100 set is a fixture of 4,096 instances with
+#: recipe here reproduces the digest ``contract`` pins at n = 4096 (tested).  The A100 set is a fixture of 4,096 inputs with
 #: no stream beyond them: a larger batch repeats instances, which can inflate throughput, so it is rejected (I).
 STREAMS: dict[str, Callable[[int], str]] = {
     FP8_ADA_MMA.name: _recipe(f"fp8-ada synthetic|seed={contract.FP8_ADA_INSTANCES_SEED}|n={{n}}|K={T.K}"),
@@ -703,7 +703,7 @@ _STREAM_SEEDS = {FP8_ADA_MMA.name: contract.FP8_ADA_INSTANCES_SEED, BF16_HOPPER.
 
 
 def instance_range(target: Target, inst: Mapping[str, Any]) -> tuple[str | None, str | None]:
-    """``(how, None)`` when ``inst`` is the target's declared instance set over [0, n) -- ``how`` is ``"frozen"`` (exactly the
+    """``(how, None)`` when ``inst`` is the target's declared input set over [0, n) -- ``how`` is ``"frozen"`` (exactly the
     frozen ref), ``"prefix"`` (a prefix of it) or ``"stream"`` (a prefix-consistent extension of a synthetic set, identified by
     generator, seed and n) -- else ``(None, why)``, ``why`` ``None`` when it simply names another set."""
 
@@ -1208,7 +1208,7 @@ def _cell_name(c: ViewCell) -> str:
 
 
 def overheads(c: ViewCell) -> tuple[float, float]:
-    """``(serving overhead, proving overhead)`` of a cell: commitment and proving seconds per instance, each times N; they sum
+    """``(serving overhead, proving overhead)`` of a cell: commitment and proving seconds per input, each times N; they sum
     to the cell's ``N / P``."""
     P = c.throughput
     return c.native * P["commit_s"] / P["instances"], c.native * P["proving_s"] / P["instances"]
@@ -1219,7 +1219,7 @@ def _fmt_x(v: float) -> str:
 
 
 def stages(c: ViewCell) -> dict[str, Any]:
-    """Table 3 in overhead units: each stage's seconds per instance × N (commitment, interaction -- network wait at the reference
+    """Table 3 in overhead units: each stage's seconds per input × N (commitment, interaction -- network wait at the reference
     profile --, the six buckets, joints, Other), which sum to
     the cell's ``N / P``; and the one-time setup (``fixed.setup_seconds``) as seconds and amortized ×native over the measured
     batch (setup × N ÷ instances), outside that sum."""
@@ -2075,13 +2075,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=None, metavar="ROOT", help="store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--format", choices=("md", "json", "entities"), default="md",
-                    help="md; json (the raw views); entities (the docs site's render: circuits, configurations, results, the printed tables)")
+                    help="md; json (the raw views); entities (the docs site's render: subcircuits, statements, backends, results, the printed tables)")
     ap.add_argument("--rules", choices=tuple(RULES), default=SPEC.name)
     ap.add_argument("--security-bits", type=float, default=None, metavar="N", help="filter to a whole-proof bound of 2^-N or better")
     ap.add_argument("--include-archived", action="store_true")
     ap.add_argument("--unvalidated-interaction", action="store_true",
                     help="preview: do not require interactive results to carry the interaction record and meet the tolerance")
-    ap.add_argument("--standard-hashes-only", action="store_true", help="drop configurations with an algebraic hash in the soundness argument")
+    ap.add_argument("--standard-hashes-only", action="store_true", help="drop backends and statements with an algebraic hash in the soundness argument")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
     ap.add_argument("--take-snapshot", action="store_true",

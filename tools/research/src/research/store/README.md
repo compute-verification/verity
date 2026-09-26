@@ -429,7 +429,7 @@ prints the table; the groups are:
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
-- **evidence** — probe captures and instance sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
+- **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and

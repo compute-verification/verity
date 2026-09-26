@@ -237,7 +237,7 @@ the verdict; the reasons are listed side by side in `fixtures/rust_verdicts/*.js
 ## D9. `authentication = included` (lane `auth-included`): a third hash, two new file versions, and the check order
 
 The included result binds every published boundary word to three SHA-256 indexed Merkle trees of
-`verity.commitments` (`backends/direct/ligero/auth.py`: a-words, b-words, output words of the frozen instance set,
+`verity.commitments` (`backends/direct/ligero/auth.py`: a-words, b-words, output words of the frozen input set,
 one `u16` leaf per word, `RangeIndexedDomain(0, count)`, owner `-1 / -2 / -1`, binding = `identity_digest` of the
 dataset manifest + word range).  Facts a verifier needs that PROTOCOL.md does not state (the code is the reference):
 

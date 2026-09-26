@@ -16,7 +16,7 @@ difference *is* the experiment (a scaling curve); the output then labels it.  Ex
 
 The ``instances`` field (which ``bench-instances/v1`` ids were proved, ``contract.compare_instances``) is judged
 alongside: two results that both record it and disagree (dataset, tier, manifest, or different id ranges for the same
-batch size) are REFUSED; a result that lacks it or records ``null`` was not measured on the shared instance set, and the
+batch size) are REFUSED; a result that lacks it or records ``null`` was not measured on the shared input set, and the
 judge says so in a WARNING and goes on -- the comparison then rests on the identity fields alone.
 
 Results recorded before the contract (the ``dot-product-vector`` workload's early baselines) carry none of the

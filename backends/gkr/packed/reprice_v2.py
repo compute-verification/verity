@@ -1,4 +1,4 @@
-"""Re-price Candidate A at the v1 and v2 checker shapes with the a-fusion measured buckets (laptop side, no torch):
+"""Re-price A-GKR at the v1 and v2 checker shapes with the a-fusion measured buckets (laptop side, no torch):
 
     uv run --package verity-numerical python -m backends.gkr.packed.reprice_v2 \
         --sumcheck backends/numerical/reports/a_fusion/bench_fused_k3.json \

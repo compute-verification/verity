@@ -1,4 +1,4 @@
-"""Re-price Candidate B (and A's shared buckets) on the RTX 4090 with every measured bucket (b-commit lane).
+"""Re-price B-Ligero (and A's shared buckets) on the RTX 4090 with every measured bucket (b-commit lane).
 
     uv run --frozen --package verity-numerical python backends/direct/encode/reprice_measured.py \
         --commit backends/direct/encode/results_commit_<run>.json --buckets backends/direct/encode/results_buckets_<run>.json \

@@ -224,7 +224,7 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     md = V.render_markdown(views)
     assert V.PREVIEW in md and "## Table 1" in md and "## Table 2" in md and "## Table 3" in md
     assert f"{T.fmt_overhead(cell.overhead)} (prov.)" in md
-    # Table 3: commitment and the proving buckets per instance, with shares of end to end
+    # Table 3: commitment and the proving buckets per input, with shares of end to end
     rows = [r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero")]
     row3, drill, _ = rows                                # Table 3, its seconds-per-instance drill-down, the interaction drill-down
     serving, proving = V.overheads(cell)

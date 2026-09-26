@@ -6,7 +6,7 @@ smallest non-square non-cube (``x^6 - a`` is irreducible iff ``a`` is neither a 
 Elements are 6-tuples in ``[0, p)``; a base element is ``(a, 0, 0, 0, 0, 0)``.  Limbs: 4 balanced signed 8-bit limbs
 per coefficient (``limbs_balanced``), 24 per challenge element.
 
-The sumcheck (Candidate A's GKR c-rounds, PROTOCOL.md 4.1, as ``explore.tensor`` prices them)::
+The sumcheck (A-GKR's GKR c-rounds, PROTOCOL.md 4.1, as ``explore.tensor`` prices them)::
 
     claim = sum_{c in {0,1}^n} eq(gamma, c) g(c) h(c),      gamma in F_{p^6}^n,  g, h : {0,1}^n -> F_p (layer values)
 

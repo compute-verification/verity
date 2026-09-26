@@ -6,7 +6,7 @@
 //! - SHA-256 slots `0..per_role` (2^15 bits each, Flock's `sha2` circuit): the x row's position leaf
 //!   `SHA-256("verity/pos-leaf/v0" || u64be(row_bytes) || row)`, one compression per 64-byte message block
 //!   (per_role = ⌈(35 + row_bytes) / 64⌉: 25 for 1536-byte rows); slots `per_role..2 per_role`: the W column's;
-//! - 2^13-bit positions `unit_pos0..unit_pos0 + units` (unit_pos0 = 4 · 2 per_role): the census units (the pinned
+//! - 2^13-bit positions `unit_pos0..unit_pos0 + units` (unit_pos0 = 4 · 2 per_role): the transition units (the pinned
 //!   `flock-unit-io/v1` lowering), unit u reading the row bytes `[32 u, 32 u + 32)` of x and of W;
 //! - the rest is empty (forced zero).
 //!

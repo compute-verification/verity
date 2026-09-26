@@ -119,7 +119,7 @@ def test_gemm_batch_shapes() -> None:
     coord = bind(G.GemmCoordinate, K=32, DOT=P.HopperBF16WgmmaDot16)
     for j in range(3):
         assert np.array_equal(y[:, j], E.evaluate_batch(coord, x, w[:, j], kernel="reference"))
-    assert np.array_equal(E.evaluate_batch(spec, x, w.reshape(7, 96)), y)  # flat leaves per instance are accepted
+    assert np.array_equal(E.evaluate_batch(spec, x, w.reshape(7, 96)), y)  # flat leaves per input are accepted
 
 
 def test_unknown_step_falls_back_to_the_reference() -> None:

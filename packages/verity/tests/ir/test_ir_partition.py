@@ -8,7 +8,7 @@ Stand-ins, built from explicit `Part`s so the validator is checked independently
 * `StubGateSet` / `StubFamily`: the `GateSet` / `Family` shape;
 * `NodeTiling` / `BodyTiling` / `Tiling`: the field names `validate_partition`'s fast path reads; `materialise` turns a
   tiling into the family it induces, so the fast path can be checked against the sweep on the same sets;
-* `OracleBoundary`: `w_out` from the explicit oracle `Subcircuit.out` (gate widths from the producing primitive), with
+* `OracleBoundary`: `w_out` from the explicit oracle `GateSelection.out` (gate widths from the producing primitive), with
   an adjustable slack on the bound and an optional "exact is Unsupported" mode;
 * small Programs from test-local primitives: `gemm_program()` (`TGemm{K=32,N=6}`: Input batches, a composite batch,
   nested calls), `synth_program(N)` (a pair of zip-able batches, a constant, a scan), `twice_program()` and
@@ -22,7 +22,7 @@ import pytest
 
 from verity.ir import boundary, partition, query_ast as G
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.layout import Scope, Subcircuit
+from verity.ir.layout import Scope, GateSelection
 from verity.ir.parts import Limits, Part, Unsupported, n_members
 from verity.ir.partition import (PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
                                  validate_partition, validate_vu_family, validate_vu_partition, validate_width, vu_status)
@@ -307,7 +307,7 @@ def family_of(program: Program, tiling: Tiling, with_tiling: bool = True) -> Stu
 
 
 class OracleBoundary:
-    """`w_out(part)` = sum of `ret.w` over `Subcircuit(circuit, gates).out` (the oracle); `w_out_bound` = exact +
+    """`w_out(part)` = sum of `ret.w` over `GateSelection(circuit, gates).out` (the oracle); `w_out_bound` = exact +
     `slack` (a deliberately loose sound bound).  `exact_unsupported=True` makes `w_out` return Unsupported."""
 
     def __init__(self, program: Program, slack: int = 0, exact_unsupported: bool = False) -> None:
@@ -317,7 +317,7 @@ class OracleBoundary:
     def _exact(self, part: Part) -> int:
         C = self.program.circuit
         gates = [g for lo, hi in part.intervals() for g in range(lo, hi)]
-        return sum(C.gate(g).prim.ret.w for g in Subcircuit(C, gates).out)
+        return sum(C.gate(g).prim.ret.w for g in GateSelection(C, gates).out)
 
     def w_out_bound(self, part: Part) -> int:
         self.calls["bound"] += 1

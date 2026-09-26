@@ -1,5 +1,5 @@
 """The WP2-checker census (``security.census``): pinned counts per transition unit and per K = 1536 VU, the layered
-shape Candidate A's accountant derives from it, and the diff against ``verity.ml.tc.relation.vu_census``."""
+shape A-GKR's accountant derives from it, and the diff against ``verity.ml.tc.relation.vu_census``."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ VU = census_vu(1536)
 
 
 def test_unit_columns_from_contracts():
-    """34 public words (c, 32 operands, y) + 225 hints + 62 looked-up row columns are what Candidate A commits."""
+    """34 public words (c, 32 operands, y) + 225 hints + 62 looked-up row columns are what A-GKR commits."""
     c = UNIT.summary()["columns"]
     assert c["inputs"] == 34 and c["hints"] == 225 and c["lookup_outputs"] == 62
     assert c["committed_A"] == 321

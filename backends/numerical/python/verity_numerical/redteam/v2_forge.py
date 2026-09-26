@@ -2,7 +2,7 @@
 
 Two families:
 
-* ``gkr_chain`` builds adversarial VU directories for Candidate A's ``verity-gkr run-vu`` / ``negatives-vu`` in
+* ``gkr_chain`` builds adversarial VU directories for A-GKR's ``verity-gkr run-vu`` / ``negatives-vu`` in
   ``--variant v2`` (Goldilocks): honest 96/steps-per-VU chains from the constant zero state whose *rows* each
   satisfy the unit circuit, with exactly one chain-level edit (a non-initial unit-0 state; an epilogue that reads a
   non-final unit's state; a flipped ``ovf`` into the epilogue; two VUs cross-linked; a B=1 batch).  The unit circuit

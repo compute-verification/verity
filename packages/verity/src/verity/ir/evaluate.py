@@ -1,7 +1,7 @@
 """Explicit-expansion evaluator (the oracle, IR §6).
 
 An execution transcript is an indexed assignment gate index -> encoding (Python int bit pattern). Evaluation
-walks a subcircuit gate by gate in canonical order, reading operands from the transcript and applying the
+walks a gate selection gate by gate in canonical order, reading operands from the transcript and applying the
 primitive's total evaluator. `Input` gates are never evaluated: their values must already be in the
 transcript (they are the prescribed inputs; the correspondence tool authenticates them separately).
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping
 
-from .layout import FunctionCall, Circuit, Subcircuit
+from .layout import FunctionCall, Circuit, GateSelection
 
 ExecutionTranscript = dict[int, int]
 
@@ -19,7 +19,7 @@ class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: Subcircuit, transcript: ExecutionTranscript, *, strict: bool = True) -> ExecutionTranscript:
+def evaluate_region(circuit: Circuit, sub: GateSelection, transcript: ExecutionTranscript, *, strict: bool = True) -> ExecutionTranscript:
     """Evaluate every gate of `sub` in canonical order, writing into `transcript` (mutated and returned).
     `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
     for gv in sub:

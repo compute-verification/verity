@@ -1,4 +1,4 @@
-//! Candidate A: prover + verifier for the WP2 transition unit (data-parallel over B units) and for the full
+//! A-GKR: prover + verifier for the WP2 transition unit (data-parallel over B units) and for the full
 //! K=1536 Verity VU (PROTOCOL.md 12: B·96 data-parallel units + B epilogue rows over one commitment, chain
 //! linkage and public output words as linear constraints on the committed vector).
 //!

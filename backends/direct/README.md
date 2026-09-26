@@ -1,4 +1,4 @@
-# Candidate B: direct constraints (`verity-direct`)
+# B-Ligero: direct constraints (`verity-direct`)
 
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as an AIR whose
 constraints are the WP2 gadget contracts (`backends/numerical/python/verity_numerical/checker/`), and the **full
@@ -13,7 +13,7 @@ and 83-case battery (PROTOCOL.md 13; one soundness fix, `LT_DIRECT` two-range fo
 
 Labels on every number from this crate: `proof_class = NON_ZK_PROOF_DIAGNOSTIC`, `authentication = excluded`,
 `unit = transition` (`bench`) or `unit = vu`, `scope = vu` (`vu-bench`), `domain = finite`. The PCS is Plonky3 FRI + Keccak Merkle, **not** the Ligero-style interactive
-PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* constraints, not Candidate B's end state.
+PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* constraints, not B-Ligero's end state.
 
 ## Layout
 

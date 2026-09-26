@@ -6,7 +6,7 @@ Timing: CUDA events on the default stream, one warm-up build, then ``reps`` buil
 Matrices are filled with a deterministic arithmetic pattern (hash cost is data-independent).  Shapes:
 
 * ``ligero``: the campaign's Ligero layouts at B = 4096, K = 1536, BabyBear, 2^-128 (``explore.tensor``): N = 16384
-  codeword columns; Candidate B commits 310,602 rows (20.36 GB, 1.24 MB per leaf), Candidate A 48,873 rows (3.20 GB).
+  codeword columns; B-Ligero commits 310,602 rows (20.36 GB, 1.24 MB per leaf), A-GKR 48,873 rows (3.20 GB).
   Poseidon2 runs as the fused CUDA kernel on the full shape; the torch version (memory-bound elementwise) runs on
   a 1024-column slice of the same rows and is scaled by 16 (labelled ``scaled_from_columns``).
 * ``generic``: 32-byte leaves (8 BabyBear elements per column) at 2^20, 2^23, 2^25, 2^27 leaves -- the shape of

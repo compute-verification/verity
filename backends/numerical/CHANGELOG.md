@@ -19,6 +19,12 @@
 - Poseidon2 row leaves are admissible, flagged as algebraic, and never count toward a standard-hash claim. The render
   already did this; `verity.commitments.rowleaf`'s wording now matches.
 
+## 2026-09-26: the README Glossary's terms in docstrings and help
+
+- Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
+  configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
+  `instances`) and the frozen tables' headers keep their names, mapped in the Glossary.
+
 ## 2026-09-26: file-verified interactive results pay their protocol's rounds
 
 - Bug: `views.interaction` gave every file-verified result `rounds = 0`, so all 14 B-interactive cells (B-Ligero, a 3-round

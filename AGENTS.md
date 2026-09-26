@@ -76,6 +76,9 @@ existing code and commands before adding abstractions or procedures. Add
 shared infrastructure when a concrete use case, recurring failure, or
 material risk justifies it; do not build for speculative requirements.
 
+Use the Glossary's terms (`README.md`); when a term changes, update the Glossary
+and roll it out in the same change.
+
 Enforce deterministic requirements in code where practical. Use skills for
 recurring, non-obvious workflows, not as a substitute for tooling or as a
 reason to add approval steps.

@@ -18,5 +18,5 @@ def test_lowering_adapter():
     assert kp["gates"][2]["operands"] == [{"local": 0}, {"local": 1}]
     assert kp["outputs"] == [3]
     # an Input gate inside a subcircuit lowers to an input equation, not a trusted source
-    low_in = lower_subcircuit(C.subcircuit([0, 14]))
+    low_in = lower_subcircuit(C.gate_selection([0, 14]))
     assert low_in["KindProgram"]["input_equations"][0]["gate"] == 0
