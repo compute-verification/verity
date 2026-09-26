@@ -784,9 +784,10 @@ def test_entities_print_every_table2_cell_and_footnote_exactly_as_the_markdown(s
             cell = ln["cells"][col]
             assert f" {cell['display']} [{cell['footnote']}] |" in md
             assert (cell["value"] is None) == (cell["result"] is None) == (cell["state"] != "cell")
-    assert ent["axes"]["families"] == t2["columns"][1:] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"]
+    assert ent["axes"]["backend_families"] == t2["columns"][1:] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"]
     assert t2["column_labels"] == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
-    assert ent["axes"]["circuits"] == [c["id"] for c in ent["circuits"]] == list(TARGETS)
+    assert ent["axes"]["subcircuits"] == [c["id"] for c in ent["subcircuits"]]
+    assert [c["legacy_target"] for c in ent["subcircuits"]] == list(TARGETS)
 
 
 def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_apart(store: LocalStore) -> None:
@@ -798,9 +799,9 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
         assert sum(p["value"] for p in r["phases"]) == pytest.approx(r["overhead"]["value"], rel=1e-12)
         assert r["serving_overhead"] + r["proving_overhead"] + next(p["value"] for p in r["phases"] if p["id"] == "interaction") \
             == pytest.approx(r["overhead"]["value"], rel=1e-9)
-        assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["subcircuit"] == "subcircuit/gemm-coordinate-k1536"
+        assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["subcircuit"].startswith("gemm_coordinate/k1536/")
         assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
-    assert b3["id"] == f"b-ligero-blake3-in-circuit@{FP8_ADA_MMA.name}" and b3["configuration"] == "b-ligero-blake3-in-circuit"
+    assert b3["id"] == f"b-ligero-blake3-in-circuit@gemm_coordinate/k1536/{FP8_ADA_MMA.instruction}" and b3["configuration"] == "b-ligero-blake3-in-circuit"
     assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"] / 4096)
     assert all(p["id"] != "setup" for p in b3["phases"])
     assert b3["state"] == {"provisional": True, "provisional_reason": b3["state"]["provisional_reason"], "algebraic": False, "algebraic_hashes": [],
@@ -823,14 +824,14 @@ def test_entity_ids_are_stable_across_renders(store: LocalStore) -> None:
     assert strip(b) == json.loads(json.dumps(a))
     ids = [c["id"] for c in a["configurations"]]
     assert len(ids) == len(set(ids)) == len(V.CONFIGURATIONS)
-    assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["circuits"]}
+    assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["subcircuits"]}
 
 
 def test_entities_table1_is_the_new_configurations_with_lists_and_a_short_zk_class() -> None:
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in ent["configurations"]}
     assert set(cfgs) == {c.id for c in V.CONFIGURATIONS}
-    assert cfgs[V.FLOCK_CONFIG.id]["family"] == "C-Flock" and cfgs[V.ROUTE_A]["family"] == "A-GKR"
+    assert cfgs[V.FLOCK_CONFIG.id]["backend_family"] == "C-Flock" and cfgs[V.ROUTE_A]["backend_family"] == "A-GKR"
     for cfg in V.CONFIGURATIONS:
         e = cfgs[cfg.id]
         assert e["zk"] == {"class": V.zk_class(cfg), "text": cfg.zk} and e["zk"]["class"] in {c for _, c in V.ZK_CLASSES}
@@ -902,24 +903,24 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     assert not any(r in i for i in ent["claims"] for r in retired)
 
 
-def test_entities_instances_are_families_by_interaction_mode_with_their_claims_in_full() -> None:
+def test_entities_backends_are_backend_families_by_interaction_mode_with_their_claims_in_full() -> None:
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["id"]: c for c in ent["configurations"]}
-    inst = {i["id"]: i for i in ent["instances"]}
+    inst = {i["id"]: i for i in ent["backends"]}
     assert list(inst) == ["A-interactive", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
-    assert [f["id"] for f in ent["families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["families"]
-    assert {f["id"]: f["column"] for f in ent["families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
+    assert [f["id"] for f in ent["backend_families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["backend_families"]
+    assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
     for i in inst.values():
-        assert i["display"] == i["id"] and i["id"] == f"{i['family'][0]}-{i['mode']}"
+        assert i["display"] == i["id"] and i["id"] == f"{i['backend_family'][0]}-{i['mode']}"
         members = [cfgs[c] for c in i["configurations"]]
-        assert members and all(m["family"] == i["family"] and m["instance"] == i["id"] for m in members)
+        assert members and all(m["backend_family"] == i["backend_family"] and m["backend"] == i["id"] for m in members)
         for slot, claim in enumerate(i["claims"]):
             ids = {m["claims"][slot]["property"]["id"] for m in members}
             assert claim["property"]["id"] == (ids.pop() if len(ids) == 1 else None)
             union = {a["id"] or a["text"] for m in members for a in m["claims"][slot]["assumptions"]}
             assert {a["id"] or a["texts"][0] for a in claim["assumptions"]} == union
             assert all(set(a["configurations"]) <= set(i["configurations"]) for a in claim["assumptions"])
-    assert {c["id"] for c in cfgs.values() if c["family"]} == {c for i in inst.values() for c in i["configurations"]}
+    assert {c["id"] for c in cfgs.values() if c["backend_family"]} == {c for i in inst.values() for c in i["configurations"]}
     b, bfs = inst["B-interactive"], inst["B-fs"]
     assert b["properties"] == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
     assert bfs["properties"] == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"] and bfs["configurations"] == ["b-ligero-fiat-shamir-hvzk"]
@@ -927,28 +928,30 @@ def test_entities_instances_are_families_by_interaction_mode_with_their_claims_i
     assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "b-ligero-v1" in zk["configurations"]
     assert inst["A-interactive"]["configurations"] == [slug(V.ROUTE_A)] and len(inst["A-fs"]["configurations"]) == 2
     assert inst["D-fs"]["claims"][1]["property"]["unmapped"] and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
-    c0 = next(c for c in ent["circuits"] if c["id"] == NVFP4_SM120.name)
+    c0 = next(c for c in ent["subcircuits"] if c["legacy_target"] == NVFP4_SM120.name)
     assert (c0["hardware_name"], c0["dtype_display"], c0["display"]) == ("RTX 5090", "FP4 (NVFP4, E2M1)", "RTX 5090 · FP4 (NVFP4, E2M1)")
     assert c0["peak"] == {"value": 1676e12, "unit": "FLOP/s", "display": "1676 T"}
-    assert next(c for c in ent["circuits"] if c["id"] == BF16_HOPPER.name)["display"] == "H100 SXM5 · BF16"
-    h8 = next(c for c in ent["circuits"] if c["id"] == FP8_HOPPER_WGMMA.name)
-    assert h8["subcircuit_kind"] == {"id": "gemm-coordinate", "K": 1536, "accumulate": "fp32"}
-    assert h8["silicon_target"] == {"instruction": "sm90.wgmma.m64n8k32.e4m3"} and h8["target"] == FP8_HOPPER_WGMMA.name
-    assert all(c["silicon_target"]["instruction"] == TARGETS[c["target"]].instruction for c in ent["circuits"])
+    assert next(c for c in ent["subcircuits"] if c["legacy_target"] == BF16_HOPPER.name)["display"] == "H100 SXM5 · BF16"
+    h8 = next(c for c in ent["subcircuits"] if c["legacy_target"] == FP8_HOPPER_WGMMA.name)
+    assert h8["id"] == "gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3" and h8["subcircuit_template"] == "gemm_coordinate"
+    assert h8["parameters"] == {"K": 1536, "semantics": "sm90.wgmma.m64n8k32.e4m3"} and h8["accumulate"] == "fp32"
+    assert not {"subcircuit_kind", "silicon_target", "target", "instruction"} & set(h8)
+    assert all(c["parameters"]["semantics"] == TARGETS[c["legacy_target"]].instruction for c in ent["subcircuits"])
 
 
-def test_entities_best_standard_hash_cell_per_family_and_circuit(store: LocalStore) -> None:
+def test_entities_best_standard_hash_cell_per_backend_family_and_subcircuit(store: LocalStore) -> None:
     arts = _entities_store(store)
     fast = committed(store, "blake3", t_total=0.1, commit=0.1)
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
-    best = {(b["family"], b["circuit"]): b for b in ent["best_standard_hash"]}
+    best = {(b["backend_family"], b["subcircuit"]): b for b in ent["best_standard_hash"]}
+    ada = f"gemm_coordinate/k1536/{FP8_ADA_MMA.instruction}"
     by_art = {r["artifact"]: r for r in ent["results"]}
-    pick = best[("B-Ligero", FP8_ADA_MMA.name)]
-    assert pick["result"] == by_art[fast]["id"] and pick["scheme"] == BLAKE3_ROW and pick["instance"] == "B-interactive"
+    pick = best[("B-Ligero", ada)]
+    assert pick["result"] == by_art[fast]["id"] and pick["scheme"] == BLAKE3_ROW and pick["backend"] == "B-interactive"
     assert by_art[arts["poseidon2"]]["id"] not in {b["result"] for b in best.values()}                   # algebraic: never a standard-hash pick
     assert all(by_art_r["overhead"]["value"] >= pick["overhead"]["value"] for by_art_r in ent["results"]
-               if by_art_r["family"] == "B-Ligero" and by_art_r["circuit"] == FP8_ADA_MMA.name and not by_art_r["state"]["algebraic"])
-    assert [r["family"] for r in ent["results"] if r["artifact"] == arts["a-gkr"]] in ([], ["A-GKR"])
+               if by_art_r["backend_family"] == "B-Ligero" and by_art_r["subcircuit"] == ada and not by_art_r["state"]["algebraic"])
+    assert [r["backend_family"] for r in ent["results"] if r["artifact"] == arts["a-gkr"]] in ([], ["A-GKR"])
 
 
 def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declare(store: LocalStore) -> None:

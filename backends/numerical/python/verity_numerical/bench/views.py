@@ -1446,9 +1446,14 @@ def slug(text: str) -> str:
     return "-".join("".join(ch if ch.isalnum() else " " for ch in text.lower()).split())
 
 
+def subcircuit_id(target_name: str | None) -> str | None:
+    """The census subcircuit (a fully bound template) a target name denotes (its ``legacy_target``)."""
+    return census.subcircuit_of(target_name).id if target_name else None
+
+
 def result_id(c: ViewCell) -> str:
-    """A result's id, stable across renders: its configuration (else its column) at its circuit."""
-    return f"{slug(c.configuration or c.column)}@{c.line}"
+    """A result's id, stable across renders: its configuration (else its column) at its subcircuit."""
+    return f"{slug(c.configuration or c.column)}@{subcircuit_id(c.line)}"
 
 
 def verity_commit() -> str | None:
@@ -1557,16 +1562,17 @@ def mode_of(cfg: Mapping[str, Any]) -> str:
     return "fs" if cfg["transferability"].startswith("transferable") else "interactive"
 
 
-def instances(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Table 1 as instances: one per backend family and interaction mode, ``<letter>-interactive`` or ``<letter>-fs``
-    (``A-fs``: A-GKR under Fiat–Shamir), with its member configurations and its claims written out in full.  Each claim
+def backends(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Table 1 as backends (each implements the Backend interface): one per backend family and interaction mode,
+    ``<letter>-interactive`` or ``<letter>-fs`` (``A-fs``: A-GKR under Fiat–Shamir), with its member configurations and its
+    claims written out in full.  Each claim
     slot (soundness, ZK, interaction, setup) holds the property its members share (``id`` ``None`` and ``unmapped`` when
     they differ or have none; ``texts`` are theirs), resting on every assumption any member rests on for it, with the
     roles the code declares and the members that cite it; the soundness ``param`` is the weakest of the members'."""
     out = []
     for fam in FAMILY_NAMES.values():
         for mode in ("interactive", "fs"):
-            members = [c for c in configurations if c["family"] == fam and mode_of(c) == mode]
+            members = [c for c in configurations if c["backend_family"] == fam and mode_of(c) == mode]
             if not members:
                 continue
             claims = []
@@ -1586,7 +1592,7 @@ def instances(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
                                             "texts": texts, "unmapped": pid is None},
                                "assumptions": list(rests.values())})
             iid = f"{fam[0]}-{mode}"
-            out.append({"id": iid, "display": iid, "family": fam, "mode": mode, "configurations": [c["id"] for c in members], "claims": claims,
+            out.append({"id": iid, "display": iid, "backend_family": fam, "mode": mode, "configurations": [c["id"] for c in members], "claims": claims,
                         "properties": [c["property"]["id"] for c in claims if c["property"]["id"]],
                         "assumptions": list(dict.fromkeys(a["id"] for c in claims for a in c["assumptions"] if a["id"]))})
     return out
@@ -1619,43 +1625,46 @@ def scheme_entities(configurations: Sequence[Configuration]) -> list[dict[str, A
 
 
 def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Per family and circuit, the lowest-overhead cell whose commitment scheme is built on standard hashes only and whose
+    """Per backend family and subcircuit, the lowest-overhead cell whose commitment scheme is built on standard hashes only and whose
     soundness argument uses no algebraic hash (ties to the lower artifact id)."""
     best: dict[tuple[str, str], Mapping[str, Any]] = {}
     for r in results:
         sch = _SCHEME.get(r["scheme"] or "")
         if sch is None or not sch.standard or r["state"]["algebraic"]:
             continue
-        k = (r["family"], r["circuit"])
+        k = (r["backend_family"], r["subcircuit"])
         if k not in best or (r["overhead"]["value"], r["artifact"]) < (best[k]["overhead"]["value"], best[k]["artifact"]):
             best[k] = r
-    return [{"family": r["family"], "circuit": r["circuit"], "result": r["id"], "instance": r["instance"], "configuration": r["configuration"],
-             "scheme": r["scheme"], "overhead": r["overhead"]} for r in sorted(best.values(), key=lambda r: (r["family"], r["circuit"]))]
+    return [{"backend_family": r["backend_family"], "subcircuit": r["subcircuit"], "result": r["id"], "backend": r["backend"],
+             "configuration": r["configuration"], "scheme": r["scheme"], "overhead": r["overhead"]}
+            for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
 
 
 def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
     """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
 
-    * ``circuits`` -- one per subcircuit (``Target``), with the subcircuit kind (id, K, accumulation), the silicon target (its
-      exact instruction) and the internal target id as separate fields; its census hardware line (id, short name, full device, peak),
-      datatype (id and display: common name, then format), tensor-core step, census subcircuit, frozen instance set and native N;
-    * ``families`` and ``configurations`` -- Table 1: family, variant, commitment scheme, statement, ZK class (short, with the
-      text), soundness bits (the weakest whole-proof bound at its cells) and text, hashes with their class and the algebraic
-      flag, interaction and assumption texts as lists; ``claims`` (:func:`claims_of`): each property with the assumptions it
-      rests on and their roles, as ``verity.claims`` ids beside their text; ``properties``, ``assumptions`` and ``models``
-      as flat id lists, ``params``, and ``unmapped`` the texts with no id yet;
-    * ``instances`` -- the primary shape of Table 1's claims (:func:`instances`): one per family and interaction mode
-      (``A-interactive``, ``A-fs``, ..., families A-GKR, B-Ligero, C-Flock, D-SP1), claims written out in full;
+    * ``subcircuits`` -- one per subcircuit, a fully bound subcircuit template: ``subcircuit_template`` (``gemm_coordinate``)
+      with its bound ``parameters`` (``K``; ``semantics``, the exact instruction), ``legacy_target`` (the target name), the
+      census hardware line (id, short name, full device, peak), datatype (id and display), tensor-core step, frozen instance
+      set and native N;
+    * ``backend_families`` -- A-GKR, B-Ligero, C-Flock, D-SP1, each with its markdown column header as ``column``;
+    * ``backends`` -- the primary shape of Table 1's claims (:func:`backends`): one per backend family and interaction mode
+      (``A-interactive``, ``A-fs``, ...), its claims written out in full;
+    * ``configurations`` -- the detail behind each backend: variant, commitment scheme, statement, ZK class (short, with the
+      text), soundness bits and text, hashes with their class and the algebraic flag, interaction and assumption texts as
+      lists, ``claims`` (:func:`claims_of`: each property with the assumptions it rests on and their declared roles);
     * ``schemes`` -- each commitment scheme's id, name, one-line description and the hash assumptions it rests on, from the
       configurations that bind it (:func:`scheme_entities`); a result's ``scheme`` is one of these ids;
-    * ``best_standard_hash`` -- per family and circuit, the lowest-overhead cell on standard hashes only (:func:`best_standard_hash`);
-    * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
-      state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
+    * ``results`` -- one per Table 2 cell (configuration x subcircuit): its backend and backend family, overhead, the phases
+      that sum to it, one-time setup apart, state (provisional, algebraic, verified, under re-verification), the artifact
+      and the render time;
+    * ``best_standard_hash`` -- per backend family and subcircuit, the lowest-overhead cell on standard hashes only;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
-    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``census/`` entries as read at render time; ``provenance`` -- render time, verity commit, rules, banner.
+    * ``claims`` -- the ``verity.claims`` entries cited (the site imports these); ``census`` -- the ``census/`` entries as read
+      at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
-    Ids: circuits by target name, instances ``<letter>-<mode>``, configurations by the slug of their name, results
-    ``<configuration>@<circuit>``, census entries by their census id."""
+    Ids: subcircuits by their census id, backends ``<letter>-<mode>``, configurations by the slug of their name, results
+    ``<configuration>@<subcircuit>``, census entries by their census id."""
 
     rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     grid = table2_grid(V)
@@ -1670,13 +1679,13 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         N = native(target)
         peak = contract.native_peak_of(target)
         dt = census.DATATYPES[peak.dtype]
-        circuits.append({"id": target.name, "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
+        sub = census.subcircuit_of(target.name)
+        circuits.append({"id": sub.id, "subcircuit_template": sub.template, "parameters": vars(sub.parameters), "legacy_target": target.name,
+                         "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
                          "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
                          "dtype": peak.dtype, "dtype_display": dt.display, "display": f"{peak.name} · {dt.display}",
-                         "subcircuit_kind": {"id": census.GEMM_COORDINATE_K1536.kind, "K": census.GEMM_COORDINATE_K1536.K, "accumulate": peak.accumulate},
-                         "silicon_target": {"instruction": target.instruction}, "target": target.name,
-                         "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
-                         "subcircuit": census.GEMM_COORDINATE_K1536.id, "instance_set": sets.get(target.name),
+                         "accumulate": census.SUBCIRCUIT_TEMPLATES[sub.template].accumulate, "step": target.transition_unit,
+                         "status": target.status, "instance_set": sets.get(target.name),
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
                                     "work_model": N["work_model"]}})
@@ -1690,8 +1699,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         fam = _FAMILY.get(cfg.family or "")
         claims = claims_of(cfg, min(bits) if bits else None)
         configurations.append({
-            "id": slug(cfg.id), "variant": cfg.id, "family": _fam(cfg.family), "scheme": cfg.scheme,
-            "instance": f"{_fam(cfg.family)[0]}-{'fs' if cfg.transferability.startswith('transferable') else 'interactive'}" if cfg.family else None,
+            "id": slug(cfg.id), "variant": cfg.id, "backend_family": _fam(cfg.family), "scheme": cfg.scheme,
+            "backend": f"{_fam(cfg.family)[0]}-{'fs' if cfg.transferability.startswith('transferable') else 'interactive'}" if cfg.family else None,
             "statement": {"full_relation": cfg.full_relation, "text": cfg.statement}, "ports": cfg.ports, "commitment": cfg.commitment,
             "zk": {"class": zk_class(cfg), "text": cfg.zk},
             "soundness": {"bits": min(bits) if bits else None, "text": cfg.soundness, "dominant_term": cfg.dominant_term},
@@ -1716,7 +1725,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
 
     for g in grid:
         ln = g["line"]
-        line = {"circuit": ln["line"], "scheme": ln["scheme"], "label": g["label"],
+        line = {"subcircuit": subcircuit_id(ln["line"]), "scheme": ln["scheme"], "label": g["label"],
                 "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"])},
                 "cells": {}}
         for col, gc in g["cells"].items():
@@ -1737,9 +1746,10 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             su, ix = st["setup"], P["interaction"]
             cfg = cfg_of.get(c.configuration or "")
             results.append({
-                "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "circuit": c.line, "scheme": c.scheme,
-                "family": _fam(col), "instance": next((x["instance"] for x in configurations if x["variant"] == c.configuration), None),
-                "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "subcircuit": census.GEMM_COORDINATE_K1536.id,
+                "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "subcircuit": subcircuit_id(c.line),
+                "scheme": c.scheme, "backend_family": _fam(col),
+                "backend": next((x["backend"] for x in configurations if x["variant"] == c.configuration), None),
+                "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id,
                 "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
                 "phases": phases, "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
                 "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"], "display": r3["setup"]} if su else None,
@@ -1762,7 +1772,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     fam_seen = None
     for (fid, row), cfg in zip(rows1, configurations):
         if fid != fam_seen:
-            table1.append({"kind": "family", "id": _fam(fid) if fid in _FAMILY else fid})
+            table1.append({"kind": "backend_family", "id": _fam(fid) if fid in _FAMILY else fid})
             fam_seen = fid
         table1.append({"kind": "configuration", "id": cfg["id"], "cells": row})
     phase_cols = [pid for pid, _ in PHASES]
@@ -1770,15 +1780,15 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "schema": ENTITIES_SCHEMA,
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
                        "published": published, "banner": PUBLISHED if published else PREVIEW},
-        "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": columns,
+        "axes": {"subcircuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "backend_families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
         "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "instance_sets")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("properties", "assumptions", "models")
                                                                                    for i in c[k]})},
-        "circuits": circuits,
+        "subcircuits": circuits,
         "schemes": scheme_entities(V.configurations),
-        "families": families,
-        "instances": instances(configurations),
+        "backend_families": families,
+        "backends": backends(configurations),
         "configurations": configurations,
         "results": results,
         "best_standard_hash": best_standard_hash(results),
@@ -1789,8 +1799,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
                        "rows": [{"result": result_id(c), "label": _cell_name(c), "cells": table3_row(c)} for c in V.cells]},
         },
-        "rejected": [{"artifact": r["artifact"], "configuration": slug(r["configuration"]) if r["configuration"] else None, "family": _fam(r["family"]),
-                      "circuit": r["line"], "scheme": r.get("scheme"), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
+        "rejected": [{"artifact": r["artifact"], "configuration": slug(r["configuration"]) if r["configuration"] else None, "backend_family": _fam(r["family"]),
+                      "subcircuit": subcircuit_id(r["line"]), "scheme": r.get("scheme"), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
     }
 
 
