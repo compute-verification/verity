@@ -5,10 +5,10 @@
 #
 #   ROLE=verifier  REL=<rel>+blake3 [SET=<set tarball under inputs/>] [POINTS="1024 2048 4096"] [RUNS=5] [PORT=7200]
 #                  [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
-#       flock b684b12 + the flock-link patch + this tree's live crate (release), the flock-link selftest at 8 VUs of the set's K,
-#       and the verifier's own statement of every size (leaf digests and prime commitment from the set: tools/cell.py statement
-#       --verifier-side); then, size by size in POINTS order (capped at the set), one `flock-link cell-serve` on PORT serving RUNS
-#       sessions (it serves the prime coins too).  A size that times out short of RUNS sessions ends the run (the prover stopped).
+#       flock b684b12 + both Flock patches + this tree's live crate (release) and the flock-link selftest at 8 VUs of the set's K;
+#       then, size by size in POINTS order (capped at the set), the verifier's own statement of that size (leaf digests and prime
+#       commitment from the set: tools/cell.py statement --verifier-side) and one `flock-link cell-serve` on PORT serving RUNS
+#       sessions (it serves the prime coins too).  A size that ends short of RUNS sessions ends the run (the prover stopped).
 #   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:sshport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
 #                  [LOOPBACK=1] [OPERATOR=<lane>]
 #       pod_bootstrap.sh, flock-link and verity-gkr-verify built from this tree, their tests; with GATE=1 the correctness gate at
