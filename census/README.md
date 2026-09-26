@@ -56,6 +56,11 @@ this is its memory-bandwidth work model: the renderer's native N for its stateme
 variable from the parameters of the verification unit it serves in; attention's `T` is `NB*BN` when the VU's last key
 block is full, and between `(NB - 1)*BN + 1` and `NB*BN - 1` when it is partial.
 
+A bound subcircuit may record `variable_ranges`: the range a per-input variable takes over the workloads it serves
+(attention's `T`). A template marked `commitment_opening` (embedding) is opened against a commitment, not proved by a proof
+backend. The per-workload headline lists it as uncovered for that reason and never counts it as covered. `port_datatypes`
+records the datatype of each port a bytes model counts. For example, the MoE router reads bf16 logits.
+
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`

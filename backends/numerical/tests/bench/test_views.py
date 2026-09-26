@@ -1410,7 +1410,8 @@ def test_a_non_gemm_cell_without_a_profile_takes_its_prover_gpus_hardware_line()
     meta = {"workload_fingerprint": {"profile": None, "subcircuit": "rope-head/d64/neox-bf16",
                                      "hardware": {"gpu": {"name": "NVIDIA H100 80GB HBM3"}}}}
     assert V.hardware_target(meta, "rope-head/d64/neox-bf16") is BF16_HOPPER
-    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is None
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is V.L40S_BF16
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA RTX A6000"}}}}, "rope-head/d64/neox-bf16") is None
 
 
 def test_the_two_preview_switches_are_off_in_the_published_rules_and_change_only_what_they_name() -> None:

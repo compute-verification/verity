@@ -14,7 +14,9 @@ served hardware.  The covered share is covered native seconds over all modelled 
 units' proving seconds (units / P, the highest-P such result per subcircuit) over their native seconds.  An uncovered subcircuit
 is listed with why; nothing is imputed.  A subcircuit whose template has no work model in a basis is listed and left out of
 both sums in that basis.  Where a work model has a per-input variable known only to bounds (attention's key count ``T`` from
-its VU's ``NB`` and ``last``), native seconds, shares and overheads are intervals.
+its VU's ``NB`` and ``last``), native seconds, shares and overheads are intervals.  A template the census marks a commitment
+opening (``commitment_opening``: embedding) is uncovered for that reason: the ontology has no covered-by-commitment state, so its
+native work stays in the denominator and is never counted as covered.
 """
 
 from __future__ import annotations
@@ -234,7 +236,10 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     elsewhere.append({"artifact": c.artifact, "prover_hardware": h.id if h else None, "prover_gpu": V.prover_gpu.get(c.artifact),
                                       "on_served_hardware": T.same_sku(V.prover_gpu.get(c.artifact), served.device),
                                       "cleared": not c.provisional and not c.legacy.finding})
-                if g["subcircuit"] is None:
+                opening = getattr(census.SUBCIRCUIT_TEMPLATES.get(g["template"] or ""), "commitment_opening", None)
+                if opening is not None and not elsewhere:
+                    why, code = f"a commitment opening: {opening.note}", "commitment opening"
+                elif g["subcircuit"] is None:
                     why, code = "the census binds no subcircuit to these parameters, so no result can name it", "no census subcircuit"
                 elif not elsewhere:
                     why, code = "no admissible result on this subcircuit", "no result"
