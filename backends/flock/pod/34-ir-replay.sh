@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Non-producer file re-verification of an IR cell's verifier sessions (verity/flock-ir-frame/v2): build flock-ir-frame (CPU),
+# Non-producer file re-verification of an IR cell's verifier sessions (verity/flock-ir-frame/v3; a key-count class cell with its
+# own manifest and per-T netlists, `--class`): build flock-ir-frame (CPU),
 # stage every point's instance files here from the captured input set (IR2, ir_frame.stage as the verifier pod does), check
 # them and the lowering against the verifier pod's (a sampling file: its native words checked first, S1), then `flock-ir-frame replay` every accepted session, plus tampered-record
 # negatives that must be rejected.
@@ -32,15 +33,29 @@ from verity_flock import ir_bench
 template, set_dir, rec, out, per = sys.argv[1], sys.argv[2], Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5])
 inp = InputSet.open(set_dir)
 assert inp.subcircuit.template.id == template, f"input set {inp.name} is not a {template} set"
-low = ir_bench._lowering(template, inp)
-(out / "net.txt").write_text(low.text)
-pin = hashlib.sha256((out / "net.txt").read_bytes()).hexdigest()
+from verity_numerical.bench import lowerings
+tmod = lowerings.registry("C-Flock").module(template)
+klass = None
+if hasattr(tmod, "class_manifest") and len(set(tmod.key_counts(inp))) > 1:
+    # a key-count class cell: this pod's own manifest (the pin) and per-T netlists, which must be the verifier pod's
+    klass = ir_bench.KeyClass(tmod, inp, out)
+    low, pin = klass.lowering(klass.T[0]), klass.pin
+    for T in sorted(set(klass.T)):
+        klass.net(T)
+    same = (out / "class.json").read_bytes() == (rec / "class.json").read_bytes() and all(
+        klass.net(T).read_bytes() == (rec / f"net-t{T}.txt").read_bytes() for T in sorted(set(klass.T)))
+    (out / "net.txt").write_text(low.text)
+else:
+    low = ir_bench._lowering(template, inp)
+    (out / "net.txt").write_text(low.text)
+    pin = hashlib.sha256((out / "net.txt").read_bytes()).hexdigest()
+    same = (out / "net.txt").read_bytes() == (rec / "net.txt").read_bytes()
 print(json.dumps({"set": inp.name, "content_digest": inp.content_digest, "n": inp.n, "pin": pin,
-                  "netlist_equals_verifier": (out / "net.txt").read_bytes() == (rec / "net.txt").read_bytes()}))
+                  "class": [klass.lo, klass.hi] if klass else None, "netlist_equals_verifier": same}))
 if low.units.cut:
     from verity_flock import ir_lower
     ir_lower.write_tables(out / "tables")
-a = Namespace(per_proof=per, template=template)
+a = Namespace(per_proof=per, template=template, klass=klass)
 mod = ir_bench.frame_module(template) if hasattr(ir_bench, 'frame_module') else None
 for d in sorted(rec.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
@@ -49,6 +64,9 @@ for d in sorted(rec.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     for j in range(len(subs)):
         f = out / d.name / f"instances-s{j}.bin"
         args = mod.serve_args(f) if mod is not None and hasattr(mod, "serve_args") else []
+        if klass:
+            args = ["--class", str(out / "class.json"), *args]
+            (out / d.name / f"net-s{j}.txt").write_bytes(klass.net(klass.T[subs[j][0]]).read_bytes())
         (out / d.name / f"args-s{j}").write_text(" ".join(args))
         extra.append(args)
     print(json.dumps({"point": d.name, "subbatches": subs, "stage_s": t, "serve_args": extra}), flush=True)
@@ -58,7 +76,7 @@ grep -q '"netlist_equals_verifier": true' $O/stage.txt || { echo "netlist differ
 PIN=$(cat $I/pin); TB=; [ -d $I/tables ] && TB="--tables $I/tables"
 (cd $I && sha256sum -c $RD/inputs/$TAG.sha256) | tee $O/instances.check || exit 1
 : > $O/replay.jsonl; n=0; bad=0
-rp() { local ax=$(cat ${1%instances-s*}args-s$(basename $1 .bin | sed "s/instances-s//") 2>/dev/null); $B replay --instances $1 --netlist $I/net.txt --pin $PIN $TB $ax --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
+rp() { local j=$(basename $1 .bin | sed "s/instances-s//"); local ax=$(cat ${1%instances-s*}args-s$j 2>/dev/null); local nt=${1%instances-s*}net-s$j.txt; [ -f $nt ] || nt=$I/net.txt; $B replay --instances $1 --netlist $nt --pin $PIN $TB $ax --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
 for sd in $S/p*/sessions-s*; do
   pt=$(basename $(dirname $sd)); sb=${sd##*sessions-s}; inst=$I/$pt/instances-s$sb.bin
   for ses in $sd/l*; do

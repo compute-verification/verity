@@ -125,6 +125,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     pd, vd = Path(a.prover_run), Path(a.verifier_run)
     raw = json.loads((pd / "result.json").read_text())
+    raw.pop("kind", None)  # ir_bench's run result is a bench-point/v1; the cell registered here is the bench-result/v1
     point = pd / raw["artifacts"][0]
     doc = patch(raw, _run(pd), _run(vd), a)
     if any(point.glob("prove-s*.txt")):
