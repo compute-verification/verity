@@ -25,6 +25,7 @@
 //!   root_B and the committed public words), so [`Server::finish`] re-verifies the Flock side offline.
 
 pub mod chunk;
+pub mod coin_seed;
 pub mod ir_block;
 pub mod ir_frame;
 pub mod ir_sampling;
@@ -657,11 +658,14 @@ pub struct SessionConfig {
     pub link: Option<LinkSpec>,
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
+    /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
+    /// it in its verdict (lane flock-netlist). Off for every statement that does not ask for it.
+    pub coin_seed: bool,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
-        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false }
+        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false }
     }
 
     /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
@@ -669,6 +673,9 @@ impl SessionConfig {
     pub fn check(&self) -> Result<(), String> {
         if self.link.is_some() && !self.require_link {
             return Err("E0: a link exchange (link: Some) without the R5 gate (require_link: false) is refused: y could follow Flock's coins".into());
+        }
+        if self.coin_seed && self.prime_live {
+            return Err("step-0 coins derive the GF(2^128) coins only; live prime coins with a committed seed are not built".into());
         }
         if self.prime_live && self.link.is_none() {
             return Err("live prime coins without a link exchange are refused: their order is against root_F and y".into());
@@ -684,6 +691,9 @@ impl SessionConfig {
         }
         if self.prime_live {
             h["prime"] = json!(PRIME_MODE);
+        }
+        if self.coin_seed {
+            h["coins"] = json!(coin_seed::SCHEME);
         }
         h.to_string()
     }
@@ -759,6 +769,8 @@ pub struct Server {
     aborted: Option<String>,
     verdict: Option<Value>,
     urandom: Option<File>,
+    /// step 0: (seed, nonce, commitment, the coin key once `Hello` is accepted, coin requests issued)
+    seed: Option<([u8; 32], [u8; 32], [u8; 32], Option<[u8; 32]>, u64)>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
     handle_s: f64,
@@ -798,6 +810,7 @@ impl Server {
             aborted: None,
             verdict: None,
             urandom: Some(File::open("/dev/urandom").expect("/dev/urandom")),
+            seed: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
         })
@@ -847,7 +860,13 @@ impl Server {
 
     fn coins(&mut self, n: usize) -> Vec<F128> {
         let mut b = vec![0u8; 16 * n];
-        self.urandom(&mut b);
+        match self.seed.as_mut() {
+            Some((_, _, _, Some(key), k)) => {
+                b = coin_seed::coins(key, *k, n);
+                *k += 1;
+            }
+            _ => self.urandom(&mut b),
+        }
         b.chunks(16)
             .map(|c| F128 {
                 lo: u64::from_le_bytes(c[..8].try_into().unwrap()),
@@ -923,6 +942,16 @@ impl Server {
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
                 }
+                if self.cfg.coin_seed && self.urandom.is_some() {
+                    let (mut seed, mut nonce) = ([0u8; 32], [0u8; 32]);
+                    self.urandom(&mut seed);
+                    self.urandom(&mut nonce);
+                    let c = coin_seed::commitment(&seed, &nonce);
+                    self.seed = Some((seed, nonce, c, Some(coin_seed::coin_key(&seed, &h)), 0));
+                    self.hello = Some(h);
+                    let w = |i: usize| u64::from_le_bytes(c[8 * i..8 * i + 8].try_into().unwrap());
+                    return Resp::Coins(vec![F128 { lo: w(0), hi: w(1) }, F128 { lo: w(2), hi: w(3) }]);
+                }
                 self.hello = Some(h);
                 Resp::Ok
             }
@@ -984,7 +1013,7 @@ impl Server {
                 }
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
-                let pts: Vec<Vec<F128>> = (0..spec.points).map(|_| self.coins(spec.m)).collect();
+                let pts: Vec<Vec<F128>> = self.coins(spec.points * spec.m).chunks(spec.m).map(|p| p.to_vec()).collect();
                 self.points = pts;
                 Resp::Coins(self.points.concat())
             }
@@ -1166,6 +1195,11 @@ impl Server {
             "rounds_without_prover_message": empty, "prime_rounds": self.prime.len(), "prime_before_commit": self.prime_before_commit,
             "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(), "handle_s": self.handle_s,
         });
+        let mut v = v;
+        if let Some((seed, nonce, c, _, k)) = &self.seed {
+            v["coin_seed"] = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "commitment": hex(c), "seed": hex(seed),
+                                    "nonce": hex(nonce), "coin_requests": k});
+        }
         self.verdict = Some(v.clone());
         v
     }

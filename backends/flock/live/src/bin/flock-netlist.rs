@@ -104,7 +104,70 @@ impl StatementVerifier for NlVerifier {
 fn config(st: &Stmt, sigma: [u8; 32]) -> SessionConfig {
     let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
     cfg.link = Some(LinkSpec { sigma, m: st.m_pts, points: 2 });
+    cfg.coin_seed = true;
     cfg
+}
+
+/// A shared transport used as a plain one (so it can be wrapped).
+struct SharedCall(SharedTransport);
+
+impl Transport for SharedCall {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        self.0.lock().unwrap().call(req)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.0.lock().unwrap().stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.0.lock().unwrap().wait_s()
+    }
+}
+
+/// Every coin response the prover received, in order (to check them against the seed the verifier reveals).
+struct Logged<T: Transport> {
+    inner: T,
+    coins: Arc<Mutex<Vec<Vec<F128>>>>,
+}
+
+impl<T: Transport> Transport for Logged<T> {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let hello = matches!(req, Req::Hello(_));
+        let r = self.inner.call(req)?;
+        if let (Resp::Coins(c), false) = (&r, hello) {
+            self.coins.lock().unwrap().push(c.clone());
+        }
+        Ok(r)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.inner.stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.inner.wait_s()
+    }
+}
+
+/// Step 0 checked by the prover: the revealed seed opens the commitment it received at `Hello`, and every coin it was sent
+/// is the seed's derivation, in order.
+fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F128>]) -> Result<(), String> {
+    use flock_live::coin_seed;
+    let cs = &verdict["coin_seed"];
+    let h32 = |k: &str| -> Result<[u8; 32], String> {
+        flock_live::netlist::hexb(cs[k].as_str().ok_or(format!("verdict: coin_seed.{k} missing"))?)?.try_into().map_err(|_| format!("coin_seed.{k} length"))
+    };
+    let (seed, nonce) = (h32("seed")?, h32("nonce")?);
+    let c: Vec<u8> = commit.iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat()).collect();
+    if commit.len() != 2 || coin_seed::commitment(&seed, &nonce).to_vec() != c {
+        return Err("step 0: the revealed seed does not open the commitment sent at Hello".into());
+    }
+    let key = coin_seed::coin_key(&seed, hello);
+    for (k, got) in coins.iter().enumerate() {
+        let want = coin_seed::coins(&key, k as u64, got.len());
+        let g: Vec<u8> = got.iter().flat_map(|w| [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat()).collect();
+        if g != want {
+            return Err(format!("step 0: coin request {k} is not the committed seed's derivation"));
+        }
+    }
+    Ok(())
 }
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
@@ -308,9 +371,12 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 }
 
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
+    let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("NL_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false);
     let (wt0, tw0) = witness(st, &w0, device);
@@ -322,9 +388,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let mut cached: Option<Vec<Vec<F128>>> = None;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello))? {
-            Resp::Ok => {}
-            r => return Err(format!("hello: {r:?}")),
+        match call(&t, Req::Hello(hello.clone()))? {
+            Resp::Coins(c) if c.len() == 2 => commit = c,
+            r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
         for rep in 0..2 {
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
@@ -377,6 +443,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     };
     let (ws, wr, calls) = t.lock().unwrap().stats();
     let wait_s = t.lock().unwrap().wait_s();
+    let step0 = if v["accepted"] == true { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap()) } else { Ok(()) };
+    let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
     (
@@ -387,7 +455,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                "buckets": buckets, "wait_s": wait_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
                "netlist_sha256": hex(&c.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
-               "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64()}),
+               "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
+               "step0_checked": step0.is_ok() && v["accepted"] == true}),
         proofs,
     )
 }
@@ -417,6 +486,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
     ("tail_swapped_netlist_refused", false, false),
+    ("coin_seed_opening_forged", false, false),
 ];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
@@ -499,6 +569,24 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let refused_file = Instances::load(&arg("--instances", ""), &c2).is_err();
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
                       "pin_differs": refused_pin, "file_refused": refused_file});
+    }
+    if name == "coin_seed_opening_forged" {
+        // an honest session, then its verdict with the revealed seed changed: the prover's step-0 check must refuse it
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let t: SharedTransport = shared(Logged { inner: InProc(s0.clone()), coins: log.clone() });
+        let (v, _) = session(st, inst, t, &Plan { gpu, ..Plan::default() });
+        let mut verdict = v["verdict"].clone();
+        let seed = verdict["coin_seed"]["seed"].as_str().unwrap_or("").to_string();
+        let forged = format!("{}{}", if seed.starts_with('0') { "1" } else { "0" }, &seed[1..]);
+        verdict["coin_seed"]["seed"] = json!(forged);
+        let c = &v["coin_seed"]["commitment"];
+        let honest_ok = v["step0_checked"] == true;
+        let commit: Vec<F128> = flock_live::netlist::hexb(c.as_str().unwrap_or("")).map(|b| b.chunks(16).map(|x| F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..].try_into().unwrap()))).collect()).unwrap_or_default();
+        let hello = config(st, sigma(st, inst)).hello();
+        let r = check_coin_seed(&commit, &hello, &verdict, &[]);
+        return json!({"case": name, "expect": "the prover refuses a revealed seed that does not open the step-0 commitment", "honest_checked": honest_ok,
+                      "pass": honest_ok && r.is_err(), "why": r.err()});
     }
     if name == "verifier_evaluated_tail_refused" {
         let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
