@@ -48,7 +48,8 @@ class NativeRangeOpenings:
     """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
 
     def _run_root(self, run: Any) -> bytes:
-        return scheme.run_root(self.program_digest, self._geo_digest, [s.root for s in run.steps])
+        roots = [s.root for s in run.steps]                     # a placeholder step root (b"") has no run root to recompute
+        return scheme.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == 32 for r in roots) else b""
 
     def leaf_span(self, step: int, m: Any, lo: int, hi: int) -> tuple[int, int, int]:
         """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""

@@ -2468,7 +2468,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
             return False
-        return self._run_root(run) == run.run_root
+        return len(run.run_root) == 32 and self._run_root(run) == run.run_root
 
     # ------------------------------------------------------------------ coverage
 

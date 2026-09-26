@@ -8,6 +8,7 @@ before any record run.  A run whose every step has a root folds exactly as befor
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import random
 import time
@@ -49,3 +50,17 @@ def test_a_run_whose_steps_all_have_roots_folds_as_before():
     run = c.commit_offline(stream())
     assert len(run.run_root) == 32
     assert run.run_root == scheme.run_root(PROGRAM, c._geo_digest, [s.root for s in run.steps])
+
+
+def test_a_run_without_a_run_root_verifies_no_opening():
+    """The placeholder path can never pass: every opening is verified up to the run root, and an empty run root matches nothing -- not
+    even the empty root recomputed from the placeholder step, nor a forged 32-byte run root over it."""
+    c = _LearnOnly(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    run = c.commit_offline(stream())
+    ops = c.open([(s, i) for s in (0, 2) for i in range(run.steps[s].n_leaves)])
+    assert ops and not any(c.verify(run, o) for o in ops)
+    forged = dataclasses.replace(run, run_root=scheme.run_root(PROGRAM, c._geo_digest, [s.root or b"\0" * 32 for s in run.steps]))
+    assert not any(c.verify(forged, o) for o in ops)
+    whole = NativeHostCommitter(None, run_id="r", chunk=CHUNK, hash_threads=1, program_digest=PROGRAM)
+    full = whole.commit_offline(stream())
+    assert all(whole.verify(full, o) for o in whole.open([(0, 0), (2, 1)]))
