@@ -44,9 +44,9 @@ from verity_vllm.check.replay.population import phase_anchor, population, split_
 from verity_vllm.pipeline import vu_export as VX
 
 STORE_SCHEMA = "vllm-vu-store/v1"
-GEMM = ("Gemm_v1", "Gemm_v2")
 WEIGHT_SAMPLE_RULE = ("GEMM weight rows: selection_key(run_root).subset(k, N, ('row', request, i, evaluation)) with k = "
-                      "gemm_coords_per_row; the whole [N, K] slice referenced by checkpoint field, range and sha256")
+                      "gemm_coords_per_row; the whole [N, K] slice referenced by checkpoint field, range and sha256 (an FP8 block GEMM: "
+                      "the e4m3 rows; a MoE expert GEMM: the routed expert's rows of the [E, N, K] slab, `expert` = the committed router id)")
 
 _FORK: dict[str, Any] = {}          # the per-VU context the forked workers read (set in the parent right before the fork)
 
@@ -63,14 +63,15 @@ def _blob(blobs: dict[str, tuple[str, bytes]], a: np.ndarray) -> dict[str, Any]:
 def _evaluation(k: tuple, fam: str, st: dict, ops: list, out: dict, refs: list, blobs: dict, limits: VX.Limits) -> dict[str, Any] | None:
     """One row evaluation as stored; None when an operand is too large to keep and is not a GEMM weight (counted, not written)."""
     args = []
+    wg, rows_of = VX.WEIGHT_ROWS_OF.get(fam, (None, None))
     for g, a in enumerate(ops):
         ref = refs[g] if g < len(refs) else None
-        if ref is not None and fam in GEMM and g == 1:
-            K, N = int(st["K"]), int(st["N"])
-            w = np.asarray(a, dtype=np.uint16).reshape(N, K)
+        if ref is not None and g == wg:
+            w, extra = rows_of(st, ops)
+            N, K = w.shape
             rows = VX._Picker(k[0], k[1])(N, limits.gemm_coords_per_row)
-            full = hashlib.sha256(np.ascontiguousarray(w).astype("<u2").tobytes()).hexdigest()
-            args.append({"weight": dict(ref, shape=[N, K], dtype="u16", sha256=full),
+            full = hashlib.sha256(np.ascontiguousarray(w).astype(w.dtype.newbyteorder("<")).tobytes()).hexdigest()
+            args.append({"weight": dict(ref, shape=[N, K], dtype=VX._WORD[w.dtype.itemsize][0], sha256=full, **extra),
                          "sample": {"rows": rows, "index": list(k[1]), **_blob(blobs, w[rows])}})
         elif ref is not None and int(np.asarray(a).size) > limits.max_row_words:
             return None
@@ -240,7 +241,7 @@ def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
             w = a["weight"]
             full = weights(w["field"], *w["range"]) if weights is not None else None
             if full is not None:
-                ops.append(np.asarray(full, dtype=np.uint16).reshape(-1))
+                ops.append(np.asarray(full, dtype=VX._WORD[int(w.get("dtype", "u16")[1:]) // 8][1]).reshape(-1))
             else:
                 ops.append(VX.RowSample(list(a["sample"]["rows"]), _value(root, a["sample"]).reshape(len(a["sample"]["rows"]), -1)))
         else:
