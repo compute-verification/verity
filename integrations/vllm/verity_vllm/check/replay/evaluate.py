@@ -37,12 +37,14 @@ class _Operands:
         return np.concatenate(self.inputs[g]) if len(self.inputs[g]) > 1 else self.inputs[g][0]
 
 
-#: observers of every row evaluation, interior producers included: tap(family, statics, operands, outputs).  Empty on every record;
-#: the VU exporter (`verity_vllm.pipeline.vu_export`) installs one around its own serial evaluations and removes it after.
-EVALUATION_TAPS: list[Callable[[str, dict[str, Any], list[np.ndarray], dict[str, np.ndarray]], None]] = []
+#: observers of every row evaluation, interior producers included: tap(family, statics, operands, outputs, weight_refs), weight_refs[g]
+#: = {"field", "range"} when operand g is a registered weight slice, else None.  Empty on every record; the VU exporter
+#: (`verity_vllm.pipeline.vu_export`) installs one around its own evaluations and removes it after.
+EVALUATION_TAPS: list[Callable[..., None]] = []
 
 
-def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None]) -> dict[str, np.ndarray]:
+def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
+             refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
     """F_V for the supported families: the family's row kernel (`verity_vllm.program.kernels.rows`) on the row's operands (`_Operands`).
     Returns {member: words}."""
     k = ROWS.get(family)
@@ -51,7 +53,7 @@ def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]
     ops = _Operands(inputs, weights)
     out = k.fn(statics, ops)
     for tap in EVALUATION_TAPS:
-        tap(family, statics, [ops[g] for g in range(len(ops))], out)
+        tap(family, statics, [ops[g] for g in range(len(ops))], out, refs or [None] * len(ops))
     return out
 
 
@@ -76,9 +78,11 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     fam, st = d["family"], d["statics"]
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
+    wrefs: list[dict[str, Any] | None] = []
     for group in r.get("args") or []:
         words: list[np.ndarray] = []
         wsl = None
+        wref = None
         for sl in group:
             kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
             if kind == "p":
@@ -99,6 +103,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(f"registered weight field {fname} is provided as {arr.dtype} but the Program declares Value<{bits}>")
                     wsl = np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1)
                     inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits})
+                    wref = {"field": fname, "range": [flo, fhi]}
                 elif pname in (SEED_PARAM, RM.SPLITS_PARAM):
                     # [R16 stoch, F-r16-20] the sampler's named INPUTS: the committed runner.sampler/seed word of THIS (step, request) and,
                     # under derived S, the committed runner.sampler/splits word of the event the Program's slice names (`splits[s]` = the
@@ -162,7 +167,8 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                 raise _Unresolved(f"unknown arg kind {kind!r}")
         inputs.append(words)
         wslices.append(wsl)
-    return evaluate(fam, st, inputs, wslices)
+        wrefs.append(wref if wsl is not None else None)
+    return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 
 def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, *,
