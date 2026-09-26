@@ -11,4 +11,7 @@ import FlockSoundness.Model.Statement
 import FlockSoundness.Model.Piop
 import FlockSoundness.Model.Ligerito
 import FlockSoundness.Model.Session
+import FlockSoundness.Defs
+import FlockSoundness.Rounds
+import FlockSoundness.RepSound
 import FlockSoundness.Soundness
