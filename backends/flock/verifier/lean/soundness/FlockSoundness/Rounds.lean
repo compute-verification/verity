@@ -12,7 +12,7 @@ claim is its value at the fresh coin. If the running claim is false, the derived
 differs from the true one whatever the prover sends, so the new claim is false except with
 probability `2/|F|` (`Game.prCoin_eval_eq_eval_le`). These are the round-by-round lemmas the
 zerocheck, lincheck and Ligerito phases of `rep_sound` chain; a Fiat–Shamir proof would reuse
-them unchanged (`ASSUMPTIONS.md` §11).
+them unchanged (`DESIGN.md` §8).
 
 All three identities use characteristic 2 (`1 + 1 = 0`).
 -/

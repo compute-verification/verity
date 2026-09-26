@@ -11,7 +11,7 @@ of the committed table packs a witness satisfying the statement, is at most
 **`table_sound_fast100`.** With the numbers: at most `2^-195.5` for `22 ≤ m ≤ 33` and `2^-195.4`
 for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
 
-This is the interactive-oracle layer, a16z's security stage 1a (`ASSUMPTIONS.md` §10): the
+This is the interactive-oracle layer, a16z's security stage 1a (`DESIGN.md` §7): the
 committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with live coins) adds
 SHA-256's collision term for the compiled protocol.
 

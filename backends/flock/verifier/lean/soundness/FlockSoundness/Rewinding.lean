@@ -7,7 +7,7 @@ import Mathlib.Order.ConditionallyCompleteLattice.Finset
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions
 
-The compiled theorem (§4.3 of `ASSUMPTIONS.md`) covers every prover, including one that never
+The compiled theorem (`ASSUMPTIONS.md` §1.2) covers every prover, including one that never
 "knows" a table. Its committed table is the **plurality** table: at each position, the column the
 prover opens in the most runs (`IsPlurality`). A run is `bad` when it opens some position to a
 column off the plurality; a pair of runs `conflict`s when both open one position, to different
@@ -19,7 +19,7 @@ a collision of the hash, found by running the prover twice with independent coin
   `#bad ² ≤ N · Q · #conflict`   (counts over runs `Ω` and pairs `Ω × Ω`),
 
 so `Pr[bad] ≤ √(N · Q · Pr[conflict])` (`prBad_le`). With `Pr[conflict] ≤ Adv_CR(B)` for the
-two-run collision finder `B`, this is the per-level term `√(N_ℓ Q_ℓ · Adv_CR)` of §4.2a.
+two-run collision finder `B`, this is the per-level term `√(N_ℓ Q_ℓ · Adv_CR)` of `DESIGN.md` §1.2.
 
 Proof: `bad` is covered by the per-position sets of off-plurality runs, of sizes `b_p`. A run
 that opens `p` to `v` conflicts at `p` with every run opening `p` to anything but `v`, and there
