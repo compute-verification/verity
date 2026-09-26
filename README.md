@@ -359,8 +359,12 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 
 - **Subcircuit template**: a named template with typed parameters, such as `gemm_coordinate(K, semantics)` or `rmsnorm(d, semantics)`. Shape and numeric (silicon) semantics are both parameters; a semantics value is an instruction id of `verity.ml.tc.instructions.INSTRUCTIONS`.
 - **Subcircuit**: a subcircuit template with every parameter bound, such as `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. A backend proves subcircuits, and a benchmark cell measures one.
+- **Instance set**: the concrete inputs for a subcircuit, with their provenance (captured or synthetic). An **instance** is one of them.
+- **Commitment scheme**: how serving committed the values being proven, such as frame-v3 rows or `vllm-v1` (`verity.commitments`). Each scheme has a stable id and lists the hash assumptions it rests on.
+- **Statement**: what a backend proves, the full committed relation: a subcircuit plus the commitment scheme that binds its inputs and outputs. A backend lowers a statement into its own circuit. Changing the scheme changes the statement, not the backend.
 - **Backend family**: A-GKR, B-Ligero, C-Flock or D-SP1. The letter is part of the name.
-- **Backend**: an implementation of the Backend interface, that is, one concrete, configured member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir.
+- **Backend**: an implementation of the Backend interface, that is, one concrete member of a family: A-interactive, A-fs, B-interactive, B-fs, C-interactive or D-fs, where fs means Fiat–Shamir. A composed backend gets its own id: route (a), A-GKR with C-Flock and a link, is `A-route-a`. A scheme is not part of a backend's identity.
+- **Cell**: one benchmark result, a backend × statement × instance set × prover hardware.
 - **Replay unit (RU)** and **verification unit (VU)**: roles that sampled proofs assigns to parts of a Program (`protocols/sampled_proofs/PROTOCOL.md`). "Unit" never names a subcircuit.
 
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
@@ -371,13 +375,14 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
 | `verity.proofs.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
-| "configured backend"; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | backend |
+| "configured backend" | backend |
+| "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a backend and a statement |
+| `verity.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of VU obligations, not a statement in this sense; a kind is a subcircuit |
 
 Some words keep a different, narrower sense:
 
 - `verity.ir`'s `Circuit` and `Subcircuit` are a Program's canonical gate layout and a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object are its shared gate bodies (digest-bearing).
-- A **circuit** on its own is a backend's arithmetisation of a subcircuit, as in A-GKR's pinned circuits or "SHA-256 in circuit".
+- A **circuit** on its own is a backend's lowering of a statement, as in A-GKR's pinned circuits or "SHA-256 in circuit".
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- An **instance** is one input to a subcircuit, as in instance sets and "4,096 instances".
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `backends/vole`, not C-Flock.
 - In `integrations/vllm`, "family" and "kind" name IR definitions and query families, many of them serialized fields (see its README's vocabulary).
