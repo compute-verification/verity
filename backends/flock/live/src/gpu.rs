@@ -625,7 +625,7 @@ pub fn prove_pure(
         keys: keys.as_ptr(),
         blocks_real: br as i32,
         unit_cache: cache,
-        pub_cv: if dev.is_some() { pcv } else { null_mut() },
+        pub_cv: if dev.is_some() && ncv > 0 { pcv } else { null_mut() },
         pub_y16: if dev.is_some() { py } else { null_mut() },
         pub_acc: if dev.is_some() { pa } else { null_mut() },
         u_out_acc: st.net.out_cols[0] as i32,
