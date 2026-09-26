@@ -8,7 +8,7 @@ The work is staged along a16z's zkVM security stages (Thaler, "The path to secur
 Stage 1 covers the protocol: 1a PIOP soundness, 1b commitment binding, 1c the compiled argument, 1d the constraint
 system against its semantics, 1e the whole theorem including ZK. Stage 2 is the verifier implementation and Stage 3 the
 prover implementation. §10 maps them onto this work, including where it deliberately differs. §11 sketches a future
-Fiat–Shamir or SNARK variant. §12 covers quantum provers and verifiers.
+Fiat–Shamir or SNARK variant. §12 covers quantum provers and verifiers, §13 one root reused across many proofs.
 
 ## 1. The claim, and its status
 
@@ -163,17 +163,15 @@ Plain collision resistance is Daniel's preferred model: no random oracle, no kno
 provers it needs the rewinding argument. Its cost is a square root on each Merkle-committed level, so its bound depends
 on the hash's output width `n`.
 
-- **The argument.** For each committed level, define the prover's "committed" table as the plurality opening of each
-  position over its continuations. If the prover opens a queried position differently from the plurality, running its
-  continuation twice from the same commitment finds a collision often enough.
+- **The argument** (§4.3): openings off the plurality table cost collisions, found by running the prover twice.
 - **The bound.** For a prover making `t` hash evaluations:
   - `Pr[inconsistent opening] ≤ Σ_levels √(N_ℓ·Q_ℓ·Adv_CR(2t)) ≤ t·√2·S_m / 2^{n/2}`;
   - `N_ℓ` is a level's codeword length;
   - `Q_ℓ` is its openings over the whole session (level 0 is committed once and opened by both reps);
   - `S_m = Σ_ℓ √(N_ℓ·Q_ℓ)`, with `log2(√2·S_m)` equal to 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35.
-- **The square root is inherent to rewinding.** Take a prover holding one collision at one position and using either
-  side with probability ½ when that position is queried. It is inconsistent with probability about `q/2`, where `q` is
-  the probability the position is queried. But two runs expose the collision only with probability about `q²/2`.
+- **The square root is inherent to rewinding.** A prover holding one collision, opened either way when its position
+  is queried (probability `q`), is inconsistent with probability about `q/2`, but two runs expose it only with about
+  `q²/2`.
 
 | Hash | Merkle rewinding term | ε ≤ 2^-128 up to |
 |---|---|---|
@@ -184,12 +182,8 @@ on the hash's output width `n`.
 - **Width needed.** Clearing 2^-128 at budget `t` needs `n ≥ 2·(log2 t + 128 + log2(√2·S_m))`. That is 437–451 bits at
   `t = 2^80`, and 477–491 bits at `t = 2^100`. Only SHA-512 among the standard hashes qualifies.
 - **More reps make it slightly worse.** Every rep opens the shared level-0 table, adding about 0.4 bit per extra rep.
-- **The tight terms need `n ≥ 128 + 2·log2 t`.** These are the round digests, the straight-line reduction and the
-  random-oracle bound. SHA-256 meets that up to `t = 2^64.5`, SHA-384 up to `t = 2^128.5`. So **at `t ≥ 2^65`, SHA-256
-  misses 2^-128 in every model, the random-oracle model included.** Daniel's range, 2^80–2^100, needs wider hashes
-  whichever model is chosen.
-- **The project's convention agrees.** `verity_numerical.security.accounting.hash_collision_bound` charges `q²/2^h` at
-  `q = 2^64`. A-GKR moved its Merkle tree to SHA-512 for this reason (`backends/gkr/gpu/sha512_cuda.py`).
+- **Tight terms need `n ≥ 128 + 2·log2 t`** (straight-line reductions, the random-oracle bound, any long-lived data
+  root): SHA-256 meets that only up to `t = 2^64.5`, so **at `t ≥ 2^65` SHA-256 misses 2^-128 in every model.**
 
 **The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
 
@@ -377,18 +371,14 @@ so that these slot in without restructuring:
 
 **The reference prover** (agreed with Daniel):
 
-- The production prover (Rust and CUDA) cannot run in Lean. So a Lean reference prover is written at spec level. It is
-  slow and never run at scale.
-- It is a deterministic function of (statement, witness, prover randomness, verifier coins).
-- Its theorems are:
-  - **completeness**: the Lean verifier accepts its honest output;
-  - **zero knowledge**: the simulator theorem, over uniform prover randomness.
-- It is linked to production by byte-for-byte differential testing. For the same statement, witness, prover seed and
-  verifier coins, the optimized prover must produce exactly the reference prover's messages. That pins down mask
-  placement.
-- **What stays trusted:**
-  - that equivalence beyond the tested inputs;
-  - the quality of the operating system's and ChaCha's randomness.
+- The production prover (Rust and CUDA) cannot run in Lean, so a slow, spec-level Lean reference prover stands in for
+  it. It is a deterministic function of (statement, witness, prover randomness, verifier coins).
+- **Its theorems:** completeness (the Lean verifier accepts its honest output), and zero knowledge (the simulator
+  theorem, over uniform prover randomness).
+- **Differential tests** tie production to it byte for byte: on the same inputs, seeds and coins, the production prover
+  must emit exactly its messages, which pins down mask placement.
+- **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's and ChaCha's
+  randomness.
 
 ## 9. What remains (by a16z stage)
 
@@ -415,6 +405,7 @@ so that these slot in without restructuring:
 5. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 6. **Stages 1e and 3, zero knowledge and the reference prover** (§8), after M1's masking spec.
+   Knowledge soundness (extracting the committed witness) is needed for any claim about registered data (§13).
 7. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
 
@@ -463,10 +454,8 @@ target 2^-128, and state the number the way the stages suggest:
    - 1c (interactive): uniform coins, and nothing for the rounds, whose bytes the server keeps;
    - Stage 2: the compiler's correctness, mitigated by tests.
 
-**Performance stages.** a16z also sets speed and memory stages, and verifier-cost limits: proofs of at most 256 KB,
-verification in at most 16 ms. They belong to the tables, not to this lane. `fast100` run twice (1–2 MB of proof,
-20–50 ms to verify, per flock-128) would exceed the verifier limits. That doesn't matter for an offline verifier, but it would matter
-for a SNARK variant.
+**Performance stages** (proofs of at most 256 KB, verification in at most 16 ms) belong to the tables. `fast100` run
+twice (1–2 MB, 20–50 ms) exceeds them, which matters only for a SNARK variant.
 
 ## 11. A Fiat–Shamir or SNARK variant (future extension)
 
@@ -485,18 +474,16 @@ A non-interactive variant ("C-fs") derives each round's coins from a hash of the
 
 **What we do now to keep the door open:**
 
-- **Round-by-round first.** Each phase of `rep_sound` is proved as a per-coin lemma: from a doomed state, whatever the
-  prover sends, the next coin leaves it with probability at most ε. That is exactly a round-by-round error, and the
-  live-coin theorem sums these lemmas. A Fiat–Shamir proof would reuse them.
-- **One joint term, kept separately.** The two out-of-domain samples per level are charged jointly, `(μ/2^128)^2` over
-  pairs, which is valid with live coins. Their round-by-round error is the unsquared `pairs·μ/2^128` (about 2^-104.5
-  at the deepest level for m = 33, with ArkLib's list bound). It will be kept as its own lemma for a Fiat–Shamir accounting.
-- **The model is ready for a compiler.** The `Game` model's `coin` nodes are the only randomness, and the tree
-  already carries the transcript prefix. A Fiat–Shamir compiler would replace each `coin` by a random-oracle query on
-  that prefix.
-- **Tools.** VCVio has Fiat–Shamir for Σ-protocols and the forking lemma. ArkLib's compiler from oracle proofs to
-  arguments (BCS) and its Fiat–Shamir for IOPs are roadmap phase 6, currently blocked. A direct random-oracle proof is
-  the alternative.
+- **Round-by-round first.** Each phase of `rep_sound` is a per-coin lemma: from a doomed state, whatever the prover
+  sends, the next coin leaves it with probability at most ε. That is a round-by-round error; a Fiat–Shamir proof would
+  reuse these lemmas.
+- **One joint term, kept separately.** The two out-of-domain samples per level are charged jointly, `(μ/2^128)^2`,
+  which is valid with live coins. Their round-by-round error, `pairs·μ/2^128` (about 2^-104.5 at m = 33), stays its own
+  lemma.
+- **The model is ready for a compiler.** `coin` nodes are the only randomness, and the tree carries the transcript
+  prefix, so a Fiat–Shamir compiler would replace each `coin` by a random-oracle query on that prefix.
+- **Tools.** VCVio has Fiat–Shamir for Σ-protocols and the forking lemma. ArkLib's BCS compiler and its Fiat–Shamir for
+  IOPs (roadmap phase 6) are blocked, so a direct random-oracle proof is the alternative.
 
 **The `seed` coin mode is not Fiat–Shamir** (PR #83, spec §7.2). Coins come from a seed the verifier commits at step
 0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
@@ -563,9 +550,8 @@ has 150–200 rounds.
 | Collision with small quantum memory (Chailloux–Naya-Plasencia–Schrottenloher) | 2^204.8 time |
 | Collision, generic limit (Zhandry) | success at most `O(q³/2^512)` |
 
-- **For comparison,** SHA-256 collisions cost 2^85.3 by BHT. NIST's post-quantum category 4 is SHA-384 collision search,
-  and SHA-512 sits above it.
-- **The hash has ample margin.** The reduction's loss is what blocks a number.
+- **The hash has ample margin**, the reduction's loss is what blocks a number. SHA-256 collisions cost 2^85.3 by BHT;
+  NIST's post-quantum category 4 is SHA-384 collision search, and SHA-512 sits above it.
 - **`seed` coins** (PR #83) sit at exactly 2^128: Grover on the 256-bit seed, and on SHA-256 as a PRF.
 
 **Zero knowledge against quantum verifiers.**
@@ -589,23 +575,59 @@ has 150–200 rounds.
 2. **A concrete number (research).** Either interactive BCS in the quantum random-oracle model with concrete terms, or
    tighter quantum rewinding.
 3. **Lean.**
-   - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, 2026; QICLean) with states, channels,
-     measurements, entropy and some QKD. They are outside Mathlib and not on our pins.
-   - **What no proof assistant has:**
-     - quantum adversaries with superposition oracle access, in a game model like ours;
-     - collapsing;
-     - CMSZ21's rewinding engine (Jordan's lemma, Marriott–Watrous);
-     - CDDGS25's multi-round argument;
-     - Zhandry's compressed oracle.
-
-     The nearest tools, qrhl-tool (Isabelle) and EasyPQC (EasyCrypt), handle quantum random-oracle proofs such as
-     Fujisaki–Okamoto and Full Domain Hash, but no rewinding.
-   - **A full Lean statement** is a research formalization program, larger than this whole classical development, and
-     not plannable now.
-   - **A cheap intermediate:** CDDGS25's theorem as a named `Prop`, like A1, with the application proved (Flock is
-     public-coin and non-adaptive, with `ε_IOP = tableError`). It is honest, but adds little while the conclusion is
-     asymptotic.
+   - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, QICLean): states, channels, measurements,
+     entropy. They are outside Mathlib and not on our pins.
+   - **What no proof assistant has:** quantum adversaries with superposition queries in a game model, collapsing,
+     CMSZ21's rewinding engine, CDDGS25's multi-round argument, or Zhandry's compressed oracle. qrhl-tool and EasyPQC
+     do quantum random-oracle proofs, but no rewinding.
+   - **A full Lean statement** is a research program larger than this whole development, and not plannable now.
+   - **A cheap intermediate:** CDDGS25's theorem as a named `Prop`, like A1, with only the application proved. It is
+     honest, but adds little while the conclusion is asymptotic.
 
 **Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. A fair statement is: the
 statistical layer holds against quantum provers; the compiled protocol is post-quantum sound asymptotically if SHA-512
 is collapsing (CDDGS25); no concrete post-quantum bound is known at these parameters.
+
+## 13. One root, many proofs
+
+The weights are committed once, as Halevi–Micali leaves under a Merkle root registered as the model's anchor, and every
+later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-root-reuse`.
+
+- **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus the root's straight-line binding
+  once, `t²/2^513`.
+  - The statistical part allows N up to 2^67.5.
+  - The rewinding term needs `N·t ≤ 2^110.7`, about 2^30 tables at `t = 2^80`.
+  - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
+  - **Decision:** state security per table, or as a lifetime budget on `N·t`.
+- **Binding for the root's life.** Proofs publish the leaves' commit strings and paths, so binding is straight-line
+  against the adversary's cumulative work. It must hold as long as anyone relies on the root, disputes about old proofs
+  included.
+  - **Design change:** `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`, so commit the root under the SHA-512 leaf and
+    tree scheme.
+  - Age doesn't weaken SHA-512. Rotate on a cryptanalytic advance, a salt or key exposure, or a hash upgrade, with a
+    fresh key and salts and a one-time proof that both roots open to the same weights.
+- **Hiding doesn't accumulate.** Every proof republishes the same commit strings, so the leaf count sets the bound:
+  `N_leaves·2^-256` with a key drawn at commitment, or `N_leaves·2^-192` with the pinned key, except for a one-time
+  `2^-64` fraction of keys.
+  - **Design change:** draw the root's key at commitment, never reuse salts, and keep the salts as secret as the
+    weights.
+- **Zero knowledge.** Honest-verifier ZK composes sequentially and concurrently, with errors adding. Malicious-verifier
+  ZK with the step-0 seed composes sequentially, by a hybrid.
+  - Simultaneous sessions against a malicious verifier are not covered. The simulator rewinds each session to learn its
+    seed, and interleaving defeats that; black-box concurrent ZK needs Ω̃(log n)-round preambles or setup.
+  - **Decision**, one of:
+    - serialize sessions (globally, if one party can hold many verifier identities);
+    - take coins from a public beacon, which is slower and puts soundness on the beacon;
+    - scope it out.
+- **Statement leakage accumulates, and ZK doesn't bound it.** N sessions reveal N statements: workload shapes, timing,
+  the shared root, and each proved predicate's truth.
+  - Weights never appear, and outputs stay committed.
+  - But a predicate over committed outputs gives whoever sees it one bit per proof: over chosen inputs, an oracle to the
+    model.
+  - **Policy needed:** which predicates are public, and how many.
+- **Linkability** is the point of one root, and it is also a leak: every proof visibly shares one model. Unlinkability
+  would need a fresh commitment and an equality proof per run, which means re-hashing the weights each time.
+  - **Theorem to add:** a statistically hiding leaf opens to essentially any row. So "these proofs used the registered
+    weights" (even one proof) needs each proof's committed witness extracted, then Halevi–Micali binding. That is
+    knowledge soundness, which is not yet planned here, and the circuit-privacy design's composition theorem needs it
+    too.
