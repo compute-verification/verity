@@ -347,9 +347,16 @@ pub fn out_of_y(relation: &str, y: u32) -> Option<u32> {
     }
 }
 
+/// The y leaf a relation's statement pins: the BF16 word (`u16`, 2 bytes) for the epilogue relations, the 32-bit word
+/// (`u32`, 4 bytes: fp8's packed accumulator, fp4's FP32 word) otherwise.
+pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
+    if net.epilogue() { ("u16", 2) } else { ("u32", 4) }
+}
+
 /// What both parties check of an (instances, netlist, layout) triple before any coin:
 /// - NV2: a netlist with the fp4-nvf4 scale inputs (608 input bits) pairs only with the fp4 layouts, and the reverse;
 /// - NV3: the a / b trees' row schema is the layout's pinned one;
+/// - NV5: the y leaf's schema and width are the relation's (`y_leaf`), and every y word fits it;
 /// - NV1: every VU's circuit output word is the one its committed y word opens (the y root is built from y).
 pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String> {
     if (net.n_in == 608) != lay.is_fp4() {
@@ -360,6 +367,14 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
         if s != lay.row_schema() {
             return Err(format!("NV3: tree {t} names row schema {s:?}; layout {lay:?} pins {:?}", lay.row_schema()));
         }
+    }
+    let (ys, yb) = y_leaf(net);
+    let (hs, hb) = (inst.header["schemas"]["y"].as_str().unwrap_or(""), inst.header["y_bytes"].as_u64().unwrap_or(0));
+    if hs != ys || hb != yb as u64 {
+        return Err(format!("NV5: the y leaf is {hs:?} over {hb} bytes; relation {} pins {ys:?} over {yb}", inst.relation));
+    }
+    if let Some(v) = (0..inst.vus).find(|&v| yb < 4 && inst.y[v] >= 1 << (8 * yb)) {
+        return Err(format!("NV5: VU {v}'s y word {:#x} does not fit the {yb}-byte y leaf", inst.y[v]));
     }
     if let Some(v) = (0..inst.vus).find(|&v| out_of_y(&inst.relation, inst.y[v]) != Some(inst.out[v])) {
         return Err(format!("NV1: VU {v}'s output word {:#010x} is not the one its committed y word {:#x} opens", inst.out[v], inst.y[v]));

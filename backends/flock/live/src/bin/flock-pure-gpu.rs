@@ -600,12 +600,29 @@ fn admission_negatives(st: &PureStmt, inst: &Instances) -> Vec<Value> {
     let other = if st.lay.row_schema() == "blake3-keyed/row/v2" { "blake3-keyed/row-nvfp4/v1" } else { "blake3-keyed/row/v2" };
     relabelled.header["schemas"]["a"] = json!(other);
     let other_layout = if st.lay.is_fp4() { Layout::Fp8 } else { Layout::Fp4 };
-    let cases: [(&str, &str, Result<(), String>); 4] = [
+    // G4: the y leaf re-encoded at the other width (u32 relations: u16, dropping the word's high half; bf16: u32 with
+    // y = out = a word past 16 bits), and a bf16 y word past its u16 leaf
+    let mut y_other_width = inst.clone();
+    let wide = st.net.epilogue();
+    y_other_width.header["schemas"]["y"] = json!(if wide { "u32" } else { "u16" });
+    y_other_width.header["y_bytes"] = json!(if wide { 4 } else { 2 });
+    if wide {
+        y_other_width.y[0] |= 1 << 16;
+        y_other_width.out[0] = y_other_width.y[0];
+    }
+    let mut y_past_leaf = inst.clone();
+    y_past_leaf.y[0] |= 1 << 16;
+    y_past_leaf.out[0] = y_past_leaf.y[0];
+    let mut cases: Vec<(&str, &str, Result<(), String>)> = vec![
         ("admission_honest", "", admit(st.lay, &st.net, inst)),
         ("y_word_differs_from_checked_output", "NV1", admit(st.lay, &st.net, &y_tampered)),
         ("netlist_paired_with_other_layout_kind", "NV2", admit(other_layout, &st.net, inst)),
         ("row_schema_relabelled", "NV3", admit(st.lay, &st.net, &relabelled)),
+        ("y_leaf_other_width", "NV5", admit(st.lay, &st.net, &y_other_width)),
     ];
+    if wide {
+        cases.push(("y_word_exceeds_u16_leaf", "NV5", admit(st.lay, &st.net, &y_past_leaf)));
+    }
     cases
         .into_iter()
         .map(|(name, tag, r)| {
