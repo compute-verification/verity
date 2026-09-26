@@ -21,15 +21,14 @@ def _write(doc: dict, path) -> str:
 def _two_layer(inst: dict) -> dict:
     """The one-layer Program with every layer-0 row repeated as layer 1 (reading layer 1's own producers): two identical layers."""
     rows = inst["rows"]
-    n = len(rows)
+    layer = [r for r in rows if ".layers.0." in r["name"]]
+    new_id = {r["i"]: len(rows) + j for j, r in enumerate(layer)}
     extra = []
-    for r in rows:
-        if ".layers.0." not in r["name"]:
-            continue
+    for r in layer:
         r2 = copy.deepcopy(r)
-        r2["i"] = r["i"] + n
+        r2["i"] = new_id[r["i"]]
         r2["name"] = r["name"].replace(".layers.0.", ".layers.1.")
-        r2["args"] = [[[k, a + n if k == "n" and ".layers.0." in rows[a]["name"] else a, lo, hi] for k, a, lo, hi in g] for g in r["args"]]
+        r2["args"] = [[[k, new_id.get(a, a) if k == "n" else a, lo, hi] for k, a, lo, hi in g] for g in r["args"]]
         extra.append(r2)
     return dict(inst, rows=rows + extra)
 
