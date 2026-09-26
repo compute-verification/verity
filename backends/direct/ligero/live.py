@@ -722,7 +722,9 @@ class ProverSession:
         self._q.put((sub, meta, proof))
 
     def end(self, summary: dict | None = None) -> dict:
-        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification)."""
+        """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification).  ``drain_seconds``:
+        how long the proofs still in flight took to leave after the prover's pass (the transfer tail the pass does not time)."""
+        t_drain = time.perf_counter()
         if self.pipelined and getattr(self, "_net", None) is not None:
             self._net.join(timeout=600.0)                    # the network thread owns ctrl until it has read the last OPEN2
             self._ctrl_q.put(None)
@@ -731,6 +733,7 @@ class ProverSession:
                 raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
         self._q.put(None)
         self._sender.join()
+        self.drain_seconds = time.perf_counter() - t_drain
         if self._sender_error is not None:
             raise LiveError(f"proof sender failed: {self._sender_error!r}")
         self._send(self.ctrl, K_END, json.dumps(summary or {}).encode())
@@ -858,7 +861,8 @@ class BenchLive:
             "net_wait": agg.get("net_wait", 0.0), "t_total_live": total + agg.get("net_wait", 0.0),
             "rtt_ms_median": statistics.median(rtts) * 1e3 if rtts else None,
             "rtt_ms_p90": rtts[int(0.9 * (len(rtts) - 1))] * 1e3 if rtts else None, "rtt_ms_max": rtts[-1] * 1e3 if rtts else None,
-            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"]})
+            "session_wall_s": getattr(s, "wall", None), "verify_wall_s": v["verify"]["wall_s"], "verify_cpu_s": v["verify"]["cpu_s"],
+            "drain_s": getattr(s, "drain_seconds", None), "bytes_out": s.bytes_out, "bytes_in": s.bytes_in, "round_trips": len(s.rtts)})
         print(f"rep {rep}: live verifier {'ACCEPTED' if v['accepted'] else 'REJECTED'} {v['accepted_subbatches']}/{self.n_proofs} "
               f"({v['reason'][:160]}); net wait {s.wait:.3f}s over {len(s.rtts)} round trips (median rtt "
               f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms, p90 "

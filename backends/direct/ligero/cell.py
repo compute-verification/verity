@@ -62,6 +62,23 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
     fp = doc["workload_fingerprint"]
     if "net.wait_seconds" not in m or not ((doc.get("validation") or {}).get("evidence") or {}).get("live_verifier"):
         raise ValueError(f"plateau point {p['dir']} did not run against a live verifier (bench-vu --verifier)")
+    ev = (doc.get("validation") or {}).get("evidence") or {}
+    lv = ev.get("live_verifier") or {}
+    per_rep = lv.get("per_rep") or []
+    idx = int((ev.get("phase_rep") or {}).get("index") or 0)
+    rep = per_rep[idx] if 0 <= idx < len(per_rep) else {}
+    sessions = max(1, int(lv.get("sessions") or len(per_rep) or 1))
+    # the bytes of ONE timed run (net_measurements sums every session), and the wait until the verifier holds every proof:
+    # the pass's own blocking plus the transfer tail after it (ProverSession.drain_seconds; the pass does not time it)
+    for k in ("bytes_out", "bytes_in"):
+        v = rep.get(k) if rep.get(k) is not None else (m.get(f"net.{k}") or 0) / sessions
+        _set(doc, f"net.{k}", v, "B")
+    tail = rep.get("drain_s")
+    if isinstance(tail, (int, float)):
+        _set(doc, "net.pass_wait_seconds", m["net.wait_seconds"], "s")
+        _set(doc, "live.transfer_tail_seconds", float(tail), "s")
+        _set(doc, "net.wait_seconds", float(m["net.wait_seconds"]) + float(tail), "s")
+        _set(doc, "t.total_live", float(m["t.total"]) + float(m["net.wait_seconds"]) + float(tail), "s")
     n_proofs = int(fp["N_subbatches"])
     pipeline = int((fp.get("software") or {}).get("backend", {}).get("pipeline") or 1) or 1
     rounds = PER_PROOF_DEPTH * math.ceil(n_proofs / max(1, pipeline))
@@ -79,6 +96,10 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
                             f"{probe['flows'][0]['bytes'] >> 20 if probe.get('flows') else '?'} MB acknowledged by the verifier, median)",
         "rounds_rule": f"rounds.sequential_depth = {PER_PROOF_DEPTH} (8c: commitment + two openings per proof) x ceil({n_proofs} "
                        f"sub-batch proofs / {pipeline} in flight)",
+        "wait_rule": ("net.wait_seconds = the timed rep's blocking on the verifier (net.pass_wait_seconds) + the transfer tail after "
+                      "its pass (live.transfer_tail_seconds: proofs still in flight when the prover finished); net.bytes_* are that "
+                      "rep's session's" if isinstance(tail, (int, float)) else
+                      "net.wait_seconds = the timed rep's blocking on the verifier (no transfer-tail record in this run)"),
         "verifier_operator": operator,
         "probe": {k: probe.get(k) for k in ("ping_ms_median", "ping_ms_min", "connect_ms", "rtt_ms", "mbps_median", "tcp_cc",
                                              "prover_dc", "verifier_dc")},
