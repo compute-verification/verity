@@ -756,7 +756,8 @@ def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
 #: module pins.
 TABLES = {"rsq": "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
           "sqrt": "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
-          "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55"}
+          "rcp": "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55",
+          "ex2": "b2a42c4a626469c986e33e43f16f41bde9d84de94347cd9ceaa1bd68d36bcdf0"}
 #: The primitives the Rust tail interpreter implements.
 TAIL_PRIMS = ("F32Add_v1", "F32Mul_v1", "F32Fma_v1", "F32Div_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1", "DivFullRcp_v1", "DivFullScaleA_v1",
               "F32AddFtz_v1", "F32SubFtz_v1", "F32MulFtz_v1", "F32FmaFtz_v1", "F32FmaSubFtz_v1", "F32Max_v1", "GuardNegInfZero_v1",
@@ -786,16 +787,17 @@ def _tail(low: Lowering) -> tuple[list[list], dict[int, int]]:
 
 
 def write_tables(out_dir) -> dict:
-    """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``) for the verifier; checks :data:`TABLES`."""
+    """The MUFU tables as raw u32 LE files (``rsq.u32``, ``sqrt.u32``, ``rcp.u32``, ``ex2.u32``) for the verifier; checks
+    :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity_vllm.program.kernels import rms_relation
+    from verity_vllm.program.kernels import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    t = rms_relation.tables("cuda")
+    t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name, want in TABLES.items():
-        b = np.ascontiguousarray(getattr(t, name), dtype="<u4").tobytes()
+        b = np.ascontiguousarray(getattr(fa2 if name == "ex2" else t, name), dtype="<u4").tobytes()
         if hashlib.sha256(b).hexdigest() != want:
             raise ValueError(f"MUFU table {name}: sha256 differs from the pinned one")
         (out / f"{name}.u32").write_bytes(b)

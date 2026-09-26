@@ -382,7 +382,7 @@ def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
 
 def test_the_tables_are_the_pinned_ones(tmp_path):
     assert IL.write_tables(tmp_path) == IL.TABLES
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["rcp.u32", "rsq.u32", "sqrt.u32"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ex2.u32", "rcp.u32", "rsq.u32", "sqrt.u32"]
 
 
 @SLOW
