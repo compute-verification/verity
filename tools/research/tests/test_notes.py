@@ -95,6 +95,17 @@ def test_newest_checkpoint_wins_wherever_it_sits_and_times_before_midnight_are_y
     assert notes.lane_status(late, NOW, 45)["commit"] == "ddddddd"     # mtime 20:00Z: 20:10Z is today, 23:50Z the day before
 
 
+def test_a_newer_open_checkpoint_after_a_final_one_reopens_the_lane_despite_its_final_section(tmp_path):
+    # verify-night-3 2026-09-26: "## FINAL" from an earlier round made the reopened lane final, done at the report's mtime, and
+    # the reaper took the pod the reopened lane had just created
+    body = ("CHECKPOINT 7585828 (20:40Z) [open] reopened for another round: NOT final\n"
+            "CHECKPOINT 906255b (18:49Z) [final] round done\n\n## FINAL\n\nround done, pods terminated\n")
+    row = notes.lane_status(_report(tmp_path, "l", body, 10), NOW, 45)
+    assert (row["state"], row["done_ts"], row["commit"]) == ("open", None, "7585828")
+    done = notes.lane_status(_report(tmp_path, "m", "CHECKPOINT 1111111 (19:00Z) [open] working\n\n## FINAL\n\ndone\n", 10), NOW, 45)
+    assert done["state"] == "final"                     # a FINAL section with no final checkpoint still finishes the lane
+
+
 def test_stale_means_not_final_and_silent_past_the_threshold(tmp_path):
     _report(tmp_path, "dead", "CHECKPOINT 1234567 (19:00Z) bench running\n", 120)
     _report(tmp_path, "alive", "CHECKPOINT 2345678 (20:50Z) measuring\n", 10)

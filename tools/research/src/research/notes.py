@@ -391,7 +391,7 @@ def _checkpoint_time(hh: str | None, mm: str | None, mtime: dt.datetime) -> dt.d
 def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
     text = path.read_text(errors="replace")
     mtime = _ts(file_time(path.parents[2], path))           # <root>/lanes/<lane>/<report>
-    best = None
+    best, last_final, top = None, None, None
     for line in text.splitlines():
         i = line.find("CHECKPOINT")
         if i < 0:
@@ -406,6 +406,9 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
             hh, mm = late.groups()
         when = _checkpoint_time(hh, mm, mtime)
         cand = {"commit": m["sha"], "at": when, "state": "final" if final else m["state"], "text": rest}
+        top = top or cand
+        if cand["state"] == "final" and when is not None and (last_final is None or when > last_final):
+            last_final = when
         if best is None or (when is not None and (best["at"] is None or when > best["at"])):
             best = cand
     finals = [m.end() for m in FINAL_RE.finditer(text)]
@@ -415,8 +418,11 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
     fm = re.search(r"^status:\s*(\S+)", front, re.M)
     fm_state = fm.group(1).lower() if fm else "open"
     cp_state = (best or {}).get("state")
+    reopened = bool(best is top and best and best["at"] and cp_state not in DONE and last_final and best["at"] > last_final)
     if "superseded" in (fm_state, cp_state):
         state = "superseded"
+    elif reopened:                       # a newer open checkpoint after a [final] one: its FINAL section is history
+        state = cp_state
     else:
         state = "final" if has_final or fm_state in DONE_STATUSES else cp_state or fm_state
     age = (now - mtime).total_seconds() / 60
