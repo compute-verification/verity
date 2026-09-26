@@ -79,6 +79,8 @@ PIECES: dict[str, Callable] = {
     "RopeOutAdd_v1": _rope_out_add,
     "SiluMulBf16_v1": _silu_mul,
     "AmpereBF16TcDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:])),
+    # verity.ml.tc.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
+    "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
 
 
@@ -326,9 +328,11 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
 
 
 TC_PRIM = "AmpereBF16TcDot16_v1"
+#: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16
+TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
 
 
-def tc_units(target) -> Units:
+def tc_units(target, prim: str = TC_PRIM) -> Units:
     """``target`` as tensor-core k-steps: every ``AmpereBF16TcDot16`` gate is one unit, ports in operand order: its 16 ``b``
     operands from input leaves (``("leaf", p)``), or ``("zero", 0)`` where the IR pads with a constant zero word; its 16 ``a``
     operands and its accumulator as cut words; its result a cut word. Input leaves read as ``a`` operands (the query) are public
@@ -338,9 +342,9 @@ def tc_units(target) -> Units:
     gates = live_gates(call)
     by = {g.index: g for g in gates}
     arg_pos = {g: i for i, g in enumerate(args)}
-    tcs = [g for g in gates if g.prim.id == TC_PRIM]
+    tcs = [g for g in gates if g.prim.id == prim]
     if not tcs:
-        raise ValueError(f"{getattr(target, 'id', target)}: no {TC_PRIM} gate")
+        raise ValueError(f"{getattr(target, 'id', target)}: no {prim} gate")
 
     def zero_word(o):
         g = by.get(o)
@@ -372,10 +376,11 @@ def tc_units(target) -> Units:
         b = [C.input(f"in{j}", 16) for j in range(16)]
         a = [C.input(f"in{16 + j}", 16) for j in range(16)]
         acc = C.input("in32", 32)
-        C.output("out0", fp.tc_dot16(C, acc, a, b))
+        groups, W, F = TC_STEPS[prim]
+        C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
         return C
 
-    return Units(target, [16] * 32 + [32], [32], ins, outs, (TC_PRIM,), [tcs[0]], [], [], K, tail,
+    return Units(target, [16] * 32 + [32], [32], ins, outs, (prim,), [tcs[0]], [], [], K, tail,
                  public=[(kpos[o], arg_pos[o]) for o in sorted(public_args, key=arg_pos.__getitem__)],
                  tail_rets=list(rets), builder=builder)
 
