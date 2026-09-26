@@ -53,6 +53,10 @@ theorem value_map (p : β → Prop) (f : α → β) : ∀ g : Game α,
       simp only [map, bind_coin, value_coin]
       exact Finset.sum_congr rfl fun c _ => by rw [← value_map p f (k c)]; rfl
 
+theorem value_bind_ret (p : β → Prop) (f : α → β) (g : Game α) :
+    value p (g.bind fun a => .ret (f a)) = value (fun a => p (f a)) g :=
+  value_map p f g
+
 theorem value_congr {p q : α → Prop} (h : ∀ a, p a ↔ q a) (g : Game α) :
     value p g = value q g :=
   le_antisymm (value_mono (fun a => (h a).1) g) (value_mono (fun a => (h a).2) g)

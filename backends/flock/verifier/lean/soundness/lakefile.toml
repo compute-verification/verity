@@ -16,3 +16,8 @@ rev = "b2e456fc48db5bff1b69c7469fde73f9b83e94c2"
 # imported declaration, which a module importer does not load (ArkLib docs/wiki/module-system.md).
 [[lean_lib]]
 name = "FlockSoundness"
+
+# Statement checks that depend on ArkLib's admitted theorems (not imported by FlockSoundness).
+[[lean_lib]]
+name = "FlockSoundnessTest"
+globs = ["FlockSoundnessTest.+"]
