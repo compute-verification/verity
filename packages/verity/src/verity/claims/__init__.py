@@ -74,6 +74,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("malicious-verifier-zk", "guarantee", "Zero knowledge against a malicious verifier", "Malicious-verifier ZK"),
     Entry("hvzk", "guarantee", "Honest-verifier zero knowledge", "HVZK"),
     Entry("no-zk", "guarantee", "No zero knowledge", "No ZK"),
+    Entry("statistical-hiding", "guarantee", "Statistically hiding commitments, given uniform salts", "Statistical hiding"),
     Entry("non-interactive", "guarantee", "Non-interactive, transferable proof", "Non-interactive"),
     Entry("designated-verifier", "guarantee", "Designated-verifier proof (convinces only the live verifier)", "Designated verifier"),
     Entry("rs-proximity-udr", "assumption", "Reed–Solomon proximity gaps, unique-decoding regime", "RS proximity · UDR", "proven"),
@@ -81,6 +82,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
+    Entry("common-reference-string", "model",
+          "Common reference string: a public parameter treated as a uniform draw fixed before use, such as hm96-sha256/v1's pinned key "
+          "(its hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),

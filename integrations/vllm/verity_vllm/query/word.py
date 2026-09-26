@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 from array import array
 from collections import Counter
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
@@ -506,11 +506,15 @@ def tap_kernel(scope: str | None) -> str:
 
 
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
-                specialize: Callable[[str, dict], Any] = specialization) -> dict[str, Any]:
+                specialize: Callable[[str, dict], Any] = specialization, acquired: Mapping[str, int] | None = None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` over a Program's Calls, grouped: each group {"family", "statics", "definition", "calls", "where",
     "inputs_committed", "outputs_committed"}.  Per group: its Definition's unit rule and the committed-boundary conditions (every
     Value the Call reads and every Value it outputs is committed, else a unit would cross Calls).  Violations are aggregated per
-    (Definition, class) with the Calls they cover and the first modules; `strict` raises `QueryRuleViolation` naming them."""
+    (Definition, class) with the Calls they cover and the first modules; `strict` raises `QueryRuleViolation` naming them.
+
+    `acquired` (Definition family -> committed interior words per Call a tap acquires, e.g. `query.norm_scales.TAP_WORDS`): those
+    interior values are committed boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
+    partition commits another number of interior words per Call is an `interior-not-acquired` violation."""
     memo: dict = {}
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
@@ -534,15 +538,19 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         if not g.get("outputs_committed", True):
             v.append({"definition": g["definition"], "class": "output-not-committed",
                       "why": "the Call's output is interior to its module body (not a required value): no unit can end at it"})
+        tap = int(acquired.get(g["family"], 0)) if acquired is not None else 0
+        if tap and rule["committed_interior_words"] != tap:
+            v.append({"definition": g["definition"], "class": "interior-not-acquired",
+                      "why": f"the tap acquires {tap} interior word(s) per Call; the partition commits {rule['committed_interior_words']}"})
         for x in v:
             note(x, g)
         k = int(g.get("calls") or 0)
         out.append({"where": g.get("where"), "definition": g["definition"], "calls": k, "units": rule["units_per_call"] * k,
                     "gates": rule["gates"] * k, "committed_interior_words": rule["committed_interior_words"] * k, "rule": rule,
-                    "violations": len(v)})
+                    "violations": len(v), **({"acquired_interior_words": min(tap, rule["committed_interior_words"]) * k} if acquired is not None else {})})
     viol = sorted(agg.values(), key=lambda a: (-a["calls"], a["definition"], a["class"]))
-    res = {"query": query_id(X, W, extras), "ok": not viol, "violations": viol, "groups": out,
-           **{k: sum(g[k] for g in out) for k in ("calls", "units", "gates", "committed_interior_words")}}
+    totals = ("calls", "units", "gates", "committed_interior_words") + (("acquired_interior_words",) if acquired is not None else ())
+    res = {"query": query_id(X, W, extras), "ok": not viol, "violations": viol, "groups": out, **{k: sum(g[k] for g in out) for k in totals}}
     if strict and viol:
         raise QueryRuleViolation(f"{query_id(X, W, extras)}: {len(viol)} violation(s): " + "; ".join(_name(x) for x in viol[:12])
                                  + (" ..." if len(viol) > 12 else ""))
@@ -577,10 +585,11 @@ def call_groups(P: Any, Q: Any) -> list[dict[str, Any]]:
     return list(groups.values())
 
 
-def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True) -> dict[str, Any]:
-    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`); `strict` raises
-    `QueryRuleViolation` naming every violating (Definition, class)."""
-    return check_calls(call_groups(P, Q), X, W, extras, strict=strict)
+def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
+                acquired: Mapping[str, int] | None = None) -> dict[str, Any]:
+    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`; `acquired`: see `check_calls`);
+    `strict` raises `QueryRuleViolation` naming every violating (Definition, class)."""
+    return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired)
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
