@@ -233,7 +233,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
         lay.rows_a[r] = saved
         return [int(x) for x in lo] != want[0] or [int(x) for x in hi] != want[1]
 
-    assert all(caught_after(lay.out_col * IL.WORD + 16 * j + b, toggle_const=True) for j in range(2) for b in (0, 7, 15))
+    assert all(caught_after(lay.out_port_cols[j] + b, toggle_const=True) for j in range(2) for b in (0, 7, 15))
     assert sum(caught_after(r) for r in rng.sample(range(first_and, first_and + lay.counts["ands"]), 12)) >= 8
 
 

@@ -7,7 +7,7 @@ all constant, are evaluated by the primitive's own evaluator and become constant
 :func:`units` splits a template instance into identical units read off its IR graph: the connected components of the gate
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
 arrangement lists which input and output leaves of the instance each unit takes. :func:`netlist` lays a unit circuit out as
-``flock-ir-unit/v1`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
+``flock-ir-unit/v2`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from . import fp
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
 
-FORMAT = "flock-ir-unit/v1"
+FORMAT = "flock-ir-unit/v2"
 WORD = 128
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
@@ -320,16 +320,14 @@ def _leaf_width(target, pos: int) -> int:
 
 @dataclass
 class Layout:
-    """A unit circuit laid out as one Flock block type (C = I; row i is ``(A_i . z)(B_i . z) = z_i``)."""
+    """A unit circuit laid out as one Flock block type (C = I; row i is ``(A_i . z)(B_i . z) = z_i``). Input and output ports
+    come in groups; each group's bits are consecutive in its own aligned power-of-two range of 128-bit words."""
 
     rows_a: list
     rows_b: list
     const: int
-    in_words: int
-    in_bits: list[int]      # per input port, its width; port j's bits are consecutive from column sum(in_bits[:j])
-    out_col: int            # the first output word column; port j's bits are consecutive from out_col * 128 + sum(out_bits[:j])
-    out_words: int
-    out_bits: list[int]
+    in_groups: list[tuple[int, int, list[int]]]    # (first word column, words, port widths)
+    out_groups: list[tuple[int, int, list[int]]]
     counts: dict
 
     @property
@@ -337,35 +335,95 @@ class Layout:
         return len(self.rows_a)
 
     @property
+    def in_bits(self) -> list[int]:
+        return [b for _, _, bits in self.in_groups for b in bits]
+
+    @property
+    def out_bits(self) -> list[int]:
+        return [b for _, _, bits in self.out_groups for b in bits]
+
+    @property
+    def in_words(self) -> int:
+        col, words, _ = self.in_groups[-1]
+        return col + words
+
+    @property
+    def out_col(self) -> int:
+        return self.out_groups[0][0]
+
+    @property
+    def out_words(self) -> int:
+        col, words, _ = self.out_groups[-1]
+        return col + words - self.out_col
+
+    @property
     def out_cols(self) -> list[int]:
         return list(range(self.out_col, self.out_col + self.out_words))
 
+    @staticmethod
+    def _cols(groups) -> list[int]:
+        out = []
+        for col, _, bits in groups:
+            at = col * WORD
+            for b in bits:
+                out.append(at)
+                at += b
+        return out
 
-def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Layout:
-    """``flock-ir-unit/v1``: the input ports' bits first, consecutive, in a power-of-two number of 128-bit words whose unused
-    bits are forced zero; the live ANDs in creation order; one row ``(L + z_j) * 1 = z_j`` per assertion; then the output
-    ports' bits as copy rows, consecutive, in a power-of-two number of words aligned to that size, unused rows forced zero;
-    the constant-one column last. A forced-zero row has empty A and B. So all input words of a unit are one aligned
-    subcube of its columns, and all output words another (one region claim each)."""
+    @property
+    def in_port_cols(self) -> list[int]:
+        """Per input port, the column of its bit 0."""
+        return self._cols(self.in_groups)
+
+    @property
+    def out_port_cols(self) -> list[int]:
+        return self._cols(self.out_groups)
+
+
+def _groups(names: Sequence[str], split: Sequence[int] | None) -> list[list[str]]:
+    cuts = [0, *(split or []), len(names)]
+    return [list(names[a:b]) for a, b in zip(cuts, cuts[1:]) if b > a]
+
+
+def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_split: Sequence[int] | None = None,
+           out_split: Sequence[int] | None = None) -> Layout:
+    """``flock-ir-unit/v2``: the input port groups first (``in_split``: the port indices where a new group starts), each
+    group's bits consecutive in a power-of-two number of 128-bit words aligned to that size, unused bits forced zero; the
+    live ANDs in creation order; one row ``(L + z_j) * 1 = z_j`` per assertion; then the output port groups as copy rows, laid
+    out the same way; the constant-one column last. A forced-zero row has empty A and B. So each group is one aligned
+    subcube of the unit's columns (one region claim)."""
     live = C.live()
     assert all(C.kind[v] in ("in", "and") for v in live), "hints are not laid out yet"
-    ins = [w for nm in in_names for w in C.inputs[nm]]
     col: dict[int, int] = {}
     rows_a: list = []
     rows_b: list = []
-    for w in ins:
-        (v,) = tuple(w.s)
-        col[v] = len(rows_a)
-        rows_a.append([len(rows_a)])
-        rows_b.append([len(rows_b)])
 
     def zero():
         rows_a.append([])
         rows_b.append([])
 
-    in_words = ceil_pow2(max(1, -(-len(rows_a) // WORD)))
-    while len(rows_a) < in_words * WORD:
-        zero()
+    def open_group(nbits: int) -> tuple[int, int]:
+        words = ceil_pow2(max(1, -(-nbits // WORD)))
+        while len(rows_a) % (WORD * words):
+            zero()
+        return len(rows_a) // WORD, words
+
+    def close_group(c: int, words: int) -> None:
+        while len(rows_a) < (c + words) * WORD:
+            zero()
+
+    in_groups = []
+    for g in _groups(in_names, in_split):
+        bits = [len(C.inputs[nm]) for nm in g]
+        c, words = open_group(sum(bits))
+        for nm in g:
+            for w in C.inputs[nm]:
+                (v,) = tuple(w.s)
+                col[v] = len(rows_a)
+                rows_a.append([len(rows_a)])
+                rows_b.append([len(rows_b)])
+        close_group(c, words)
+        in_groups.append((c, words, bits))
     ands = [v for v in range(len(C.kind)) if v in live and C.kind[v] == "and"]
     for v in ands:
         col[v] = len(rows_a)
@@ -385,17 +443,16 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Lay
         j = len(rows_a)
         rows_a.append(form(Lf) + [j])
         rows_b.append(["C"])
-    out_bits = [len(C.outputs[nm]) for nm in out_names]
-    out_words = ceil_pow2(max(1, -(-sum(out_bits) // WORD)))
-    while len(rows_a) % (WORD * out_words):
-        zero()
-    out_col = len(rows_a) // WORD
-    for nm in out_names:
-        for w in C.outputs[nm]:
-            rows_a.append(form(w))
-            rows_b.append(["C"])
-    while len(rows_a) % (WORD * out_words):
-        zero()
+    out_groups = []
+    for g in _groups(out_names, out_split):
+        bits = [len(C.outputs[nm]) for nm in g]
+        c, words = open_group(sum(bits))
+        for nm in g:
+            for w in C.outputs[nm]:
+                rows_a.append(form(w))
+                rows_b.append(["C"])
+        close_group(c, words)
+        out_groups.append((c, words, bits))
     const = len(rows_a)
     rows_a.append([const])
     rows_b.append([const])
@@ -409,16 +466,20 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Lay
 
     rows_a = [fix(r) for r in rows_a]
     rows_b = [fix(r) for r in rows_b]
-    counts = {"ands": len(ands), "asserts": len(C.asserts), "rows": len(rows_a), "in_words": in_words, "out_words": out_words,
-              "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b))}
-    return Layout(rows_a, rows_b, const, in_words, [len(C.inputs[nm]) for nm in in_names], out_col, out_words, out_bits, counts)
+    lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay.counts = {"ands": len(ands), "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
+                  "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b))}
+    return lay
 
 
 def netlist(lay: Layout, name: str) -> str:
-    """The layout as ``flock-ir-unit/v1`` text: a header line ``FORMAT name rows const in_words n_in in_bits.. out_col
-    out_words n_out out_bits..``, then one line per row ``|A| A.. |B| B..``."""
-    head = [FORMAT, name, lay.useful, lay.const, lay.in_words, len(lay.in_bits), *lay.in_bits, lay.out_col, lay.out_words,
-            len(lay.out_bits), *lay.out_bits]
+    """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
+    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``."""
+    head = [FORMAT, name, lay.useful, lay.const]
+    for groups in (lay.in_groups, lay.out_groups):
+        head.append(len(groups))
+        for c, words, bits in groups:
+            head += [c, words, len(bits), *bits]
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
@@ -455,10 +516,8 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
     lane)`` flips that committed bit after witness generation (a negative: a cheating prover's witness)."""
     mask = (1 << T) - 1
     z = [0] * lay.useful
-    at = 0
-    for j, width in enumerate(lay.in_bits):
-        z[at:at + width] = slice_words(ports[j], width)
-        at += width
+    for at, width, words in zip(lay.in_port_cols, lay.in_bits, ports):
+        z[at:at + width] = slice_words(words, width)
     z[lay.const] = mask
 
     def ev(r):
@@ -476,10 +535,7 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
     ok = mask
     for i in range(lay.useful):
         ok &= ~((ev(lay.rows_a[i]) & ev(lay.rows_b[i])) ^ z[i]) & mask
-    outs, at = [], lay.out_col * WORD
-    for nb in lay.out_bits:
-        outs.append(unslice_words(z[at:at + nb], T))
-        at += nb
+    outs = [unslice_words(z[at:at + nb], T) for at, nb in zip(lay.out_port_cols, lay.out_bits)]
     return outs, ok
 
 
@@ -488,7 +544,7 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
 @dataclass
 class Lowering:
     """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit and its
-    ``flock-ir-unit/v1`` layout. ``evaluate`` runs the laid-out unit rows (what Flock proves) over every unit of every
+    ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit rows (what Flock proves) over every unit of every
     instance and assembles the instances' outputs and cut words."""
 
     name: str
@@ -544,9 +600,14 @@ class Lowering:
 
 
 def lowering(definition, name: str, cut: Callable | None = None) -> Lowering:
+    """The template's units, their circuit and layout; cut words form their own port groups (after the leaf inputs and after
+    the returned outputs), so private inputs, public outputs and cut words are separate aligned regions."""
     U = units(definition, cut)
     C = U.circuit()
-    lay = layout(C, [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))])
+    n_leaf = sum(1 for k, _ in U.in_src[0] if k == "leaf")
+    n_ret = sum(1 for k, _ in U.out_src[0] if k == "ret")
+    lay = layout(C, [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))],
+                 [n_leaf] if n_leaf < len(U.in_widths) else None, [n_ret] if n_ret < len(U.out_widths) else None)
     return Lowering(name, definition, U, C, lay)
 
 
@@ -574,13 +635,14 @@ def flat_ports(input_set, ports, lo: int, hi: int) -> np.ndarray:
     return np.concatenate([np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint64).reshape(hi - lo, -1) for p in ports], axis=1)
 
 
-def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int) -> bytes:
-    """Per lane, the ports' bits packed LSB first and consecutively (port j from bit ``sum(widths[:j])``) into ``words``
-    128-bit little-endian words."""
+def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, cols: Sequence[int] | None = None) -> bytes:
+    """Per lane, the ports' bits packed LSB first into ``words`` 128-bit little-endian words: port j from bit ``cols[j]``
+    (default: consecutive)."""
     T = len(ports[0])
     buf = np.zeros((T, words * WORD), dtype=np.uint8)
     at = 0
-    for p, w in zip(ports, widths):
+    for j, (p, w) in enumerate(zip(ports, widths)):
+        at = at if cols is None else cols[j]
         p = np.asarray(p, dtype=np.uint64)
         for b in range(w):
             buf[:, at + b] = ((p >> np.uint64(b)) & np.uint64(1)).astype(np.uint8)
@@ -599,8 +661,8 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
     head = {"format": INSTANCES_FORMAT, "unit": low.name, "unit_sha256": low.sha256, "instances": n, "units_per_instance": U.n,
             "units": n * U.n, "in_words": lay.in_words, "in_bits": lay.in_bits, "out_words": lay.out_words, "out_bits": lay.out_bits,
             "cut_words": len(U.cut), **meta}
-    body = _pack_words(low.unit_inputs(flat_in, cuts), lay.in_bits, lay.in_words)
-    body += _pack_words(low.unit_outputs(flat_out, cuts), lay.out_bits, lay.out_words)
+    body = _pack_words(low.unit_inputs(flat_in, cuts), lay.in_bits, lay.in_words, lay.in_port_cols)
+    body += _pack_words(low.unit_outputs(flat_out, cuts), lay.out_bits, lay.out_words, [c - lay.out_col * WORD for c in lay.out_port_cols])
     with open(path, "wb") as f:
         f.write(json.dumps(head, sort_keys=True).encode() + b"\n")
         f.write(body)

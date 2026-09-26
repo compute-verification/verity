@@ -30,15 +30,23 @@ pub const MAX_UNITS: usize = 256;
 pub const MIN_K_LOG: usize = 20;
 const WORD: usize = 128;
 
-/// A `flock-ir-unit/v1` netlist.
+/// A port group of a unit: its first 128-bit word column, its (power-of-two, aligned) word count and its ports' widths.
+#[derive(Clone, Debug)]
+pub struct Group {
+    pub col: usize,
+    pub words: usize,
+    pub bits: Vec<usize>,
+}
+
+/// A `flock-ir-unit/v2` netlist.
 pub struct IrUnitNet {
     pub name: String,
     pub useful: usize,
     pub const_pos: usize,
+    pub in_groups: Vec<Group>,
+    pub out_groups: Vec<Group>,
     pub in_words: usize,
-    pub in_bits: Vec<usize>,
     pub out_cols: Vec<usize>,
-    pub out_bits: Vec<usize>,
     pub a: Vec<Vec<usize>>,
     pub b: Vec<Vec<usize>>,
     pub unit_log: usize,
@@ -50,15 +58,29 @@ impl IrUnitNet {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.lines();
         let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
-        assert_eq!(h[0], "flock-ir-unit/v1", "not a flock-ir-unit/v1 netlist");
+        assert_eq!(h[0], "flock-ir-unit/v2", "not a flock-ir-unit/v2 netlist");
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
-        let (useful, const_pos, in_words, n_in) = (n(2), n(3), n(4), n(5));
-        let in_bits: Vec<usize> = (0..n_in).map(|i| n(6 + i)).collect();
-        let (out_col, out_words, n_out) = (n(6 + n_in), n(7 + n_in), n(8 + n_in));
-        let out_bits: Vec<usize> = (0..n_out).map(|i| n(9 + n_in + i)).collect();
-        let out_cols: Vec<usize> = (out_col..out_col + out_words).collect();
-        assert!(out_bits.iter().sum::<usize>() <= out_words * WORD);
-        assert!(const_pos == useful - 1 && in_bits.iter().sum::<usize>() <= in_words * WORD);
+        let (useful, const_pos) = (n(2), n(3));
+        let mut at = 4;
+        let groups = |at: &mut usize| -> Vec<Group> {
+            let count = n(*at);
+            *at += 1;
+            (0..count)
+                .map(|_| {
+                    let (col, words, np) = (n(*at), n(*at + 1), n(*at + 2));
+                    let bits = (0..np).map(|i| n(*at + 3 + i)).collect();
+                    *at += 3 + np;
+                    assert!(words.is_power_of_two() && col % words == 0, "a port group must be an aligned power of two of words");
+                    Group { col, words, bits }
+                })
+                .collect()
+        };
+        let in_groups = groups(&mut at);
+        let out_groups = groups(&mut at);
+        let in_words = in_groups.last().map(|g| g.col + g.words).unwrap_or(0);
+        let (o0, o1) = (out_groups[0].col, out_groups.last().map(|g| g.col + g.words).unwrap());
+        let out_cols: Vec<usize> = (o0..o1).collect();
+        assert!(const_pos == useful - 1);
         let (mut a, mut b) = (Vec::with_capacity(useful), Vec::with_capacity(useful));
         for _ in 0..useful {
             let v: Vec<usize> = lines.next().expect("row").split_whitespace().map(|t| t.parse().unwrap()).collect();
@@ -67,14 +89,17 @@ impl IrUnitNet {
             a.push(v[1..1 + na].to_vec());
             b.push(v[2 + na..2 + na + nb].to_vec());
         }
-        let used: usize = in_bits.iter().sum();
         for i in 0..in_words * WORD {
-            let want: Vec<usize> = if i < used { vec![i] } else { vec![] };
-            assert!(a[i] == want && b[i] == want, "unit row {i} is not an input row");
+            assert!((a[i] == [i] && b[i] == [i]) || (a[i].is_empty() && b[i].is_empty()), "unit row {i} is not an input row");
         }
         assert!(a[const_pos] == [const_pos] && b[const_pos] == [const_pos]);
         let unit_log = useful.next_power_of_two().trailing_zeros() as usize;
-        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_words, in_bits, out_cols, out_bits, a, b, unit_log: unit_log.max(7), sha256 }
+        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log: unit_log.max(7), sha256 }
+    }
+
+    /// Whether column `i` is an input column (its row is `A = B = [i]`).
+    pub fn is_input(&self, i: usize) -> bool {
+        i < self.in_words * WORD && self.a[i].len() == 1
     }
 
     pub fn load(path: &str) -> Self {
@@ -97,9 +122,10 @@ impl IrUnitNet {
         let u = self.useful;
         let first = self.in_words * WORD;
         let mut z = vec![0u64; u];
-        let used: usize = self.in_bits.iter().sum();
-        for (i, zi) in z.iter_mut().enumerate().take(used) {
-            *zi = input(i);
+        for (i, zi) in z.iter_mut().enumerate().take(first) {
+            if self.a[i].len() == 1 {
+                *zi = input(i);
+            }
         }
         z[self.const_pos] = !0;
         for i in first..u {
@@ -176,8 +202,10 @@ impl IrInstances {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Region {
-    In,
-    Out,
+    /// input words [col, col + words) of every unit
+    In(usize, usize),
+    /// output words [col, col + words) of every unit
+    Out(usize, usize),
 }
 
 /// One public region: the in-block bits it fixes (`fixed` over `mask`) and its free in-block bits, LSB first.
@@ -284,7 +312,8 @@ impl IrStmt {
             assert!(free.len() <= PT_LOCAL, "a region of {} free bits", free.len());
             RegionShape { region, free, mask, fixed }
         };
-        let regions = vec![shape(Region::In, net.in_words, 0), shape(Region::Out, net.out_cols.len(), net.out_cols[0])];
+        let mut regions: Vec<RegionShape> = net.in_groups.iter().map(|g| shape(Region::In(g.col, g.words), g.words, g.col)).collect();
+        regions.extend(net.out_groups.iter().map(|g| shape(Region::Out(g.col, g.words), g.words, g.col)));
         let dummy_out = net.outputs(&vec![F128::ZERO; net.in_words]);
         let mut h = Sha256::new();
         h.update(TAG);
@@ -378,10 +407,10 @@ impl IrStmt {
 
     fn words_of<'a>(&'a self, reg: Region, inst: &'a IrInstances, g: usize, zero: &'a [F128]) -> &'a [F128] {
         match (reg, g < self.units_real) {
-            (Region::In, true) => inst.input(g),
-            (Region::In, false) => zero,
-            (Region::Out, true) => inst.output(g),
-            (Region::Out, false) => &self.dummy_out,
+            (Region::In(c, w), true) => &inst.input(g)[c..c + w],
+            (Region::In(_, w), false) => &zero[..w],
+            (Region::Out(c, w), true) => { let o = c - self.net.out_cols[0]; &inst.output(g)[o..o + w] }
+            (Region::Out(c, w), false) => { let o = c - self.net.out_cols[0]; &self.dummy_out[o..o + w] }
         }
     }
 
