@@ -60,7 +60,7 @@
  "openings": [
   {
    "accept": true,
-   "domain_digest": "0fd0e0d83abed64ed5c26ffcf685e24f3fded2aa0bde16ab0f46edeccab90ddd",
+   "domain_digest": "9678fdee03d63c0a4adea48b5581bc0324d9f61f604e8526bd8c1f17423cefd380238c9212bdf04d8a217457f2b16b200b86c8413dc452373f7a4a1add254cc0",
    "index": 3,
    "kind": "semantic",
    "path": [
@@ -73,7 +73,7 @@
   },
   {
    "accept": false,
-   "domain_digest": "0fd0e0d83abed64ed5c26ffcf685e24f3fded2aa0bde16ab0f46edeccab90ddd",
+   "domain_digest": "9678fdee03d63c0a4adea48b5581bc0324d9f61f604e8526bd8c1f17423cefd380238c9212bdf04d8a217457f2b16b200b86c8413dc452373f7a4a1add254cc0",
    "index": 3,
    "kind": "semantic",
    "path": [
@@ -86,7 +86,7 @@
   },
   {
    "accept": true,
-   "domain_digest": "2519d69daed7886a4d4cb660e80fbe4d515f34c2ac047593c7feb23479c838b0",
+   "domain_digest": "fd84116a357fe06bc6ef255d379827581033570b2b1913897b9954b19cdb294af88b109853ee33d098373e8c1f305a0178bbbf8e9f350970829b3c5404afd7a9",
    "index": 4,
    "kind": "step",
    "path": [
@@ -99,7 +99,7 @@
   },
   {
    "accept": false,
-   "domain_digest": "2519d69daed7886a4d4cb660e80fbe4d515f34c2ac047593c7feb23479c838b0",
+   "domain_digest": "fd84116a357fe06bc6ef255d379827581033570b2b1913897b9954b19cdb294af88b109853ee33d098373e8c1f305a0178bbbf8e9f350970829b3c5404afd7a9",
    "index": 4,
    "kind": "step",
    "path": [
@@ -112,7 +112,7 @@
   },
   {
    "accept": true,
-   "domain_digest": "6f251e009a48bf426b6b48e6074ddf3493ca8808fc979c56b3548c26b6853afe",
+   "domain_digest": "f1b6e63514e463078b667da527a9c5b47ddf61b8052bfbfa6db272bec49da84e3dae21eb75120808f0f5d74f53aa68d90e2b3c1d7979a290741f397a03458698",
    "index": 2,
    "kind": "stream",
    "path": [
@@ -125,7 +125,7 @@
   },
   {
    "accept": false,
-   "domain_digest": "6f251e009a48bf426b6b48e6074ddf3493ca8808fc979c56b3548c26b6853afe",
+   "domain_digest": "f1b6e63514e463078b667da527a9c5b47ddf61b8052bfbfa6db272bec49da84e3dae21eb75120808f0f5d74f53aa68d90e2b3c1d7979a290741f397a03458698",
    "index": 2,
    "kind": "stream",
    "path": [

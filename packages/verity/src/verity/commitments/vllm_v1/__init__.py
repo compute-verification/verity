@@ -22,7 +22,7 @@ from verity.errors import InvalidArtifact
 from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
-from ..identity import identity_digest
+from ..identity import identity_digest, identity_digest_sha512
 from ..leaves import LEAF_TAG, shape_text
 from ..scheme import DIGEST_BYTES as _DIGEST_BYTES
 from ..scheme import LeafLayout, Path
@@ -579,8 +579,9 @@ def domain_digest(domain: Domain) -> bytes:
     over ``{"kind": ..., <every field>}`` with byte fields as lowercase hex and ``leaf_count`` included.
 
     vllm-v1 hashes bind no domain inside leaves or nodes, so a backend statement that names a vllm-v1 root must also
-    name this digest; two statements over the same root and different domains then differ.  ``hash`` enters the document
-    only for ``vllm-v1-sha512`` domains, so every SHA-256 domain digest is unchanged.
+    name this digest; two statements over the same root and different domains then differ.  A ``vllm-v1-sha512`` domain's
+    document carries ``"hash": "sha512"`` and its digest is :func:`identity_digest_sha512` (64 bytes); every SHA-256 domain
+    digest is unchanged.
     """
 
     doc: dict = {"kind": _DOMAIN_KIND[type(domain)], "leaf_count": domain.leaf_count}
@@ -589,6 +590,8 @@ def domain_digest(domain: Domain) -> bytes:
         if name == "hash" and value == "sha256":
             continue
         doc[name] = value.hex() if isinstance(value, bytes) else value
+    if domain.hash == "sha512":
+        return identity_digest_sha512(DOMAIN_DIGEST_TAG, doc)
     return bytes.fromhex(identity_digest(DOMAIN_DIGEST_TAG, doc))
 
 

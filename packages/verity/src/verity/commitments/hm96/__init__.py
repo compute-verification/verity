@@ -37,7 +37,7 @@ from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
 
-from ..identity import canonical_json_bytes, identity_digest
+from ..identity import identity_digest, identity_digest_sha512
 from ..scheme import DIGEST_BYTES as _DIGEST_BYTES
 from ..scheme import LeafLayout, Path, sha
 from ..vllm_v1 import VllmV1
@@ -226,15 +226,14 @@ class Instance:
     def scheme_digest(self, key: bytes) -> bytes:
         """The configured rule's identity, for a root binding or statement to absorb: name, salt size and the key's digest.
 
-        SHA-256: ``identity_digest(scheme_tag, doc)``.  SHA-512: ``SHA-512(u32be(len tag) || tag || u64be(len doc) || doc)`` over
-        the same canonical JSON, whose key digest is SHA-512.
+        SHA-256: ``identity_digest(scheme_tag, doc)``.  SHA-512: ``identity_digest_sha512(scheme_tag, doc)``, whose key digest
+        is SHA-512.
         """
 
         doc = {"name": self.name, "salt_bytes": self.salt_bytes, f"key_{self.hash}": self._h(self.check_key(key)).hex()}
         if self.hash == "sha256":
             return bytes.fromhex(identity_digest(self.scheme_tag, doc))
-        tag, payload = self.scheme_tag.encode("utf-8"), canonical_json_bytes(doc)
-        return self._h(len(tag).to_bytes(4, "big") + tag + len(payload).to_bytes(8, "big") + payload)
+        return identity_digest_sha512(self.scheme_tag, doc)
 
     def xor_count(self, key: bytes) -> int:
         """Two-input XOR gates of ``b = x XOR M y`` in a circuit: row i takes ``weight(row i) - 1`` XORs, plus one for ``x_i``."""

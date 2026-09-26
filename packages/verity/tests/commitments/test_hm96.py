@@ -282,6 +282,21 @@ def test_sha512_binding_and_refusals() -> None:
         hm96.Hm96Sha256(vllm_v1.VllmV1({"v": vllm_v1.StepDomain(d, d, d, d, 2, hash="sha512")}))
 
 
+def test_sha512_scheme_digest_is_the_sha512_identity() -> None:
+    from verity.commitments.identity import identity_digest_sha512
+
+    doc = {"name": "hm96-sha512/v1", "salt_bytes": 192, "key_sha512": hashlib.sha512(S512.default_key).hexdigest()}
+    assert S512.scheme_digest(S512.default_key) == identity_digest_sha512("verity/hm96-sha512/scheme/v1", doc)
+
+
+def test_the_setup_claims_name_both_keys_and_the_event() -> None:
+    from verity import claims
+
+    assert "2^-64" in claims.get("hash-derived-key").name and "fails" in claims.get("hash-derived-key").name
+    crs = claims.get("common-reference-string").name
+    assert "hm96-sha256/v1" in crs and "hm96-sha512/v1" in crs
+
+
 def test_sha512_hiding_bound_is_the_same() -> None:
     assert S512.statistical_distance_log2(1) == -256
     assert S512.statistical_distance_log2(1 << 64, key_failure_log2=64) == -128

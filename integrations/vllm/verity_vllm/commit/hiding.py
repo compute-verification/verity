@@ -121,19 +121,25 @@ class LeafSchemeRule:
 
     def _unsalted(self, step: int, n_leaves: int) -> bool:
         """Under hm96, whether `step` lacks exactly one salt per leaf: its openings do not verify and the run does not finalize."""
-        return self.hiding is not None and len(self._salts.get(step, b"")) != n_leaves * SALT_BYTES
+        return self.hiding is not None and len(self._salts.get(step, b"")) != n_leaves * self._salt_bytes()
+
+    def _salt_bytes(self) -> int:
+        """The configured instance's salt size (128 bytes for hm96-sha256/v1, 192 for hm96-sha512/v1)."""
+        return self.hiding.instance.salt_bytes if self.hiding is not None else 0
 
     def _salts_of(self, step: int, lo: int, hi: int) -> bytes:
         """The salts of leaves [lo, hi) of `step` (empty under vllm-v1 leaves)."""
-        return b"" if self.hiding is None else self._salts[step][lo * SALT_BYTES:hi * SALT_BYTES]
+        y = self._salt_bytes()
+        return b"" if self.hiding is None else self._salts[step][lo * y:hi * y]
 
     def _leaf_rule(self, inner: list[bytes], salts: bytes) -> list[bytes] | None:
         """The tree leaves of position-leaf digests `inner` under this rule; None for a salt string of the wrong size."""
         if self.hiding is None:
             return None if salts else inner
-        if len(salts) != len(inner) * SALT_BYTES:
+        y = self._salt_bytes()
+        if len(salts) != len(inner) * y:
             return None
-        return [self.hiding.leaf(x, salts[i * SALT_BYTES:(i + 1) * SALT_BYTES]) for i, x in enumerate(inner)]
+        return [self.hiding.leaf(x, salts[i * y:(i + 1) * y]) for i, x in enumerate(inner)]
 
     def _refuse_padding(self, padding: list) -> None:
         if padding and self.hiding is not None:

@@ -9,8 +9,9 @@ different session, phase, owner, or position set.
 Promoted from veritor ``protocol/merkle.py`` (eb865ce2) with the ``Commitment`` and ``Opening`` records of
 ``protocol/messages.py``.  The frame ``veritor/protocol/merkle/frame/v3`` and every tag below are wire constants
 mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  A domain with ``hash="sha512"`` hashes the
-same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes (``frame_v3/PROTOCOL.md`` §6); the
-``binding`` and the positions' identity stay 32-byte identity digests.
+same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes, and its domain id absorbs the positions'
+SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).  ``binding`` stays the caller's 32-byte SHA-256 identity digest until the
+re-baseline moves identities to SHA-512.
 """
 
 from __future__ import annotations
@@ -119,17 +120,16 @@ class CommitmentDomain:
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"
             )
         sha(self.hash)
+        if self.hash == "sha256":
+            positions = bytes.fromhex(self.positions.identity_digest)
+        elif hasattr(self.positions, "identity_sha512"):
+            positions = self.positions.identity_sha512()
+        else:
+            raise ProtocolError("a SHA-512 frame needs positions with a SHA-512 identity (identity_sha512)")
         object.__setattr__(
             self,
             "domain_id",
-            _hash(
-                b"domain",
-                self.binding,
-                _uint(self.owner + 2),
-                bytes.fromhex(self.positions.identity_digest),
-                _uint(self.positions.count),
-                hash=self.hash,
-            ),
+            _hash(b"domain", self.binding, _uint(self.owner + 2), positions, _uint(self.positions.count), hash=self.hash),
         )
 
     @property
@@ -236,7 +236,7 @@ class MerkleTree:
 
 
 def validate_commitment(domain: CommitmentDomain, commitment: Commitment) -> bool:
-    if commitment.count != domain.count:
+    if commitment.count != domain.count or len(commitment.root) != domain.digest_bytes:
         return False
     return domain.count > 0 or commitment.root == domain.empty_root()
 
@@ -256,7 +256,7 @@ def verify_opening(
         rank = domain.positions.rank(opening.position)
     except KeyError:
         return False
-    if len(opening.path) != merkle_depth(domain.count) or len(commitment.root) != domain.digest_bytes:
+    if len(opening.path) != merkle_depth(domain.count):
         return False
     if any(len(sibling) != domain.digest_bytes for sibling in opening.path):
         return False

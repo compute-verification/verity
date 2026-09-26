@@ -109,6 +109,17 @@ def test_roots_bind_the_leaf_scheme_and_default_leaves_are_unchanged():
     assert run_hidden.persistent_bytes - run_plain.persistent_bytes == run_hidden.extra["salt_bytes"]
 
 
+def test_the_leaf_rule_takes_the_instances_salt_size():
+    c = committer()
+    c.hiding = hiding.HidingLeaves(instance=hm96.SHA512)          # what wiring hm96-sha512 at the re-baseline will configure
+    inner, salt = os.urandom(64), hm96.SHA512.fresh_salt()
+    assert c._salt_bytes() == 192
+    assert c._leaf_rule([inner], salt) == [c.hiding.leaf(inner, salt)]
+    assert c._leaf_rule([inner], salt[:128]) is None
+    c._salts[3] = salt * 2
+    assert not c._unsalted(3, 2) and c._unsalted(3, 3) and c._salts_of(3, 1, 2) == salt
+
+
 def test_the_context_suffix_keeps_the_context_encoding_injective():
     digest = hiding.HidingLeaves().digest
     assert len(digest) == 32 and b"/step=" not in digest and b"/leaf=" not in digest

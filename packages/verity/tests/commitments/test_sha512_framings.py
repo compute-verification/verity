@@ -11,15 +11,16 @@ from verity.commitments import vllm_v1 as ref
 from verity.commitments.frame_v3 import NAME_SHA512 as FRAME_SHA512
 from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.commitments.frame_v3 import vectors_sha512 as FV
-from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.identity import identity_digest_sha512, tagged_sha512
+from verity.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain
 from verity.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import CommitmentDomain, MerkleTree, verify_opening
+from verity.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, _hash, _uint, validate_commitment, verify_opening
 from verity.commitments.multiproof import multiproof, verify_multiproof
-from verity.commitments.rowleaf import ROLE_X, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
+from verity.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA256_ROW, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.commitments.scheme import CommitmentScheme
 from verity.commitments.vllm_v1 import vectors_sha512 as VV
-from verity.errors import InvalidArtifact
+from verity.errors import InvalidArtifact, ProtocolError
 
 F = FV.load()
 W = VV.load()
@@ -201,3 +202,61 @@ def test_vllm_configuration_names_its_hash_and_never_mixes() -> None:
         ref.VllmV1({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
     assert ref.domain_digest(s512) != ref.domain_digest(ref.StepDomain(d, d, d, d, 3))
     assert ref.VllmV1({}).name == ref.NAME
+
+
+# --- the red team's conditions on PR #93 ---------------------------------------------------------------------------
+
+
+def test_the_tagged_sha512_identity_frame() -> None:
+    tag, doc = "verity/test/v1", {"a": 1}
+    payload = b'{"a":1}'
+    expect = hashlib.sha512(b"verity/tagged-sha512/v1\0" + len(tag).to_bytes(4, "big") + tag.encode() + len(payload).to_bytes(8, "big") + payload)
+    assert tagged_sha512(tag, payload) == identity_digest_sha512(tag, doc) == expect.digest()
+
+
+def test_a_sha512_frame_absorbs_the_positions_sha512_identity() -> None:
+    binding = hashlib.sha256(b"b").digest()
+    for positions in (RangeIndexedDomain(2, 11, 3), ExplicitIndexedDomain([4, 9, 1])):
+        d = CommitmentDomain(binding, 1, positions, hash="sha512")
+        assert len(positions.identity_sha512()) == 64
+        assert d.domain_id == _hash(b"domain", binding, _uint(3), positions.identity_sha512(), _uint(positions.count), hash="sha512")
+        assert d.domain_id != _hash(b"domain", binding, _uint(3), bytes.fromhex(positions.identity_digest), _uint(positions.count), hash="sha512")
+
+    class Opaque:
+        count = 2
+        identity_digest = "00" * 32
+
+    with pytest.raises(ProtocolError):
+        CommitmentDomain(binding, 0, Opaque(), hash="sha512")   # type: ignore[arg-type]
+
+
+def test_validate_commitment_rejects_a_root_of_the_other_width() -> None:
+    d256 = CommitmentDomain(hashlib.sha256(b"w").digest(), 0, RangeIndexedDomain(3))
+    d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(3), hash="sha512")
+    t256 = MerkleTree(d256, {p: bytes([p]) for p in range(3)}, lambda _p: "raw")
+    t512 = MerkleTree(d512, {p: bytes([p]) for p in range(3)}, lambda _p: "raw")
+    assert validate_commitment(d256, t256.commitment) and validate_commitment(d512, t512.commitment)
+    assert not validate_commitment(d512, Commitment(t256.commitment.root, 3))
+    assert not validate_commitment(d256, Commitment(t512.commitment.root, 3))
+    assert not verify_opening(d512, Commitment(t512.commitment.root[:32], 3), t512.open(1), "raw", VerificationLimits())
+
+
+def test_vllm_sha512_domain_digests_are_sha512() -> None:
+    d = hashlib.sha256(b"dd").digest()
+    s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
+    doc = {"kind": "step", "leaf_count": 3, "program_digest": d.hex(), "ctx_digest": d.hex(), "geo_digest": d.hex(), "layout_digest": d.hex(),
+           "chunk": None, "hash": "sha512"}
+    assert ref.domain_digest(s512) == identity_digest_sha512(ref.DOMAIN_DIGEST_TAG, doc)
+    assert len(ref.domain_digest(s512)) == 64 and len(ref.domain_digest(ref.StepDomain(d, d, d, d, 3))) == 32
+    assert all(len(_b(c["domain_digest"])) == 64 for c in W["openings"])
+
+
+def test_hiding_row_schemas_are_named_at_their_widths() -> None:
+    d256 = CommitmentDomain(hashlib.sha256(b"h").digest(), 0, RangeIndexedDomain(1))
+    d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(1), hash="sha512")
+    assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) == d512.leaf(0, 0, "hm96-sha512/row/v1", bytes(64))
+    assert row_leaf(d256, 0, bytes(32), SCHEMA_HM96_SHA256_ROW) == d256.leaf(0, 0, "hm96-sha256/row/v1", bytes(32))
+    assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) != row_leaf(d512, 0, bytes(64), SCHEMA_SHA512_ROW)
+    for schema, width in ((SCHEMA_HM96_SHA512_ROW, 32), (SCHEMA_HM96_SHA256_ROW, 64)):
+        with pytest.raises(ValueError):
+            row_leaf(d512, 0, bytes(width), schema)
