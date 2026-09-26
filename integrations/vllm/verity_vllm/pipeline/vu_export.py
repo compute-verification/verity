@@ -49,6 +49,7 @@ from verity_vllm.check.replay.population import phase_anchor, population, split_
 from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.kernels import rows as RK
+from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"
 EXPORT_SCHEMA = "vllm-vu-export/v1"
@@ -260,6 +261,22 @@ def _decompose_row(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
 DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose_gemm, "Gemm_v2": _decompose_gemm,
                                                            "Attention_v3": _decompose_attention, "Attention_v2": _decompose_attention,
                                                            "RoPE_v1": _decompose_rope}
+
+
+def template_of(spec: str) -> tuple[str, dict[str, Any], int]:
+    """A Call's Definition spec -> (subcircuit template, bound parameters, instances per Call): `decompose`'s cut, read off the spec."""
+    fam, st = RM.spec_family(spec), RM.spec_statics(spec)
+    try:
+        if fam in ("Gemm_v1", "Gemm_v2"):
+            return "GemmCoordinate", {"K": st["K"], "dot": _gemm_dot(fam, st)[0]}, int(st["N"])
+        if fam in ("Attention_v3", "Attention_v2"):
+            dot, inv = _attn_prims(fam, st)
+            return "AttentionHead", {"D": st["D"], "BN": st["BN"], "dot": dot, "inv": inv}, int(st["NH"])
+        if fam == "RoPE_v1":
+            return "RoPEHead", {"D": st["D"]}, int(st["NHEADS"])
+    except (KeyError, RK.Declined):
+        pass
+    return fam, st, 1
 
 
 def decompose(fam: str, st: dict[str, Any], ops: list[np.ndarray], out: dict[str, np.ndarray], pick: Callable[[int, int], list[int]],
