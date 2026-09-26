@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -143,6 +144,29 @@ def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard
     assert CU.marker_problem(d).startswith(".custody: not preserved")
     st = idle_since(tmp_path / "root", _env(tmp_path, QUIET), 120)
     assert st["verdict"] == "refuse" and "custody not on the remote" in st["unfetched"][0]["why"]
+
+
+def test_on_the_machine_a_failed_push_leaves_launcher_log_as_recorded_and_names_an_expired_key(tmp_path):
+    # the runner's stderr IS launcher.log: a retry notice or the failure line printed there after the record was taken made the run dir
+    # differ from its record for good (x4-hopper-blake3: `data custody` refused even after a repair push); an expired key was a bare 403
+    runs = tmp_path / "root" / "runs"
+    d = _fixture_run(runs)
+    (d / "launcher.log").write_text("research: custody: publishing the attempt and every run file\n")
+    cdir = _custody_dir(tmp_path, FIXTURE_RID, tmp_path / "vault",
+                        remote_toml='[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "http://127.0.0.1:9"\nregion = "auto"\n'
+                                    'access_key_id_env = "AWS_ACCESS_KEY_ID"\nsecret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n')
+    cred = json.loads((cdir / CU.CRED_FILE).read_text())
+    (cdir / CU.CRED_FILE).write_text(json.dumps({**cred, "expires_utc": "2020-01-01T00:00:00Z"}))
+    before = (d / "launcher.log").read_bytes()
+    code = ("from pathlib import Path; from research.store import custody as CU, remote_s3 as R; R.RETRY_BACKOFF_S = 0; "
+            f"CU.runner_publish(Path({str(d)!r}), Path({str(cdir)!r}), sleep=lambda s: None, tries=1)")
+    with open(d / "launcher.log", "ab") as log:
+        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True, timeout=120)
+    assert (d / "launcher.log").read_bytes() == before
+    marker = json.loads((d / CU.MARKER).read_text())
+    assert marker["preserved"] is False and marker["error"].startswith("the custody key expired at 2020-01-01T00:00:00Z: the run outlived")
+    assert "custody NOT on the remote" in (cdir / CU.PUBLISH_LOG).read_text()
+    assert CU.marker_problem(d).startswith(".custody: not preserved")
 
 
 def test_research_data_custody_publishes_a_local_run_and_verifies_it_elsewhere(tmp_path, monkeypatch, capsys):
