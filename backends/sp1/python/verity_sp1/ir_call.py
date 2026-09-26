@@ -12,7 +12,8 @@ unmodified SP1 checker recomputes it gate for gate and compares with the committ
 * a primitive the guest evaluates against a committed MUFU table (``RsqrtApprox``, ...) gets one more incoming
   value, the table row ``(index << 32) | word`` its operand selects, read from the table's tree (256 rows a leaf);
   the guest rejects any other row;
-* every other primitive is the guest gate :data:`OPS` names for it.
+* every other primitive is the guest gate :data:`OPS` names for it (``veritor.tc-ampere-bf16@2``: :data:`TC_OPS`, and a
+  tensor-core step whose accumulator is a constant zero is ``tc_dot16_0``).
 
 Everything is committed under ``verity-vllm/leaf/v1`` and opened as whole packed leaves (statement format 3,
 witness format 3).  The roots of ``inputs`` and ``outputs`` are the hashes the proof binds its instances to; the
@@ -31,6 +32,8 @@ from verity.evaluation.reference import standalone_call
 from verity.ir.defs import SpecializedDefinition
 from verity.ir.evaluate import evaluate_call
 from verity.ir.types import Tuple as TupleT
+from verity.proofs.families import make_tc_ampere_bf16_gate_set
+from verity.proofs.gateset import GateSet
 from verity.proofs.lowering import to_statement_v3
 from verity.proofs.packed import PackedLeaf, PackedWitness, encode_packed_witness, packed_table
 from verity.proofs.reduce_mufu import REDUCE_MUFU_NAME, REDUCE_MUFU_VERSION, make_reduce_mufu_gate_set
@@ -53,7 +56,7 @@ from verity.proofs.typed_obligation import (
 )
 from verity.proofs.wire import encode_statement_v3
 
-__all__ = ["OPS", "TABLE_GATES", "Instance", "Lowered", "Table", "lower_call"]
+__all__ = ["FAMILIES", "OPS", "TABLE_GATES", "TC_OPS", "Instance", "Lowered", "Table", "lower_call"]
 
 FAMILY_ID = f"{REDUCE_MUFU_NAME}@{REDUCE_MUFU_VERSION}"
 #: IR primitive (``name_vN``) -> the ``veritor.reduce-mufu@1`` gate with the same semantics.
@@ -77,6 +80,19 @@ OPS: Mapping[str, str] = {
     "RsqrtApprox_v1": "rsqrt_approx",
     "SelectBf16_v1": "select_bf16",
     "SelectI32_v1": "select_i32",
+}
+#: IR primitive -> ``veritor.tc-ampere-bf16@2`` gate: the Ampere ``mma`` step and the hardware casts.  A step whose
+#: accumulator is a constant zero lowers to ``tc_dot16_0``.
+TC_OPS: Mapping[str, str] = {
+    "AmpereBF16TcDot16_v1": "tc_dot16",
+    "AmpereBF16TcDot16_v2": "tc_dot16",
+    "Bf16ToF32_v1": "bf16_to_f32",
+    "F2fpBf16_v1": "f32_to_bf16",
+}
+#: Guest family -> (its gate set, the IR primitive -> gate map).
+FAMILIES: Mapping[str, tuple[Callable[[], GateSet], Mapping[str, str]]] = {
+    FAMILY_ID: (make_reduce_mufu_gate_set, OPS),
+    "veritor.tc-ampere-bf16@2": (lambda: make_tc_ampere_bf16_gate_set("2"), TC_OPS),
 }
 #: Guest gate -> the name of the MUFU table whose row is its second argument.
 TABLE_GATES: Mapping[str, str] = {"rsqrt_approx": "rsq", "mufu_sqrt_tab": "sqrt", "div_full_rcp": "rcp"}
@@ -181,8 +197,10 @@ def lower_call(
     compiled: str,
     instance_label: Callable[[int], str] = lambda unit: f"u{unit:06d}",
     oracle: bool = True,
+    family: str = FAMILY_ID,
 ) -> Lowered:
-    """The obligations of ``instances`` of ``spec`` (see the module docstring), the format-3 statement and witness.
+    """The obligations of ``instances`` of ``spec`` (see the module docstring), the format-3 statement and witness,
+    over the guest ``family`` (a key of :data:`FAMILIES`).
 
     ``session`` and ``compiled`` (32-byte hex) are the binding every obligation carries.  Raises ``KeyError`` for a
     primitive with no guest gate, and ``ValueError`` when an instance's claimed returns are not what the IR oracle
@@ -190,12 +208,20 @@ def lower_call(
     gates of one instance read one row.
     """
 
+    make_gate_set, ops = FAMILIES[family]
     prog, call = standalone_call(spec)
     circuit = prog.circuit
     params, ret = spec.signature()
     arg_gates = list(call.args)
     return_gates = list(call.returns)
     widths = {g: circuit.gate(g).prim.ret.w for g in arg_gates}
+    # a zero constant read only as a tensor-core accumulator is the step's zero-accumulator form, not a value
+    readers: dict[int, list[tuple[str, int]]] = {}
+    for gv in call:
+        for position, o in enumerate(gv.operands):
+            readers.setdefault(o, []).append((ops.get(gv.prim.id, ""), position))
+    folded = {gv.index for gv in call if not gv.operands and gv.prim.evaluate() == 0
+              and all(op == "tc_dot16" and position == 0 for op, position in readers.get(gv.index, ()))}
 
     # the body: incoming = arguments, then constants, then one table row per table gate
     body_of: dict[int, int] = {}
@@ -211,14 +237,19 @@ def lower_call(
 
     for gv in call:
         prim = gv.prim
+        if gv.index in folded:
+            continue
         if not gv.operands:
             incoming_of[gv.index] = len(incoming)
             incoming.append(prim.ret.w)
             extras.append(("const", len(constants)))
             constants.append((gv.index, prim.evaluate()))
             continue
-        op = OPS[prim.id]
-        args = [arg(o) for o in gv.operands]
+        op = ops[prim.id]
+        operands = list(gv.operands)
+        if op == "tc_dot16" and operands[0] in folded:
+            op, operands = "tc_dot16_0", operands[1:]
+        args = [arg(o) for o in operands]
         if op in TABLE_GATES:
             extras.append(("table", len(table_gates)))
             table_gates.append((gv.index, gv.operands[0], TABLE_GATES[op]))
@@ -320,9 +351,9 @@ def lower_call(
         root_hex[f"table/{name}"] = t.tree()[-1][0].hex()
         roots.append(Root(f"table/{name}", -2, _domain(f"table/{name}/{t.source}"), root_hex[f"table/{name}"], t.leaves, VLLM_FRAMING))
 
-    gate_set = make_reduce_mufu_gate_set()
+    gate_set = make_gate_set()
     obj = TypedObligationSet(
-        Family(FAMILY_ID, str(gate_set.digest), 32),
+        Family(family, str(gate_set.digest), 32),
         (),
         tuple(sorted(roots, key=lambda r: r.id)),
         tuple(sorted(leaves, key=lambda v: v.id)),

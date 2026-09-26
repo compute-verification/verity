@@ -57,6 +57,9 @@ from verity.proofs.binding import bound_public_values
 from verity.proofs.typed_obligation import TypedObligationSet, object_digest
 
 SP1_SECURITY_BITS = 100
+REDUCE = "veritor.reduce-mufu@1"
+#: Sets whose port names are not the definition's parameters (``in0, in1, ...`` / ``out*``): (arguments, returns).
+PORTS = {"Gemm_v1": (["x", "w"], ["y"])}
 NEGATIVES = ("wrong-first-output-word", "wrong-last-output-word", "tampered-output-leaf")
 
 
@@ -68,7 +71,7 @@ def _sha256(data: bytes) -> str:
 
 
 def _bind(relation: dict):
-    """The specialised IR definition a set's manifest names, and its tables (frontend imports stay here)."""
+    """The specialised IR definition a set's manifest names, its tables and the guest family (frontend imports stay here)."""
 
     from verity.ir.defs import bind
     from verity.proofs.reduce_mufu import div_full_rcp_index, mufu_sqrt_index, rsqrt_approx_index
@@ -82,12 +85,15 @@ def _bind(relation: dict):
     if definition in ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"):
         eps = float.fromhex(json.loads(statics["EPS"])["f64"])
         if definition == "RMSNormFusedCuda_v2":
-            return bind(b1.RMSNormFusedCuda, N=int(statics["N"]), EPS=eps), {"rsq": Table("rsq", t.rsq, rsqrt_approx_index, t.source["rsq"]["sha256"])}, {"rsq": t.source["rsq"]}
+            return (bind(b1.RMSNormFusedCuda, N=int(statics["N"]), EPS=eps), {"rsq": Table("rsq", t.rsq, rsqrt_approx_index, t.source["rsq"]["sha256"])},
+                    {"rsq": t.source["rsq"]}, REDUCE)
         tables = {"sqrt": Table("sqrt", t.sqrt, mufu_sqrt_index, t.source["sqrt"]["sha256"]),
                   "rcp": Table("rcp", t.rcp, div_full_rcp_index, t.source["rcp"]["sha256"])}
-        return bind(b1.RMSNormTriton, N=int(statics["N"]), EPS=eps), tables, {k: t.source[k] for k in tables}
+        return bind(b1.RMSNormTriton, N=int(statics["N"]), EPS=eps), tables, {k: t.source[k] for k in tables}, REDUCE
     if definition == "RoPE_v1":
-        return bind(b1.RoPEHead, D=int(statics["D"])), {}, {}
+        return bind(b1.RoPEHead, D=int(statics["D"])), {}, {}, REDUCE
+    if definition == "Gemm_v1":
+        return bind(b1.GemmCoordinate, K=int(statics["K"])), {}, {}, "veritor.tc-ampere-bf16@2"
     raise SystemExit(f"no binding for {relation['definition']} yet")
 
 
@@ -100,8 +106,11 @@ def _instances(spec, set_dir: Path, manifest: dict, lo: int, hi: int):
 
     ports = manifest["ports"]
     names = [name for name, _ in spec.signature()[0]]
-    ins = names if all(n in ports for n in names) else sorted((p for p in ports if not p.startswith("out")), key=lambda p: int(p[2:]))
-    outs = sorted(p for p in ports if p.startswith("out"))
+    if manifest["relation"]["definition"] in PORTS:
+        ins, outs = PORTS[manifest["relation"]["definition"]]
+    else:
+        ins = names if all(n in ports for n in names) else sorted((p for p in ports if not p.startswith("out")), key=lambda p: int(p[2:]))
+        outs = sorted(p for p in ports if p.startswith("out"))
     arrays = {p: np.fromfile(set_dir / ports[p]["file"], dtype="<u2").reshape(manifest["n"], ports[p]["words"]) for p in ins + outs}
     return [Instance(i, [int(v) for p in ins for v in arrays[p][i]], [int(v) for p in outs for v in arrays[p][i]]) for i in range(lo, hi)]
 
@@ -128,6 +137,7 @@ def _bundle_entry(lowered) -> dict[str, bytes]:
 def prepare(a) -> int:
     from dataclasses import replace
 
+    from verity.proofs.packed import PackedWitness, decode_packed_witness, encode_packed_witness
     from verity_sp1.ir_call import lower_call
 
     set_dir = Path(a.set)
@@ -136,12 +146,12 @@ def prepare(a) -> int:
         if _sha256((set_dir / name).read_bytes()) != f["sha256"]:
             raise SystemExit(f"{name} does not match the set's manifest")
     hi = a.hi if a.hi is not None else manifest["n"]
-    spec, tables, table_sources = _bind(manifest["relation"])
+    spec, tables, table_sources, family = _bind(manifest["relation"])
     instances = _instances(spec, set_dir, manifest, a.lo, hi)
     prov = manifest["provenance"]
     session, compiled = prov["run_root"], prov["program_digests"]["r0"]
     started = time.perf_counter()
-    honest = lower_call(spec, instances, tables=tables, session=session, compiled=compiled)  # raises unless the IR oracle reproduces every instance
+    honest = lower_call(spec, instances, tables=tables, session=session, compiled=compiled, family=family)  # raises unless the IR oracle reproduces every instance
     lower_s = time.perf_counter() - started
     if not _python_verdict(honest):
         raise SystemExit("the Python reference rejects the honest bundle")
@@ -152,18 +162,17 @@ def prepare(a) -> int:
         return replace(first, returns=[w ^ 1 if k == j else w for k, w in enumerate(first.returns)])
 
     negatives = {
-        "wrong-first-output-word": lower_call(spec, [flipped(0)], tables=tables, session=session, compiled=compiled, oracle=False),
-        "wrong-last-output-word": lower_call(spec, [flipped(last)], tables=tables, session=session, compiled=compiled, oracle=False),
+        "wrong-first-output-word": lower_call(spec, [flipped(0)], tables=tables, session=session, compiled=compiled, family=family, oracle=False),
+        "wrong-last-output-word": lower_call(spec, [flipped(last)], tables=tables, session=session, compiled=compiled, family=family, oracle=False),
     }
-    one = lower_call(spec, instances[:1], tables=tables, session=session, compiled=compiled)
+    one = lower_call(spec, instances[:1], tables=tables, session=session, compiled=compiled, family=family)
     # one byte of the first output leaf's value, flipped: the leaf no longer authenticates
-    out_width = one.obj.leaves[[v.id for v in one.obj.leaves].index(f"u{first.unit:06d}/out/0")].layout.length
-    leaf_bytes = b"".join(w.to_bytes(2, "little") for w in first.returns[:out_width])
-    witness = bytearray(one.witness)
-    at = witness.find(leaf_bytes)
-    assert at >= 0 and witness.find(leaf_bytes, at + 1) < 0
-    witness[at] ^= 0x01
-    negatives["tampered-output-leaf"] = replace(one, witness=bytes(witness))
+    target = f"u{first.unit:06d}/out/0"
+    trees = decode_packed_witness(one.witness).trees
+    tampered = tuple(tuple(replace(leaf, value=bytes([leaf.value[0] ^ 1]) + leaf.value[1:]) if leaf.canonical_id == target else leaf
+                           for leaf in tree) for tree in trees)
+    assert tampered != trees
+    negatives["tampered-output-leaf"] = replace(one, witness=encode_packed_witness(PackedWitness(tampered)))
     python_negatives = {name: _python_verdict(low) for name, low in negatives.items()}
     if any(python_negatives.values()):
         raise SystemExit(f"the Python reference accepts a negative: {python_negatives}")
@@ -172,6 +181,7 @@ def prepare(a) -> int:
         "schema": "sp1-ir-call-bundle/v1",
         "set": {"art": a.set_art, "name": manifest.get("set"), "content_digest": manifest["content_digest"], "relation": manifest["relation"],
                 "provenance": prov, "lo": a.lo, "hi": hi},
+        "family": family,
         "definition": {"id": spec.id, "gates": honest.gates, "incoming": len(honest.obj.subcircuits[0].incoming),
                        "outgoing": len(honest.obj.subcircuits[0].outgoing)},
         "tables": table_sources,
@@ -337,7 +347,7 @@ def run(a) -> int:
                       "run": meta["set"]["provenance"].get("run"), "run_root": meta["set"]["provenance"].get("run_root")},
         "B": B,
         "definition": meta["definition"],
-        "family": "veritor.reduce-mufu@1",
+        "family": meta.get("family", REDUCE),
         "statement_format": 3,
         "object_digest": meta["object_digest"],
         "statement_sha256": meta["statement_sha256"],
