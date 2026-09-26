@@ -15,3 +15,6 @@ import FlockSoundness.Defs
 import FlockSoundness.Rounds
 import FlockSoundness.RepSound
 import FlockSoundness.Soundness
+import FlockSoundness.Merkle
+import FlockSoundness.Rewinding
+import FlockSoundness.Compiled

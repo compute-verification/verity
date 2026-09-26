@@ -27,6 +27,12 @@ from `link_sound`; that disappears when they are proved.
 -- the numbers
 #print axioms FlockSoundness.Accounting.tableError_le_of_le_33
 #print axioms FlockSoundness.Accounting.tableError_le_of_34_35
+-- the compiled layer: Merkle binding, the rewinding lemma, the compilation step
+#print axioms FlockSoundness.Merkle.opening_binding
+#print axioms FlockSoundness.Rewinding.bad_sq_le
+#print axioms FlockSoundness.Rewinding.prBad_le
+#print axioms FlockSoundness.Compiled.compile_step
+#print axioms FlockSoundness.Compiled.compile_step_prefix
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and
 -- `link_sound`; the phase lemmas and `link_sound` are still `sorry`
 #print axioms FlockSoundness.rep_sound
