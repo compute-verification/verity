@@ -1,5 +1,27 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the benchmark spine (input sets from the IR, one cell entry point, per-template lowerings)
+
+- `bench.templates`: the subcircuit templates of row #101, each a registered IR Definition with typed parameters:
+  `gemm-coordinate` (`GemmCoordinate_v2{K, DOT}`, any K, Ampere mma and Hopper wgmma BF16; the census's other semantics
+  bind but cannot be generated), `attention-head` (FA2 `AttentionHead_v3`, T per instance), `rope-head`,
+  `rmsnorm-fused-cuda`, `rmsnorm-triton`, `silu-mul` and `gumbel-top-p-token-select` (the vLLM registry's Definitions,
+  imported lazily). A subcircuit carries the relation, set name and ports the vLLM VU exporter (PR #42) writes, and
+  `identify(relation)` maps any set back to its subcircuit.
+- `bench.input_sets`: one layout for captured and synthetic sets (PR #42's `vllm-vu-set/v1`; synthetic sets are
+  `input-set/v1` with the same fields), `verify` re-evaluates every instance through `verity.evaluation`. All 11,040
+  instances of the eight captured #101 sets (`art:b5bb0ca9`) re-evaluate bit-exactly.
+- `bench.generate`: seeded synthetic sets. Draw `j` reads each port from `verity.randomness` counter streams at
+  `(port, j)`; outputs come from the IR evaluator; instance `i` is the `i`-th draw in the subcircuit's domain, so sets are
+  prefix-stable. `--register` stores a set as an `input-set/v1` artifact.
+- `bench.cell plan | run | check | register`: one entry point per (backend, statement, input set). It resolves the
+  family's lowering, plans the backend driver's `research run`s (`bench.drivers`, one module per backend; today
+  `c_interactive`, wrapping `backends/flock/pod/30-cell.sh` and `verity_flock.register`), checks a result against the
+  protocol (contract, warm/runs/uncontended/plateau, interaction record, verifier on another host, RTT and loopback
+  probes, statement and instance set) and registers it with the cell stamped and the running lane as its producer.
+- `bench.lowerings`: each family (A-GKR, B-Ligero, C-Flock, D-SP1) keeps one module per template under `templates/`
+  (`supports(subcircuit, scheme)` with the reason, `relation`, optional `stage`); the reason is the cell's `n/s`.
+
 ## 2026-09-25: `views --format entities`, the docs site's render
 
 - `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
