@@ -359,7 +359,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool) -> Wit {
           nets: Arc::new(nets) }
 }
 
-/// The tail stages of the forged netlist (`--forged`: the same template with every positive tail constant x 100, staged by
+/// The tail stages of the forged netlist (`--forged`: the same template with every positive tail constant x 4, staged by
 /// `verity_flock.netlist`), evaluated in place of the pinned stages: a swapped tail.
 fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet> {
     let text = std::fs::read_to_string(arg("--forged", "net-forged.txt")).expect("--forged netlist");

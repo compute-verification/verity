@@ -218,7 +218,8 @@ def _fold_constant_mufu(prog: list) -> list:
 
 
 def forge(prog: list) -> list:
-    """Every positive finite f32 constant of a tail program x 100 (a swapped tail, for the negatives)."""
+    """Every positive finite f32 constant of a tail program x 4 (a swapped tail, for the negatives: eps changes, and a constant
+    divisor stays a power of two)."""
     import struct
 
     out = []
@@ -226,7 +227,7 @@ def forge(prog: list) -> list:
         if op[1] == "Const":
             f = struct.unpack("<f", struct.pack("<I", op[2] & 0xFFFFFFFF))[0]
             if 0 < f < float("inf"):
-                op = [op[0], "Const", struct.unpack("<I", struct.pack("<f", f * 100))[0]]
+                op = [op[0], "Const", struct.unpack("<I", struct.pack("<f", f * 4))[0]]
         out.append(op)
     return out
 

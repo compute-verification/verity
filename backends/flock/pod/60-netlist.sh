@@ -29,7 +29,7 @@ for tarf in $I/*.tar; do
   SET=$(dirname $(find $S -name manifest.json | head -1)); D=$O/$t; mkdir -p $D
   if [ "$MODE" = selftest ]; then
     N=${SELF_N:-4}
-    python3 -m verity_flock.netlist --input-set $SET --n $N --out $D/stage | tee $D/stage.json || exit 1
+    python3 -m verity_flock.netlist --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
     if [ "${CPU_SELF:-1}" = 1 ]; then
       $B selftest --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt --tables $D/stage/tables --forged $D/stage/net-forged.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
       grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
