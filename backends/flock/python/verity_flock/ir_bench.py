@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-from .bench import PER_PROOF_LOG2, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
+from .bench import PER_PROOF_LOG2, _EXITED, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
 STATEMENT = "verity/flock-ir-frame/v3"
@@ -180,9 +180,11 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             _OURS.add(pr.pid)
             try:
                 rcs.append(pr.wait())
+                time.sleep(2)
                 _gpu_released()
             finally:
                 _OURS.discard(pr.pid)
+                _EXITED.append(time.monotonic())
         finally:
             if srv is not None:
                 time.sleep(1)
