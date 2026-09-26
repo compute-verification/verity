@@ -74,6 +74,24 @@ def test_the_verifiers_own_statement_of_an_input_set(K, tmp_path):
     assert not (cell / "operands.bin").exists() and not (cell / "statement" / "circuit.txt").exists()
 
 
+def test_the_gate_replays_flock_at_the_statements_k(tmp_path):
+    """``cell_gate.py --flock`` builds flock-link's statement at sigma.txt's K (without ``--k`` flock-link builds K = 1536's)."""
+    ses = tmp_path / "session"
+    ses.mkdir()
+    (ses / "session.json").write_text("{}")
+    sigma = tmp_path / "sigma.txt"
+    sigma.write_text("verity/link-L/v2\nscheme blake3-keyed/row/v2\nvus 4\nk 8192\nbits 16\nm 21\n")
+    fake = tmp_path / "flock-link"
+    fake.write_text(f"#!{sys.executable}\nimport json, sys\nprint('REPLAY\\t' + json.dumps({{'accepted': True, 'why': sys.argv[1:]}}))\n")
+    fake.chmod(0o755)
+    out = tmp_path / "gate"
+    subprocess.run([sys.executable, str(GKR / "tools" / "cell_gate.py"), "--session", str(ses), "--sigma", str(sigma), "--producer", "p",
+                    "--out", str(out), "--flock", str(fake), "--digests", str(sigma), "--prime-commitment", "ab" * 32, "--vus", "4"],
+                   capture_output=True, text=True)
+    doc = json.loads((out / "gate.json").read_text())
+    assert doc["checks"]["flock_replay"]["ok"] and "'--k', '8192'" in doc["checks"]["flock_replay"]["detail"]
+
+
 def _point(root: Path, i: int, vus: int, t_total: float | None, why: str = "ok", verifier: str = "10.0.0.2:17200") -> Path:
     d = root / f"p{i}-{vus}"
     d.mkdir(parents=True)
