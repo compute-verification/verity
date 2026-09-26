@@ -806,6 +806,9 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     2026-09-26 02:44Z: real-K H100 BF16 cells use the wgmma subcircuit's id)."""
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
     home = census.subcircuit_of(target.name)
+    named = stamped_subcircuit(meta)
+    if named and named.split("/")[0] != home.template:
+        return named                                         # another template (a non-GEMM subcircuit): its own statement
     K = fp.get("K") if isinstance(fp.get("K"), int) and not isinstance(fp.get("K"), bool) else home.parameters.K
     sem = None
     stamped = (meta.get("cell") or {}).get("subcircuit") if isinstance(meta.get("cell"), Mapping) else None
@@ -828,6 +831,44 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
         sem = {v: k for k, v in stands.items()}.get(sem, sem)
     found = census.subcircuit_with(home.template, K=K, semantics=sem)
     return found.id if found else f"{home.template}/k{K}/{_sem_slug(sem)}"
+
+
+def stamped_subcircuit(meta: Mapping[str, Any]) -> str | None:
+    """The subcircuit a result names itself: the ``bench.cell`` stamp's, else the fingerprint's or the meta's ``subcircuit``."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    cell = meta.get("cell") if isinstance(meta.get("cell"), Mapping) else {}
+    return next((v for v in (cell.get("subcircuit"), fp.get("subcircuit"), meta.get("subcircuit")) if isinstance(v, str)), None)
+
+
+def is_gemm(sub: str | None) -> bool:
+    return sub is None or sub.split("/")[0] == "gemm-coordinate"
+
+
+def native_of(target: Target, sub: str | None) -> dict[str, Any]:
+    """``N`` of a row: the GEMM work model (:func:`native`) at the subcircuit's K, or for another template its census
+    memory-bandwidth work model (:func:`memory_native`)."""
+    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub)
+
+
+def memory_native(target: Target, sub: str) -> dict[str, Any]:
+    """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
+    input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
+    binding (``ops_per_instance`` is the template's op count, for reference)."""
+    known = census.SUBCIRCUITS[sub]
+    wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
+    env = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}
+    nbytes, ops = census.evaluate(wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
+    hw = contract.native_peak_of(target)
+    bw = getattr(hw, "memory_bytes_per_second", None)
+    if not _num(bw):
+        raise ValueError(f"{hw.id}: no memory bandwidth in the census for {sub}'s memory-bandwidth work model")
+    version = WORK_MODEL.split(":")[0]
+    return {"instances_per_second": bw / nbytes, "unit": "memory", "ops_per_instance": ops, "bytes_per_instance": nbytes, "steps": None,
+            "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": hw.flop_per_second, "memory_bytes_per_second": bw,
+            "device": hw.device, "source": "; ".join(x.label for x in getattr(hw, "memory_sources", ())) or census.source(hw),
+            "work_model": f"{version}: memory-bandwidth bound, {wm.bytes_per_input} bytes per input over the line's memory bandwidth",
+            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({wm.bytes_per_input}: {wm.bytes_basis}; "
+                      f"{wm.bytes_source}) over {bw / 1e12:.3g} TB/s ({hw.id}); ops {ops} per input ({wm.ops_per_input}) are not binding")}
 
 
 def subcircuit_k(sub: str) -> int:
@@ -875,9 +916,13 @@ def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
         return [("I", f"inputs name no registered input set ({' | '.join(INPUT_SET_KINDS)}; "
                       f"digest {inst.get('content_digest') or inst.get('manifest_sha256')!r})")]
     art, meta = hit
-    K, sk = subcircuit_k(ctx.subcircuit), _set_k(meta)
-    if sk != K:
-        return [("I", f"input set {art} is of K = {sk}, the statement {ctx.subcircuit} is of K = {K}")]
+    if not is_gemm(ctx.subcircuit):
+        if meta.get("subcircuit") != ctx.subcircuit:
+            return [("I", f"input set {art} is of {meta.get('subcircuit')!r}, the statement's subcircuit is {ctx.subcircuit}")]
+    else:
+        K, sk = subcircuit_k(ctx.subcircuit), _set_k(meta)
+        if sk != K:
+            return [("I", f"input set {art} is of K = {sk}, the statement {ctx.subcircuit} is of K = {K}")]
     rng, n = inst.get("range"), meta.get("n")
     if isinstance(rng, (list, tuple)) and len(rng) == 2 and isinstance(n, int) and not (0 <= rng[0] < rng[1] <= n):
         return [("I", f"inputs {list(rng)} leave input set {art} (n = {n})")]
@@ -971,6 +1016,9 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("M", why))
     verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
     ceiling, verdict = T._redteam_ceiling(verdicts, self_)
+    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None:
+        p.append(("U", f"not red-team cleared: a statement on a new template ({ctx.subcircuit}) needs a red-team proof_class verdict "
+                       "on its results before it is a cell"))
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
         p.append(("D", f"capped: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
     state, flab = T.cell_finding(ctx.labels)
@@ -1154,7 +1202,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             entry["subcircuit"] = c.subcircuit
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native(c.target, subcircuit_k(c.subcircuit) if c.subcircuit else T.K)["instances_per_second"]
+            n = native_of(c.target, c.subcircuit)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1230,8 +1278,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         if c.subcircuit:
             own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
     for target in TARGETS.values():
-        for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (subcircuit_k(x), x)):
-            N = native(target, subcircuit_k(sub))
+        for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
+            N = native_of(target, sub)
             for scheme in line_schemes:
                 if scheme in own[(target.name, sub)]:
                     add_line(target, sub, scheme, N)
@@ -1343,6 +1391,8 @@ def _instances_text(target_name: str, inst: Mapping[str, Any], sub: str | None =
 
 
 def _native_text(N: Mapping[str, Any]) -> str:
+    if N.get("memory_bytes_per_second") and N["unit"] == "memory":
+        return f"{fmt_rate(N['instances_per_second'])} · memory, {N['memory_bytes_per_second'] / 1e12:.3g} TB/s"
     return f"{fmt_rate(N['instances_per_second'])} · {N['unit']}, {N['dtype']} {T._fmt_tflops(N['peak_flop_per_second'])}"
 
 
@@ -1447,7 +1497,8 @@ def table2_grid(V: Views) -> list[dict[str, Any]]:
         N = ln["native"]
         g: dict[str, Any] = {
             "line": ln, "label": f"{N['device']} · {N['dtype']} · {ln.get('subcircuit_display') or ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
-            "native": {"display": _native_text(N), "note": f"{ln.get('subcircuit') or ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
+            "native": {"display": _native_text(N), "note": f"{ln.get('subcircuit') or ln['line']}: {N['basis']}; {N['source']}" if N.get("basis") else
+                       f"{ln.get('subcircuit') or ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
                                                            f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}"},
             "cells": {}}
         for col in V.columns():
@@ -2088,7 +2139,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                          "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
                          "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
                          "dtype": peak.dtype, "dtype_display": dt.display, "hardware_display": f"{peak.name} · {dt.display}",
-                         "accumulate": "fp32", "step": target.transition_unit, "status": target.status, "input_set": None,
+                         "accumulate": census.SUBCIRCUIT_TEMPLATES[known.template].accumulate if known else "fp32",
+                         "step": target.transition_unit if is_gemm(sub_id) else None, "status": target.status, "input_set": None,
                          "input_set_provenance": None,
                          "fidelity_notes": [{"note": n.note, "sources": [vars(x) for x in n.sources]} for n in (known.fidelity_notes if known else [])],
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),

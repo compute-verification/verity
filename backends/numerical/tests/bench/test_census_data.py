@@ -135,15 +135,16 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
 def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
     """Every subcircuit's semantics is an exact instruction of the registry, with its operand datatype and a stable id; a
     subcircuit need not have a (legacy) target: the H100 BF16 wgmma one (lane wgmma-bf16) came after the targets froze."""
-    for s in census.SUBCIRCUITS.values():
+    gemm = [s for s in census.SUBCIRCUITS.values() if s.template == "gemm-coordinate"]
+    for s in gemm:
         ins = INSTRUCTIONS[s.parameters.semantics]
         sem = "-".join(x for x in ins.id.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
         assert s.id == f"{s.template}/k{s.parameters.K}/{sem}" and s.parameters.datatype == ins.a_dtype and ins.model is not None
         assert s.display == f"GemmCoordinate<{s.parameters.K}> · {sem.split('-')[0]} {sem.split('-')[1]} · {census.DATATYPES[ins.a_dtype].display}"
-    untargeted = {s.id for s in census.SUBCIRCUITS.values() if getattr(s, "legacy_target", None) is None}
+    untargeted = {s.id for s in gemm if getattr(s, "legacy_target", None) is None}
     real_k = {f"gemm-coordinate/k{k}/{sem}" for k in (2048, 8192) for sem in ("sm80-mma-bf16", "sm90-wgmma-bf16", "sm89-mma-e4m3", "sm90-wgmma-e4m3")}
     assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"} | real_k              # the real-K statements' subcircuits
-    assert len(census.SUBCIRCUITS) == len(TARGETS) + len(untargeted)
+    assert len(gemm) == len(TARGETS) + len(untargeted)
     wgmma = census.SUBCIRCUITS["gemm-coordinate/k1536/sm90-wgmma-bf16"]
     assert INSTRUCTIONS[wgmma.parameters.semantics].status == "pinned" and wgmma.fidelity_notes == []
 
@@ -288,3 +289,22 @@ def test_every_template_carries_a_work_model_the_tables_n_agrees_with() -> None:
     assert _ops(rms.ops_per_input, {"N": 2048}) == 3 * 2048 and vars(rms.special_per_input) == {"rsqrt": "1"}
     fp8 = census.SUBCIRCUIT_TEMPLATES["scaled-mm-fp8-block-coordinate"].work_model
     assert _ops(fp8.ops_per_input, {"K": 2560, "G": 128}) == 2 * 2560 + 3 * 20
+
+
+
+def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
+    """The four non-GEMM templates C-Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
+    their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
+    want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
+            "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}
+    for sid, nbytes in want.items():
+        s = census.SUBCIRCUITS[sid]
+        wm = census.SUBCIRCUIT_TEMPLATES[s.template].work_model
+        env = {k: v for k, v in vars(s.parameters).items() if isinstance(v, int)}
+        assert census.evaluate(wm.bytes_per_input, env) == nbytes and wm.bytes_basis and wm.bytes_source
+        assert s.id.startswith(s.template + "/") and s.display
+    for hid in ("h100-sxm5-80gb/bf16", "h100-sxm5-80gb/e4m3"):
+        h = census.HARDWARE[hid]
+        assert h.memory_bytes_per_second == 3.35e12 and "3.35 TB/s" in h.memory_sources[0].label and "3.35 TB/s" not in census.source(h)
+    with pytest.raises(ValueError):
+        census.evaluate("__import__('os')", {})

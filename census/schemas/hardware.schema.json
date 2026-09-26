@@ -85,6 +85,32 @@
       "methodology": {
         "type": "string",
         "minLength": 1
+      },
+      "memory_bytes_per_second": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "datasheet memory bandwidth (bytes per second), the denominator of a memory-bandwidth work model"
+      },
+      "memory_sources": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "href": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
       }
     }
   }
