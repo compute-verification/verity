@@ -65,8 +65,8 @@ def _w_install(worker) -> dict[str, Any]:
         captured.append((ids.detach().reshape(-1).to(torch.int64).cpu(), out.detach().clone()))
         return r
 
-    rng = random.Random(1000 + rank)
-    edge = X.edge_ids(start, vs, vocab) + X.edge_ids(0 if start else vs, vs, vocab) + [rng.randrange(vocab) for _ in range(40)]
+    rng = random.Random(1000)                         # the same ids on every rank: the embedding's forward all-reduces the partials
+    edge = sorted(set(X.edge_ids(0, vs, vocab) + X.edge_ids(vs, vs, vocab))) + [rng.randrange(vocab) for _ in range(40)]
     out: dict[str, Any] = {"rank": rank, "site": name, "start": start, "shard_rows": vs, "vocab": vocab, "edge_ids": edge}
     with torch.no_grad():
         bare = {dt: emb(torch.tensor(edge, dtype=dt, device="cuda")).clone() for dt in (torch.int32, torch.int64)}
@@ -210,8 +210,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems or not doc.get("ok") else 0
     if not a.out:
         ap.error("--out is required (or --verify RECORD)")
+    out = str(Path(a.out).resolve())
     os.chdir(Path(__file__).resolve().parents[2])
-    return 0 if run(a.case, a.out)["ok"] else 1
+    return 0 if run(a.case, out)["ok"] else 1
 
 
 if __name__ == "__main__":

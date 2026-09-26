@@ -15,9 +15,10 @@ one block):
   (d) the source (`router_softmax_source`) on vLLM's routing path -- `fused_topk` in a module the source knows as an MoE layer --
       leaves the outputs bit-identical, acquires nothing outside a committed step, acquires one `moe/L<k>/router_softmax` per launch
       inside one, equal to the op's words, refuses a launch of another geometry, and restores the patched op;
-  (e) live: an OLMoE engine (vLLM, eager, batch invariant) generating with the source installed commits every MoE layer's softmax at
-      every step; each committed row equals the IR's words over the logits the router received, and the generated tokens equal an
-      engine without the source.
+  (e) live: vLLM engines (eager, batch invariant) serving tiny random-weight models of both served router shapes -- OLMoE's (E = 64,
+      top-8) and Qwen3-MoE's (E = 128, top-8, renormalized), vLLM's own MoE layers -- generating with the source installed commit every
+      MoE layer's softmax at every step; each committed row equals the IR's words over the logits the router received, and the generated
+      tokens equal the same engine's without the source.
 
 This module is the property and its record `router_tap_exactness.json` (environment, the build's sha256, per-configuration results,
 `ok`), whose `digest` is the sha256 of the canonical JSON of every other field; `verify_record` re-derives the digest and the verdict
@@ -83,9 +84,19 @@ def source_ok(s: dict[str, Any]) -> bool:
             and s.get("words_equal") is True and s.get("refused_other_geometry") is True and s.get("restored") is True)
 
 
+#: the router shapes the live check serves: (E, TOPK, renormalize) of OLMoE and of Qwen3-30B-A3B
+LIVE_SHAPES = ((64, 8, False), (128, 8, True))
+
+
+def live_model_ok(m: dict[str, Any]) -> bool:
+    return (not m.get("error") and int(m.get("rows_checked") or 0) > 0 and m.get("rows_ne_ir") == 0 and m.get("tokens_equal_bare") is True
+            and m.get("every_layer_every_step") is True and m.get("errors") == 0)
+
+
 def live_ok(v: dict[str, Any]) -> bool:
-    return (not v.get("error") and int(v.get("rows_checked") or 0) > 0 and v.get("rows_ne_ir") == 0 and v.get("tokens_equal_bare") is True
-            and v.get("every_layer_every_step") is True and v.get("errors") == 0)
+    ms = v.get("models") or []
+    shapes = {(int(m.get("experts") or 0), int(m.get("topk") or 0), bool(m.get("renormalize"))) for m in ms}
+    return not v.get("error") and shapes >= set(LIVE_SHAPES) and all(map(live_model_ok, ms))
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
@@ -119,5 +130,6 @@ def verify_record(doc: dict[str, Any]) -> list[str]:
     return problems
 
 
-__all__ = ["SCHEMA", "RECORD", "CONFIGS", "FILLS", "RANDOM", "QUICK_RANDOM", "ir_row", "classify", "config_ok", "source_ok", "live_ok",
+__all__ = ["SCHEMA", "RECORD", "CONFIGS", "FILLS", "RANDOM", "QUICK_RANDOM", "LIVE_SHAPES", "ir_row", "classify", "config_ok", "source_ok",
+           "live_model_ok", "live_ok",
            "seal", "verify_record"]

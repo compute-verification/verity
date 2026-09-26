@@ -1,6 +1,6 @@
 """GPU run of the router-tap exactness property (`verity_vllm.properties.router_tap_exactness`): check the tap build on this GPU against
-the installed `_moe_C.topk_softmax` and the IR's ordered router, the router-softmax source on vLLM's routing path, and live on an OLMoE
-engine; write the sealed record `<out>/router_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's
+the installed `_moe_C.topk_softmax` and the IR's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
+engines serving tiny random-weight models of the two served router shapes (OLMoE's, Qwen3-MoE's); write the sealed record `<out>/router_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's
 digest and verdict without a GPU.
 
 It lives under tests/ because it seeds random generators, sets VLLM_BATCH_INVARIANT for its own process and launches vLLM's kernels
@@ -301,32 +301,64 @@ def check_source(so: str, seed: int) -> dict[str, Any]:
     return rec
 
 
-def check_live(so: str, pool, max_tokens: int = 8) -> dict[str, Any]:
+#: tiny random-weight models of the two served router shapes, served by vLLM's own MoE layers (E = 64 top-8 as OLMoE, E = 128 top-8
+#: renormalized as Qwen3-30B-A3B), with the B0 checkpoint's tokenizer: the router path is vLLM's, no full checkpoint is downloaded
+TINY = {"olmoe": {"E": 64, "K": 8, "renorm": False}, "qwen3moe": {"E": 128, "K": 8, "renorm": True}}
+
+
+def make_tiny(kind: str, tok_dir: str, out_dir: str, seed: int) -> dict[str, Any]:
+    import shutil
+
     import torch
-    from vllm import SamplingParams
+    import transformers
+
+    base = json.loads(Path(tok_dir, "config.json").read_text())
+    ids = {k: base.get(k) for k in ("bos_token_id", "eos_token_id", "pad_token_id")}
+    t = TINY[kind]
+    common = dict(vocab_size=int(base["vocab_size"]), hidden_size=128, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=4,
+                  num_experts=t["E"], num_experts_per_tok=t["K"], norm_topk_prob=t["renorm"], max_position_embeddings=2048,
+                  tie_word_embeddings=False, **ids)
+    if kind == "olmoe":
+        cfg = transformers.OlmoeConfig(intermediate_size=64, **common)
+    else:
+        cfg = transformers.Qwen3MoeConfig(intermediate_size=128, moe_intermediate_size=64, head_dim=32, decoder_sparse_step=1, mlp_only_layers=[],
+                                          **common)
+    torch.manual_seed(seed)
+    model = transformers.AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16)
+    model.save_pretrained(out_dir, safe_serialization=True)
+    for f in Path(tok_dir).iterdir():
+        if f.is_file() and f.name != "config.json" and (f.suffix in (".json", ".txt", ".model") and not f.name.endswith(".index.json")):
+            shutil.copy(f, Path(out_dir, f.name))
+    return {"kind": kind, "architecture": cfg.architectures[0] if cfg.architectures else type(model).__name__, "experts": t["E"], "topk": t["K"],
+            "renormalize": t["renorm"], "vocab": common["vocab_size"], "seed": seed}
+
+
+def check_live(so: str, pool, kind: str, tok_dir: str, work: str, max_tokens: int = 8) -> dict[str, Any]:
+    import torch
+    from vllm import LLM, SamplingParams
 
     from verity_vllm.acquire.sources.moe_source import moe_layers_of
     from verity_vllm.acquire.sources.router_softmax_source import RouterSoftmaxSource
+    from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import hooks
-    from verity_vllm.engine.build import build_engine
 
-    eng = build_engine(case="OLMOE", max_num_seqs=4, execution="bi-eager")
-    sp = SamplingParams(temperature=0.0, max_tokens=max_tokens)
+    d = Path(work, f"tiny-{kind}")
+    rec: dict[str, Any] = make_tiny(kind, tok_dir, str(d), 20260926)
+    E, K, renorm = rec["experts"], rec["topk"], rec["renormalize"]
+    llm = LLM(model=str(d), tokenizer=str(d), dtype="bfloat16", enforce_eager=True, max_model_len=512, gpu_memory_utilization=0.3,
+              enable_prefix_caching=False, max_num_seqs=4, seed=0)
+    model = prof.get_model_runner(llm).get_model()
+    sp = SamplingParams(temperature=0.0, max_tokens=max_tokens, ignore_eos=True)
 
     def generate():
-        outs = eng.llm.generate(list(PROMPTS), sp, use_tqdm=False)
-        return [list(o.outputs[0].token_ids) for o in outs]
+        return [list(o.outputs[0].token_ids) for o in llm.generate(list(PROMPTS), sp, use_tqdm=False)]
 
     bare = generate()
-    mods = moe_layers_of(eng.model)
-    cfg = eng.model.config if hasattr(eng.model, "config") else None
-    E = int(getattr(cfg, "num_experts", 64) or 64)
-    K = int(getattr(cfg, "num_experts_per_tok", 8) or 8)
-    renorm = bool(getattr(cfg, "norm_topk_prob", False))
+    mods = moe_layers_of(model)
     layers = {k: {"module": n, "experts": E, "topk": K, "renormalize": renorm, "width": RS.words(E, K, renorm)} for n, k in mods.items()}
     com = _Recorder()
     com._cur = types.SimpleNamespace(step=0)
-    src = RouterSoftmaxSource(com, eng.model, layers, so)
+    src = RouterSoftmaxSource(com, model, layers, so)
     logits: list[Any] = []
     forwards = [0]
     src.install()
@@ -338,20 +370,18 @@ def check_live(so: str, pool, max_tokens: int = 8) -> dict[str, Any]:
         return inner(w, ids, tei, gating, renormalize, bias, is_padding)
 
     rec_hooks.patch(torch.ops._moe_C, "topk_softmax", recording)
-    h = eng.model.register_forward_pre_hook(lambda _m, _a: forwards.__setitem__(0, forwards[0] + 1))
+    h = model.register_forward_pre_hook(lambda _m, _a: forwards.__setitem__(0, forwards[0] + 1))
     try:
         served = generate()
     finally:
         h.remove()
         rec_hooks.uninstall()
         src.uninstall()
-    rec: dict[str, Any] = {"model": eng.cp.get("repo") if isinstance(eng.cp, dict) else None, "experts": E, "topk": K, "renormalize": renorm,
-                           "moe_layers": len(layers), "forwards": forwards[0], "acquired": len(com.acquired), "launches": len(logits),
-                           "prompts": len(PROMPTS), "max_tokens": max_tokens, "tokens_bare": bare, "tokens_served": served}
-    rec["tokens_equal_bare"] = bare == served
-    rec["every_layer_every_step"] = len(com.acquired) == len(logits) == len(layers) * forwards[0] and forwards[0] > 0
+    rec.update(moe_layers=len(layers), forwards=forwards[0], acquired=len(com.acquired), launches=len(logits), prompts=len(PROMPTS),
+               max_tokens=max_tokens, tokens_bare=bare, tokens_served=served, tokens_equal_bare=bare == served)
+    rec["every_layer_every_step"] = len(com.acquired) == len(logits) == len(layers) * forwards[0] and forwards[0] > 0 and len(layers) > 0
     jobs, taps = [], []
-    for (name, t), lg in zip(com.acquired, logits):
+    for (_name, t), lg in zip(com.acquired, logits):
         rows = lg.reshape(-1, E).contiguous().view(torch.int16).cpu().numpy().view(np.uint16).astype(np.int64)
         tw = _u32(t).reshape(len(rows), -1)
         for i in range(len(rows)):
@@ -363,7 +393,9 @@ def check_live(so: str, pool, max_tokens: int = 8) -> dict[str, Any]:
     ne = [i for i, (words, _w, _ids) in enumerate(ir) if not np.array_equal(np.asarray(words, dtype=np.uint32), taps[i])]
     rec["rows_checked"], rec["rows_ne_ir"] = len(jobs), len(ne)
     rec["errors"], rec["error_msgs"] = len(com.errors), com.errors[:4]
-    rec["ok"] = X.live_ok(rec)
+    del llm
+    __import__("gc").collect()
+    torch.cuda.empty_cache()
     return rec
 
 
@@ -378,7 +410,7 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     """Check the tap build at `so` on this GPU and write the sealed record to `<out>/router_tap_exactness.json`."""
     pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the IR evaluation needs none
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
-    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     import torch
     import vllm
     import vllm._custom_ops  # noqa: F401  -- loads the installed _moe_C ops
@@ -407,8 +439,12 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     doc["source"] = _guarded(check_source, {}, so, 7)
     print(f"[router-tap] source {json.dumps({k: v for k, v in doc['source'].items() if k != 'layers'})[:900]}", flush=True)
     if live and not quick:
-        doc["live"] = _guarded(check_live, {}, so, pool)
-        print(f"[router-tap] live {json.dumps({k: v for k, v in doc['live'].items() if not k.startswith('tokens_')})[:900]}", flush=True)
+        from verity_vllm.engine import engine_profile as prof
+
+        tok_dir = prof.checkpoint_for("B0", "manifests/checkpoints.json")["local_path"]
+        doc["live"] = {"tokenizer": tok_dir, "models": [_guarded(check_live, {"kind": k}, so, pool, k, tok_dir, out) for k in TINY]}
+        for m in doc["live"]["models"]:
+            print(f"[router-tap] live {json.dumps({k: v for k, v in m.items() if not k.startswith('tokens_')})[:900]}", flush=True)
     pool.close()
     doc = X.seal(doc)
     path = Path(out) / X.RECORD
@@ -423,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--so", help="the tap build: verity_router_tap.so (ops/pod_router_tap.sh)")
     ap.add_argument("--out", help=f"directory for {X.RECORD}")
     ap.add_argument("--quick", action="store_true", help=f"{X.QUICK_RANDOM} random rows per configuration, no live check")
-    ap.add_argument("--no-live", action="store_true", help="skip the live OLMoE check")
+    ap.add_argument("--no-live", action="store_true", help="skip the live check on the tiny MoE models")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
@@ -433,7 +469,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems or not doc.get("ok") else 0
     if not (a.so and a.out):
         ap.error("--so and --out are required (or --verify RECORD)")
-    return 0 if run(a.so, a.out, a.quick, live=not a.no_live)["ok"] else 1
+    out = str(Path(a.out).resolve())
+    os.chdir(Path(__file__).resolve().parents[2])
+    return 0 if run(a.so, out, a.quick, live=not a.no_live)["ok"] else 1
 
 
 if __name__ == "__main__":

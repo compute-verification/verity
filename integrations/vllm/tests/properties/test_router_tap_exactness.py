@@ -27,7 +27,9 @@ def _doc(**kw):
     doc = {"schema": X.SCHEMA, "quick": False, "configs": [_config(E, K, r) for E, K, _V, r in X.CONFIGS],
            "source": {"outputs_equal": True, "outside_step_acquired": 0, "names_ok": True, "words_equal": True, "refused_other_geometry": True,
                       "restored": True, "ok": True},
-           "live": {"rows_checked": 100, "rows_ne_ir": 0, "tokens_equal_bare": True, "every_layer_every_step": True, "errors": 0, "ok": True}}
+           "live": {"models": [{"experts": E, "topk": K, "renormalize": r, "rows_checked": 100, "rows_ne_ir": 0, "tokens_equal_bare": True,
+                                "every_layer_every_step": True, "errors": 0} for E, K, r in X.LIVE_SHAPES]}}
+    doc["live"]["ok"] = X.live_ok(doc["live"])
     doc.update(kw)
     return X.seal(doc)
 
@@ -43,12 +45,15 @@ def test_a_sealed_record_verifies():
 
 @pytest.mark.parametrize("edit", [("configs", 0, "tap_ne_ir", 1), ("configs", 1, "unwritten", 3), ("configs", 2, "out_eq_installed", False),
                                   ("configs", 3, "out_eq_untapped", False), ("configs", 0, "ir_rows", 9), ("configs", 1, "words_per_row", 130),
-                                  ("source", None, "restored", False), ("live", None, "rows_ne_ir", 2), ("live", None, "tokens_equal_bare", False)])
+                                  ("source", None, "restored", False), ("live", 0, "rows_ne_ir", 2), ("live", 1, "tokens_equal_bare", False),
+                                  ("live", 1, "renormalize", False)])
 def test_every_clause_fails_the_record(edit):
     where, i, key, value = edit
     doc = copy.deepcopy(_doc())
-    ent = doc[where][i] if i is not None else doc[where]
+    ent = (doc["live"]["models"][i] if where == "live" else doc[where][i]) if i is not None else doc[where]
     ent[key] = value
+    if where == "live":
+        ent, where = doc["live"], "live"
     ent["ok"] = X.config_ok(ent) if where == "configs" else (X.source_ok(ent) if where == "source" else X.live_ok(ent))
     resealed = X.seal({k: v for k, v in doc.items() if k not in ("ok", "digest")})
     assert not resealed["ok"] and X.verify_record(resealed) == []
