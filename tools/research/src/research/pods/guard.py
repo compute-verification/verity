@@ -4,6 +4,7 @@
                         [--balance-floor USD] [--pod-max-hours H] [--poll S] [--dry-run] [--log F] [--self-pod ID] [--detach]
     research pods guard status --prefix vyv- [--dry-run] [--json]
     research pods guard stop --prefix vyv- [--dry-run]
+    research pods guard reset --prefix vyv- [--by WHO] [--dry-run]
 
 Scope.  Only live pods (desiredStatus not EXITED/TERMINATED) whose NAME starts with `--prefix` are counted or touched.  Every other pod
 on the account is invisible to the guard: not counted, never terminated.  The prefix is required.
@@ -32,13 +33,16 @@ The guard's own host is `--self-pod ID`, else RUNPOD_POD_ID (from /proc/1/enviro
 Files: $RESEARCH_GUARD_DIR (default ~/.research/pods)/guard-<prefix>[.dry-run].{json,log,pid}.  One guard per prefix: a start refuses
 (exit 3) while the recorded pid is alive.  `--detach` re-runs the same command in a new session, stdin closed, output to the log
 (setsid nohup; under `caffeinate -is` on macOS), and prints the pid.  A failed list (network blip) is logged and retried: it never ends
-the guard.  `stop` signals exactly the recorded pid (no pkill).
+the guard.  `stop` signals exactly the recorded pid (no pkill).  A trip is sticky across restarts; after a lapsed deadline `reset`
+clears it in the state file, keeping the spend tally, and logs who cleared it.  It refuses (exit 3) while the recorded guard is alive,
+since a live guard rewrites the file from memory each poll: stop, reset, then start again with the new limits.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import socket
 import os
 import re
 import signal
@@ -384,6 +388,33 @@ def stop(prefix: str, dry_run: bool = False) -> int:
     return 0
 
 
+def reset(prefix: str, by: str, dry_run: bool = False, clock: Callable[[], float] = time.time) -> int:
+    """Clear the sticky trip for ``prefix`` (the vLLM coordinator hand-edited ``state.tripped`` after a lapsed deadline, 2026-09-26):
+    the spend tally, pods and terminations stay; the trip moves to ``resets`` with who cleared it, and the log records it."""
+    p = paths(prefix, dry_run)
+    if not p["state"].exists():
+        print(f"research pods guard: no guard state for prefix {prefix!r} ({p['state']})", file=sys.stderr)
+        return 2
+    pid = recorded_pid(p["pid"])
+    if pid and _alive(pid):
+        print(f"research pods guard: guard pid {pid} is running for prefix {prefix!r}; it rewrites the state each poll. "
+              f"`research pods guard stop --prefix {prefix}` first, then reset, then start it again", file=sys.stderr)
+        return 3
+    state = json.loads(p["state"].read_text())
+    trip = state.get("tripped")
+    if not trip:
+        print(f"research pods guard: prefix {prefix!r} is not tripped; nothing to reset")
+        return 0
+    now = iso(clock())
+    state.setdefault("resets", []).append({"at": now, "by": by, "cleared": trip})
+    state["tripped"] = None
+    save_state(p["state"], state)
+    with p["log"].open("a") as f:
+        f.write(f"{now} RESET by {by}: cleared the trip of {trip.get('at')} ({trip.get('why')}); spent ${state.get('spent', 0.0):.2f} kept\n")
+    print(f"research pods guard: cleared the trip for prefix {prefix!r} ({trip.get('why')}); spent ${state.get('spent', 0.0):.2f} kept")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="research pods guard", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--prefix", required=True, help="only pods whose name starts with this are counted or terminated")
@@ -412,6 +443,14 @@ def main(argv: list[str]) -> int:
             ap.add_argument("--json", action="store_true")
         ns = ap.parse_args(argv[1:])
         return status(ns.prefix, ns.dry_run, ns.json) if argv[0] == "status" else stop(ns.prefix, ns.dry_run)
+    if argv[:1] == ["reset"]:
+        ap = argparse.ArgumentParser(prog="research pods guard reset")
+        ap.add_argument("--prefix", required=True)
+        ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or f"{os.environ.get('USER', '?')}@{socket.gethostname()}",
+                        help="who clears the trip, for the log (default $RESEARCH_LANE, else user@host)")
+        ap.add_argument("--dry-run", action="store_true")
+        ns = ap.parse_args(argv[1:])
+        return reset(ns.prefix, ns.by, ns.dry_run)
     ns = _parser().parse_args(argv)
     if not ns.prefix.strip():
         print("research pods guard: --prefix must be non-empty", file=sys.stderr)
