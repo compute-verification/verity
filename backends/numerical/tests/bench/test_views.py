@@ -1428,3 +1428,19 @@ def test_the_two_preview_switches_are_off_in_the_published_rules_and_change_only
     assert (full["bytes_per_instance"], cached["bytes_per_instance"]) == (6 * 2048, 4 * 2048) and "PREVIEW" in cached["basis"]
     silu = "silu-mul/i8192/bf16"
     assert V.memory_native(BF16_HOPPER, silu, cached=True)["bytes_per_instance"] == V.memory_native(BF16_HOPPER, silu)["bytes_per_instance"]
+
+
+def test_the_renderers_validation_path_imports_no_numpy() -> None:
+    # the steward renders with a bare python3.12 (no numpy); PR #54 once pulled bench.templates (numpy) into contract.validate
+    import subprocess
+    import sys
+
+    code = ("import builtins; real = builtins.__import__\n"
+            "def block(name, *a, **k):\n"
+            "    if name == 'numpy' or name.startswith('numpy.'): raise ModuleNotFoundError('numpy blocked')\n"
+            "    return real(name, *a, **k)\n"
+            "builtins.__import__ = block\n"
+            "from verity_numerical.bench import contract, views\n"
+            "assert contract.non_gemm_subcircuit({'subcircuit': 'rope-head/d64/neox-bf16'}) == 'rope-head/d64/neox-bf16'\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-800:]
