@@ -169,10 +169,28 @@ def test_synthetic_sets(template, tmp_path):
 @pytest.mark.parametrize("template", sorted(LOWERED))
 def test_lowering_is_the_pinned_one(template):
     mod = REG.module(template)
-    low = mod.lowering(TM.subcircuit(template, **LOWERED[template]))
-    assert low.sha256 == mod.PIN
+    sub = TM.subcircuit(template, **LOWERED[template])
+    (param,) = LOWERED[template].values()
+    low = mod.lowering(sub)
+    assert low.sha256 == mod.PINS[param]
     head = low.text.split("\n", 1)[0].split()
     assert head[0] == IL.FORMAT and head[1] == mod.UNIT and int(head[2]) <= 1 << 13
+    if template == "silu-mul":
+        assert mod.frame_lowering(sub).sha256 == mod.FRAME_PINS[param]
+
+
+def test_the_pin_covers_the_leaf_maps():
+    """IR6: the netlist's LEAVES line places every unit on its instance's words (flat input and output leaves, each port's
+    [leaves, bits]); another arrangement of the same unit is another pin with the same rows."""
+    import json
+
+    mod = REG.module("rope-head")
+    a, b = mod.lowering(TM.subcircuit("rope-head", D=64)), mod.lowering(TM.subcircuit("rope-head", D=32))
+    line = a.text.splitlines()[-1]
+    assert line.startswith("LEAVES ") and json.loads(line.removeprefix("LEAVES ")) == a.leaves
+    assert a.leaves["in"][1] == [1, 33, 65, 97] and a.leaves["out"][1] == [1, 33]
+    assert a.leaves["in_ports"] == [[64, 16], [64, 16]] and a.leaves["out_ports"] == [[64, 16]]
+    assert a.sha256 != b.sha256 and a.text.splitlines()[:-1] == b.text.splitlines()[:-1]
 
 
 def test_supports_says_what_is_missing():

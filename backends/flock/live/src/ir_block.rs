@@ -51,6 +51,9 @@ pub struct IrUnitNet {
     pub b: Vec<Vec<usize>>,
     pub unit_log: usize,
     pub sha256: [u8; 32],
+    /// The units' leaf maps (the `LEAVES <json>` line: per-unit `in` / `out` instance leaves, `in_ports` / `out_ports` as
+    /// `[leaves, bits]`), covered by `sha256` and so by the pin (red-team-flock-2 IR6).
+    pub leaves: Option<serde_json::Value>,
     /// A cut lowering's cut structure (its final `CUT <json>` line: `words`, `tail`, per-unit `in` / `out` ports), covered by
     /// `sha256` and so by the pin (red-team-flock-2 IR4).
     pub cut: Option<serde_json::Value>,
@@ -96,13 +99,17 @@ impl IrUnitNet {
             assert!((a[i] == [i] && b[i] == [i]) || (a[i].is_empty() && b[i].is_empty()), "unit row {i} is not an input row");
         }
         assert!(a[const_pos] == [const_pos] && b[const_pos] == [const_pos]);
-        let cut = lines.next().map(|l| {
-            let j = l.strip_prefix("CUT ").expect("a netlist line after the rows that is not its CUT line");
-            serde_json::from_str::<serde_json::Value>(j).expect("the CUT line is not JSON")
-        });
-        assert!(lines.next().is_none(), "netlist text after its CUT line");
+        let mut rest = lines.peekable();
+        let mut tagged = |tag: &str| -> Option<serde_json::Value> {
+            let j = rest.next_if(|l| l.starts_with(tag))?;
+            Some(serde_json::from_str(&j[tag.len()..]).unwrap_or_else(|e| panic!("the {tag}line is not JSON: {e}")))
+        };
+        let leaves = tagged("LEAVES ");
+        let cut = tagged("CUT ");
+        assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES and CUT lines, in that order");
         let unit_log = useful.next_power_of_two().trailing_zeros() as usize;
-        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log: unit_log.max(7), sha256, cut }
+        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log: unit_log.max(7), sha256,
+                    leaves, cut }
     }
 
     /// Whether column `i` is an input column (its row is `A = B = [i]`).

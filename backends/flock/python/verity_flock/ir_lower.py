@@ -479,10 +479,11 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     return lay
 
 
-def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
+def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
-    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``; a cut lowering ends with one line
-    ``CUT <canonical JSON>`` (:attr:`Lowering.cut`), so the netlist's sha256 pins its cut structure (red-team-flock-2 IR4)."""
+    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
+    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
+    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -491,6 +492,8 @@ def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
+    if leaves is not None:
+        lines.append("LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")))
     if cut is not None:
         lines.append("CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines) + "\n"
@@ -498,6 +501,20 @@ def netlist(lay: Layout, name: str, cut: dict | None = None) -> str:
 
 def digest(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _flat_ports(t) -> list[list[int]]:
+    """``[leaves, bits]`` per port of a type: a Value or (nested) Array of Values is one port; a Tuple, one per field."""
+    from verity.ir.types import Array, Tuple, Value
+
+    if isinstance(t, Tuple):
+        return [x for f in t.fields for x in _flat_ports(f)]
+    n = 1
+    while isinstance(t, Array):
+        n, t = n * t.n, t.elem
+    if not isinstance(t, Value):
+        raise ValueError(f"a port of type {t} is not an array of words")
+    return [[n, t.w]]
 
 
 def slice_words(words, nbits: int) -> list[int]:
@@ -577,8 +594,18 @@ class Lowering:
                         for src in U.out_src]}
 
     @property
+    def leaves(self) -> dict:
+        """The units' leaf maps: per instance-local unit, ``in`` its leaf input ports' and ``out`` its returned-output ports'
+        instance leaves (flat positions in parameter / return order), and ``in_ports`` / ``out_ports`` each parameter's and
+        return's ``[leaves, bits]``: what places every unit on its instance's rows and outputs."""
+        params, ret = self.definition.signature()
+        U = self.units
+        return {"in": [[p for k, p in s if k == "leaf"] for s in U.in_src], "out": [[p for k, p in s if k == "ret"] for s in U.out_src],
+                "in_ports": [x for _, t in params for x in _flat_ports(t)], "out_ports": _flat_ports(ret)}
+
+    @property
     def text(self) -> str:
-        return netlist(self.layout, self.name, self.cut)
+        return netlist(self.layout, self.name, self.cut, self.leaves)
 
     @property
     def sha256(self) -> str:

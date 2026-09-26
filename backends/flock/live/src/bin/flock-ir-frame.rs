@@ -8,7 +8,8 @@
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
 //! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
-//! and for a cut template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
+//! the wiring, output mapping, block assignment and row key against the netlist's pinned leaf maps (IR6), and for a cut
+//! template its cut words against the netlist's pinned tail (on the sha256-pinned MUFU tables under
 //! `--tables`). Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's run output values)` (the
 //! verifier chains them into its regions and folds each row's chunk values into its digest), two verifier points (the
 //! regions' claims), `Link(y = 0, 0)`, Flock's coins.
@@ -358,6 +359,10 @@ const CASES: &[(&str, bool, bool)] = &[
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("prover_file_differs_from_verifier_file", false, false),
+    ("wiring_swapped", false, false),
+    ("output_mapping_swapped", false, false),
+    ("units_swapped_between_slots", false, false),
+    ("row_key_changed", false, false),
     ("row_scalar_forged", false, false),
     ("eps_forged_tail_words", false, false),
     ("aggregate_forged_with_its_scalar", false, true),
@@ -392,8 +397,50 @@ fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize,
     v
 }
 
+/// An IR6 case: a structurally valid file (the block table and frame-v3 roots still check) whose leaf maps or key differ from
+/// the netlist's; pass iff `check_leaf_maps` refuses it.
+fn leaf_case(st: &FrameStmt, name: &str) -> Option<Value> {
+    let mut v = load(&arg("--instances", ""));
+    match name {
+        "wiring_swapped" => v.lay.wiring.iter_mut().for_each(|w| w.swap(0, 1)),
+        "output_mapping_swapped" => {
+            // every instance-local unit 0's first two returned words swapped with its mapping: the instance outputs (and roots) stay
+            v.lay.out_leaf[0].swap(0, 1);
+            let (c0, c1, rw) = (v.lay.ret_cols[0], v.lay.ret_cols[1], v.lay.ret_words);
+            let get = |w: &[F128], c: usize| ((if c % 128 < 64 { w[c / 128].lo >> (c % 128) } else { w[c / 128].hi >> (c % 128 - 64) }) & 0xFFFF) as u16;
+            let set = |w: &mut [F128], c: usize, x: u16| {
+                let t = c % 128;
+                let m = 0xFFFFu64;
+                if t < 64 { w[c / 128].lo = (w[c / 128].lo & !(m << t)) | ((x as u64) << t) } else { w[c / 128].hi = (w[c / 128].hi & !(m << (t - 64))) | ((x as u64) << (t - 64)) }
+            };
+            for g in (0..v.units).step_by(v.upi) {
+                let w = &mut v.outputs[g * rw..(g + 1) * rw];
+                let (a, b) = (get(w, c0), get(w, c1));
+                set(w, c0, b);
+                set(w, c1, a);
+            }
+        }
+        "units_swapped_between_slots" => {
+            let slots: Vec<(usize, usize)> = v.blocks.iter().enumerate()
+                .flat_map(|(b, bl)| bl.1.iter().enumerate().filter(|x| x.1.is_some()).map(move |(u, _)| (b, u))).take(2).collect();
+            let (x, y) = (v.blocks[slots[0].0].1[slots[0].1], v.blocks[slots[1].0].1[slots[1].1]);
+            v.blocks[slots[0].0].1[slots[0].1] = y;
+            v.blocks[slots[1].0].1[slots[1].1] = x;
+        }
+        "row_key_changed" => v.key = flock_live::chunk::row_key(b"w"),
+        _ => return None,
+    }
+    let shape = check_blocks(&v).and_then(|_| check_roots(&v));
+    let r = check_leaf_maps(&v, &st.net);
+    Some(json!({"case": name, "expect": "refused at load (the netlist's leaf maps)", "shape_checks_pass": shape.is_ok(), "refused": r.is_err(),
+                "pass": shape.is_ok() && r.is_err(), "why": r.err().or(shape.err())}))
+}
+
 /// A load-time case: pass iff the verifier's checks refuse the altered file.
 fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
+    if let Some(v) = leaf_case(st, name) {
+        return Some(v);
+    }
     let t = TABLES.get().unwrap();
     let (v, consistent) = match name {
         "row_scalar_forged" => {
@@ -592,7 +639,7 @@ fn main() {
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
         refuse("the instance file was staged for another unit netlist".into());
     }
-    for c in [check_order(&net), check_blocks(&inst), check_roots(&inst)] {
+    for c in [check_order(&net), check_blocks(&inst), check_roots(&inst), check_leaf_maps(&inst, &net)] {
         if let Err(e) = c {
             refuse(e);
         }

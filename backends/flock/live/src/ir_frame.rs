@@ -18,7 +18,9 @@
 //! - every unit's returned-output words, and for a cut template every unit's cut input and cut output words (public, from
 //!   the verifier's own instance file, whose cut words the netlist's pinned tail relates).
 //!
-//! So a chunk's runs chain across blocks through their output values, and one circuit serves every block. The verifier folds
+//! So a chunk's runs chain across blocks through their output values, and one circuit serves every block. What the layout
+//! means (which leaves each unit slot reads, which output leaves it returns, the row key) is checked against the netlist's
+//! pinned leaf maps before anything (`check_leaf_maps`, IR6); the header's copy is never trusted. The verifier folds
 //! each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
 //! words, against the frame-v3 roots it recomputes. An empty run slot (padding) hashes `nb` zero blocks from the key at
 //! counter 0, flags KEYED_HASH | CHUNK_START (first) | CHUNK_END (last).
@@ -43,7 +45,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, ROOT, comp, key_words, log2ceil, tree},
+    chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, ROOT, comp, key_words, log2ceil, row_key, tree},
     ir_block::{CutMap, Group, IrUnitNet, cut_map_of},
     ir_tail::Tables,
 };
@@ -341,6 +343,59 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
     let want_c: usize = (0..inst.in_ports.len()).map(|p| inst.chunks_of(p)).sum::<usize>() * inst.n * runs;
     if seen_c.len() != want_c || seen_u.len() != inst.units {
         return Err("the blocks do not hold every run of every row chunk and every unit".into());
+    }
+    Ok(())
+}
+
+/// Red-team-flock-2 IR6: the file's meaning against the netlist's pinned leaf maps (its LEAVES line), not the header's word.
+/// The ports are 16-bit words with the pinned leaf counts; the output mapping is the pinned one and the returned-output
+/// columns are consecutive 16-bit ports; every real unit slot's wiring reads exactly the runs and byte offsets its unit's
+/// pinned input leaves occupy in its own instance's rows (so the block assignment is the leaf maps'); the row key is the
+/// x-row key.
+pub fn check_leaf_maps(inst: &FrameInstances, net: &IrUnitNet) -> Result<(), String> {
+    let lv = net.leaves.as_ref().ok_or("the netlist pins no leaf maps (no LEAVES line)")?;
+    let lists = |v: &Value| -> Vec<Vec<usize>> { v.as_array().map(|a| a.iter().map(usizes).collect()).unwrap_or_default() };
+    let (lin, lout, pin, pout) = (lists(&lv["in"]), lists(&lv["out"]), lists(&lv["in_ports"]), lists(&lv["out_ports"]));
+    if pin.iter().chain(&pout).any(|p| p.len() != 2 || p[1] != 16) {
+        return Err("the netlist's ports are not all [leaves, 16] (u16 rows and output words)".into());
+    }
+    let words = |ports: &[(String, usize)]| ports.iter().map(|p| p.1).collect::<Vec<_>>();
+    if words(&inst.in_ports) != pin.iter().map(|p| p[0]).collect::<Vec<_>>() || words(&inst.out_ports) != pout.iter().map(|p| p[0]).collect::<Vec<_>>() {
+        return Err("the header's ports are not the netlist's".into());
+    }
+    let lay = &inst.lay;
+    if lin.len() != inst.upi || lout.len() != inst.upi || lay.out_leaf != lout {
+        return Err("the output mapping is not the netlist's leaf map".into());
+    }
+    let g0 = &net.out_groups[0];
+    if g0.bits.iter().any(|&b| b != 16) || lay.ret_cols != (0..g0.bits.len()).map(|j| 16 * j).collect::<Vec<_>>() {
+        return Err("the returned outputs are not the netlist's 16-bit ports".into());
+    }
+    if inst.key != row_key(b"x") {
+        return Err("the row key is not the x-row key (verity/blake3-leaf/v1/x)".into());
+    }
+    let starts: Vec<usize> = pin.iter().scan(0, |a, p| { let s = *a; *a += p[0]; Some(s) }).collect();
+    let total: usize = pin.iter().map(|p| p[0]).sum();
+    let run_bytes = 64 * lay.nb;
+    for (b, (chunks, units)) in inst.blocks.iter().enumerate() {
+        for (u, g) in units.iter().enumerate() {
+            let Some(g) = *g else { continue };
+            let (i, lu) = (g / inst.upi, g % inst.upi);
+            if lay.wiring[u].len() != lin[lu].len() {
+                return Err(format!("block {b}: unit slot {u} has {} wired leaf ports, unit {lu} of an instance {}", lay.wiring[u].len(), lin[lu].len()));
+            }
+            for (j, &pos) in lin[lu].iter().enumerate() {
+                if pos >= total {
+                    return Err(format!("unit {lu}'s leaf {pos} is past its instance's {total} input words"));
+                }
+                let p = starts.iter().rposition(|&s| s <= pos).unwrap();
+                let byte = 2 * (pos - starts[p]);
+                let (q, off) = lay.wiring[u][j];
+                if chunks.get(q).copied().flatten() != Some((i, p, byte / 1024, byte % 1024 / run_bytes)) || off != byte % run_bytes {
+                    return Err(format!("block {b}: unit slot {u} (unit {g}) reads its leaf port {j} from run slot {q} byte {off}, not its input leaf {pos}"));
+                }
+            }
+        }
     }
     Ok(())
 }
