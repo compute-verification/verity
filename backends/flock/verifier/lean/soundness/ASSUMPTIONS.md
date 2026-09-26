@@ -36,8 +36,10 @@ proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34,
 | Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
 | The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
 | The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*` | written (definitions) |
-| Composition: one table from one rep and the link points | 1a | `table_sound` | proved from the two lemmas below |
-| One rep is sound from a doomed start | 1a | `rep_sound` | **to prove** |
+| Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
+| One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
+| One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
+| Phase lemmas: zerocheck, lincheck, opening, Ligerito | 1a | `zerocheck_phase`, `lincheck_phase`, `opening_phase`, `ligerito_phase` | **to prove** |
 | The link points reduce region checks to opened claims | 1a | `link_sound` | **to prove** |
 | The Merkle layer (SHA-256 caps and paths) | 1b | `Merkle` | **to write** (§4) |
 | Session binding (round digests) with live coins: the compiled interactive argument | 1c, interactive | `Merkle` | **to write** (§4) |
@@ -46,7 +48,8 @@ proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34,
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§8) | planned |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check. `table_sound` shows `sorryAx` until the two lemmas are proved.
+`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until the phase lemmas and
+`link_sound` are proved.
 
 ## 2. The model
 
@@ -352,7 +355,10 @@ so that these slot in without restructuring:
 
 ## 9. What remains (by a16z stage)
 
-1. **Stage 1a, `rep_sound`**, phase by phase:
+1. **Stage 1a, the phase lemmas of `rep_sound`.** The composition and the round lemmas are done. Their shared first
+   piece is the list size: at most `L₀` codewords near the committed table. It follows from ArkLib's
+   `irs_lambda_le_johnson_mds` once `Model.encode` is identified with ArkLib's interleaved Reed–Solomon code
+   (`Arith.Correct.xhat_poly`). The phases:
    - zerocheck;
    - lincheck (including the pin);
    - the opening (ring switching);
