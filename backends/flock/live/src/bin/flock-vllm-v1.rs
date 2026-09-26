@@ -685,7 +685,7 @@ fn f128_of_hex(s: &str) -> F128 {
 /// is not transferable evidence, but every message the proofs carry must hash to what the verifier recorded before each
 /// coin, the link exchange must hash to the recorded link_sha256, and Flock must accept both reps on one committed root.
 fn replay(st: &Arc<VllmStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
-    let p = ports(inst, Held::Honest);
+    let p = ports(inst, Held::Honest)?;
     let sig = sigma(st, inst, &p);
     if rec["kind"] != "flock-live-session/v1" {
         return Err("not a flock-live session record".into());
