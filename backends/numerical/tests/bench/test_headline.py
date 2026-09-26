@@ -156,13 +156,9 @@ def test_101s_bound_subcircuits_carry_bench_spines_ids() -> None:
                         ("rope-head", {"D": 64}), ("silu-mul", {"I": 8192})):
         spine = TM.subcircuit(tpl, **params)
         assert spine.id in census.SUBCIRCUITS and census.SUBCIRCUITS[spine.id].display == spine.display
-    att = census.SUBCIRCUITS["attention-head/d64-bn128/sm80-fa2-bf16"]
-    assert (att.variable_ranges.T.min, att.variable_ranges.T.max) == (1, 383)
-    lo = min(H._bounds(census.SUBCIRCUIT_TEMPLATES["attention-head"].work_model, m["parameters"])["T"][0]
-             for m in ROW101["template_mix"] if m["subcircuit_template"] == "attention-head")
-    hi = max(H._bounds(census.SUBCIRCUIT_TEMPLATES["attention-head"].work_model, m["parameters"])["T"][1]
-             for m in ROW101["template_mix"] if m["subcircuit_template"] == "attention-head")
-    assert (lo, hi) == (1, 383)
+    lo, hi = (f(H._bounds(census.SUBCIRCUIT_TEMPLATES["attention-head"].work_model, m["parameters"])["T"][i]
+                for m in ROW101["template_mix"] if m["subcircuit_template"] == "attention-head") for f, i in ((min, 0), (max, 1)))
+    assert (lo, hi) == (1, 383)                                 # #101's own strata; the bound subcircuit's range spans every row it serves
     assert {g["subcircuit"] for g in H.groups(ROW101)} >= {"attention-head/d64-bn128/sm80-fa2-bf16", "gumbel-top-p-token-select/v128256/fp32",
                                                           "embedding-row/v128256-h2048/bf16"}
     assert all(g["subcircuit"] for g in H.groups(ROW101))
@@ -318,3 +314,67 @@ def test_an_l40s_cell_is_still_red_team_gated_and_an_h100_profile_does_not_pull_
     assert why["line"] == V.L40S_BF16.name and why["codes"][0][0] == "U"
     ln = next(x for x in views.lines if x.get("subcircuit") == NONGEMM[2])
     assert ln["line"] == V.L40S_BF16.name and next(c for c in ln["cells"].values() if c).artifact == profiled
+
+
+# --- every served workload bound the same way ------------------------------------------------------------------------------------
+
+#: Templates (and attention semantics) the bench spine binds but cannot generate synthetic sets for yet, or does not bind at all:
+#: the census binds them in the spine's id form.  A change here is a spine change (a new generator) or a new served template.
+NO_SPINE_GENERATOR = {"attention-head/sm90-fa3-bf16", "token-select-greedy", "embedding-row", "moe-router-topk", "moe-expert-coordinate",
+                      "moe-expert-coordinate-weighted", "moe-sum", "scaled-mm-fp8-block-coordinate", "bias-add", "bf16-mul-scalar"}
+
+
+def _spine_key(sid: str) -> str:
+    tpl, _, rest = sid.partition("/")
+    return f"{tpl}/{rest.rsplit('/', 1)[1]}" if tpl == "attention-head" and not rest.endswith("sm80-fa2-bf16") else tpl
+
+
+def test_every_served_workload_resolves_to_bound_subcircuits_in_the_spines_id_form() -> None:
+    from verity_numerical.bench import templates as TM
+
+    seen = set()
+    for w in census.raw("workloads"):
+        for g in H.groups(w):
+            assert g["subcircuit"], (w["id"], g["display"])                   # every template of every workload is bound
+            seen.add(g["subcircuit"])
+    missing = set()
+    for sid in seen:
+        try:
+            spine = TM.parse_subcircuit_id(sid)
+        except (KeyError, ValueError):
+            spine = None
+        if spine is None or spine.id != sid:                    # parse_subcircuit_id reads FA3's id as FA2's: not the spine's
+            missing.add(_spine_key(sid))
+            continue
+        assert spine.display == census.SUBCIRCUITS[sid].display
+    assert missing == NO_SPINE_GENERATOR
+    for sid in seen:                                            # the spine's id form: <template>/<parameters>/<semantics or datatype>
+        tpl, params, tail = sid.split("/")
+        assert tpl == census.SUBCIRCUITS[sid].template and params and tail
+    for s in census.SUBCIRCUITS.values():
+        if s.template == "attention-head":
+            hits = [m for w in census.raw("workloads") for m in w["template_mix"]
+                    if m["subcircuit_template"] == "attention-head" and m["subcircuit_parameters"] == vars(s.parameters)]
+            bounds = [H._bounds(census.SUBCIRCUIT_TEMPLATES["attention-head"].work_model, m["parameters"])["T"] for m in hits]
+            assert (s.variable_ranges.T.min, s.variable_ranges.T.max) == (min(b[0] for b in bounds), max(b[1] for b in bounds))
+
+
+def test_each_workloads_gaps_are_named_by_subcircuit(store: LocalStore) -> None:
+    recs = H.headline(V.build(store, SPEC))
+    assert len(recs) == len(census.raw("workloads"))
+    for rec in recs:
+        for row in rec["backends"]:
+            assert {u["reason"] for u in row["uncovered"]} <= {"no result", "commitment opening"}
+            assert all(u["subcircuit"] for u in row["uncovered"])
+
+
+@pytest.mark.parametrize("sid", ["gemm-coordinate/k2304/sm80-mma-bf16", "gemm-coordinate/k9728/sm90-wgmma-bf16",
+                                 "rmsnorm-triton/n128-eps1e-06/bf16", "rope-head/d256/neox-bf16", "silu-mul/i1024/bf16"])
+def test_the_spine_generates_synthetic_sets_for_other_workloads_subcircuits(sid: str, tmp_path) -> None:
+    from verity_numerical.bench import generate as G
+    from verity_numerical.bench import templates as TM
+
+    if not sid.startswith("gemm-coordinate/"):
+        pytest.importorskip("verity_vllm", reason="non-GEMM templates evaluate through the vLLM integration's Definitions")
+    out = G.generate(TM.parse_subcircuit_id(sid), 2, 0, tmp_path)
+    assert out["draws"] >= 2
