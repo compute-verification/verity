@@ -121,9 +121,10 @@ $PY -m pytest -q backends/gkr/tests 2>&1 | tail -3 | tee $O/pytest.txt
 INST=(); [ -n "$SET_DIR" ] && INST=(--input-set $SET_DIR) || INST=(--instances $W/bench-instances/v1)
 pc() { $PY -c "import json;print(json.load(open('$1/cell.json'))['prime_commitment'])"; }
 loopback() {  # $1 = cell dir, $2 = vus, $3 = out dir: a verifier on 127.0.0.1:7300 (SP)
+  local t
   $B cell-serve --listen 127.0.0.1:7300 --out $3 --vus $2 --k $K --digests $1/leaf_digests.bin --prime-commitment $(pc $1) \
     --operator loopback-selftest > $3.log 2>&1 &
-  SP=$!; for i in $(seq 240); do grep -q SERVING $3.log 2>/dev/null && break; sleep 0.5; done
+  SP=$!; for t in $(seq 240); do grep -q SERVING $3.log 2>/dev/null && break; sleep 0.5; done
 }
 stop_loopback() { kill $SP 2>/dev/null; wait $SP 2>/dev/null; }
 statement() {  # $1 = vus -> $W/cell/c$1
