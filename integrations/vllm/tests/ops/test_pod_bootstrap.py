@@ -140,6 +140,31 @@ def test_bootstrap_writes_the_sampled_proofs_pth_and_readiness_checks_it() -> No
     assert 'check("sampled_proofs_via_pth"' in _readiness_source()
 
 
+def test_the_pth_check_passes_on_a_fresh_venv_and_fails_without_the_pth(tmp_path: Path) -> None:
+    """A fresh Python 3.12 venv as bootstrap leaves it: verity-sampled-proofs.pth in site-packages and a PYTHONPATH (core, research,
+    the integration) that omits protocols/sampled_proofs.  The readiness check's function imports verity_sampled_proofs from the
+    tree through the .pth -- its dependency verity from PYTHONPATH -- and fails once the .pth is removed."""
+    uv = shutil.which("uv") or shutil.which(os.path.expanduser("~/.local/bin/uv"))
+    if not uv:
+        pytest.skip("uv not installed")
+    venv = tmp_path / "venv"
+    if subprocess.run([uv, "venv", "-q", "-p", "3.12", str(venv)], capture_output=True, timeout=300).returncode != 0:
+        pytest.skip("no Python 3.12 for uv venv")
+    py, site = venv / "bin" / "python", venv / "lib" / "python3.12" / "site-packages"
+    sampled, core, research = TREE / "protocols" / "sampled_proofs", TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
+    src = _readiness_source()
+    fn = src[src.index("def sampled_without_pythonpath():"):src.index('check("sampled_proofs_via_pth"')]
+    probe = tmp_path / "probe.py"
+    probe.write_text("import os, subprocess, sys\nsampled = sys.argv[1]\n" + fn + "print(sampled_without_pythonpath())\n")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (VLLM, core, research, sampled)))
+    (site / "verity-sampled-proofs.pth").write_text(f"{sampled}\n")
+    ok = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    assert ok.returncode == 0 and ok.stdout.strip().startswith(str(sampled.resolve())), ok.stdout + ok.stderr
+    (site / "verity-sampled-proofs.pth").unlink()
+    bad = subprocess.run([str(py), str(probe), str(sampled)], capture_output=True, text=True, env=env, timeout=120)
+    assert bad.returncode != 0 and "without protocols/sampled_proofs on PYTHONPATH" in bad.stderr
+
+
 def test_gpu_mode_record_shape_is_unchanged() -> None:
     """The gpu-mode record carries no `mode` key and the same check names as before 2026-09-23 (readers treat 'no mode' as gpu)."""
     src = _readiness_source()

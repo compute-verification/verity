@@ -56,7 +56,7 @@ The headline is throughput, ``vu.per_second``, and better its inverse relative t
 
 ``R_proved`` is intrinsic to the prover (one VU of GemmCoordinate<K> is K MACs = 2K FLOP).  ``R_native`` depends on
 the target named by the fingerprint's ``profile``: the datasheet dense tensor-core peak of the target's conformance
-anchor for its operand dtype at FP32 accumulate (``Target.native_peak``, ``verity.proofs.target``; A100 BF16
+anchor for its operand dtype at FP32 accumulate (the census line of ``Target.anchor_device``, :func:`native_peak_of`; A100 BF16
 312 TFLOPS for FIRST, RTX 4090 FP8 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA).  The
 identity ``overhead.vs_native_peak == rate.native_peak_flop_per_second / rate.proved_flop_per_second`` holds by
 construction (:func:`rate_measurements`); :func:`validate` recomputes each of the three from ``t.total``,
@@ -80,11 +80,12 @@ import os
 import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from verity.proofs.target import FIRST, TARGETS, NativePeak
+from verity.ml.tc.instructions import INSTRUCTIONS
+from verity.proofs.target import FIRST, TARGETS, Target
+from verity_numerical.bench import census
 
 __all__ = [
     "AUTHENTICATION",
@@ -136,6 +137,7 @@ __all__ = [
     "joint",
     "measurement",
     "NATIVE_REFERENCE",
+    "native_peak_of",
     "native_reference",
     "native_seconds_per_vu",
     "overhead",
@@ -184,7 +186,7 @@ REQUIRED_FIELDS = (
     "preprocessing", "retention", "instances",
 )
 #: The frozen instance set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
-INSTANCES_DATASET = "bench-instances/v1"
+INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: The frozen FP8 Ada instance set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
@@ -192,10 +194,9 @@ INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
 #: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
 #: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
-FP8_ADA_INSTANCES_DATASET = "bench-instances-fp8-ada/v1"
-FP8_ADA_INSTANCES_TIER = "vu-k1536-fp8-ada"
-FP8_ADA_INSTANCES_SEED = 20260922
-FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d"
+_FP8_ADA = census.INPUT_SETS["bench-instances-fp8-ada-v1"]
+FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
+FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
 #: The frozen Hopper instance sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
 #: VUs ``backends/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
 #: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
@@ -203,24 +204,21 @@ FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b3
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
 #: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
 #: recipe is a new tier.
-BF16_HOPPER_INSTANCES_DATASET = "bench-instances-bf16-hopper/v1"
-BF16_HOPPER_INSTANCES_TIER = "vu-k1536-bf16-hopper"
-BF16_HOPPER_INSTANCES_SEED = 20260922
-BF16_HOPPER_INSTANCES_DIGEST = "2a5babca16e82727611ae483a125b8d853e27e4c9deedda7c35927cc1e456869"
-FP8_HOPPER_INSTANCES_DATASET = "bench-instances-fp8-hopper/v1"
-FP8_HOPPER_INSTANCES_TIER = "vu-k1536-fp8-hopper"
-FP8_HOPPER_INSTANCES_SEED = 20260922
-FP8_HOPPER_INSTANCES_DIGEST = "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc"
+_BF16_HOPPER = census.INPUT_SETS["bench-instances-bf16-hopper-v1"]
+BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier
+BF16_HOPPER_INSTANCES_SEED, BF16_HOPPER_INSTANCES_DIGEST = _BF16_HOPPER.seed, _BF16_HOPPER.manifest_sha256
+_FP8_HOPPER = census.INPUT_SETS["bench-instances-fp8-hopper-v1"]
+FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
+FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
 #: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
 #: ``backends/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
 #: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
 #: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
 #: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
-NVFP4_INSTANCES_DATASET = "bench-instances-nvfp4-sm120/v1"
-NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
-NVFP4_INSTANCES_SEED = 20260922
-NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
+_NVFP4 = census.INPUT_SETS["bench-instances-nvfp4-sm120-v1"]
+NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
+NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
 #: ``verity.proofs.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
 #: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
@@ -285,10 +283,10 @@ OVERHEAD = "overhead.vs_native_peak"
 RATE_TOLERANCE = 1e-6
 
 
-def native_reference(profile: str = PROFILE) -> NativePeak:
-    """The native peak the headline overhead of a ``profile`` divides by: that target's ``Target.native_peak`` -- the
+def native_reference(profile: str = PROFILE) -> Any:
+    """The native peak the headline overhead of a ``profile`` divides by: :func:`native_peak_of` its target -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
-    accumulate, no sparsity (``verity.proofs.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    accumulate, no sparsity (``verity.proofs.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
     so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
     the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
     is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
@@ -298,12 +296,18 @@ def native_reference(profile: str = PROFILE) -> NativePeak:
     target = TARGETS.get(profile) if isinstance(profile, str) else None
     if target is None:
         raise ValueError(f"profile must be one of {PROFILES}, got {profile!r}")
-    return target.native_peak
+    return native_peak_of(target)
+
+
+def native_peak_of(target: Target) -> Any:
+    """The census hardware line a target's overhead divides by: its ``anchor_device`` running its instruction's operand dtype."""
+    return census.line(target.anchor_device, INSTRUCTIONS[target.instruction].a_dtype)
 
 
 #: The campaign target's native reference as a plain (JSON-serialisable) mapping, for the callers that predate
 #: :func:`native_reference`: ``NATIVE_REFERENCE["flop_per_second"]`` is ``native_reference(PROFILE).flop_per_second``.
-NATIVE_REFERENCE: dict[str, Any] = {**asdict(native_reference(PROFILE)), "profile": PROFILE, "flop_per_vu": "2 * K"}
+NATIVE_REFERENCE: dict[str, Any] = {**next(e for e in census.raw("hardware") if e["id"] == native_reference(PROFILE).id),
+                                     "source": census.source(native_reference(PROFILE)), "profile": PROFILE, "flop_per_vu": "2 * K"}
 
 
 def native_seconds_per_vu(K: int, profile: str = PROFILE) -> float:
@@ -311,7 +315,7 @@ def native_seconds_per_vu(K: int, profile: str = PROFILE) -> float:
 
     if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
         raise ValueError(f"K must be a positive int, got {K!r}")
-    return native_reference(profile).seconds_per_vu(K)
+    return census.native_seconds_per_instance(native_reference(profile), K)
 
 
 def overhead(seconds_per_vu: float, K: int, profile: str = PROFILE) -> float:

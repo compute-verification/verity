@@ -21,7 +21,7 @@ verity-sampled-proofs = { workspace = true }
 verity-flock = { workspace = true }
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["jsonschema>=4.26", "pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "protocols"]
