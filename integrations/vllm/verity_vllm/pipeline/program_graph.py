@@ -595,15 +595,13 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             viol[v["class"]] += x["calls"]
         if log:
             log(f"  {x['id']} {x['definition']}: {entry['units']} units, {entry['committed_interior_words']} committed interior words")
-    tokens = sum(x["calls"] for x in g["groups"] if x["definition"].startswith("Embedding"))
     tap_rows = []
     for (fam, head), (w, bits) in sorted(taps.items(), key=lambda kv: -kv[1][0]):
         today = word_query.committed_today(fam, head)
-        tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)),
-                         "bytes_per_token": round(bits / 8 / tokens, 1) if tokens else None, "committed_today": today,
+        tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)), "committed_today": today,
                          "new_tap_in": None if today else word_query.tap_kernel(fam)})
     g["q_word_v1"] = {"query": word_query.query_id(X, W, extras), **dict(tot), "units_per_gate": round(tot["units"] / tot["gates"], 4) if tot["gates"] else None,
-                      "tokens": tokens, "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
+                      "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
         "verity_vllm.query.word, no recomputes: each gate is computed in exactly one unit; a value read across units is committed once at "
