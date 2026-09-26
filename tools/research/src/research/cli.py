@@ -146,6 +146,8 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    if ns.claimed:
+        _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
@@ -268,6 +270,22 @@ def cmd_run(argv: list[str]) -> int:
               f"(`research data custody {run_id}` from any machine)", file=sys.stderr)
         CU.runner_publish(run_dir, Path(ns.custody_dir), tool=prep.get("tool"), conditions=conds)
     return out
+
+
+def _survive_stray_signals() -> None:
+    """Machine side: the runner's argv carries the workload's command, so `pkill -f <pattern>` aimed at the workload also hits the runner,
+    which then died without recording or publishing the run.  SIGTERM and SIGHUP are logged and otherwise ignored: the runner keeps
+    supervising and publishes when the workload exits.  A run is stopped through its workload's process group (status.json `pgid`);
+    SIGKILL still ends the runner.  A Python handler, not SIG_IGN, so the workload it spawns gets the default disposition back at exec."""
+    import signal
+    import time
+
+    def note(signum: int, _frame: object) -> None:
+        print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
+              f"and publishes the run when the workload exits; stop the workload with `kill -TERM -<pgid>` (status.json)", file=sys.stderr, flush=True)
+
+    for s in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, note)
 
 
 CWD_SOURCE = "source"

@@ -130,6 +130,29 @@ def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_p
     assert st["verdict"] == "refuse" and "stdout.log changed after its custody" in st["unfetched"][0]["why"]
 
 
+def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custody(tmp_path):
+    # `pkill -f rows.sh` to stop a queue matched the runner's argv too (it carries the workload's command): the runner died, so the run
+    # never recorded its end or published (vllm-rf-epoch #73)
+    import signal
+
+    vault = tmp_path / "vault"
+    req, runs = _request(tmp_path, RID, [PY, "-c", "import time; time.sleep(2); print('finished')"], vault)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    deadline = time.time() + 30
+    while time.time() < deadline and (json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}).get("state") != "running":
+        time.sleep(0.05)
+    runner = json.loads((d / "launch.json").read_text())["runner_pid"]
+    os.kill(runner, signal.SIGTERM)
+    os.kill(runner, signal.SIGHUP)
+    marker = _wait_marker(d)
+    status = json.loads((d / "status.json").read_text())
+    assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
+    assert marker["preserved"] is True and CU.marker_problem(d) is None
+    log = (d / "launcher.log").read_text()
+    assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
+
+
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys):
     runs = tmp_path / "root" / "runs"
     d = _fixture_run(runs)
