@@ -11,16 +11,19 @@ Counting: ``gf2`` commits only ANDs; XOR and NOT are free linear forms. Material
 subcircuit uses (an AND input or a returned bit) is a chain of ``|terms| - 1`` XORs, plus a NOT when its constant is 1; a
 subcircuit's counts are its own gates plus its children's (forms are not shared across a subcircuit boundary). AND counts
 are the gates live in the unit (they sum to the unit's committed ANDs). Identical subcircuits (same canonical structure) are
-one node, referenced with instance counts.
+one node, referenced with instance counts. A subcircuit with children records its parts in order and the wiring between them
+(:func:`_wiring`); a gate list tags each gate with the scope of the innermost named subcircuit that made it.
 
     python -m verity_flock.boolean_export --program-graph ROW.program.json --out DIR
 """
 from __future__ import annotations
 
 import argparse
+import bisect
 import dataclasses
 import gzip
 import hashlib
+import inspect
 import json
 import random
 import sys
@@ -57,11 +60,12 @@ KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "a
 # --- tracing -----------------------------------------------------------------------------------------------------------
 
 class _Call:
-    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1")
+    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports")
 
     def __init__(self, fn, start):
         self.fn, self.start, self.end, self.ins, self.outs, self.kids = fn, start, start, [], [], []
         self.seq0 = self.seq1 = _SEQ[0]
+        self.iports = self.oports = ()
 
 
 _T: dict = {"C": None, "stack": None}
@@ -122,6 +126,31 @@ def _bits(x, out):
             _bits(getattr(x, f.name), out)
 
 
+_SIG: dict = {}
+
+
+def _arg_names(fn) -> tuple[list[str], str | None]:
+    if fn not in _SIG:
+        try:
+            ps = list(inspect.signature(fn).parameters.values())
+        except (TypeError, ValueError):
+            ps = []
+        _SIG[fn] = ([p.name for p in ps if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)],
+                    next((p.name for p in ps if p.kind == p.VAR_POSITIONAL), None))
+    return _SIG[fn]
+
+
+def _ports(items, out) -> tuple:
+    """Flatten ``(name, value)`` items' bits into ``out``; the ``(name, width)`` of each item with bits."""
+    ports = []
+    for name, x in items:
+        n = len(out)
+        _bits(x, out)
+        if len(out) > n:
+            ports.append((name, len(out) - n))
+    return tuple(ports)
+
+
 def _wrap(name, fn):
     def w(*a, **k):
         st = _T["stack"]
@@ -140,9 +169,16 @@ def _wrap(name, fn):
             st.pop()
         node.end = len(_T["C"].kind) if _T["C"] is not None else node.start
         node.seq1 = _SEQ[0]
-        _bits([x for x in a if not isinstance(x, Circuit)], node.ins)
-        _bits(list(k.values()), node.ins)
-        _bits(r, node.outs)
+        pos, var = _arg_names(fn)
+        node.iports = _ports([(pos[i] if i < len(pos) else f"{var or 'arg'}[{i - len(pos)}]", x) for i, x in enumerate(a)
+                              if not isinstance(x, Circuit)] + list(k.items()), node.ins)
+        if isinstance(r, tuple):
+            outs = [(f"out{i}", x) for i, x in enumerate(r)]
+        elif dataclasses.is_dataclass(r) and not isinstance(r, type):
+            outs = [(f.name, getattr(r, f.name)) for f in dataclasses.fields(r)]
+        else:
+            outs = [("out", r)]
+        node.oports = _ports(outs, node.outs)
         return r
 
     w.__wrapped__ = fn
@@ -185,8 +221,8 @@ def trace(build) -> tuple[Circuit, _Call]:
         _T["stack"] = None
     root.end = len(C.kind)
     root.seq1 = _SEQ[0]
-    root.ins = [w for bits in C.inputs.values() for w in bits]
-    root.outs = [w for bits in C.outputs.values() for w in bits]
+    root.iports = _ports(list(C.inputs.items()), root.ins)
+    root.oports = _ports(list(C.outputs.items()), root.outs)
     return C, root
 
 
@@ -199,7 +235,20 @@ class Registry:
         self.nodes: dict[str, dict] = {}
         self.gates_dir = out / "gates"
         self.gates_dir.mkdir(parents=True, exist_ok=True)
-        self.verified = 0
+        self.verified = self.tag_scopes = self.tag_and_differs = 0
+        self.wiring_compared = self.wiring_differs = 0
+
+    def _tag_ands(self, gl) -> int:
+        """Tag scopes whose subtree's tagged ANDs differ from their subcircuit's ``and`` (a list holds every gate its outputs
+        need; the tree counts the gates live in the unit)."""
+        sc, g, tags = gl["tag_scopes"], gl["gates"], gl["tags"]
+        n = [0] * len(sc)
+        for i, t in enumerate(tags):
+            if g[3 * i] == 0:
+                n[t] += 1
+        for i in range(len(sc) - 1, 0, -1):
+            n[sc[i][1]] += n[i]
+        return sum(n[i] != self.nodes[s[0]]["and"] for i, s in enumerate(sc))
 
     def analyse(self, C: Circuit, root: _Call, name: str, kind: str) -> str:
         live = C.live()
@@ -278,28 +327,46 @@ class Registry:
                 h.update(repr((kh, k.start - node.start)).encode())
             h.update(repr([canon(f) for f in node.outs]).encode())
             hid = "sc-" + h.hexdigest()[:16]
+            hid_of[id(node)] = hid
             n_and, n_xor, n_not = len(own), xor, nots
             children: dict[str, int] = {}
             for kh, (ka, kx, kn) in kid_ids:
                 n_and, n_xor, n_not = n_and + ka, n_xor + kx, n_not + kn
                 children[kh] = children.get(kh, 0) + 1
+            wires = _wiring(node, data, is_and) if node.kids else None
             if hid not in self.nodes:
                 fn = node.fn
-                self.nodes[hid] = {"id": hid, "name": _display(fn, node), "kind": KIND.get(fn, "piece" if fn in IL.PIECES or fn.endswith("_v1")
-                                                                                          else "subcircuit"),
-                                   "function": fn, "and": n_and, "xor": n_xor, "not": n_not, "in_bits": len(node.ins),
-                                   "out_bits": len(node.outs), "children": [{"ref": c, "count": n} for c, n in children.items()],
-                                   "own": {"and": len(own), "xor": xor, "not": nots}}
+                rec = self.nodes[hid] = {
+                    "id": hid, "name": _display(fn, node),
+                    "kind": KIND.get(fn, "piece" if fn in IL.PIECES or fn.endswith("_v1") else "subcircuit"),
+                    "function": fn, "and": n_and, "xor": n_xor, "not": n_not, "in_bits": len(node.ins), "out_bits": len(node.outs),
+                    "in_ports": [list(p) for p in node.iports], "out_ports": [list(p) for p in node.oports],
+                    "children": [{"ref": c, "count": n} for c, n in children.items()],
+                    "own": {"and": len(own), "xor": xor, "not": nots}}
+                if wires is not None:
+                    at = {c: i for i, c in enumerate(children)}
+                    rec["parts"] = [at[kh] for kh, _ in kid_ids]
+                    rec["wiring"] = wires
+            elif wires is not None:
+                self.wiring_compared += 1
+                rec = self.nodes[hid]
+                if rec["wiring"] != wires:
+                    merged = _merge_wiring(rec["wiring"], wires)
+                    if merged is None:
+                        self.wiring_differs += 1
+                    else:
+                        rec["wiring"] = merged
             memo.setdefault(hid, node)
             return hid, (n_and, n_xor, n_not)
 
+        hid_of: dict[int, str] = {}
         rid, _ = visit(root)
         rec = self.nodes[rid]
         rec["name"], rec["kind"] = name, kind
-        self._gate_lists(C, root, rid, memo)
+        self._gate_lists(C, root, rid, memo, owner, hid_of)
         return rid
 
-    def _gate_lists(self, C, root, rid, memo):
+    def _gate_lists(self, C, root, rid, memo, owner, hid_of):
         """Write the gate list of every node type that is at most GATE_LIMIT gates and whose parent is larger (or is a root),
         once; verify each against the circuit on random inputs."""
         want = set()
@@ -323,11 +390,13 @@ class Registry:
             if rec.get("gates") or h not in memo:
                 continue
             node = memo[h]
-            gl = gate_list(C, node)
+            gl = gate_list(C, node, owner, hid_of)
             if vals is None:
                 vals = _evaluate_all(C, 64)
             _check(gl, node, vals)
             self.verified += 1
+            self.tag_scopes += len(gl["tag_scopes"])
+            self.tag_and_differs += self._tag_ands(gl)
             bundle[h] = gl
             rec["gates"] = {"file": f"gates/{rid}.json.gz", "key": h}
             rec["gate_list"] = {"and": gl["counts"]["and"], "xor": gl["counts"]["xor"], "not": gl["counts"]["not"]}
@@ -336,18 +405,151 @@ class Registry:
                 {"schema": SCHEMA + "/gates", "lists": bundle}, separators=(",", ":")).encode(), mtime=0))
 
 
+def _wiring(node: _Call, data, is_and) -> list[list[int]]:
+    """The dataflow between a node's parts (its child calls, in order): edges ``[src_part, src_port, dst_part, dst_port,
+    width]``, bits ``src_port + i`` -> ``dst_port + i``. Part -1 is the node itself (its input ports as a source, its output
+    ports as a destination); part -2 is a constant (port = its value, the destinations all get it); part -3 is the node's own
+    gates (``own``), unnumbered (port -1): the bits it reads and the bits it makes. ``src_port`` -1 on a part: made inside it
+    but not one of its output ports; part -4: from outside the node without being one of its inputs."""
+    kids = node.kids
+    p_in: dict = {}
+    for i, f in enumerate(node.ins):
+        p_in.setdefault((f.s, f.c), i)
+    sib: dict = {}
+    by_seq = [(k.seq0, k.seq1, m) for m, k in enumerate(kids) if k.seq1 > k.seq0]
+    by_bit = [(k.start, k.end, m) for m, k in enumerate(kids) if k.end > k.start]
+    seq0s, bit0s = [e[0] for e in by_seq], [e[0] for e in by_bit]
+
+    def part(spans, lows, v):
+        i = bisect.bisect_right(lows, v) - 1
+        return spans[i][2] if i >= 0 and v < spans[i][1] else None
+
+    def known(k):
+        if k in p_in:
+            return (-1, p_in[k])
+        return sib.get(k)
+
+    def classify(x):
+        k = (x.s, x.c)
+        got = known(k)
+        if got is not None:
+            return {got}, ()
+        if not x.s:
+            return set(), ()
+        if isinstance(x, TL):
+            if not node.seq0 <= x.seq < node.seq1:
+                return {(-4, -1)}, ()
+            m = part(by_seq, seq0s, x.seq)
+            if m is not None:
+                return {(m, -1)}, ()
+            return set(), (x.p1,) if x.p2 is None else (x.p1, x.p2)
+        direct, deps = set(), []
+        for t in x.s:
+            got = known((frozenset((t,)), 0))
+            if got is not None:
+                direct.add(got)
+            elif node.start <= t < node.end:
+                m = part(by_bit, bit0s, t)
+                if m is not None:
+                    direct.add((m, -1))
+                elif is_and[t]:
+                    deps.extend(data[t])
+                else:
+                    direct.add((-4, -1))
+            else:
+                direct.add((-4, -1))
+        return direct, deps
+
+    bits: list[tuple] = []
+    own_reads: set = set()
+    seen: set[int] = set()
+
+    def reads(x0):
+        stack = [x0]
+        while stack:
+            x = stack.pop()
+            if id(x) in seen:
+                continue
+            seen.add(id(x))
+            direct, deps = classify(x)
+            own_reads.update(direct)
+            stack.extend(deps)
+
+    def edge(sp, sport, dp, dport):
+        bits.append((sp, sport, dp, dport))
+
+    def resolve(f, dp, dport):
+        if not f.s:
+            return edge(-2, f.c, dp, dport)
+        got = known((f.s, f.c))
+        if got is not None:
+            return edge(got[0], got[1], dp, dport)
+        reads(f)
+        edge(-3, -1, dp, dport)
+
+    for m, k in enumerate(kids):
+        for j, f in enumerate(k.ins):
+            resolve(f, m, j)
+        for i, f in enumerate(k.outs):
+            sib.setdefault((f.s, f.c), (m, i))
+    for i, f in enumerate(node.outs):
+        resolve(f, -1, i)
+    for sp, sport in sorted(own_reads):
+        edge(sp, sport, -3, -1)
+    return _runs(bits)
+
+
+def _runs(bits) -> list[list[int]]:
+    """Bit edges ``(src_part, src_port, dst_part, dst_port)`` as runs ``[..., width]`` (a constant's or an unnumbered port
+    does not advance)."""
+    edges: list[list[int]] = []
+    for sp, sport, dp, dport in bits:
+        if edges:
+            e = edges[-1]
+            n = e[4]
+            if (e[0] == sp and e[2] == dp and e[1] + (0 if sp == -2 or sport < 0 else n) == sport
+                    and e[3] + (0 if dport < 0 else n) == dport):
+                e[4] += 1
+                continue
+        edges.append([sp, sport, dp, dport, 1])
+    return edges
+
+
+def _bitwise(edges) -> list[tuple]:
+    return [(sp, sport if sp == -2 or sport < 0 else sport + i, dp, dport if dport < 0 else dport + i)
+            for sp, sport, dp, dport, w in edges for i in range(w)]
+
+
+def _merge_wiring(old, new):
+    """``old`` with the constants whose value differs in ``new`` as port -1, if that is the only difference; else None."""
+    a, b = _bitwise(old), _bitwise(new)
+    if len(a) != len(b) or any(x[2:] != y[2:] or (x[:2] != y[:2] and not x[0] == y[0] == -2) for x, y in zip(a, b)):
+        return None
+    return _runs([x if x[:2] == y[:2] else (-2, -1) + x[2:] for x, y in zip(a, b)])
+
+
 def _display(fn, node) -> str:
     base = DISPLAY.get(fn, fn)
     return f"{base} [{len(node.ins)}→{len(node.outs)} bits]"
 
 
-def gate_list(C: Circuit, node: _Call) -> dict:
+def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
     """The node's gates as an explicit AND/XOR/NOT list, in the order the lowering made them: wires 0..n_in-1 are its inputs
     (forms made outside it, its argument bits first), each gate appends one wire, -1 / -2 are constants 0 / 1; ``gates`` is
     flat ``[op, a, b]`` (op 0 AND, 1 XOR, 2 NOT with b = -1). A linear form with no recorded operations (``fp.lookup``'s table
-    sums) is a chain of XORs where it is used."""
+    sums) is a chain of XORs where it is used. ``tags[g]`` is gate g's scope: ``tag_scopes`` lists the node's call tree in
+    preorder as ``[subcircuit id, parent scope, part index in the parent's parts]`` (scope 0 is the node), and a gate's scope
+    is the innermost named subcircuit that made it (a chain's, the one that used it)."""
     data, kind, cseq = C.data, C.kind, C.seq
     lo, hi, s0, s1 = node.start, node.end, node.seq0, node.seq1
+    scopes: list[list] = []
+    scope_of: dict[int, int] = {}
+    todo = [(node, -1, -1)]
+    while todo:
+        n, parent, j = todo.pop()
+        scope_of[id(n)] = len(scopes)
+        scopes.append([hid_of[id(n)], parent, j])
+        todo.extend((k, scope_of[id(n)], i) for i, k in reversed(list(enumerate(n.kids))))
 
     def inside(x):
         if isinstance(x, TL):
@@ -392,14 +594,17 @@ def gate_list(C: Circuit, node: _Call) -> dict:
             origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
     n_in = len(order)
     gates: list[int] = []
+    tags: list[int] = []
     cnt = {"and": 0, "xor": 0, "not": 0}
     nxt = [n_in]
+    cur = [0]
     wire_tl: dict[int, int] = {}
     wire_and: dict[int, int] = {}
     chain: dict = {}
 
     def emit(op, a, b=-1):
         gates.extend((OP[op], a, b))
+        tags.append(cur[0])
         cnt[op.lower()] += 1
         nxt[0] += 1
         return nxt[0] - 1
@@ -426,14 +631,18 @@ def gate_list(C: Circuit, node: _Call) -> dict:
     items = sorted([(cseq[v], 0, v) for v in need_and] + [(x.seq, 1, x) for x in need_tl.values()], key=lambda e: e[0])
     for _, typ, x in items:
         if typ == 0:
+            cur[0] = scope_of[id(owner[x])]
             a, b = data[x]
             wire_and[x] = emit("AND", wire(a), wire(b))
-        elif x.op == "XOR":
-            wire_tl[id(x)] = emit("XOR", wire(x.p1), wire(x.p2))
         else:
-            wire_tl[id(x)] = emit("NOT", wire(x.p1))
+            cur[0] = scope_of[id(x.nd)]
+            if x.op == "XOR":
+                wire_tl[id(x)] = emit("XOR", wire(x.p1), wire(x.p2))
+            else:
+                wire_tl[id(x)] = emit("NOT", wire(x.p1))
+    cur[0] = 0
     outs = [wire(f) for f in node.outs]
-    return {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "counts": cnt}
+    return {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
 
 
 def _evaluate_all(C: Circuit, T: int) -> list[int]:
@@ -857,7 +1066,8 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
         if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
             rec = _walked(base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}")
             rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
-                           f"({mod.__name__}.width); its Definition is walked instead, every primitive with its piece, none in a proof unit")
+                           f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
+                           f"primitive with its piece, none in a proof unit")
             return rec
         low = mod.lowering(sub)
         uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
@@ -1002,13 +1212,25 @@ def main(argv=None) -> int:
              "rows": rows, "files": {"row": "<row_key>.boolean.json", "templates": "templates.json", "subcircuits": "subcircuits.json",
                                      "gates": "gates/<circuit root id>.json.gz: {lists: {subcircuit id: gate list}}"},
              "gate_list_rule": "wires 0..inputs-1 are the inputs; each gate appends one wire; -1 = 0, -2 = 1; gates = flat [op, a, b], "
-                               "op 0 AND, 1 XOR, 2 NOT (b = -1)",
+                               "op 0 AND, 1 XOR, 2 NOT (b = -1); tags[g] indexes tag_scopes = [subcircuit id, parent scope, part index] "
+                               "(preorder, scope 0 = the list's subcircuit)",
+             "wiring_rule": "parts[i] indexes children (the i-th child call, in order); wiring = [src_part, src_port, dst_part, dst_port, "
+                            "width]: bits src_port+i -> dst_port+i; part -1 = the subcircuit's inputs (as source) / outputs (as "
+                            "destination), -2 = a constant (port = its value; -1 = its value differs between instances), "
+                            "-3 = the subcircuit's own gates (port -1, unnumbered)",
              "gate_limit": GATE_LIMIT, "subcircuits": len(reg.nodes), "gate_lists": len(gates),
              "gate_lists_bytes": sum(p.stat().st_size for p in gates),
              "verification": f"every gate list evaluated against its circuit (gf2 bit-sliced, 64 random vectors): {reg.verified} checked, 0 differ",
+             "wiring_verification": f"every instance's wiring computed and compared with its type's: {reg.wiring_compared} further "
+                                    f"instances compared, {reg.wiring_differs} differ beyond the value of a constant input; "
+                                    f"{sum(any(e[0] == -2 and e[1] == -1 for e in n.get('wiring', ())) for n in reg.nodes.values())} "
+                                    f"types have a constant input whose value differs between instances (port -1)",
+             "tag_scopes": reg.tag_scopes, "tag_scopes_whose_tagged_ands_differ_from_the_tree": reg.tag_and_differs,
              "not_yet_lowered": nyl}
     (out / "index.json").write_text(json.dumps(index, indent=1))
-    print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified}))
+    print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
+                      "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
+                      "tag_and_differs": reg.tag_and_differs}))
     return 0
 
 
