@@ -26,6 +26,8 @@ flock-hash = { workspace = true }
 blake3 = { workspace = true }
 rayon = { workspace = true }
 flock-cuda-ffi = { path = "../flock-cuda-ffi", optional = true }
+getrandom = "0.3"
+rand_chacha = "0.9"
 
 [lints]
 workspace = true

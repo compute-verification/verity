@@ -29,8 +29,10 @@ pub mod ir_block;
 pub mod ir_frame;
 pub mod ir_sampling;
 pub mod ir_tail;
+pub mod netlist;
 pub mod pure_block;
 pub mod vllm_block;
+pub mod zk_hooks;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 
