@@ -376,6 +376,9 @@ pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
     if net.epilogue() { ("u16", 2) } else { ("u32", 4) }
 }
 
+/// The most region claims the CUDA prover takes (`max_extra` in `cuda/prove_chunk.cuh`): two per public region.
+pub const MAX_EXTRA_CLAIMS: usize = 64;
+
 /// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
 pub const MAX_M: usize = 35;
 
@@ -794,6 +797,7 @@ impl PureStmt {
             }
         };
         let regions: Vec<RegionShape> = list.into_iter().map(|r| shape(r, &net, lay)).collect();
+        assert!(2 * regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?}: {} region claims, the GPU prover takes {MAX_EXTRA_CLAIMS}", 2 * regions.len());
         // dummy blocks: zero messages; bf16 under a zero key and counter 0, fp8 under the per-slot constants
         let dummy_cv: Vec<[u32; 8]> = if lay.is_sha() {
             (0..2)
@@ -1042,13 +1046,22 @@ impl PureStmt {
         }
     }
 
+    /// Everything a prover session precomputes from the instance set before any parallel witness work: `ChunkTail`'s
+    /// continuation accumulators.
+    pub fn prepare(&self, inst: &Instances) {
+        if self.lay.tail().is_some() {
+            self.tail_chain(inst);
+        }
+    }
+
     /// `ChunkTail`: the accumulator into units 16..32 of each real VU's partial-chunk block, evaluated (zero operands).
+    /// Sequential: `c_in` reaches it from rayon workers, and a parallel initialiser would wait on the workers blocked on
+    /// this lock (a deadlock); `prepare` computes it up front.
     fn tail_chain(&self, inst: &Instances) -> &Vec<[u32; 16]> {
         self.tail_cin.get_or_init(|| {
             let col = self.net.out_cols[0];
             (0..inst.vus.div_ceil(64))
-                .into_par_iter()
-                .flat_map_iter(|g| {
+                .flat_map(|g| {
                     let vs: Vec<usize> = (64 * g..(64 * g + 64).min(inst.vus)).collect();
                     let mut t = vec![[0u32; 16]; vs.len()];
                     for (l, &v) in vs.iter().enumerate() {
@@ -1248,5 +1261,57 @@ impl PureStmt {
             .zip(values)
             .map(|(pt, value)| ExtraClaim { value, skip_weights: eq_skip_weights(&pt[..6]), x_full: pt[6..].to_vec() })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A lowered unit's shape without its logic: input rows, one output word (two with the epilogue), the constant.
+    fn shape_net(n_in: usize, epilogue: bool) -> UnitNet {
+        let useful = 1024;
+        let (mut a, mut b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = (0..useful).map(|i| (if i < n_in { vec![i] } else { vec![] }, if i < n_in { vec![i] } else { vec![] })).unzip();
+        a[useful - 1] = vec![useful - 1];
+        b[useful - 1] = vec![useful - 1];
+        UnitNet { relation: "shape".into(), useful, const_pos: useful - 1, n_in, out_cols: if epilogue { vec![5, 6] } else { vec![5] }, a, b, sha256: [0; 32] }
+    }
+
+    /// Every layout's region claims fit the GPU prover (ChunkTail with the epilogue once had 18 against a cap of 16).
+    #[test]
+    fn region_claims_fit_the_gpu_prover() {
+        let layouts = [Layout::Chunk(3), Layout::Chunk(16), Layout::ChunkTail(4), Layout::ChunkTail(17), Layout::Fp8, Layout::ShaBf16, Layout::ShaFp8];
+        for lay in layouts {
+            for epilogue in [false, true] {
+                let st = PureStmt::new(shape_net(544, epilogue), 8, lay);
+                assert!(2 * st.regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?} epilogue {epilogue}");
+            }
+        }
+        for lay in [Layout::Fp4, Layout::ShaFp4] {
+            let st = PureStmt::new(shape_net(608, false), 8, lay);
+            assert!(2 * st.regions.len() <= MAX_EXTRA_CLAIMS, "{lay:?}");
+        }
+        assert_eq!(PureStmt::new(shape_net(544, true), 8, Layout::ChunkTail(4)).regions.len(), 9);
+    }
+
+    /// ChunkTail's continuation accumulators, first reached from rayon workers (as the witness builders reach them) and
+    /// without `prepare`, complete: a parallel initialiser under the OnceLock deadlocked the GPU prover.
+    #[test]
+    fn tail_chain_from_rayon_workers_completes() {
+        let (vus, units) = (2048, 144);
+        let st = std::sync::Arc::new(PureStmt::new(shape_net(544, true), vus, Layout::ChunkTail(4)));
+        let inst = std::sync::Arc::new(Instances {
+            header: serde_json::json!({}), relation: "shape".into(), vus, units, row_bytes: 4608, x: vec![0; vus * 4608],
+            w: vec![0; vus * 4608], accs: (0..vus * units).map(|i| i as u32).collect(), out: vec![0; vus], y: vec![0; vus],
+        });
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (st2, inst2) = (st.clone(), inst.clone());
+        // 128 workers: enough that a worker waiting inside the initialiser steals an outer c_in task (the old code hung here)
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(128).build().unwrap();
+        std::thread::spawn(move || {
+            let n: u64 = pool.install(|| (0..st2.blocks_real * 32).into_par_iter().map(|i| st2.c_in(&inst2, i / 32, i % 32) as u64).sum());
+            tx.send(n).unwrap();
+        });
+        assert!(rx.recv_timeout(std::time::Duration::from_secs(120)).is_ok(), "c_in from rayon workers did not complete");
     }
 }

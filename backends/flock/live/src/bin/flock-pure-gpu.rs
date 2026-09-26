@@ -740,6 +740,7 @@ fn main() {
         std::process::exit(2);
     }
     let st = Arc::new(PureStmt::new(net, inst.vus, lay));
+    st.prepare(&inst);
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),

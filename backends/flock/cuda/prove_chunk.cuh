@@ -724,7 +724,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     CKI(phase(1));
 
     // ================= link: Commit(root_B) -> points -> y (before any coin) =
-    const int max_extra = 16;
+    // two claims per public region (flock_live::pure_block::MAX_EXTRA_CLAIMS; ChunkTail with the epilogue has 9 regions)
+    const int max_extra = 64;
     std::vector<uint64_t> x_raw((size_t)max_extra * (m - 6) * 2);
     int n_extra = 0;
     if (C->link_cb) {
