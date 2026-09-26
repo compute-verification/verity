@@ -53,7 +53,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
     out = []
     for runs in zip(*parts):
         m = {"accepted": all(r.get("accepted") is True for r in runs), "warm": runs[0].get("warm"), "run": runs[0].get("run"), "subbatches": len(runs)}
-        for k in ("e2e_s", "witness_s", "wait_s", "calls", "wire_sent", "wire_recv"):
+        for k in ("e2e_s", "witness_s", "wait_s", "wait_e2e_s", "calls", "wire_sent", "wire_recv"):
             m[k] = sum(r[k] for r in runs)
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
