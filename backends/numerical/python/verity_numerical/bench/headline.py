@@ -219,7 +219,9 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
             covered, uncovered = [], []
             for g in subs:
                 mine = [(c, sub) for c, b, sub in cells if b == bid and g["subcircuit"] is not None and sub == g["subcircuit"]]
-                hits = [c for c, _ in mine if not c.provisional and not c.legacy.finding and T.same_sku(V.prover_gpu.get(c.artifact), served.device)]
+                anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
+                hits = [c for c, _ in mine if not c.provisional and not c.legacy.finding
+                        and (anywhere or T.same_sku(V.prover_gpu.get(c.artifact), served.device))]
                 if hits:
                     c = min(hits, key=lambda x: (-x.throughput["instances_per_second"], x.artifact))
                     P = c.throughput["instances_per_second"]

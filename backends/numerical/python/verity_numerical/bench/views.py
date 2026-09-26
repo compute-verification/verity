@@ -451,6 +451,8 @@ class Rules:
     #: measured wall is at most 1.1 x the model), and non-GEMM N on activations only (per-row weights and tables cached)
     interaction_one_sided: bool = False
     native_cached: bool = False
+    #: a third preview: the workload headline counts a cleared cell on any GPU (N still the served hardware line's)
+    headline_any_hardware: bool = False
 
 
 SPEC = Rules("spec")
@@ -2384,6 +2386,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--standard-hashes-only", action="store_true", help="drop backends and statements with an algebraic hash in the soundness argument")
     ap.add_argument("--preview-one-sided-interaction", action="store_true",
                     help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
+    ap.add_argument("--preview-any-hardware-headline", action="store_true",
+                    help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
     ap.add_argument("--preview-cached-weights", action="store_true",
                     help="PREVIEW (pending decision, never published): non-GEMM native N on activations only (weights/tables cached)")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
@@ -2431,6 +2435,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}+unvalidated-interaction", interaction_validated=False)
     if ns.preview_one_sided_interaction:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
+    if ns.preview_any_hardware_headline:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-any-hardware-headline", headline_any_hardware=True)
     if ns.preview_cached_weights:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-cached-weights", native_cached=True)
     if ns.standard_hashes_only:

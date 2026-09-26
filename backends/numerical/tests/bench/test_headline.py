@@ -156,3 +156,15 @@ def test_the_render_and_the_site_json_carry_the_headline_and_legacy_does_not(sto
     assert got and all(x["result"] and x["result"].startswith("C-interactive@") for x in got)
     legacy = V.build(store, V.LEGACY)
     assert "Workload headline" not in V.render_markdown(legacy) and V.render_entities(legacy)["workload_headline"] is None
+
+
+def test_the_any_hardware_preview_counts_the_cells_on_other_gpus_and_the_published_rules_do_not(store: LocalStore) -> None:
+    import dataclasses
+
+    for sub in NONGEMM:
+        nongemm(store, sub)
+    strict = next(r for r in H.headline(V.build(store, SPEC)) if r["workload"] == ROW101["id"])
+    loose = next(r for r in H.headline(V.build(store, dataclasses.replace(SPEC, headline_any_hardware=True))) if r["workload"] == ROW101["id"])
+    row = lambda rec: next(r for r in rec["backends"] if r["backend"] == "C-interactive")  # noqa: E731
+    assert row(strict)["covered"] == [] and not SPEC.headline_any_hardware
+    assert {c["subcircuit"] for c in row(loose)["covered"]} == set(NONGEMM)
