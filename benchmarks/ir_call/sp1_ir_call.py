@@ -92,6 +92,8 @@ def _bind(relation: dict):
         return bind(b1.RMSNormTriton, N=int(statics["N"]), EPS=eps), tables, {k: t.source[k] for k in tables}, REDUCE
     if definition == "RoPE_v1":
         return bind(b1.RoPEHead, D=int(statics["D"])), {}, {}, REDUCE
+    if definition == "SiluMul_v1":
+        return bind(b1.SiluMul, I=int(statics["I"])), {}, {}, "veritor.elem-bf16@1"
     if definition == "Gemm_v1":
         return bind(b1.GemmCoordinate, K=int(statics["K"])), {}, {}, "veritor.tc-ampere-bf16@2"
     raise SystemExit(f"no binding for {relation['definition']} yet")

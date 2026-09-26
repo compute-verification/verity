@@ -74,3 +74,13 @@ def test_table_gates_accept_only_the_row_the_operand_reads():
     assert gate_set["rsqrt_approx"].evaluate((x, (index << 32) | word)) == R.rsqrt_approx(x, (index << 32) | word)
     with pytest.raises(RuntimeError):
         gate_set["rsqrt_approx"].evaluate((x, ((index ^ 1) << 32) | word))
+
+
+def test_elem_bf16_is_the_guests():
+    from verity.proofs.elem_bf16 import ELEM_BF16_DIGEST, silu_mul_bf16, silu_table
+
+    assert str(family_gate_set("veritor.elem-bf16@1", 32).digest) == ELEM_BF16_DIGEST
+    table = silu_table()  # raises unless it hashes to the guest's embedded table
+    assert table[0x0000] == 0 and table[0x8000] == 0 and table[0x3F80] == 0x3F3B  # silu(1) = 0.7311 -> bf16 0x3F3B
+    assert silu_mul_bf16(0x3F80, 0x4000) == 0x3FBB  # 2 * bf16(silu(1))
+    assert silu_mul_bf16(0x7FC1, 0x3F80) == 0x7FC0
