@@ -6,8 +6,12 @@ The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAV
 pinned per I by :data:`PINS` (the frame statement's two-element unit by :data:`FRAME_PINS`)."""
 TEMPLATE = "silu-mul"
 UNIT = "silu-mul/bf16/element"
-PINS = {8192: "be5a090be33ef6ad7d8cc0242610d038c87adb11c93f4ba1328f19263a42f25b"}
-FRAME_PINS = {8192: "823415f4d07973827c800d8bb64baedaeab62ca240ff8a5569f28a1beea12282"}
+PINS = {8192: "be5a090be33ef6ad7d8cc0242610d038c87adb11c93f4ba1328f19263a42f25b",
+        9728: "1747e5c5bd676392db03ec383fc3acf6655b6066619f748d26b6380e25062e0d",
+        14336: "20e14a658b21fff2e3dd001ccb64ec9ca67ff5e4e7a28b9ca311011404a15726"}
+FRAME_PINS = {8192: "823415f4d07973827c800d8bb64baedaeab62ca240ff8a5569f28a1beea12282",
+              9728: "5b903f64ceeb414a4528ab36ceafde474afc2a9a0594ac2fb9fd0bb71bf19ea9",
+              14336: "8291dc1369457102112b6fe221f245544e819411e16bf160ae3f04651d257a05"}
 
 
 def definition(subcircuit):
