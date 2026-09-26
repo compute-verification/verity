@@ -60,7 +60,12 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
-           "commitments": "one root, both reps (R1)", "flavor": "rs", "merkle_hash": "sha256", "leaf_scheme": c.leaf_scheme,
+           "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
+           // every commitment hash of the statement is SHA-256; the serving row leaf is the one path left (its format is the
+           // serving side's, blake3-keyed/row/v2 until the Halevi-Micali-on-SHA-256 row leaf replaces it)
+           "hashes": {"merkle": "sha256", "round_digest": "sha256", "statement_digest": "sha256", "sigma": "sha256",
+                      "coin_commitment": "sha256", "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
+                      "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "blake3-keyed/row/v2"},
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 

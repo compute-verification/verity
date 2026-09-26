@@ -768,9 +768,6 @@ pub struct RoundRec {
     pub len: usize,
     pub n: u32,
     pub coins: Vec<F128>,
-    /// with a step-0 seed: the session-wide index of the coin request that answered this round (`coin_seed::coins(key, g, n)`),
-    /// so the derivation replays from the record however the reps' rounds interleave
-    pub g: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -832,6 +829,9 @@ pub struct Server {
     /// the global index of the last seed-derived coin request, and of the link points' request
     last_g: Option<u64>,
     points_g: Option<u64>,
+    /// with a step-0 seed: (stream, round) -> the session-wide index of the coin request that answered it
+    /// (`coin_seed::coins(key, g, n)`), so the derivation replays from the record however the reps' rounds interleave
+    round_g: BTreeMap<(String, usize), u64>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
     t0: std::time::Instant,
@@ -876,6 +876,7 @@ impl Server {
             seed: None,
             last_g: None,
             points_g: None,
+            round_g: BTreeMap::new(),
             seed_inject: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
@@ -1175,7 +1176,11 @@ impl Server {
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
                 }
                 let coins = self.coins(n as usize);
-                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone(), g: self.last_g });
+                let at = self.streams[&stream].rounds.len();
+                if let Some(g) = self.last_g {
+                    self.round_g.insert((stream.clone(), at), g);
+                }
+                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
                 Resp::Coins(coins)
             }
             Req::Proof { table, rep, bytes } => {
@@ -1296,7 +1301,7 @@ impl Server {
                     "stream": name, "parent": s.parent, "label": String::from_utf8_lossy(&s.label), "at": s.at,
                     "root_sha256": s.cap.as_ref().map(|c| hex(&sha256(c))),
                     "rounds": s.rounds.iter().enumerate().map(|(k, r)| json!({
-                        "k": k, "g": r.g, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
+                        "k": k, "g": self.round_g.get(&(name.clone(), k)), "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
                         "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
                     })).collect::<Vec<_>>(),
                 })
@@ -1486,7 +1491,10 @@ impl Server {
                 if sha.len() != 32 || coins.len() != n as usize {
                     return Err(bad(&format!("{name} round {k}: malformed")));
                 }
-                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins, g: r["g"].as_u64() });
+                if let Some(g) = r["g"].as_u64() {
+                    s.round_g.insert((name.to_string(), sr.rounds.len()), g);
+                }
+                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
             }
             if sr.parent.is_empty() {
                 let Some((table, rep)) = s.root_of(&name) else { return Err(bad(&format!("unknown root stream {name}"))) };
