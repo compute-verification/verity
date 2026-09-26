@@ -1452,3 +1452,11 @@ def test_a_result_naming_an_unknown_subcircuit_is_rejected_not_a_crash(store: Lo
     views = V.build(store)
     assert codes(views, art) == ["X"] and "not a census subcircuit" in next(r for r in views.rejected if r["artifact"] == art)["codes"][0][1]
     V.render_entities(views, rendered_at="2026-09-26T08:40:00Z", commit="abc")
+
+
+def test_a_captured_vu_set_matches_its_statement_by_ir_definition_and_statics() -> None:
+    rope = {"relation": {"definition": "RoPE_v1", "statics": {"D": 64}, "subcircuit": "RoPEHead<64>"}}
+    assert V._captured_set_is(rope, "rope-head/d64/neox-bf16")
+    assert not V._captured_set_is({"relation": {"definition": "RoPE_v1", "statics": {"D": 128}}}, "rope-head/d64/neox-bf16")
+    rms = {"relation": {"definition": "RMSNormFusedCuda_v2", "statics": {"N": 2048, "EPS": '{"f64":"0x1p-17"}'}}}
+    assert V._captured_set_is(rms, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16") and not V._captured_set_is(rms, "rmsnorm-triton/n2048-eps1e-05/bf16")

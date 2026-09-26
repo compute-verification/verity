@@ -952,6 +952,22 @@ def _set_k(meta: Mapping[str, Any]) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _captured_set_is(meta: Mapping[str, Any], sub: str | None) -> bool:
+    """Whether a captured ``vllm-vu-set/v1`` set (which records its IR ``relation``, not a census id) is of ``sub``: its
+    ``relation.definition`` is one of the template's IR Definitions in the census, and its integer statics equal the
+    subcircuit's integer parameters.  numpy-free (the steward renders without numpy; ``bench.templates.identify`` needs it)."""
+    known = census.SUBCIRCUITS.get(sub or "")
+    rel = meta.get("relation") if isinstance(meta.get("relation"), Mapping) else {}
+    if known is None or not isinstance(rel.get("definition"), str):
+        return False
+    names = {n for d in getattr(census.SUBCIRCUIT_TEMPLATES[known.template], "ir_definitions", ()) for n in re.findall(r"[A-Za-z][A-Za-z0-9_]*", d)}
+    if rel["definition"] not in names:
+        return False
+    statics = rel.get("statics") if isinstance(rel.get("statics"), Mapping) else {}
+    ints = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int) and not isinstance(v, bool)}
+    return all(statics.get(k) == v for k, v in ints.items())
+
+
 def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
     """Why a result on a statement of its own (another K or semantics) does not run on a registered input set of that K, or
     ``[]``: its inputs name an ``input-set/v1`` / ``vllm-vu-set/v1`` artifact (the ``bench.cell`` stamp's art, else the set's
@@ -968,7 +984,7 @@ def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
                       f"digest {inst.get('content_digest') or inst.get('manifest_sha256')!r})")]
     art, meta = hit
     if not is_gemm(ctx.subcircuit):
-        if meta.get("subcircuit") != ctx.subcircuit:
+        if meta.get("subcircuit") != ctx.subcircuit and not _captured_set_is(meta, ctx.subcircuit):
             return [("I", f"input set {art} is of {meta.get('subcircuit')!r}, the statement's subcircuit is {ctx.subcircuit}")]
     else:
         K, sk = subcircuit_k(ctx.subcircuit), _set_k(meta)
