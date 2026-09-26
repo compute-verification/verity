@@ -83,3 +83,25 @@ def test_real_k_rows_compose_with_a_sized_blake3_frame() -> None:
     for rel_name, K in (("bf16-ampere-x4-k2048+sha256", 2048), ("fp8-ada-x4-k8192", 8192), ("fp8-ada-x4+blake3", 1536)):
         st.relation = rel_name
         assert _K_of(st) == K
+
+
+@pytest.mark.parametrize("name,semantics", [("fp8-ada-x4-k2048", "sm89.mma.m16n8k32.e4m3"),
+                                            ("fp8-hopper-x4-k2048", "sm90.wgmma.m64n8k32.e4m3")])
+def test_fp8_sets_are_read_as_their_fp32_accumulators(tmp_path, name, semantics) -> None:
+    """An E4M3 set records the FP32 accumulator itself (a u32 ``y``, no epilogue): the reader compares it word for word with the
+    model's (not the 22-bit public packing of it), so a flip in any bit of the recorded word is refused."""
+    from verity_numerical.bench.input_sets import InputSet
+
+    from .relchain import set_instances
+    rel = relation(name)
+    path = _gemm_set(tmp_path, rel.K, semantics, n=4)
+    s = InputSet.open(path)
+    assert s.manifest["ports"]["y"]["dtype"] == "u32"
+    vus = set_instances(rel, path, 4)
+    assert [v[3] for v in vus] == [int(w) for w in s.port("y")[:, 0]]
+    yfile = s.path / s.manifest["ports"]["y"]["file"]
+    yb = bytearray(yfile.read_bytes())
+    yb[0] ^= 1                                                   # bit 0 of instance 0's FP32 word
+    yfile.write_bytes(bytes(yb))
+    with pytest.raises(ValueError, match="FP32 accumulator"):
+        set_instances(rel, path, 4)

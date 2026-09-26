@@ -295,3 +295,17 @@ def test_verifier_tag_comes_from_the_crate_it_was_built_in(tmp_path):
     with pytest.raises(SystemExit, match="src/main.rs is newer than the binary"):
         R.load_verifier(binary)
     assert R.load_verifier(binary, allow_stale=True).src_commit is None
+
+
+def test_a_bench_cell_result_is_reverified_from_its_artifacts_path(env, capsys):
+    """A bench.cell result's run-files are its prover run's dump at ``sweep/<point>/proofs`` (the result's ``artifacts``):
+    reverify reads the tree there, not only at the top."""
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    root = env / "cell"
+    _dump(root / "sweep" / "p3-6272")
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=root)
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-cell", "artifacts": ["sweep/p3-6272/proofs"]}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out

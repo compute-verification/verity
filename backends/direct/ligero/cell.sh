@@ -40,13 +40,10 @@ if [ "$ROLE" = verifier ]; then
   wait $B || { cat $RD/build.log; echo "BUILD FAILED"; exit 1; }
   sha256sum $W/bin/ligero-verify | tee $RD/ligero_verify.sha256
   say "live serve on :$PORT (idle exit ${IDLE:-1800}s)"
-  # a finished session's statements and proofs (GBs per cell) leave the disk once its verdict is written; the verdicts stay
-  ( while sleep 60; do for d in $RD/sessions/s*/; do [ -f "$d/verdict.json" ] && rm -f "$d"/*.proof "$d"/*.hproof "$d"/*.stmt; done; done ) &
-  CLEAN=$!
+  # --drop-files: a finished session's statements and proofs (GBs per cell) leave the disk once its verdict is written
   "$PY" -m backends.direct.ligero.live serve --listen 0.0.0.0:$PORT --out $RD/sessions --ligero-verify $W/bin/ligero-verify \
-      --jobs ${JOBS:-$NT} --threads 1 --target-bits 128 --idle-exit ${IDLE:-1800} > $RD/serve.out 2>&1
+      --jobs ${JOBS:-$NT} --threads 1 --target-bits 128 --idle-exit ${IDLE:-1800} --drop-files > $RD/serve.out 2>&1
   rc=$?
-  kill $CLEAN 2>/dev/null
   tail -3 $RD/serve.out
   "$PY" - "$RD" <<'EOF'
 import json, sys
@@ -120,7 +117,7 @@ if [ "${LOOPBACK:-1}" = 1 ]; then
   say "loopback probe: $NPL VUs against a live verifier on 127.0.0.1"
   mkdir -p $RD/loopback
   $PY -m backends.direct.ligero.live serve --listen 127.0.0.1:7001 --out $RD/loopback/sessions --ligero-verify $V --jobs $NT \
-      --threads 1 --idle-exit 60 > $RD/loopback/serve.out 2>&1 &
+      --threads 1 --idle-exit 60 --drop-files > $RD/loopback/serve.out 2>&1 &
   LS=$!; sleep 3
   $PY -u -m backends.direct.ligero.run --relation $REL bench-vu "${BENCH[@]}" --batch $L --pipeline $PP --total-vus $NPL --reps 2 \
       --verifier tcp://127.0.0.1:7001 --no-local-verify --out $RD/loopback/result.json > $RD/loopback/bench.log 2>&1

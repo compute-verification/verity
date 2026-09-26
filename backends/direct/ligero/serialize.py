@@ -740,9 +740,44 @@ def read_statement(data: bytes) -> Statement:
 # Proof
 # ---------------------------------------------------------------------------------------------------------------------
 
-def proof_bytes(pf) -> bytes:
-    from .protocol import COIN_BYTES
+def _u4_view(a) -> memoryview:
+    """``a`` as ``<u4`` bytes without a copy when it already is a C-contiguous little-endian uint32 array (the prover's
+    opened columns and test messages are), else one converted copy."""
+    u = np.ascontiguousarray(np.asarray(a), dtype="<u4")
+    return memoryview(u).cast("B")
+
+
+def proof_buffers(pf) -> list:
+    """The ``ligero-proof`` byte stream of :func:`proof_bytes` as a list of buffers: the small fields packed into ``bytes``,
+    every large array (w, h, q, v, the opened columns) a view of the proof's own memory -- the live sender writes them to the
+    socket as they are (``live.send_frame_parts``), so a proof is never copied on the prover's side."""
     w = _W()
+    out: list = []
+
+    def flush():
+        if w.parts:
+            out.append(w.bytes())
+            w.parts.clear()
+
+    def big(a):
+        flush()
+        out.append(_u4_view(a))
+
+    _proof_stream(pf, w, big)
+    flush()
+    return out
+
+
+def proof_bytes(pf) -> bytes:
+    w = _W()
+    _proof_stream(pf, w, lambda a: w.arr(a, "<u4"))
+    return w.bytes()
+
+
+def _proof_stream(pf, w: "_W", big) -> None:
+    """Write proof ``pf`` in the ligero-proof/v1 | v2 | v3 layout: the header fields through ``w``, each large ``<u4`` array
+    through ``big(array)``."""
+    from .protocol import COIN_BYTES
     fp = getattr(pf, "fp", None)
     if fp is not None and pf.auth is not None:
         raise ValueError("a fingerprint message and multiproofs in one transcript: no such format")
@@ -765,14 +800,14 @@ def proof_bytes(pf) -> bytes:
             w.raw(x)
     assert len(pf.root) == 32
     w.raw(pf.root)
-    w.arr(pf.w, "<u4")
-    w.arr(pf.h, "<u4")
+    big(pf.w)
+    big(pf.h)
     if pf.q is not None:
-        w.arr(pf.q, "<u4")
+        big(pf.q)
     if pf.v is not None:
-        w.arr(pf.v, "<u4")
+        big(pf.v)
     w.arr(np.asarray(pf.cols, dtype=np.int64), "<u4")
-    w.arr(pf.opened, "<u4")
+    big(pf.opened)
     for pth in pf.paths:
         assert len(pth) == depth
         for sib in pth:
@@ -789,7 +824,6 @@ def proof_bytes(pf) -> bytes:
         F = np.ascontiguousarray(np.asarray(fp, dtype=np.int64))
         w.u32(F.size)
         w.arr(F.reshape(-1), "<u4")
-    return w.bytes()
 
 
 def read_proof(data: bytes, fp_shape: tuple | None = None):
@@ -831,6 +865,31 @@ def read_proof(data: bytes, fp_shape: tuple | None = None):
     pf = Proof(root, w, h, cols, opened, paths, name, {}, q, v, cc, coins, auth)
     pf.fp = fp
     return pf
+
+
+def read_proof_head(data: bytes):
+    """The head of a proof file -- coin commitments, coins, root and the test message (w, h, q, v) -- without reading the
+    opened columns or the paths behind it: what the live verifier's per-proof checks compare (the Rust verifier reads the
+    whole file).  ``ValueError`` on a truncated or foreign head."""
+    from types import SimpleNamespace
+
+    from .protocol import Coins
+    r = _R(data)
+    magic = r.take(8)
+    if magic not in (PROOF_MAGIC, PROOF_MAGIC_V2, PROOF_MAGIC_V3):
+        raise ValueError("not a ligero-proof/v1, /v2 or /v3 file")
+    _hid, has_coins, has_v, has_q = r.u8(), r.u8(), r.u8(), r.u8()
+    D, w_len, h_len, q_len, v_len, _M, _t, _depth = (r.u32() for _ in range(8))
+    cc = coins = None
+    if has_coins:
+        c1, c2, r1, s1, r2, s2 = (r.take(32) for _ in range(6))
+        cc, coins = (c1, c2), Coins(r1, s1, r2, s2)
+    root = r.take(32)
+    w = r.arr((D, w_len), "<u4")
+    h = r.arr((D, h_len), "<u4")
+    q = r.arr((D, q_len), "<u4") if has_q else None
+    v = r.arr((D, v_len), "<u4") if has_v else None
+    return SimpleNamespace(magic=magic, coin_commit=cc, coins=coins, root=root, w=w, h=h, q=q, v=v, fp=None)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
