@@ -64,7 +64,7 @@ def unmet(cell) -> str | None:
     return None
 
 
-def set_tarball(ref: dict, root: Path = Path(".bench-cell") / "sets") -> Path:
+def gemm_set_tarball(ref: dict, root: Path = Path(".bench-cell") / "sets") -> Path:
     """An input set's manifest and port files as one ``.tgz`` sent with both runs (``research run --send``; the pods have no
     store access), named by the set and its content digest."""
     d = Path(ref["path"])
@@ -87,7 +87,7 @@ def jobs(cell) -> list[dict]:
               *([f"PER={cell.per_proof}"] if cell.per_proof else [])]
     send = []
     if cell.input_set.get("kind") == "set":
-        tgz = set_tarball(cell.input_set)
+        tgz = gemm_set_tarball(cell.input_set)
         common.append(f"SET={tgz.name}")
         send = [str(tgz)]
     operator = f"OPERATOR={cell.lane}-verifier-pod"
