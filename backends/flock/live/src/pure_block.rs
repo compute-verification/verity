@@ -50,14 +50,16 @@ pub const PT_LOCAL: usize = 16;
 
 /// The `flock-unit-io/v1` lowered unit (flock-backend's `verity_flock.lowering`), read-only.
 /// The block shape of one relation family.
-/// - `Bf16` (16-bit rows, 3 chunks, 96 units): block (v, c) is chunk c of VU v; `k_log` 20; 16 + 16 compressions and 32 units.
+/// - `Chunk(n)` (rows of n whole BLAKE3 chunks, 32 units per chunk: 16-bit K = 1536 is `Chunk(3)`, K = 2048 `Chunk(4)`,
+///   K = 8192 `Chunk(16)`; 8-bit K = 2048 `Chunk(2)`, K = 8192 `Chunk(8)`): block (v, c) is chunk c of VU v; `k_log` 20;
+///   16 + 16 compressions and 32 units; the cross-chunk accumulators are prover-committed public words.
 /// - `Fp8` (8-bit rows, 1.5 chunks, 48 units): block v is the whole VU; `k_log` 21; x chunk 0 (16) and chunk 1 (8), then W's,
 ///   48 compressions and the 48 units at 2^13 positions 96..144. Key, counter, flags and block_len are all per-slot
 ///   constants, the accumulator chain is inside the block (c_in of unit 0 forced to +0), and only the four chunk chaining
 ///   values and the output word are public.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Layout {
-    Bf16,
+    Chunk(u8),
     Fp8,
     /// `sha256/row/v1` leaves: block v is the whole VU; each role is one SHA-256 chain (the verifier's midstate after the
     /// 64-byte prefix block, the row's 64-byte blocks, one constant padding block) of 2^15-bit compressions, then the
@@ -70,26 +72,26 @@ pub enum Layout {
 impl Layout {
     pub fn of(row_bytes: usize, units: usize, sha: bool) -> Self {
         match (row_bytes, units, sha) {
-            (3072, 96, false) => Layout::Bf16,
             (1536, 48, false) => Layout::Fp8,
+            (rb, u, false) if rb % 1024 == 0 && u == 32 * (rb / 1024) && rb / 1024 <= 64 => Layout::Chunk((rb / 1024) as u8),
             (3072, 96, true) => Layout::ShaBf16,
             (1536, 48, true) => Layout::ShaFp8,
-            _ => panic!("flock-pure-block covers 16-bit rows (96 units) and 8-bit rows (48 units)"),
+            _ => panic!("flock-pure-block covers rows of whole BLAKE3 chunks (32 units each) and the K = 1536 8-bit and SHA-256 rows"),
         }
     }
     pub fn is_sha(self) -> bool { matches!(self, Layout::ShaBf16 | Layout::ShaFp8) }
-    pub fn row_bytes(self) -> usize { match self { Layout::Bf16 | Layout::ShaBf16 => 3072, _ => 1536 } }
+    pub fn row_bytes(self) -> usize { match self { Layout::Chunk(n) => 1024 * n as usize, Layout::ShaBf16 => 3072, _ => 1536 } }
     /// log2 of a compression sub-block: BLAKE3 14, SHA-256 15.
     pub fn comp_log(self) -> usize { if self.is_sha() { 15 } else { 14 } }
-    pub fn k_log(self) -> usize { match self { Layout::Bf16 => 20, Layout::Fp8 => 21, Layout::ShaBf16 => 22, Layout::ShaFp8 => 21 } }
-    pub fn comp_slots(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48, Layout::ShaBf16 => 98, Layout::ShaFp8 => 50 } }
+    pub fn k_log(self) -> usize { match self { Layout::Chunk(_) => 20, Layout::Fp8 => 21, Layout::ShaBf16 => 22, Layout::ShaFp8 => 21 } }
+    pub fn comp_slots(self) -> usize { match self { Layout::Chunk(_) => 32, Layout::Fp8 => 48, Layout::ShaBf16 => 98, Layout::ShaFp8 => 50 } }
     pub fn per_role(self) -> usize { self.comp_slots() / 2 }
-    pub fn units(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96 } }
+    pub fn units(self) -> usize { match self { Layout::Chunk(_) => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96 } }
     /// The first unit's 2^13 position: right after the compressions.
     pub fn unit_pos0(self) -> usize { self.comp_slots() << (self.comp_log() - 13) }
-    pub fn blocks_per_vu(self) -> usize { match self { Layout::Bf16 => 3, _ => 1 } }
+    pub fn blocks_per_vu(self) -> usize { match self { Layout::Chunk(n) => n as usize, _ => 1 } }
     /// Compressions per chunk of a block, in order (SHA: one chain per role, its padding block included).
-    pub fn chunks(self) -> &'static [usize] { match self { Layout::Bf16 => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25] } }
+    pub fn chunks(self) -> &'static [usize] { match self { Layout::Chunk(_) => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25] } }
     /// Chaining values per block the prover publishes (x chunks, then W chunks); SHA publishes none (the digests are the
     /// verifier's).
     pub fn n_cv(self) -> usize { if self.is_sha() { 0 } else { 2 * self.chunks().len() } }
@@ -589,7 +591,7 @@ impl PureStmt {
         let (da, db) = if lay.is_sha() { delta_sha(&net, lay, lay.row_bytes()) } else { delta(&net, lay, &keys) };
         let list: Vec<Region> = match lay {
             Layout::ShaBf16 | Layout::ShaFp8 => vec![Region::Digest(0), Region::Digest(1), if net.epilogue() { Region::Y } else { Region::AccOut }],
-            Layout::Bf16 => {
+            Layout::Chunk(_) => {
                 let mut v = vec![Region::Key, Region::Counter, Region::Cv, Region::AccIn, Region::AccOut];
                 if net.epilogue() {
                     v.push(Region::Y);
@@ -618,7 +620,7 @@ impl PureStmt {
             .flat_map(|role| {
                 let keys = keys;
                 lay.chunks().iter().enumerate().map(move |(c, &nb)| {
-                    let (mut cv, ctr) = match lay { Layout::Bf16 => ([0u32; 8], 0u64), _ => (keys[role], c as u64) };
+                    let (mut cv, ctr) = match lay { Layout::Chunk(_) => ([0u32; 8], 0u64), _ => (keys[role], c as u64) };
                     for j in 0..nb {
                         cv = blake3_compress(&cv, &[0u32; 16], ctr, 64, chunk_flags(j, nb))[..8].try_into().unwrap();
                     }
@@ -635,6 +637,11 @@ impl PureStmt {
         h.update(net.sha256);
         for x in [vus, blocks_real, nbl, m, kl, UNIT_LOG, slots, units, p0] {
             h.update((x as u64).to_le_bytes());
+        }
+        if let Layout::Chunk(n) = lay {
+            if n != 3 {
+                h.update(format!("layout chunk: block = (VU, chunk), {n} chunks per VU, committed cross-chunk accumulators").as_bytes());
+            }
         }
         if lay == Layout::Fp8 {
             h.update(b"layout fp8: block = VU, chunks 16+8, per-slot key/counter constants, c_in(0) = 0");
@@ -697,7 +704,7 @@ impl PureStmt {
                         let (v, ci) = self.vu_chunk(b, c);
                         let (mut cv, ctr) = match (lay, real) {
                             (_, true) => (self.keys[role], ci as u64),
-                            (Layout::Bf16, false) => ([0; 8], 0),
+                            (Layout::Chunk(_), false) => ([0; 8], 0),
                             (_, false) => (self.keys[role], c as u64),
                         };
                         for j in 0..nb {
@@ -882,13 +889,13 @@ impl PureStmt {
             Region::AccIn => (if real && c > 0 { p.acc[b - 1] } else { 0 }).to_le_bytes().to_vec(),
             Region::AccOut => (match (self.lay, real) {
                 (_, false) => self.dummy_unit.0,
-                (Layout::Bf16, true) => p.acc[b],
+                (Layout::Chunk(_), true) => p.acc[b],
                 (_, true) => inst.out[v],
             })
             .to_le_bytes()
             .to_vec(),
             Region::Y => {
-                let y = if !real { self.dummy_unit.1 } else if self.lay.blocks_per_vu() == 1 || c == 2 { inst.out[v] } else { p.y16[b] };
+                let y = if !real { self.dummy_unit.1 } else if c + 1 == self.lay.blocks_per_vu() { inst.out[v] } else { p.y16[b] };
                 (y as u16).to_le_bytes().to_vec()
             }
         }
