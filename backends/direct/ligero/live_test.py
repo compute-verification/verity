@@ -365,3 +365,19 @@ def test_streamed_proofs_on_parallel_data_connections(server, monkeypatch):
         assert b"".join(bytes(b) for b in bufs) == proof_bytes(proof)
         assert any(isinstance(b, memoryview) and b.nbytes == proof.opened.nbytes for b in bufs)      # the opened columns, uncopied
         assert proof_bytes(proof) == (out / verdict["session_id"] / f"sub_{si:02d}.proof").read_bytes()
+
+
+def test_proof_frame_after_the_session_closed_is_refused_not_raised(tmp_path):
+    """A PROOF frame that arrives after the session finished (its check pool shut down, e.g. behind a refused duplicate on
+    another data connection) is recorded as a data-channel error; the reader thread does not die on the pool's RuntimeError
+    (red-team-bligero-real-k nit)."""
+    import struct
+    from types import SimpleNamespace
+    srv = SimpleNamespace(out=tmp_path, target_bits=128.0, log=lambda m: None)
+    sess = live.Session(srv, None, None, {"n_proofs": 2}, b"")
+    sess.check_pool.shutdown(wait=False)                # what _finish does once the verdict is written
+    a, b = socket.socketpair()
+    live.send_frame(a, live.K_PROOF, struct.pack("<II", 1, 0) + b"late")
+    sess._data_loop(b)
+    assert sess.proofs_done.is_set()
+    assert any("PROOF 1 arrived after the session closed" in e for e in sess.errors), sess.errors

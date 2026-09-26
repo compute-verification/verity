@@ -9,7 +9,8 @@ session with a verifier on another pod, which drew the coins and ran the Rust ve
 it -- the open-connection RTT and one-flow bandwidth to the verifier (``live probe --pings``, before the sweep), the same-run
 loopback probe (one ``bench-vu`` at the plateau size against a verifier on 127.0.0.1: the prover's own handling per round trip)
 -- and the interaction record the views read (``bench.views.interaction``).  ``register`` stamps the producing lane and the
-verifier run's session verdicts on that document for ``research data put``.
+verifier run's session verdicts on that document for ``research data put``, and refuses it (exit 3) unless its soundness bound,
+with the chain test's field term booked (``chain_bound``), is at or below 2^-128.
 """
 from __future__ import annotations
 
@@ -20,7 +21,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import chain_term
+
 PER_PROOF_DEPTH = 3          # PROTOCOL.md 8c: the verifier's commitment, then its two openings
+TARGET_BITS = 128.0          # a registered cell's bound, the chain test's field term included
+
+
+class Refused(ValueError):
+    """``register`` does not stamp this result."""
 
 
 def _meas(doc: dict[str, Any]) -> dict[str, Any]:
@@ -151,8 +159,42 @@ def _tree_sha(run: Path) -> str | None:
         return None
 
 
+def chain_bound(doc: dict[str, Any]) -> dict[str, Any]:
+    """The result's soundness record with the chain test's field term booked (``chain_term``; red-team-bligero-real-k A1).
+    A result whose terms carry ``chain_field`` was made with it booked.  Otherwise the term is added here per proof from the
+    statement's linked rows (a hashed statement; a bare one has three and no term), and the union is taken again over the
+    record's ``n_proofs``."""
+    snd = ((doc.get("validation") or {}).get("evidence") or {}).get("soundness")
+    if not isinstance(snd, dict) or "per_proof_total_log2" not in snd:
+        raise Refused("the result carries no soundness record (validation.evidence.soundness)")
+    terms = snd.get("terms_log2") or {}
+    fp = doc.get("workload_fingerprint") or {}
+    if "chain_field" in terms or not isinstance(fp.get("leaf"), dict):
+        return snd
+    if "h" in snd:
+        raise Refused("a row-sharing pair made before the chain test's field term was booked: re-run it")
+    extras = chain_term.hashed_extras(fp.get("statement_relation") or fp["relation"])
+    d = int(str(snd["field"]).rpartition("^")[2])
+    term = math.log2(chain_term.field_term(extras, d)) + (snd.get("fiat_shamir_queries_log2") or 0)
+    pp = snd["per_proof_total_log2"]
+    per = max(pp, term) + math.log2(1.0 + 2.0 ** -abs(pp - term))
+    return {**snd, "terms_log2": {**terms, "chain_field": term}, "per_proof_total_log2": per,
+            "total_log2": per + math.log2(snd["n_proofs"]), "chain_extras": extras, "chain_degree": chain_term.degree(extras),
+            "chain_field_booked": "at register: the result predates the term (red-team-bligero-real-k A1)"}
+
+
 def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict[str, Any]:
     doc = json.loads((prover_run / "result.json").read_text())
+    snd = chain_bound(doc)
+    if snd["total_log2"] > -TARGET_BITS:
+        raise Refused(f"soundness 2^{snd['total_log2']:.3f} over {snd['n_proofs']} sub-batches (per proof "
+                      f"2^{snd['per_proof_total_log2']:.3f}, chain test field term 2^{snd['terms_log2'].get('chain_field', float('-inf')):.2f}) "
+                      f"is above 2^-{TARGET_BITS:g}")
+    if snd is not doc["validation"]["evidence"]["soundness"]:
+        doc["validation"]["evidence"]["soundness"] = snd
+        sec = (doc.get("workload_fingerprint") or {}).get("security")
+        if isinstance(sec, dict):
+            sec["achieved_log2"], sec["achieved_bits"] = snd["total_log2"], -snd["total_log2"]
     doc["lane"] = doc["registered_by"] = lane
     for x in doc.get("measurements") or []:
         if x.get("name") == "rounds.per_proof_depth":         # not a contract name (finish wrote it before fadc2b9b)
@@ -203,7 +245,11 @@ def main(argv: list[str] | None = None) -> int:
         lb = json.loads(a.loopback.read_text()) if a.loopback and a.loopback.is_file() else None
         doc = finish(a.sweep, json.loads(a.probe.read_text()), lb, a.verifier, a.run_dir or a.out.parent, a.operator)
     else:
-        doc = register(a.prover_run, a.verifier_run, a.lane)
+        try:
+            doc = register(a.prover_run, a.verifier_run, a.lane)
+        except Refused as e:
+            print(f"register refused: {e}", file=sys.stderr)
+            return 3
     a.out.write_text(json.dumps(doc, indent=1, default=str))
     ix = __import__("verity_numerical.bench.views", fromlist=["interaction"])
     rec = ix.interaction(doc)

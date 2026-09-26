@@ -153,7 +153,13 @@ so the reported bound meets the target, ligero-verify DISCREPANCIES BV-D1) and `
     2^-80 sensitivity point: t = 118, D = 4 (fields 2^-110..-124).
 
 `t` is `ligero_queries_for(target, n, l, l)`. The linear test sends nothing, so its query term is at most the Appendix
-C one used.  A row-sharing GEMM side (8e) adds the statistical term `fingerprint_collision` (2^-157 / 2^-139 per proof). The proximity-gap statement for base-field rows combined by base-field coefficients is Ligero's own
+C one used.  A row-sharing GEMM side (8e) adds the statistical term `fingerprint_collision` (2^-157 / 2^-139 per proof).
+A chain of more than three linked rows (the hashed relations: the leaf's carried state) adds `chain_field`: its `E` extra
+constraints take monomial coefficients of degree up to `1 + ceil(E / 6)` (`chain.py`), so a violation survives a
+coordinate with probability up to that degree x 3 / 2^32 (the coins are uint32 mod p), i.e. `(3 deg / 2^32)^D` per proof
+(`chain_term.py`): 2^-165.6 for Poseidon2 (19 rows), 2^-155.4 for SHA-256 (69), 2^-149.5 for the 3-slot BLAKE3 frame (133),
+2^-137.4 for BF16 K = 8192 BLAKE3 (549).  `config_for` sizes `t` with it and ligero-verify books it too
+(red-team-bligero-real-k A1).  The proximity-gap statement for base-field rows combined by base-field coefficients is Ligero's own
 setting (no subfield/extension assumption is needed here, since the combinations are base-field).
 
 ## 7. Communication (l = 4096, m = 3372, t = 189, D = 6)

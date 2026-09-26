@@ -31,10 +31,11 @@ constraint ``e`` at column ``j`` (link extras first, then start extras, then end
 has coefficient ``u_{e mod 6} * u_6^(e div 6 + 1)`` where ``u_f = rc[f][j]``.  Every constraint at a column then has its
 own monomial (the base ones are the degree-1 ``u_0 .. u_6``, the extras have ``u_6``-degree >= 1), so the combination
 ``r^T (A w - b)`` is a nonzero polynomial of degree <= 1 + ceil(E / 6) in the column's coefficients whenever ``A w != b``
-(``E`` extras at that column) and vanishes with probability <= (1 + ceil(E / 6)) / p per challenge coordinate
-(Schwartz-Zippel) instead of 1 / p -- for the 32 extras of a hashed chain start column: 7 / p, i.e. (7 / p)^D = 2^-169
-at D = 6, below the field term ``(n + 3) / p^D`` the accounting already books.  Systems with three linked rows are
-unchanged (no extras; byte-identical transcripts).
+(``E`` extras at that column) and vanishes with probability <= (1 + ceil(E / 6)) x 3 / 2^32 per challenge coordinate
+(Schwartz-Zippel; the coefficients are uint32 words mod p, ``protocol._expand``).  That is not negligible next to the
+other field terms: 2^-137.4 per proof for a BF16 K = 8192 BLAKE3 frame (549 linked rows).  ``protocol.soundness`` books it
+as ``chain_field`` and ``config_for`` sizes ``t`` with it (``chain_term``, :func:`extra_constraints`), as does the Rust
+verifier's ``soundness()``.  Systems with three linked rows are unchanged (no extras; byte-identical transcripts).
 
 Fingerprint constraints (``sys.chain["fp"]``, lane share-logup: ``hashchain.compose_shared`` / ``row_hash_system``).  A
 system whose operand rows are hashed ONCE per tile instead of once per VU binds every VU to its shared row by a
@@ -59,11 +60,12 @@ from dataclasses import dataclass
 
 import torch
 
+from . import chain_term
 from .compile import P, System
 
 __all__ = ["FP_COORDS", "FP_COORDS_FS", "N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "N_BASE_LINKS", "WORD_BITS", "ChainCoefs",
-           "FpArgs", "Layout", "chain_coefs", "check_component", "end_terms", "extra_coef", "fp_lane_rows", "fp_values",
-           "n_links", "rho_powers"]
+           "FpArgs", "Layout", "chain_coefs", "check_component", "end_terms", "extra_coef", "extra_constraints", "fp_lane_rows",
+           "fp_values", "n_links", "rho_powers"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 FP_COORDS = 8         # fingerprint coordinates, interactive mode (module comment): (767 / p)^8 ~ 2^-171 at 48 steps
@@ -91,6 +93,15 @@ def n_links(ch: dict) -> int:
     if len(c) != len(y) or len(c) < N_BASE_LINKS:
         raise ValueError(f"a chain links {N_BASE_LINKS} or more rows ({len(c)} c rows, {len(y)} y expressions)")
     return len(c)
+
+
+def extra_constraints(ch: dict | None) -> int:
+    """The constraints of ``sys.chain`` with monomial coefficients (module comment): the link and start extras of the rows
+    beyond the base three, then the fingerprint constraints; 0 without a chain."""
+    if ch is None:
+        return 0
+    fp = ch.get("fp")
+    return chain_term.extra_constraints(n_links(ch), len(fp["lanes"]) * int(fp["coords"]) if fp is not None else 0)
 
 
 def extra_coef(rc: torch.Tensor, e: int) -> torch.Tensor:

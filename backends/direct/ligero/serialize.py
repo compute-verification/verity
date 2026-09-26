@@ -1027,12 +1027,13 @@ def verify_batch_dir(dir: Path, device: str = "cpu", target_bits: float = 128.0)
         if st.v6:
             # the pair: G's bound with the fingerprint term and H's, each sized for 2 n_proofs (SharedHashedRunner.batch_bound)
             sh = st.shared
-            b = [pm.soundness(st.config(), R.tb.L, R.tb.Q, 1, fp=(sh.coords, st.steps, 2))["per_proof_total_log2"],
-                 pm.soundness(sh.config(st), R.tb_h.L, R.tb_h.Q, 1)["per_proof_total_log2"]]
+            b = [pm.soundness(st.config(), R.tb.L, R.tb.Q, 1, fp=(sh.coords, st.steps, 2),
+                              chain_extras=R.chain_extras)["per_proof_total_log2"],
+                 pm.soundness(sh.config(st), R.tb_h.L, R.tb_h.Q, 1, chain_extras=R.chain_extras_h)["per_proof_total_log2"]]
             items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
                           "per_proof_log2": b, "n_proofs": 2 * st.n_proofs, "pair": True})
             continue
-        b = pm.soundness(st.config(), R.tb.L, R.tb.Q, 1)["per_proof_total_log2"]
+        b = pm.soundness(st.config(), R.tb.L, R.tb.Q, 1, chain_extras=getattr(R, "chain_extras", 0))["per_proof_total_log2"]
         items.append({"name": p.name, "accepted": ok, "reason": why, "seconds": secs, "own_coins": own is not None,
                       "per_proof_log2": b, "n_proofs": st.n_proofs})
     per, claimed, names = [], [], []
