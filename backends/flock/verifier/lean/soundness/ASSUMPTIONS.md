@@ -4,6 +4,12 @@ For the expert reviewer and for Table 1. Lane `flock-soundness`, level 4a of the
 interactive mode only. The Lean development is this directory (`FlockSoundness/`). The verifier it is about is
 specified in `../../PROTOCOL.md` (PR #85).
 
+The work is staged along a16z's zkVM security stages (Thaler, "The path to secure and efficient zkVMs", March 2025).
+Stage 1 covers the protocol: 1a PIOP soundness, 1b commitment binding, 1c the compiled argument, 1d the constraint
+system against its semantics, 1e the whole theorem including ZK. Stage 2 is the verifier implementation and Stage 3 the
+prover implementation. §10 maps them onto this work, including where it deliberately differs. §11 sketches a future
+Fiat–Shamir or SNARK variant.
+
 ## 1. The claim, and its status
 
 **The theorem** (`FlockSoundness.table_sound`, `table_sound_fast100` in `FlockSoundness/Soundness.lean`). Consider one table
@@ -23,16 +29,21 @@ proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34,
 (`Accounting/Numbers.lean`). The statement shapes covered are those with at most 2^26 witness bits per block,
 1,024 public regions and 64 link-point coordinates. That covers every statement of §16 with room to spare.
 
-| Piece | Lean | Status |
-|---|---|---|
-| Interaction model: live coins, prover strategies, acceptance probability, optimal prover | `Game/Basic.lean` | proved |
-| Two reps on independent coins, any interleaving: the error squares | `Game/Interleave.lean`, `value_interleave_le` | proved |
-| The bound as a function of the parameters, and its value for every `m` | `Accounting/*` | proved |
-| The verifier, following PROTOCOL.md §9–§16 | `Model/*` | written (definitions) |
-| Composition: one table from one rep and the link points | `table_sound` | proved from the two lemmas below |
-| One rep is sound from a doomed start | `rep_sound` | **to prove** |
-| The link points reduce region checks to opened claims | `link_sound` | **to prove** |
-| The Merkle layer (SHA-256 caps and paths) and session binding (round digests) | `Merkle` | **to write** (§4) |
+| Piece | a16z stage | Lean | Status |
+|---|---|---|---|
+| Interaction model: live coins, prover strategies, acceptance probability, optimal prover | (framework) | `Game/Basic.lean` | proved |
+| A live coin hits a fixed nonzero polynomial's zero with probability at most degree/|F| (Schwartz–Zippel) | (framework) | `Game/Poly.lean` | proved |
+| Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
+| The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
+| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*` | written (definitions) |
+| Composition: one table from one rep and the link points | 1a | `table_sound` | proved from the two lemmas below |
+| One rep is sound from a doomed start | 1a | `rep_sound` | **to prove** |
+| The link points reduce region checks to opened claims | 1a | `link_sound` | **to prove** |
+| The Merkle layer (SHA-256 caps and paths) | 1b | `Merkle` | **to write** (§4) |
+| Session binding (round digests) with live coins: the compiled interactive argument | 1c, interactive | `Merkle` | **to write** (§4) |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
+| The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
+| Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§8) | planned |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check. `table_sound` shows `sorryAx` until the two lemmas are proved.
@@ -259,9 +270,9 @@ so that these slot in without restructuring:
   - that equivalence beyond the tested inputs;
   - the quality of the operating system's and ChaCha's randomness.
 
-## 9. What remains
+## 9. What remains (by a16z stage)
 
-1. **`rep_sound`**, phase by phase:
+1. **Stage 1a, `rep_sound`**, phase by phase:
    - zerocheck;
    - lincheck (including the pin);
    - the opening (ring switching);
@@ -269,12 +280,98 @@ so that these slot in without restructuring:
    - the final check.
 
    Each phase is a doomed-state transition bounded by the matching `Accounting` term. `Game.value_bind_le` chains them.
-2. **`link_sound`**: Schwartz–Zippel on each region's multilinear difference, at two independent points.
+2. **Stage 1a, `link_sound`**: Schwartz–Zippel on each region's multilinear difference, at two independent points.
 3. **`Arith.Correct`** for the GHASH instance, from CompPoly's definitions.
-4. **The compiled theorems** (§4):
+4. **Stages 1b and 1c (interactive), the compiled theorems** (§4):
    - collision resistance with explicit tables, using VCVio's binding theorem;
    - session binding through the round digests;
    - the random-oracle version for arbitrary provers.
-5. **Refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the model
-   accepts.
-6. **Zero knowledge** (§8), after M1's masking spec.
+5. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
+   model accepts.
+6. **Stages 1e and 3, zero knowledge and the reference prover** (§8), after M1's masking spec.
+7. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
+   one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
+
+## 10. Staging against a16z's security stages
+
+a16z's stages are written for zkVMs: SNARKs proving a virtual machine's execution, made non-interactive by
+Fiat–Shamir. Our setting differs in three ways:
+
+- it is interactive, with live coins;
+- there is one Boolean-circuit prover;
+- the verifier is written in Lean and runs offline.
+
+We follow the staging and vocabulary, and differ where the setting does.
+
+| a16z stage | What it asks | Here | Follows, or deliberately differs |
+|---|---|---|---|
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer. It covers the PIOP (zerocheck, lincheck, ring switching, batching) together with Ligerito as an interactive oracle commitment. It is information-theoretic, per table, against any prover. | Follows, with one gap: a16z's Stage 1 has no room for an unproved cited theorem. We reach "Stage 1a modulo A1" (our level 4a). Proving A1 is level 4b, which is not plannable at the Johnson bound. A unique-decoding profile would make it plannable, since ArkLib proves those gaps. |
+| **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: SHA-256 collision resistance, tight for provers that know their tables, or random-oracle extraction for every prover (§4.2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (§2). | Follows. The model is named per result, as a16z asks. |
+| **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The compiled argument is the oracle protocol plus Merkle commitments (1b) plus session binding. Each round's bytes are bound by the digest the coin server recorded before drawing that round's coins. That binding is tight under collision resistance for every prover, since the server holds the live bytes. | Differs. The coins need no random oracle, which avoids the article's main caveat (Fiat–Shamir security with real hash functions is an open question). A Fiat–Shamir variant is future work (§11). |
+| **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | There is no VM: statements are circuits. 1d is the lowering theorem: the block R1CS the verifier builds (slots, Δ, pin, regions; spec §16) is satisfied exactly by correct evaluations of the named circuit. That is level 3, in another lane. | Differs in content, not in intent. a16z's "verified bytecode" caveat becomes our rule "the circuit is the meaning". That the circuit matches the hardware is checked empirically, by capture replay recorded as Store evidence, and stays outside formal scope. |
+| **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§8). | Follows. **Recursion caveat:** not triggered. There is no recursion: the spec rejects forks and the union prover. |
+| **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | The executable Lean verifier (`Flock.Verify`, lane `flock-verifier`) refines `Model`: if it accepts, the model accepts. | Differs in the target. The implementation is itself Lean, so the refinement is Lean-to-Lean. The machine code is trusted: Lean's compiler and runtime, mitigated by agreement tests against upstream's Rust verifier in CI (§5). |
+| **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems. The production prover (Rust and CUDA) is linked to it by byte-for-byte differential tests (§8). | **Deliberately different: the production prover is not proved.** Equivalence beyond the tested inputs is trusted. Completeness failures cost liveness (a true statement that cannot be proved), not soundness. |
+
+**Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
+
+- level 4a is Stage 1a–1c (interactive) modulo A1;
+- level 4b completes Stage 1 by proving A1;
+- level 3 is Stage 2, plus the lowering theorem of 1d;
+- levels 1–2 are the implementation that Stage 2 is about.
+
+**Stating soundness.** a16z's concrete levels are 100 bits as the bare minimum and 128 bits as standard practice. We
+target 2^-128, and state the number the way the stages suggest:
+
+1. **The statistical part, per table:** `−log2` of the proven error against any prover at the oracle layer. That is
+   195.5 bits for m ≤ 33 and 195.4 bits for m = 34, 35.
+   - Only proven results are used: A1 is a published theorem, not a conjectured proximity gap.
+   - No bits are credited to grinding (proof of work).
+   - A session with several tables adds their errors.
+2. **The cryptographic part, with its model named:**
+   - collision resistance: the probability that an explicit reduction finds a SHA-256 collision;
+   - or the random-oracle model: `t²/2^257 + …` (§4.2).
+3. **Each assumption, at the stage that uses it:**
+   - 1a: A1;
+   - 1b: SHA-256 collision resistance, or the random-oracle model;
+   - 1c (interactive): SHA-256 collision resistance for the round digests, and uniform coins;
+   - Stage 2: the compiler's correctness, mitigated by tests.
+
+**Performance stages.** a16z also sets speed and memory stages, and verifier-cost limits: proofs of at most 256 KB,
+verification in at most 16 ms. They belong to the tables, not to this lane. `fast100` run twice (1–2 MB of proof,
+20–50 ms to verify, per flock-128) would exceed the verifier limits. That doesn't matter for an offline verifier, but it would matter
+for a SNARK variant.
+
+## 11. A Fiat–Shamir or SNARK variant (future extension)
+
+A non-interactive variant ("C-fs") derives each round's coins from a hash of the transcript so far. It would need:
+
+- **Round-by-round soundness of every component, and a Fiat–Shamir theorem** in the random-oracle model (a16z 1c).
+  a16z's caveat applies: whether Fiat–Shamir with a real hash is secure is open. Systems without recursion are on
+  firmer ground.
+- **A new parameter set.** A cheating prover can re-hash to re-sample a round's coins (state restoration). So the error
+  grows to roughly `t × (round-by-round error)`, and two reps no longer square against such a prover. flock-128 found
+  `fast100` run twice at best 2^-75.6 under Fiat–Shamir. A SNARK profile would need one of:
+  - the strict `Fast`/`Slim` profiles, with grinding credited in the random-oracle model;
+  - GF(2^256) at the PIOP coins (flock-128's `f256` option).
+- **Recursion,** if proofs must be small. That triggers a16z's recursion caveat: every component inside the recursion
+  must be verified too.
+
+**What we do now to keep the door open:**
+
+- **Round-by-round first.** Each phase of `rep_sound` is proved as a per-coin lemma: from a doomed state, whatever the
+  prover sends, the next coin leaves it with probability at most ε. That is exactly a round-by-round error, and the
+  live-coin theorem sums these lemmas. A Fiat–Shamir proof would reuse them.
+- **One joint term, kept separately.** The two out-of-domain samples per level are charged jointly, `(μ/2^128)^2` over
+  pairs, which is valid with live coins. Their round-by-round error is the unsquared `pairs·μ/2^128` (about 2^-104.5
+  at the deepest level for m = 33, with ArkLib's list bound). It will be kept as its own lemma for a Fiat–Shamir accounting.
+- **The model is ready for a compiler.** The `Game` model's `coin` nodes are the only randomness, and the tree
+  already carries the transcript prefix. A Fiat–Shamir compiler would replace each `coin` by a random-oracle query on
+  that prefix.
+- **Tools.** VCVio has Fiat–Shamir for Σ-protocols and the forking lemma. ArkLib's compiler from oracle proofs to
+  arguments (BCS) and its Fiat–Shamir for IOPs are roadmap phase 6, currently blocked. A direct random-oracle proof is
+  the alternative.
+
+**The `seed` coin mode is not Fiat–Shamir** (PR #83, spec §7.2). Coins come from a seed the verifier commits at step
+0, so soundness adds only seed hiding and SHA-256 as a PRF. It is the bridge to zero knowledge against a malicious
+verifier (§8), not to non-interactive proofs.
