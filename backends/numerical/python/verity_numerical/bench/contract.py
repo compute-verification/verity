@@ -179,17 +179,17 @@ ZK_NONE = "none"
 #: authentication, same target and domain, same K **and batch size**, the **same hardware** (the whole probed object:
 #: a 4090 run is never compared with a CPU run, nor with another pod's driver), and the same soundness target
 #: (``security.target``, a dotted path into the fingerprint).  The decision numbers are B=4096 K=1536 VUs of one
-#: instance set on one machine at 2^-128; ``--allow`` names the one field an experiment deliberately varies.
+#: input set on one machine at 2^-128; ``--allow`` names the one field an experiment deliberately varies.
 IDENTITY_FIELDS = ("proof_class", "authentication", "profile", "domain", "K", "B", "hardware", "security.target")
 REQUIRED_FIELDS = (
     "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
     "preprocessing", "retention", "instances",
 )
-#: The frozen instance set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
+#: The frozen input set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
 INSTANCES_DATASET = census.INSTANCE_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
-#: The frozen FP8 Ada instance set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
+#: The frozen FP8 Ada input set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
 #: draws (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
 #: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
@@ -197,7 +197,7 @@ INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 _FP8_ADA = census.INSTANCE_SETS["bench-instances-fp8-ada-v1"]
 FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
 FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
-#: The frozen Hopper instance sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
+#: The frozen Hopper input sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
 #: VUs ``backends/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
 #: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
 #: (``tools/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
@@ -210,7 +210,7 @@ BF16_HOPPER_INSTANCES_SEED, BF16_HOPPER_INSTANCES_DIGEST = _BF16_HOPPER.seed, _B
 _FP8_HOPPER = census.INSTANCE_SETS["bench-instances-fp8-hopper-v1"]
 FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
 FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
-#: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
+#: The frozen NVFP4 sm_120 input set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
 #: ``backends/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
 #: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
@@ -460,7 +460,7 @@ def fingerprint(
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
     ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
     batch chopped into several proofs is visible beside ``B``; so is ``instances`` (``null`` = not measured on the
-    shared instance set -- see :func:`instances_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
+    shared input set -- see :func:`instances_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
     caller gave one."""
 
     software = dict(software)
@@ -806,7 +806,7 @@ def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str
     both carry a non-null ``instances`` and they disagree -- a different dataset, tier or manifest, or different id
     ranges for the same batch size (a different range with a different ``B`` is a scaling point, visible in the
     fingerprint deltas, not a conflict); the judge then refuses.  ``warnings`` name the side(s) that lack it (absent or
-    null): those numbers were not measured on the shared instance set, so the comparison rests on the identity fields alone."""
+    null): those numbers were not measured on the shared input set, so the comparison rests on the identity fields alone."""
 
     fb, fc = baseline or {}, candidate or {}
     a, b = fb.get(INSTANCES_FIELD), fc.get(INSTANCES_FIELD)

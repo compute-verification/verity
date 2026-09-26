@@ -29,7 +29,7 @@ authentication  included | excluded
 Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
 soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
-otherwise). The decision workload is B=4096 K=1536 VUs of one instance set on
+otherwise). The decision workload is B=4096 K=1536 VUs of one input set on
 one machine at 2^-128; the canonical comparison is the three frozen tables
 below. Transition-unit and small-B numbers are diagnostics of a
 backend's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
@@ -53,7 +53,7 @@ elements, hash bytes, verifier seconds, transcript bytes, the RTT sweep,
 coupling diagnostics) is drill-down behind a Table 2 or Table 3 cell, never
 another top-level table. Caption constants: K = 1536; B = 4096; soundness
 2^-128, target and achieved (union-bounded over sub-batches); dense execution;
-FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's subcircuit;
+FP32 accumulation; FMA = 2 FLOP; the frozen input set of the row's subcircuit;
 native denominator = datasheet dense peak of the exact target device
 (`Target.native_peak`); authentication = excluded (until `included` runs exist).
 
@@ -243,7 +243,7 @@ returns a level with the exact evidence that satisfies or fails each criterion;
   discrepancy-log entry naming the target is resolved/excluded; (c) relation
   == model: the checker accepts >= 2,000 honest VUs incl. edge families and
   rejects >= 100 mutations (`bench-result/v1` validation); (d) hardware-in-the-
-  loop: the frozen instance set re-executed on the anchor with 0 mismatches
+  loop: the frozen input set re-executed on the anchor with 0 mismatches
   (`tc-evidence/v1` labelled `family=frozen-instances instances_dataset=<ds>
   instances_tier=<tier> mismatches=0`); (e) an independent verifier accepted a
   full-contract proof; (f) no open `trust_downgrade` label.
@@ -318,7 +318,7 @@ above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
 
-Every A-GKR/B number at K=1536 is measured on the frozen instance set
+Every A-GKR/B number at K=1536 is measured on the frozen input set
 `bench-instances/v1` (`fixtures/bench-instances/v1/`, loader and recipe
 `verity_numerical.bench.instances`): the `vu-k1536` tier, 4,096 valid VUs
 (3,456 real Qwen2.5-1.5B coordinates including the 24 hardware-confirmed

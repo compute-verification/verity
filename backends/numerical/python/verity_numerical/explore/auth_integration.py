@@ -29,7 +29,7 @@ Options (report section 2; ``OPTIONS``)
 (e)                         the ZK verdict per option is in ``PRIVACY`` and the report.
 
 Sharing (:func:`sharing_from_bench`).  Leaf hashing / row binding is paid once per *distinct* leaf, and the frozen
-instance set has a structure: 24 captured activation rows x 144 weight rows each (3 456 real VUs) + 640 corners; 2 598
+input set has a structure: 24 captured activation rows x 144 weight rows each (3 456 real VUs) + 640 corners; 2 598
 distinct weight rows in 18 weight matrices; every real VU's ``y`` is one word of one of 24 output rows.  Three regimes
 are priced: ``bench`` (that structure extrapolated to 4 096 real VUs), ``decode_step`` (one token, 4 096 coordinates of
 one projection: x and y shared by all, w all distinct) and ``worst`` (nothing shared).
@@ -195,7 +195,7 @@ class Sharing:
 
 
 def sharing_from_bench(B: int = B_TARGET, Rs: Sequence[int] = (1, 16, 64, 256, 4096)) -> Sharing:
-    """The frozen instance set's real structure, extrapolated from its 3 456 real VUs to ``B`` real VUs (the 640
+    """The frozen input set's real structure, extrapolated from its 3 456 real VUs to ``B`` real VUs (the 640
     corners are synthetic and have no Verity leaves)."""
     index = json.loads((BENCH / "vu-k1536.index.json").read_text())
     seeds = json.loads((BENCH / "seeds" / "seeds.json").read_text())["seeds"]

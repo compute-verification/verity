@@ -2,7 +2,7 @@
 R1), the same rule as ligero-verify's ``auth::layout_error``.  End to end (the red-team's ``rtsh_remap_e2e`` 2-VU fixture,
 fp8-ada+blake3 on the CPU): VU 0's committed output is VU 1's under honest x / W roots and the statement claims VU 0 on
 (x row 1, W column 1) -- refused by Python and ``$LIGERO_VERIFY`` (when set); ``reverify.commitment_problems`` (R2) flags
-its y root against the recomputed instance set, a statement without a proof (R4) and a rep that claims a VU twice; the
+its y root against the recomputed input set, a statement without a proof (R4) and a rep that claims a VU twice; the
 honest dump passes all three.  Tile layouts (a +shared v6 dump of a 2 x 3 tile written by ``bench-vu``): the dump is
 recomputed from its manifest's ``set.tile`` and passes ``verify_tree``; a remapped tile VU, a wrong ``set.tile`` (a float
 seed included), a root that is not the set's, a dump without ``set.tile``, a ``sharing`` label that is not the tile's and a
@@ -54,7 +54,7 @@ LAYOUT = "auth: a VU's x row / W column is not the one its index fixes in the co
 @pytest.fixture(scope="module")
 def remap(tmp_path_factory):
     """``{tag: (dir, python (ok, why), manifest)}`` for the honest dump and the R1 forgery (``rtsh_remap_e2e`` with
-    ``--set-binding``): 2 VUs, l = 256, trees bound to the relation's instance set as a producer binds them."""
+    ``--set-binding``): 2 VUs, l = 256, trees bound to the relation's input set as a producer binds them."""
     pytest.importorskip("torch")
     pytest.importorskip("blake3", exc_type=ImportError)
     from .relations import relation

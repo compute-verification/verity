@@ -44,7 +44,7 @@ def _isolated(monkeypatch, tmp_path):
 @pytest.fixture
 def repo(tmp_path) -> Path:
     """A synthetic repository: a discrepancy log with one resolved entry naming the target, the reference files the catalogue
-    expects (presence only), and one frozen instance set with an edge family and a negative tier."""
+    expects (presence only), and one frozen input set with an edge family and a negative tier."""
     root = tmp_path / "repo"
     root.mkdir()
     write_log(root, [dlog("D10", "resolved", evidence_refs=[GOLDEN])])
@@ -395,7 +395,7 @@ def test_binding_class_entries_are_deployment_caveats_not_gates(store, repo):
 
 
 def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
-    """The FP8 Ada instance set is seeded, not a fixture: its identity is the recipe digest pinned in the bench contract."""
+    """The FP8 Ada input set is seeded, not a fixture: its identity is the recipe digest pinned in the bench contract."""
     import functools
     import shutil
     import types

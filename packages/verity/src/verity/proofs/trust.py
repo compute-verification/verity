@@ -526,7 +526,7 @@ class RelationRecord:
 
 @dataclass
 class DatasetIdentity:
-    """A frozen instance set in the repo (``fixtures/<name>/v<k>/manifest.json`` whose ``target.profile`` names the target)."""
+    """A frozen input set in the repo (``fixtures/<name>/v<k>/manifest.json`` whose ``target.profile`` names the target)."""
 
     name: str
     path: str                 # repo-relative manifest path, or ``contract:<CONSTANT>`` for a recipe pinned by digest in the bench contract
@@ -870,7 +870,7 @@ def d_class(entry: dict) -> str:
     return cls
 
 
-#: Instance sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
+#: Input sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
 #: set is seeded: uniform finite E4M3 bytes from ``FP8_ADA_INSTANCES_SEED``).  target name -> the contract constant prefix; the
 #: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count (the Hopper ones once b-hopper lands them).
 CONTRACT_INSTANCE_SETS: dict[str, str] = {
@@ -881,7 +881,7 @@ CONTRACT_INSTANCE_SETS: dict[str, str] = {
 
 
 def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> list[DatasetIdentity]:
-    """The subject's contract-pinned instance sets (``CONTRACT_INSTANCE_SETS``); ``contract`` overrides the module (tests)."""
+    """The subject's contract-pinned input sets (``CONTRACT_INSTANCE_SETS``); ``contract`` overrides the module (tests)."""
     prefixes = [p for name, p in CONTRACT_INSTANCE_SETS.items() if name in subject.names]
     if not prefixes:
         return []

@@ -6,7 +6,7 @@ authenticated as packed words against the object's Merkle roots").  This module 
 (``fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``) for the leaf structure -- nothing about
 leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of paying for that binding.
 
-What is authenticated per instance (read from the fixture by :func:`read_openings`)
+What is authenticated per input (read from the fixture by :func:`read_openings`)
 ====================================================================================
 
 Three whole-tensor leaves under the ``verity-vllm/leaf/v1`` scheme (``verity.commitments.leaves``), opened as packed
@@ -44,7 +44,7 @@ Nothing in ``verity.commitments`` forbids handing the opened leaves to a verifie
 ``NON_ZK_PROOF`` at best under ``backends/AGENTS.md``'s labels.  Option (b) is costed under this reading and marked
 incompatible with reading P.
 
-Options (per instance and per batch; see :func:`cost_option`)
+Options (per input and per batch; see :func:`cost_option`)
 ============================================================
 
 (a) Merkle openings verified inside the proof: SHA-256 of every distinct leaf (whole tensor row) plus the
@@ -393,7 +393,7 @@ class OptionCost:
     hiding_assumption: str
     sharing: str
     B: int
-    # per instance (amortised)
+    # per input (amortised)
     hash_invocations_per_instance: float
     hash_invocations_by_type: dict[str, float]
     mul_gates_per_instance: float

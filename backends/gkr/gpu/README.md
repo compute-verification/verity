@@ -79,7 +79,7 @@ ZK masking.
 
 ## Negatives
 
-`vu-k1536-neg` (52 instances): 52/52 rejected — 8 at witness generation (`bf16.t`/`acc.t: 255 not in [0, 255)`,
+`vu-k1536-neg` (52 inputs): 52/52 rejected — 8 at witness generation (`bf16.t`/`acc.t: 255 not in [0, 255)`,
 a hint outside its table range, i.e. the prover cannot even build an in-domain witness) and 44 by the verifier
 (`assertions phase-2a: round 0 sum mismatch`: the assertion layer's claimed zero is not zero).  An accepted negative
 would be a soundness bug; there are none.  Re-run with `negatives` below.

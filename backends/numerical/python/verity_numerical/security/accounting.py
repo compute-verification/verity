@@ -938,7 +938,7 @@ def account_candidate_a(p: CandidateA) -> Budget:
             rounds += shards * r_sh
             pads += shards * p.lookup_repetitions * (3 * (n_dim * (n_dim - 1) // 2) + 4 * n_dim)
             masked_instances += shards * p.lookup_repetitions * (n_dim - 1)      # one sumcheck per fractional-GKR layer
-            if libra:   # one mask per instance: (d+1) = 4 coefficients per round + a_0
+            if libra:   # one mask per input: (d+1) = 4 coefficients per round + a_0
                 pads += shards * p.lookup_repetitions * ((n_dim * (n_dim - 1) // 2) + (n_dim - 1))
             extra_mult += (shards - 1) * tbl.rows
     else:

@@ -12,7 +12,7 @@ RESULT is a bench-result/v1 artifact id (abbreviated ids welcome).  For each one
      (and the attempt's `relation` param, and --relation when given);
   4. `ligero-verify batch --target-bits 128` on every rep dir: batch ACCEPT, zero rejections, Rust/Python verdicts agree, and
      the rep holds as many proofs as the manifest lists for it;
-     before it, a dump whose statements carry hash authentication (included-hash) must commit to the claimed instance set: the
+     before it, a dump whose statements carry hash authentication (included-hash) must commit to the claimed input set: the
      a/b/y bindings and roots are recomputed from the set (--instances-root, default $BENCH_INSTANCES) and every statement's
      trees must equal them, and each rep's statements must cover every VU of [0, total) exactly once; a row-sharing (v6) dump
      is recomputed as the GEMM tile its manifest's `set.tile` names (x = vu // nw, W = vu % nw) and fails without one;
@@ -130,7 +130,7 @@ class Report:
     reps: dict[str, dict] = field(default_factory=dict)
     verdict: str | None = None
     labels: list[str] = field(default_factory=list)
-    hashed: bool = False                    # included-hash statements: trees recomputed from the instance set
+    hashed: bool = False                    # included-hash statements: trees recomputed from the input set
     tile: str | None = None                 # the recomputed set is the manifest's `set.tile` (nx x nw), not one row per VU
 
     def line(self) -> str:
@@ -234,7 +234,7 @@ def sharing_label(tile: Any) -> str:
 
 
 def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
-    """The x / W / y tree references of the instance set the dump names, recomputed from the set itself: the pinned relation
+    """The x / W / y tree references of the input set the dump names, recomputed from the set itself: the pinned relation
     (``system-digest``) fixes the relation and leaf scheme, the manifest's ``set`` block the range ``[0, total_vus)`` and the
     set's manifest digest, which the regenerated set must reproduce.  Without ``set.tile`` the set is ``relchain.instances``
     (one x row and W column per VU); with it, the GEMM tile ``relchain.tile_instances(rel, nx, nw, seed)`` (:func:`tile_shape`:
@@ -322,7 +322,7 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: int, K: int, word_bits: int) -> dict[str, TreeKey]:
     """The ``vllm-v1`` port references of the set, from the core scheme alone (``verity.commitments.vllm_v1``: position
     leaves of the raw row bytes and of each output word's little-endian bytes, node/lift fold, step-root binding) under
-    the verifier-derived domains of ``vllm_tree`` (ctx = instance set and range)."""
+    the verifier-derived domains of ``vllm_tree`` (ctx = input set and range)."""
     from verity.commitments import vllm_v1
 
     from . import vllm_tree
@@ -609,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="fetch, check and verify; write nothing to the store")
     ap.add_argument("--store", default=None, help="store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--instances-root", default=os.environ.get("BENCH_INSTANCES"),
-                    help="where frozen instance sets live, to recompute hash commitments (default $BENCH_INSTANCES)")
+                    help="where frozen input sets live, to recompute hash commitments (default $BENCH_INSTANCES)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if not ns.by and not ns.dry_run:

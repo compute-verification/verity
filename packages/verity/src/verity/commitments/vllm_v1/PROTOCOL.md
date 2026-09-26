@@ -262,7 +262,7 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
    and absorbs `domain_digest(domain)` into its statement digest and Fiat–Shamir transcript.
 
    `domain_digest(domain)` is `identity_digest("verity/vllm-v1/domain/v1", {kind, leaf_count, <fields>})`, with byte
-   fields in hex. The verifier builds the domain from its own Program, instance set and range, never from the
+   fields in hex. The verifier builds the domain from its own Program, input set and range, never from the
    proof.
 
    This is the external stand-in for frame-v3's verifier-derived `domain_id`. Without it, two statements over the

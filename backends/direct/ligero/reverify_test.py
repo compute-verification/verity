@@ -149,7 +149,7 @@ def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys)
 
 
 # ---- fp4-nvf4+poseidon2 (fp4/hashed.py FP4_HASHED): the committed trees are recomputed through the relation's lane format (a
-# 2-VU dump proved on the CPU by the hashed runner the bench drives, trees bound to the relation's instance set) ----
+# 2-VU dump proved on the CPU by the hashed runner the bench drives, trees bound to the relation's input set) ----
 
 FP4_PIN = "fp4-nvf4+poseidon2"
 

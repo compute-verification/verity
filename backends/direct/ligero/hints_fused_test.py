@@ -2,7 +2,7 @@
 
 * coverage (torch-free): the kernel's emission order names every hint row of every v2 / v3 system (chain and unit mode) once;
 * byte identity (``torch.equal``) with ``_hints_eager`` and with the CUDA-graph path, per relation:
-  - real sub-batches: the relation's instance set marshalled by the chain runner (what the prover hands the generator);
+  - real sub-batches: the relation's input set marshalled by the chain runner (what the prover hands the generator);
   - in-domain random units in unit mode (``pubsel.relation_test._cases``: zeros, subnormals, chained states, zero sums);
   - adversarial columns: operand words uniform over the whole word range (NaN, inf, off-domain words included), the
     accumulator uniform over all 2^32 words plus every FP32 class (+-0, subnormals, the extremes, inf, NaN), all-zero and
@@ -207,7 +207,7 @@ def test_fused_equals_torch_and_reference_in_domain(name):
 @pytest.mark.skipif(not _cuda_ok(), reason="the fused kernel is CUDA (cupy / NVRTC)")
 @pytest.mark.parametrize("name", V2 + V3)
 def test_fused_equals_torch_real_subbatch(name):
-    """The instance set marshalled by the chain runner (chain mode, pad units included), as the prover calls it."""
+    """The input set marshalled by the chain runner (chain mode, pad units included), as the prover calls it."""
     from dataclasses import replace
     from . import protocol as protocol_mod
     from .relchain import RelationChainRunner, instances

@@ -55,7 +55,7 @@ def word_schema(y_bits: int) -> tuple[str, int]:
 
 
 def binding_digest(*, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int, K: int, tree: str, schema: str) -> bytes:
-    """Identity of the committed object: the frozen instance set (by manifest digest), which rows of it, the leaf schema."""
+    """Identity of the committed object: the frozen input set (by manifest digest), which rows of it, the leaf schema."""
     if tree not in TREE_NAMES:
         raise ValueError(f"unknown tree {tree!r}")
     h = identity_digest(BINDING_TAG, {"dataset": dataset, "tier": tier, "manifest_sha256": manifest_sha256,
@@ -128,7 +128,7 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, y_bits: int) -
 def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, word_bits: int, y_bits: int,
                 bindings: Mapping[str, bytes], leaf=None, digests: Mapping[str, np.ndarray] | None = None,
                 rows_dev: Mapping | None = None) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
-    """The three trees of a committed instance set; also the operand digests (what the honest prover will publish).
+    """The three trees of a committed input set; also the operand digests (what the honest prover will publish).
     ``digests``: ``{"a": x digests, "b": W digests}`` computed already (:func:`build_row_tree`); ``rows_dev``: ``{"a",
     "b"}`` the rows on the device."""
     scheme = _leaf(leaf)

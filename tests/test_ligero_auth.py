@@ -93,7 +93,7 @@ def test_word_tree_and_multiproofs_agree_with_verity_commitments() -> None:
 
 
 def _instance(n_total_vus: int = 6, K: int = 32, vus=(1, 4)):
-    """Tiny committed instance set (K words per VU, steps = K / 16) and the honest statement words of ``vus``."""
+    """Tiny committed input set (K words per VU, steps = K / 16) and the honest statement words of ``vus``."""
     rng = np.random.default_rng(3)
     a_all = rng.integers(0, 1 << 16, size=n_total_vus * K, dtype=np.uint16)
     b_all = rng.integers(0, 1 << 16, size=n_total_vus * K, dtype=np.uint16)
