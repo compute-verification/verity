@@ -30,6 +30,7 @@ class Fmt:
 
 BF16 = Fmt("bf16", 8, 7, "ieee")
 E4M3 = Fmt("e4m3", 4, 3, "e4m3")
+E2M1 = Fmt("e2m1", 2, 1, "none")  # word_bits only; the NVFP4 unit is unit_fp4
 
 
 def decode_operand(C, fmt, word):
