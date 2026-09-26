@@ -9,16 +9,20 @@ co-resident verifier is not a separate verifier).  An identity is a dict with an
     product_uuid   ``/sys/class/dmi/id/product_uuid``
     boot_id        ``/proc/sys/kernel/random/boot_id``: containers of one host share its kernel's
     cpu_model      the host CPU model (``/proc/cpuinfo``)
+    hypervisor     whether the CPU flags carry ``hypervisor`` (a virtual machine's guest)
+    sys_vendor, product_name   ``/sys/class/dmi/id/``
     pod_id, hostname
 
-and a link ``{peer, peer_ip, source_ip}`` is how the prover reached the verifier.  :func:`assess` says why a pair is not shown
-to be on separate machines: a shared machine id, product uuid or boot id; a link to a host bridge (loopback, link-local, the
-docker pool 172.16/12), or to another private address unless the machine ids are known and differ; too little identity to tell
-(neither a machine id or DMI uuid on both sides, nor a public IP and CPU model on both); or a shared public IP without the proof
-a datacenter NAT needs (machine id, DMI uuid and boot id all recorded and all different, and a measured RTT of at least
-:data:`RTT_FLOOR_MS`).  A shared public IP that has that proof is accepted and reported (``shared_public_ip``).
+and a link ``{peer, peer_ip, source_ip, rtt}`` is how the prover reached the verifier, ``rtt`` its TCP-connect round trip
+(:func:`tcp_rtt`).  :func:`assess` says why a pair is not shown to be on separate machines: a shared machine id, product uuid or
+boot id; a link to a host bridge (loopback, link-local, the docker pool 172.16/12), to the prover's own public IP, or to another
+private address unless the machine ids are known and differ; too little identity to tell (neither a machine id or DMI uuid on
+both sides, nor a public IP and CPU model on both); or a shared public IP without the proof a datacenter NAT needs
+(:func:`_nat_exception`: the three ids recorded and different, both pods bare metal, the link RunPod's global network, and a
+TCP-connect RTT on it of at least :data:`RTT_FLOOR_MS`).  A shared public IP that has that proof is accepted and reported
+(``shared_public_ip`` and its evidence).
 
-    python3 placement.py probe [--peer HOST:PORT] [--out FILE]     stdlib only: runs on a pod before a cell's job
+    python3 placement.py probe [--peer HOST:PORT] [--rtt HOST:PORT] [--out FILE]     stdlib only: runs on a pod before a cell's job
 """
 from __future__ import annotations
 
@@ -36,6 +40,14 @@ SHARED_KEYS = ("machine_id", "product_uuid", "boot_id", "public_ip")
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
 #: The measured prover-verifier round trip a shared-IP pair must reach: well above the 0.03 ms of two containers on one host.
 RTT_FLOOR_MS = 0.1
+RTT_CONNECTS = 30
+RTT_METHOD = "tcp-connect: median and minimum of 30 kernel-level TCP connects on the session's route (no payload)"
+#: RunPod's global network: a shared-IP pair's only accepted link is ``<verifier pod id>.runpod.internal`` resolving into 10/8.
+RUNPOD_INTERNAL = ".runpod.internal"
+GLOBAL_NET = ipaddress.ip_network("10.0.0.0/8")
+#: ``/sys/class/dmi/id/sys_vendor`` prefixes of hypervisors' guests (red-team-flock-3 S1): a VM's DMI uuid and boot id are its own.
+HYPERVISOR_VENDORS = ("QEMU", "KVM", "Xen", "VMware", "Microsoft Corporation", "innotek", "Parallels", "Red Hat", "OpenStack",
+                      "Amazon EC2", "Google")
 PROBE = "backends/numerical/python/verity_numerical/bench/placement.py"
 
 
@@ -84,13 +96,54 @@ def link_to(peer: str) -> dict[str, Any]:
     return out
 
 
-def probe(peer: str | None = None) -> dict[str, Any]:
-    """This machine's identity as seen from inside its container (and the link to ``peer``)."""
+def _hypervisor_flag() -> bool | None:
+    """Whether the CPU flags carry ``hypervisor`` (set by every hypervisor for its guests); ``None`` without /proc/cpuinfo flags."""
+    for line in (_read("/proc/cpuinfo") or "").splitlines():
+        if line.lower().startswith("flags"):
+            return "hypervisor" in line.split(":", 1)[1].split()
+    return None
+
+
+def tcp_rtt(target: str, n: int = RTT_CONNECTS, timeout: float = 5.0) -> dict[str, Any]:
+    """Round trips of ``n`` kernel-level TCP connects to ``target`` (HOST:PORT): ``connect()`` to the SYN-ACK, no payload, each socket
+    closed at once.  Median and minimum in ms, the address connected to, and how many failed."""
+    import statistics
+    import time
+
+    host, _, port = target.rpartition(":")
+    out: dict[str, Any] = {"target": target, "target_ip": None, "n": 0, "failed": 0, "median_ms": None, "min_ms": None,
+                           "method": RTT_METHOD}
+    try:
+        out["target_ip"] = socket.getaddrinfo(host, int(port), proto=socket.IPPROTO_TCP)[0][4][0]
+    except (OSError, ValueError) as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+        return out
+    ts = []
+    for _ in range(n):
+        t = time.perf_counter()
+        try:
+            socket.create_connection((out["target_ip"], int(port)), timeout=timeout).close()
+        except OSError:
+            out["failed"] += 1
+            continue
+        ts.append((time.perf_counter() - t) * 1e3)
+    if ts:
+        out.update(n=len(ts), median_ms=statistics.median(ts), min_ms=min(ts))
+    return out
+
+
+def probe(peer: str | None = None, rtt: str | None = None) -> dict[str, Any]:
+    """This machine's identity as seen from inside its container, the link to ``peer`` and, with ``rtt`` (HOST:PORT on the peer's
+    route), the TCP-connect round trip to it."""
     ident = {"pod_id": os.environ.get("RUNPOD_POD_ID"), "public_ip": os.environ.get("RUNPOD_PUBLIC_IP"),
              "product_uuid": _read("/sys/class/dmi/id/product_uuid"), "boot_id": _read("/proc/sys/kernel/random/boot_id"),
-             "cpu_model": _cpu_model(), "hostname": socket.gethostname(), "datacenter": os.environ.get("RUNPOD_DC_ID")}
+             "cpu_model": _cpu_model(), "hypervisor": _hypervisor_flag(), "sys_vendor": _read("/sys/class/dmi/id/sys_vendor"),
+             "product_name": _read("/sys/class/dmi/id/product_name"), "hostname": socket.gethostname(),
+             "datacenter": os.environ.get("RUNPOD_DC_ID")}
     if peer:
         ident["link"] = link_to(peer)
+        if rtt:
+            ident["link"]["rtt"] = tcp_rtt(rtt)
     return ident
 
 
@@ -103,7 +156,7 @@ def from_job(run_dir: Path) -> dict[str, Any]:
         ident.update({k: env.get(k) for k in ("boot_id", "hostname", "pod_id") if env.get(k)})
     pl = run_dir / "placement.json"
     if pl.is_file():
-        ident.update({k: v for k, v in json.loads(pl.read_text()).items() if v})
+        ident = merge(ident, json.loads(pl.read_text()))
     return ident
 
 
@@ -120,10 +173,30 @@ def from_runpod(machine: str) -> dict[str, Any]:
     return {"pod_id": pod.get("id"), "machine_id": pod.get("machineId") or None, "public_ip": pod.get("publicIp") or None}
 
 
+def rtt_target(peer: str | None) -> str | None:
+    """Where the prover times its TCP connects for a global-network peer: the verifier pod's sshd on the same name and route.  Not
+    the session port: the verifiers count every connection on it as a session."""
+    host = (peer or "").rpartition(":")[0]
+    return f"{host}:22" if host.endswith(RUNPOD_INTERNAL) else None
+
+
+def remote_probe(machine: str, peer: str | None = None) -> dict[str, Any]:
+    """:func:`probe` run on a pod over ``research pods ssh`` (this file on stdin), so a plan can see its DMI identity and RTT."""
+    import subprocess
+
+    args = ["probe", *(["--peer", peer] if peer else []), *(["--rtt", rtt_target(peer)] if rtt_target(peer) else [])]
+    r = subprocess.run(["research", "pods", "ssh", machine, "--", "python3", "-", *args], input=Path(__file__).read_text(),
+                       capture_output=True, text=True, timeout=300)
+    if r.returncode:
+        raise RuntimeError(f"probe on {machine}: rc {r.returncode}: {r.stderr.strip()[-300:]}")
+    return json.loads(r.stdout[r.stdout.index("{"):])
+
+
 def merge(*idents: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Later identities override earlier ones; a value not recorded (``None``, empty) never overrides (``False`` is recorded)."""
     out: dict[str, Any] = {}
     for i in idents:
-        out.update({k: v for k, v in (i or {}).items() if v})
+        out.update({k: v for k, v in (i or {}).items() if v is not None and v != "" and v != {}})
     return out
 
 
@@ -138,35 +211,67 @@ def is_host_bridge(ip: str | None) -> bool:
     return a.is_loopback or a.is_link_local or (a.version == 4 and a in HOST_BRIDGE_NET)
 
 
-def assess(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any] | None = None, rtt_ms: float | None = None,
-           final: bool = True) -> dict[str, Any]:
-    """Whether ``prover`` and ``verifier`` are shown to be separate machines on a routed link: ``{"problems": [...],
-    "shared_public_ip": bool, "evidence": {...}}`` (no problems: they are).
+def is_hypervisor_vendor(vendor: str | None) -> bool:
+    return bool(vendor) and any(str(vendor).strip().lower().startswith(v.lower()) for v in HYPERVISOR_VENDORS)
 
-    A shared public IP (a datacenter's egress NAT) is one machine unless every one of :data:`NAT_IDS` is recorded on both pods and
-    differs, the measured prover-verifier RTT is at least :data:`RTT_FLOOR_MS` and the link is no host bridge (coordinator
-    2026-09-26 22:00Z, red-team-flock's 12:00Z item 1 made explicit).  With ``final=False`` (a plan: only the RunPod API's machine
-    ids are known) the machine ids must differ and the DMI uuid, boot id and RTT are left to the runs (``evidence.pending``)."""
+
+def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    """Why a pair sharing a public IP does not earn the NAT exception (coordinator 22:00Z; red-team-flock-3 S1-S5, 22:05Z), and its
+    evidence: all three :data:`NAT_IDS` recorded and different; both pods bare metal (no ``hypervisor`` CPU flag, a DMI
+    ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
+    on that route (median) at least :data:`RTT_FLOOR_MS`."""
+    ip, out = prover["public_ip"], []
+    pre = f"prover and verifier share public_ip {ip}"
+    missing = [k for k in NAT_IDS if not (prover.get(k) and verifier.get(k))]
+    if missing:
+        out.append(f"{pre}: the NAT exception needs {', '.join(NAT_IDS)} recorded on both pods and all different; missing: {', '.join(missing)}")
+    for role, x in (("prover", prover), ("verifier", verifier)):
+        if x.get("hypervisor") is None or not x.get("sys_vendor"):
+            out.append(f"{pre}: the {role} pod's hypervisor flag and DMI sys_vendor are not recorded (a VM's uuid and boot id are its own)")
+        elif x["hypervisor"] is True or is_hypervisor_vendor(x["sys_vendor"]):
+            out.append(f"{pre}: the {role} pod is a virtual machine (hypervisor flag {x['hypervisor']}, sys_vendor {x['sys_vendor']!r}): "
+                       "two VMs of one host would pass the id checks")
+    host = (link.get("peer") or "").rpartition(":")[0]
+    want = f"{verifier.get('pod_id')}{RUNPOD_INTERNAL}" if verifier.get("pod_id") else None
+    peer_ip = link.get("peer_ip")
+    try:
+        in_global = peer_ip is not None and ipaddress.ip_address(peer_ip) in GLOBAL_NET
+    except ValueError:
+        in_global = False
+    if not (want and host == want and in_global):
+        out.append(f"{pre}: the link must be RunPod's global network, {want or '<verifier pod id>' + RUNPOD_INTERNAL} resolving into "
+                   f"{GLOBAL_NET}; it is {host or '?'} at {peer_ip}")
+    rtt = link.get("rtt") or {}
+    ok_rtt = (str(rtt.get("method", "")).startswith("tcp-connect") and isinstance(rtt.get("median_ms"), (int, float))
+              and rtt.get("target_ip") == peer_ip and rtt["median_ms"] >= RTT_FLOOR_MS)
+    if not ok_rtt:
+        out.append(f"{pre}: no TCP-connect RTT of at least {RTT_FLOOR_MS} ms measured on the link's own route (median "
+                   f"{rtt.get('median_ms')!r} ms to {rtt.get('target_ip')!r}, method {rtt.get('method')!r}); a co-resident pair measured "
+                   "about 0.03 ms")
+    evidence = {k: [prover.get(k), verifier.get(k)] for k in NAT_IDS}
+    evidence.update({"public_ip": ip, "bare_metal": {role: {k: x.get(k) for k in ("hypervisor", "sys_vendor", "product_name", "cpu_model")}
+                                                     for role, x in (("prover", prover), ("verifier", verifier))},
+                     "link": {"name": host or None, "address": peer_ip}, "rtt": {k: rtt.get(k) for k in ("method", "median_ms", "min_ms", "n",
+                                                                                                     "failed", "target", "target_ip")},
+                     "rtt_floor_ms": RTT_FLOOR_MS})
+    return out, evidence
+
+
+def assess(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Whether ``prover`` and ``verifier`` are shown to be separate machines on a routed link: ``{"problems": [...],
+    "shared_public_ip": bool, "evidence": {...}}`` (no problems: they are).  A shared public IP (a datacenter's egress NAT) is one
+    machine unless the pair earns the NAT exception (:func:`_nat_exception`); ``evidence`` is what it rests on."""
+    link = link or {}
     out: list[str] = []
-    for k in ("machine_id", "product_uuid", "boot_id"):
+    for k in NAT_IDS:
         if prover.get(k) and prover.get(k) == verifier.get(k):
             out.append(f"prover and verifier share {k} {prover[k]} (one machine)")
-    peer = (link or {}).get("peer_ip")
+    peer = link.get("peer_ip")
     shared = bool(prover.get("public_ip")) and prover.get("public_ip") == verifier.get("public_ip")
     evidence: dict[str, Any] = {}
     if shared:
-        evidence = {k: [prover.get(k), verifier.get(k)] for k in NAT_IDS} | {"public_ip": prover["public_ip"], "rtt_ms": rtt_ms,
-                                                                             "rtt_floor_ms": RTT_FLOOR_MS}
-        needed = NAT_IDS if final else ("machine_id",)
-        missing = [k for k in needed if not (prover.get(k) and verifier.get(k))]
-        if missing:
-            out.append(f"prover and verifier share public_ip {prover['public_ip']}: a shared (NAT) IP needs {', '.join(NAT_IDS)} recorded on "
-                       f"both pods and all different; missing: {', '.join(missing)}")
-        if final and not (isinstance(rtt_ms, (int, float)) and rtt_ms >= RTT_FLOOR_MS):
-            out.append(f"prover and verifier share public_ip {prover['public_ip']}: the measured RTT {rtt_ms!r} ms is not at least "
-                       f"{RTT_FLOOR_MS} ms (a co-resident pair measured about 0.03 ms)")
-        if not final:
-            evidence["pending"] = [k for k in ("product_uuid", "boot_id") if not (prover.get(k) and verifier.get(k))] + ["rtt_ms"]
+        why, evidence = _nat_exception(prover, verifier, link)
+        out += why
     else:
         ids_differ = any(prover.get(k) and verifier.get(k) and prover[k] != verifier[k] for k in ("machine_id", "product_uuid"))
         ip_cpu = all(x.get(k) for x in (prover, verifier) for k in ("public_ip", "cpu_model"))
@@ -178,15 +283,14 @@ def assess(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping
         out.append(f"the prover reaches the verifier at {peer}, a host bridge or loopback address (one machine, not a routed path)")
     elif peer and is_host_private(peer) and not machines_differ:
         out.append(f"the prover reaches the verifier at {peer}, a private address, and the machine ids are not known to differ")
-    if peer and prover.get("public_ip") and peer == prover["public_ip"] and not shared:
-        out.append(f"the prover reaches the verifier at its own public IP {peer} (hairpin on one machine)")
+    if peer and prover.get("public_ip") and peer == prover["public_ip"]:
+        out.append(f"the prover reaches the verifier at its own public IP {peer} (a hairpin, never a separate machine's route)")
     return {"problems": out, "shared_public_ip": shared, "evidence": evidence}
 
 
-def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any] | None = None, rtt_ms: float | None = None,
-               final: bool = True) -> list[str]:
+def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any] | None = None) -> list[str]:
     """Why ``prover`` and ``verifier`` are not shown to be separate machines on a routed link (empty: they are; :func:`assess`)."""
-    return assess(prover, verifier, link, rtt_ms, final)["problems"]
+    return assess(prover, verifier, link)["problems"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -194,9 +298,10 @@ def main(argv: list[str] | None = None) -> int:
     sp = ap.add_subparsers(dest="cmd", required=True)
     p = sp.add_parser("probe")
     p.add_argument("--peer", default=None)
+    p.add_argument("--rtt", default=None, help="HOST:PORT on the peer's route: the TCP-connect RTT target")
     p.add_argument("--out", default=None)
     a = ap.parse_args(argv)
-    doc = probe(a.peer or None)
+    doc = probe(a.peer or None, a.rtt or None)
     text = json.dumps(doc, indent=1) + "\n"
     if a.out:
         Path(a.out).write_text(text)

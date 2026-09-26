@@ -3,16 +3,24 @@
 ## 2026-09-26: bench.cell accepts a shared datacenter NAT IP, given full machine-identity proof
 
 - `bench.placement.assess` treats a public IP shared by the prover and verifier (a datacenter's egress NAT) as separate machines only
-  when all three conditions hold:
+  when every condition holds (coordinator 22:00Z, with red-team-flock-3's conditions S1-S5):
   - the RunPod machine id, DMI `product_uuid` and `boot_id` are all recorded on both pods and all differ;
-  - the session's measured RTT (`net.rtt_ms`) is at least `RTT_FLOOR_MS` = 0.1 ms, where the co-resident pair measured about 0.03 ms;
-  - the link is not a host bridge.
-- **Host bridges:** loopback, link-local and the docker pool 172.16/12 are now always refused. A datacenter's routed private network
-  (RunPod's 10.x) is accepted between distinct machine ids.
-- **`plan`:** only machine ids are known at plan time, so it requires those to differ and records the rest as pending
-  (`cell.placement.separation.pending`). `check` and `register` apply the full rule.
-- **Recording:** `register` writes `cell.placement.shared_public_ip` and, when it is true, `separation`: the three ids of both pods,
-  the shared IP, the measured RTT and the floor.
+  - both pods are bare metal (S1): no `hypervisor` CPU flag, and a DMI `sys_vendor` that is not a hypervisor's
+    (`HYPERVISOR_VENDORS`); a missing flag or vendor refuses;
+  - the link is RunPod's global network (S3): `<verifier pod id>.runpod.internal` resolving into 10/8;
+  - a TCP-connect RTT on that route is at least `RTT_FLOOR_MS` = 0.1 ms (S4), where the co-resident pair measured about 0.03 ms.
+    `placement.tcp_rtt` gives the median of 30 kernel-level connects, to the verifier pod's sshd on the same name and address
+    (`rtt_target`); it does not use the session port, because the verifiers count every connection on it as a session. The
+    session's `net.rtt_ms` and a round trip timed via the public IP do not count.
+- **Host bridges and hairpins:** loopback, link-local and the docker pool 172.16/12 are always refused, as is dialling the prover's
+  own public IP. A datacenter's routed private network (RunPod's 10.x) is accepted between distinct machine ids.
+- **`plan`:** when the API shows a shared IP, it probes both pods over ssh (`placement.remote_probe`; the prover's probe includes
+  its link and RTT) and applies the full rule. If the pods cannot be probed, the plan is refused.
+- **`register` (S2):** re-checks the rule on the runs' own `placement.json` records and refuses when either run lacks any value
+  (pod id, DMI uuid, boot id, hypervisor flag, sys_vendor, and for the prover the link and its RTT), or when a run's DMI uuid or boot
+  id differs from what the plan probed on that pod.
+- **Recording (S5):** `cell.placement.shared_public_ip` and, when it is true, `separation`: the three ids of both pods, the shared
+  IP, both pods' bare-metal facts, the link's name and address, the RTT measurement and the floor.
 
 ## 2026-09-26: class-pin attention cells credited per listed key count
 

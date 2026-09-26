@@ -144,7 +144,13 @@ def plan(backend: str, statement: str, input_set: str, prover: str, **kw: Any) -
     if drv.INTERACTIVE:
         if not cell.placement:
             cell.placement = resolve_placement(cell)
-        a = PL.assess(cell.placement.get("prover") or {}, cell.placement.get("verifier") or {}, cell.placement.get("link"), final=False)
+        a = PL.assess(cell.placement.get("prover") or {}, cell.placement.get("verifier") or {}, cell.placement.get("link"))
+        if a["shared_public_ip"] and not cell.placement.get("probed"):
+            try:
+                cell.placement = probe_pods(cell)
+            except NotSupported as e:
+                raise NotSupported("; ".join([*a["problems"], str(e)])) from e
+            a = PL.assess(cell.placement["prover"], cell.placement["verifier"], cell.placement["link"])
         if a["problems"]:
             raise NotSupported("; ".join(a["problems"]))
         cell.placement["shared_public_ip"] = a["shared_public_ip"]
@@ -167,8 +173,22 @@ def resolve_placement(cell: Cell) -> dict[str, Any]:
 
 
 #: Before a cell's job, each pod records its identity (and the prover the route to its verifier) in the run's placement.json.
-PROBE_WRAP = (f'python3 {PL.PROBE} probe --peer "$1" --out "${{RESEARCH_RUN_DIR:-.}}/placement.json" >/dev/null '
-              '|| echo "placement probe failed" >&2; shift; exec "$@"')
+PROBE_WRAP = (f'python3 {PL.PROBE} probe --peer "$1" --rtt "$2" --out "${{RESEARCH_RUN_DIR:-.}}/placement.json" >/dev/null '
+              '|| echo "placement probe failed" >&2; shift 2; exec "$@"')
+
+
+def probe_pods(cell: Cell) -> dict[str, Any]:
+    """A shared-IP pair's full identity before any job: both pods probed over ssh (the prover with its link and TCP-connect RTT to
+    the verifier), merged over the API's (red-team-flock-3 S2)."""
+    try:
+        p = PL.remote_probe(cell.prover, cell.verifier_addr)
+        v = PL.remote_probe(cell.verifier or "")
+    except Exception as e:  # noqa: BLE001  (no ssh, no pod: the exception cannot be shown)
+        raise NotSupported(f"the pods share a public IP and could not be probed ({type(e).__name__}: {e})") from e
+    plan = cell.placement
+    return {"prover": PL.merge(plan.get("prover"), {k: x for k, x in p.items() if k != "link"}),
+            "verifier": PL.merge(plan.get("verifier"), {k: x for k, x in v.items() if k != "link"}),
+            "link": PL.merge(plan.get("link"), p.get("link")), "probed": True}
 
 
 def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
@@ -188,7 +208,9 @@ def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
         argv += ["--send", f]
     command = list(job["command"])
     if cell.placement:
-        command = ["bash", "-c", PROBE_WRAP, "cell-job", (cell.verifier_addr or "") if job.get("role") == "prover" else "", *command]
+        prover = job.get("role") == "prover"
+        command = ["bash", "-c", PROBE_WRAP, "cell-job", (cell.verifier_addr or "") if prover else "",
+                   (PL.rtt_target(cell.verifier_addr) or "") if prover else "", *command]
     return dict(job, argv=argv + ["--", *command])
 
 
@@ -221,18 +243,38 @@ def run_placement(cell: Cell, prover_run: Path | None, verifier_run: Path | None
     return {"prover": p, "verifier": v, "link": PL.merge(plan.get("link"), p.pop("link", None)), "verifier_link": v.pop("link", None)}
 
 
-def run_assessment(cell: Cell, prover_run: Path | None, verifier_run: Path | None, rtt_ms: float | None) -> dict[str, Any]:
-    """``placement.assess`` on both runs' identities with the session's measured RTT (``net.rtt_ms``)."""
+def run_assessment(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> dict[str, Any]:
+    """``placement.assess`` on both runs' identities (the plan's merged with the runs' records)."""
     pl = run_placement(cell, prover_run, verifier_run)
-    return PL.assess(pl["prover"], pl["verifier"], pl["link"], rtt_ms=rtt_ms)
+    return PL.assess(pl["prover"], pl["verifier"], pl["link"])
 
 
-def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None, rtt_ms: float | None = None) -> list[str]:
+RUN_NAT_KEYS = ("pod_id", "product_uuid", "boot_id", "hypervisor", "sys_vendor")
+
+
+def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
     """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
-    the cell planned (a run whose pod id differs from the plan's)."""
+    the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own
+    (red-team-flock-3 S2): each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the DMI uuid and
+    boot id the plan probed on that pod, since the machine id is the plan's."""
     if not (cell.placement or prover_run or verifier_run):
         return []
-    out = list(run_assessment(cell, prover_run, verifier_run, rtt_ms)["problems"])
+    a = run_assessment(cell, prover_run, verifier_run)
+    out = list(a["problems"])
+    if a["shared_public_ip"]:
+        for role, run in (("prover", prover_run), ("verifier", verifier_run)):
+            if run is None:
+                continue
+            rec, planned = PL.from_job(run), cell.placement.get(role) or {}
+            keys = [k for k in RUN_NAT_KEYS if rec.get(k) is None or rec.get(k) == ""]
+            if role == "prover":
+                link = rec.get("link") or {}
+                keys += [f"link.{k}" for k in ("peer", "peer_ip", "rtt") if not link.get(k)]
+            if keys:
+                out.append(f"the {role} run did not record {', '.join(keys)}: the NAT exception is re-checked on the runs' own records")
+            for k in ("product_uuid", "boot_id"):
+                if planned.get(k) and rec.get(k) and planned[k] != rec[k]:
+                    out.append(f"the {role} run's {k} {rec[k]} is not the {planned[k]} the plan probed on pod {planned.get('pod_id')}")
     for role, run in (("prover", prover_run), ("verifier", verifier_run)):
         planned, ran = (cell.placement.get(role) or {}).get("pod_id"), (PL.from_job(run) if run else {}).get("pod_id")
         if planned and ran and planned != ran:
@@ -260,7 +302,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
         placement = (fp.get("verifier") or {}).get("placement") if isinstance(fp.get("verifier"), Mapping) else None
         if placement in (None, "loopback") or str(placement).startswith("127."):
             out.append(f"verifier placement {placement!r}: the protocol's verifier runs on a separate pod")
-        out += placement_problems(cell, prover_run, verifier_run, m.get("net.rtt_ms"))
+        out += placement_problems(cell, prover_run, verifier_run)
         if not isinstance(m.get("live.loopback_round_seconds"), (int, float)) or not inter.get("loopback_method"):
             out.append("no loopback probe (live.loopback_round_seconds with interaction.loopback_method)")
         if not isinstance(m.get("net.rtt_ms"), (int, float)) or not inter.get("rtt_method"):
@@ -321,7 +363,7 @@ def stamp(cell: Cell, doc: dict[str, Any], prover_run: Path | None = None, verif
                    "input_set": {k: cell.input_set.get(k) for k in ("kind", "id", "art", "n", "content_digest", "manifest_sha256", "source")},
                    "prover_pod": cell.prover, "verifier_pod": cell.verifier, "entry": "verity_numerical.bench.cell"}
     if cell.placement or prover_run or verifier_run:
-        a = run_assessment(cell, prover_run, verifier_run, _meas(doc).get("net.rtt_ms"))
+        a = run_assessment(cell, prover_run, verifier_run)
         doc["cell"]["placement"] = dict(run_placement(cell, prover_run, verifier_run), plan=cell.placement,
                                         shared_public_ip=a["shared_public_ip"], **({"separation": a["evidence"]} if a["shared_public_ip"] else {}))
     if cell.lane:
