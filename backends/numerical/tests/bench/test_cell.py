@@ -50,7 +50,7 @@ def test_plan_wraps_the_flock_cell_script():
 
 @pytest.mark.parametrize("kw,why", [
     (dict(statement="rope-head/d64/neox-bf16+frame-v3/blake3-keyed"), "no lowering of RoPEHead_v1"),
-    (dict(statement="gemm-coordinate/k2048/sm90-mma-bf16+frame-v3/blake3-keyed"), "K = 2048"),
+    (dict(statement="gemm-coordinate/k512/sm90-mma-bf16+frame-v3/blake3-keyed"), "CN3"),
     (dict(statement="gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/sha-256"), "keyed-BLAKE3"),
     (dict(input_set="bench-instances-fp8-ada-v1"), "is of gemm-coordinate/k1536/sm89-mma-e4m3"),
     (dict(verifier=None), "separate pod"),
@@ -79,6 +79,7 @@ def test_an_input_set_needs_the_lowerings_stage(monkeypatch):
     mod = C.LW.registry("C-Flock").module("gemm-coordinate")
     monkeypatch.setattr(mod, "supports", lambda s, c: None)
     monkeypatch.setattr(mod, "relation", lambda s, c: "bf16-ampere-k2048")
+    monkeypatch.delattr(mod, "stage", raising=False)
     with pytest.raises(C.NotSupported, match="no stage"):
         C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p", **FLOCK)
     monkeypatch.setattr(mod, "stage", lambda s, lo, hi, out: out, raising=False)
