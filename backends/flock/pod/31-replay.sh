@@ -3,6 +3,7 @@
 # (CPU), regenerate every point's instance files here, check them against the verifier pod's, then `flock-pure-gpu replay`
 # every accepted session from its record and proof files, plus tampered-record negatives that must be rejected.
 #   inputs/$TAG.tgz (out/verifier minus instance files)  inputs/$TAG.sha256 (its instance files)  REL=bf16-hopper PER=8192
+#   SET=name.tgz (a spine input set in inputs/)  YMODEL=1  K=2048 (as bench.py's --set / --y-model / --k)
 #   NEG=p3-8192/sessions-s0 (where the negatives run; empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -42,16 +43,19 @@ PIN=$(python3 -c "from verity_flock import lowering; print(lowering.PINS['$REL']
 NET=$W/net-$REL.txt; python3 -c "from verity_flock import lowering; open('$NET','w').write(lowering.netlist('$REL'))"
 echo "$PIN  $NET" | sha256sum -c | tee $O/netlist.check || exit 1
 cmp $NET $S/net-$REL.txt && echo "netlist equals the verifier pod's" | tee -a $O/netlist.check
-python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$SCHEME" "$LEAF" <<'PY' | tee $O/instances.txt
+SETDIR=; if [ -n "${SET:-}" ]; then SETDIR=$W/set-${SET%.tgz}; rm -rf $SETDIR; mkdir -p $SETDIR; tar xzf $RD/inputs/$SET -C $SETDIR || exit 5; fi
+python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$SCHEME" "$LEAF" "$SETDIR" "${YMODEL:-}" "${K:-0}" <<'PY' | tee $O/instances.txt
 import sys, json
+from argparse import Namespace
 from pathlib import Path
-from verity_flock import instances, bench
+from verity_flock import bench
 rel, per, s, out, procs, scheme, leaf = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5]), sys.argv[6], sys.argv[7]
+a = Namespace(relation=rel, procs=procs, cache=None, scheme=scheme, leaf=leaf, set=sys.argv[8], y_model=bool(sys.argv[9]), k=int(sys.argv[10]))
 for d in sorted(s.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
     for j, (lo, hi) in enumerate(bench.subbatches(total, per)):
         f = out / d.name / f"instances-s{j}.bin"; f.parent.mkdir(parents=True, exist_ok=True)
-        h = instances.write(f, rel, total, procs, None, lo, hi, scheme=scheme, leaf=leaf)
+        h = bench.write_instances(a, f, total, lo, hi)
         print(json.dumps({"file": f"{d.name}/instances-s{j}.bin", "range": [lo, hi], "roots": h["roots"]}), flush=True)
 PY
 (cd $W/inst-$TAG && sha256sum -c $RD/inputs/$TAG.sha256) | tee $O/instances.check || exit 1
