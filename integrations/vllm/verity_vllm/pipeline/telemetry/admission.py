@@ -436,8 +436,9 @@ def predict(cfg: RowConfig) -> dict[str, Any]:
     if cfg.bounded_staging and cfg.retain == "host" and excl_hidden:
         # fix (a): the M1 export stream's interior is not copied off the staging window; the pool holds the C2-read families + levels
         pool_kept = max(0, raw - hid_b)
-        pool = int(pool_kept * lf)
-        pool_basis = f"bounded staging, --retain host --retain-exclude {','.join(sorted(cfg.retain_exclude))}: (raw {raw // MiB} - hidden M1 {hid_b // MiB}) MiB x {lf} (R19 admit fix (a))"
+        pool = pool_kept + int(raw * (lf - 1.0))
+        pool_basis = (f"bounded staging, --retain host --retain-exclude {','.join(sorted(cfg.retain_exclude))}: (raw {raw // MiB} - hidden M1 {hid_b // MiB}) MiB "
+                      f"+ levels over every leaf raw {raw // MiB} MiB x {lf - 1.0:.2f} (R19 admit fix (a))")
     elif cfg.bounded_staging and cfg.retain != "host":
         pool = int(raw * (lf - 1.0))
         pool_basis = f"bounded staging, --retain {cfg.retain}: Merkle levels only, raw {raw // MiB} MiB x {lf - 1.0:.2f} (raw released per window; openings by replay)"
