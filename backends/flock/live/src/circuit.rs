@@ -35,7 +35,7 @@ use flock_hash::blake3_compress;
 use flock_prover::r1cs_hashes::blake3 as b3;
 use rayon::prelude::*;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 
 use crate::{
     chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, PARENT, ROOT, comp, key_words, log2ceil},
@@ -52,10 +52,24 @@ pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
-    json!({"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
-           "target": {"scheme": "hm96 on sha-512 (core scheme pending)", "inner": "sha512 column digest",
-                      "salt_bytes_per_leaf": 192, "salt_source": "os generator, one draw per leaf", "key_bits": 2047,
-                      "key": "the scheme's pinned constant, one per statement for every tree"}})
+    let id = if cfg!(feature = "sha512") { "flock-leaf/sha512-unsalted" } else { "flock-leaf/sha256-unsalted" };
+    json!({"id": id, "salt_bytes": 0,
+           "target": {"scheme": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes_per_leaf": 192,
+                      "salt_source": "os generator, one draw per leaf", "key": "default_key, a statement constant for every tree",
+                      "key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key()))}})
+}
+
+/// `hm96-sha512/v1`'s pinned key: `SHA-512("verity/hm96-sha512/key/v1\0" || u32be(i))` for i = 0..3, bit 2047 cleared.
+pub fn hm96_sha512_default_key() -> [u8; 256] {
+    let mut k = [0u8; 256];
+    for (i, c) in k.chunks_mut(64).enumerate() {
+        let mut h = Sha512::new();
+        h.update(b"verity/hm96-sha512/key/v1\0");
+        h.update((i as u32).to_be_bytes());
+        c.copy_from_slice(&h.finalize());
+    }
+    k[255] &= 0x7f;
+    k
 }
 const WORD: usize = 128;
 const SUB_LOG: usize = b3::K_LOG;
@@ -1356,5 +1370,15 @@ impl Stmt {
     /// Words per block the device witness needs for the unit slots: every unit's input words, block-major.
     pub fn region_bytes_len(&self, reg: &RegionShape) -> usize {
         (1usize << reg.free.len()) / 8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn hm96_sha512_default_key_is_core_s() {
+        // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        assert_eq!(super::leaf_scheme()["target"]["key_sha512"],
+                   "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }
 }

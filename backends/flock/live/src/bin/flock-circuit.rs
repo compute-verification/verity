@@ -625,10 +625,17 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         bad["streams"][0]["rounds"][0]["msg"] = json!(format!("{}{}", if m.starts_with('0') { "1" } else { "0" }, m.get(1..).unwrap_or("")));
         let v2: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
         let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
-        let altered = Server::from_record(config(st, sigma(st, inst)), v2, &bad, map).err();
-        return json!({"case": name, "expect": "the honest record replays offline; swapped proofs and altered round bytes do not",
-                      "accepted": v["accepted"], "altered_bytes_refused": altered,
-                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some(),
+        let altered = Server::from_record(config(st, sigma(st, inst)), v2, &bad, map.clone()).err();
+        // the same record with its link.sigma flipped: refused (Σ is the verifier's own)
+        let mut bad_sigma = rec.clone();
+        let sg = bad_sigma["link"]["sigma"].as_str().unwrap_or("").to_string();
+        bad_sigma["link"]["sigma"] = json!(format!("{}{}", if sg.starts_with('0') { "1" } else { "0" }, sg.get(1..).unwrap_or("")));
+        let v3: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+        let sigma_refused = Server::from_record(config(st, sigma(st, inst)), v3, &bad_sigma, map).err();
+        return json!({"case": name, "expect": "the honest record replays offline; swapped proofs, altered round bytes and another Σ do not",
+                      "accepted": v["accepted"], "altered_bytes_refused": altered, "sigma_refused": sigma_refused,
+                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some()
+                          && sigma_refused.is_some(),
                       "why": honest.as_ref().map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e)),
                       "why_swapped": swapped.map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e))});
     }

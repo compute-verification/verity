@@ -1463,6 +1463,9 @@ impl Server {
             if rec["link_mode"] != "exchange" || l["mode"] != "exchange" {
                 return Err(bad("link_mode is not exchange"));
             }
+            if l["sigma"].as_str() != s.cfg.link.as_ref().map(|k| hex(&k.sigma)).as_deref() {
+                return Err(bad("link.sigma is not the verifier's Σ"));
+            }
             let root_f = hx(&l["root_f"], "root_f")?;
             let names: Vec<String> = s.cfg.tables.iter().map(|t| t.name.clone()).collect();
             let mut roots = Vec::new();
