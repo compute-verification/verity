@@ -289,6 +289,14 @@ class CommitConfig:
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
                            help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
                                 "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
+    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
+                             help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
+                                  "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "
+                                  "root then differ from the record")
+    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="0",
+                            help="1 opts in, never the record: commit each TP rank's vocabulary-range values per token row (verity_vllm.query."
+                                 "vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source); the manifest and run "
+                                 "root then differ from the record")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs
@@ -315,6 +323,7 @@ class RunEnv:
     hidden_so_fa2: str = option("--hidden-so-fa2")
     hidden_so_fa3: str = option("--hidden-so-fa3")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used when --norm-tap 1")
+    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used when --router-tap 1")
     hot_root: str = option("--hot-root", env="HOT_ROOT")
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
