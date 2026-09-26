@@ -7,7 +7,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-replay}; O=$RD/out; W=/workspace/verify-flock-pure; mkdir -p $O $W
-REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
+REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; SCHEME=${SCHEME:-blake3}; NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
 MODE=build GPU=0 bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }
@@ -41,16 +41,16 @@ PIN=$(python3 -c "from verity_flock import lowering; print(lowering.PINS['$REL']
 NET=$W/net-$REL.txt; python3 -c "from verity_flock import lowering; open('$NET','w').write(lowering.netlist('$REL'))"
 echo "$PIN  $NET" | sha256sum -c | tee $O/netlist.check || exit 1
 cmp $NET $S/net-$REL.txt && echo "netlist equals the verifier pod's" | tee -a $O/netlist.check
-python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" <<'PY' | tee $O/instances.txt
+python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$SCHEME" <<'PY' | tee $O/instances.txt
 import sys, json
 from pathlib import Path
 from verity_flock import instances, bench
-rel, per, s, out, procs = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5])
+rel, per, s, out, procs, scheme = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
 for d in sorted(s.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
     for j, (lo, hi) in enumerate(bench.subbatches(total, per)):
         f = out / d.name / f"instances-s{j}.bin"; f.parent.mkdir(parents=True, exist_ok=True)
-        h = instances.write(f, rel, total, procs, None, lo, hi)
+        h = instances.write(f, rel, total, procs, None, lo, hi, scheme=scheme)
         print(json.dumps({"file": f"{d.name}/instances-s{j}.bin", "range": [lo, hi], "roots": h["roots"]}), flush=True)
 PY
 (cd $W/inst-$TAG && sha256sum -c $RD/inputs/$TAG.sha256) | tee $O/instances.check || exit 1
