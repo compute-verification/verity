@@ -83,9 +83,14 @@ enum Held {
     BareTreeRoot,
 }
 
-fn ports(inst: &Instances, held: Held) -> Ports {
+/// The verifier's statement from its own instance file. Every bound root the file names is recomputed natively from the
+/// file's values (x rows, W columns, output words: position leaves, the vllm-v1 fold, the step-root binding under the
+/// verifier's domain), so a file whose roots are not its values' is refused before any session.
+fn ports(inst: &Instances, held: Held) -> Result<Ports, String> {
     let h = &inst.header;
-    assert_eq!(h["scheme"], "vllm-v1", "not a vllm-v1 instance file (verity_flock.instances --scheme vllm-v1)");
+    if h["scheme"] != "vllm-v1" {
+        return Err("not a vllm-v1 instance file (verity_flock.instances --scheme vllm-v1)".into());
+    }
     let y_bytes = h["y_bytes"].as_u64().unwrap();
     let shape = v1::Shape { k: h["k"].as_u64().unwrap(), word_bits: h["word_bits"].as_u64().unwrap(), y_bytes };
     let mut refs = h["instances"].clone();
@@ -93,11 +98,17 @@ fn ports(inst: &Instances, held: Held) -> Ports {
     let mut roots: [[u8; 32]; 3] = std::array::from_fn(|t| unhex32(h["roots"][v1::TREES[t]].as_str().unwrap()));
     for (t, d) in domains.iter().enumerate() {
         let n = v1::TREES[t];
-        assert_eq!(v1::hex(&d.digest()), h["domain_digests"][n].as_str().unwrap(), "port {n}: the instance file's domain is not the verifier's");
-        assert_eq!(d.n as usize, inst.vus);
+        if v1::hex(&d.digest()) != h["domain_digests"][n].as_str().unwrap_or("") || d.n as usize != inst.vus {
+            return Err(format!("port {n}: the instance file's domain is not the verifier's"));
+        }
     }
-    let yl = v1::y_leaves(&inst.y, y_bytes as usize);
-    assert_eq!(domains[2].bind(&v1::fold(&yl)), roots[2], "port y: the output words do not fold to the bound y root");
+    let (la, lb) = row_leaves(inst);
+    let leaves = [la, lb, v1::y_leaves(&inst.y, y_bytes as usize)];
+    for (t, l) in leaves.iter().enumerate() {
+        if domains[t].bind(&v1::fold(l)) != roots[t] {
+            return Err(format!("VL1: port {}: the instance file's bound root is not the step root of its own values", v1::TREES[t]));
+        }
+    }
     let mut domains = domains;
     match held {
         Held::Honest => {}
@@ -106,16 +117,13 @@ fn ports(inst: &Instances, held: Held) -> Ports {
             refs["range"][1] = json!(refs["range"][1].as_u64().unwrap() + 1);
             domains[0] = v1::Domain::of(0, &shape, &refs);
         }
-        Held::BareTreeRoot => {
-            let (cmp, _) = compressions_digests(inst);
-            roots[0] = v1::fold(&cmp);
-        }
+        Held::BareTreeRoot => roots[0] = v1::fold(&leaves[0]),
     }
-    Ports { shape, domains, roots, y_bytes: y_bytes as usize }
+    Ok(Ports { shape, domains, roots, y_bytes: y_bytes as usize })
 }
 
-/// The a-port leaf digests the committer computed (for the bare-tree-root negative only).
-fn compressions_digests(inst: &Instances) -> (Vec<[u8; 32]>, Vec<[u8; 32]>) {
+/// The position leaves of the x rows and the W columns.
+fn row_leaves(inst: &Instances) -> (Vec<[u8; 32]>, Vec<[u8; 32]>) {
     let f = |r: usize| (0..inst.vus).into_par_iter().map(|v| v1::pos_leaf(inst.row(r, v))).collect();
     (f(0), f(1))
 }
@@ -190,8 +198,11 @@ fn config(st: &VllmStmt, sigma: [u8; 32]) -> SessionConfig {
     cfg
 }
 
-fn server(st: &Arc<VllmStmt>, inst: &Arc<Instances>, held: Held) -> Server {
-    let p = ports(inst, held);
+fn server(st: &Arc<VllmStmt>, inst: &Arc<Instances>, held: Held) -> Result<Server, String> {
+    Ok(server_with(st, inst, ports(inst, held)?))
+}
+
+fn server_with(st: &Arc<VllmStmt>, inst: &Arc<Instances>, p: Ports) -> Server {
     Server::new(config(st, sigma(st, inst, &p)), Box::new(VllmVerifier { st: st.clone(), inst: inst.clone(), ports: p }))
 }
 
@@ -321,7 +332,7 @@ fn rechain(comps: &mut [sh::Compression], st: &VllmStmt, role: usize, msg: &[u8]
 fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
     let t0 = Instant::now();
     // A verifier-side negative's prover names the verifier's statement (Σ agrees), so only the root check can refuse it.
-    let held = ports(inst, plan.prover_held.or(plan.held).unwrap_or(Held::Honest));
+    let held = ports(inst, plan.prover_held.or(plan.held).unwrap_or(Held::Honest)).expect("the prover's instance file");
     let commit_s = t0.elapsed().as_secs_f64();
     let sig = sigma(st, inst, &held);
     let hello = config(st, sig).hello();
@@ -500,6 +511,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("verifier_domain_other_range", false, false),
     ("bare_tree_root", false, false),
     ("prover_names_other_domain", false, false),
+    ("verifier_instance_file_root_tampered", false, false),
     ("digest_forged", false, false),
     ("digests_swapped_x_w", false, false),
     ("digests_swapped_positions", false, false),
@@ -545,10 +557,25 @@ fn run_case(st: &Arc<VllmStmt>, inst: &Arc<Instances>, name: &str, gpu: bool) ->
     let want = CASES.iter().find(|c| c.0 == name).expect("case");
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
-        let s0 = Arc::new(Mutex::new(server(st, inst, Held::Honest)));
+        let s0 = Arc::new(Mutex::new(server(st, inst, Held::Honest).unwrap()));
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }).1);
     }
-    let s = Arc::new(Mutex::new(server(st, inst, plan.held.unwrap_or(Held::Honest))));
+    // VL1: the verifier's own instance file names another a root than its x rows' (the prover's file is honest)
+    let vinst = if name == "verifier_instance_file_root_tampered" {
+        let mut t = (**inst).clone();
+        let a = t.header["roots"]["a"].as_str().unwrap().to_string();
+        t.header["roots"]["a"] = json!(format!("{}{}", if a.starts_with('0') { "1" } else { "0" }, &a[1..]));
+        Arc::new(t)
+    } else {
+        inst.clone()
+    };
+    let s = match server(st, &vinst, plan.held.unwrap_or(Held::Honest)) {
+        Ok(s) => Arc::new(Mutex::new(s)),
+        Err(e) => {
+            return json!({"case": name, "gpu": plan.gpu, "expect": if want.1 {"accept"} else {"reject"}, "accepted": false,
+                          "pass": !want.1, "both_reps_required": want.2, "why": e, "verifier_refused_instance_file": true});
+        }
+    };
     let (v, _) = session(st, inst, shared(InProc(s.clone())), &plan);
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap().record_json();
@@ -607,7 +634,10 @@ fn main() {
     eprintln!("statement {} vus={} nbl={} m={} k_log={} built in {:.2}s", inst.relation, inst.vus, st.nbl, st.m, lay.k_log(), tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
-        "serve" => serve_loop(move || server(&st, &inst, Held::Honest)),
+        "serve" => {
+            let p = ports(&inst, Held::Honest).unwrap_or_else(|e| panic!("the verifier refuses its instance file: {e}"));
+            serve_loop(move || server_with(&st, &inst, p.clone()))
+        }
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
