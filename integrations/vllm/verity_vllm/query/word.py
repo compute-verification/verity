@@ -217,15 +217,37 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str]]:
     own = np.frombuffer(owner, np.int64).copy()
     dead = np.flatnonzero(own == -1)
     if len(dead):
+        # a dead gate joins the one live unit it reads, taking the dead-only units it reads along; reading several live units, or
+        # none, it heads a dead unit
         by_consumer = np.argsort(G.dst, kind="stable")
         dstart = np.searchsorted(G.dst[by_consumer], np.arange(n + 1))
+        live = len(kinds)
+        parent: dict[int, int] = {}
+
+        def find(u: int) -> int:
+            while u in parent:
+                u = parent[u]
+            return u
+
         for g in dead:
-            us = {int(own[G.src[by_consumer[e]]]) for e in range(dstart[g], dstart[g + 1])}
-            if len(us) == 1 and min(us) >= 0:
-                own[g] = us.pop()
+            us = {find(int(own[G.src[by_consumer[e]]])) for e in range(dstart[g], dstart[g + 1])}
+            alive = {u for u in us if u < live}
+            if len(alive) == 1:
+                (a,) = alive
+                for u in us - alive:
+                    parent[u] = a
+                own[g] = a
             else:
                 own[g] = len(kinds)
                 kinds.append("dead")
+        if parent:
+            for g in dead:
+                own[g] = find(int(own[g]))
+            keep = sorted(set(range(len(kinds))) - set(parent))
+            remap = np.full(len(kinds), -1, np.int64)
+            remap[keep] = np.arange(len(keep))
+            own = remap[own]
+            kinds = [kinds[u] for u in keep]
     return own, kinds
 
 

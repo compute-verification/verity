@@ -44,12 +44,12 @@ class _Committed:
     program_path: Any
 
 
-def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, log=None) -> dict[str, Any]:
-    """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values; raises
+def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict: bool = True, log=None) -> dict[str, Any]:
+    """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values; `strict` raises
     `word.QueryRuleViolation` naming every violation.  The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
-    r = word_query.check_query(P, _Committed(required, literal_calls(P), corr.module_of), X, W, extras)
+    r = word_query.check_query(P, _Committed(required, literal_calls(P), corr.module_of), X, W, extras, strict=strict)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words")
     return r
