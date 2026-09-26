@@ -47,6 +47,11 @@ pub const UNITS: usize = 32;
 pub const UNIT_POS0: usize = 64;
 pub const PIN: usize = b3::Z_CONST_POS;
 pub const TAG: &[u8] = b"verity/flock-pure-block/v2";
+/// The statement a relation's netlist proves: `verity/flock-pure-block-total` for a total unit (relation `<pipe>-total`: every
+/// operand and accumulator encoding, NaN and infinity included), else the finite-domain `verity/flock-pure-block/v2`.
+pub fn statement_name(relation: &str) -> &'static str {
+    if relation.ends_with("-total") { "verity/flock-pure-block-total" } else { "verity/flock-pure-block/v2" }
+}
 /// Coordinates per verifier point: the regions' free in-block bits come from `r[..16]`, block bits from `r[16..]`.
 pub const PT_LOCAL: usize = 16;
 
@@ -858,7 +863,7 @@ impl PureStmt {
         let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
         let dummy_unit = (word(net.out_cols[0], 32), if net.epilogue() { word(net.out_cols[1], 16) } else { 0 });
         let mut h = Sha256::new();
-        h.update(TAG);
+        h.update(statement_name(&net.relation).as_bytes());
         h.update(comp().statement_digest());
         h.update(net.sha256);
         for x in [vus, blocks_real, nbl, m, kl, ul, slots, units, p0] {

@@ -33,7 +33,8 @@ RULE = ("double total VUs from start at fixed per-proof settings until two succe
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
 PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-ada-mma-draft/2026-09-22",
             "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21",
-            "bf16-hopper-wgmma": "bf16-hopper-mma-draft/2026-09-22", "fp4-nvf4": "nvfp4-sm120-mma-draft/2026-09-22"}
+            "bf16-hopper-wgmma": "bf16-hopper-mma-draft/2026-09-22", "fp4-nvf4": "nvfp4-sm120-mma-draft/2026-09-22",
+            "bf16-ampere-total": "first-campaign-target/2026-09-21"}
 
 
 def _guard():
@@ -330,7 +331,7 @@ def result(a, p: dict, sweep: dict) -> dict:
     first = timed[0]
     hw = contract.probe_hardware()
     fp = contract.fingerprint(
-        profile=profile, domain="finite", K=p["header"]["k"], B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
+        profile=profile, domain=lowering.PIPES[a.relation].domain, K=p["header"]["k"], B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
         zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",

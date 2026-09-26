@@ -124,3 +124,10 @@ def test_vllm_v1_instance_roots_are_step_roots_under_b_ligeros_domains(tmp_path)
         assert core.domain_digest(ports[t]).hex() == h["domain_digests"][t]
         assert scheme.verify_path(t, bytes.fromhex(h["roots"][t]), n, 3, leaves[3], scheme.path(t, leaves, 3))
         assert scheme.root(t, leaves).hex() != core.fold(leaves).hex()
+
+
+def test_total_unit_is_pinned_and_matches_tc_dot_total_on_every_encoding():
+    from verity_flock import lowering
+    assert lowering.digest("bf16-ampere-total") == lowering.PINS["bf16-ampere-total"]
+    assert lowering.PIPES["bf16-ampere-total"].domain == "total" and lowering.PIPES["bf16-ampere"].domain == "finite-only"
+    assert lowering.self_check("bf16-ampere-total", 120) == 0

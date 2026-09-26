@@ -541,7 +541,7 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let wait_s = t.lock().unwrap().wait_s();
     let hexs = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": "verity/flock-pure-block/v2", "prover": "flock-cuda-block",
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": flock_live::pure_block::statement_name(&inst.relation), "prover": "flock-cuda-block",
                "gpu": plan.gpu, "relation": inst.relation, "vus": inst.vus, "units": inst.units, "n_blake3": st.lay.comp_slots() * st.blocks_real,
                "n_units": st.lay.units() * st.blocks_real, "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
                "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(), "buckets": buckets, "wait_s": wait_s, "calls": calls,
@@ -719,7 +719,7 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v2", "layout": format!("{:?}", st.lay), "relation": inst.relation, "vus": inst.vus, "m": st.m,
+    println!("SELFTEST\t{}", json!({"statement": flock_live::pure_block::statement_name(&inst.relation), "layout": format!("{:?}", st.lay), "relation": inst.relation, "vus": inst.vus, "m": st.m,
         "gpu": gpu, "all_pass": all}));
 }
 
@@ -902,7 +902,7 @@ fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     if rec["link_sha256"].as_str() != Some(hex(&sha256(&lb)).as_str()) {
         return Err("L1: the recorded link_sha256 is not root_F || root_B || points || y".into());
     }
-    Ok(json!({"accepted": true, "statement": "verity/flock-pure-block/v2", "relation": inst.relation, "vus": inst.vus,
+    Ok(json!({"accepted": true, "statement": flock_live::pure_block::statement_name(&inst.relation), "relation": inst.relation, "vus": inst.vus,
               "instances": inst.header["instances"], "sigma": hex(&sig), "roots": roots.iter().map(|r| hex(r)).collect::<Vec<_>>(),
               "netlist_sha256": hex(&st.net.sha256), "statement_digest": hex(&st.digest), "root_b_sha256": root_b,
               "link_sha256": rec["link_sha256"], "proof_sha256": want_proofs, "verify_s": t.elapsed().as_secs_f64()}))

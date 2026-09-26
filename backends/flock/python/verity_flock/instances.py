@@ -331,7 +331,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
             accs = np.asarray([r for part in ex.map(_chain_rows, jobs) for r in part], dtype=np.uint32)
     else:
         accs = np.asarray([r for j in jobs for r in _chain_rows(j)], dtype=np.uint32)
-    final = [f32_to_bf16_word(int(a[-1])) for a in accs] if pipe.epilogue else [int(a[-1]) for a in accs]
+    final = [_epilogue(pipe, int(a[-1])) for a in accs] if pipe.epilogue else [int(a[-1]) for a in accs]
     bad = sum(int(f != int(v)) for f, v in zip(final, y_rec))
     if bad and not y_model:
         raise ValueError(f"{d.name}: {bad} recorded outputs differ from the {relation} model chain")
@@ -459,17 +459,76 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
     return _write_file(path, header, x.tobytes(), w.tobytes(), accs, out, st["y"])
 
 
+def _epilogue(pipe, acc: int) -> int:
+    """The unit's BF16 output word: ``F2fpBf16`` (NaN -> 0x7FFF) for a total unit, ``f32_to_bf16`` for the finite ones (whose
+    accumulators are never NaN)."""
+    from verity.ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word
+    return f32_to_bf16_hw_word(acc) if pipe.total else f32_to_bf16_word(acc)
+
+
+def write_probe(path: str | Path, relation: str, n: int, K_: int = K, seed: int = 20260926, leaf: str = "blake3") -> dict:
+    """A total relation's selftest file of ``n`` VUs of ``K_`` words, accumulators chained under ``tc_dot_total``: VU v % 4 = 0
+    finite rows (exponents near 1.0: a finite output), 1 the same with one infinite operand in the last unit (an infinite
+    output), 2 with a NaN operand (the canonical NaN), 3 drawn by ``lowering.total_cases`` (NaN, +-inf, signed zeros,
+    subnormals, max-finite). Not a cell's input set: dataset ``flock-total-probe``, its manifest the recipe's hash."""
+    import random
+
+    from .lowering import total_cases
+    pipe = PIPES[relation]
+    if not pipe.total:
+        raise ValueError(f"{relation}: the probe exercises a total unit's non-finite encodings")
+    rng = random.Random(seed)
+    units = K_ // pipe.k
+    near = lambda: (rng.getrandbits(1) << 15) | (rng.randint(118, 136) << 7) | rng.getrandbits(7)  # noqa: E731
+    xs, ws = [], []
+    for v in range(n):
+        mode = v % 4
+        if mode == 3:
+            r = total_cases(rng, units)
+            xv, wv = [a for _, xx, _ in r for a in xx], [b for _, _, ww in r for b in ww]
+        else:
+            xv, wv = [near() for _ in range(K_)], [near() for _ in range(K_)]
+            j = K_ - 1 - rng.randrange(pipe.k)
+            if mode == 1:                       # one infinite operand in the last unit, its partner finite nonzero: +-inf
+                xv[j] = rng.choice((0x7F80, 0xFF80))
+            elif mode == 2:                     # a NaN operand in some unit: the canonical NaN from there on
+                xv[rng.randrange(K_)] = rng.choice((0x7FC0, 0x7F81, 0xFFFF))
+        xs.append(xv)
+        ws.append(wv)
+    x, w = np.asarray(xs, dtype="<u2"), np.asarray(ws, dtype="<u2")
+    accs = np.asarray(_chain_rows((relation, x, w)), dtype=np.uint32)
+    final = [_epilogue(pipe, int(a[-1])) for a in accs]
+    manifest = hashlib.sha256(f"flock-total-probe|{relation}|K={K_}|n={n}|seed={seed}".encode()).hexdigest()
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
+    if leaf == "sha256":
+        da, db = [sha256_row_digest(r.tolist(), 16, ROLE_X) for r in x], [sha256_row_digest(r.tolist(), 16, ROLE_W) for r in w]
+    else:
+        da, db = _row_digests([r.tobytes() for r in x], leaf, ROLE_X), _row_digests([r.tobytes() for r in w], leaf, ROLE_W)
+    st = _frame_v3("flock-total-probe", f"probe-k{K_}", manifest, 0, K_, SCHEMA_SHA256_ROW if leaf == "sha256" else SCHEMA_BLAKE3_ROW,
+                   da, db, final, 16)
+    ref = {"dataset": "flock-total-probe", "tier": f"probe-k{K_}", "range": [0, n], "manifest_sha256": manifest, "seed": seed,
+           "source": "synthetic"}
+    header = {"format": FORMAT, "relation": relation, "vus": n, "k": K_, "word_bits": 16, "units": units, "row_bytes": 2 * K_,
+              "epilogue": True, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
+    return _write_file(path, header, x.tobytes(), w.tobytes(), accs, final, st["y"])
+
+
 def _chain_rows(args):
     relation, x, w = args
+    from verity.ml.tc import total
     from verity.ml.tc.silicon import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
-    model, k = _model(pipe.model), pipe.k
+    k = pipe.k
+    if pipe.total:
+        model, step = getattr(total, pipe.model), total.tc_dot_total
+    else:
+        model, step = _model(pipe.model), tc_dot
     out = []
     for a, b in zip(x, w):
         al, bl, c, row = a.tolist(), b.tolist(), 0, []
         for s in range(len(al) // k):
-            c = tc_dot(model, c, al[k * s:k * s + k], bl[k * s:k * s + k])
+            c = step(model, c, al[k * s:k * s + k], bl[k * s:k * s + k])
             row.append(c)
         out.append(row)
     return out

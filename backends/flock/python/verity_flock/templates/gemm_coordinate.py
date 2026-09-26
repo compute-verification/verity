@@ -11,7 +11,9 @@ from pathlib import Path
 TEMPLATE = "gemm-coordinate"
 K = 1536
 SCHEMES = {"frame-v3/blake3-keyed": "blake3", "frame-v3/sha-256": "sha256"}
-RELATIONS = {"sm80.mma.m16n8k16.bf16": "bf16-ampere", "sm90.mma.m16n8k16.bf16": "bf16-hopper",
+#: sm80 BF16 lowers to the total unit (circuits are total by default, 2026-09-26); the other semantics' units assert finite
+#: operands (domain finite-only) until each has its total unit.
+RELATIONS = {"sm80.mma.m16n8k16.bf16": "bf16-ampere-total", "sm90.mma.m16n8k16.bf16": "bf16-hopper",
              "sm90.wgmma.m64n8k16.bf16": "bf16-hopper-wgmma", "sm89.mma.m16n8k32.e4m3": "fp8-ada",
              "sm90.wgmma.m64n8k32.e4m3": "fp8-hopper", "sm120.mma.m16n8k64.e2m1.nvf4": "fp4-nvf4"}
 #: Chunk(n) with a red-team grant (red-team-flock, extended 2026-09-26 10:05Z to every n from 2 to 64); ChunkTail(n) is under review.

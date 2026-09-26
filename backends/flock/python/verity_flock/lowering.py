@@ -1,6 +1,7 @@
 """The pinned lowering of a GEMM-coordinate transition unit into one Flock block-R1CS type with word-aligned IO.
 
-One unit (``unit.py``, the binary census's exact GF(2) circuit of ``GroupSum.step``) becomes one 2^13-bit block, C = I:
+One unit (``unit.py``, the binary census's exact GF(2) circuit of ``GroupSum.step``, finite operands asserted; or
+``unit_total.py``, the same step on every encoding) becomes one 2^13-bit block (2^14 for a total unit), C = I:
 row i is ``(A_i . z)(B_i . z) = z_i``. Column layout (``flock-unit-io/v1``):
 
 ~~~text
@@ -24,12 +25,14 @@ The text is deterministic: the same relation gives the same bytes on any machine
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import random
 from dataclasses import dataclass
 
 from . import unit as U
 from . import unit_fp4
+from . import unit_total
 
 FORMAT = "flock-unit-io/v1"
 K_LOG = 13
@@ -45,6 +48,15 @@ class Pipe:
     floor: int
     epilogue: bool       # f32_to_bf16 in-circuit (GemmCoordinate) or the bare FP32 word (GemmAccumulator)
     model: str           # verity.ml.tc.models name
+    total: bool = False  # every encoding (unit_total, F2fpBf16 epilogue) rather than finite operands asserted
+
+    @property
+    def unit_log(self) -> int:
+        return K_LOG + 1 if self.total else K_LOG
+
+    @property
+    def domain(self) -> str:
+        return "total" if self.total else "finite-only"
 
     @property
     def k(self) -> int:
@@ -65,6 +77,8 @@ PIPES = {
     # finite domain the same unit as bf16-hopper (16 : 26 : -133; F2fpBf16 differs from f32_to_bf16 only on NaN)
     "bf16-hopper-wgmma": Pipe("bf16-hopper-wgmma", U.BF16, (16,), 26, -133, True, "HOPPER_BF16_WGMMA_K16"),
     "fp4-nvf4": Pipe("fp4-nvf4", U.E2M1, (16, 16, 16, 16), 27, -174, False, "BLACKWELL_SM120_NVF4"),
+    # sm80.mma.m16n8k16.bf16 on every encoding: verity.ml.tc.total.tc_dot_total(AMPERE_BF16_M16N8K16) + F2fpBf16
+    "bf16-ampere-total": Pipe("bf16-ampere-total", U.BF16, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16", total=True),
 }
 
 #: sha256 of :func:`netlist` per relation: the lowering version the verifier re-derives and compares.
@@ -75,11 +89,18 @@ PINS = {
     "bf16-ampere": "e97ecb9ef01d653b550ebe947cc12d92c60392613457b560246b99aff4922247",
     "bf16-hopper-wgmma": "12c3c8d382330788d4f85cc7132d4bf2d4a95886efe71fb4494cf9eaeaef74ad",
     "fp4-nvf4": "fb52a87c01a8a41f0e3460a10c62dcac4c346eb0c4540a86e0921845738666b3",
+    "bf16-ampere-total": "fef256dfde97d7998570b385ee22067fa6cbf0d4683fa89cdaa215360ff975d8",
 }
 
 
+@functools.lru_cache(maxsize=None)
 def _layout(pipe: Pipe):
-    C = unit_fp4.unit() if pipe.fmt is U.E2M1 else U.unit(pipe.fmt, pipe.groups, pipe.width, pipe.floor, epilogue=pipe.epilogue)
+    if pipe.total:
+        C = unit_total.unit(pipe.groups, pipe.width, pipe.floor)
+    elif pipe.fmt is U.E2M1:
+        C = unit_fp4.unit()
+    else:
+        C = U.unit(pipe.fmt, pipe.groups, pipe.width, pipe.floor, epilogue=pipe.epilogue)
     live = C.live()
     ins = [w for nm in ("x", "w", "c", "sx", "sw") if nm in C.inputs for w in C.inputs[nm]]
     assert len(ins) in (544, 608), len(ins)
@@ -138,7 +159,7 @@ def _layout(pipe: Pipe):
 
     rows_a = [fix(r) for r in rows_a]
     rows_b = [fix(r) for r in rows_b]
-    assert len(rows_a) <= 1 << K_LOG, len(rows_a)
+    assert len(rows_a) <= 1 << pipe.unit_log, len(rows_a)
     return C, rows_a, rows_b, const, outs
 
 
@@ -213,6 +234,8 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
             got, _, ok = evaluate(relation, x, w, c, sx, sw)
             bad += not ok or got != model.step_scaled(c, x, w, sx, sw)
         return bad
+    if pipe.total:
+        return _self_check_total(relation, pipe, model, rng, n)
     bits = pipe.word_bits
     finite = (lambda w: (w >> 7) & 0xFF != 0xFF) if bits == 16 else (lambda w: w & 0x7F != 0x7F)
     bad = 0
@@ -231,4 +254,52 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
         got, y, ok = evaluate(relation, x, w, c)
         if not ok or got != want or (pipe.epilogue and y != f32_to_bf16_word(want)):
             bad += 1
+    return bad
+
+
+#: Non-finite and edge encodings the total self-check draws from: BF16 +-inf, NaNs (quiet, signalling, negative), signed
+#: zeros, the smallest subnormal and the largest finite; FP32 the same.
+SPECIAL_BF16 = (0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0xFFFF, 0x0000, 0x8000, 0x0001, 0x7F7F, 0xFF7F)
+SPECIAL_F32 = (0x7F800000, 0xFF800000, 0x7FC00000, 0x7F800001, 0xFFFFFFFF, 0, 0x80000000, 1, 0x7F7FFFFF, 0xFF7FFFFF)
+
+
+def total_cases(rng: random.Random, n: int):
+    """``n`` units ``(c, x, w)`` over every encoding: a quarter each with no, 2 %, 10 % and 50 % special words, and half of
+    them with operand exponents drawn near each other (and the accumulator near their product), so finite results with
+    alignment and cancellation are as common as saturating and non-finite ones."""
+    out = []
+    for t in range(n):
+        p = (0.0, 0.02, 0.1, 0.5)[t % 4]
+        e0 = rng.randint(0, 254) if t % 2 == 0 else None
+
+        def op():
+            if rng.random() < p:
+                return rng.choice(SPECIAL_BF16)
+            if e0 is not None:
+                return (rng.getrandbits(1) << 15) | (min(254, max(0, e0 + rng.randint(-8, 8))) << 7) | rng.getrandbits(7)
+            return rng.getrandbits(16)
+
+        x, w = [op() for _ in range(16)], [op() for _ in range(16)]
+        if rng.random() < p:
+            c = rng.choice(SPECIAL_F32)
+        elif e0 is not None:
+            c = (rng.getrandbits(1) << 31) | (min(254, max(0, 2 * e0 - 127 + rng.randint(-20, 20))) << 23) | rng.getrandbits(23)
+        else:
+            c = rng.getrandbits(32)
+        out.append((c, x, w))
+    return out
+
+
+def _self_check_total(relation: str, pipe: Pipe, model, rng: random.Random, n: int) -> int:
+    """Mismatches of the lowered total unit against ``tc_dot_total`` and ``F2fpBf16`` (``cvt.rn.bf16.f32``, NaN -> 0x7FFF)."""
+    from verity.ml.tc import total
+    from verity.ml.tc.cast import f32_to_bf16_hw_word
+    from verity.ml.tc.total import tc_dot_total
+
+    model = getattr(total, pipe.model, model)
+    bad = 0
+    for c, x, w in total_cases(rng, n):
+        want = tc_dot_total(model, c, x, w)
+        got, y, ok = evaluate(relation, x, w, c)
+        bad += not ok or got != want or y != f32_to_bf16_hw_word(want)
     return bad
