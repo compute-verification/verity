@@ -21,7 +21,8 @@ from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
-    return IntegrityProfile(("replay", "check"), (n_r, n_v), {"replay": Bernoulli(p), "check": Subset(k)}, delta, **facts)
+    draws = {"replay": Bernoulli(p), "check": Subset(k)}
+    return IntegrityProfile(("replay", "check"), (n_r, n_v), draws, delta, **facts)
 
 
 def _before_levels(n_r, n_v, p, k, delta):
@@ -217,7 +218,7 @@ def test_counts_name_known_levels_coarse_to_fine():
 
 
 def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
-    """GEMM coordinates as the Bernoulli level, the two subcircuits inside each as the checked level, both leaving out
+    """GEMM coordinates as the Bernoulli level, the two calls inside each as the checked level, both leaving out
     the Inputs (checked outside the draws); the IR supplies the counts and the query ids."""
     program = Program(bind(gemm.Gemm, K=32, N=4, **gemm.GEMM_AMPERE))
     coarse_q = G.instances("//GemmCoordinate")
@@ -228,6 +229,6 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     assert validate_partition(program, fine, within=computed).status == "exact"
     per = members_per_parent(program, coarse, fine)
     assert per == (2, 2, 2, 2)
-    a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("subcircuit", G.query_id(fine_q))),
-                         (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "subcircuit": Subset(1)}, 0.01)
-    assert a.count("subcircuit") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)
+    a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
+                         (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
+    assert a.count("call") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)

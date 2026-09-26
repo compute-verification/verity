@@ -68,7 +68,7 @@ class IntegrityProfile:
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
     strategy leaving m_i incorrect checked members in Bernoulli member i is accepted with probability
     prod_i exp(-rho(m_i)), and except with probability `delta` an accepted transcript satisfies
-    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single units is one level drawn `Bernoulli(p)`.
+    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single statements is one level drawn `Bernoulli(p)`.
 
     Checked exhaustively:
         `programs`    digests of the evaluated Programs, in commit order;
