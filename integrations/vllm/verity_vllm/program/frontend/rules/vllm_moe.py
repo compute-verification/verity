@@ -113,7 +113,7 @@ def _val_matches(v, node) -> bool:
 
 # -- [R17-42] the declared construction: which family owns the block ------------------------------------------------------------------
 
-INDEXED_READ, INDEXED_READ_ROUNDS = "indexed-read", "indexed-read-rounds"   # rounds: MOE-01 with the router stated round by round
+INDEXED_READ, INDEXED_READ_ORDERED = "indexed-read", "indexed-read-ordered"   # MOE-01 with the router in selection order
 PADDED = "padded"
 
 
@@ -126,7 +126,7 @@ def active_moe_construction() -> str:
 def _not_owned(family: str) -> str | None:
     """A refusal string when the active construction is not `family`'s, else None: the two families are exclusive BY DECLARATION."""
     c = active_moe_construction()
-    if c != family and (c, family) != (INDEXED_READ_ROUNDS, INDEXED_READ):
+    if c != family and (c, family) != (INDEXED_READ_ORDERED, INDEXED_READ):
         return f"moe_construction={c!r} (declared TargetProfile): the {c} rules own the fused-MoE block; this rule is the {family} family"
     return None
 
@@ -227,7 +227,7 @@ class TopkSoftmaxRule(InPlaceRule):
         # [MOE-04] renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
         # MoeRouterTopKNorm_v1 (registry.moe); the ids are unchanged, the weights are the normalised probabilities.
         renorm = node.args[4]
-        fn = ctx.kind("moe_router_topk" + ("_rounds" if active_moe_construction() == INDEXED_READ_ROUNDS else "") + ("_norm" if renorm else ""), node, E=E, TOPK=TOPK, VPT=VPT)
+        fn = ctx.kind("moe_router_topk" + ("_ordered" if active_moe_construction() == INDEXED_READ_ORDERED else "") + ("_norm" if renorm else ""), node, E=E, TOPK=TOPK, VPT=VPT)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         w_rows = [o[0] for o in outs]
         id_rows = [o[1] for o in outs]

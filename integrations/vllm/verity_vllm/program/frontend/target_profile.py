@@ -155,10 +155,10 @@ class TargetProfile:
                                     "lift_of_record": "LMoeFfnL_v1{E,TOPK,VPT,H,I} (hand-authored; registry.lifted.register_hand_lift)",
                                     "population": "|Q(Lift(P_fixed-slot))|: every expert slot of every token, the unselected ones DISABLED (bot) -- "
                                                   "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"},
-                         "indexed-read-rounds": {"rules": "vllm_moe MOE-01, the router stated round by round (the same function as MOE-01's)",
-                                                 "definitions": ("MoeRouterTopKRounds_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
+                         "indexed-read-ordered": {"rules": "vllm_moe MOE-01, the router stated in its selection order over one committed softmax (the same function as MOE-01's)",
+                                                 "definitions": ("MoeRouterTopKOrdered_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
                                                                  "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
-                                                 "population": "indexed-read's, the router's units one per output (no committed round scores)"}}
+                                                 "population": "indexed-read's; the router commits its softmax once (2E+2 values per token), not the rounds' masked scores"}}
     DEFAULT_MOE_CONSTRUCTION = "indexed-read"
 
     #: [R17-1] the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
