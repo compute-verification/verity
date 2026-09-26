@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# flock-ir-sampling: verity/flock-ir-sampling/v1 (flock-ir-frame on a flock-ir-sampling/v1 file) on the GPU. Builds flock-gpu-link's
-# checkout (20-gpu-link.sh MODE=build) and flock-ir-frame, stages a synthetic GumbelTopPTokenSelect_v1{V=SELF_V} set on the pod
+# flock-ir-sampling: verity/flock-ir-sampling/v1 (the flock-ir-sampling binary) on the GPU. Builds flock-gpu-link's checkout
+# (20-gpu-link.sh MODE=build) and flock-ir-sampling, stages a synthetic GumbelTopPTokenSelect_v1{V=SELF_V} set on the pod
 # (verity_flock.ir_sampling.stage: the verifier's own staging), runs the CPU and GPU selftests on it, then loopback sessions (WARM
 # warm-ups + RUNS timed, --gpu) on the first LOOP rows of the input set sent as inputs/*.tar (research run --send), if any.
 # env: SELF_V=1280 SELF_N=2  LOOP="1 4"  WARM=1 RUNS=2  GPU=1  SM=90
@@ -14,8 +14,8 @@ read -r Q PER < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER=100000; }
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER ))); export RAYON_NUM_THREADS=$TH
 F=/workspace/flock-gpu-link/flock
 FEAT=; G=; [ "${GPU:-1}" = 1 ] && { FEAT="--features gpu"; G=--gpu; }
-(cd $F && cargo build --release -p flock-live $FEAT --bin flock-ir-frame -j $TH) > $O/build-ir.txt 2>&1 || { tail -40 $O/build-ir.txt; exit 1; }
-B=$F/target/release/flock-ir-frame; sha256sum $B | tee $O/binary.sha256
+(cd $F && cargo build --release -p flock-live $FEAT --bin flock-ir-sampling -j $TH) > $O/build-ir.txt 2>&1 || { tail -40 $O/build-ir.txt; exit 1; }
+B=$F/target/release/flock-ir-sampling; sha256sum $B | tee $O/binary.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$SRC/packages/verity/src:$SRC/backends/numerical/python:$SRC/backends/flock/python:$SRC/integrations/vllm

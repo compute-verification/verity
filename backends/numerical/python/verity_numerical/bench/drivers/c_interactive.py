@@ -84,8 +84,21 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
     cmd = [sys.executable, "-m", "verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
            "--out", str(out)]
     if cell.relation.startswith(IR_PREFIX):
-        cmd += ["--verifier-binary", "flock-ir-frame"]
+        cmd += ["--verifier-binary", ir_binary(prover_run)]
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
+
+
+def ir_binary(prover_run: Path) -> str:
+    """An IR cell's verifier binary: the prover's own (the result's ``software.backend.name``: ``flock-ir-frame``, or
+    ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when the result does not say."""
+    import json
+
+    for p in (Path(prover_run) / "result.json", *Path(prover_run).glob("**/result.json")):
+        try:
+            return json.loads(p.read_text())["workload_fingerprint"]["software"]["backend"]["name"] or "flock-ir-frame"
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return "flock-ir-frame"
 
 
 def takes_lane() -> bool:

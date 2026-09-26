@@ -1,5 +1,6 @@
 """C-Flock lowering of ``gumbel-top-p-token-select`` (``GumbelTopPTokenSelect_v1{V}``, one vocabulary row) and its frame-v3
-instance file for the statement ``verity/flock-ir-sampling/v1`` (``live/src/ir_frame.rs``, format ``flock-ir-sampling/v1``).
+instance file for the statement ``verity/flock-ir-sampling/v1`` (``live/src/ir_sampling.rs``, binary ``flock-ir-sampling``,
+format ``flock-ir-sampling/v1``).
 
 The Definition is ``TemperatureScale -> TopPMask -> GumbelSelectF32``: three scans over the V lanes of the row around three
 row-level values (the temperature's reciprocal, the top-p keep word, the Gumbel stream key). The lowering keeps the scans'
@@ -555,7 +556,7 @@ def read(path):
 def check_native(path) -> list[str]:
     """The verifier's check of a file's native cut words: each recomputed from the file's public words (the scalar ports and
     the units' ``scaled`` words), and the token the file's out port commits equal to lane V-1's ``best_i`` (empty: all hold).
-    ``flock-ir-frame`` checks the units' words in the proof; this is the part of the statement it does not evaluate."""
+    ``flock-ir-sampling`` checks the units' words in the proof; this is the part of the statement it does not evaluate."""
     head, _logits, _d, pub, cuts = read(path)
     bad = []
     for i in range(head["instances"]):
@@ -568,7 +569,7 @@ def check_native(path) -> list[str]:
 
 def public_sha256(path) -> str:
     """sha256 of the file's public bytes (the header line and everything after the logits rows): the Σ input
-    ``flock-ir-frame`` computes, and what ``serve --native-checked`` names."""
+    ``flock-ir-sampling`` computes, and what ``serve --native-checked`` names."""
     b = Path(path).read_bytes()
     nl = b.index(b"\n")
     head = json.loads(b[:nl])
@@ -576,7 +577,7 @@ def public_sha256(path) -> str:
 
 
 def serve_args(path) -> list[str]:
-    """``flock-ir-frame serve`` refuses a sampling file until its native words are checked: :func:`check_native`, then
+    """``flock-ir-sampling serve`` refuses a sampling file until its native words are checked: :func:`check_native`, then
     ``--native-checked <public sha256>``."""
     bad = check_native(path)
     if bad:

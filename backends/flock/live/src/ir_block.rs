@@ -493,12 +493,7 @@ pub struct CutMap {
     pub tail: Vec<crate::ir_tail::Op>,
     pub unit_in: Vec<Vec<(usize, usize)>>,
     pub unit_out: Vec<Vec<(usize, usize)>>,
-    /// every cut word no unit computes is native to [`NATIVE_SAMPLING`]'s verifier (no tail program)
-    pub native: bool,
 }
-
-/// The statement whose verifier computes a netlist's unit-less cut words natively (a CUT line's `native`).
-pub const NATIVE_SAMPLING: &str = "verity/flock-ir-sampling/v1";
 
 fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
     v.as_array()
@@ -522,11 +517,7 @@ fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
 /// word (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
 /// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
 pub fn cut_map(inst: &IrInstances, net: &IrUnitNet) -> Result<CutMap, String> {
-    let cm = cut_map_of(net, &inst.header, inst.units)?;
-    if cm.native {
-        return Err(format!("the netlist's native cut words are {NATIVE_SAMPLING}'s, not this statement's"));
-    }
-    Ok(cm)
+    cut_map_of(net, &inst.header, inst.units)
 }
 
 /// [`cut_map`] for any instance file: its header (`instances`, `units_per_instance`, `cut_words`, no `cut`) and unit count.
@@ -549,14 +540,9 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
         if net.cut.is_some() || net.in_groups.len() != 1 || net.out_groups.len() != 1 {
             return Err("a netlist with cut groups or a CUT line but no cut words".into());
         }
-        return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi], native: false });
+        return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi] });
     }
-    let native = match cut.get("native") {
-        None => false,
-        Some(v) if v.as_str() == Some(NATIVE_SAMPLING) => true,
-        Some(v) => return Err(format!("the netlist's cut words are native to {v}, which this verifier does not implement")),
-    };
-    if net.in_groups.len() != 2 || !(net.out_groups.len() == 2 || native && net.out_groups.len() == 1) {
+    if net.in_groups.len() != 2 || net.out_groups.len() != 2 {
         return Err(format!("{words} cut words, but the netlist has no cut port groups"));
     }
     let (unit_in, unit_out) = (pairs(&cut["in"])?, pairs(&cut["out"])?);
@@ -569,7 +555,7 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
         }
         Ok((0..g.bits.len()).map(|j| g.col * WORD - base + 32 * j).collect())
     };
-    let (cin, cout) = (group_cols(&net.in_groups[1], 0)?, group_cols(net.out_groups.last().unwrap(), net.out_cols[0] * WORD)?);
+    let (cin, cout) = (group_cols(&net.in_groups[1], 0)?, group_cols(&net.out_groups[1], net.out_cols[0] * WORD)?);
     let mut produced = std::collections::BTreeSet::new();
     for u in 0..upi {
         if unit_in[u].iter().map(|p| p.0).collect::<Vec<_>>() != cin || unit_out[u].iter().map(|p| p.0).collect::<Vec<_>>() != cout {
@@ -586,17 +572,11 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
             }
         }
     }
-    if native {
-        if cut["tail"].as_array().is_none_or(|a| !a.is_empty()) {
-            return Err("native cut words and a tail program".into());
-        }
-        return Ok(CutMap { words, tail: vec![], unit_in, unit_out, native });
-    }
     let tail = crate::ir_tail::parse(&cut["tail"], words, &produced)?;
     if tail.iter().any(|o| o.out < words && produced.contains(&o.out)) {
         return Err("a cut word is computed by a unit and by the tail".into());
     }
-    Ok(CutMap { words, tail, unit_in, unit_out, native })
+    Ok(CutMap { words, tail, unit_in, unit_out })
 }
 
 fn word32(words: &[F128], col: usize) -> u32 {

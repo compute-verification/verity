@@ -192,7 +192,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "coins": "live verifier (flock-live R1-R8)"},
         hardware=contract.probe_hardware(),
-        software={"backend": {"name": Path(a.bin).name, "configuration": "C-interactive/flock-ir-frame", "commit": a.commit,
+        software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": statement, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
                               "unit": low.name, "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
@@ -204,7 +204,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n,
         n_blake3=first["n_blake3"], n_units=first["n_units"],
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
-        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": "flock-ir-frame serve (separate process)"})
+        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)"})
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
           {"name": "commit.seconds", "value": med("rows_s"), "unit": "s"},
@@ -234,7 +234,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     if p["peak_rss"]:
         ms.append(contract.measurement("mem.peak_host_bytes", p["peak_rss"]))
     doc = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "workload_fingerprint": fp,
-           "validation": {"status": "passed" if p["ok"] else "failed", "checker": "flock-ir-frame serve (live verifier, R1-R8 replay)",
+           "validation": {"status": "passed" if p["ok"] else "failed", "checker": f"{Path(a.bin).name} serve (live verifier, R1-R8 replay)",
                           "detail": f"{sum(1 for r in p['live'] if r.get('accepted'))}/{len(p['live'])} sessions accepted",
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [], "sweep": sweep, "contention": p["contention"],
