@@ -32,9 +32,9 @@ use flock_core::{
 };
 use flock_field::F128;
 use flock_hash::blake3_compress;
-use flock_prover::r1cs_hashes::blake3 as b3;
+use flock_prover::r1cs_hashes::{blake3 as b3, sha2 as sha2c};
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
+use ::sha2::{Digest, Sha256};
 
 use crate::chunk::{key_words, row_key, comp, log2ceil};
 
@@ -59,26 +59,40 @@ pub const PT_LOCAL: usize = 16;
 pub enum Layout {
     Bf16,
     Fp8,
+    /// `sha256/row/v1` leaves: block v is the whole VU; each role is one SHA-256 chain (the verifier's midstate after the
+    /// 64-byte prefix block, the row's 64-byte blocks, one constant padding block) of 2^15-bit compressions, then the
+    /// units at 2^13 positions after them. 16-bit rows: 49 + 49 compressions, 96 units, k_log 22.
+    ShaBf16,
+    /// 8-bit rows: 25 + 25 compressions, 48 units, k_log 21.
+    ShaFp8,
 }
 
 impl Layout {
-    pub fn of(row_bytes: usize, units: usize) -> Self {
-        match (row_bytes, units) {
-            (3072, 96) => Layout::Bf16,
-            (1536, 48) => Layout::Fp8,
-            _ => panic!("flock-pure-block covers 16-bit rows of 3 chunks (96 units) and 8-bit rows of 1.5 chunks (48 units)"),
+    pub fn of(row_bytes: usize, units: usize, sha: bool) -> Self {
+        match (row_bytes, units, sha) {
+            (3072, 96, false) => Layout::Bf16,
+            (1536, 48, false) => Layout::Fp8,
+            (3072, 96, true) => Layout::ShaBf16,
+            (1536, 48, true) => Layout::ShaFp8,
+            _ => panic!("flock-pure-block covers 16-bit rows (96 units) and 8-bit rows (48 units)"),
         }
     }
-    pub fn k_log(self) -> usize { match self { Layout::Bf16 => 20, Layout::Fp8 => 21 } }
-    pub fn comp_slots(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48 } }
+    pub fn is_sha(self) -> bool { matches!(self, Layout::ShaBf16 | Layout::ShaFp8) }
+    pub fn row_bytes(self) -> usize { match self { Layout::Bf16 | Layout::ShaBf16 => 3072, _ => 1536 } }
+    /// log2 of a compression sub-block: BLAKE3 14, SHA-256 15.
+    pub fn comp_log(self) -> usize { if self.is_sha() { 15 } else { 14 } }
+    pub fn k_log(self) -> usize { match self { Layout::Bf16 => 20, Layout::Fp8 => 21, Layout::ShaBf16 => 22, Layout::ShaFp8 => 21 } }
+    pub fn comp_slots(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48, Layout::ShaBf16 => 98, Layout::ShaFp8 => 50 } }
     pub fn per_role(self) -> usize { self.comp_slots() / 2 }
-    pub fn units(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48 } }
-    pub fn unit_pos0(self) -> usize { 2 * self.comp_slots() }
-    pub fn blocks_per_vu(self) -> usize { match self { Layout::Bf16 => 3, Layout::Fp8 => 1 } }
-    /// Compressions per chunk of a block, in order.
-    pub fn chunks(self) -> &'static [usize] { match self { Layout::Bf16 => &[16], Layout::Fp8 => &[16, 8] } }
-    /// Chaining values per block (every chunk of both roles): x chunks, then W chunks.
-    pub fn n_cv(self) -> usize { 2 * self.chunks().len() }
+    pub fn units(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96 } }
+    /// The first unit's 2^13 position: right after the compressions.
+    pub fn unit_pos0(self) -> usize { self.comp_slots() << (self.comp_log() - 13) }
+    pub fn blocks_per_vu(self) -> usize { match self { Layout::Bf16 => 3, _ => 1 } }
+    /// Compressions per chunk of a block, in order (SHA: one chain per role, its padding block included).
+    pub fn chunks(self) -> &'static [usize] { match self { Layout::Bf16 => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25] } }
+    /// Chaining values per block the prover publishes (x chunks, then W chunks); SHA publishes none (the digests are the
+    /// verifier's).
+    pub fn n_cv(self) -> usize { if self.is_sha() { 0 } else { 2 * self.chunks().len() } }
     /// (role, chunk in block, block in chunk) of compression slot s.
     pub fn slot(self, s: usize) -> (usize, usize, usize) {
         let (role, mut j) = (s / self.per_role(), s % self.per_role());
@@ -92,6 +106,42 @@ impl Layout {
     }
     /// The chunk's index in its row (the BLAKE3 counter) for block b, chunk c of the block.
     pub fn chunk_index(self, b: usize, c: usize) -> usize { (b % self.blocks_per_vu()) * self.chunks().len() + c }
+    /// The one pinned constant column: slot 0's constant.
+    pub fn pin(self) -> usize { if self.is_sha() { sha2c::Z_CONST_POS } else { b3::Z_CONST_POS } }
+    /// The compression circuit of the layout.
+    pub fn comp(self) -> &'static BlockR1cs {
+        static S: OnceLock<BlockR1cs> = OnceLock::new();
+        if self.is_sha() { S.get_or_init(|| sha2c::build_block_r1cs(3)) } else { comp() }
+    }
+}
+
+/// `sha256/row/v1`: the 64-byte prefix block (`verity.commitments.rowleaf.sha256_row_prefix`).
+pub fn sha_prefix(role: usize, word_bits: usize, n_words: usize) -> [u8; 64] {
+    let mut p = [0u8; 64];
+    let tag = b"verity/sha256-row/v1\0";
+    p[..tag.len()].copy_from_slice(tag);
+    p[tag.len()] = role as u8 + 1;
+    p[tag.len() + 1] = word_bits as u8;
+    p[tag.len() + 2..tag.len() + 6].copy_from_slice(&(n_words as u32).to_be_bytes());
+    p
+}
+
+pub fn be_words16(b: &[u8]) -> [u32; 16] {
+    from_fn(|i| u32::from_be_bytes(b[4 * i..4 * i + 4].try_into().unwrap()))
+}
+
+/// The SHA-256 state after the role's prefix block (the chain's constant input).
+pub fn sha_midstate(role: usize, row_bytes: usize) -> [u32; 8] {
+    let word_bits = if row_bytes == 3072 { 16 } else { 8 };
+    sha2c::sha256_compress(&sha2c::SHA256_IV, &be_words16(&sha_prefix(role, word_bits, row_bytes * 8 / word_bits)))
+}
+
+/// The constant padding block of a `64 + row_bytes`-byte message.
+pub fn sha_pad_block(row_bytes: usize) -> [u32; 16] {
+    let mut b = [0u8; 64];
+    b[0] = 0x80;
+    b[56..].copy_from_slice(&(((64 + row_bytes) * 8) as u64).to_be_bytes());
+    be_words16(&b)
 }
 
 pub fn chunk_flags(j: usize, nb: usize) -> u32 {
@@ -231,6 +281,8 @@ impl Instances {
 pub enum Region {
     /// fp8: the chaining value of compression slot k (a chunk's last block).
     CvSlot(usize),
+    /// sha: the final state (the row digest, big-endian words) of role r's chain: the verifier's own digest.
+    Digest(usize),
     Key,
     Counter,
     Cv,
@@ -252,6 +304,7 @@ fn shape(region: Region, net: &UnitNet, lay: Layout) -> RegionShape {
     // (free bits, fixed value) in the 20 in-block bits
     let (free, fixed): (Vec<usize>, u32) = match region {
         Region::CvSlot(k) => (bits(0, 8), (1 << 8) | ((k as u32) << b3::K_LOG)),
+        Region::Digest(r) => (bits(0, 8), (1 << 8) | (((lay.per_role() * r + lay.per_role() - 1) as u32) << lay.comp_log())),
         Region::Key => ([bits(0, 8), vec![18]].concat(), 0),
         Region::Counter => ([bits(0, 6), bits(14, 5)].concat(), 1 << 10),
         Region::Cv => ([bits(0, 8), vec![18]].concat(), (1 << 8) | (0xF << 14)),
@@ -313,18 +366,20 @@ impl LincheckCircuit for PureCircuit {
     }
 
     fn fold_alpha_batched(&self, alpha: F128, eq: &[F128]) -> Vec<F128> {
-        let (cs, us) = (1usize << b3::K_LOG, 1usize << UNIT_LOG);
+        let (cl, us) = (self.lay.comp_log(), 1usize << UNIT_LOG);
+        let cs = 1usize << cl;
+        let per = 1usize << (cl - UNIT_LOG);
         let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
         assert_eq!(eq.len(), 1 << kl);
         let c0 = eq[..us].iter().position(|e| *e != F128::ZERO).expect("eq tensor vanishes on the first unit slot");
         let inv = eq[c0].inv();
-        let base_c = comp().csc_lincheck_circuit().fold_alpha_batched(alpha, &eq[..cs]);
+        let base_c = self.lay.comp().csc_lincheck_circuit().fold_alpha_batched(alpha, &eq[..cs]);
         let base_u = self.unit.fold_alpha_batched(alpha, &eq[..us]);
         let mut out = vec![F128::ZERO; 1 << kl];
         out.par_chunks_mut(us).enumerate().for_each(|(p, o)| {
-            if p < 2 * slots {
-                let s = eq[((p >> 1) << b3::K_LOG) | c0] * inv;
-                let half = (p & 1) * us;
+            if p < per * slots {
+                let s = eq[((p / per) << cl) | c0] * inv;
+                let half = (p % per) * us;
                 for (x, y) in o.iter_mut().zip(&base_c[half..half + us]) {
                     *x = s * *y;
                 }
@@ -345,8 +400,84 @@ impl LincheckCircuit for PureCircuit {
     }
 
     fn const_pin_col(&self) -> Option<usize> {
-        Some(PIN)
+        Some(self.lay.pin())
     }
+}
+
+/// Δ of the SHA-256 layouts: chain copies, the midstate at each role's first block and the padding block's message as
+/// constants, the unit operands as copies of the big-endian message bits, the accumulator chain (c_in(0) = +0), and every
+/// sub-circuit's constant a copy of the pinned one.
+fn delta_sha(net: &UnitNet, lay: Layout, row_bytes: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
+    let c = lay.comp();
+    let (a, b) = (&c.a_0.rows, &c.b_0.rows);
+    let (z, pin, cl) = (sha2c::Z_CONST_POS, lay.pin(), lay.comp_log());
+    let input = |r: usize| assert!(a[r] == [r] && b[r] == [z], "SHA-256 row {r} is not an input row");
+    let (mut da, mut db) = (Vec::new(), Vec::new());
+    let both = |da: &mut Vec<(u32, u32)>, db: &mut Vec<(u32, u32)>, i: usize, old: usize, new: usize| {
+        for d in [da, db] {
+            d.push((i as u32, old as u32));
+            d.push((i as u32, new as u32));
+        }
+    };
+    let constant = |da: &mut Vec<(u32, u32)>, g: &dyn Fn(usize) -> usize, base: usize, val: u32| {
+        for bit in 0..32 {
+            let r = base + bit;
+            input(r);
+            da.push((g(r) as u32, g(r) as u32));
+            if (val >> bit) & 1 == 1 {
+                da.push((g(r) as u32, g(z) as u32));
+            }
+        }
+    };
+    let pad = sha_pad_block(row_bytes);
+    for s in 0..lay.comp_slots() {
+        let (role, j) = (s / lay.per_role(), s % lay.per_role());
+        let g = |col: usize| (s << cl) + col;
+        if s > 0 {
+            both(&mut da, &mut db, g(z), g(z), pin);
+        }
+        if j > 0 {
+            for r in 0..256 {
+                input(sha2c::H_BASE + r);
+                da.push((g(sha2c::H_BASE + r) as u32, g(sha2c::H_BASE + r) as u32));
+                da.push((g(sha2c::H_BASE + r) as u32, (((s - 1) << cl) + sha2c::H_OUT_BASE + r) as u32));
+            }
+        } else {
+            for (w, &hw) in sha_midstate(role, row_bytes).iter().enumerate() {
+                constant(&mut da, &g, sha2c::H_BASE + 32 * w, hw);
+            }
+        }
+        if j + 1 == lay.per_role() {
+            for (w, &mw) in pad.iter().enumerate() {
+                constant(&mut da, &g, sha2c::M_BASE + 32 * w, mw);
+            }
+        }
+    }
+    let p0 = lay.unit_pos0();
+    for u in 0..lay.units() {
+        let base = (p0 + u) << UNIT_LOG;
+        both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, pin);
+        for role in 0..2 {
+            let slot = role * lay.per_role() + u / 2;
+            for t in 0..256 {
+                let bk = 32 * (u % 2) + t / 8;
+                let msg = (slot << cl) + sha2c::M_BASE + 32 * (bk / 4) + 8 * (3 - bk % 4) + t % 8;
+                both(&mut da, &mut db, base + 256 * role + t, base + 256 * role + t, msg);
+            }
+        }
+        if u > 0 {
+            let prev = ((p0 + u - 1) << UNIT_LOG) + net.out_cols[0] * 128;
+            for t in 0..32 {
+                both(&mut da, &mut db, base + 512 + t, base + 512 + t, prev + t);
+            }
+        } else {
+            for t in 0..32 {
+                da.push(((base + 512 + t) as u32, (base + 512 + t) as u32));
+                db.push(((base + 512 + t) as u32, (base + 512 + t) as u32));
+            }
+        }
+    }
+    (da, db)
 }
 
 fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
@@ -377,7 +508,7 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
         let nb = lay.chunks()[ch];
         let g = |col: usize| (s << b3::K_LOG) + col;
         if s > 0 {
-            both(&mut da, &mut db, g(z), g(z), PIN);
+            both(&mut da, &mut db, g(z), g(z), lay.pin());
         }
         if j > 0 {
             for r in 0..256 {
@@ -400,7 +531,7 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
     let p0 = lay.unit_pos0();
     for u in 0..lay.units() {
         let base = (p0 + u) << UNIT_LOG;
-        both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, PIN);
+        both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, lay.pin());
         for role in 0..2 {
             let slot = role * lay.per_role() + u / 2;
             for t in 0..256 {
@@ -421,6 +552,13 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
         }
     }
     (da, db)
+}
+
+/// The compressions of a pure-block witness (BLAKE3 for the keyed-BLAKE3 layouts, SHA-256 for `sha256/row/v1`).
+#[derive(Clone)]
+pub enum Comps {
+    B3(Vec<b3::Compression>),
+    Sha(Vec<([u32; 8], [u32; 16])>),
 }
 
 pub struct PureStmt {
@@ -448,8 +586,9 @@ impl PureStmt {
         let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units(), lay.unit_pos0());
         let m = kl + nbl;
         let keys = [key_words(&row_key(b"x")), key_words(&row_key(b"w"))];
-        let (da, db) = delta(&net, lay, &keys);
+        let (da, db) = if lay.is_sha() { delta_sha(&net, lay, lay.row_bytes()) } else { delta(&net, lay, &keys) };
         let list: Vec<Region> = match lay {
+            Layout::ShaBf16 | Layout::ShaFp8 => vec![Region::Digest(0), Region::Digest(1), if net.epilogue() { Region::Y } else { Region::AccOut }],
             Layout::Bf16 => {
                 let mut v = vec![Region::Key, Region::Counter, Region::Cv, Region::AccIn, Region::AccOut];
                 if net.epilogue() {
@@ -465,18 +604,28 @@ impl PureStmt {
         };
         let regions: Vec<RegionShape> = list.into_iter().map(|r| shape(r, &net, lay)).collect();
         // dummy blocks: zero messages; bf16 under a zero key and counter 0, fp8 under the per-slot constants
-        let dummy_cv: Vec<[u32; 8]> = (0..2)
+        let dummy_cv: Vec<[u32; 8]> = if lay.is_sha() {
+            (0..2)
+                .map(|role| {
+                    let mut h = sha_midstate(role, lay.row_bytes());
+                    for _ in 0..lay.per_role() - 1 {
+                        h = sha2c::sha256_compress(&h, &[0u32; 16]);
+                    }
+                    sha2c::sha256_compress(&h, &sha_pad_block(lay.row_bytes()))
+                })
+                .collect()
+        } else { (0..2)
             .flat_map(|role| {
                 let keys = keys;
                 lay.chunks().iter().enumerate().map(move |(c, &nb)| {
-                    let (mut cv, ctr) = match lay { Layout::Bf16 => ([0u32; 8], 0u64), Layout::Fp8 => (keys[role], c as u64) };
+                    let (mut cv, ctr) = match lay { Layout::Bf16 => ([0u32; 8], 0u64), _ => (keys[role], c as u64) };
                     for j in 0..nb {
                         cv = blake3_compress(&cv, &[0u32; 16], ctr, 64, chunk_flags(j, nb))[..8].try_into().unwrap();
                     }
                     cv
                 })
             })
-            .collect();
+            .collect() };
         let (z, _, _) = net.eval64(|_| 0);
         let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
         let dummy_unit = (word(net.out_cols[0], 32), if net.epilogue() { word(net.out_cols[1], 16) } else { 0 });
@@ -489,6 +638,10 @@ impl PureStmt {
         }
         if lay == Layout::Fp8 {
             h.update(b"layout fp8: block = VU, chunks 16+8, per-slot key/counter constants, c_in(0) = 0");
+        }
+        if lay.is_sha() {
+            h.update(b"layout sha256/row/v1: block = VU, one SHA-256 chain per role from the prefix midstate, constant padding block, c_in(0) = 0");
+            h.update(lay.comp().statement_digest());
         }
         for d in [&da, &db] {
             h.update((d.len() as u64).to_le_bytes());
@@ -509,7 +662,7 @@ impl PureStmt {
             b_0: empty(),
             c_0: SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() },
             layout: WitnessLayout::RowMajor,
-            const_pin: Some(PIN),
+            const_pin: Some(lay.pin()),
             digest_cache: OnceLock::from(digest),
             csc_cache: OnceLock::new(),
         };
@@ -545,7 +698,7 @@ impl PureStmt {
                         let (mut cv, ctr) = match (lay, real) {
                             (_, true) => (self.keys[role], ci as u64),
                             (Layout::Bf16, false) => ([0; 8], 0),
-                            (Layout::Fp8, false) => (self.keys[role], c as u64),
+                            (_, false) => (self.keys[role], c as u64),
                         };
                         for j in 0..nb {
                             let msg: [u32; 16] = if real {
@@ -567,6 +720,53 @@ impl PureStmt {
             .collect();
         let cvs = per.iter().map(|p| p.1.clone()).take(self.blocks_real).collect();
         (per.into_iter().flat_map(|p| p.0).collect(), cvs)
+    }
+
+    /// The SHA-256 chain's final state for row (role, v): the `sha256/row/v1` digest as big-endian words.
+    pub fn sha_state(&self, inst: &Instances, role: usize, v: usize) -> [u32; 8] {
+        let row = inst.row(role, v);
+        let mut h = sha_midstate(role, row.len());
+        for blk in row.chunks(64) {
+            h = sha2c::sha256_compress(&h, &be_words16(blk));
+        }
+        sha2c::sha256_compress(&h, &sha_pad_block(row.len()))
+    }
+
+    /// Every SHA-256 compression `(h_in, m)`, block-major (each VU: the x chain, then the W chain; dummy blocks hash zero
+    /// rows).
+    pub fn sha_compressions(&self, inst: &Instances) -> Vec<([u32; 8], [u32; 16])> {
+        let lay = self.lay;
+        (0..self.blocks())
+            .into_par_iter()
+            .flat_map_iter(|b| {
+                let real = b < self.blocks_real;
+                let mut out = Vec::with_capacity(lay.comp_slots());
+                for role in 0..2 {
+                    let mut h = sha_midstate(role, lay.row_bytes());
+                    for j in 0..lay.per_role() - 1 {
+                        let m = if real { be_words16(&inst.row(role, b)[64 * j..64 * j + 64]) } else { [0; 16] };
+                        out.push((h, m));
+                        h = sha2c::sha256_compress(&h, &m);
+                    }
+                    out.push((h, sha_pad_block(lay.row_bytes())));
+                }
+                out
+            })
+            .collect()
+    }
+
+    /// Unit (block b, u)'s 544 input bits straight from the rows (the SHA layouts; zero rows for dummy blocks).
+    pub fn unit_inputs_rows(&self, inst: &Instances, b: usize, u: usize, c_in: u32) -> [F128; 5] {
+        let words = |role: usize| -> [F128; 2] {
+            if b >= self.blocks_real {
+                return [F128::ZERO; 2];
+            }
+            let r = &inst.row(role, b)[32 * u..32 * u + 32];
+            let w: Vec<u32> = r.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect();
+            [crate::chunk::pack4(&w[..4]), crate::chunk::pack4(&w[4..])]
+        };
+        let (x, w) = (words(0), words(1));
+        [x[0], x[1], w[0], w[1], F128::new(c_in as u64, 0)]
     }
 
     /// Unit (block b, u)'s 544 input bits: x bytes, W bytes (as the compressions hash them), accumulator in.
@@ -592,13 +792,19 @@ impl PureStmt {
     }
 
     /// `(z, a, b, z_lincheck)` of the block witness: compressions, then units evaluated from `inputs(b, u)`.
-    pub fn witness(&self, comps: &[b3::Compression], inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+    pub fn witness(&self, comps: &Comps, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
         let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
         let n = 1usize << (self.m - 7);
-        let (cz, ca, cb) = b3::generate_witness_with_ab_packed(comps, log2ceil(comps.len()));
+        let (cz, ca, cb) = match comps {
+            Comps::B3(c) => b3::generate_witness_with_ab_packed(c, log2ceil(c.len())),
+            Comps::Sha(c) => {
+                let (z, a, b, _) = sha2c::generate_witness_with_ab_packed_and_lincheck(c, log2ceil(c.len()).max(3));
+                (z, a, b)
+            }
+        };
         let (mut z, mut a, mut b) = (vec![F128::ZERO; n], vec![F128::ZERO; n], vec![F128::ZERO; n]);
         let wpb = 1usize << (kl - 7);
-        let cw = 1usize << (b3::K_LOG - 7);
+        let cw = 1usize << (self.lay.comp_log() - 7);
         for (dst, src) in [(&mut z, &cz), (&mut a, &ca), (&mut b, &cb)] {
             dst.par_chunks_mut(wpb).enumerate().for_each(|(blk, d)| {
                 for s in 0..slots {
@@ -658,6 +864,7 @@ impl PureStmt {
         let (v, c) = (b / self.lay.blocks_per_vu(), b % self.lay.blocks_per_vu());
         let le = |w: &[u32]| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
         match reg.region {
+            Region::Digest(r) => le(&if real { self.sha_state(inst, r, v) } else { self.dummy_cv[r] }),
             Region::CvSlot(k) => {
                 let (role, ch, _) = self.lay.slot(k);
                 let i = role * self.lay.chunks().len() + ch;
@@ -675,13 +882,13 @@ impl PureStmt {
             Region::AccIn => (if real && c > 0 { p.acc[b - 1] } else { 0 }).to_le_bytes().to_vec(),
             Region::AccOut => (match (self.lay, real) {
                 (_, false) => self.dummy_unit.0,
-                (Layout::Fp8, true) => inst.out[v],
                 (Layout::Bf16, true) => p.acc[b],
+                (_, true) => inst.out[v],
             })
             .to_le_bytes()
             .to_vec(),
             Region::Y => {
-                let y = if !real { self.dummy_unit.1 } else if c == 2 { inst.out[v] } else { p.y16[b] };
+                let y = if !real { self.dummy_unit.1 } else if self.lay.blocks_per_vu() == 1 || c == 2 { inst.out[v] } else { p.y16[b] };
                 (y as u16).to_le_bytes().to_vec()
             }
         }
