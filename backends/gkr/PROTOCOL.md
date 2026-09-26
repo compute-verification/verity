@@ -1,4 +1,4 @@
-# Candidate A — data-parallel GKR + logUp-GKR lookups + interactive Longfellow-style ZK layer
+# A-GKR — data-parallel GKR + logUp-GKR lookups + interactive Longfellow-style ZK layer
 
 Status: **specification / proposed research**. Nothing here is implemented or measured. The interactive
 adaptation of the Longfellow ZK layer (section 5), the merging of logUp-GKR claims into the checker GKR
@@ -127,9 +127,9 @@ coordinates; an \(F_c\)-linear constraint on pads is \(\deg\) \(F_t\)-linear con
 | leaf \(j\) **[proposal, default]** | HM96 \(O(k)\)-bit commitment to column \(j\): \(s_j=H(T[0][j]\|\cdots\|T[\mathrm{NROW}][j])\), random \(x_j\in\{0,1\}^{6k+4}\), universal \(h_j\) with \(h_j(x_j)=s_j\), leaf \(=(h_j,\,H(x_j))\), \(k=160\); opening \(=\) column \(\|\,x_j\) | hiding of unopened columns is **statistical**, \(n\cdot2^{-160}=2^{-146}\) (HM96 Theorem 1, union over \(n\) leaves; calculator `zk` term); binding by collision resistance of \(H\). Alternative (unsalted \(H(\text{column})\), libzk `commit`) needs a hiding assumption on \(H\) beyond CRH (section 7) |
 | committed elements, \(K=1536,B=4096\) | \(181.4\)M \(F_t\) elements = \(393216\cdot(321+140)\) inputs, hints, row columns and query wires \(+\) 66 623 multiplicities \(+\) 4 674 pads \(\times3\) coordinates → 47 231 rows, \(774\)M encoded symbols; \(126.3\)M without the query wires (`commit_query_wires=False`, depth 630) | calculator `parameters` |
 
-Quadratic constraints are laid out libzk-style as aligned triples of rows (`layout_quadratic_rows`); Candidate A
+Quadratic constraints are laid out libzk-style as aligned triples of rows (`layout_quadratic_rows`); A-GKR
 has only the deferred products of section 6 (\(\approx4\) per checker layer, 3 per fractional-GKR layer, times
-\(\deg^2\) coordinates), so alignment copies are negligible here (they are not for Candidate B).
+\(\deg^2\) coordinates), so alignment copies are negligible here (they are not for B-Ligero).
 
 ## 4. Interactive reductions
 
@@ -251,7 +251,7 @@ lookups on the critical path (section 5.4: depth 630 instead of 381).
 | two-claims-to-one line reduction, \(\alpha,\beta,\gamma,\mu,\lambda\) combinations | none (multiplications by challenges) | — |
 | deferred final-round identities (6) | none (products of padded values) | — |
 
-There is no witness-dependent division in Candidate A; the only zero-test on witness data is the public
+There is no witness-dependent division in A-GKR; the only zero-test on witness data is the public
 \(z_T\in\mathrm{Img}_T\) rule of step 2a, whose inputs (\(z_T\), \(\beta_T\), the table) are all public.
 
 ## 5. ZK layer: padded transcript + deferred Ligero verification, made interactive
@@ -498,9 +498,9 @@ Public inputs to constraint generation: all challenges, all padded values, \(\wi
 points, table evaluations \(\widetilde t_v(\beta_T)\) at \(\rho_T\). Output: matrices \(A\) (linear) and triples
 (quadratic) over \(F_c\) on the committed vector \(W_1\), expanded to \(F_t\) coordinates. Both parties compute
 them; the prover needs them only for step 5b. Combination coefficients: \(r\) (IRS test) is an explicit uniform
-vector; \(r_{add}\), \(r_q\) may be explicit (Candidate A has \(\approx10\)k linear and \(\approx1\)k quadratic
+vector; \(r_{add}\), \(r_q\) may be explicit (A-GKR has \(\approx10\)k linear and \(\approx1\)k quadratic
 constraints) or powers of one uniform element each (`ligero_error(combination="powers")`, error
-\((\#\text{constraints}-1)/|F_c|\) by Schwartz–Zippel **[derivation]**; required for Candidate B).
+\((\#\text{constraints}-1)/|F_c|\) by Schwartz–Zippel **[derivation]**; required for B-Ligero).
 
 ## 7. Hash properties assumed, and where
 
@@ -646,7 +646,7 @@ which is an upper bound a real layout would shrink; the depth column separates t
 ## 11. Open items (questions, not decisions)
 
 - Sequential depth: baseline 381 at \(B=4096\) (network floor 0.38 s at 1 ms RTT, 19.1 s at 50 ms) against
-  Candidate B's 3; the proposals reach 158 (\(c=2,s=5\)) at \(+1.3\%\) committed elements and \(\approx2\times\)
+  B-Ligero's 3; the proposals reach 158 (\(c=2,s=5\)) at \(+1.3\%\) committed elements and \(\approx2\times\)
   sumcheck-round prover work; the checker chain (297) is the floor of sharding alone. The measurements decide; no
   round budget is set.
 - Whether to commit the 140 computed query wires per unit (depth 381, 181M committed) or not (depth 630, 126M).
@@ -989,7 +989,7 @@ v1 Goldilocks control on the same binary revision and box.
 
 ## 15. Batched logUp over the table union (implemented 2026-09-22, lane a-logup-union; `--logup union`)
 
-**This is a protocol change to Candidate A's lookup argument and to nothing else.** The relation (`checker.v2`),
+**This is a protocol change to A-GKR's lookup argument and to nothing else.** The relation (`checker.v2`),
 the circuit export, the committed columns, the chain linkage and the Ligero opening are those of sections 12–14; only
 *how the lookups are proved* changes: the ten (v2: twelve, counting the epilogue's `R16`/`R15`) per-table
 fractional-GKR instances of section 4 become **one** instance over the union of the tables, every element tagged by
