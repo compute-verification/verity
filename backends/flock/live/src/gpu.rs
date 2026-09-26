@@ -141,6 +141,10 @@ struct ChunkParams {
     sha: i32,
     sha_mid: *const u32,
     sha_pad: *const u32,
+    last_blen: i32,
+    last_root: i32,
+    scale_slot0: i32,
+    last_data_words: i32,
 }
 
 unsafe extern "C" {
@@ -397,7 +401,8 @@ impl ChunkParams {
             u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(), rows_x: null(), rows_w: null(), accs: null(), vus: 0,
             row_bytes: 0, units_per_vu: 0, keys: null(), blocks_real: 0, unit_cache: 0, pub_cv: null_mut(), pub_y16: null_mut(),
             pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1, per_role: 0, chunks_per_block: 0, chunk_nb0: 0, chunk_nb1: 0,
-            blocks_per_vu: 0, dummy_keyed: 0, host_z: null(), host_a: null(), host_b: null(), sha: 0, sha_mid: null(), sha_pad: null(),
+            blocks_per_vu: 0, dummy_keyed: 0, host_z: null(), host_a: null(), host_b: null(), sha: 0, sha_mid: null(), sha_pad: null(), last_blen: 64, last_root: 0,
+            scale_slot0: -1, last_data_words: 0,
         }
     }
 }
@@ -609,7 +614,7 @@ pub fn prove_pure(
         u_b_col: u.7.as_ptr(),
         u_useful: st.net.useful as i32,
         u_const: st.net.const_pos as i32,
-        u_n_in: 544,
+        u_n_in: st.net.n_in as i32,
         u_inputs: if dev.is_some() { null() } else { uin.as_ptr() },
         rows_x: dev.map_or(null(), |i| i.x.as_ptr()),
         rows_w: dev.map_or(null(), |i| i.w.as_ptr()),
@@ -630,13 +635,17 @@ pub fn prove_pure(
         chunk_nb0: lay.chunks()[0] as i32,
         chunk_nb1: lay.chunks().get(1).map_or(0, |&n| n as i32),
         blocks_per_vu: lay.blocks_per_vu() as i32,
-        dummy_keyed: (lay == pb::Layout::Fp8) as i32,
+        dummy_keyed: lay.per_slot_keys() as i32,
         host_z: hz,
         host_a: ha,
         host_b: hb,
         sha: lay.is_sha() as i32,
         sha_mid: sha_mid.as_ptr(),
         sha_pad: sha_pad.as_ptr(),
+        last_blen: lay.blen(lay.chunks()[0] - 1, lay.chunks()[0]) as i32,
+        last_root: lay.is_fp4() as i32,
+        scale_slot0: if lay.is_fp4() { pb::Layout::FP4_SCALE_BLOCK as i32 } else { -1 },
+        last_data_words: if lay.is_sha() { lay.last_data_words() as i32 } else { 0 },
     };
     let (proof, commitment) = run(&params, &chunk, pcs, m);
     (proof, commitment, phase)

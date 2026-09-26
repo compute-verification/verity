@@ -96,7 +96,7 @@ fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
 /// The row digests (x, W) and the three frame-v3 roots, from the values.
 fn commit(inst: &Instances) -> ([Vec<[u8; 32]>; 2], [[u8; 32]; 3]) {
     let keys = [flock_live::chunk::row_key(b"x"), flock_live::chunk::row_key(b"w")];
-    let sha = inst.header["schemas"]["a"] == "sha256/row/v1";
+    let sha = inst.header["schemas"]["a"].as_str().unwrap_or("").starts_with("sha256/");
     let digests: [Vec<[u8; 32]>; 2] = from_fn(|r| {
         (0..inst.vus)
             .into_par_iter()
@@ -104,7 +104,7 @@ fn commit(inst: &Instances) -> ([Vec<[u8; 32]>; 2], [[u8; 32]; 3]) {
                 if sha {
                     let row = inst.row(r, v);
                     let mut h = Sha256::new();
-                    h.update(flock_live::pure_block::sha_prefix(r, if inst.row_bytes == 3072 { 16 } else { 8 }, 1536));
+                    h.update(flock_live::pure_block::sha_row_prefix(r, inst.row_bytes));
                     h.update(row);
                     h.finalize().into()
                 } else {
@@ -174,7 +174,7 @@ impl StatementVerifier for PureVerifier {
                 }
             }
         }
-        for v in 0..if lay.is_sha() { 0 } else { self.inst.vus } {
+        for v in 0..if lay.n_cv() == 0 { 0 } else { self.inst.vus } {
             for r in 0..2 {
                 let (bpv, nch) = (lay.blocks_per_vu(), lay.chunks().len());
                 let cvs: Vec<[u32; 8]> = (bpv * v..bpv * (v + 1)).flat_map(|b| (0..nch).map(move |c| (b, c))).map(|(b, c)| p.cv[b][r * nch + c]).collect();
@@ -323,7 +323,7 @@ fn unit31_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Syn
     (0..st.blocks_real)
         .into_par_iter()
         .map(|b| {
-            let r = inputs(b, UNITS - 1);
+            let r = inputs(b, st.lay.units() - 1);
             let (z, _, _) = st.net.eval64(|bit| {
                 let w = r[bit >> 7];
                 let j = bit & 127;
@@ -360,16 +360,16 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
                 comps[5].1[2] ^= 1;
             }
             if let Some(what) = plan.bad_params {
-                let r = &mut comps[15];
+                let r = &mut comps[st.lay.chunks()[0] - 1];
                 match what {
                     0 => r.4 &= !flock_live::chunk::CHUNK_END,
                     1 => r.2 = 7,
-                    _ => r.3 = 32,
+                    _ => r.3 = if r.3 == 32 { 64 } else { 32 },
                 }
             }
             if plan.key_substituted {
                 let mut cv = st.keys[1];
-                for j in 0..16 {
+                for j in 0..st.lay.chunks()[0] {
                     comps[j].0 = cv;
                     let c = comps[j];
                     cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
@@ -605,7 +605,7 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         if !st.net.epilogue() && name == "y16_public_forged" {
             continue;
         }
-        if st.lay.is_sha() && matches!(name, "chunk_end_flag_dropped" | "wrong_counter" | "chunk_value_forged") {
+        if (st.lay.is_sha() && matches!(name, "chunk_end_flag_dropped" | "wrong_counter")) || (st.lay.n_cv() == 0 && name == "chunk_value_forged") {
             continue;
         }
         let v = if gpu {
@@ -644,7 +644,7 @@ fn main() {
         assert_eq!(got, pin, "the netlist's sha256 is not the pinned lowering");
     }
     assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
-    let lay = Layout::of(inst.row_bytes, inst.units, inst.header["schemas"]["a"] == "sha256/row/v1");
+    let lay = Layout::of(inst.row_bytes, inst.units, inst.header["schemas"]["a"].as_str().unwrap_or("").starts_with("sha256/"));
     let st = Arc::new(PureStmt::new(net, inst.vus, lay));
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
