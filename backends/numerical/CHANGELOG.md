@@ -17,6 +17,10 @@
       `MoeExpertGemm(W)_v1{N=1}`. Tests check both against their coordinate Definitions.
   - **The FP8 block-scaled GEMM:** `scaled-mm-fp8-block-coordinate` (`ScaledMmFp8BlockCoordinate_v1{K, G}`). Its operands are E4M3
     codes and its block scales positive normal f32.
+- `gemm-coordinate` generates NVFP4 at `sm120.mma.m16n8k64.e2m1.nvf4`.
+  - Ports: `x` and `w` are E2M1 codes (`u8`, one per byte); `sx` and `sw` are UE4M3 scale bytes per block of 16; `y` is the FP32
+    accumulator word of `verity.ml.kernels.SM120_NVF4_DOT` (`models.BLACKWELL_SM120_NVF4`).
+  - `generate --suite nvfp4` covers K = 1536 at 8,192 and 16,384 VUs.
 - `generate --suite workloads` makes one set per census-bound subcircuit of vLLM rows #39, #57, #60, #67, #73 and #74, 45 in all.
   Each attention head uses its census `T` range.
 - `bench.lowerings`: a template without a module in a family is `n/s`, and its reason names the file to create. It is no longer a

@@ -211,6 +211,24 @@ def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
     assert ref_id == f'{sub.target().id}{{"K":64}}' and digest == TM.reference_digest(sub.target())
 
 
+def test_nvfp4_sets_hold_the_models_accumulator(tmp_path):
+    """NVFP4 (sm120): y is models.BLACKWELL_SM120_NVF4's chain over the E2M1 codes and UE4M3 block-16 scales, from the IR reference
+    verity.ml.kernels.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
+    from verity.ml.tc.models import BLACKWELL_SM120_NVF4 as M
+
+    sid = "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4"
+    sub = TM.parse_subcircuit_id(sid)
+    s = IS.InputSet.open(G.generate(sub, 8, 2, tmp_path)["path"])
+    assert IS.verify(s.path)["ok"] and s.subcircuit.id == sid and s.relation["definition"] == TM.NVFP4_DEFINITION
+    assert {k: (v["dtype"], v["words"]) for k, v in s.manifest["ports"].items()} == \
+        {"x": ("u8", 1536), "w": ("u8", 1536), "sx": ("u8", 96), "sw": ("u8", 96), "y": ("u32", 1)}
+    ins = s.instances()
+    for i in range(8):
+        assert M.chain(0, ins["x"][i].tolist(), ins["w"][i].tolist(), ins["sx"][i].tolist(), ins["sw"][i].tolist()) == int(ins["y"][i, 0])
+    assert ins["x"].max() <= 15 and ins["sx"].max() <= 0x7E and ins["sw"].max() <= 0x7E
+    assert [(p["K"], p["semantics"], n) for _t, p, n in G.SUITES["nvfp4"]] == [(1536, TM.NVFP4_SEMANTICS, 8192), (1536, TM.NVFP4_SEMANTICS, 16384)]
+
+
 def test_e4m3_words_are_pinned():
     r = np.array([0, 126, 127, 253, 254, 0xFFFFFFFF], dtype=np.uint32)
     assert TM.e4m3_finite_words(r).tolist() == [0, 126, 128, 254, 0, 15]
