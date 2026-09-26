@@ -349,7 +349,18 @@ def _specialization(fam: str, statics: dict[str, Any]):
     d = reg.defs.get(fam)
     if d is None:
         return lookup_primitive(reg, fam)
-    return d.bind(**statics) if hasattr(d, "bind") else d
+
+    def fn_value(v: Any) -> Any:
+        """A function-valued static (`DOT`, rendered `{"fn": id}` or as the bare id) -> the registered Definition it names."""
+        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v.startswith('{"fn"') else v)
+        if not isinstance(fid, str):
+            return v
+        try:
+            return lookup_primitive(reg, fid)
+        except KeyError:
+            return reg.defs[fid] if fid in reg.defs else v
+
+    return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
 
 
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> dict[str, dict[str, Any]]:
@@ -376,7 +387,7 @@ def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> dict[str, dict[s
     for fam, st in roots:
         try:
             visit(_specialization(fam, st))
-        except (KeyError, TypeError, ValueError) as e:
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
             out[f"{fam}{json.dumps(st, sort_keys=True, default=str)}"] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
     return out
 
@@ -395,7 +406,7 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
             roots.append((x["definition"], st))
             try:
                 ids.append(_spec_id(_specialization(x["definition"], st)))
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, AttributeError):
                 ids.append(None)
         x["definition_ids"] = ids
     g["definitions"] = definitions(roots)
