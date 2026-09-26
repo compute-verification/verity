@@ -13,7 +13,7 @@ production root.
 - Conformance: `packages/verity/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
-All hashes are SHA-256. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
+All hashes are SHA-256; §10 specifies `vllm-v1-sha512`, the same framing through SHA-512. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
 `‖` is concatenation. Byte strings in the vectors are lowercase hex.
 
 ## 1. Base hash
@@ -310,3 +310,68 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
 
 With 1–7 in place, a `vllm-v1` opening in a backend statement means what a frame-v3 opening does: this value, at
 this verifier-derived position, of this verifier-derived commitment. §5's injectivity argument carries over unchanged.
+
+## 10. `vllm-v1-sha512`
+
+`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments (Daniel, 2026-09-26:
+SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+- every leaf, tree and root function takes `hash="sha512"`;
+- the domain types take a `hash="sha512"` field;
+- `VllmV1` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
+
+Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-baseline switches its committers.
+
+**Digest widths.**
+
+| width | what |
+|---|---|
+| 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds |
+| 32 bytes: identity digests from the integration, unchanged | `program`, `ctx`, `geo`, `layout`, `template`, `names` |
+| variable, unchanged | `query_id` |
+
+**What carries over unchanged:**
+- **The bytes around the hash.** Tags, prefixes, headers and field order are unchanged, and preimages stay fixed-width except
+  `query_id`, so §4's one-way parsing holds.
+- **The first-byte separation of §2 and §5**, including the hm96 leaf: `hm96-sha512/v1`'s leaf tag starts `verity/hm96-sha512/`.
+- **§5's binding argument and every verifier duty.**
+
+**What differs:**
+- **Domain digests.** `domain_digest` includes `"hash": "sha512"` for a SHA-512 domain, so SHA-256 domain digests are unchanged.
+- **Thread trees.** Unvisited slots hold 64 zero bytes.
+- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1` (`Hm96Sha512`). Under it, the §4 context suffix carries that rule's
+  64-byte scheme digest.
+
+**Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
+
+**What the integration changes at the re-baseline.**
+- The committers hash with SHA-512: the Python `commit.scheme` rules, and the CUDA copies `native_tree.cu`, `hidden_gpu_tree.cu`,
+  `native_leafhash.cu` and the FA2 tap's `Verity_sha_ctx`.
+- They match `vectors_sha512.json` byte for byte.
+
+**Vectors.** `vectors_sha512.json`, written by `python -m verity.commitments.vllm_v1.vectors_sha512`, covers:
+- H over the node, lift and empty tags;
+- position, chunk and thread leaves;
+- trees of 0–7 leaves with their paths;
+- all six root bindings;
+- per domain kind, one accepted opening and one with a changed value that is rejected, with domain digests.
+
+`test_sha512_framings.py` checks them.
+
+**Cost.** Native compressions per message:
+
+| message | `vllm-v1` | `vllm-v1-sha512` |
+|---|---|---|
+| node | 2 | 2 |
+| lift | 2 | 1 |
+| step root | 4 | 2 |
+| run root, before the fold | 3 | 2 |
+| position leaf of R bytes | ⌈(R + 35)/64⌉: 49 at R = 3,072 | ⌈(R + 43)/128⌉: 25 at R = 3,072 |
+
+- **Per byte.** A SHA-512 compression processes 128 bytes, so a leaf takes about half as many. Each one costs more wherever SHA-256
+  has hardware support (SHA-NI) and SHA-512 doesn't.
+- **Opening paths** double in bytes.
+- **In a circuit** the tree is native at the verifier; only leaf digests are proven, and `hm96/PROTOCOL.md` §5 and §6 give their ANDs.
+- **Measured.** `benchmarks/commitments/commit_cost.py --scheme vllm-v1-sha512` measures it.
+
+**Hashes.** Table 1 lists SHA-512 under collision resistance (`cr/sha-512`) for everything the scheme computes. The integration's
+identity digests stay SHA-256; making identities SHA-512 is not part of E4.

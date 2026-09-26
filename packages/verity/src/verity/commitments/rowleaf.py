@@ -17,6 +17,8 @@ Five schemas:
 ``sha256/row-nvfp4/v1``      ``SHA-256(sha256_row_nvfp4_prefix(role, k) || nvfp4_row_bytes)`` for an NVFP4 row (``k`` E2M1
                              codes and their ``k/16`` UE4M3 scales).
 ``blake3-keyed/row-nvfp4/v1`` ``BLAKE3(nvfp4_row_bytes, key=blake3_row_key(role))``: the same row bytes, the frame-v3 keys.
+``sha512/row/v1``            ``SHA-512(sha512_row_prefix(role, word_bits, n_words) || row_bytes)``: ``sha256/row/v1`` through SHA-512,
+                             with a 128-byte constant first block (``frame-v3-sha512`` rows and ``hm96-sha512/v1``'s inner digest).
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
                              but algebraic: its results are reported and flagged as algebraic in the security section,
                              and never count toward a standard-hash claim (Daniel's standing decision).
@@ -44,6 +46,7 @@ __all__ = [
     "SCHEMA_ROW",
     "SCHEMA_SHA256_ROW",
     "SCHEMA_SHA256_ROW_NVFP4",
+    "SCHEMA_SHA512_ROW",
     "blake3_row_digest",
     "blake3_row_key",
     "blake3_row_layout",
@@ -60,6 +63,9 @@ __all__ = [
     "sha256_row_nvfp4_layout",
     "sha256_row_nvfp4_prefix",
     "sha256_row_prefix",
+    "sha512_row_digest",
+    "sha512_row_layout",
+    "sha512_row_prefix",
 ]
 
 SCHEMA_ROW = "poseidon2-babybear-w24/row/v2h"
@@ -67,12 +73,14 @@ SCHEMA_SHA256_ROW = "sha256/row/v1"
 SCHEMA_BLAKE3_ROW = "blake3-keyed/row/v2"
 SCHEMA_SHA256_ROW_NVFP4 = "sha256/row-nvfp4/v1"
 SCHEMA_BLAKE3_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
-_DIGEST_SCHEMAS = (SCHEMA_SHA256_ROW, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW_NVFP4, SCHEMA_BLAKE3_ROW_NVFP4)
+SCHEMA_SHA512_ROW = "sha512/row/v1"
+_DIGEST_SCHEMAS = {SCHEMA_SHA256_ROW: 32, SCHEMA_BLAKE3_ROW: 32, SCHEMA_SHA256_ROW_NVFP4: 32, SCHEMA_BLAKE3_ROW_NVFP4: 32, SCHEMA_SHA512_ROW: 64}
 
 ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
 _ROLE_KEY_NAME = {ROLE_X: b"x", ROLE_W: b"w"}
 SHA256_ROW_TAG = b"verity/sha256-row/v1\0"
 SHA256_ROW_NVFP4_TAG = b"verity/sha256-row-nvfp4/v1\0"
+SHA512_ROW_TAG = b"verity/sha512-row/v1\0"
 NVFP4_SCALE_GROUP = 16
 BLAKE3_KEY_PREFIX = b"verity/blake3-leaf/v1/"
 
@@ -121,6 +129,26 @@ def sha256_row_layout(role: int, word_bits: int, n_words: int) -> LeafLayout:
 
 def sha256_row_digest(words: Sequence[int], word_bits: int, role: int) -> bytes:
     return sha256_row_layout(role, word_bits, len(words)).digest(row_bytes(words, word_bits))
+
+
+# --- sha512/row/v1 -----------------------------------------------------------------------------------------------
+
+
+def sha512_row_prefix(role: int, word_bits: int, n_words: int) -> bytes:
+    """The 128-byte first block: ``"verity/sha512-row/v1\\0" || u8 role || u8 word_bits || u32be n_words``, zero padded."""
+
+    if not 0 < n_words < 1 << 32:
+        raise ValueError("n_words must be a positive u32")
+    head = SHA512_ROW_TAG + bytes([_role(role), _width(word_bits)]) + n_words.to_bytes(4, "big")
+    return head.ljust(128, b"\0")
+
+
+def sha512_row_layout(role: int, word_bits: int, n_words: int) -> LeafLayout:
+    return LeafLayout("sha512", sha512_row_prefix(role, word_bits, n_words), n_words * word_bits // 8)
+
+
+def sha512_row_digest(words: Sequence[int], word_bits: int, role: int) -> bytes:
+    return sha512_row_layout(role, word_bits, len(words)).digest(row_bytes(words, word_bits))
 
 
 # --- blake3-keyed/row/v2 -----------------------------------------------------------------------------------------
@@ -214,10 +242,10 @@ def row_digest(words, word_bits: int, role: int) -> list[int]:
 def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_ROW) -> bytes:
     """The frame-v3 leaf of the row at ``rank`` (rank == position in a range domain).
 
-    ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default) or the 32-byte SHA-256 / BLAKE3 row digest (the four
-    digest schemas, NVFP4 rows included).
+    ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default), the 32-byte SHA-256 / BLAKE3 row digest (four digest
+    schemas, NVFP4 rows included) or the 64-byte ``sha512/row/v1`` digest (under a ``frame-v3-sha512`` domain).
     """
     value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
-    if schema != SCHEMA_ROW and (schema not in _DIGEST_SCHEMAS or len(value) != 32):
-        raise ValueError(f"unknown row schema {schema!r} or a digest that is not 32 bytes")
+    if schema != SCHEMA_ROW and len(value) != _DIGEST_SCHEMAS.get(schema, -1):
+        raise ValueError(f"unknown row schema {schema!r} or a digest of the wrong size ({len(value)} bytes)")
     return domain.leaf(rank, rank, schema, value)

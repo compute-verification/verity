@@ -1,4 +1,4 @@
-"""Transparent SHA-256 Merkle commitments over verifier-derived domains.
+"""Transparent SHA-256 Merkle commitments over verifier-derived domains, and their SHA-512 variant ``frame-v3-sha512``.
 
 A :class:`CommitmentDomain` fixes *which* positions a commitment covers, in
 *which* order, at *which* phase of *which* session.  Both parties derive it
@@ -8,12 +8,13 @@ different session, phase, owner, or position set.
 
 Promoted from veritor ``protocol/merkle.py`` (eb865ce2) with the ``Commitment`` and ``Opening`` records of
 ``protocol/messages.py``.  The frame ``veritor/protocol/merkle/frame/v3`` and every tag below are wire constants
-mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.
+mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  A domain with ``hash="sha512"`` hashes the
+same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes (``frame_v3/PROTOCOL.md`` §6); the
+``binding`` and the positions' identity stay 32-byte identity digests.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -22,6 +23,7 @@ from verity.errors import ProtocolError
 from .identity import JSONValue
 from .indexed import IndexedDomain, iter_members
 from .limits import VerificationLimits
+from .scheme import DIGEST_BYTES, sha
 
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 _LEAF = b"leaf"
@@ -36,8 +38,8 @@ def _uint(value: int) -> bytes:
     return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big")
 
 
-def _hash(tag: bytes, *parts: bytes) -> bytes:
-    digest = hashlib.sha256()
+def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
+    digest = sha(hash)()
     digest.update(_FRAME)
     digest.update(len(tag).to_bytes(4, "big"))
     digest.update(tag)
@@ -52,8 +54,8 @@ def merkle_depth(count: int) -> int:
 
 
 def _bytes32(value: object, name: str) -> bytes:
-    if type(value) is not bytes or len(value) != 32:
-        raise ProtocolError(f"{name} must be 32 bytes")
+    if type(value) is not bytes or len(value) not in (32, 64):
+        raise ProtocolError(f"{name} must be a 32-byte (SHA-256 frame) or 64-byte (SHA-512 frame) digest")
     return value
 
 
@@ -88,9 +90,9 @@ class Opening:
         if type(self.value) is not bytes:
             raise ProtocolError("opening value must be bytes")
         if type(self.path) is not tuple or any(
-            type(item) is not bytes or len(item) != 32 for item in self.path
+            type(item) is not bytes or len(item) not in (32, 64) for item in self.path
         ):
-            raise ProtocolError("opening path must be a tuple of 32-byte digests")
+            raise ProtocolError("opening path must be a tuple of 32- or 64-byte digests")
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +108,7 @@ class CommitmentDomain:
     binding: bytes
     owner: int
     positions: IndexedDomain[int]
+    hash: str = "sha256"
     domain_id: bytes = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -115,6 +118,7 @@ class CommitmentDomain:
             raise ProtocolError(
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"
             )
+        sha(self.hash)
         object.__setattr__(
             self,
             "domain_id",
@@ -124,12 +128,17 @@ class CommitmentDomain:
                 _uint(self.owner + 2),
                 bytes.fromhex(self.positions.identity_digest),
                 _uint(self.positions.count),
+                hash=self.hash,
             ),
         )
 
     @property
     def count(self) -> int:
         return self.positions.count
+
+    @property
+    def digest_bytes(self) -> int:
+        return DIGEST_BYTES[self.hash]
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
         return _hash(
@@ -139,10 +148,11 @@ class CommitmentDomain:
             _uint(position),
             schema.encode("utf-8"),
             value,
+            hash=self.hash,
         )
 
     def leaf_prefix(self, rank: int, position: int, schema: str, value_len: int) -> bytes:
-        """Every byte of :meth:`leaf`'s SHA-256 message before the value: ``leaf == SHA-256(prefix || value)``."""
+        """Every byte of :meth:`leaf`'s message before the value: ``leaf == H(prefix || value)``, H the domain's hash."""
 
         parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
         out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
@@ -151,10 +161,10 @@ class CommitmentDomain:
         return out + value_len.to_bytes(8, "big")
 
     def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right)
+        return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right, hash=self.hash)
 
     def empty_root(self) -> bytes:
-        return _hash(_EMPTY, self.domain_id)
+        return _hash(_EMPTY, self.domain_id, hash=self.hash)
 
 
 def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tuple[bytes, ...], ...]:
@@ -165,7 +175,7 @@ def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tupl
     if not leaves:
         return ()
     width = 1 << merkle_depth(len(leaves))
-    level = [*leaves, *(_hash(_PAD, domain.domain_id, _uint(rank)) for rank in range(len(leaves), width))]
+    level = [*leaves, *(_hash(_PAD, domain.domain_id, _uint(rank), hash=domain.hash) for rank in range(len(leaves), width))]
     levels = [tuple(level)]
     depth = 0
     while len(level) > 1:
@@ -246,9 +256,11 @@ def verify_opening(
         rank = domain.positions.rank(opening.position)
     except KeyError:
         return False
-    if len(opening.path) != merkle_depth(domain.count):
+    if len(opening.path) != merkle_depth(domain.count) or len(commitment.root) != domain.digest_bytes:
         return False
-    limits.enforce("max_proof_bytes", len(opening.value) + 32 * len(opening.path))
+    if any(len(sibling) != domain.digest_bytes for sibling in opening.path):
+        return False
+    limits.enforce("max_proof_bytes", len(opening.value) + domain.digest_bytes * len(opening.path))
     digest = domain.leaf(rank, opening.position, schema, opening.value)
     cursor = rank
     for level, sibling in enumerate(opening.path):
