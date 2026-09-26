@@ -1266,9 +1266,15 @@ def replay_golden(probe: Probe, path: Path, records: list[dict] | None = None, p
             if want != hw:
                 model_mism.append({**rec, "hardware": f"{hw:08x}", "model": "error" if want is None else f"{want:08x}"})
                 fam["model_mismatches"] += 1
+        # every other output has a zero accumulator and a zero row or column: +0, except that a zero times a non-finite operand
+        # is NaN, so row i reads the canonical NaN where a[i] holds an infinity or NaN, and column j where b[j] does
         rest = D[r].copy()
         rest[i, j] = 0
-        other_nonzero += int(np.count_nonzero(rest))  # zero rows times anything, zero accumulator: every other output is +0
+        if not fmt.is_finite(A[r, i]).all():
+            rest[i, :] ^= np.where(np.arange(N) != j, np.uint32(T.FP32_CANONICAL_NAN), np.uint32(0))
+        if not fmt.is_finite(Bt[r, j]).all():
+            rest[:, j] ^= np.where(np.arange(M) != i, np.uint32(T.FP32_CANONICAL_NAN), np.uint32(0))
+        other_nonzero += int(np.count_nonzero(rest))
     out = {
         "file": str(path),
         "pipeline": pipeline,

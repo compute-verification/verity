@@ -37,6 +37,7 @@ from .models import (
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_NVF4,
     HOPPER_BF16_M16N8K16,
+    HOPPER_BF16_WGMMA_K16,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
     Model,
@@ -135,6 +136,11 @@ _H100_BF16 = (
     "f32.bf16.bf16 / HGMMA.64x128x16.F32.BF16, 307,281,920 words, 0 mismatches against groups=(16,), width 26, "
     "floor -133 (verity.ml.tc.total.HOPPER_BF16_WGMMA_K16) -- the wgmma path, not mma.sync"
 )
+_H100_WGMMA_BF16 = (
+    "lane wgmma-bf16 (2026-09-26), tools/tc_probe on vy-wgmma-bf16-h100 (H100 80GB HBM3, driver 580.126.09, nvcc 12.4.131, -arch=sm_90a): "
+    "one wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x HGMMA.64x8x16.F32.BF16, A from shared memory (SS) and "
+    "from registers (RS), against the total semantics (specials asserted)"
+)
 _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
     "570.195.03, SASS 166a24a0...): lockfile records 1,574,998/1,574,998 dot statements bit-exact under model5 "
@@ -227,6 +233,20 @@ INSTRUCTIONS: dict[str, Instruction] = {
             status="pinned",
             dossier="art:0664d5c367791927273cf038f0f6caa326a00801a3d563210c1969f159d3afff",
             evidence=(_H100_MMA_BF16, "Hawkeye (H100) recovered groups (16,), width 26, floor -133 -- instruction path not stated", _H100_BF16, _PIN_BF16),
+        ),
+        # --- BF16 Hopper wgmma -----------------------------------------------------------------------------------
+        _i(
+            # The instruction vLLM's H100 BF16 GEMMs (cuBLAS, CUTLASS, Triton) and FA3 issue.  Same parameters as the mma.sync
+            # path's model, a separate entry so that a subcircuit names the instruction production runs.
+            id="sm90.wgmma.m64n8k16.bf16",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16",
+            shape=(64, 8, 16),
+            a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
+            model=HOPPER_BF16_WGMMA_K16,
+            status="pinned",
+            dossier=None,
+            evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
         # --- FP8 Ada mma.sync ----------------------------------------------------------------------------------
         _i(
