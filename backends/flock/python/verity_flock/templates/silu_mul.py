@@ -30,11 +30,18 @@ def frame_lowering(subcircuit):
 
 
 def supports(subcircuit, scheme):
-    return (f"C-Flock lowers {subcircuit.id} exactly (verity_flock.templates.silu_mul: unit {UNIT}) and proves it with public "
-            f"unit inputs and outputs (verity/flock-ir-block/v1); binding its rows under {scheme} is not wired yet")
+    if scheme in FRAME_SCHEMES:
+        return None
+    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v1); binding its rows under "
+            f"{scheme} is not wired yet")
+
+
+def relation(subcircuit, scheme):
+    return "irf:silu-mul"
 
 
 def stage(input_set, lo, hi, out_dir):
-    from verity_flock import ir_lower
+    """The frame-v3 instance file for ids [lo, hi) (``verity_flock.ir_frame.stage``): each pod stages its own."""
+    from verity_flock import ir_frame
 
-    return ir_lower.stage(lowering(input_set.subcircuit), input_set, lo, hi, out_dir)
+    return ir_frame.stage(frame_lowering(input_set.subcircuit), input_set, lo, hi, out_dir)

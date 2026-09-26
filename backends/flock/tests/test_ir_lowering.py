@@ -176,14 +176,18 @@ def test_lowering_is_the_pinned_one(template):
 
 
 def test_supports_says_what_is_missing():
-    for template, params in {**LOWERED, "rmsnorm-fused-cuda": {"N": 2048, "EPS": 1e-5}, "rmsnorm-triton": {"N": 2048, "EPS": 1e-5}}.items():
-        why = REG.supports(TM.subcircuit(template, **params), "frame-v3/blake3-keyed")
+    for template, params in LOWERED.items():
+        sub = TM.subcircuit(template, **params)
+        assert REG.supports(sub, "frame-v3/blake3-keyed") is None and REG.relation(sub, "frame-v3/blake3-keyed") == f"irf:{template}"
+        assert "not wired yet" in REG.supports(sub, "vllm-v1")
+    for template in ("rmsnorm-fused-cuda", "rmsnorm-triton"):
+        why = REG.supports(TM.subcircuit(template, N=2048, EPS=1e-5), "frame-v3/blake3-keyed")
         assert "C-Flock lowers" in why and "not wired yet" in why
 
 
 def test_stage_writes_the_instance_file(tmp_path):
     s = InputSet.open(SLICES / "rope-head-d64")
-    path = REG.module("rope-head").stage(s, 0, 2, tmp_path)
+    path = IL.stage(REG.module("rope-head").lowering(s.subcircuit), s, 0, 2, tmp_path)
     head, body = path.read_bytes().split(b"\n", 1)
     import json
 
@@ -311,7 +315,7 @@ def test_the_instance_file_accounts_for_every_cut_word(tmp_path):
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
     s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
     low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    head = json.loads(REG.module("rmsnorm-fused-cuda").stage(s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
+    head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
     cut = head["cut"]
     assert head["cut_words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
     produced = [k for unit in cut["out"] for _, k in unit]
@@ -322,7 +326,8 @@ def test_the_instance_file_accounts_for_every_cut_word(tmp_path):
         assert set(op[2:] if op[1] != "Const" else []) <= defined
         defined.add(op[0])
     assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
-    rope = json.loads(REG.module("rope-head").stage(InputSet.open(SLICES / "rope-head-d64"), 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
+    rs = InputSet.open(SLICES / "rope-head-d64")
+    rope = json.loads(IL.stage(REG.module("rope-head").lowering(rs.subcircuit), rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
     assert rope["cut_words"] == 0 and rope["cut"]["tail"] == [] and all(not u for u in rope["cut"]["in"] + rope["cut"]["out"])
 
 
@@ -330,7 +335,7 @@ def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
     """IR2: the verifier stages its own file; a producer's file with one output word changed differs from it."""
     s = InputSet.open(SLICES / "rope-head-d64")
     low = REG.module("rope-head").lowering(s.subcircuit)
-    path = REG.module("rope-head").stage(s, 0, 2, tmp_path)
+    path = IL.stage(low, s, 0, 2, tmp_path)
     assert IL.check_staged(low, s, path) == []
     b = bytearray(path.read_bytes())
     b[-3] ^= 1
@@ -383,3 +388,64 @@ def test_piece_counts_are_what_the_design_says():
     general = count(fp.f32_mul, (32, 32))
     narrow = count(lambda C, a, b: fp.f32_mul(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b)), (16, 16))
     assert narrow * 3 < general
+
+
+# --- verity/flock-ir-frame/v1: the frame-v3 binding --------------------------------------------------------------------------
+
+def test_frame_plans_hold_whole_chunks():
+    from verity_flock import ir_frame as F
+
+    rope = TM.subcircuit("rope-head", D=64)
+    pl = F.plan(REG.module("rope-head").frame_lowering(rope), rope)
+    assert (pl.G, pl.nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (2, 2, 8, 64, 64, 20)
+    assert pl.wiring[0] == [(0, 0), (0, 64), (1, 0), (1, 64)]
+    silu = TM.subcircuit("silu-mul", I=8192)
+    low = REG.module("silu-mul").frame_lowering(silu)
+    pl = F.plan(low, silu)
+    assert low.units.n == 4096 and (pl.G, pl.nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (1, 16, 32, 256, 256, 22)
+    assert pl.comps[3][0] == [(0, 3, 1024), (0, 19, 1024)]
+
+
+def test_frame_staging_commits_rows_and_outputs(tmp_path):
+    import json
+
+    import blake3
+    from verity.commitments.rowleaf import ROLE_X, blake3_row_key
+
+    s = InputSet.open(SLICES / "rope-head-d64")
+    path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
+    head, body = path.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    assert h["format"] == "flock-ir-frame/v1" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
+    assert sorted(h["frame_v3"]["roots"]) == ["cs", "out", "x"] and h["frame_v3"]["schemas"]["x"] == "blake3-keyed/row/v2"
+    x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)
+    row0 = x[0, :64].astype("<u2").tobytes()
+    assert body[:128] == row0
+    assert body[256:256 + 32] == blake3.blake3(row0, key=blake3_row_key(ROLE_X)).digest()
+    assert h["blocks"] == [[[[0, 0, 0], [0, 1, 0], None, None], list(range(32)) + [None] * 32]]
+
+
+def test_non_gemm_results_carry_no_gemm_target():
+    from verity_numerical.bench import contract
+
+    base = dict(domain="finite", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+                security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}}, software={"backend": {"name": "b", "commit": None},
+                "toolchain": {}}, preprocessing="none", retention="retained", instances=None)
+    ok = contract.fingerprint(profile=None, K=None, subcircuit="rope-head/d64/neox-bf16", **base)
+    assert contract.validate_fingerprint(ok) == []
+    assert any("profile must be null" in p for p in contract.validate_fingerprint({**ok, "profile": contract.PROFILE}))
+    assert any("profile must be a target" in p for p in contract.validate_fingerprint({**ok, "subcircuit": None}))
+    rates = [contract.measurement(contract.OVERHEAD, 1.0)]
+    assert contract._check_rates(ok, rates) and "GEMM rates" in contract._check_rates(ok, rates)[0]
+
+
+def test_an_ir_cell_plans_through_the_spine():
+    from verity_numerical.bench import cell as C
+
+    c = C.plan("C-interactive", "rope-head/d64/neox-bf16+frame-v3/blake3-keyed", str(SLICES / "rope-head-d64"), "vy-p", verifier="vy-v",
+               verifier_addr="1.2.3.4:7400", rtt_target="1.2.3.4:22", lane="flock-ir-lowering", points="2 4", runs=5)
+    assert c.relation == "irf:rope-head"
+    v, p = c.jobs
+    assert v["command"][:3] == ["bash", "backends/flock/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
+    assert "--send" in v["argv"] and v["argv"][v["argv"].index("--send") + 1] == p["argv"][p["argv"].index("--send") + 1]
+    assert "VERIFIER=1.2.3.4:7400" in p["command"] and "LOOPBACK=1" in p["command"]

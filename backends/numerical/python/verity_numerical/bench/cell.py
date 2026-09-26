@@ -151,6 +151,8 @@ def research_run(cell: Cell, job: Mapping[str, Any]) -> dict[str, Any]:
         argv += ["--campaign", cell.campaign]
     for k, v in sorted((job.get("env") or {}).items()):
         argv += ["--env", f"{k}={v}"]
+    for f in job.get("send") or []:
+        argv += ["--send", f]
     return dict(job, argv=argv + ["--", *job["command"]])
 
 

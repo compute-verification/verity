@@ -20,12 +20,18 @@ def test_one_module_per_template(family):
     assert set(reg.modules()) == set(TM.TEMPLATES)
 
 
+#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v1).
+LOWERED = {"C-Flock": {"rope-head", "silu-mul"}}
+
+
 @pytest.mark.parametrize("family", FAMILIES)
 def test_unlowered_templates_say_why(family):
     reg = L.registry(family)
     for sub in EXAMPLES:
         why = reg.supports(sub, "frame-v3/blake3-keyed")
-        if sub.template.id != "gemm-coordinate":
+        if sub.template.id in LOWERED.get(family, ()):
+            assert why is None and isinstance(reg.supports(sub, "vllm-v1"), str)
+        elif sub.template.id != "gemm-coordinate":
             assert isinstance(why, str) and family in why
 
 
