@@ -1,5 +1,26 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: real-K rows: a result at another K (or semantics) is its own statement
+
+- **Statements:** K and the semantics are part of the subcircuit (docs ontology, "A result"). A result whose GEMM
+  coordinate is not its target's own K = 1536 subcircuit is its own statement, with its own Table 2 rows after the
+  K = 1536 rows, one per scheme with a result. Native N is computed at that K. It is not a new column.
+- **Resolving a result's statement:** `views.result_subcircuit` takes:
+  - K from the fingerprint;
+  - the semantics from the `bench.cell` stamp's subcircuit, else the result's `relation` (`RELATION_SEMANTICS`), else the
+    target's instruction.
+
+  Semantics the census records as one (`stood_for_by`) are one statement: H100 BF16 `wgmma` stays on the `mma` row at
+  K = 1536, and at real K uses the `wgmma` subcircuit's id (root's ruling, 02:44Z).
+- **Census:** `census/subcircuits.json` gains the eight real-K bound subcircuits: `gemm-coordinate/k{2048,8192}/`
+  `{sm80-mma-bf16, sm90-wgmma-bf16, sm89-mma-e4m3, sm90-wgmma-e4m3}`.
+- **Inputs:** a real-K result's inputs must be a registered `input-set/v1` or `vllm-vu-set/v1` artifact of that K,
+  matched by the stamp's art or the set's content digest, over a range inside the set. Otherwise it gets reason I.
+  Red-team verdicts count per statement.
+- **Entities:** the render keys real-K results, rows and Table 3 by their statement, and lists the real-K subcircuits.
+- **Unchanged:** the legacy rules and parity (K != 1536 is still B). Existing rows, cells and the raw JSON are unchanged;
+  only the embedded census section gains the new subcircuits. `superseded_by` already rejected a result (above).
+
 ## 2026-09-26: the below-bar drill-down
 
 - A result labelled `below_bar=true` (the vocabulary's verification key, added to the store contract with this change)

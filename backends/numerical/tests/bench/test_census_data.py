@@ -141,7 +141,8 @@ def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
         assert s.id == f"{s.template}/k{s.parameters.K}/{sem}" and s.parameters.datatype == ins.a_dtype and ins.model is not None
         assert s.display == f"GemmCoordinate<{s.parameters.K}> · {sem.split('-')[0]} {sem.split('-')[1]} · {census.DATATYPES[ins.a_dtype].display}"
     untargeted = {s.id for s in census.SUBCIRCUITS.values() if getattr(s, "legacy_target", None) is None}
-    assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"}
+    real_k = {f"gemm-coordinate/k{k}/{sem}" for k in (2048, 8192) for sem in ("sm80-mma-bf16", "sm90-wgmma-bf16", "sm89-mma-e4m3", "sm90-wgmma-e4m3")}
+    assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"} | real_k              # the real-K statements' subcircuits
     assert len(census.SUBCIRCUITS) == len(TARGETS) + len(untargeted)
     wgmma = census.SUBCIRCUITS["gemm-coordinate/k1536/sm90-wgmma-bf16"]
     assert INSTRUCTIONS[wgmma.parameters.semantics].status == "pinned" and wgmma.fidelity_notes == []
