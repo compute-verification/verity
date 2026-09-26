@@ -480,6 +480,13 @@ def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) 
     assert V.parity(store) == [] and pulled not in {c.artifact for c in V.build(store, V.LEGACY).cells}
 
 
+def test_a_superseded_finding_rejects_the_result_like_a_pull(store: LocalStore) -> None:
+    old = committed(store, t_total=0.4, labels=[("finding", "SUPERSEDED: provenance: backend-generated inputs", "flock-backend",
+                                                  "2026-09-26T06:00:00Z")])
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, old)[-1] == "D"
+
+
 def _stream_ref(n: int, **over: Any) -> dict[str, Any]:
     return {**T.FROZEN_INSTANCES[FP8_ADA_MMA.name], "range": [0, n], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](n),
             "seed": 20260922, "recipe": "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)", **over}

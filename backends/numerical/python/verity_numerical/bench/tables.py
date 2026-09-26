@@ -471,8 +471,9 @@ def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = R
 
 #: The research coordinator's cell marks (``lanes/coordinator/evidence/marked-cells.py``): the LATEST ``finding`` label on a
 #: result, by ts, decides.  ``UNDER RE-VERIFICATION ...`` marks its cell with a footnote while it stands; a later ``CLEARED ...``
-#: drops the mark; ``PULLED ...`` rejects the result like a red-team downgrade.  Any other latest finding changes nothing.
-FINDING_OPEN, FINDING_CLEARED, FINDING_PULLED = "UNDER RE-VERIFICATION", "CLEARED", "PULLED"
+#: drops the mark; ``PULLED ...`` rejects the result like a red-team downgrade, and so does ``SUPERSEDED ...`` (its producer re-ran
+#: the cell, e.g. on the spine's input sets).  Any other latest finding changes nothing.
+FINDING_OPEN, FINDING_CLEARED, FINDING_PULLED, FINDING_SUPERSEDED = "UNDER RE-VERIFICATION", "CLEARED", "PULLED", "SUPERSEDED"
 UNDER_REVERIFICATION = "under re-verification"
 
 
@@ -484,7 +485,7 @@ def cell_finding(labels: Iterable[Any]) -> tuple[str | None, _Label | None]:
         return None, None
     latest = max(found, key=lambda lab: (lab.ts, str(lab.value)))
     value = str(latest.value)
-    for state, prefix in (("open", FINDING_OPEN), ("cleared", FINDING_CLEARED), ("pulled", FINDING_PULLED)):
+    for state, prefix in (("open", FINDING_OPEN), ("cleared", FINDING_CLEARED), ("pulled", FINDING_PULLED), ("pulled", FINDING_SUPERSEDED)):
         if value.startswith(prefix):
             return state, latest
     return None, latest

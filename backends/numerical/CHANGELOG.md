@@ -1,5 +1,11 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: a `SUPERSEDED …` finding rejects a result
+
+- A `finding` label starting with `SUPERSEDED` now rejects the result (reason D), as `PULLED` does. Its producer uses it when
+  a re-run replaces a cell, for example flock-backend's four FP8 real-K cells re-run on the spine's input sets. Without the
+  rejection, the old and new results would both publish, because their input sets differ.
+
 ## 2026-09-26: FP8 GEMM coordinate input sets (fp8-ada, fp8-hopper)
 
 - `gemm-coordinate` generates the two FP8 lines, `sm89.mma.m16n8k32.e4m3` (RTX 4090) and `sm90.wgmma.m64n8k32.e4m3` (H100), at any
