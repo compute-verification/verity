@@ -54,6 +54,8 @@ LABEL = "label"
 NOTE = "note"
 ASSUMPTIONS = "assumptions"
 OMITTED = "omitted"
+DOMAIN = "domain"
+DOMAINS = ("total", "finite-only")
 BREAKTHROUGH = "breakthrough"
 LANE = "lane"
 ROW = "row"
@@ -210,6 +212,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(NOTE, GROUP_RESULT, TEXT, "the lane's free-text note"),
     _k(ASSUMPTIONS, GROUP_RESULT, LIST, "the cryptographic assumptions the number rests on"),
     _k(OMITTED, GROUP_RESULT, LIST, "what the number leaves out (ZK, authentication, key setup, ...)"),
+    _k(DOMAIN, GROUP_RESULT, ENUM, "the operand domain the statement covers: total (every bit pattern, NaN and infinity included, as the "
+                                   "hardware) or finite-only (non-finite operands asserted away; Daniel 2026-09-26: an explicit, named choice)", DOMAINS),
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
