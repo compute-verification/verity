@@ -1539,6 +1539,20 @@ def _mark_names(c: ViewCell) -> list[str]:
 _MARK_TEXT = {"provisional": "(prov.)", "algebraic": "(alg.)", "under-reverification": f"({T.UNDER_REVERIFICATION})"}
 
 
+#: A live run whose own round trips (rounds x its measured RTT) exceed this share of its measured wall is footnoted: its wall is
+#: the network's, not the prover's (red-team-flock 2026-09-26: the RTX 5090 cells' 3.2 ms separate-verifier RTT).
+RTT_DOMINATES = 0.5
+
+
+def rtt_share(ix: Mapping[str, Any]) -> float | None:
+    """A live result's measured round-trip time (rounds x its own RTT) as a share of its measured wall (prover compute + network
+    wait); ``None`` when not live or not measured."""
+    if not ix.get("live") or not _num(ix.get("rtt_ms")) or not _num(ix.get("rounds")):
+        return None
+    wall = (ix.get("prover_s") or 0.0) + (ix.get("wait_s") or 0.0)
+    return (ix["rounds"] * ix["rtt_ms"] / 1e3) / wall if wall > 0 else None
+
+
 def _cell_note(c: ViewCell, col: str) -> str:
     P, b = c.throughput, c.batching
     text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
@@ -1551,6 +1565,11 @@ def _cell_note(c: ViewCell, col: str) -> str:
     if ixl.get("loopback_s"):
         text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
                  f"({ixl['loopback_method'] or 'method not recorded'})")
+    share = rtt_share(ixl)
+    if share is not None and share > RTT_DOMINATES:
+        text += (f"; separate verifier at {ixl['rtt_ms']:.3g} ms measured RTT: its {ixl['rounds']:.0f} round trips are {100 * min(share, 1):.0f}% of "
+                 f"the measured wall, so that wall is the network's; P is the formula at the 1 ms reference and cells are ranked on it, "
+                 f"never on measured total time")
     if c.provisional:
         text += f"; provisional: {c.provisional}"
     if c.legacy.finding:
@@ -2106,6 +2125,7 @@ def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),
         "loopback_moved_s": ix["loopback_s"], "inputs": P["instances"],
+        "rtt_share": rtt_share(ix), "rtt_dominated": bool((rtt_share(ix) or 0) > RTT_DOMINATES),
         "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / inputs",
     }
 
