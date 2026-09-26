@@ -91,6 +91,15 @@ impl Layout {
     }
     pub fn is_sha(self) -> bool { matches!(self, Layout::ShaBf16 | Layout::ShaFp8 | Layout::ShaFp4) }
     pub fn is_fp4(self) -> bool { matches!(self, Layout::Fp4 | Layout::ShaFp4) }
+    /// The row-leaf schema of the a / b trees (a file naming another is refused: NV3).
+    pub fn row_schema(self) -> &'static str {
+        match self {
+            Layout::Fp4 => "blake3-keyed/row-nvfp4/v1",
+            Layout::ShaFp4 => "sha256/row-nvfp4/v1",
+            Layout::ShaBf16 | Layout::ShaFp8 => "sha256/row/v1",
+            _ => "blake3-keyed/row/v2",
+        }
+    }
     /// Per-slot key / counter constants (the whole VU in one block).
     pub fn per_slot_keys(self) -> bool { matches!(self, Layout::Fp8 | Layout::Fp4) }
     pub fn row_bytes(self) -> usize { match self { Layout::Chunk(n) => 1024 * n as usize, Layout::ShaBf16 => 3072, Layout::Fp4 | Layout::ShaFp4 => 864, _ => 1536 } }
@@ -321,6 +330,41 @@ impl Instances {
     pub fn acc(&self, v: usize, j: usize) -> u32 {
         self.accs[v * self.units + j]
     }
+
+    /// The output word VU v's committed y word opens (the word the output regions check), `!0` when y opens none.
+    pub fn out_word(&self, v: usize) -> u32 {
+        out_of_y(&self.relation, self.y[v]).unwrap_or(!0)
+    }
+}
+
+/// The circuit output word a committed y word stands for: the fp8 relations commit the FP32 accumulator >> 10 (an
+/// E4M3 accumulator's low 10 bits are zero: B-Ligero's `fp8.relation.pack_public`), every other relation the word itself.
+pub fn out_of_y(relation: &str, y: u32) -> Option<u32> {
+    if relation.starts_with("fp8-") {
+        (y < 1 << 22).then_some(y << 10)
+    } else {
+        Some(y)
+    }
+}
+
+/// What both parties check of an (instances, netlist, layout) triple before any coin:
+/// - NV2: a netlist with the fp4-nvf4 scale inputs (608 input bits) pairs only with the fp4 layouts, and the reverse;
+/// - NV3: the a / b trees' row schema is the layout's pinned one;
+/// - NV1: every VU's circuit output word is the one its committed y word opens (the y root is built from y).
+pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String> {
+    if (net.n_in == 608) != lay.is_fp4() {
+        return Err(format!("NV2: a netlist with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
+    }
+    for t in ["a", "b"] {
+        let s = inst.header["schemas"][t].as_str().unwrap_or("");
+        if s != lay.row_schema() {
+            return Err(format!("NV3: tree {t} names row schema {s:?}; layout {lay:?} pins {:?}", lay.row_schema()));
+        }
+    }
+    if let Some(v) = (0..inst.vus).find(|&v| out_of_y(&inst.relation, inst.y[v]) != Some(inst.out[v])) {
+        return Err(format!("NV1: VU {v}'s output word {:#010x} is not the one its committed y word {:#x} opens", inst.out[v], inst.y[v]));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -647,6 +691,7 @@ pub struct PureStmt {
 
 impl PureStmt {
     pub fn new(net: UnitNet, vus: usize, lay: Layout) -> Self {
+        assert_eq!(net.n_in == 608, lay.is_fp4(), "NV2: {}-bit unit inputs under layout {lay:?}", net.n_in);
         let blocks_real = lay.blocks_per_vu() * vus;
         let nbl = log2ceil(blocks_real).max(3);
         let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units(), lay.unit_pos0());
@@ -713,6 +758,7 @@ impl PureStmt {
             h.update(b"layout fp8: block = VU, chunks 16+8, per-slot key/counter constants, c_in(0) = 0");
         }
         if lay.is_fp4() {
+            h.update(lay.row_schema().as_bytes());
             h.update(b"layout fp4-nvf4: block = VU, 864-byte nvfp4 rows (768 code bytes, 96 scale bytes), one chunk / chain per role, 24 units reading 32 code bytes and one scale word, c_in(0) = 0");
         }
         if lay.is_sha() {
@@ -992,12 +1038,12 @@ impl PureStmt {
             Region::AccOut => (match (self.lay, real) {
                 (_, false) => self.dummy_unit.0,
                 (Layout::Chunk(_), true) => p.acc[b],
-                (_, true) => inst.out[v],
+                (_, true) => inst.out_word(v),
             })
             .to_le_bytes()
             .to_vec(),
             Region::Y => {
-                let y = if !real { self.dummy_unit.1 } else if c + 1 == self.lay.blocks_per_vu() { inst.out[v] } else { p.y16[b] };
+                let y = if !real { self.dummy_unit.1 } else if c + 1 == self.lay.blocks_per_vu() { inst.out_word(v) } else { p.y16[b] };
                 (y as u16).to_le_bytes().to_vec()
             }
         }

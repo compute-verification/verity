@@ -169,7 +169,7 @@ impl StatementVerifier for PureVerifier {
         if let (Layout::Chunk(n), false) = (lay, st.net.epilogue()) {
             let n = n as usize;
             for v in 0..self.inst.vus {
-                if p.acc[n * v + n - 1] != self.inst.out[v] {
+                if p.acc[n * v + n - 1] != self.inst.out_word(v) {
                     return Err(format!("C4: VU {v}'s committed final accumulator is not its output word"));
                 }
             }
@@ -591,6 +591,34 @@ fn run_case(st: &Arc<PureStmt>, inst: &Arc<Instances>, name: &str, gpu: bool) ->
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"]})
 }
 
+/// NV1–NV3: an instance file or netlist pairing that admission must refuse (before any coin), each by its own check.
+fn admission_negatives(st: &PureStmt, inst: &Instances) -> Vec<Value> {
+    use flock_live::pure_block::admit;
+    let mut y_tampered = inst.clone();
+    y_tampered.y[0] ^= 1;
+    let mut relabelled = inst.clone();
+    let other = if st.lay.row_schema() == "blake3-keyed/row/v2" { "blake3-keyed/row-nvfp4/v1" } else { "blake3-keyed/row/v2" };
+    relabelled.header["schemas"]["a"] = json!(other);
+    let other_layout = if st.lay.is_fp4() { Layout::Fp8 } else { Layout::Fp4 };
+    let cases: [(&str, &str, Result<(), String>); 4] = [
+        ("admission_honest", "", admit(st.lay, &st.net, inst)),
+        ("y_word_differs_from_checked_output", "NV1", admit(st.lay, &st.net, &y_tampered)),
+        ("netlist_paired_with_other_layout_kind", "NV2", admit(other_layout, &st.net, inst)),
+        ("row_schema_relabelled", "NV3", admit(st.lay, &st.net, &relabelled)),
+    ];
+    cases
+        .into_iter()
+        .map(|(name, tag, r)| {
+            let pass = match (&r, tag) {
+                (Ok(()), "") => true,
+                (Err(e), t) => !t.is_empty() && e.starts_with(t),
+                _ => false,
+            };
+            json!({"case": name, "expect": if tag.is_empty() {"admit"} else {"refuse"}, "admitted": r.is_ok(), "why": r.err(), "pass": pass})
+        })
+        .collect()
+}
+
 fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
     let only = arg("--only", "");
     if !only.is_empty() {
@@ -629,6 +657,10 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
+    for v in admission_negatives(st, inst) {
+        all &= v["pass"] == true;
+        println!("NEG\t{v}");
+    }
     println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v2", "layout": format!("{:?}", st.lay), "relation": inst.relation, "vus": inst.vus, "m": st.m,
         "gpu": gpu, "all_pass": all}));
 }
@@ -645,6 +677,10 @@ fn main() {
     }
     assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
     let lay = Layout::of(inst.row_bytes, inst.units, inst.header["schemas"]["a"].as_str().unwrap_or("").starts_with("sha256/"));
+    if let Err(e) = flock_live::pure_block::admit(lay, &net, &inst) {
+        eprintln!("REFUSED\t{e}");
+        std::process::exit(2);
+    }
     let st = Arc::new(PureStmt::new(net, inst.vus, lay));
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
