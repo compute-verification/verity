@@ -2,8 +2,9 @@
 
 An unsalted leaf digest such as vllm-v1's position leaf or frame-v3's `sha256/row/v1` is a deterministic function of the value. Anyone
 holding the digest can search a low-entropy value, for example a token id, however zero-knowledge the proof over it is. `hm96-sha256/v1`
-is a leaf rule that wraps any SHA-256 leaf digest so that the published data hides the value statistically. Binding rests on the
-collision resistance of SHA-256 alone.
+is a leaf rule that wraps any SHA-256 leaf digest so that the published data hides the value, statistically given uniform salts
+(section 3; with the pinned key the bound holds except for a 2^-64 fraction of keys). Binding rests on the collision resistance of
+SHA-256 alone.
 
 - **Reference.** `verity.commitments.hm96`, stdlib only. `Hm96Sha256(base, key)` configures it over a `vllm-v1` configuration.
 - **Vectors.** `vectors.json`, written by `python -m verity.commitments.hm96.vectors`. `--check` exits nonzero if the file is stale.
@@ -80,11 +81,13 @@ bits gives `2^-k`, so 1024 bits give k = 127 per commitment. With the affine fam
 why the direct bound above is tighter.
 
 **What the bound needs:**
-- a salt per leaf from the operating system's generator, never reused: two leaves with one salt reveal `x ⊕ x'`;
-- salts that aren't expanded from a seed, since that makes hiding computational, resting on the generator;
+- uniform, independent salts, one per leaf and never reused: two leaves with one salt reveal `x ⊕ x'`;
 - a key independent of the salts.
 
-As everywhere in this repository, the operating system's generator is modelled as uniform.
+**Randomness.** Hiding is statistical given uniform salts. Real salts come from a cryptographic generator: the operating system's
+(`os.urandom`, itself a ChaCha20-based generator on Linux), or a stream seeded from it, such as a prover's ChaCha20 stream. The bound
+treats either as uniform, the modelling convention this repository uses everywhere; neither is a different assumption. What differs is
+custody: salts drawn per leaf are stored beside the values, and salts expanded from one seed are exposed together if that seed is.
 
 **Public:** the key, the commit string `b ‖ c` of every row a proof touches, the leaf digests and the tree. **Private:** the value,
 x and y. Opening a leaf reveals its value and salt. Salts are independent, so the bound still covers the unopened leaves.
@@ -110,6 +113,11 @@ Per leaf, the gadget takes the private value and salt:
 
 The verifier computes `tree_leaf(key, b ‖ c)` natively and checks the tree with the base scheme. `HidingLayout(inner, key)` is what the
 gadget and the statement check read: `inner`, `salt_layout` (SHA-256, `SALT_PREFIX`, 128 bytes) and `rows(key)` for the XOR network.
+
+**The key is the statement's, never a witness.** The gadget takes the key as a circuit constant, or as a public input the verifier
+checks against `scheme_digest`. A prover free to choose the key could solve `M_k'·y = b ⊕ x'` for a key k' (256 linear equations in
+1,279 unknowns) and open a committed `b ‖ c` to any `x'`. The leaf's key digest stops that only where the verifier recomputes the leaf
+with the key the circuit used.
 
 **Circuit cost beyond the unsalted inner digest:**
 - **c:** 3 private SHA-256 compressions. y fills two blocks, and the padding block follows. That is 3 × 22,696 = 68,088 ANDs.
@@ -155,10 +163,18 @@ A proof's own Merkle trees, such as Flock's Ligerito column trees, hide their un
 - the leaf is `tree_leaf`.
 
 Opening a column reveals the column and its salt. Lane flock-circuit's `flock-leaf/hm96-sha256` reserves exactly these sizes: a
-128-byte salt and a 160-byte key. Salts drawn from a seeded stream cipher, rather than from the operating system per salt, make the
-hiding computational in that generator (section 3).
+128-byte salt and a 160-byte key. Salts from the prover's seeded stream, like the operating system's, are modelled as uniform, so the
+leaves hide statistically given uniform salts (section 3). The key is fixed before the root and is never a witness (section 5).
 
 ## 8. Hashes
 
-Table 1 lists one hash, of class standard: SHA-256, for the inner digest, the salt digest and the leaf, under collision resistance.
-Hiding is statistical and rests on no hash property.
+Table 1 lists one hash, of class standard: SHA-256, for the inner digest, the salt digest and the leaf, under collision resistance
+(`cr/sha-256`).
+
+Hiding rests on no hash property. It is statistical given uniform salts, and its bound depends on the key:
+- a per-run uniform key: `N · 2^-256` for N leaves;
+- the pinned `DEFAULT_KEY`, which the vLLM committer uses: `N · 2^-192`, except for a `2^-64` fraction of keys. That condition is the
+  common-reference-string step of section 3.
+
+`verity.claims` names these as the guarantee `statistical-hiding` and the model `common-reference-string`. A Table 1 row that cites
+hm96 hiding under the pinned key cites both.

@@ -164,6 +164,16 @@ def test_fresh_randomness() -> None:
     assert hm96.check_key(k) == k and k != hm96.fresh_key()
 
 
+def test_the_claims_the_spec_cites_resolve() -> None:
+    from pathlib import Path
+
+    from verity import claims
+
+    spec = (Path(hm96.__file__).parent / "PROTOCOL.md").read_text(encoding="utf-8")
+    for cid, kind in (("statistical-hiding", "guarantee"), ("common-reference-string", "model"), ("cr/sha-256", "assumption")):
+        assert claims.get(cid).kind == kind and f"`{cid}`" in spec
+
+
 def test_hiding_bound() -> None:
     assert hm96.statistical_distance_log2(1) == -256
     assert hm96.statistical_distance_log2(1 << 64) == -192

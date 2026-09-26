@@ -16,8 +16,10 @@ unsalted leaf digest the port already defines (a vllm-v1 position leaf, a ``sha2
 ``b || c`` is the Halevi–Micali commit string: their first scheme with the affine universal family ``y -> M y + b``,
 applied to the digest ``x`` (their O(k) variant).  A backend proves ``b || c`` from the private value and salt and
 publishes it; the verifier computes the leaf natively.  In a circuit only ``c`` costs AND gates beyond the unsalted
-digest: ``M_key * y`` is XOR-only.  Binding rests on SHA-256's collision resistance alone, for any key; hiding is
-statistical (at most ``N * 2^-256`` for N leaves under one key, :func:`statistical_distance_log2`).
+digest: ``M_key * y`` is XOR-only, and the key is a circuit constant or a public input, never a witness.  Binding rests on
+SHA-256's collision resistance alone, for any key.  Hiding is statistical given uniform salts: at most ``N * 2^-256`` for N
+leaves under a uniform key, and under the pinned :data:`DEFAULT_KEY` ``N * 2^-192`` except for a ``2^-64`` fraction of keys,
+a common-reference-string step (:func:`statistical_distance_log2`; claims ``statistical-hiding``, ``common-reference-string``).
 """
 
 from __future__ import annotations
@@ -117,7 +119,7 @@ def fresh_key() -> bytes:
 
 
 def fresh_salt() -> bytes:
-    """One leaf's salt: 128 bytes from the operating system's generator, never reused, never expanded from a seed."""
+    """One leaf's salt: 128 bytes from the operating system's generator, never reused."""
 
     return os.urandom(SALT_BYTES)
 
