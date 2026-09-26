@@ -106,10 +106,10 @@ def test_template_units_are_read_off_the_ir():
     rope = TM.subcircuit("rope-head", D=64)
     U = IL.units(rope.definition())
     assert U.n == 32 and U.in_widths == [16] * 4 and U.out_widths == [16, 16]
-    assert U.inputs[5] == [5, 37, 69, 101] and U.outputs[5] == [5, 37]
+    assert U.in_src[5] == [("leaf", 5), ("leaf", 37), ("leaf", 69), ("leaf", 101)] and U.out_src[5] == [("ret", 5), ("ret", 37)]
     silu = TM.subcircuit("silu-mul", I=8192)
     U = IL.units(silu.definition())
-    assert U.n == 8192 and U.inputs[3] == [3, 8195] and U.outputs[3] == [3]
+    assert U.n == 8192 and U.in_src[3] == [("leaf", 3), ("leaf", 8195)] and U.out_src[3] == [("ret", 3)]
 
 
 def test_rope_unit_matches_its_primitives():
@@ -139,9 +139,13 @@ def _check_set(s: InputSet) -> int:
     sub = s.subcircuit
     low = REG.module(sub.template.id).lowering(sub)
     fin, want = IL.flat_ports(s, sub.inputs, 0, s.n), IL.flat_ports(s, sub.outputs, 0, s.n)
-    got, ok = low.evaluate(fin)
+    cuts = IL.cut_words(low, fin) if low.units.cut else None
+    got, cut_out, ok = low.evaluate(fin, cuts)
     assert ok == (1 << (s.n * low.units.n)) - 1
-    return int((got != want).any(axis=1).sum())
+    bad = (got != want).any(axis=1)
+    if cuts is not None:
+        bad |= (cut_out != cuts).any(axis=1)
+    return int(bad.sum())
 
 
 @pytest.mark.parametrize("name", ["rope-head-d64", "silumul-v1-i8192"])
@@ -183,15 +187,15 @@ def test_stage_writes_the_instance_file(tmp_path):
     import json
 
     h = json.loads(head)
-    assert h["format"] == IL.INSTANCES_FORMAT and h["units"] == 64 and h["in_words"] == 1 and h["out_words"] == 2
-    assert len(body) == 64 * (1 + 2) * 16
+    assert h["format"] == IL.INSTANCES_FORMAT and h["units"] == 64 and h["in_words"] == 1 and h["out_words"] == 1
+    assert len(body) == 64 * (1 + 1) * 16
     assert (tmp_path / "net.txt").read_text().startswith(IL.FORMAT)
     first = int.from_bytes(body[:16], "little")
     x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)[0]
     assert first == int(x[0]) | int(x[32]) << 16 | int(x[64]) << 32 | int(x[96]) << 48
     y = IL.flat_ports(s, s.subcircuit.outputs, 0, 1)[0]
     outs = body[64 * 16:]
-    assert [int.from_bytes(outs[16 * k:16 * k + 16], "little") for k in range(4)] == [int(y[0]), int(y[32]), int(y[1]), int(y[33])]
+    assert [int.from_bytes(outs[16 * k:16 * k + 16], "little") for k in range(2)] == [int(y[0]) | int(y[32]) << 16, int(y[1]) | int(y[33]) << 16]
 
 
 # --- negatives ---------------------------------------------------------------------------------------------------------------
@@ -201,7 +205,7 @@ def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied():
     x = np.arange(16, dtype=np.uint64)[None, :] * 0x101 + 0x3F00
     first_and = low.layout.in_words * IL.WORD
     for row in (first_and, first_and + 1000, low.layout.useful - 2):
-        _, ok = low.evaluate(x, flip=(row, 2))
+        _, _, ok = low.evaluate(x, flip=(row, 2))
         assert ok == ((1 << 4) - 1) & ~(1 << 2)
 
 
@@ -228,7 +232,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
         lay.rows_a[r] = saved
         return [int(x) for x in lo] != want[0] or [int(x) for x in hi] != want[1]
 
-    assert all(caught_after(lay.out_cols[j] * IL.WORD + b, toggle_const=True) for j in range(2) for b in (0, 7, 15))
+    assert all(caught_after(lay.out_col * IL.WORD + 16 * j + b, toggle_const=True) for j in range(2) for b in (0, 7, 15))
     assert sum(caught_after(r) for r in rng.sample(range(first_and, first_and + lay.counts["ands"]), 12)) >= 8
 
 

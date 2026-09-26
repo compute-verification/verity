@@ -54,12 +54,10 @@ impl IrUnitNet {
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
         let (useful, const_pos, in_words, n_in) = (n(2), n(3), n(4), n(5));
         let in_bits: Vec<usize> = (0..n_in).map(|i| n(6 + i)).collect();
-        let n_out = n(6 + n_in);
-        let (mut out_cols, mut out_bits) = (Vec::new(), Vec::new());
-        for i in 0..n_out {
-            out_cols.push(n(7 + n_in + 2 * i));
-            out_bits.push(n(8 + n_in + 2 * i));
-        }
+        let (out_col, out_words, n_out) = (n(6 + n_in), n(7 + n_in), n(8 + n_in));
+        let out_bits: Vec<usize> = (0..n_out).map(|i| n(9 + n_in + i)).collect();
+        let out_cols: Vec<usize> = (out_col..out_col + out_words).collect();
+        assert!(out_bits.iter().sum::<usize>() <= out_words * WORD);
         assert!(const_pos == useful - 1 && in_bits.iter().sum::<usize>() <= in_words * WORD);
         let (mut a, mut b) = (Vec::with_capacity(useful), Vec::with_capacity(useful));
         for _ in 0..useful {

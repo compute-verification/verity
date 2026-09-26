@@ -4,7 +4,7 @@
 The unit's ``flock-ir-unit/v1`` netlist does not depend on D (only the arrangement does) and is pinned by :data:`PIN`."""
 TEMPLATE = "rope-head"
 UNIT = "rope-head/neox-bf16/pair"
-PIN = "7156eb271a2aa1253f0f6f5d736db42c0d8b0d51d9dcef32d34b1f14b76c763a"
+PIN = "25d8e464dd56a99d65027d1f010ea0c29a5066679108854b73a5120bbcdbffb9"
 
 
 def definition(subcircuit):
