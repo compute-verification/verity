@@ -8,7 +8,7 @@
     python -m verity_numerical.bench.cell check    --cell cell.json --prover-run RUN [--verifier-run RUN] [--result FILE]
     python -m verity_numerical.bench.cell register --cell cell.json --prover-run RUN [--verifier-run RUN] [--dry-run]
 
-``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census instance set id (a
+``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census input set id (a
 backend's frozen set), an input-set directory, or an ``art:`` id of one (``input_sets``).  ``plan`` resolves the cell: the
 backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``bench.lowerings``: why
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the
@@ -92,8 +92,8 @@ class NotSupported(ValueError):
 
 def resolve_input_set(arg: str) -> dict[str, Any]:
     """A census frozen set (``kind = census``) or an input set (``kind = set``: a directory, or an ``art:`` id fetched)."""
-    if arg in CN.INSTANCE_SETS:
-        e = CN.INSTANCE_SETS[arg]
+    if arg in CN.INPUT_SETS:
+        e = CN.INPUT_SETS[arg]
         return {"kind": "census", "id": e.id, "subcircuit": e.subcircuit, "dataset": e.dataset, "tier": e.tier, "n": e.size,
                 "manifest_sha256": e.manifest_sha256, "source": e.provenance}
     art = None
@@ -105,7 +105,7 @@ def resolve_input_set(arg: str) -> dict[str, Any]:
             raise ValueError(f"research data fetch {arg}: {r.stderr.strip()[-300:]}")
         path = Path(r.stdout.strip().splitlines()[-1])
     if not path.exists():
-        raise ValueError(f"--input-set {arg!r}: not a census instance set ({sorted(CN.INSTANCE_SETS)}), a directory or an art: id")
+        raise ValueError(f"--input-set {arg!r}: not a census input set ({sorted(CN.INPUT_SETS)}), a directory or an art: id")
     s = IS.InputSet.open(path)
     return {"kind": "set", "id": s.name, "subcircuit": s.subcircuit.id, "path": str(s.path), "art": art, "n": s.n,
             "content_digest": s.content_digest, "manifest_sha256": s.manifest_sha256(), "source": s.source}
