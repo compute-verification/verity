@@ -197,6 +197,21 @@ def prepare(a) -> int:
             tar.addfile(info, io.BytesIO(data))
     (out / "bundle.tar").write_bytes(buf.getvalue())
     (out / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n")
+    from verity_numerical.bench import contract
+
+    m = contract.measurement
+    result = {
+        "schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+        "workload_fingerprint": {"workload": "sp1-ir-call.prepare", "subcircuit": manifest["relation"]["definition"], "B": hi - a.lo,
+                                 "instances": meta["set"], "object_digest": meta["object_digest"], "statement_sha256": meta["statement_sha256"],
+                                 "bundle_sha256": _sha256(buf.getvalue()), "source_sha": meta["source_sha"], "proof_class": "NO_PROOF"},
+        "validation": {"status": "passed", "checker": "IR oracle == recorded outputs; Python reference accepts honest, rejects every negative",
+                       "detail": "accepted", "evidence": ["meta.json"]},
+        "measurements": [m("lower_seconds", lower_s, "s"), m("gates", honest.gates, "count"), m("statement_bytes", len(honest.statement), "B"),
+                         m("witness_bytes", len(honest.witness), "B")],
+        "artifacts": ["bundle.tar", "meta.json"],
+    }
+    (out / "result.json").write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
     print(json.dumps({"bundle": str(out / "bundle.tar"), "bytes": len(buf.getvalue()), "sha256": _sha256(buf.getvalue()),
                       "instances": hi - a.lo, "gates": honest.gates, "statement_bytes": len(honest.statement),
                       "witness_bytes": len(honest.witness), "lower_seconds": round(lower_s, 3)}, indent=1))
