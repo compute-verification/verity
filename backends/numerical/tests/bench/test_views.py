@@ -148,10 +148,10 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
               B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None,
-              backend: str | None = None, proof_class: str | None = None) -> str:
+              backend: str | None = None, proof_class: str | None = None, joints: dict | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
-    doc = hashed(leaf, t_total=t_total, security=security)
+    doc = hashed(leaf, t_total=t_total, security=security, **({"joints": joints, "buckets": {"lookup": 0.1 * t_total}} if joints else {}))
     doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
     if setup is not None:
         doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
@@ -1062,3 +1062,27 @@ def test_blake3_xob_commits_keyed_blake3_bytes_so_it_is_a_circuit_of_one_scheme(
     assert sch["frame-v3/blake3-keyed"]["leaf_circuits"] == ["blake3", "blake3-xob"] and not any("xob" in k for k in sch)
     for s in sch.values():                                                     # each scheme's circuits commit one object
         assert len({leaf[c] for c in s["leaf_circuits"]}) <= (2 if s["id"] == "frame-v3/ajtai" else 1)
+
+
+def test_a_fused_stage_is_one_span_and_other_keeps_its_raw_value(store: LocalStore) -> None:
+    art = committed(store, "blake3", t_total=0.4, commit=0.6, joints={("witness", "encoding_commitment"): 0.2})
+    ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    r = next(x for x in ent["results"] if x["artifact"] == art)
+    spans = [p for p in r["phases"] if p["kind"] == "span"]
+    assert len(spans) == 1 and spans[0]["covers"] == ["witness", "encoding_commitment"]
+    assert (spans[0]["from"], spans[0]["to"]) == ("witness", "encoding_commitment")
+    assert not {"witness", "encoding_commitment"} & {p["id"] for p in r["phases"] if p["kind"] == "stage"}
+    assert r["other_raw"] is not None and sum(p.get("raw", p["value"]) for p in r["phases"]) == pytest.approx(r["overhead"]["value"], rel=1e-12)
+    rows3 = {x["result"]: x["cells"] for x in ent["tables"]["table3"]["rows"]}
+    assert rows3[r["id"]]["witness"].startswith("witness+encoding_commitment: ") and rows3[r["id"]]["encoding_commitment"] == T.JOINT_CONTINUATION
+
+
+def test_every_backends_best_is_kept_not_only_the_familys(store: LocalStore) -> None:
+    """Two backends of one family on one statement: both results are emitted; Table 2's cell stays the family's best."""
+    fast = committed(store, "blake3", t_total=0.1, commit=0.1)
+    slow = committed(store, "blake3", t_total=0.5, commit=0.5)
+    views = V.build(store)
+    assert [c.artifact for c in views.cells] == [fast]
+    one = V.best_per_key(views.admissible, lambda c: "B-interactive")
+    two = V.best_per_key(views.admissible, lambda c: "B-interactive" if c.artifact == fast else "B-other")
+    assert [c.artifact for c in one] == [fast] and sorted(c.artifact for c in two) == sorted([fast, slow])

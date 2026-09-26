@@ -1722,6 +1722,17 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
             for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
 
 
+def best_per_key(cells: Sequence[ViewCell], key: Callable[[ViewCell], str]) -> list[ViewCell]:
+    """Every admissible result, one per key (backend x statement x instance set x prover hardware): the highest ``P``, ties to
+    the lower artifact id.  Unlike Table 2's cell (each family's best), every backend's best is kept."""
+    best: dict[str, ViewCell] = {}
+    for c in cells:
+        k = key(c)
+        if k not in best or (-c.throughput["instances_per_second"], c.artifact) < (-best[k].throughput["instances_per_second"], best[k].artifact):
+            best[k] = c
+    return list(best.values())
+
+
 def configuration_records(V: Views) -> list[dict[str, Any]]:
     """The renderer's configurations as records, the input of :func:`backends` (an implementation detail: the entities render
     emits backends and statements, not configurations).  Each has its backend, variant, scheme, ZK class, soundness bits (the
@@ -1898,12 +1909,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
                             for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None}
 
-    per_backend: dict[str, ViewCell] = {}
-    for c in V.admissible:
-        k = result_key(c)
-        if k not in per_backend or (-c.throughput["instances_per_second"], c.artifact) < (-per_backend[k].throughput["instances_per_second"], per_backend[k].artifact):
-            per_backend[k] = c
-    results = [result_of(c) for c in per_backend.values()]
+    results = [result_of(c) for c in best_per_key(V.admissible, result_key)]
 
     table2_lines, footnotes = [], []
 
