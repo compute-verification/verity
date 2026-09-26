@@ -66,6 +66,9 @@ source $W/env.sh; cd "$REPO"
 export OMP_NUM_THREADS=$NT MKL_NUM_THREADS=$NT OPENBLAS_NUM_THREADS=$NT VY_CPU_THREADS=$NT
 export MALLOC_MMAP_MAX_=0 MALLOC_TRIM_THRESHOLD_=1000000000000 LIGERO_GPU_STRICT=1 LIGERO_GRAPH_STRICT=1
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+# the warm-up sub-batch's host gen_step cross-check is minutes of Python per folded sub-batch; the relation's gadget gate runs it,
+# the prover's constraint self-check on the warm-up sub-batch stays on
+export LIGERO_REFERENCE_HINTS=${LIGERO_REFERENCE_HINTS:-0}
 V=$W/bin/ligero-verify
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | tee $RD/gpu.txt
 SETARGS=(); CAP=""
