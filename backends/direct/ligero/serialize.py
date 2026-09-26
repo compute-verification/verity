@@ -867,6 +867,31 @@ def read_proof(data: bytes, fp_shape: tuple | None = None):
     return pf
 
 
+def read_proof_head(data: bytes):
+    """The head of a proof file -- coin commitments, coins, root and the test message (w, h, q, v) -- without reading the
+    opened columns or the paths behind it: what the live verifier's per-proof checks compare (the Rust verifier reads the
+    whole file).  ``ValueError`` on a truncated or foreign head."""
+    from types import SimpleNamespace
+
+    from .protocol import Coins
+    r = _R(data)
+    magic = r.take(8)
+    if magic not in (PROOF_MAGIC, PROOF_MAGIC_V2, PROOF_MAGIC_V3):
+        raise ValueError("not a ligero-proof/v1, /v2 or /v3 file")
+    _hid, has_coins, has_v, has_q = r.u8(), r.u8(), r.u8(), r.u8()
+    D, w_len, h_len, q_len, v_len, _M, _t, _depth = (r.u32() for _ in range(8))
+    cc = coins = None
+    if has_coins:
+        c1, c2, r1, s1, r2, s2 = (r.take(32) for _ in range(6))
+        cc, coins = (c1, c2), Coins(r1, s1, r2, s2)
+    root = r.take(32)
+    w = r.arr((D, w_len), "<u4")
+    h = r.arr((D, h_len), "<u4")
+    q = r.arr((D, q_len), "<u4") if has_q else None
+    v = r.arr((D, v_len), "<u4") if has_v else None
+    return SimpleNamespace(magic=magic, coin_commit=cc, coins=coins, root=root, w=w, h=h, q=q, v=v, fp=None)
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # The Python verifier on files (the cross-check)
 # ---------------------------------------------------------------------------------------------------------------------

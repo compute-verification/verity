@@ -70,7 +70,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .serialize import proof_buffers, proof_bytes, read_proof, read_statement
+from .serialize import proof_buffers, proof_bytes, read_proof, read_proof_head, read_statement
 
 try:
     from . import protocol as pm
@@ -1649,7 +1649,8 @@ class Session(threading.Thread):
 
         def check(pf_bytes, cc, root, tests, fp_shape_=None, fp_sent=None):
             try:
-                pf = read_proof(pf_bytes, fp_shape=fp_shape_) if fp_shape_ is not None else read_proof(pf_bytes)
+                # the head is all these checks read (a pair's G carries its fingerprints behind the openings: read in full)
+                pf = read_proof(pf_bytes, fp_shape=fp_shape_) if fp_shape_ is not None else read_proof_head(pf_bytes)
             except ValueError as e:
                 return f"unreadable proof: {e}"
             if pf.coin_commit is None or pf.coins is None:
