@@ -4,7 +4,7 @@
 # them and the lowering against the verifier pod's, then `flock-ir-frame replay` every accepted session, plus tampered-record
 # negatives that must be rejected.
 #   inputs/$TAG.tgz (out/verifier minus instance files)  inputs/$TAG.sha256 (its instance files)  inputs/set-$TAG.tgz (the set)
-#   TEMPLATE=rope-head PER=1024 NEG=p1-256/sessions-s0
+#   TEMPLATE=rope-head PER=1024 NEG=p1-256/sessions-s0  [SRC_RANGE=lo:hi WANT_DIGEST=<cell set's content digest>: the set sent is the source]
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-ir-replay}; W=/workspace/verify-flock-ir; mkdir -p $W
@@ -22,6 +22,12 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
 SD=$W/set-$TAG; rm -rf $SD; mkdir -p $SD; tar xzf $RD/inputs/set-$TAG.tgz -C $SD
 SET=$(dirname $(find $SD -name manifest.json | head -1))
+if [ -n "${SRC_RANGE:-}" ]; then  # the cell's set is a subset of the sent source set: cut it here (input_sets.subset) and check its digest
+  python3 -c "import sys;from verity_numerical.bench import input_sets as I;lo,hi=map(int,sys.argv[2].split(':'));p=I.subset(sys.argv[1],sys.argv[3],lo,hi);s=I.InputSet.open(p);print(s.content_digest);print(p)" $SET $SRC_RANGE $W/sub-$TAG > $O/subset.txt || exit 1
+  echo "subset $SRC_RANGE of $(python3 -c "import sys;from verity_numerical.bench import input_sets as I;print(I.InputSet.open(sys.argv[1]).content_digest)" $SET): content digest $(head -1 $O/subset.txt), want ${WANT_DIGEST:-?}" | tee -a $O/stage.txt
+  [ -z "${WANT_DIGEST:-}" ] || [ "$(head -1 $O/subset.txt)" = "$WANT_DIGEST" ] || { echo "subset digest differs from the cell's set"; exit 1; }
+  SET=$(tail -1 $O/subset.txt)
+fi
 I=$W/inst-$TAG; rm -rf $I; mkdir -p $I
 python3 - "$TEMPLATE" "$SET" "$S" "$I" "$PER" <<'PY' | tee $O/stage.txt || exit 1
 import hashlib, json, os, sys
