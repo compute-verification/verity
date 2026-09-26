@@ -249,6 +249,25 @@ def test_a_source_tree_that_predates_custody_is_refused(tmp_path):
 def test_custody_flags_need_on(capsys):
     assert cli.main(["run", "--custody-r2", "--", "true"]) == 2
     assert "--custody-r2 / --custody-ttl are for --on" in capsys.readouterr().err
+    assert cli.main(["run", "--on", "m", "--project", "p", "--no-custody-r2", "--custody-ttl", "8h", "--", "true"]) == 2
+    assert "--no-custody-r2 mints none" in capsys.readouterr().err
+
+
+def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, monkeypatch, capsys):
+    seen: list = []
+
+    def launch(**kw):
+        seen.append(kw["custody_ttl"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+    monkeypatch.setattr(remote, "launch", launch)
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p"]
+    assert cli.main([*base, "--", "true"]) == 0
+    assert cli.main([*base, "--custody-ttl", "12h", "--", "true"]) == 0
+    assert cli.main([*base, "--custody-r2", "--", "true"]) == 0
+    capsys.readouterr()
+    assert cli.main([*base, "--no-custody-r2", "--", "true"]) == 0
+    assert seen == ["6h", "12h", "6h", None]
+    assert "--no-custody-r2: this run's records stay on the machine" in capsys.readouterr().err
 
 
 def test_a_refused_claim_deletes_the_staged_key(tmp_path):

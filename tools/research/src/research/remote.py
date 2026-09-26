@@ -1113,14 +1113,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if custody_ttl:
             if not knows_custody(source_tool_package(source)):
                 raise Refused(f"--custody-r2: the research package in {source} predates run custody (no research/store/custody.py); "
-                              f"the machine would not publish it.  Commit a tree that has it, or drop --custody-r2")
+                              f"the machine would not publish it.  Commit a tree that has it, or pass --no-custody-r2")
             from .store import credentials as C
             from .store import custody as CU
 
             try:
                 custody_pub, custody_files = CU.mint_for_machine(custody_ttl)
             except C.MintError as e:
-                raise Refused(f"--custody-r2: cannot mint the machine's key here: {e}") from None
+                raise Refused(f"--custody-r2: cannot mint the machine's key here: {e} (the parent key: the Cursor secrets, or source "
+                              f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
         tgt = pod_target(m)
         ssh = ssh_argv(tgt["host"], tgt["port"])
