@@ -193,15 +193,17 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 
 ## 6. Zero knowledge (planned; not yet proved)
 
-The masked protocol and the reference prover are in DESIGN.md §6.
+The masked protocol and the reference prover are in DESIGN.md §6; the analysis of concurrent sessions is DESIGN.md §11.
 
-**Targets.** Two simulation theorems for the interactive mode:
+**The target** (Daniel, 2026-09-26): zero knowledge against a malicious verifier, including many concurrent sessions. The
+verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
+fallback anywhere.
 
-1. **Honest-verifier ZK, statistical given uniform masks.** A simulator produces transcripts distributed like real ones,
-   up to a statistical term, from the public statement alone (the circuit, the roots and the public parameters).
-2. **ZK against a malicious verifier, with the verifier's coin seed committed at step 0.** The verifier's coins are
-   fixed by its commitment before the first prover message. So it suffices to simulate for every fixed coin sequence
-   ("special" honest-verifier ZK), together with the commitment's binding.
+- **The lemma it rests on:** special honest-verifier ZK of masked Flock. That is a simulator, from the public statement
+  alone, for every fixed coin sequence: VEIL's notion, and the first zero-knowledge theorem to prove.
+- **Keeping a malicious verifier from choosing coins adaptively, across concurrent sessions.** DESIGN.md §11 recommends
+  global serialization now: per-round coin commitments and a Goldreich–Kahan simulator, collision resistance only, no
+  setup. If concurrency is required, it recommends a Prabhakaran–Rosen–Sahai preamble. **Decision, with Daniel.**
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
@@ -209,8 +211,8 @@ The masked protocol and the reference prover are in DESIGN.md §6.
   from the operating system and ChaCha; their quality is trusted.
 - **Leaf hiding.** Halevi–Micali leaves are statistically hiding (`N·2^-256` for N leaves with a fresh key, §7) and
   binding under collision resistance of their hash, SHA-512 in the adopted variant.
-- **Binding of the coin-seed commitment**, under SHA-256 collision resistance. This is needed for malicious-verifier ZK
-  only. Against quantum verifiers it needs a wider, collapse-binding commitment (DESIGN.md §9).
+- **Binding of the verifier's coin commitments** (HM96, per round, at step 0), under collision resistance of their hash.
+  Against quantum verifiers it needs a wider, collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
   AHIV22 Lemma 4.15 condition). This is to be proved, not assumed.
 
@@ -225,8 +227,9 @@ The weights are committed once and every later proof opens that root. The analys
   weights.
 - **Hiding** is fixed by the leaf count, not by the number of proofs. **Design change:** draw the root's key at
   commitment, and never reuse salts.
-- **Zero knowledge** composes sequentially. Concurrent sessions against a malicious verifier are not covered.
-  **Decision, with Daniel:** serialize sessions, take coins from a public beacon, or scope it out.
+- **Zero knowledge** must hold against a malicious verifier across concurrent sessions (§6). DESIGN.md §11 recommends
+  global serialization now, and a Prabhakaran–Rosen–Sahai preamble if concurrency is required. **Decision, with
+  Daniel.**
 - **Statement leakage** accumulates over sessions. **Policy needed:** which predicates are public, and how many.
 - **Linkability** is intended, and it needs knowledge soundness (§1.3).
 
@@ -256,6 +259,7 @@ The weights are committed once and every later proof opens that root. The analys
    registered data and for recursion's outer proof.
 6. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-7. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec.
+7. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
+   honest-verifier ZK lemma, then the malicious-verifier layer DESIGN.md §11 settles on.
 8. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

@@ -346,9 +346,11 @@ has 150–200 rounds.
 
 **Zero knowledge against quantum verifiers.**
 
-- **Honest-verifier ZK is unaffected.** The view is classical and statistically close to the simulation, and
-  statistical distance bounds quantum distinguishers too. Halevi–Micali hiding, masks and padding are statistical.
-- **Malicious-verifier ZK needs quantum rewinding** of a verifier whose state may be quantum.
+- **The special honest-verifier ZK lemma (§11) is unaffected.** For fixed coins the view is classical and
+  statistically close to the simulation, and statistical distance bounds quantum distinguishers too. Halevi–Micali
+  hiding, masks and padding are statistical.
+- **Malicious-verifier ZK with a rewinding simulator** (§11's (a) and (d)) needs quantum rewinding of a verifier whose
+  state may be quantum. The straight-line options, a beacon or registered keys, avoid it.
   - The closest result: Lombardi–Ma–Spooner (FOCS 2022) prove Goldreich–Kahan, where the verifier commits to its
     challenges first, post-quantum ZK. It needs the verifier's commitment to be collapse-binding and statistically
     hiding.
@@ -404,14 +406,8 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
   `2^-64` fraction of keys.
   - **Design change:** draw the root's key at commitment, never reuse salts, and keep the salts as secret as the
     weights.
-- **Zero knowledge.** Honest-verifier ZK composes sequentially and concurrently, with errors adding. Malicious-verifier
-  ZK with the step-0 seed composes sequentially, by a hybrid.
-  - Simultaneous sessions against a malicious verifier are not covered. The simulator rewinds each session to learn its
-    seed, and interleaving defeats that; black-box concurrent ZK needs Ω̃(log n)-round preambles or setup.
-  - **Decision**, one of:
-    - serialize sessions (globally, if one party can hold many verifier identities);
-    - take coins from a public beacon, which is slower and puts soundness on the beacon;
-    - scope it out.
+- **Zero knowledge** must hold against a malicious verifier, including concurrent sessions (Daniel, 2026-09-26). §11
+  weighs the options and recommends one.
 - **Statement leakage accumulates, and ZK doesn't bound it.** N sessions reveal N statements: workload shapes, timing,
   the shared root, and each proved predicate's truth.
   - Weights never appear, and outputs stay committed.
@@ -423,3 +419,95 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
   - **Knowledge soundness:** a statistically hiding leaf opens to essentially any row. So "these proofs used the
     registered weights" (even one proof) needs each proof's committed witness extracted, then Halevi–Micali binding.
     That is knowledge soundness (§3), and the circuit-privacy design's composition theorem needs it too.
+
+## 11. Zero knowledge against a malicious, concurrent verifier
+
+**The target.** Daniel, 2026-09-26: the verifier is malicious (two nations checking each other), so honest-verifier zero
+knowledge is not an acceptable fallback anywhere. The target is zero knowledge against a malicious verifier, including
+many concurrent sessions.
+
+**The lemma every option uses** is special honest-verifier ZK (SHVZK): a simulator for every fixed coin sequence.
+
+- VEIL proves exactly that for its compiler: a simulator whose output equals the real view "for any value of verifier
+  randomness" (perfect; Lemma 4.3). Its footnote names the notion "semi-malicious", and Succinct has machine-checked
+  the paper's statements in Lean.
+- Masked Flock (M1, VEIL-style) must keep that property on binary fields:
+  - every leaked GF(2^128) value needs 128 uniform mask bits whose weights span;
+  - ring switching must be covered;
+  - adversarial out-of-domain points or repeated query positions must not reveal more than the padding covers.
+
+  So the prover must reject degenerate coins, as VEIL's generators exclude a zero mask coefficient.
+- What remains is stopping the verifier from choosing coins adaptively, and simulating without rewinding across
+  sessions.
+
+**(a) Serialize all sessions.**
+
+- **Zero knowledge.** Coins are committed per round with HM96 at step 0, and a Goldreich–Kahan simulator makes one
+  extraction run, then one rewind. Sequential composition of auxiliary-input zero knowledge (Goldreich–Oren 1994)
+  covers session after session. Collision resistance only, no setup.
+- **Cost.** One session at a time, each about 220 round trips (live, per the scoping estimate).
+  - With the counterparty's coin server co-located with the prover (sub-millisecond round trips, as Phase B plans),
+    that is 0.1–0.2 s per session, negligible next to proving.
+  - Across a border (50–150 ms round trips) it is 11–33 s per session. Each session must then carry many tables in
+    lockstep, up to a whole run's (the batch is bounded by prover memory), or throughput falls by the idle fraction.
+- **Identities.** A counterparty can defeat per-identity serialization by running sessions under several identities and
+  pooling their views. So serialization must be global: at most one session at a time with anyone who could collude with
+  the counterparty, which in a bilateral setting means everyone.
+
+**(b) Coins from a joint public beacon.**
+
+- **Zero knowledge: yes, straight-line.** If every coin comes from a beacon that releases its values on schedule
+  whatever the prover sends, the verifier chooses nothing. The simulator waits for the values and runs the SHVZK
+  simulator. There is no rewinding, so concurrency costs nothing, and quantum verifiers are covered as well.
+- **The beacon must not be the counterparty's.** One that can hold back a value until it has seen the prover's message
+  forces rewinding again, and one the prover controls breaks soundness. "Joint" therefore means a third party or a
+  threshold of them (drand's League of Entropy), or a VDF beacon.
+- **Soundness then assumes:**
+  - each round's bytes are recorded before that round's beacon value is released (the verifier's clock);
+  - the beacon is unpredictable to the prover and unbiasable by it. For drand, that means fewer than a threshold of its
+    members collude with the prover, plus BLS unforgeability over pairings: not collision resistance, and not
+    post-quantum.
+- **Cost.** Rounds pace to the beacon period: about 11 minutes per table at drand's 3 s.
+- **Side effect.** With trusted timestamps, transcripts become transferable evidence rather than deniable ones. The
+  weights stay hidden either way.
+
+**(c) A straight-line-extractable coin commitment.**
+
+- **Encryption to a key the simulator holds.** In the common-reference-string model, that key is a trapdoor someone
+  generated: trusted setup, excluded.
+- **Registered verifier keys** (the bare public-key model, Canetti–Goldreich–Goldwasser–Micali 2000).
+  - Each verifier registers a public key once, with a proof of knowledge of its secret key. It then encrypts its
+    per-round coins under that key, with perfectly binding encryption opened round by round.
+  - The simulator extracts the secret key once, at registration, and afterwards decrypts every session's coins
+    straight-line, so concurrency costs nothing.
+  - There is no trusted party, but there is a public-key assumption (LWE, for post-quantum) and a registration phase
+    before sessions.
+- **The observable random-oracle model** (Pass 2003; Canetti–Jain–Scafuro 2014). The verifier commits with HM96 as
+  today, and the simulator reads the coins off the verifier's SHA-512 queries. It is hash-only and setup-free, but zero
+  knowledge then rests on the random-oracle model (soundness is unchanged), and quantum queries cannot be observed.
+
+**(d) Standard concurrent-ZK techniques.**
+
+- **Commitment first.** Public-coin protocols like Flock's cannot be black-box concurrent ZK as they stand
+  (Pass–Tseng–Wikström 2009). Committing the verifier's coins first, as in (a), is the necessary first step.
+- **Prabhakaran–Rosen–Sahai (2002).** A preamble of ω(log n) slots after the coin commitments lets a recursive rewinding
+  simulator extract every session's coins in polynomial time. It needs collision resistance only and no setup, and
+  gives real concurrency. The cost is a few dozen extra round trips, and a simulator whose proof and concrete bounds
+  are heavy: a large formalization.
+- **The timing model (Dwork–Naor–Sahai 1998).** Bounded delays and prover-imposed time-outs keep sessions from nesting.
+  It needs collision resistance plus a timing assumption, and is paid for in latency.
+- **Non-black-box simulation (Barak 2001)** is impractical here.
+
+**Recommendation,** under Daniel's constraints (collision resistance only where possible, no trusted setup, a malicious
+verifier):
+
+1. **Now: (a), global serialization.** Co-locate the counterparty's coin server with the prover, and batch a run's
+   tables into one session in lockstep. It needs only collision resistance (the HM96 coin commitments) and the
+   Goldreich–Kahan simulator already planned. The cost is operational.
+2. **If concurrency is required: (d), a Prabhakaran–Rosen–Sahai preamble.** It is the only option that keeps collision
+   resistance only and no setup while allowing real concurrency. The price is extra rounds and a much harder proof.
+3. **Otherwise:** (c) with registered keys is the cleanest concurrent option, if Daniel accepts one public-key
+   assumption. (b) fits only if both nations accept a third-party beacon for soundness. Both are straight-line, so they
+   also sidestep quantum rewinding (§9), which (a) and (d) would need.
+
+All four rest on the SHVZK lemma for masked Flock, which is the first zero-knowledge theorem to prove.
