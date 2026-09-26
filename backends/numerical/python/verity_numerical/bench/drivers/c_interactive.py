@@ -3,6 +3,9 @@
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
 writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
 
+The netlist statement (``nl:<template>``, ``verity/flock-netlist/v1``, planned with ``--relation nl:<template>``) runs
+``backends/flock/pod/61-netlist-cell.sh`` the same way (``verity_flock.netlist_bench``; the verifier stages only its public files).
+
 An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``backends/flock/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
 ``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
@@ -25,6 +28,10 @@ RESULT = "result.json"
 SCRIPT = "backends/flock/pod/30-cell.sh"
 IR_SCRIPT = "backends/flock/pod/33-ir-cell.sh"
 IR_PREFIX = "irf:"
+NL_SCRIPT = "backends/flock/pod/61-netlist-cell.sh"
+NL_PREFIX = "nl:"
+#: relations other than the template module's that ``cell plan --relation`` may name
+RELATIONS = (NL_PREFIX,)
 
 
 def set_tarball(cell) -> str:
@@ -41,18 +48,18 @@ def set_tarball(cell) -> str:
     return str(out)
 
 
-def ir_jobs(cell) -> list[dict]:
+def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
     if cell.input_set.get("kind") != "set":
         raise ValueError("an IR template cell runs on an input set (directory or art: id), not a census frozen set")
     tar = set_tarball(cell)
-    common = [f"TEMPLATE={cell.relation[len(IR_PREFIX):]}", f"POINTS={cell.points}", f"RUNS={cell.runs}",
+    common = [f"TEMPLATE={cell.relation.split(':', 1)[1]}", f"POINTS={cell.points}", f"RUNS={cell.runs}",
               *([f"PER={cell.per_proof}"] if cell.per_proof else []), *([f"ART={cell.input_set['art']}"] if cell.input_set.get("art") else [])]
     operator = f"OPERATOR={cell.lane}-verifier-pod"
     return [
         {"role": "verifier", "pod": cell.verifier, "stage": "flock.ir-cell.verifier", "send": [tar],
-         "command": ["bash", IR_SCRIPT, "ROLE=verifier", *common, operator]},
+         "command": ["bash", script, "ROLE=verifier", *common, operator]},
         {"role": "prover", "pod": cell.prover, "stage": "flock.ir-cell.prover", "send": [tar],
-         "command": ["bash", IR_SCRIPT, "ROLE=prover", *common, f"VERIFIER={cell.verifier_addr}", f"RTT_TARGET={cell.rtt_target}", "LOOPBACK=1",
+         "command": ["bash", script, "ROLE=prover", *common, f"VERIFIER={cell.verifier_addr}", f"RTT_TARGET={cell.rtt_target}", "LOOPBACK=1",
                      operator, *cell.backend_args]},
     ]
 
@@ -66,6 +73,8 @@ def unmet(cell) -> str | None:
 
 
 def jobs(cell) -> list[dict]:
+    if cell.relation.startswith(NL_PREFIX):
+        return ir_jobs(cell, NL_SCRIPT)
     if cell.relation.startswith(IR_PREFIX):
         return ir_jobs(cell)
     send = [set_tarball(cell)] if cell.input_set.get("kind") == "set" else []
@@ -88,7 +97,7 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
         raise ValueError("C-interactive registers under the producing lane: the cell has no lane")
     cmd = [sys.executable, "-m", "verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
            "--out", str(out)]
-    if cell.relation.startswith(IR_PREFIX):
+    if cell.relation.startswith(IR_PREFIX) or cell.relation.startswith(NL_PREFIX):
         cmd += ["--verifier-binary", ir_binary(prover_run)]
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
 

@@ -119,8 +119,10 @@ def resolve_input_set(arg: str) -> dict[str, Any]:
             "content_digest": s.content_digest, "manifest_sha256": s.manifest_sha256(), "source": s.source}
 
 
-def plan(backend: str, statement: str, input_set: str, prover: str, **kw: Any) -> Cell:
-    """Resolve and check a cell and its jobs; raises :class:`NotSupported` with the reason when it cannot run."""
+def plan(backend: str, statement: str, input_set: str, prover: str, relation: str | None = None, **kw: Any) -> Cell:
+    """Resolve and check a cell and its jobs; raises :class:`NotSupported` with the reason when it cannot run. ``relation``
+    names another of the family's statements of the same subcircuit and scheme than the template module's (the driver must
+    know it: ``RELATIONS``)."""
     family = family_of(backend)
     sid, scheme = split_statement(statement)
     sub = TM.parse_subcircuit_id(sid)
@@ -136,7 +138,9 @@ def plan(backend: str, statement: str, input_set: str, prover: str, **kw: Any) -
     if ref["kind"] == "set" and LW.registry(family).stage(sub) is None:
         raise NotSupported(f"{family}'s {sub.template.id} lowering has no stage(): its scripts regenerate their own frozen set, so "
                            f"it runs on a census set only, not on input set {ref['id']}")
-    cell = Cell(backend, family, statement, sub.id, scheme, ref, LW.registry(family).relation(sub, scheme), prover, **kw)
+    if relation is not None and not any(relation.startswith(r) for r in getattr(drv, "RELATIONS", ())):
+        raise NotSupported(f"{backend}'s driver runs no relation {relation!r} (its RELATIONS: {getattr(drv, 'RELATIONS', ())})")
+    cell = Cell(backend, family, statement, sub.id, scheme, ref, relation or LW.registry(family).relation(sub, scheme), prover, **kw)
     if drv.INTERACTIVE and not (cell.verifier and cell.verifier_addr):
         raise NotSupported(f"{backend} is interactive: the protocol puts its verifier on a separate pod (--verifier, --verifier-addr)")
     if drv.INTERACTIVE and cell.verifier == cell.prover:
@@ -377,6 +381,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--per-proof", type=int, default=None)
     p.add_argument("--backend-arg", action="append", default=[], help="an extra argument for the backend's prover script")
     p.add_argument("--placement", default=None, help="JSON {prover, verifier, link}: the pods' identities (default: the RunPod API)")
+    p.add_argument("--relation", default=None, help="another of the family's statements than the template module's (the driver's RELATIONS)")
     p.add_argument("--out", default="cell.json")
     for name in ("run", "check", "register"):
         q = sp.add_parser(name)
@@ -395,7 +400,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     a = ap.parse_args(list(argv) if argv is not None else None)
     if a.cmd == "plan":
         try:
-            cell = plan(a.backend, a.statement, a.input_set, a.prover, verifier=a.verifier, verifier_addr=a.verifier_addr,
+            cell = plan(a.backend, a.statement, a.input_set, a.prover, relation=a.relation, verifier=a.verifier, verifier_addr=a.verifier_addr,
                         rtt_target=a.rtt_target, campaign=a.campaign, lane=a.lane, points=a.points, runs=a.runs, per_proof=a.per_proof,
                         backend_args=a.backend_arg, placement=json.loads(Path(a.placement).read_text()) if a.placement else {})
         except NotSupported as e:
