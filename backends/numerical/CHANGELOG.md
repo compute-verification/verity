@@ -10,6 +10,31 @@
 - Both are `Rules` fields, off in `SPEC`. The published render and parity are unchanged. Daniel decides both; the previews
   render beside the published JSON in the notes' `renders/previews/`.
 
+## 2026-09-26: the per-workload headline
+
+- **What:** for each census workload and each backend, the share of the served run's native work that published, cleared
+  cells cover, and the work-weighted overhead over that share (`bench.headline`). It renders as the "Workload headline"
+  section after Table 3, and as `workload_headline` in the entities JSON. It is absent under the legacy rules. Existing
+  tables, the raw views JSON and parity are byte-identical.
+- **Units and native work:** units come from the workload's template mix (VUs × subcircuits per VU, per bound subcircuit).
+  Native seconds come from each template's census work model on the served hardware line, in two bases, as sp1-evaluator's
+  cover summary stated them:
+  - tensor-peak GEMM: GEMM-like templates at the dense tensor-core peak, everything else memory-bound;
+  - all memory-bound: a GEMM coordinate reads its weight row.
+- **Coverage:** a subcircuit counts as covered only when the backend has an admissible result on exactly that subcircuit
+  (template and bound parameters, semantics included). The result must be cleared (not provisional, no open finding) and
+  its prover must have run on the served hardware. Overhead = the covered units' proving time (units ÷ the highest P) ÷
+  their native time.
+- **Uncovered and unmodelled:** uncovered subcircuits are listed with the reason: no census subcircuit, no result, results
+  only on other hardware, or not cleared. Nothing is imputed. A template with no work model in a basis is listed and left
+  out of both sums.
+- **Intervals:** attention's key count is known only to its block (`NB`, `last`), so native work, shares and overheads are
+  intervals.
+- **Census:** L40S memory bandwidth (864 GB/s) is added. Byte models are added for `attention-head`,
+  `gumbel-top-p-token-select`, `token-select-greedy`, `embedding-row`, `gemm-coordinate` (`K*BITS//8`), the MoE expert
+  coordinates, `moe-sum`, `scaled-mm-fp8-block-coordinate`, `bias-add` and `bf16-mul-scalar`. Attention's
+  `variable_bounds` is added, and the entities census now includes `workloads`. `moe-router-topk` has no byte model yet.
+
 ## 2026-09-26: non-GEMM statement rows, with native N from a memory-bandwidth work model
 
 - **Statements:** a result whose subcircuit is another template (its `bench.cell` stamp, or the fingerprint's
