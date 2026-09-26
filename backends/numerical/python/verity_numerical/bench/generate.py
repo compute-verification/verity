@@ -85,9 +85,10 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
         while len(kept) < n:
             if j >= limit:
                 raise RuntimeError(f"{sub.id}: {len(kept)} of {n} draws admitted after {j} (the sampler leaves the domain too often)")
-            want = n - len(kept)
-            span = max(chunk, want + want // 8 + 1) if pool is None else chunk * procs
-            ranges = [(a, min(j + span, a + chunk)) for a in range(j, j + span, chunk)]
+            need = (n - len(kept)) + (n - len(kept)) // 8 + 1
+            per = chunk if pool is None else max(1, min(chunk, -(-need // procs)))
+            span = max(per, need) if pool is None else per * procs
+            ranges = [(a, min(j + span, a + per)) for a in range(j, j + span, per)]
             results = list(pool.map(_chunk, ranges)) if pool is not None else [_chunk(r) for r in ranges]
             for (a, _b), (draws, outs) in zip(ranges, results):
                 ok = sub.admitted(outs)
