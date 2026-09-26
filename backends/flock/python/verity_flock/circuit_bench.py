@@ -208,7 +208,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
           *([{"name": "live.tcp_connect_rtt_ms", "value": a.tcp["median_ms"], "unit": "ms"}] if getattr(a, "tcp", None) else []),
           *([{"name": "live.loopback_round_seconds", "value": p["loopback"]["seconds_per_round"], "unit": "s"}]
             if p.get("loopback", {}).get("seconds_per_round") else []),
-          {"name": "live.prover_compute_seconds", "value": t_e2e - med("wait_s"), "unit": "s"},
+          {"name": "live.prover_compute_seconds", "value": statistics.median(r["e2e_s"] - r["wait_e2e_s"] for r in timed), "unit": "s"},
           contract.measurement("transcript.bytes", int(first["wire_sent"]) + int(first["wire_recv"])),
           contract.measurement("verify.wall_s", statistics.median(r["verdict"]["verify_s"] for r in timed)),
           {"name": "proof.bytes", "value": sum(first["proof_bytes"]), "unit": "B"},
@@ -233,10 +233,12 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                            "loopback_method": p.get("loopback", {}).get("method"), "verifier_operator": a.operator or None,
                            "t_total_includes_wait": True,
                            "t_total_note": "live coins: t.total and the buckets include the prover's coin waits; prover compute alone is "
-                                           "live.prover_compute_seconds = t.total - net.wait_seconds"},
+                                           "live.prover_compute_seconds = e2e_s - wait_e2e_s per timed session (the waits inside the "
+                                           "e2e window), median; net.wait_seconds also counts the proof uploads and the verdict after it"},
            "protocol": {"warm": True, "runs": len(timed), "statistic": "median", "contended": p["contention"].get("contended"),
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
-           "runs": [{"e2e_s": r["e2e_s"], "witness_s": r["witness_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"]} for r in timed]}
+           "runs": [{"e2e_s": r["e2e_s"], "witness_s": r["witness_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"],
+                     "wait_e2e_s": r["wait_e2e_s"]} for r in timed]}
     doc["validation"]["contract_problems"] = contract.validate(doc)
     return doc
 

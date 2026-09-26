@@ -431,6 +431,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         Ok(())
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
+    let wait_e2e_s = t.lock().unwrap().wait_s();
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
             Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
@@ -457,7 +458,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
-               "buckets": buckets, "wait_s": wait_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
+               "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
                "circuit_sha256": hex(&c.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
