@@ -297,6 +297,50 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
 
 
+def _separable(fn: Any) -> list[tuple[Any, int]] | None:
+    """[(callee, members)] when `fn`'s body nodes read only its parameters and it returns every leaf they produce: no value crosses
+    between nodes, so its partition is each node member's own (a Gemm's N coordinates, attention's heads).  None otherwise."""
+    from verity.ir.intervals import norm, ref_intervals, total
+    from verity.ir.parts import n_members
+    body = fn.body
+    for n in body.nodes:
+        if n.form == "scan":
+            return None
+        reads: dict = {}
+        for a in n.args:
+            ref_intervals(a.refs, reads)
+        if any(space != "p" for space, _i in reads):
+            return None
+    ret: dict = {}
+    ref_intervals(body.ret, ret)
+    for k, n in enumerate(body.nodes):
+        if total(norm(ret.get(("n", k), ()))) != n.out.leaves:
+            return None
+    return [(n.fn, n_members(n)) for n in body.nodes]
+
+
+def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: int, W: int, extras: int) -> dict[str, Any]:
+    agg: dict[tuple, dict[str, Any]] = {}
+    interior = Counter()
+    viol: dict[str, dict[str, Any]] = {}
+    for r, m in parts:
+        for c in r["classes"]:
+            k = (c["kind"], c["head"], c["scope"], c["gates"], c["out_bits"], c.get("out_gates", 1))
+            a = agg.get(k)
+            if a is None:
+                a = agg[k] = dict(c, count=0)
+            a["count"] += c["count"] * m
+        for i in r["committed_interior"]:
+            interior[(i["scope"], i["head"])] += i["words"] * m
+        for v in r["violations"]:
+            e = viol.setdefault(v["class"], dict(v, units=0))
+            e["units"] += v.get("units", 1) * m
+    classes = sorted(agg.values(), key=lambda c: (-c["count"], c["kind"], str(c["scope"])))
+    rule = _finish(fid, gates, classes, [{"scope": s, "head": p, "words": w} for (s, p), w in interior.most_common()], X, W, extras)
+    rule["violations"] = [dict(v, definition=fid) for v in viol.values()]
+    return rule
+
+
 def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: int = MAX_GATES) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
@@ -312,6 +356,8 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         classes = [] if not fn.params else [{"kind": "output", "head": fn.id, "scope": fn.id, "gates": 1, "out_bits": bits, "count": 1,
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
         rule = _finish(fn.id, 1, classes, [], X, W, extras)
+    elif (sep := _separable(fn)) is not None:
+        rule = _combine(fn.id, fn.gates, [(unit_rule(c, X, W, extras, memo=memo, max_gates=max_gates), m) for c, m in sep], X, W, extras)
     elif fn.gates > max_gates:
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": max_gates}]

@@ -539,7 +539,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
         if log:
             log(f"  {x['id']} {x['definition']}: {entry['units']} units, {entry['committed_interior_words']} committed interior words")
     g["q_word_v1"] = {"query": word_query.query_id(X, W, extras), **dict(tot), "units_per_gate": round(tot["units"] / tot["gates"], 4) if tot["gates"] else None,
-                      "by_template": {k: dict(v) for k, v in sorted(by_template.items())}, "violations": dict(viol)}
+                      "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol)}
     g.setdefault("rules", {})["q_word_v1"] = (
         "verity_vllm.query.word: every Call's gates partitioned into units with |out(S)| <= X bits or one boundary gate <= W bits; a value "
         "several units read is its own unit, committed unless a <= 2-gate recompute of committed values; per group: per_call and row totals "
