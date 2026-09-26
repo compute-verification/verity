@@ -78,7 +78,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "statement", "statement_digest", "prover", "netlist_sha256", "public_sha256"):
+        for k in ("roots", "sigma", "dense_m", "statement", "statement_digest", "prover", "netlist_sha256", "public_sha256", "open_rtt_ms"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         for k in ("n_blake3", "n_units", "instances"):
             m[k] = sum(r.get(k) or 0 for r in runs)
@@ -171,6 +171,9 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     e2e = [r["e2e_s"] for r in timed]
     t_e2e = statistics.median(e2e)
     net_wait = max(0.0, statistics.median(r["wait_s"] - r["verdict"].get("handle_s", 0.0) for r in timed))
+    rtts = [x for r in timed for x in (r["open_rtt_ms"] if isinstance(r.get("open_rtt_ms"), list) else [r.get("open_rtt_ms")])
+            if isinstance(x, (int, float)) and x == x]
+    open_rtt = statistics.median(rtts) if rtts else None
     n = p["total"]
     first = timed[0]
     sub = input_set.subcircuit
@@ -191,7 +194,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         scheme=SCHEME, statement=STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n,
         n_blake3=first["n_blake3"], n_units=first["n_units"],
-        rtt_method="net.rtt_ms = TCP connect time to the verifier pod's sshd (tcp_rtt), measured before the sweep",
+        rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": "flock-ir-frame serve (separate process)"})
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
@@ -207,7 +210,8 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
           {"name": "live.verifier_round_seconds", "value": statistics.median(r["verdict"].get("handle_s", 0.0) for r in timed), "unit": "s"},
           {"name": "live.network_wait_seconds", "value": net_wait, "unit": "s"},
           {"name": "live.coin_wait_per_round_ms", "value": 1e3 * net_wait / max(1, int(first["calls"])), "unit": "ms"},
-          *([contract.measurement("net.rtt_ms", a.tcp["median_ms"])] if getattr(a, "tcp", None) else []),
+          *([contract.measurement("net.rtt_ms", open_rtt)] if open_rtt is not None else []),
+          *([{"name": "live.tcp_connect_rtt_ms", "value": a.tcp["median_ms"], "unit": "ms"}] if getattr(a, "tcp", None) else []),
           *([{"name": "live.loopback_round_seconds", "value": p["loopback"]["seconds_per_round"], "unit": "s"}]
             if p.get("loopback", {}).get("seconds_per_round") else []),
           {"name": "live.prover_compute_seconds", "value": t_e2e - med("wait_s"), "unit": "s"},
@@ -225,8 +229,11 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
                           "detail": f"{sum(1 for r in p['live'] if r.get('accepted'))}/{len(p['live'])} sessions accepted",
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [], "sweep": sweep, "contention": p["contention"],
-           "interaction": {"rtt_method": (f"net.rtt_ms = TCP connect time from the prover pod to the verifier pod ({a.tcp['target']}, its sshd), "
-                                          f"median of {a.tcp['n']}, measured in this run before the sweep") if getattr(a, "tcp", None) else None,
+           "interaction": {"rtt_method": ("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the "
+                                          "verifier (answered Ok by the verifier's server, no session state), 30 probes right after "
+                                          "connecting and before Hello, in every timed session; median over all of them") if open_rtt is not None else None,
+                           "tcp_connect_method": (f"live.tcp_connect_rtt_ms = TCP connect time to the verifier pod's sshd ({a.tcp['target']}), "
+                                                  f"median of {a.tcp['n']}, before the sweep") if getattr(a, "tcp", None) else None,
                            "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / "
                                                "round trips, median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
                            "loopback_method": p.get("loopback", {}).get("method"), "verifier_operator": a.operator or None,

@@ -498,10 +498,15 @@ fn main() {
             let dump = arg("--dump", "");
             let plan = Plan { gpu: flag("--gpu"), ..Plan::default() };
             for run in 0..warm + runs {
-                let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7400")).unwrap());
+                let mut tcp = TcpTransport::connect(&arg("--verifier", "127.0.0.1:7400")).unwrap();
+                let (rtt, rtt_min, rtt_n) = tcp.ping_rtt(30);
+                let t = shared(tcp);
                 let (mut v, proofs) = session(&st, &inst, t, &plan);
                 v["run"] = json!(run);
                 v["warm"] = json!(run < warm);
+                v["open_rtt_ms"] = json!(rtt);
+                v["open_rtt_min_ms"] = json!(rtt_min);
+                v["open_rtt_n"] = json!(rtt_n);
                 if !dump.is_empty() {
                     std::fs::create_dir_all(&dump).unwrap();
                     for (r, p) in proofs.iter().enumerate() {
