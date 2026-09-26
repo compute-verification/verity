@@ -69,8 +69,8 @@ class Limits:
     heads_per_row: int = 4                   # attention / RoPE heads taken from one row
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written
-    max_seconds: float = 900.0               # evaluation budget: the draw stops (named, per family) once it is spent
-    workers: int = 1                         # > 1: a forked pool (the Commit's host-retained store; never a device-retained one)
+    max_seconds: float = 600.0               # evaluation budget: the draw stops (named, per family) once it is spent
+    workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
     @classmethod
     def from_dir(cls, out_dir: str | Path) -> "Limits":
@@ -498,6 +498,13 @@ def verify(out_dir: str | Path) -> dict[str, Any]:
     return {"ok": all(r["ok"] for r in res) and bool(res), "sets": res}
 
 
+def _limits_for(out: Path, sr: dict[str, Any]) -> Limits:
+    lim = Limits.from_dir(out)
+    if (sr.get("evaluator") or {}).get("retention") == "device":
+        lim.workers = 1                                                      # forked children cannot read device-retained blocks
+    return lim
+
+
 def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: bytes, programs: dict[str, dict[str, Any]], bmap: dict[str, Any],
                  reader: Callable, weights: Callable, arrivals: dict[str, int], manifest: Any, replay_kw: dict[str, Any], loaded: dict[str, dict],
                  program_digests: dict[str, str], versions: dict[str, Any], eng: Any) -> dict[str, Any] | None:
@@ -514,7 +521,7 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
     try:
         s = export_vus(programs, bmap, reader, weights, out_dir=out, run_root=run_root, arrivals=arrivals, manifest=man,
                        executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},
-                       provenance=prov, limits=Limits.from_dir(out))
+                       provenance=prov, limits=_limits_for(out, sr))
     except Exception as e:  # noqa: BLE001  -- not part of the record: named, never a verdict
         print(f"[vu-export] FAILED: {e!r}"[:400], flush=True)
         return {"ok": False, "why": repr(e)[:400]}

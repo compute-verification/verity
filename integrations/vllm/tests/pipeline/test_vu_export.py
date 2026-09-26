@@ -34,7 +34,7 @@ def attn_world():
 def _export(world, out, *, limits=None, mutate=None, root=ROOT):
     bmap, committed = world.bmap_and_reader(mutate=mutate)
     return VX.export_vus(_programs(world), bmap, committed, _weights(world), out_dir=out, run_root=root,
-                         provenance={"row": "test", "model": "tiny"}, limits=limits or VX.Limits(per_family=64))
+                         provenance={"row": "test", "model": "tiny"}, limits=limits or VX.Limits(per_family=64, workers=1))
 
 
 def test_sets_are_grouped_by_subcircuit_and_reevaluate(attn_world, tmp_path):
@@ -167,4 +167,5 @@ def test_families_are_interleaved_in_the_draw(attn_world):
 def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     a = _export(attn_world, tmp_path / "serial")
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
+    assert VX._limits_for(tmp_path, {"evaluator": {"retention": "device"}}).workers == 1 and VX._limits_for(tmp_path, {}).workers == 8
     assert [(x["set"], x["n"], x["content_digest"]) for x in a["sets"]] == [(x["set"], x["n"], x["content_digest"]) for x in b["sets"]]
