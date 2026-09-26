@@ -163,6 +163,7 @@ def _guarded_record(**row3):
 
 def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
     assert _guarded_record()["ok"] is True and X.verify_record(_guarded_record()) == []
+    assert _guarded_record(guard_words=0, ir_sampled=0)["ok"] is True                   # every row visits one key block: nothing to sample
     for bad in ({"stream_eq_baseline": None}, {"stream_eq_baseline": False}, {"guard_mismatch": 1}, {"ir_sampled": 0}):
         assert _guarded_record(**bad)["ok"] is False
     assert X.seal({**_guarded_record(), "baseline": {}})["ok"] is False

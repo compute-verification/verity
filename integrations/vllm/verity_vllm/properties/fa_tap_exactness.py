@@ -212,11 +212,11 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
 
 
 def row3_ok(e: dict[str, Any]) -> bool:
-    """A guarded-max case: word 3 is the guard everywhere, 0 at first blocks, the IR agrees on the sample, and every other word equals the
-    baseline (default) build's."""
+    """A guarded-max case: word 3 is the guard everywhere, 0 at first blocks, the IR agrees on a sample (when any row visits a block after its
+    first), and every other word equals the baseline (default) build's."""
     r = e.get("row3") or {}
-    return (r.get("guard_mismatch") == 0 and r.get("first_block_nonzero") == 0 and r.get("ir_mismatch") == 0 and r.get("ir_sampled", 0) > 0
-            and r.get("stream_eq_baseline") is True)
+    return (r.get("guard_mismatch") == 0 and r.get("first_block_nonzero") == 0 and r.get("ir_mismatch") == 0
+            and (r.get("ir_sampled", 0) > 0 or r.get("guard_words") == 0) and r.get("stream_eq_baseline") is True)
 
 
 def negatives(fa_version: int, D: int) -> list[tuple[dict[str, Any], dict[str, int], str]]:
