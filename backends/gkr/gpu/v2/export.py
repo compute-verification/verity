@@ -16,6 +16,7 @@ Files (``bb_export`` formats, ``<QQ`` header then u32 LE): ``units.bin`` (264 co
     python -m gpu.v2.export synth --out DIR --vus 2 --steps 3                      # + DIR/negatives (4 chain cases)
     python -m gpu.v2.export negatives --out DIR                                    # a-v2's 30 unit + 4 chain cases
     python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16 --out DIR        # statement files only, at that model
+    python -m gpu.v2.export circuits --model ampere_bf16_m16n8k16 --k 2048 --out DIR   # the same files, steps = 2048 / 16
     python -m gpu.v2.export circuits --model ada_e4m3_m16n8k32 --out DIR           # E4M3: adder-side view, fp8 epilogue
 """
 from __future__ import annotations
@@ -409,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("circuits")
     c.add_argument("--model", required=True, help="a verity.ml.tc.models.MODELS name, e.g. hopper_bf16_m16n8k16")
     c.add_argument("--out", type=Path, required=True)
+    c.add_argument("--k", type=int, default=1536, help="the VU's reduction length: the files are uniform in K, the manifest's steps "
+                                                       "are K / products per unit")
     c.add_argument("--no-merge", action="store_true", help="E4M3: keep one LogUp table per source table")
     sub.add_parser("stats")
     args = ap.parse_args(argv)
@@ -416,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         m = export(args.root, args.tier, args.lo, args.hi, args.out, args.procs)
         print(json.dumps({k: v for k, v in m.items() if k not in ("index", "written")}, default=str))
     elif args.cmd == "circuits":
-        print(json.dumps(circuits(args.out, args.model, merge=not args.no_merge), default=str))
+        print(json.dumps(circuits(args.out, args.model, K=args.k, merge=not args.no_merge), default=str))
     elif args.cmd == "synth":
         print(json.dumps(synth(args.out, args.vus, args.steps, args.seed), default=str))
     elif args.cmd == "negatives":
