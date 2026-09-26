@@ -29,6 +29,7 @@ pub mod ir_block;
 pub mod ir_frame;
 pub mod ir_sampling;
 pub mod ir_tail;
+pub mod lookup;
 pub mod netlist;
 pub mod pure_block;
 pub mod vllm_block;

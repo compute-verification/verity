@@ -40,6 +40,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, PARENT, ROOT, comp, key_words, log2ceil},
     ir_block::IrUnitNet,
+    lookup::LookupNet,
 };
 
 pub const TAG: &[u8] = b"verity/flock-netlist/v1";
@@ -114,6 +115,14 @@ pub enum CompRole {
     DummyParent,
 }
 
+/// A copy of every bit of output port `src_port` of slot `(src_net, src_idx)` into input port `dst_port` of slot
+/// `(dst_net, dst_idx)`, both instance-local (per VU).
+#[derive(Clone, Copy, Debug)]
+pub struct Wire {
+    pub dst: (usize, usize, usize),
+    pub src: (usize, usize, usize),
+}
+
 pub struct Composite {
     pub name: String,
     pub sha256: [u8; 32],
@@ -132,10 +141,30 @@ pub struct Composite {
     pub dummy_digests: Vec<[u8; 32]>,
     pub dummy_outputs: Vec<u16>,
     pub leaf_scheme: String,
+    /// slots per VU of each netlist
+    pub per_vu: Vec<usize>,
+    pub wires: Vec<Wire>,
+    /// the lookup slot types' fast witnesses, by netlist index
+    pub lookups: BTreeMap<usize, LookupNet>,
+}
+
+fn table_of<'a>(t: &'a crate::ir_tail::Tables, name: &str) -> &'a [u32] {
+    match name {
+        "rsq" => &t.rsq,
+        "sqrt" => &t.sqrt,
+        "ex2" => &t.ex2,
+        _ => &t.rcp,
+    }
+}
+
+/// Every input (output) port of a netlist: its first column in the slot and its width, groups in order.
+pub fn port_cols(groups: &[crate::ir_block::Group]) -> Vec<(usize, usize)> {
+    groups.iter().flat_map(|g| g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some((c, w)) }).collect::<Vec<_>>()).collect()
 }
 
 impl Composite {
-    pub fn parse(text: &str) -> Result<Self, String> {
+    /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the netlist has lookups.
+    pub fn parse(text: &str, tables: Option<&str>) -> Result<Self, String> {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
         let head = lines.next().ok_or("empty netlist")?.trim_end();
@@ -146,6 +175,7 @@ impl Composite {
             return Err("META: not verity/flock-netlist/v1".into());
         }
         let mut nets = Vec::new();
+        let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
             let h: Vec<&str> = l.split_whitespace().collect();
             if h.len() != 3 || h[0] != "NET" {
@@ -162,6 +192,29 @@ impl Composite {
         for k in ["tail", "cut", "cut_words", "public_ports", "public", "native", "outputs_by_tail"] {
             if meta.get(k).is_some() {
                 return Err(format!("META: {k:?} (a verifier-evaluated part of the computation); the verifier only checks proofs"));
+            }
+        }
+        let lk = meta["lookups"].as_object().cloned().unwrap_or_default();
+        if !lk.is_empty() {
+            let need: std::collections::BTreeSet<&'static str> = crate::ir_tail::TABLE_SHA256.iter().map(|t| t.0).filter(|t| lk.contains_key(*t)).collect();
+            if need.len() != lk.len() {
+                return Err("META: a lookup of a table the statement does not pin".into());
+            }
+            let t = crate::ir_tail::Tables::load(tables.ok_or("the netlist has lookups: pass --tables DIR")?, &need)?;
+            for (name, spec) in &lk {
+                let pinned = crate::ir_tail::TABLE_SHA256.iter().find(|x| x.0 == name).unwrap();
+                if spec["sha256"].as_str() != Some(pinned.1) || spec["table"].as_str() != Some(name.as_str()) || spec["out_bits"] != 31 {
+                    return Err(format!("META: lookup {name} is not the pinned table"));
+                }
+                let n = spec["in_bits"].as_u64().unwrap_or(0) as usize;
+                let lo = spec["lo_bits"].as_u64().unwrap_or(0) as usize;
+                if 1usize << n != pinned.2 || !(2..n).contains(&lo) {
+                    return Err(format!("META: lookup {name}'s index is not its table's"));
+                }
+                let words: &'static [u32] = Box::leak(table_of(&t, name).to_vec().into_boxed_slice());
+                let (net, fast) = LookupNet::build(&format!("lookup:{name}"), words, n, lo, 31);
+                nets.push((format!("lookup:{name}"), net));
+                lookups_fast.push((nets.len() - 1, fast));
             }
         }
         let ports: Vec<Port> = meta["ports"].as_array().ok_or("META: ports")?.iter().map(|p| Port {
@@ -205,9 +258,24 @@ impl Composite {
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "digest length".to_string()))).collect::<Result<Vec<[u8; 32]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
         let out_words = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
+        let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown netlist {nm}"));
+        let mut per_vu = vec![0usize; nets.len()];
+        per_vu[unit_net] = upv;
+        if let Some(m) = meta["per_vu"].as_object() {
+            for (k, v) in m {
+                per_vu[net_of(k)?] = v.as_u64().unwrap_or(0) as usize;
+            }
+        }
+        let mut wires = Vec::new();
+        for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+            let n = |i: usize| w[i].as_str().ok_or("a wire's netlist".to_string()).and_then(net_of);
+            let u = |i: usize| w[i].as_u64().map(|x| x as usize).ok_or("a wire's index".to_string());
+            wires.push(Wire { dst: (n(0)?, u(1)?, u(2)?), src: (n(3)?, u(4)?, u(5)?) });
+        }
         let c = Composite {
             name, sha256, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"]["id"].as_str().unwrap_or("").into(), meta, nets, ranges, ports,
-            out_words, g, upv, unit_net, leaves_in, leaves_out, key, dummy_digests, dummy_outputs,
+            out_words, g, upv, unit_net, leaves_in, leaves_out, key, dummy_digests, dummy_outputs, per_vu, wires,
+            lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
         Ok(c)
@@ -269,8 +337,47 @@ impl Composite {
         if ur.len() != 1 || ur[0].count != self.g * self.upv || !ur[0].count.is_power_of_two() {
             return Err("not one unit range of vus_per_block x units_per_vu (a power of two) units".into());
         }
-        if unit.in_groups.len() != 1 || unit.out_groups.len() != 1 || unit.in_groups[0].bits.iter().any(|&b| b != 16) || unit.out_groups[0].bits.iter().any(|&b| b != 16) {
-            return Err("the unit's ports are not one group of 16-bit leaf inputs and one of 16-bit returned outputs".into());
+        if unit.in_groups.is_empty() || unit.in_groups.len() > 2 || unit.out_groups.is_empty() || unit.out_groups.len() > 2
+            || unit.in_groups[0].bits.iter().any(|&b| b != 16) || unit.out_groups[0].bits.iter().any(|&b| b != 16)
+        {
+            return Err("the unit's ports are not a group of 16-bit leaf inputs (then cut inputs) and one of 16-bit returned outputs (then cut outputs)".into());
+        }
+        for (i, r) in self.ranges.iter().enumerate() {
+            if let Kind::Net(n) = r.kind
+                && r.count != self.g * self.per_vu[n]
+            {
+                return Err(format!("range {i} of {}: {} slots, not {} per VU", self.nets[n].0, r.count, self.per_vu[n]));
+            }
+        }
+        for (n, (nm, _)) in self.nets.iter().enumerate() {
+            let ranges = self.ranges.iter().filter(|r| r.kind == Kind::Net(n)).count();
+            if ranges != 1 {
+                return Err(format!("netlist {nm} has {ranges} ranges, not one"));
+            }
+        }
+        // every input port of every slot is wired exactly once: the unit's leaf ports by its leaf map, the rest by a wire
+        let mut wired: BTreeMap<(usize, usize, usize), usize> = BTreeMap::new();
+        for w in &self.wires {
+            let (dn, di, dp) = w.dst;
+            let (sn, si, sp) = w.src;
+            let (dc, sc) = (port_cols(&self.nets[dn].1.in_groups), port_cols(&self.nets[sn].1.out_groups));
+            if di >= self.per_vu[dn] || si >= self.per_vu[sn] || dp >= dc.len() || sp >= sc.len() || dc[dp].1 != sc[sp].1 {
+                return Err(format!("a wire {w:?} outside its slots' ports or of unequal widths"));
+            }
+            if dn == self.unit_net && dp < unit.in_groups[0].bits.len() {
+                return Err("a wire into a unit's leaf port".into());
+            }
+            *wired.entry(w.dst).or_default() += 1;
+        }
+        for (n, (nm, net)) in self.nets.iter().enumerate() {
+            let first = if n == self.unit_net { net.in_groups[0].bits.len() } else { 0 };
+            for i in 0..self.per_vu[n] {
+                for p in first..port_cols(&net.in_groups).len() {
+                    if wired.get(&(n, i, p)).copied().unwrap_or(0) != 1 {
+                        return Err(format!("input port {p} of {nm} slot {i} is not wired exactly once"));
+                    }
+                }
+            }
         }
         let n_in: usize = self.ports.iter().map(|p| p.words).sum();
         let n_out: usize = self.out_words.iter().sum();
@@ -303,6 +410,15 @@ impl Composite {
             return Err(format!("leaf-commitment scheme {:?} is not one this verifier implements", self.leaf_scheme));
         }
         Ok(())
+    }
+
+    pub fn range_of(&self, n: usize) -> &Range {
+        self.ranges.iter().find(|r| r.kind == Kind::Net(n)).unwrap()
+    }
+
+    /// Block-local column of slot `i` (of VU `g`) of netlist `n`.
+    pub fn slot_col(&self, n: usize, g: usize, i: usize) -> usize {
+        self.range_of(n).slot(g * self.per_vu[n] + i)
     }
 
     pub fn unit(&self) -> &IrUnitNet {
@@ -460,7 +576,16 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
                     let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
                     c.message_col(g, p, 2 * (leaf - starts[p])) + t
                 };
-                both(&mut da, &mut db, base + leaf_cols[j] + t, if leaf < 0 { src } else { src });
+                both(&mut da, &mut db, base + leaf_cols[j] + t, src);
+            }
+        }
+    }
+    for g in 0..c.g {
+        for w in &c.wires {
+            let (dc, sc) = (port_cols(&c.nets[w.dst.0].1.in_groups)[w.dst.2], port_cols(&c.nets[w.src.0].1.out_groups)[w.src.2]);
+            let (dst, src) = (c.slot_col(w.dst.0, g, w.dst.1) + dc.0, c.slot_col(w.src.0, g, w.src.1) + sc.0);
+            for t in 0..dc.1 {
+                both(&mut da, &mut db, dst + t, src + t);
             }
         }
     }
@@ -689,6 +814,18 @@ pub struct Stmt {
     pub identity: Value,
 }
 
+fn bit(w: &F128, t: usize) -> u64 {
+    (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1
+}
+
+fn set_bit(w: &mut F128, t: usize) {
+    if t < 64 { w.lo |= 1 << t } else { w.hi |= 1 << (t - 64) }
+}
+
+fn flip_bit(w: &mut F128, t: usize) {
+    if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
+}
+
 fn leak<T>(x: T) -> &'static T {
     Box::leak(Box::new(x))
 }
@@ -899,10 +1036,90 @@ impl Stmt {
         w
     }
 
-    /// `(z, a, b, z_lincheck)`: every block's compressions and units (`inputs(b, k)`, any witness), the mask slot from `mask`.
+    /// Every slot's output words (`net.out_cols`) for input words `ins` (a lookup: its table word; else the rows, 64 at once).
+    fn eval_outputs(&self, n: usize, net: &IrUnitNet, ins: &[Vec<F128>]) -> Vec<Vec<F128>> {
+        if let Some(lk) = self.c.lookups.get(&n) {
+            return ins.par_iter().map(|w| {
+                let idx = (w[0].lo as usize) & ((1 << lk.n) - 1);
+                vec![F128::new((lk.table[idx] & 0x7FFF_FFFF) as u64, 0)]
+            }).collect();
+        }
+        let o0 = net.out_cols[0] * WORD;
+        let nw = net.out_cols.len();
+        ins.par_chunks(64).flat_map_iter(|grp| {
+            let (zz, _, _) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+            (0..grp.len()).map(move |l| {
+                let mut o = vec![F128::ZERO; nw];
+                for (r, y) in zz[o0..o0 + nw * WORD].iter().enumerate() {
+                    if (y >> l) & 1 == 1 {
+                        set_bit(&mut o[r / WORD], r % WORD);
+                    }
+                }
+                o
+            }).collect::<Vec<_>>()
+        }).collect()
+    }
+
+    /// Every slot's input words, converged: the units' leaf words from `unit_inputs(b, k)`, then every wire copied from the
+    /// slot that computes it, re-evaluating each slot type whose inputs changed until none do (the tail and the lookups
+    /// between the units' two passes). `nets` overrides a netlist's evaluation (a tampered witness).
+    pub fn converge(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> Vec<Vec<Vec<F128>>> {
+        let c = &self.c;
+        let nb = self.blocks();
+        let net_of = |n: usize| -> &IrUnitNet { nets.get(&n).copied().unwrap_or(&c.nets[n].1) };
+        let count = |n: usize| c.range_of(n).count;
+        let mut ins: Vec<Vec<Vec<F128>>> = (0..c.nets.len()).map(|n| {
+            if n == c.unit_net {
+                (0..nb * count(n)).into_par_iter().map(|x| unit_inputs(x / count(n), x % count(n))).collect()
+            } else {
+                vec![vec![F128::ZERO; net_of(n).in_words]; nb * count(n)]
+            }
+        }).collect();
+        if c.wires.is_empty() {
+            return ins;
+        }
+        let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
+        let mut dirty = vec![true; c.nets.len()];
+        for _round in 0..64 {
+            for n in 0..c.nets.len() {
+                if dirty[n] {
+                    outs[n] = self.eval_outputs(n, net_of(n), &ins[n]);
+                    dirty[n] = false;
+                }
+            }
+            let mut changed = false;
+            for w in &c.wires {
+                let (dn, sn) = (w.dst.0, w.src.0);
+                let (dcol, width) = port_cols(&net_of(dn).in_groups)[w.dst.2];
+                let scol = port_cols(&net_of(sn).out_groups)[w.src.2].0 - net_of(sn).out_cols[0] * WORD;
+                for b in 0..nb {
+                    for g in 0..c.g {
+                        let xs = b * count(sn) + g * c.per_vu[sn] + w.src.1;
+                        let xd = b * count(dn) + g * c.per_vu[dn] + w.dst.1;
+                        for t in 0..width {
+                            let v = bit(&outs[sn][xs][(scol + t) / WORD], (scol + t) % WORD);
+                            let d = &mut ins[dn][xd][(dcol + t) / WORD];
+                            if bit(d, (dcol + t) % WORD) != v {
+                                flip_bit(d, (dcol + t) % WORD);
+                                changed = true;
+                                dirty[dn] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if !changed {
+                return ins;
+            }
+        }
+        panic!("the slots' wires did not converge in 64 rounds (a cycle through a slot's own output?)")
+    }
+
+    /// `(z, a, b, z_lincheck)`: every block's compressions (`comps(b)`), every slot of every netlist from its input words `ins`
+    /// (`converge`; a lookup by its fast witness), the mask slot from `mask`. `nets` overrides a netlist's evaluation.
     #[allow(clippy::type_complexity)]
-    pub fn witness(&self, comps: &(dyn Fn(usize) -> Vec<b3::Compression> + Sync), inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync),
-                   mask: &(dyn Fn(usize) -> Vec<F128> + Sync)) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+    pub fn witness(&self, comps: &(dyn Fn(usize) -> Vec<b3::Compression> + Sync), ins: &[Vec<Vec<F128>>],
+                   mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
         let c = &self.c;
         let kl = c.k_log;
         let n = 1usize << (self.m - 7);
@@ -929,41 +1146,40 @@ impl Stmt {
                 bbb[w..w + mw.len()].copy_from_slice(&mw);
             }
         });
-        let unit = c.unit();
-        let ur = c.unit_range();
-        let uw = 1usize << (unit.unit_log - 7);
-        let total = self.blocks() * ur.count;
-        let groups: Vec<Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>> = (0..total.div_ceil(64)).into_par_iter().map(|gi| {
-            let ids: Vec<usize> = (64 * gi..(64 * gi + 64).min(total)).collect();
-            let ins: Vec<Vec<F128>> = ids.iter().map(|&x| inputs(x / ur.count, x % ur.count)).collect();
-            let (zz, aa, bq) = unit.eval64(|col| {
-                let mut x = 0u64;
-                for (l, r) in ins.iter().enumerate() {
-                    let w = &r[col / WORD];
-                    let t = col % WORD;
-                    x |= ((if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1) << l;
-                }
-                x
-            });
-            ids.iter().enumerate().map(|(l, &x)| {
-                let pack = |v: &Vec<u64>| -> Vec<F128> {
-                    let mut o = vec![F128::ZERO; uw];
-                    for (r, &y) in v.iter().enumerate() {
-                        if (y >> l) & 1 == 1 {
-                            if r % 128 < 64 { o[r / 128].lo |= 1 << (r % 128) } else { o[r / 128].hi |= 1 << (r % 128 - 64) }
-                        }
-                    }
-                    o
-                };
-                (x, pack(&zz), pack(&aa), pack(&bq))
-            }).collect()
-        }).collect();
-        for (x, uz, ua, ub) in groups.into_iter().flatten() {
-            let (blk, k) = (x / ur.count, x % ur.count);
-            let at = blk * wpb + ur.slot(k) / WORD;
-            z[at..at + uw].copy_from_slice(&uz);
-            a[at..at + uw].copy_from_slice(&ua);
-            bb[at..at + uw].copy_from_slice(&ub);
+        for (ni, (_, pinned)) in c.nets.iter().enumerate() {
+            let net = nets.get(&ni).copied().unwrap_or(pinned);
+            let r = c.range_of(ni);
+            let uw = 1usize << (pinned.unit_log - 7);
+            let items: Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> = if let Some(lk) = c.lookups.get(&ni) {
+                ins[ni].par_iter().enumerate().map(|(x, w)| {
+                    let (zz, aa, bq) = lk.witness((w[0].lo as usize) & ((1 << lk.n) - 1));
+                    let f = |v: Vec<u64>| v.chunks(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
+                    (x, f(zz), f(aa), f(bq))
+                }).collect()
+            } else {
+                ins[ni].par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
+                    let (zz, aa, bq) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+                    (0..grp.len()).map(move |l| {
+                        let pack = |v: &Vec<u64>| -> Vec<F128> {
+                            let mut o = vec![F128::ZERO; uw];
+                            for (row, &y) in v.iter().enumerate() {
+                                if (y >> l) & 1 == 1 {
+                                    set_bit(&mut o[row / WORD], row % WORD);
+                                }
+                            }
+                            o
+                        };
+                        (64 * gi + l, pack(&zz), pack(&aa), pack(&bq))
+                    }).collect::<Vec<_>>()
+                }).collect()
+            };
+            for (x, uz, ua, ub) in items {
+                let (blk, k) = (x / r.count, x % r.count);
+                let at = blk * wpb + r.slot(k) / WORD;
+                z[at..at + uw].copy_from_slice(&uz);
+                a[at..at + uw].copy_from_slice(&ua);
+                bb[at..at + uw].copy_from_slice(&ub);
+            }
         }
         let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
         (z, a, bb, zl)

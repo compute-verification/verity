@@ -11,6 +11,7 @@
 //! points (the regions' claims), `Link(y = 0, 0)` (nothing is prover-supplied), Flock's coins.
 
 use std::{
+    collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex},
     time::Instant,
@@ -118,6 +119,10 @@ struct Wit {
     inputs: Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>,
     mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send>,
     flip_z: Option<usize>,
+    /// after the inputs converge: flip this bit of a unit's cut input (net, instance, column) — a tampered private cut word
+    cut_flip: Option<(usize, usize, usize)>,
+    /// evaluate these netlists instead of the pinned ones (a swapped tail)
+    nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
 }
 
 type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
@@ -132,14 +137,19 @@ enum WitData {
 
 fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
-    if device && w.flip_z.is_none() {
+    if device && w.flip_z.is_none() && st.c.wires.is_empty() {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let comps: Vec<Compression> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.comps)(b)).collect();
         let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
         return (WitData::Dev(comps, inputs), t.elapsed().as_secs_f64());
     }
-    let (mut z, a, b, zl) = st.witness(&*w.comps, &*w.inputs, &*w.mask);
+    let mut ins = st.converge(&*w.inputs, &w.nets);
+    if let Some((n, x, col)) = w.cut_flip {
+        let word = &mut ins[n][x][col / 128];
+        if col % 128 < 64 { word.lo ^= 1 << (col % 128) } else { word.hi ^= 1 << (col % 128 - 64) }
+    }
+    let (mut z, a, b, zl) = st.witness(&*w.comps, &ins, &*w.mask, &w.nets);
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
@@ -190,6 +200,8 @@ struct Plan {
     key_substituted: bool,
     flags_forged: bool,
     mask_random: bool,
+    cut_flip: bool,
+    tail_swapped: bool,
     rep1_other_witness: bool,
     fast: bool,
     substitute: Option<Vec<Vec<u8>>>,
@@ -264,7 +276,22 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool) -> Wit {
         if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
     });
     let ur = st.c.unit_range();
-    Wit { comps, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40) }
+    let unit = st.c.unit();
+    let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
+    let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
+    Wit { comps, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
+          nets: Arc::new(nets) }
+}
+
+/// The tail stages of the forged netlist (`--forged`: the same template with every positive tail constant x 100, staged by
+/// `verity_flock.netlist`), evaluated in place of the pinned stages: a swapped tail.
+fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet> {
+    let text = std::fs::read_to_string(arg("--forged", "net-forged.txt")).expect("--forged netlist");
+    let f: &'static Composite = Box::leak(Box::new(Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))));
+    st.c.nets.iter().enumerate().filter(|(_, n)| n.0.starts_with("stage")).filter_map(|(i, n)| {
+        let g = &f.nets.iter().find(|m| m.0 == n.0)?.1;
+        (g.sha256 != n.1.sha256 && g.useful <= 1 << n.1.unit_log && g.in_words == n.1.in_words && g.out_cols == n.1.out_cols).then_some((i, g))
+    }).collect()
 }
 
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
@@ -374,18 +401,25 @@ const CASES: &[(&str, bool, bool)] = &[
     ("relabelled_netlist", false, false),
     ("relabelled_netlist_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
+    ("private_cut_word_tampered", false, true),
+    ("tail_swapped", false, true),
+    ("tail_swapped_netlist_refused", false, false),
 ];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_chunk = st.c.ports.iter().any(|p| p.chunks > 1);
     let multi_block = st.c.ports.iter().any(|p| p.nb > 1);
+    let cut = !st.c.wires.is_empty();
     (name == "parent_message_forged" && !multi_chunk) || (name == "chaining_value_forged" && !multi_block)
+        || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_netlist_refused"].contains(&name))
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
     let h = Plan { gpu, ..Plan::default() };
     match name {
         "mask_cells_random" => Plan { mask_random: true, ..h },
+        "private_cut_word_tampered" => Plan { cut_flip: true, ..h },
+        "tail_swapped" => Plan { tail_swapped: true, ..h },
         "message_byte_differs_from_the_committed_row" => Plan { message_flip: true, ..h },
         "unit_input_differs_from_its_message_bits" => Plan { input_flip: true, ..h },
         "unit_internal_bit_flipped" => Plan { unit_flip: true, ..h },
@@ -401,7 +435,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 }
 
 fn load_composite(path: &str) -> Composite {
-    Composite::parse(&std::fs::read_to_string(path).expect("netlist")).unwrap_or_else(|e| refuse(e))
+    Composite::parse(&std::fs::read_to_string(path).expect("netlist"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
 }
 
 /// The verifier's file with one public word changed and its frame-v3 roots recomputed: a self-consistent, false statement.
@@ -447,7 +481,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "relabelled_netlist_refused_at_load" {
         let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
         let other = relabel(&text);
-        let c2 = Composite::parse(&other).unwrap_or_else(|e| refuse(e));
+        let c2 = Composite::parse(&other, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
         let refused_pin = hex(&c2.sha256) != hex(&st.c.sha256);
         let refused_file = Instances::load(&arg("--instances", ""), &c2).is_err();
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
@@ -456,8 +490,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "verifier_evaluated_tail_refused" {
         let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
         let (cut_line, meta_tail) = with_tail(&text);
-        let r1 = Composite::parse(&cut_line).err();
-        let r2 = Composite::parse(&meta_tail).err();
+        let r1 = Composite::parse(&cut_line, Some(&arg("--tables", "tables"))).err();
+        let r2 = Composite::parse(&meta_tail, Some(&arg("--tables", "tables"))).err();
         return json!({"case": name, "expect": "refused at parse (a CUT line in a NET; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
@@ -478,9 +512,15 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             p.public_sha256[0] ^= 1;
             (st.clone(), Arc::new(p), inst.clone())
         }
+        "tail_swapped_netlist_refused" => {
+            let text = std::fs::read_to_string(arg("--forged", "net-forged.txt")).unwrap();
+            let c2 = Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
+            let st2 = Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e)));
+            (st2, inst.clone(), inst.clone())
+        }
         "relabelled_netlist" => {
             let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
-            let c2 = Composite::parse(&relabel(&text)).unwrap_or_else(|e| refuse(e));
+            let c2 = Composite::parse(&relabel(&text), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
             let st2 = Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e)));
             (st2, inst.clone(), inst.clone())
         }
@@ -538,7 +578,8 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"),
+                       "--forged", &arg("--forged", "net-forged.txt"), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);

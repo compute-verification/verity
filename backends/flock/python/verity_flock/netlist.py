@@ -98,21 +98,87 @@ def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
     return out, max(20, (at - 1).bit_length())
 
 
-def compose(low: IL.Lowering, sub, vus_per_block: int | None = None) -> str:
-    """The ``flock-netlist/v1`` text for a template instance lowered to identical units (no cut yet: every unit input is an
-    input leaf or a zero word, every output leaf a unit's returned word)."""
+#: MUFU lookup slots: low decoder bits per table (``lookup.rs``); the high decoder takes the rest
+LOOKUP_LO = {24: 14, 23: 13}
+
+
+def _decode_rows(k: int) -> int:
+    return 0 if k == 1 else (1 << k) + _decode_rows(k // 2) + _decode_rows(k - k // 2)
+
+
+def lookup_rows(n: int, lo: int, bits: int) -> int:
+    """Rows of a lookup slot (``lookup.rs`` LookupNet::build): index word, decoders, products, output word, constant."""
+    r = 128 + _decode_rows(lo) + _decode_rows(n - lo) + bits * (1 << (n - lo))
+    return -(-r // 128) * 128 + 128 + 1
+
+
+def _slot_log(useful: int) -> int:
+    return max(7, (useful - 1).bit_length())
+
+
+def _wires(low: IL.Lowering, tail) -> list:
+    """Instance-local wires ``[dst net, dst index, dst port, src net, src index, src port]``: every cut input port of every unit
+    and every input port of every stage and lookup, from the port that computes it (a unit's cut output, a stage's output, a
+    lookup's value)."""
     U = low.units
-    if U.cut or U.tail_rets:
-        raise NotImplementedError(f"{low.name}: its tail is not a slot type of the circuit yet (tail stages, MUFU lookup slots); "
+    n_ret = sum(1 for k, _ in U.out_src[0] if k == "ret")
+    producer: dict[int, tuple] = {}
+    for u, src in enumerate(U.out_src):
+        for j, (kind, k) in enumerate(src):
+            if kind == "cut":
+                producer[k] = ("unit", u, j)
+    last = len(tail.stages) - 1
+    for j, tag in enumerate(tail.stages[last].outs):
+        if tag[0] == "cut":
+            producer[tag[1]] = (f"stage{last}", 0, j)
+    local, seen = [], {}
+    for j, (table, _) in enumerate(tail.lookups):
+        local.append(seen.get(table, 0))
+        seen[table] = seen.get(table, 0) + 1
+    wires = []
+    for u, src in enumerate(U.in_src):
+        for j, (kind, k) in enumerate(src):
+            if kind == "cut":
+                wires.append(["unit", u, j, *producer[k]])
+    for i, st in enumerate(tail.stages):
+        prev = tail.stages[i - 1] if i else None
+        for j, tag in enumerate(st.ins):
+            if tag[0] in ("pass", "ctx"):
+                wires.append([f"stage{i}", 0, j, f"stage{i - 1}", 0, prev.outs.index(tag)])
+            elif tag[0] == "lookup":
+                wires.append([f"stage{i}", 0, j, f"lookup:{tail.lookups[tag[1]][0]}", local[tag[1]], 0])
+            else:
+                wires.append([f"stage{i}", 0, j, *producer[tag[1]]])
+    for q, (table, si) in enumerate(tail.lookups):
+        wires.append([f"lookup:{table}", local[q], 0, f"stage{si}", 0, tail.stages[si].outs.index(("index", q))])
+    del n_ret
+    return wires
+
+
+def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False) -> str:
+    """The ``flock-netlist/v1`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
+    (:mod:`tail`: stage netlists and MUFU lookup slots, wired to the units' cut ports)."""
+    from . import tail as TL
+
+    U = low.units
+    if U.tail_rets:
+        raise NotImplementedError(f"{low.name}: a tail that computes the outputs (tensor-core steps) is not in the circuit yet; "
                                   f"the statement has no verifier-evaluated form")
     if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
         raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
+    tail = TL.lower_tail(low, forged) if U.cut else None
+    stages = [TL.stage_layout(st) for st in tail.stages] if tail else []
+    lookups: dict[str, int] = {}
+    for table, _ in (tail.lookups if tail else []):
+        lookups[table] = lookups.get(table, 0) + 1
     lv = low.leaves
     ports = [_port(p.name, w) for p, (w, _) in zip(sub.inputs, lv["in_ports"])]
     outs = [[p.name, w] for p, (w, _) in zip(sub.outputs, lv["out_ports"])]
-    ul = max(7, (low.layout.useful - 1).bit_length())
+    ul = _slot_log(low.layout.useful)
     if low.layout.useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
+    lk = {t: {"table": t, "sha256": IL.TABLES[t], "in_bits": TL.TABLE_BITS[t], "out_bits": TL.VALUE_BITS, "lo_bits": LOOKUP_LO[TL.TABLE_BITS[t]]}
+          for t in lookups}
 
     def fits(G: int):
         items = []
@@ -121,6 +187,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None) -> str:
             if p.chunks > 1:
                 items.append(("comp", SUB_LOG, G * p.chunks, {"role": "parents", "port": pi}))
         items.append(("unit", ul, G * U.n, {"net": "unit"}))
+        for i, lay in enumerate(stages):
+            items.append(("unit", _slot_log(lay.useful), G, {"net": f"stage{i}"}))
+        for t, c in lookups.items():
+            L = lk[t]
+            items.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}"}))
         items.append(("mask", MASK_LOG, 1, {"net": "mask"}))
         return _ranges(items)
 
@@ -142,14 +213,17 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None) -> str:
             runs = r["count"] // p.nb
             r["slots"] = [[g, c] if g < G else None for g, c in ([divmod(q, p.chunks) for q in range(runs)])]
     dummy = _dummy(low, sub, ports)
+    per_vu = {"unit": U.n, **{f"stage{i}": 1 for i in range(len(stages))}, **{f"lookup:{t}": c for t, c in lookups.items()}}
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.chunks, p.nb] for p in ports], "out_ports": outs, "ranges": ranges,
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key": _row_key().hex(),
-            "dummy": dummy, "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG}
+            "dummy": dummy, "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
+            "wires": _wires(low, tail) if tail else []}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
-    unit_text = IL.netlist(low.layout, low.name, None, None)
-    return head + f"NET unit {unit_text.count(chr(10))}\n" + unit_text
+    texts = [("unit", IL.netlist(low.layout, low.name, None, None))]
+    texts += [(f"stage{i}", IL.netlist(lay, f"{low.name}/tail/stage{i}", None, None)) for i, lay in enumerate(stages)]
+    return head + "".join(f"NET {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
 
 
 def _row_key() -> bytes:
@@ -164,7 +238,8 @@ def _dummy(low: IL.Lowering, sub, ports: list[Port]) -> dict:
 
     key = _row_key()
     n_in = sum(p.words for p in ports)
-    outs, _, ok = low.evaluate(np.zeros((1, n_in), dtype=np.uint64))
+    zero = np.zeros((1, n_in), dtype=np.uint64)
+    outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
     return {"digests": [blake3.blake3(bytes(p.bytes), key=key).hexdigest() for p in ports], "outputs": [int(x) for x in outs[0]]}
 
@@ -213,6 +288,10 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
     out.mkdir(parents=True, exist_ok=True)
     text = compose(low, input_set.subcircuit)
     (out / "net.txt").write_text(text)
+    if low.units.cut:
+        IL.write_tables(out / "tables")
+        if not (out / "net-forged.txt").exists():
+            (out / "net-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
     path = out / f"{'pub' if public_only else 'inst'}-{hi - lo}.bin"
     write(text, input_set, lo, hi, path, public_only)
     return path

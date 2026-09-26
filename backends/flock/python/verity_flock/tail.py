@@ -198,10 +198,45 @@ class Tail:
     computes: list
 
 
-def lower_tail(low: IL.Lowering) -> Tail:
-    """The cut lowering's tail program as stages: a new stage after every MUFU operation; every value read later is handed on."""
+def _fold_constant_mufu(prog: list) -> list:
+    """A MUFU operation on constants is a constant (its value from the IR primitive's own evaluator, as the lowering does for
+    every constant gate): no lookup slot for it."""
+    from verity_vllm.program.registry import prims as P
+
+    const: dict[int, int] = {}
+    out = []
+    for op in prog:
+        if op[1] == "Const":
+            const[op[0]] = op[2]
+        elif op[1] in MUFU and all(a in const for a in op[2:]):
+            v = getattr(P, op[1][:-3]).evaluate(*[const[a] for a in op[2:]])
+            const[op[0]] = v
+            out.append([op[0], "Const", v])
+            continue
+        out.append(op)
+    return out
+
+
+def forge(prog: list) -> list:
+    """Every positive finite f32 constant of a tail program x 100 (a swapped tail, for the negatives)."""
+    import struct
+
+    out = []
+    for op in prog:
+        if op[1] == "Const":
+            f = struct.unpack("<f", struct.pack("<I", op[2] & 0xFFFFFFFF))[0]
+            if 0 < f < float("inf"):
+                op = [op[0], "Const", struct.unpack("<I", struct.pack("<f", f * 100))[0]]
+        out.append(op)
+    return out
+
+
+def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
+    """The cut lowering's tail program as stages: a new stage after every MUFU operation; every value read later is handed on.
+    ``forged``: the program with :func:`forge` applied (a different tail of the same shape)."""
     U = low.units
     prog, slot = IL._tail(low)
+    prog = _fold_constant_mufu(forge(prog) if forged else prog)
     produced_by_units = {k for src in U.out_src for kind, k in src if kind == "cut"}
     read_by_units = sorted({k for src in U.in_src for kind, k in src if kind == "cut"} - produced_by_units)
     bounds = [i for i, op in enumerate(prog) if op[1] in MUFU]
