@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: Table 2's columns are headed A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to published renders)
+
+- The views' markdown prints each family column under its Glossary name: `SP1` is now `D-SP1` and `Flock` is now `C-Flock`,
+  in Table 2's header, Table 3's cell labels and Table 1's family rows. A-GKR and B-Ligero are unchanged.
+- The entities render follows: `table2.column_labels` maps each family to the same name, and `backend_families[].column`
+  is that header.
+- Column ids stay `SP1` and `Flock`: they key the cells, `--format json`'s `table2.columns` and the parity gate against
+  the frozen tables (`tables.py`, whose own headers are unchanged). The first published render after this change differs
+  from the previous one only in those headers and labels; re-record the parity baseline with it.
+
 ## 2026-09-26: the README Glossary's terms in docstrings and help
 
 - Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
