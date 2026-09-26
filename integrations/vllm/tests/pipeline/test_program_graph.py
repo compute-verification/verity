@@ -125,3 +125,25 @@ def test_fold_hints_mark_chains_and_parallel_runs():
     h = PG.fold_hints(chain + par)
     assert h == [{"start": 0, "count": 5, "fn": "A", "form": "call", "chained": True},
                  {"start": 5, "count": 4, "fn": "B", "form": "call", "chained": False}]
+
+
+def test_catalog_deduplicates_specializations_across_rows(tmp_path):
+    import gzip
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    for r in ("rowA", "rowB"):
+        (tmp_path / "graphs").mkdir(exist_ok=True)
+        (tmp_path / "graphs" / f"{r}.program.json").write_text(json.dumps(g))
+    ix = PG.catalog(tmp_path / "graphs")
+    assert ix and all(set(e["rows"]) == {"rowA", "rowB"} for e in ix.values())
+    shards = {}
+    for p in (tmp_path / "graphs" / "definitions").glob("*.json.gz"):
+        shards.update(json.loads(gzip.open(p, "rt").read()))
+    assert len(shards) == len({e["digest"] for e in ix.values()})
+    assert all(PG.definition_digest(v["definition"]) == h for h, v in shards.items())
+    ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]
+    attn = next(o for o in ops if o["definition"] == "Attention_v3")
+    assert attn["specs_enumerated"] == attn["varying"]["T"][1] - attn["varying"]["T"][0] + 1
+    assert all(d["digest"] in shards for o in ops for d in o["definitions"] if d["id"])
+    again = json.loads((tmp_path / "graphs" / "rowA.program.json").read_text())
+    assert "definitions" not in again and again["definitions_index"]
