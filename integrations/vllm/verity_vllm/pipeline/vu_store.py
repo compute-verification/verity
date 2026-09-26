@@ -107,14 +107,14 @@ def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tupl
             yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
         return
     import gc
-    import multiprocessing as mp
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.check.replay.fork import fork_pool
     SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])
     SR._prewarm_evaluators(_FORK["picked"])
     gc.collect()
     gc.freeze()
     try:
-        with mp.get_context("fork").Pool(processes=workers) as pool:
+        with fork_pool(workers) as pool:
             chunk = workers * 4
             for lo in range(0, n, chunk):
                 if time.perf_counter() - t0 > budget_s:
