@@ -13,7 +13,9 @@ Three independent groups run at once, the cores split between them (`--cores N`,
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result
     lean            `lake build` of the Lean verifier (PR #85), then its partition check against `verity.ir.partition`
-                    (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build
+                    (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
+                    (`tools/lean/audit.py --all --build`, its reports under `lean-audit/`), then its agreement with
+                    upstream's Rust verifier (`ci.py`) on the upstream build
                     stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by
                     name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
 
@@ -122,6 +124,8 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
+            ("lean-audit", [sys.executable, str(ROOT / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(ROOT),
+                            "--out", str(out / "lean-audit")], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -370,7 +374,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("circuit-check.json", *(s.get("log") for s in done)) if p and (run_dir / p).exists()]}
+           "steps": done, "artifacts": [p for p in ("circuit-check.json", "lean-audit/", *(s.get("log") for s in done)) if p and (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")

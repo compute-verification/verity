@@ -1,5 +1,0 @@
-name = "NegativeControl"
-defaultTargets = ["NegativeControl"]
-
-[[lean_lib]]
-name = "NegativeControl"

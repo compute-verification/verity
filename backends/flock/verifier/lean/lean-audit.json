@@ -1,0 +1,91 @@
+{
+ "roots": [
+  "Flock",
+  "FlockProofs",
+  "Main"
+ ],
+ "exempt": {
+  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
+ },
+ "meaning": [
+  "FlockProofs"
+ ],
+ "escapes": {
+  "Flock.canon": "partial def: canonical JSON of the statement's objects (PROTOCOL.md 16.8); no proof is about it, and the agreement tests (17.1) cover it"
+ },
+ "pins": {
+  "Flock.climb_binding": {
+   "signature": [
+    "Flock.climb_binding (ms : Flock.MerkleScheme) (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat) :",
+    "  s1.length = s2.length → a ≠ b → Flock.climb ms a idx s1 = Flock.climb ms b idx s2 → ms.Collision"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000e358eaf8"
+  },
+  "Flock.merkleCheck_opens": {
+   "signature": [
+    "Flock.merkleCheck_opens (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)",
+    "  (rows : Array (Array Flock.F128)) (siblings : Array ByteArray) (lanes : Nat)",
+    "  (h : Flock.merkleCheck ms cap c d positions rows siblings lanes = Except.ok ()) (j : Nat) (hj : j < positions.size) :",
+    "  Flock.opens ms cap c d lanes positions[j]! rows[j]! (Flock.sibsOf siblings (d - c) j) = true"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003673a1c9"
+  },
+  "Flock.merkle_binding": {
+   "signature": [
+    "Flock.merkle_binding (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)",
+    "  (rows1 rows2 : Array (Array Flock.F128)) (sib1 sib2 : Array ByteArray) (lanes : Nat)",
+    "  (h1 : Flock.merkleCheck ms cap c d positions rows1 sib1 lanes = Except.ok ())",
+    "  (h2 : Flock.merkleCheck ms cap c d positions rows2 sib2 lanes = Except.ok ()) (j : Nat) (hj : j < positions.size)",
+    "  (hr : rows1[j]! ≠ rows2[j]!) : ms.Collision"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007698f2b1"
+  },
+  "Flock.opens_binding": {
+   "signature": [
+    "Flock.opens_binding (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d lanes pos : Nat) (r1 r2 : Array Flock.F128)",
+    "  (s1 s2 : List ByteArray) (h1 : Flock.opens ms cap c d lanes pos r1 s1 = true)",
+    "  (h2 : Flock.opens ms cap c d lanes pos r2 s2 = true) (hr : r1 ≠ r2) : ms.Collision"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000080c6f70b"
+  },
+  "Flock.squeeze_answers": {
+   "signature": [
+    "Flock.squeeze_answers (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : n ≠ 0)",
+    "  (h : Flock.Transcript.squeeze kind n t = Except.ok (coins, t')) :",
+    "  ∃ r,",
+    "    t.rounds[t.k]? = some r ∧",
+    "      r.n = n ∧",
+    "        r.answers (t.framed kind n) ∧",
+    "          coins = r.coins ∧ t' = { rounds := t.rounds, k := t.k + 1, pending := ByteArray.empty }"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003bb3acb8"
+  },
+  "Flock.squeeze_retained": {
+   "signature": [
+    "Flock.squeeze_retained (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : n ≠ 0)",
+    "  (h : Flock.Transcript.squeeze kind n t = Except.ok (coins, t')) (r : Flock.Round) (hr : t.rounds[t.k]? = some r)",
+    "  (b : ByteArray) (hb : r.bytes = some b) : t.framed kind n = b ∧ coins = r.coins"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000a0fefb73"
+  }
+ },
+ "reads": {
+  "FlockProofs.Merkle": {
+   "digest": "89e5d9d71d02d76b750ef406a53d6860",
+   "definitions": [
+    "Flock.MerkleScheme.Collision"
+   ],
+   "pins": [
+    "Flock.climb_binding",
+    "Flock.merkle_binding",
+    "Flock.opens_binding"
+   ]
+  }
+ }
+}
