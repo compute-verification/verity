@@ -32,7 +32,7 @@ import numpy as np
 from verity.ir.layout import WIDE_FAN_IN, resolve
 from verity.ir.refs import Affine, Concat, Strided
 
-from verity_vllm.query import word as W
+from verity_vllm.query import call_scope as CS
 from verity_vllm.query.program_view import iter_instance_rows, spec_base, spec_statics
 
 CHECK_ID = "cross-call/v1"
@@ -47,7 +47,7 @@ MAX_GATES = 200_000_000
 _SPACE = {"p": 0, "n": 1}
 
 
-class RecomputeViolation(W.QueryRuleViolation):
+class RecomputeViolation(CS.QueryRuleViolation):
     """A Program in which some value is computed in two Calls: named per Definition, with the Calls that compute it."""
 
 
@@ -121,7 +121,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
         n = _ret_leaves(fn)
         if not params:
             r = Support({}, {}, np.zeros(n, np.int64))
-        elif fn.id in W.WIRING:
+        elif fn.id in CS.WIRING:
             r = Support({}, {}, np.full(n, full, np.int64))
         else:
             r = Support({full: 1}, {full: frozenset({fn.id})}, np.full(n, full, np.int64))
@@ -146,7 +146,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
             elif ax == 0:
                 cols.append(_leaf_masks(a.refs, pmask, outs).reshape(n, -1))
             else:
-                cols.append(np.stack([_leaf_masks(W._member_refs(a, ax, m), pmask, outs) for m in range(n)]))
+                cols.append(np.stack([_leaf_masks(CS._member_refs(a, ax, m), pmask, outs) for m in range(n)]))
         if not hasattr(e, "body"):
             sub = analyze(e, memo)
             if sub.gates:
@@ -165,7 +165,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
                 for c in cols:
                     if c.shape[1]:
                         red |= np.bitwise_or.reduce(c, axis=1)
-                outs.append(np.repeat(red if e.id in W.WIRING else np.zeros(n, np.int64), sub.out.shape[0]))
+                outs.append(np.repeat(red if e.id in CS.WIRING else np.zeros(n, np.int64), sub.out.shape[0]))
             continue
         pure = all((c.shape[1] == 0) or bool((c == c[:, :1]).all()) for c in cols)
         if pure:
@@ -198,7 +198,7 @@ def _wide(gate: Any, call: Any) -> Iterator[Any]:
     m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
     at_call = s.spec is call.spec and s.offset == call.offset
     for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
-        refs = W._member_refs(a, ax, m)
+        refs = CS._member_refs(a, ax, m)
         if at_call and isinstance(refs, Affine) and refs.space == "p":
             yield ("p", refs.idx)
             continue
@@ -207,7 +207,7 @@ def _wide(gate: Any, call: Any) -> Iterator[Any]:
 
 
 def _gates(fn: Any) -> tuple[Any, Any, int, int, list[int]]:
-    c, call = W._call_scope(fn)
+    c, call = CS._call_scope(fn)
     bounds, t = [], 0
     for _, ty in _params(fn):
         t += int(ty.leaves)
@@ -237,7 +237,7 @@ def _expand(fn: Any, leaf_masks: np.ndarray) -> Support:
             else:
                 m |= int(leaf_masks[o])
         mask[j] = m
-        if m and gate.prim.params and gate.prim.id not in W.WIRING:
+        if m and gate.prim.params and gate.prim.id not in CS.WIRING:
             g[m] += 1
             p[m].add(gate.prim.id)
     ret = []
@@ -259,6 +259,17 @@ def _norm(op: Iterable[Any], canon: dict[int, int]) -> list[tuple[int, int, int,
         else:
             out.append((s, i, lo, hi))
     return out
+
+
+def _view(op: dict[str, Any], canon: dict[int, int]) -> list[Any]:
+    """A strided operand `{"strided": [space, idx, base, inner, outer_stride, inner_stride, count]}` (a batch member's view, e.g. one
+    column of a table) without its runs: [its digest, its bounding run].  Held like a long operand: equal views, equal leaves; the
+    bounding run stands for its reads."""
+    sp, i, base, inner, os_, is_, cnt = op["strided"]
+    s = _SPACE[sp]
+    i = canon.get(int(i), int(i)) if s == 1 else int(i)
+    hi = base + ((cnt - 1) // inner) * os_ + (min(inner, cnt) - 1) * is_ + 1 if cnt else base
+    return [_digest("strided", s, i, base, inner, os_, is_, cnt), (s, i, int(base), int(hi))]
 
 
 def _digest(*parts: Any) -> bytes:
@@ -324,7 +335,7 @@ def _rows_of(source: Any) -> Callable[[], Iterable[dict[str, Any]]]:
     return lambda: sorted(rows, key=lambda r: int(r["i"]))
 
 
-def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str, dict], Any] = W.specialization,
+def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str, dict], Any] = CS.specialization,
                   max_gates: int = MAX_GATES, memo: dict | None = None, log=None) -> dict[str, Any]:
     """Cross-Call recomputes in one Program: `source` = an instance sequence path (`instances.json.gz`), its document, or its rows.
     Returns {"check", "ok", "calls", "structure_calls", "recomputes": [per (Definition, level): the Calls, the gates they compute
@@ -364,11 +375,11 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
     for r in rows():
         n += 1
         i, spec, form, name = int(r["i"]), r["spec"], str(r.get("form") or "call"), str(r.get("name") or "")
-        ops = [_norm(op, canon) for op in (r.get("args") or ())]
-        if all(run[0] == 1 and run[1] in structure for op in ops for run in op):
+        ops = [_view(op, canon) if isinstance(op, dict) else _norm(op, canon) for op in (r.get("args") or ())]
+        if all(run[0] == 1 and run[1] in structure for op in ops for run in (op[1:] if op and isinstance(op[0], bytes) else op)):
             structure.add(i)
             continue
-        key = _digest(spec, form, b"".join(_runs_bytes(op) + b"|" for op in ops))
+        key = _digest(spec, form, b"".join((op[0] if op and isinstance(op[0], bytes) else _runs_bytes(op)) + b"|" for op in ops))
         j = first.get(key)
         if j is not None:
             canon[i] = j
@@ -377,9 +388,10 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
         first[key] = i
         names[i] = name
         for op in ops:
-            for run in op:
+            for run in (op[1:] if op and isinstance(op[0], bytes) else op):
                 ranges.add(run, i)
-        calls[i] = _Call(i, spec, form, name, [op if len(op) <= LONG_OPERAND else _digest(_runs_bytes(op)) for op in ops])
+        calls[i] = _Call(i, spec, form, name, [op[0] if op and isinstance(op[0], bytes) else op if len(op) <= LONG_OPERAND
+                                               else _digest(_runs_bytes(op)) for op in ops])
     ranges.close()
 
     # pass 2: levels 2 and 3 over the stored Calls
@@ -513,7 +525,7 @@ def _structure(fn: Any, memo: dict) -> tuple[list[tuple[str, tuple[int, ...], bo
             o_ = g.operands
             wide = len(o_) > WIDE_FAN_IN
             ops = () if wide else tuple(o - lo if lo <= o < lo + n else -1 - o for o in o_)
-            gates.append((g.prim.id if not wide else "", ops, bool(g.prim.params) and g.prim.id not in W.WIRING))
+            gates.append((g.prim.id if not wide else "", ops, bool(g.prim.params) and g.prim.id not in CS.WIRING))
         got = memo[key] = (gates, bounds)
     return got
 
@@ -564,6 +576,34 @@ def _name(a: dict[str, Any]) -> str:
             f"e.g. {a['examples'][0][0]} = {a['examples'][0][1]}")
 
 
+def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
+    """Recomputes between the node members of a Definition whose body nodes read only its parameters (`word._separable`: its
+    partition is each member's own): each member is a Call over `fn`'s parameters, its operand runs its references
+    (`verity.ir.refs.runs`), checked as a Program's Calls are (`check_program`).  The recompute classes name each member's callee."""
+    from verity.ir.parts import n_members
+    from verity.ir.refs import runs
+    keys: dict[str, str] = {}
+    fns: dict[str, Any] = {}
+    rows: list[dict[str, Any]] = []
+    for k, node in enumerate(fn.body.nodes):
+        spec = keys.setdefault(node.fn.id, f"member{len(keys)}")
+        fns[spec] = node.fn
+        batch = node.form == "batch"
+        for m in range(n_members(node) if batch else 1):
+            args = []
+            for a, ax in zip(node.args, node.axes if batch else (None,) * len(node.args)):
+                refs = CS._member_refs(a, ax, m) if batch else a.refs
+                if isinstance(refs, Strided) and refs.count > LONG_OPERAND * (refs.inner if refs.inner_stride == 1 else 1):
+                    args.append({"strided": [refs.space, refs.idx, refs.base, refs.inner, refs.outer_stride, refs.inner_stride, refs.count]})
+                else:
+                    args.append([[s_, int(i), int(lo), int(hi)] for s_, i, lo, hi in runs(refs)])
+            rows.append({"i": len(rows), "spec": spec, "form": "call", "name": f"{node.fn.id}[node {k}, member {m}]", "args": args})
+    r = check_program(rows, strict=False, specialize=lambda f, _s: fns[f], memo=memo)
+    for a in r["recomputes"]:
+        a["definition"] = fns[a["definition"]].id
+    return r
+
+
 def check_programs(paths: Iterable[str], *, strict: bool = True, log=None, **kw: Any) -> dict[str, Any]:
     """`check_program` over several request Programs (one row), each on its own; the violations are named per Program."""
     memo: dict = {}
@@ -576,4 +616,4 @@ def check_programs(paths: Iterable[str], *, strict: bool = True, log=None, **kw:
     return {"check": CHECK_ID, "ok": not bad, "programs": per}
 
 
-__all__ = ["CHECK_ID", "RecomputeViolation", "Support", "analyze", "check_program", "check_programs"]
+__all__ = ["CHECK_ID", "RecomputeViolation", "Support", "analyze", "check_program", "check_programs", "members_check"]

@@ -128,3 +128,25 @@ def test_the_manifest_build_runs_the_check(tmp_path):
     with pytest.raises(X.RecomputeViolation, match="dup"):
         M.cross_call_check(str(tmp_path))
     assert M.BuildOptions.__dataclass_fields__["cross_call_check"].default is False            # opt-in
+
+
+def test_members_of_a_separable_definition_are_compared():
+    # word.unit_rule cuts each member of a body that reads only its parameters on its own: the FP8 block GEMM's coordinates each
+    # compute their block's scale product sx[kb] * sw[kb], 127 copies per (weight block, kb)
+    fp8 = W.specialization("ScaledMmFp8Block_v1", {"K": 256, "N": 256, "G": 128})
+    (v,) = [v for v in W.unit_rule(fp8)["violations"] if v["class"] == "cut"]
+    assert v["codes"] == ["gate-recomputed"] and v["detail"]["gate-recomputed"]["n"] == 2 * 2 * 127
+    (a,) = v["detail"]["gate-recomputed"]["classes"]
+    assert a["level"] == "operands" and a["definition"].startswith("ScaledMmFp8BlockCoordinate") and a["calls"] == 2 * 127
+    with pytest.raises(W.QueryRuleViolation, match="ScaledMmFp8Block_v1.*cut"):
+        W.check_calls([{"family": "ScaledMmFp8Block_v1", "statics": {"K": 256, "N": 256, "G": 128}, "definition": fp8.id, "calls": 1}])
+
+    def twice(B, S, x):
+        return tuple_of(B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1]))
+
+    f = bind(CompositeDefinition("TwiceSeparable", 1, (), lambda S: ((("x", Array(2, F32)),), Tuple(F32, F32)), twice, register=False))
+    assert W._separable(f) is not None
+    (v,) = W.unit_rule(f)["violations"]
+    assert v["class"] == "cut" and v["detail"]["gate-recomputed"]["n"] == 1
+    for fam, st in (("Gemm_v1", {"K": 64, "N": 8}), ("Attention_v3", {"T": 21, "NH": 4, "KVH": 2, "D": 64, "BN": 128}), ("RoPE_v1", {"NHEADS": 3, "D": 16})):
+        assert W.unit_rule(W.specialization(fam, st))["violations"] == []

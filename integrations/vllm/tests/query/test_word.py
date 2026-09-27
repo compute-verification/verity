@@ -209,3 +209,16 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
     assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
     assert R["kinds"] == ["output"] and R["cut"].ok and R["cut"].detail["redundant_gates"] == 1
+
+
+def test_a_call_that_only_rearranges_bits_returns_its_inputs():
+    # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.types import Array
+    from verity_vllm.program.registry import prims as P
+    f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
+                                 lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
+    G = W.Graph(f)
+    R = W.units(G, 16, 32)
+    assert G.n == 0 and len(G.returned_inputs) == 8 and R["cut"].ok, R["cut"].codes
+    assert W.unit_rule(f)["violations"] == []
