@@ -86,7 +86,9 @@ verifier's build with its upstream cross-check once PR #85 is on `main`, at once
 only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into
 `main` only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence
 store, or when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on
-one `check` of the merged tree.
+one `check` of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
+(`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`): record it with
+`uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
 
 ## Working principles
 

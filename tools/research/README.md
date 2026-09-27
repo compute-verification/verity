@@ -94,6 +94,10 @@ polled there), and fast-forwards the target to it when it passes: the exact tree
 the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
 the longest prefix that passed.
 
+A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
+the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
+`passed` admits it. `check` requires `lean-agreement` for `backends/flock/`; `--train --send FILE` ships what such a step needs.
+
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
 workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory), so a relative
