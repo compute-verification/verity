@@ -215,11 +215,11 @@ def mufu_ex2_ftz(x: np.ndarray, table: np.ndarray | None = None) -> np.ndarray:
     mant = ((ax & 0x7FFFFF) | 0x800000).astype(np.int64)
     unb = e - 127
     sh_l = np.clip(unb, 0, 63)
-    # the registered evaluator is the compiled C rule (`mant >> (-unb)`), whose shift amount is taken
-    # mod 64 on both x86-64 and arm64; the exhaustive sm_89 verification (attention-model.md §3.1,
-    # all 2^32 inputs, 0 mismatches) pinned exactly this behaviour, so it is replicated bit for bit
-    sh_r = (-unb) & 63
-    K = np.where(unb >= 0, mant << sh_l, mant >> np.where(unb < 0, sh_r, 0))
+    # K = floor(|x| 2^23): mant < 2^24, so every right shift of 24 or more is 0 and |x| < 2^-23 reads T[0] = 1.0
+    # at n = 0 for either sign.  The exhaustive sm_89 verification (attention-model.md §3.1, all 2^32 inputs,
+    # 0 mismatches) ran the model on the device, where the shift clamps; a host C shift by >= 64 wraps mod 64
+    sh_r = np.clip(-unb, 0, 24)
+    K = np.where(unb >= 0, mant << sh_l, mant >> sh_r)
     frac_zero = (K & 0x7FFFFF) == 0
     fixed = np.where(~neg, K, np.where(frac_zero, -K, -K - 1))
     n = fixed >> 23  # arithmetic
@@ -792,9 +792,9 @@ def silu_mul_rows(gu: np.ndarray):
 BN = b1.BN  # `AttnBlock_v1`'s block (64).  [E7 D54] `attn_block` reads the block size from the K block it is given; `attention_head_states` takes ``BN``
 
 
-def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None):
+def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True):
     """`AttnBlock_v1{D, NVIS, FIRST}` vectorised over rows (`AttnBlock_v2{..., BN, DOT}` with ``dot16`` = the DOT step's twin,
-    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`).
+    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded).
 
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
@@ -810,7 +810,7 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
     for c in range(1, NVIS):
         bmax = max_fmnmx(bmax, s[:, c])
     m_new = bmax if FIRST else max_fmnmx(m_prev, bmax)
-    m_use = guard_neg_inf_zero(m_new)
+    m_use = guard_neg_inf_zero(m_new) if check else m_new
     scale = np.full(R, b1._scale_log2_bits(D), dtype=np.uint32)
     if not FIRST:
         scores_scale = mufu_ex2_ftz(mul_ftz(sub_ftz(m_prev, m_use), scale))
@@ -858,10 +858,10 @@ def fa3_inv_sum(s: np.ndarray) -> np.ndarray:
 INV_SUM_BY_PRIM = {"Fa2InvSum_v1": fa2_inv_sum, "Fa3InvSum_v1": fa3_inv_sum}
 
 
-def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int | None = None, *, dot16=None, inv=None):
+def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int | None = None, *, dot16=None, inv=None, masked_from: int | None = None):
     """`AttentionHead_v1{T, D}` (``BN`` None / 64) or `AttentionHead_v3{T, D}` (``BN = b1.fa2_kblock_n(D)``) vectorised over rows,
     emitting every block state; `AttentionHead_v2{T, D, BN, DOT, INV}` with ``dot16`` = `TC_DOT16_BY_PRIM[DOT]` and ``inv`` =
-    `INV_SUM_BY_PRIM[INV]` (defaults: the Ampere step, `Fa2InvSum_v1`).
+    `INV_SUM_BY_PRIM[INV]` (defaults: the Ampere step, `Fa2InvSum_v1`); `AttentionHead_v4{..., MASKED_FROM}` with ``masked_from``.
 
     q (R, D); k, v (R, T, D) bf16 words (per-row KV, GQA-expanded by the caller).  Returns dict:
     ``m`` (R, nb), ``l`` (R, nb, 4), ``o`` (R, nb, D) f32 words in *processing order* (block nb-1 first),
@@ -893,7 +893,7 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
                                 zero if first else m,
                                 np.zeros((R, 4), np.uint32) if first else l,
                                 np.zeros((R, D), np.uint32) if first else o,
-                                D=D, NVIS=nvis, FIRST=first, dot16=dot16)
+                                D=D, NVIS=nvis, FIRST=first, dot16=dot16, check=masked_from is None or b >= masked_from)
         nf |= f
         ms.append(m)
         ls.append(l)
@@ -906,9 +906,9 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
 
 
 def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, dot_prim: str = "AmpereBF16TcDot16_v1",
-                   inv_prim: str = "Fa2InvSum_v1") -> tuple[np.ndarray, np.ndarray]:
+                   inv_prim: str = "Fa2InvSum_v1", masked_from: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """[R17 dense, ruling R17-3 / BRIEF §4] one attention ROW of the Program -- `Attention_v3{T, NH, KVH, D, BN}` (FA2, the defaults) or
-    `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1) -- exactly as the
+    `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1; `Attention_v4` adds ``masked_from``) -- exactly as the
     registered Definitions compose it: head h reads KV head h // (NH/KVH); one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks
     visited last -> first (`AttentionHead_v2/v3`).  q (NH, D), kc / vc (T, KVH, D) bf16 words -> (out (NH, D) bf16 words, nonfinite (NH,)).
     This is the composition of the row's VUs on its committed boundary (q, the K/V history, out); the block INTERIORS Q(P) selects live in
@@ -932,7 +932,7 @@ def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, do
     kvh = np.arange(NH) // G                                                     # (NH,): the KV head of each query head
     k = np.ascontiguousarray(np.transpose(kc, (1, 0, 2))[kvh])                   # (NH, T, D) GQA-expanded views
     v = np.ascontiguousarray(np.transpose(vc, (1, 0, 2))[kvh])
-    st = attention_head_states(q, k, v, int(BN), dot16=TC_DOT16_BY_PRIM[dot_prim], inv=INV_SUM_BY_PRIM[inv_prim])
+    st = attention_head_states(q, k, v, int(BN), dot16=TC_DOT16_BY_PRIM[dot_prim], inv=INV_SUM_BY_PRIM[inv_prim], masked_from=masked_from)
     return st["out"], st["nonfinite"]
 
 

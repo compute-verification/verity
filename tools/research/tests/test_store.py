@@ -141,7 +141,7 @@ def test_put_fetch_roundtrip_file_and_tree(store, tmp_path, capsys):
     out.mkdir()
     assert store.fetch(art, out) == out / "proof.bin" and (out / "proof.bin").read_bytes() == src.read_bytes()
     assert store.fetch(art, tmp_path / "renamed.bin").read_bytes() == src.read_bytes()
-    assert not os.access(store.object_path(m.payload.sha256), os.W_OK), "blobs are read-only"
+    assert not store.object_path(m.payload.sha256).stat().st_mode & 0o222, "blobs are read-only"   # the mode: root may write anyway
 
     tree = _tree(tmp_path / "tree")
     tart = store.put_artifact("run-files/v1", {"run": "x"}, tree=tree)
@@ -200,7 +200,7 @@ def test_labels_append_only(store):
     assert [l.value for l in store.labels(t, key="reviewed")] == [True, False], "history kept; the store never picks a winner"
     assert [l.by for l in store.labels(t, key="proof_class", by_glob="red-team-*")] == ["red-team-zk-1", "red-team-zk-2", "red-team-zk-2"]
     assert [l.ref for l in store.labels(t, by_glob="*-2")] == ["r20260922-105905-2021", None]
-    assert not os.access(p1, os.W_OK)
+    assert not Path(p1).stat().st_mode & 0o222
     assert store.labels("art:" + "4" * 64) == []
     with pytest.raises(ValueError):
         store.add_label("not-an-id", "k", "v", "me")

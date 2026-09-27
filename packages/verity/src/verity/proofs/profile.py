@@ -8,7 +8,7 @@ the application's failure union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ir.partition.Level`): each level's members
 partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`) or only groups.  The
-names are the producer's labels (sampled proofs draws "replay" with `Bernoulli(p)` and "check" with `Subset(k)`); the
+names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn `Bernoulli(p * k / n_v)`); the
 profile carries draws, never roles.
 """
 
@@ -17,11 +17,26 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
-from itertools import combinations
-from math import comb, inf, log, prod
+from math import comb, inf, log, log1p, nextafter, prod
 from types import MappingProxyType
 
 from verity.ir.partition import Hierarchy, Level
+
+
+#: `worst_case`'s margin: risks are shrunk and the bound raised by this relative amount, far above the arithmetic's error
+#: (a few units in the last place), so the bound is never below the relaxation's exact optimum
+MARGIN = 2.0 ** -30
+
+
+def _neg_log_ratio(a: int, d: int) -> float:
+    """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
+    a/d >= 1/2 (no cancellation), the log of the correctly rounded d/a while it fits a float, and the difference of the
+    two big-integer logs only beyond that, where -ln(a/d) > 693 and the difference is relatively tiny."""
+    if 2 * a >= d:
+        return -log1p(-((d - a) / d))
+    if a << 1000 >= d:
+        return log(d / a)
+    return log(d) - log(a)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +78,12 @@ class IntegrityProfile:
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; undrawn levels only group.  `drawn` counts the members actually drawn at each level, all passed.
+
+    A profile of more than one level is valid only when its checked level is committed before the first draw
+    (one-stage, or two-stage with every intermediate committed up front).  When the checked level is committed after
+    a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
+    and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
+    committed first (`docs/audit-protocols.md` §2.9).
 
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
@@ -149,31 +170,66 @@ class IntegrityProfile:
             raise ValueError(f"0 <= m <= {n}")
         return 1 - p + p * Fraction(comb(n - m, k), comb(n, k))
 
+    def _odds(self) -> tuple[int, int, int, int, int]:
+        """(n, k, p's numerator, p's denominator, C(n, k)): accept(m) = ((den - num) C(n, k) + num C(n - m, k)) /
+        (den C(n, k)), in integers."""
+        _, n, p, k = self._law()
+        return n, k, p.numerator, p.denominator, comb(n, k)
+
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m)."""
-        a = self.accept(m)
-        return inf if a == 0 else -log(a)
+        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`_neg_log_ratio`): no
+        underflow where `accept` falls below the smallest float, and no cancellation where it is close to 1."""
+        n, k, num, den, top = self._odds()
+        if not 0 <= m <= n:
+            raise ValueError(f"0 <= m <= {n}")
+        a = (den - num) * top + num * comb(n - m, k)
+        return inf if a == 0 else _neg_log_ratio(a, den * top)
+
+    def _rhos(self) -> list[float]:
+        """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, the same values as `rho`."""
+        n, k, num, den, top = self._odds()
+        whole, c, out = den * top, top, []
+        for m in range(n + 1):
+            a = (den - num) * top + num * c
+            out.append(inf if a == 0 else _neg_log_ratio(a, whole))
+            c = c * (n - m - k) // (n - m) if n - m > k else 0
+        return out
 
     def worst_case(self, utility: Callable[[int], float], cap: float | None = None) -> float:
         """An upper bound on sum_i utility(m_i) over the Bernoulli members i the profile admits, for utility(0) = 0.
 
         It is the optimum of the linear relaxation: choose x_m >= 0 Bernoulli members at each m in 1..n with
-        sum x_m <= members and sum x_m rho(m) <= ln(1/delta).  Two constraints, so an optimal vertex uses at most two
-        values of m, and every pair is tried.  A consumer reading at a level above the Bernoulli level (touched
-        requests, say) passes `cap`, that level's member count (`count`), which the bound never exceeds."""
+        sum x_m <= members and sum x_m rho(m) <= ln(1/delta).  Scaled by `members`, that is the largest value, at
+        mean risk at most ln(1/delta)/members, of the upper concave envelope of the points (rho(m), utility(m)) and
+        (0, 0).  rho is nondecreasing in m (accept is), so the points arrive sorted and one pass builds the envelope:
+        linear in n, where trying every pair of m was quadratic.  The rounding is directed: every risk is shrunk and the
+        result raised by `MARGIN`, capped at members * max utility, which the optimum never exceeds, so the bound is
+        never below the exact optimum.  A consumer reading at a level above the Bernoulli level (touched requests, say)
+        passes `cap`, that level's member count (`count`), which the bound never exceeds."""
         if cap is not None and cap < 0:
             raise ValueError("cap >= 0")
         members, n, _, _ = self._law()
-        budget = log(1 / self.delta)
-        options = [(float(u), self.rho(m)) for m in range(1, n + 1) if (u := utility(m)) > 0]
-        options = [(u, r) for u, r in options if r < inf]
+        rhos = self._rhos()
+        points = [(r * (1 - MARGIN), float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
         best = 0.0
-        if options:
-            best = max(u * (members if r == 0 else min(members, budget / r)) for u, r in options)
-            for (ua, ra), (ub, rb) in combinations(sorted(options, key=lambda o: o[1]), 2):
-                if rb > ra and ra * members < budget < rb * members:
-                    xb = (budget - members * ra) / (rb - ra)
-                    best = max(best, ua * (members - xb) + ub * xb)
+        if points and members > 0:
+            hull: list[tuple[float, float]] = []
+            for pt in sorted([(0.0, 0.0), *points]):
+                while len(hull) >= 2 and ((hull[-1][0] - hull[-2][0]) * (pt[1] - hull[-2][1])
+                                          >= (hull[-1][1] - hull[-2][1]) * (pt[0] - hull[-2][0])):
+                    hull.pop()
+                hull.append(pt)
+            t = log(1 / self.delta) / members
+            for (ra, ua), (rb, ub) in zip(hull, hull[1:] + [(inf, 0.0)]):
+                if ra <= t:
+                    best = max(best, ua)
+                    if t < rb < inf:
+                        best = max(best, ua + (ub - ua) * (t - ra) / (rb - ra))
+            top = max(u for _r, u in points)
+            full = members * top
+            if Fraction(full) < members * Fraction(top):                 # the cap, rounded up
+                full = nextafter(full, inf)
+            best = full if best * members >= full else min(full, nextafter(best * members * (1 + MARGIN), inf))
         return best if cap is None else min(best, float(cap))
 
     def to_json(self) -> dict:
@@ -185,4 +241,4 @@ class IntegrityProfile:
                 "delta": self.delta, "drawn": dict(self.drawn)}
 
 
-__all__ = ["Bernoulli", "Draw", "IntegrityProfile", "Subset"]
+__all__ = ["MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Subset"]

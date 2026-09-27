@@ -69,7 +69,7 @@ __device__ __forceinline__ uint32_t model_ex2(uint32_t xb, const uint32_t* T) {
         int unb = e - 127;
         if (unb >= 30) return (xb >> 31) ? 0u : 0x7F800000u;  // |x| >= 2^30: overflow / underflow(ftz)
         uint64_t mant = (uint64_t)((ax & 0x7FFFFF) | 0x800000);
-        uint64_t K = (unb >= 0) ? (mant << unb) : (mant >> (-unb));  // floor(|x| * 2^23)
+        uint64_t K = (unb >= 0) ? (mant << unb) : (-unb >= 24 ? 0 : (mant >> (-unb)));  // floor(|x| * 2^23); mant < 2^24
         long long fixed;
         if (!(xb >> 31)) fixed = (long long)K;
         else if (FRAC_MODE == 4 && (K & 0x7FFFFF) == 0) fixed = -(long long)K;

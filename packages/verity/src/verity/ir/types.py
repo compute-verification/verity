@@ -37,7 +37,7 @@ class Value(Type):
     w: int
 
     def __post_init__(self) -> None:
-        if not (isinstance(self.w, int) and self.w > 0):
+        if not (isinstance(self.w, int) and not isinstance(self.w, bool) and self.w > 0):
             raise TypeError(f"Value<w> needs a positive int width, got {self.w!r}")
 
     @property
@@ -63,7 +63,7 @@ class Array(Type):
     elem: Type
 
     def __post_init__(self) -> None:
-        if not (isinstance(self.n, int) and self.n >= 0):
+        if not (isinstance(self.n, int) and not isinstance(self.n, bool) and self.n >= 0):
             raise TypeError(f"Array<n,T> needs a non-negative int length, got {self.n!r}")
         if not isinstance(self.elem, Type):
             raise TypeError(f"Array element must be a Type, got {self.elem!r}")

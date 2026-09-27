@@ -52,6 +52,9 @@ class Instance:
 
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
+    # linear in the finder's expected time t: a collision with probability at most t/2^(n/2 + 0.5) for an n-bit hash
+    # (Chiesa-Dall'Agnol-Guan-Spooner-Yogev, ePrint 2024/1434, Thm 2)
+    Property("ecr", "Expected-time collision resistance", "ECR"),
     Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
 )}

@@ -31,6 +31,9 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as M0's selftest build pins it, for its recorded cases.
+- `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
+  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
+  staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
