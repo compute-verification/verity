@@ -16,6 +16,8 @@ structure Public where
   outputs : Array Nat
   /-- SHA-256 of the canonical header (`rows = false`) and every byte after it: what Σ binds -/
   sha : ByteArray
+  /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
+  population : Option (Nat × Array ByteArray × Array Nat) := none
   deriving Inhabited
 
 def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
@@ -49,24 +51,25 @@ namespace FV3
 
 def FRAME : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
 
-def hash (tag : String) (parts : List ByteArray) : ByteArray :=
+def hash (tag : String) (parts : List ByteArray) (H : ByteArray → ByteArray := Sha256.hash) : ByteArray :=
   let t := tag.toUTF8
-  Sha256.hash (parts.foldl (fun acc p => acc ++ be64 p.size.toUInt64 ++ p) (FRAME ++ be32 t.size.toUInt32 ++ t))
+  H (parts.foldl (fun acc p => acc ++ be64 p.size.toUInt64 ++ p) (FRAME ++ be32 t.size.toUInt32 ++ t))
 
 def uint (x : Nat) : ByteArray :=
   let b := be64 x.toUInt64
   let z := ((List.range 8).find? (fun i => b.get! i != 0)).getD 7
   b.extract z 8
 
-def leaf (dom : ByteArray) (i : Nat) (schema : String) (payload : ByteArray) : ByteArray :=
-  hash "leaf" [dom, uint i, uint i, schema.toUTF8, payload]
+def leaf (dom : ByteArray) (i : Nat) (schema : String) (payload : ByteArray) (H : ByteArray → ByteArray := Sha256.hash) :
+    ByteArray :=
+  hash "leaf" [dom, uint i, uint i, schema.toUTF8, payload] H
 
-def root (dom : ByteArray) (leaves : Array ByteArray) : ByteArray := Id.run do
+def root (dom : ByteArray) (leaves : Array ByteArray) (H : ByteArray → ByteArray := Sha256.hash) : ByteArray := Id.run do
   let n := leaves.size
   let width := nextPow2 n
-  let mut level := leaves ++ (Array.range (width - n)).map fun k => hash "pad" [dom, uint (n + k)]
+  let mut level := leaves ++ (Array.range (width - n)).map fun k => hash "pad" [dom, uint (n + k)] H
   for depth in [0:log2ceil width] do
-    level := (Array.range (level.size / 2)).map fun i => hash "node" [dom, uint depth, uint i, level[2 * i]!, level[2 * i + 1]!]
+    level := (Array.range (level.size / 2)).map fun i => hash "node" [dom, uint depth, uint i, level[2 * i]!, level[2 * i + 1]!] H
   return level.getD 0 ByteArray.empty
 
 end FV3
