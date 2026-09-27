@@ -1,19 +1,51 @@
-"""One Call's computing graph and the unit width rule: the references a unit cut of the no-recompute partition is checked on.
+"""`Q_word` v1, the partition query, and the references a cut is checked on: each Call's computing graph, the cut, the width rule.
 
-`CallGraph(fn)` is the explicit gates of one activation of `fn` (its parameters are Input gates of a one-Call Program) that COMPUTE:
-constants, values computed from constants alone, and wiring (`WIRING`: primitives each of whose output bits is a constant or a copy of
-one input bit) are circuit structure, and a read through structure stands for reads of its source gates.  It is what a partition
-checker derives from its own copy of the program rather than reads from a cut: each computing gate's declared width and primitive,
-the reads between computing gates, the Call's parameter reads, the returned gates in return order, the pairs of gates computing the
-same value, and the total and structure gate counts.
+The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
-The width rule (`Q_word_v1{X,W,EXTRAS}`, today X = 16, W = 32, EXTRAS = 0) counts **bits**: a unit's boundary gates are its gates
-another unit reads or the Call returns; with ob their summed declared widths and og their number, the unit passes when
-ob <= X + EXTRAS, or when og == 1 and ob <= W + EXTRAS (one value of at most W bits).  `check_cut` applies it with
-`partition.validate_unit_cut`, the invariant, to one Call's cut: failure code `unit-too-wide`, listing (unit, ob, og).
+**Input.**  The program's descriptor, `codec.canonical_json(codec.encode_program(program))` minus `annotations` (schema
+`verity-ir/descriptor/v1`), decoded by `codec.decode_program`: the root specialization and every definition it reaches -- a primitive
+by `{form, id, params, ret}`, a composite by its bindings and body (`params`, `ret_type`, `nodes` with `form` call / batch / scan /
+primitive, `fn`, `args` of typed reference sequences, `axes`, `out`, and `ret`).  Gates follow the canonical layout (`layout.Circuit`):
+a body's gates are its nodes' in order, node k at `body.offsets[k]`, a batch node's members contiguous (member m at offset
+`m * callee.gates`), a primitive node one gate per member, recursively; `layout.resolve` maps a reference (`("p", param, leaf)` or
+`("n", node, leaf)`, `refs.Affine` / `Strided` / `Concat` / `Explicit` sequences) to a gate id.
 
-A cut is its owner per computing gate.  Its committed set is derived (`derived_committed`): a value is committed exactly when a unit
-other than its producer's reads it, or the Call returns it; what serving commits is checked against that set.
+1. **Calls.**  The root body's nodes whose callee's family is not `Input`, in body order.  Each is cut as its Definition's activation
+   in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
+   `L..L+gates-1`.  Activations of one Definition share its cut.
+2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body
+   (`separable`: no scan node, every node reads only parameters, the body returns every leaf each node produces) is its nodes'
+   members' cuts, in node then member order.  Any other body is `cut_word(CallGraph(fn), X)`.
+3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
+   * operands: the gate's operand ids; a gate with more than `layout.WIDE_FAN_IN` (4096) operands is *wide*: its operands are
+     enumerated per argument (`_wide_operands`), skipping an argument that is a whole parameter of the Call; an operand outside the
+     Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
+   * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
+     non-structure, non-external gate with at least one operand, all of them constants, is a constant too;
+   * recomputes: `key(j) = (primitive, operand tokens)`, an input's token interned from `("i", input index)`; a structure gate's token
+     is interned from `("s",) + key`, a wide gate's from `("u", j)`; a computing gate whose key an earlier computing gate `f` had is
+     the recomputed pair `(j, f)` and takes `f`'s token, else it is interned from `("g", j)`.  Tokens are exact interned ids
+     (`_Interner`), never hashes;
+   * reads through structure: a structure gate's sources are its operands with every structure operand replaced by its sources;
+     the computing gates, compacted in layout order, read each distinct source of their operands once, in operand order (an input:
+     `input_reads`; a gate: an edge `src -> dst`);
+   * outputs: each returned leaf in `body.ret` order, resolved inside the Call: a computing gate, or a structure gate's computing
+     sources (ascending) -- its input sources are `returned_inputs`.
+4. **cut_word(graph, X).**  (i) `targets`: the returned computing gates, first occurrence in return order, packed greedily into runs
+   of at most X declared bits (a wider gate is a run alone); each run is an *output* unit and heads its gates.  (ii) Repeat: every
+   gate starts at its head's unit or -1; backward (`g = n-1..0`) a gate without a head takes the unit its consumers agree on
+   (consumers in edge order; one consumer's unit, ignoring -1 and repeats; -2 when two differ).  Producers `p` of edges `(p, q)`
+   with `own[p] = -2` and `own[q] >= 0`, ascending, become new *committed* units heading themselves; if there are none, gates still
+   at -1 (ascending) join the one unit their uncommitted producers are all in (exactly one producer unit, and it is live), and every
+   gate still at -1 heads its own *dead* unit; producers of edges across units that head nothing, ascending, then become committed
+   units (the dead units dropped and the pass repeated), or, if there are none, the cut is final.  Units are numbered as created:
+   outputs, committed in promotion order, dead last.
+5. **Units of the Program.**  By Call, then within the Call's cut.  The input unit is not a unit.
+6. **Checks** (`check_cut`).  The committed set is derived (`derived_committed`): a value is committed exactly when a unit other
+   than its producer's reads it, or the Call returns it.  `partition.validate_unit_cut` holds the invariant (the Call's parameters
+   standing for the input unit); the width rule counts **bits**: with ob the summed declared widths and og the number of a unit's
+   boundary gates (read by another unit, or returned), a unit passes when ob <= X, or og == 1 and ob <= W; code `unit-too-wide`.
+   What serving commits, when given, is held to the derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`).
 """
 from __future__ import annotations
 
@@ -72,6 +104,16 @@ def _wide_operands(gate: Any, call: Any) -> Iterator[int]:
             yield resolve(s, refs[j])
 
 
+class _Interner(dict):
+    """Structural keys -> dense ids, in first-seen order."""
+
+    def __call__(self, key: tuple) -> int:
+        t = self.get(key)
+        if t is None:
+            t = self[key] = len(self)
+        return t
+
+
 class CallGraph:
     """The computing gates of one activation of `fn`, compacted in canonical (topological) order:
 
@@ -125,27 +167,24 @@ class CallGraph:
             if not free[j] and not external[j] and ops[j] and all(o >= 0 and const[o] for o in ops[j]):
                 const[j] = free[j] = True
         # recomputes: a computation gate with the primitive and the operands (by value: constants, inputs, wiring, earlier canonical
-        # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing
-        tok = array("q", bytes(8 * n))                               # a value's token: equal tokens, equal values
-        first: dict[int, int] = {}                                  # key hash -> the first gate with that key
+        # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing.
+        # Values are exact interned ids (`_Interner`), never hashes: equal ids, structurally equal values.
+        ids = _Interner()
+        tok = array("q", bytes(8 * n))
+        first: dict[tuple, int] = {}                                # computing key -> the first gate with it
         dup: list[tuple[int, int]] = []
-
-        def key(j: int) -> tuple:
-            return (int(prim[j]),) + tuple(hash(("i", -o)) if o < 0 else tok[o] for o in ops[j])   # -o >= 1: hash(-1) == hash(-2)
-
         for j in range(n):
-            k = key(j)
-            h = hash(k)
+            k = (prim[j],) + tuple(ids(("i", -1 - o)) if o < 0 else tok[o] for o in ops[j])
             if free[j]:
-                tok[j] = hash(("s", h))
+                tok[j] = ids(("s",) + k)
             elif j in wide:
-                tok[j] = hash(("u", j))
-            elif h in first and key(first[h]) == k:
-                dup.append((j, first[h]))
-                tok[j] = tok[first[h]]
+                tok[j] = ids(("u", j))
+            elif k in first:
+                dup.append((j, first[k]))
+                tok[j] = tok[first[k]]
             else:
-                first.setdefault(h, j)
-                tok[j] = hash(("g", j))
+                first[k] = j
+                tok[j] = ids(("g", j))
         srcs: dict[int, tuple[int, ...]] = {}
         for j in range(n):
             if free[j]:
@@ -258,4 +297,177 @@ def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int] |
     return CutVerdict(False, tuple(cut.codes) + ("unit-too-wide",), detail)
 
 
-__all__ = ["WIRING", "WIDTH_RULE", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut"]
+def separable(fn: Any) -> list[tuple[Any, int]] | None:
+    """[(callee, members)] per body node when `fn`'s body nodes read only its parameters and it returns every leaf they produce: no
+    value crosses between nodes, so the cut is each node member's own.  None otherwise (a scan node included)."""
+    from .intervals import norm, ref_intervals, total
+    from .parts import n_members
+    if not hasattr(fn, "body"):
+        return None
+    body = fn.body
+    for n in body.nodes:
+        if n.form == "scan":
+            return None
+        reads: dict = {}
+        for a in n.args:
+            ref_intervals(a.refs, reads)
+        if any(space != "p" for space, _i in reads):
+            return None
+    ret: dict = {}
+    ref_intervals(body.ret, ret)
+    for k, n in enumerate(body.nodes):
+        if total(norm(ret.get(("n", k), ()))) != n.out.leaves:
+            return None
+    return [(n.fn, n_members(n)) for n in body.nodes]
+
+
+def targets(graph: CallGraph, X: int) -> list[list[int]]:
+    """Step 1: the returned computing gates, first occurrence in return order, packed into runs of at most X declared bits (a gate
+    wider than X is a run alone)."""
+    seen, out, cur, bits = set(), [], [], 0
+    width = graph.width.tolist()
+    for g in graph.outputs:
+        if g in seen:
+            continue
+        seen.add(g)
+        w = width[g]
+        if cur and bits + w > X:
+            out.append(cur)
+            cur, bits = [], 0
+        cur.append(g)
+        bits += w
+    if cur:
+        out.append(cur)
+    return out
+
+
+def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[int], list[int]]:
+    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values."""
+    n = graph.n
+    consumers: list[list[int]] = [[] for _ in range(n)]
+    producers: list[list[int]] = [[] for _ in range(n)]
+    edges = list(zip(graph.src.tolist(), graph.dst.tolist()))
+    for p, q in edges:
+        consumers[p].append(q)
+        producers[q].append(p)
+    while True:
+        own = list(head)
+        for g in range(n - 1, -1, -1):
+            if own[g] >= 0:
+                continue
+            o = -1
+            for c in consumers[g]:
+                oc = own[c]
+                if oc == -1 or oc == o:
+                    continue
+                if o == -1 and oc >= 0:
+                    o = oc
+                else:
+                    o = -2
+                    break
+            own[g] = o
+        promote = sorted({p for p, q in edges if own[p] == -2 and own[q] >= 0})
+        if not promote:
+            live = len(kinds)
+            for g in range(n):
+                if own[g] != -1:
+                    continue
+                us = {own[p] for p in producers[g] if head[p] < 0}
+                alive = {u for u in us if 0 <= u < live}
+                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
+            for g in range(n):
+                if own[g] == -1:
+                    own[g] = len(kinds)
+                    kinds.append("dead")
+            promote = sorted({p for p, q in edges if own[p] != own[q] and head[p] < 0})
+            if not promote:
+                return own, head
+            del kinds[live:]
+        for i, g in enumerate(promote):
+            head[g] = len(kinds) + i
+        kinds += ["committed"] * len(promote)
+
+
+def cut_word(graph: CallGraph, X: int) -> tuple[list[int], list[str], list[int]]:
+    """`Q_word`'s cut of one flat Call: (owner per computing gate, kind per unit: output / committed / dead, head per gate: its unit
+    when the gate heads it, else -1)."""
+    head = [-1] * graph.n
+    kinds: list[str] = []
+    for t in targets(graph, X):
+        for g in t:
+            head[g] = len(kinds)
+        kinds.append("output")
+    own, head = owners(graph, head, kinds)
+    return own, kinds, head
+
+
+class DefinitionCut:
+    """`Q_word{X}`'s cut of one Definition specialization, as evaluated: `flat` (owner per computing gate, `kinds`) for a body cut as a
+    whole, or `parts` [(child cut or None for a structure primitive, members)] for a separable body, whose units are its members' in
+    node, then member, order.  `units`: how many; `owner()`: the owner per computing gate of the activation, materialised."""
+
+    __slots__ = ("fn", "flat", "kinds", "parts", "units", "gates")
+
+    def __init__(self, fn: Any, flat: list[int] | None = None, kinds: list[str] | None = None,
+                 parts: list[tuple["DefinitionCut | None", int]] | None = None) -> None:
+        self.fn, self.flat, self.kinds, self.parts = fn, flat, kinds, parts
+        if parts is None:
+            self.units, self.gates = len(kinds or ()), len(flat or ())
+        else:
+            self.units = sum(c.units * m for c, m in parts if c is not None)
+            self.gates = sum(c.gates * m for c, m in parts if c is not None)
+
+    def owner(self) -> list[int]:
+        if self.parts is None:
+            return list(self.flat)
+        out: list[int] = []
+        base = 0
+        for c, m in self.parts:
+            if c is None:
+                continue
+            sub = c.owner()
+            for _ in range(m):
+                out.extend(u + base for u in sub)
+                base += c.units
+        return out
+
+    def locate(self, u: int) -> list[tuple[int, int, int]]:
+        """Unit `u` of this cut as a path of (body node, member, unit within the member's cut) down to a flat cut."""
+        if not 0 <= u < self.units:
+            raise IndexError(f"unit {u} outside 0..{self.units - 1}")
+        if self.parts is None:
+            return []
+        for k, (c, m) in enumerate(self.parts):
+            if c is None:
+                continue
+            if u < c.units * m:
+                return [(k, u // c.units, u % c.units)] + c.locate(u % c.units)
+            u -= c.units * m
+        raise AssertionError("unreachable")
+
+
+def evaluate_definition(fn: Any, X: int, memo: dict | None = None, wiring: frozenset[str] = WIRING) -> DefinitionCut:
+    """`Q_word{X}` on one activation of `fn`: a primitive is one unit (none when it is structure: a constant or wiring); a separable body
+    is its members' cuts (`separable`); any other body is `cut_word` of its `CallGraph`.  Memoised by Definition id."""
+    memo = {} if memo is None else memo
+    key = ("Q_word", fn.id, X)
+    got = memo.get(key)
+    if got is not None:
+        return got
+    if not hasattr(fn, "body"):
+        r = DefinitionCut(fn, [], []) if (not fn.params or fn.id in wiring) else DefinitionCut(fn, [0], ["output"])
+    elif (sep := separable(fn)) is not None:
+        parts = []
+        for callee, m in sep:
+            c = evaluate_definition(callee, X, memo, wiring)
+            parts.append((c if c.gates else None, m))
+        r = DefinitionCut(fn, parts=parts)
+    else:
+        own, kinds, _head = cut_word(CallGraph(fn, wiring), X)
+        r = DefinitionCut(fn, own, kinds)
+    memo[key] = r
+    return r
+
+
+__all__ = ["WIRING", "WIDTH_RULE", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
+           "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition"]

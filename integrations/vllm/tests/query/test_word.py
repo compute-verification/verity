@@ -253,8 +253,8 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
         return tuple_of(*outs)
 
     P = Program(bind(CompositeDefinition("PartitionTop", 1, (), lambda S: (params, Tuple(*[r for _p, r in sig])), body, register=False)))
-    obj = W.partition_object(P)
-    assert PO.validate(obj).ok and PO.verify(obj, P).ok and len(obj["calls"]) == 3
-    attn = obj["cuts"][obj["calls"][2]["cut"]]
-    assert PO.Units(obj).population == sum(W.unit_rule(f)["units_per_call"] for f in fns[:2]) + len(attn["classes"]) and len(obj["cuts"]) == 3
-    assert PO.digest(obj) == PO.digest(W.partition_object(P))
+    obj = PO.build(P)
+    assert PO.validate(obj).ok and PO.verify(obj, P).ok
+    part = PO.evaluate(P)
+    assert part.population == sum(W.unit_rule(f)["units_per_call"] for f in fns) and len(part.calls) == 3
+    assert PO.owners_digest(part) == PO.owners_digest(PO.evaluate(P))

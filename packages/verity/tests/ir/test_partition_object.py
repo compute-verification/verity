@@ -1,161 +1,156 @@
-"""`verity/partition/v1` (`verity.ir.partition_object`) and the references it is checked on (`verity.ir.cut`): the build from a cut, the
-canonical bytes and the SHA-512 digest (a pinned vector), the object's own form, and the object against a Program -- the invariant on
-graphs derived from the Program and the width rule in bits (<= 16, or exactly one value of <= 32)."""
+"""`verity/partition/v1` names the partition as a query, `Q_word` v1 (`verity.ir.partition_object`), evaluated by the canonical evaluator
+in `verity.ir.cut`: the object's form and digest, the evaluation (owners, units, the derived committed set, `locate`), `verify` against
+a Program, and the pinned vector -- descriptor bytes in, each Call's graph and evaluated cut out (`partition_vectors.json`)."""
 from __future__ import annotations
 
 import copy
 import hashlib
+import json
+from pathlib import Path
 
 import pytest
 
-from verity.ir import cut, partition_object as PO
-from verity.ir.codec import canonical_json
-from verity.ir.defs import CompositeDefinition, bind
+from verity.ir import codec, cut, partition_object as PO
+from verity.ir.defs import REGISTRY, CompositeDefinition, bind
 from verity.ir.program import Program
 from verity.ir.refs import tuple_of
 from verity.ir.types import Array, Tuple, Value
+from verity.ml.prims import const
 from verity.ml.scalar import F32Fabs, F32Fmaxf, I32Add
 
-F32, I32 = Value(32), Value(32)
+F32 = I32 = Value(32)
+VECTORS = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())
 
-#: Max3(x) = fmaxf(fmaxf(x0, x1), |x2|): two computing gates, |x2| is wiring
-Max3 = bind(CompositeDefinition("TMax3", 1, (), lambda S: ((("x", Array(3, F32)),), F32),
-                           lambda B, S, x: B.call(F32Fmaxf, B.call(F32Fmaxf, x[0], x[1]), B.call(F32Fabs, x[2])), register=False))
-#: Pair(x) = (s, s + x0) with s = x0 + x1: two 32-bit outputs, so two units, s committed and read by the second
-Pair = bind(CompositeDefinition("TPair", 1, (), lambda S: ((("x", Array(2, I32)),), Tuple(I32, I32)),
-                           lambda B, S, x: (lambda s: tuple_of(s, B.call(I32Add, s, x[0])))(B.call(I32Add, x[0], x[1])), register=False))
-Top = CompositeDefinition("TTop", 1, (), lambda S: ((("a", Array(3, F32)), ("b", Array(2, I32))), Tuple(F32, Tuple(I32, I32))),
-                          lambda B, S, a, b: tuple_of(B.call(Max3, a), B.call(Pair, b)), register=False)
+
+def _c(name, params, ret, body):
+    return bind(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False))
+
+
+#: fmaxf(fmaxf(x0, x1), |x2|): |x2| is wiring
+Max3 = _c("VMax3", (("x", Array(3, F32)),), F32, lambda B, S, x: B.call(F32Fmaxf, B.call(F32Fmaxf, x[0], x[1]), B.call(F32Fabs, x[2])))
+#: (s, s + x0), s = x0 + x1: two 32-bit outputs, two units
+Pair = _c("VPair", (("x", Array(2, I32)),), Tuple(I32, I32),
+          lambda B, S, x: (lambda s: tuple_of(s, B.call(I32Add, s, x[0])))(B.call(I32Add, x[0], x[1])))
+#: x0 + x1 computed twice inside the one unit: a redundant gate, not a recompute
+Twice = _c("VTwice", (("x", Array(2, I32)),), I32,
+           lambda B, S, x: B.call(I32Add, B.call(I32Add, x[0], x[1]), B.call(I32Add, x[0], x[1])))
+#: a separable body: each row's Max3 its own cut
+Rows = _c("VRows", (("x", Array(2, Array(3, F32))),), Array(2, F32), lambda B, S, x: B.batch(Max3, x, axes=(0,)))
+#: x0 + (1 + 2): the sum of constants is structure
+AddOne = _c("VAddOne", (("x", Array(1, I32)),), I32,
+            lambda B, S, x: B.call(I32Add, x[0], B.call(I32Add, B.call(const(32, 1)), B.call(const(32, 2)))))
+
+
+def _fan(B, S, x):
+    a = B.call(I32Add, x[0], x[1])
+    B.call(I32Add, x[0], x[2])                                         # dead: read by nothing, returned by nothing
+    return tuple_of(B.call(I32Add, a, x[2]), B.call(I32Add, a, x[3]))
+
+
+#: a committed interior value (read by two output units) and a dead gate
+Fan = _c("VFan", (("x", Array(4, I32)),), Tuple(I32, I32), _fan)
+CALLS = (Max3, Pair, Twice, Rows, AddOne, Fan)
+Top = _c("VTop", tuple((n, fn.signature()[0][0][1]) for n, fn in zip("abcdef", CALLS)), Tuple(*[fn.signature()[1] for fn in CALLS]),
+         lambda B, S, *a: tuple_of(*(B.call(fn, v) for fn, v in zip(CALLS, a))))
 
 
 @pytest.fixture(scope="module")
 def program():
-    return Program(bind(Top))
-
-
-def _good(program):
-    return PO.build(program, [(0, [0, 0]), (1, [0, 1])])
-
-
-def test_the_call_graph_removes_structure_and_keeps_the_returned_gates():
-    g = cut.CallGraph(Max3)
-    assert (g.n, g.free, g.total) == (2, 1, 3) and g.free_by_prim == {"F32Fabs_v1": 1}
-    assert list(g.src) == [0] and list(g.dst) == [1] and g.outputs == [1] and list(g.width) == [32, 32]
-    assert sorted(g.input_reads) == [(0, 0), (1, 0), (2, 1)]                   # |x2| is read through: the gate reads x2 itself
-    p = cut.CallGraph(Pair)
-    assert p.n == 2 and p.outputs == [0, 1] and list(zip(p.src, p.dst)) == [(0, 1)] and p.recomputed == []
+    return Program(Top)
 
 
 def test_the_width_rule_counts_bits():
     assert cut.fits(16, 1) and cut.fits(16, 2) and cut.fits(32, 1) and not cut.fits(32, 2) and not cut.fits(33, 1) and not cut.fits(17, 2)
-    assert cut.fits(18, 2, extras=2) and cut.WIDTH_RULE == (16, 32, 0)
     p = cut.CallGraph(Pair)
-    assert cut.boundary_widths(p, [0, 1]) == ([32, 32], [1, 1])
-    assert cut.boundary_widths(p, [0, 0]) == ([64], [2])
+    assert cut.boundary_widths(p, [0, 1]) == ([32, 32], [1, 1]) and cut.boundary_widths(p, [0, 0]) == ([64], [2])
     v = cut.check_cut(p, [0, 0])
     assert v.codes == ("unit-too-wide",) and v.detail["unit-too-wide"]["gates"] == [[0, 64, 2]]
-    assert cut.check_cut(p, [0, 0], limits=None).ok                          # the invariant alone holds
+    assert cut.check_cut(p, [0, 0], limits=None).ok
 
 
-def test_build_digest_and_canonical_bytes(program):
-    obj = _good(program)
-    assert obj["format"] == "verity/partition/v1" and len(obj["program"]) == 128 and set(obj) == {"format", "program", "cuts", "calls"}
-    assert [c["call"] for c in obj["calls"]] == [0, 1] and len(obj["cuts"]) == 2
-    for key, cut in obj["cuts"].items():
-        assert key == hashlib.sha512(canonical_json(cut)).hexdigest() == PO.cut_key(cut)
-    assert PO.canonical(obj) == canonical_json(obj)
-    assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + canonical_json(obj)).hexdigest()
+def test_the_object_names_the_query(program):
+    obj = PO.build(program)
+    assert obj == {"format": "verity/partition/v1", "program": PO.program_sha512(program),
+                   "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
+    assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(obj)).hexdigest()
     assert PO.validate(obj).ok and PO.verify(obj, program).ok
-    assert PO.build(program, [(1, [0, 1]), (0, [0, 0])]) == obj              # Calls in canonical order
-
-
-def test_every_activation_of_a_specialization_shares_one_cut():
-    top = bind(CompositeDefinition("TTwice", 1, (), lambda S: ((("a", Array(3, F32)), ("b", Array(3, F32))), Tuple(F32, F32)),
-                                   lambda B, S, a, b: tuple_of(B.call(Max3, a), B.call(Max3, b)), register=False))
-    P = Program(top)
-    obj = PO.build(P, [(0, [0, 0]), (1, [0, 0])])
-    assert len(obj["cuts"]) == 1 and obj["calls"][0]["cut"] == obj["calls"][1]["cut"] and PO.verify(obj, P).ok
-    U = PO.Units(obj)
-    assert U.population == 2 and U.locate(1)[:3] == (1, 1, 0) and U.locate(0)[3] == U.locate(1)[3]
-
-
-def test_units_are_derived_by_call_then_owner(program):
-    obj = _good(program)
-    U = PO.Units(obj)
-    assert U.population == 3
-    assert [U.locate(i)[1:3] for i in range(3)] == [(0, 0), (1, 0), (1, 1)]
-    assert U.locate(2)[3] == obj["cuts"][obj["calls"][1]["cut"]]["classes"][1] == PO.unit_class("TPair_v1", 1)
-    with pytest.raises(IndexError):
-        U.locate(3)
-
-
-def test_a_pinned_digest_vector():
-    cut = {"owner": [0, 0, 1], "classes": ["a" * 128, "b" * 128]}
-    key = PO.cut_key(cut)
-    obj = {"format": "verity/partition/v1", "program": "0" * 128, "cuts": {key: cut}, "calls": [{"call": 0, "cut": key}, {"call": 3, "cut": key}]}
-    assert PO.validate(obj).ok and PO.Units(obj).population == 4
-    assert key == ("83cbe8589bf05a4d3321ba7501291785ef171796fe1150bd14594f6b85f34ec1"
-                   "a80d16775d1050f6d09b3672cb772031383c065fe75bdc7551c89a612ce786db")
-    assert PO.digest(obj) == ("7273d670c5b9e73fe5439a2ad7c68f0159ba5b0de1a00af499ee364830874ebc"
-                              "53202037d99679b569c6551e39f51a3ac3e9be57a408c9c9e7dce233d3f41b4b")
-    assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + PO.canonical(obj)).hexdigest()
-
-
-def _cut(o):
-    return next(iter(o["cuts"].values()))
 
 
 @pytest.mark.parametrize("edit,code", [
-    (lambda o: o.update(units=[]), "keys"),                                     # a derived property is never stored
+    (lambda o: o.update(owners=[]), "keys"),                                    # nothing derived is stored
     (lambda o: o.update(format="verity/partition/v0"), "format"),
     (lambda o: o.update(program="ab"), "program-digest"),
-    (lambda o: o["calls"].reverse(), "calls-order"),
-    (lambda o: _cut(o).update(owner=[0, 2]), "owner-values"),
-    (lambda o: _cut(o).update(owner=[1, 1]), "cut-key"),                        # an edited cut no longer matches its key
-    (lambda o: o["calls"][0].update(cut="0" * 128), "call-cut"),
-    (lambda o: o["cuts"].update({"f" * 128: {"owner": [0], "classes": ["c" * 128]}}), "cut-unused"),
-    (lambda o: _cut(o).update(committed=[1]), "cut-keys"),                      # the committed set is derived, never stored
-    (lambda o: o["calls"][0].update(widths=[32]), "call-keys"),
-    (lambda o: _cut(o).update(reads=[]), "cut-keys"),
+    (lambda o: o["query"].update(version=2), "query-unknown"),
+    (lambda o: o["query"].update(name="Q_module_body"), "query-unknown"),
+    (lambda o: o["query"]["params"].pop("W"), "query-params"),
+    (lambda o: o["query"]["params"].update(EXTRAS=2), "query-params"),
+    (lambda o: o["query"]["params"].update(X=0), "query-params"),
+    (lambda o: o["query"].update(cut="x"), "query-keys"),
 ])
 def test_the_object_form_is_checked(program, edit, code):
-    obj = copy.deepcopy(_good(program))
+    obj = copy.deepcopy(PO.build(program))
     edit(obj)
     v = PO.validate(obj)
     assert not v.ok and code in v.codes, v.codes
 
 
-@pytest.mark.parametrize("cut,code", [({"owner": [0, 1], "classes": ["a" * 128]}, "classes"),
-                                      ({"owner": [0, 0], "classes": ["x"]}, "classes"),
-                                      ({"owner": [1, 1], "classes": ["a" * 128]}, "owner-values")])
-def test_a_cuts_own_form_is_checked(cut, code):
-    key = PO.cut_key(cut)
-    v = PO.validate({"format": "verity/partition/v1", "program": "0" * 128, "cuts": {key: cut}, "calls": [{"call": 0, "cut": key}]})
-    assert not v.ok and code in v.codes, v.codes
+def test_the_evaluation(program):
+    part = PO.evaluate(program)
+    got = {c.fn.id.split("_v")[0]: (c.units, c.owner()) for _k, c in part.calls}
+    assert got == {"VMax3": (1, [0, 0]), "VPair": (2, [0, 1]), "VTwice": (1, [0, 0, 0]), "VRows": (2, [0, 0, 1, 1]),
+                   "VAddOne": (1, [0]), "VFan": (4, [2, 3, 0, 1])}
+    assert part.population == 11 and [k for k, _c in part.calls] == [6, 7, 8, 9, 10, 11]      # the six Input nodes come first
+    fan = [p for p, (_k, c) in enumerate(part.calls) if c.fn is Fan][0]
+    assert part.calls[fan][1].kinds == ["output", "output", "committed", "dead"] and part.committed(fan) == [0, 2, 3]
+    twice = [p for p, (_k, c) in enumerate(part.calls) if c.fn is Twice][0]
+    assert part.graph(twice).recomputed == [(1, 0)]                          # inside one unit: redundant
+    rows = [p for p, (_k, c) in enumerate(part.calls) if c.fn is Rows][0]
+    assert part.calls[rows][1].parts is not None and part.locate(5) == (rows, 9, 1, [(0, 1, 0)])
+    assert part.locate(0)[:3] == (0, 6, 0) and part.locate(10)[:3] == (5, 11, 3)
+    with pytest.raises(IndexError):
+        part.locate(11)
 
 
-def test_the_object_is_checked_against_the_program(program):
-    obj = _good(program)
+def test_verify_holds_serving_to_the_derived_committed_set(program):
+    obj = PO.build(program)
+    fan = 11
+    assert PO.verify(obj, program, served={fan: [0, 2, 3]}).ok
+    (f,) = PO.verify(obj, program, served={fan: [2, 3]}).detail["cut"]["gates"]  # the interior value read by two units, not served
+    assert f["call"] == fan and "read-uncommitted" in f["codes"]
+    (f,) = PO.verify(obj, program, served={fan: [0, 1, 2, 3]}).detail["cut"]["gates"]   # the dead gate served
+    assert f["codes"] == ["committed-unread"]
     other = copy.deepcopy(obj)
     other["program"] = "f" * 128
     assert PO.verify(other, program).codes == ("program",)
-    wide = PO.build(program, [(0, [0, 0]), (1, [0, 0])])                    # Pair as one unit: 64 bits over two gates
-    (f,) = PO.verify(wide, program).detail["cut"]["gates"]
-    assert f["call"] == 1 and f["codes"] == ["unit-too-wide"]
-    assert PO.verify(wide, program, limits=None).ok
-    assert cut.derived_committed(cut.CallGraph(Pair), [0, 1]) == [0, 1] and cut.derived_committed(cut.CallGraph(Max3), [0, 0]) == [1]
-    assert PO.verify(obj, program, served={1: [0, 1]}).ok                     # serving commits exactly the derived set
-    (f,) = PO.verify(obj, program, served={1: [1]}).detail["cut"]["gates"]  # s is read by the other unit and returned, not served
-    assert f["call"] == 1 and {"read-uncommitted", "output-uncommitted"} <= set(f["codes"])
-    (f,) = PO.verify(obj, program, served={0: [0, 1]}).detail["cut"]["gates"]  # a value no other unit reads, served anyway
-    assert f["call"] == 0 and f["codes"] == ["committed-unread"]
-    short = PO.build(program, [(0, [0])])
-    assert PO.verify(short, program).detail["cut"]["gates"][0]["codes"] == ["owner-length"]
-    stray = copy.deepcopy(obj)
-    stray["calls"][1]["call"] = 7
-    assert "call-not-a-call" in PO.verify(stray, program).codes
+    narrow = PO.build(program, PO.query(X=16, W=16))                          # Pair's and Fan's 32-bit outputs are too wide at W = 16
+    assert {f["call"] for f in PO.verify(narrow, program).detail["cut"]["gates"]} >= {7, 11}
 
 
-def test_classes_come_from_the_backend_when_given(program):
-    obj = PO.build(program, [(0, [0, 0]), (1, [0, 1])], classes=lambda call, unit: hashlib.sha512(f"{call}/{unit}".encode()).hexdigest())
-    assert PO.Units(obj).locate(2)[3] == hashlib.sha512(b"1/1").hexdigest() and PO.verify(obj, program).ok
+def test_a_value_two_members_compute_fails_verify():
+    twice = _c("VTwiceSep", (("x", Array(2, I32)),), Tuple(I32, I32), lambda B, S, x: tuple_of(B.call(I32Add, x[0], x[1]), B.call(I32Add, x[0], x[1])))
+    top = _c("VTop2", (("a", Array(2, I32)),), Tuple(I32, I32), lambda B, S, a: B.call(twice, a))
+    P = Program(top)
+    assert cut.separable(twice) is not None
+    (f,) = PO.verify(PO.build(P), P).detail["cut"]["gates"]
+    assert "gate-recomputed" in f["codes"]
+
+
+def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
+    desc = codec.encode_program(program)
+    assert codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"}).decode() == VECTORS["descriptor"]
+    D = codec.decode_program(json.loads(VECTORS["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
+    assert PO.program_sha512(D.desc) == VECTORS["program_sha512"] == PO.program_sha512(program)
+    obj = PO.build(D)
+    assert obj == VECTORS["object"] and PO.digest(obj) == VECTORS["object_digest"]
+    part = PO.evaluate(D)
+    assert part.population == VECTORS["population"] and PO.owners_digest(part) == VECTORS["owners_digest"]
+    for p, ((k, c), want) in enumerate(zip(part.calls, VECTORS["calls"])):
+        g = part.graph(p)
+        assert (k, c.fn.id) == (want["call"], want["definition"])
+        assert {"total": g.total, "structure": g.free, "n": g.n, "keep": g.keep.tolist(), "width": g.width.tolist(),
+                "prim": [g.prim_names[x] for x in g.prim.tolist()], "src": g.src.tolist(), "dst": g.dst.tolist(),
+                "input_reads": [list(x) for x in g.input_reads], "outputs": list(g.outputs), "returned_inputs": list(g.returned_inputs),
+                "recomputed": [list(x) for x in g.recomputed]} == want["graph"]
+        assert (c.owner(), c.units, part.committed(p)) == (want["owner"], want["units"], want["committed"])
+    assert [[i, list(part.locate(i)[:3]), [list(x) for x in part.locate(i)[3]]] for i in range(part.population)] == VECTORS["locate"]
+    assert PO.verify(obj, D).ok

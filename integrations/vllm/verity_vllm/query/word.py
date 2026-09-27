@@ -30,13 +30,12 @@ where it does not today).  `unit_rule` summarises one specialization; `check_que
 """
 from __future__ import annotations
 
-from array import array
 from collections import Counter
 from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ir.cut import WIRING, CallGraph, fits
+from verity.ir.cut import WIRING, CallGraph, cut_word, fits
 from verity.ir.defs import PrimitiveDefinition
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
@@ -79,96 +78,12 @@ class Graph(CallGraph):
         self.src, self.dst = _np(self.src), _np(self.dst)
 
 
-def _targets(G: Graph, X: int) -> list[list[int]]:
-    """The returned gates (first occurrence, return order) packed into runs of at most X declared bits."""
-    seen, out, cur, bits = set(), [], [], 0
-    for g in G.outputs:
-        if g in seen:
-            continue
-        seen.add(g)
-        w = int(G.width[g])
-        if cur and bits + w > X:
-            out.append(cur)
-            cur, bits = [], 0
-        cur.append(g)
-        bits += w
-    if cur:
-        out.append(cur)
-    return out
-
-
-def _owners(G: Graph, head: np.ndarray, kinds: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """Owner per gate for the given heads: backward, a gate joins its consumers' unit when they agree; a gate several units read
-    directly becomes a head (committed); a gate no returned value depends on (dead) joins the one live unit it reads, else heads a
-    dead unit.  Loops until every gate a unit reads from another unit is a head: the committed set is the boundary set."""
-    n = G.n
-    order = np.argsort(G.src, kind="stable")
-    cons = array("q", G.dst[order].tobytes())                 # consumers of gate g: cons[start[g]:start[g + 1]]
-    start = array("q", np.searchsorted(G.src[order], np.arange(n + 1)).tobytes())
-    by_consumer = np.argsort(G.dst, kind="stable")
-    dstart = np.searchsorted(G.dst[by_consumer], np.arange(n + 1))
-    while True:
-        owner = array("q", head.tobytes())                     # -1: no returned value depends on it; -2: several units
-        for g in range(n - 1, -1, -1):
-            if owner[g] >= 0:
-                continue
-            o = -1
-            for e in range(start[g], start[g + 1]):
-                oc = owner[cons[e]]
-                if oc == -1 or oc == o:
-                    continue
-                if o == -1 and oc >= 0:
-                    o = oc
-                else:
-                    o = -2
-                    break
-            owner[g] = o
-        own = np.frombuffer(owner, np.int64).copy()
-        s_, d_ = G.src[order], G.dst[order]
-        promote = np.unique(s_[(own[s_] == -2) & (own[d_] >= 0)])
-        if not len(promote):
-            live = len(kinds)
-            for g in np.flatnonzero(own == -1).tolist():              # reads of committed values (heads) cross units freely
-                us = {int(own[G.src[e_]]) for e_ in by_consumer[dstart[g]:dstart[g + 1]].tolist() if head[G.src[e_]] < 0}
-                alive = {u for u in us if 0 <= u < live}
-                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
-            for g in np.flatnonzero(own == -1).tolist():
-                own[g] = len(kinds)
-                kinds.append("dead")
-            cross = own[G.src] != own[G.dst]
-            promote = np.unique(G.src[cross][head[G.src[cross]] < 0])
-            if not len(promote):
-                return own, head
-            del kinds[live:]
-        head[promote] = np.arange(len(kinds), len(kinds) + len(promote))
-        kinds += ["committed"] * len(promote)
-
-
 def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """(owner per gate, kind per unit, head per gate): "output" (returned values), "committed" (a value another unit reads), "dead"
-    (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the returned ones and every value read across units."""
-    head = np.full(G.n, -1, np.int64)
-    kinds: list[str] = []
-    for t in _targets(G, X):
-        head[t] = len(kinds)
-        kinds.append("output")
-    own, head = _owners(G, head, kinds)
-    return own, kinds, head
-
-
-def partition_object(program: Any, X: int = 16, *, classes: Callable[[int, int], str] | None = None) -> dict[str, Any]:
-    """`verity/partition/v1` (`verity.ir.partition_object`) of `program`: every `call` node of its root body, cut by `partition` (a unit
-    per computing gate; the committed set is derived from it).  `classes`: see `partition_object.build`."""
-    from verity.ir.partition_object import build
-    cuts, memo = [], {}
-    for k, node in enumerate(program.fn.body.nodes):
-        if node.form != "call" or not hasattr(node.fn, "body"):
-            continue
-        r = memo.get(node.fn.id)
-        if r is None:
-            r = memo[node.fn.id] = partition(Graph(node.fn), X)[0].tolist()
-        cuts.append((k, r))
-    return build(program, cuts, classes)
+    """(owner per gate, kind per unit, head per gate) of core's `verity.ir.cut.cut_word` (the reference): "output" (returned values),
+    "committed" (a value another unit reads), "dead" (read by no returned value); `head[g] >= 0` marks the gates the cut commits -- the
+    returned ones and every value read across units."""
+    own, kinds, head = cut_word(G, X)
+    return np.asarray(own, np.int64), kinds, np.asarray(head, np.int64)
 
 
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
@@ -454,6 +369,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
     return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired)
 
 
-__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition",
-           "partition_object", "units",
+__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
            "unit_rule", "check_calls", "call_groups", "check_query"]
