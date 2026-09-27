@@ -249,5 +249,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
-                        "--format", str(ir / "format_vectors.json")], capture_output=True, text=True)
+                        "--format", str(ir / "format_vectors.json")]
+                       + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
+                       capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr

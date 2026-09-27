@@ -15,6 +15,7 @@ import Flock.Qword
 namespace Flock.Extract
 
 open Program Partition
+open Lean (Json)
 
 def WIDE_FAN_IN : Nat := 4096
 
@@ -47,7 +48,20 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
   let mut wide : Array Bool := Array.mkEmpty n
   let mut inputs : Std.HashMap Nat Nat := {}
   let mut inputIds : Array Nat := #[]
-  let mut stack : Array (Scope × Nat × Nat) := #[(top, 0, 0)]
+  -- a primitive Call is one gate reading its parameters' leaves in order
+  let mut stack : Array (Scope × Nat × Nat) := if defn.prim then #[] else #[(top, 0, 0)]
+  if defn.prim then
+    let isWide := decide (lo > WIDE_FAN_IN)
+    if !isWide then
+      for j in [0:lo] do
+        ops := ops.push (-1 - (j : Int))
+        if full then
+          inputIds := inputIds.push j
+          inputs := inputs.insert j j
+    prim := prim.push d
+    wide := wide.push isWide
+    external := external.push (lo > 0)
+    opStart := opStart.push ops.size
   while stack.size > 0 do
     let (sc, k, m) := stack.back!
     let body := (P.defs[sc.d]!).body
@@ -156,8 +170,8 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
   -- outputs: each returned leaf, resolved inside the Call; a structure value's computing sources
   let mut outs : Array Nat := #[]
   let mut returned : Array Nat := #[]
-  for r in defn.body.ret.toArray do
-    let g ← resolve P top r
+  let retGates ← if defn.prim then pure #[lo] else defn.body.ret.toArray.mapM (resolve P top)
+  for g in retGates do
     if lo ≤ g && g < lo + n then
       let x := g - lo
       for u in (if free[x]! then srcs[x]! else #[(x : Int)]) do
@@ -219,13 +233,16 @@ partial def evalDef (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DCut) (d 
 /-- `partition_object.Partition`: the Program's Calls (root nodes that are not Input nodes, each a `call` or `primitive`
 node), each with its Definition's cut. -/
 def evaluate (P : Prog) (X : Nat) : V (Array (Nat × Nat × Qword.DCut)) := do
+  if let some v := P.orderViolation then
+    let r := (v.getObjVal? "reference").toOption.getD Json.null
+    throw s!"query-inapplicable: {(v.getObjValAs? String "definition").toOption.getD ""} node {(v.getObjVal? "node").toOption.getD Json.null} names ['{((r.getArrVal? 0).toOption.bind (·.getStr?.toOption)).getD ""}', {(r.getArrVal? 1).toOption.getD Json.null}]: not a parameter or an earlier node"
   let root := (P.defs[P.root]!).body
   let mut memo : Std.HashMap Nat Qword.DCut := {}
   let mut out := #[]
   for k in P.calls do
     let node := root.nodes[k]!
     if !(node.form == .call || node.form == .prim) then
-      throw s!"query-refused: root node {k} has form {node.form.name}: a Call is a call or primitive node"
+      throw s!"query-inapplicable: root node {k} has form '{node.form.name}': a Call is a call or primitive node"
     let (c, memo') ← evalDef P X memo node.fn
     memo := memo'
     out := out.push (k, node.fn, c)

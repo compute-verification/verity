@@ -73,12 +73,21 @@ def check_format(a, out, bad):
         for k, x in f["wide"]["graph"]["wide"].items():
             if g.get(k) != x:
                 bad.append(("wide", "graph." + k, g.get(k), x))
+    fr = f["forward_reference"]
     d = json.loads(f["descriptor"])
     d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}
     (out / "forward.desc").write_text(json.dumps(d))
     got = lean(a, out / "forward.desc")
-    if got["ok"] or f["forward_reference"]["q_word"] not in got["error"]:
+    want = fr.get("call_refused")
+    if got["ok"] or (want is not None and got.get("inapplicable") != want) or (want is None and fr["q_word"] not in got["error"]):
         bad.append(("forward_reference", got.get("error")))
+    if "root_refused" in fr:
+        d = json.loads(f["descriptor"])
+        _root_body(d)["nodes"][3]["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}
+        (out / "forward-root.desc").write_text(json.dumps(d))
+        got = lean(a, out / "forward-root.desc")
+        if got["ok"] or got.get("inapplicable") != fr["root_refused"]:
+            bad.append(("forward_reference root", got.get("inapplicable")))
     refused = 0
     for label, edit, _why in spec.REJECT:
         d = json.loads(f["descriptor"])
@@ -90,6 +99,62 @@ def check_format(a, out, bad):
         else:
             refused += 1
     return refused, len(spec.REJECT)
+
+
+def _root_body(d):
+    return d["definitions"][d["root"]]["body"]
+
+
+def _text(x):
+    return x if isinstance(x, str) else json.dumps(x)
+
+
+def check_qword_vectors(a, out, bad):
+    """`qword_vectors.json` (#111): every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
+    committed set), every order refusal (the `order_violation` detail), and the verify refusals that are the query's
+    (`query-inapplicable`); the cut refusals are the width rule and the invariant, which `qword-program` does not check."""
+    v = json.loads(Path(a.qword_vectors).read_text())
+    runs_checked = 0
+    for name, runs in v["evaluations"]:
+        (out / f"{name}.desc").write_text(_text(v["descriptors"][name]))
+        for run in runs:
+            got = lean(a, out / f"{name}.desc", str(run["X"]))
+            runs_checked += 1
+            if not got["ok"]:
+                bad.append(("evaluation", name, run["X"], got.get("error")))
+                continue
+            if got["population"] != run["population"] or got["owners_digest"] != run["owners_digest"]:
+                bad.append(("evaluation", name, run["X"], "population or owners_digest"))
+            det = {c["call"]: c for c in got["detail"]}
+            for c in run["calls"]:
+                g = det.get(c["call"], {})
+                for k, x in c.items():
+                    if k == "graph":
+                        for gk, gx in x.items():
+                            if g.get("graph", {}).get(gk) != gx:
+                                bad.append(("evaluation", name, run["X"], c["call"], "graph." + gk))
+                    elif g.get(k) != x:
+                        bad.append(("evaluation", name, run["X"], c["call"], k))
+    orders = 0
+    for label, dname, definition, node, arg, refs, want in v["order_refusals"]:
+        d = json.loads(_text(v["descriptors"][dname]))
+        body = d["definitions"][definition]["body"] if definition else _root_body(d)
+        body["nodes"][node]["args"][arg]["refs"] = refs
+        (out / "order.desc").write_text(json.dumps(d))
+        got = lean(a, out / "order.desc")
+        orders += 1
+        if got["ok"] or got.get("inapplicable") != want["detail"][0]:
+            bad.append(("order_refusals", label, got.get("inapplicable")))
+    inapplicable = 0
+    for label, dname, X, W, want in v["verify_refusals"]:
+        if want["codes"] != ["query-inapplicable"]:
+            continue
+        (out / "refused.desc").write_text(_text(v["descriptors"][dname]))
+        got = lean(a, out / "refused.desc", str(X))
+        inapplicable += 1
+        if got["ok"] or not got.get("error", "").startswith("query-inapplicable"):
+            bad.append(("verify_refusals", label, got.get("error")))
+    return {"evaluations": runs_checked, "order_refusals": orders, "inapplicable": inapplicable}
 
 
 def check_program(a, path, out, bad):
@@ -130,6 +195,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--vectors")
     ap.add_argument("--format")
+    ap.add_argument("--qword-vectors")
     ap.add_argument("--program", action="append", default=[])
     ap.add_argument("--registry")
     a = ap.parse_args()
@@ -142,6 +208,8 @@ def main():
         res["vectors_calls"] = check_vectors(a, out, bad)
     if a.format:
         res["decoder_rejects_refused"] = check_format(a, out, bad)
+    if a.qword_vectors:
+        res["qword_vectors"] = check_qword_vectors(a, out, bad)
     for p in a.program:
         res[f"program {Path(p).parent.name}/{Path(p).name}"] = check_program(a, p, out, bad)
     res["disagree"] = bad[:50]

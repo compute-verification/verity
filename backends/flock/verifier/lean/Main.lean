@@ -455,6 +455,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
   let res : V Lean.Json := do
     let P ← Program.decode bytes
+    if let some v := P.orderViolation then
+      return Lean.Json.mkObj [("inapplicable", v), ("error", Lean.Json.str (match Extract.evaluate P X with
+        | .error e => e
+        | .ok _ => ""))]
     let calls ← Extract.evaluate P X
     let units : Qword.Units := ⟨calls.map fun (k, _, c) => (k, c)⟩
     -- `--template T --units i,j,…`: the claimed units' membership, as a Flock statement's finding checks it
@@ -481,18 +485,21 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
       let own := c.owner
       let mut o := [("call", Lean.toJson k), ("definition", Lean.Json.str (P.defs[d]!).key), ("units", Lean.toJson c.units),
         ("owner", Lean.toJson own)]
-      if !(P.defs[d]!).prim then
-        let gr ← Extract.graph P d
-        o := o ++ [("graph", graphJson gr),
-          ("committed", Lean.toJson (if own.size == gr.g.n then Partition.derivedCommitted gr.g own else #[]))]
+      if let .flat _ kinds := c then o := o ++ [("kinds", Lean.toJson kinds)]
+      let gr ← Extract.graph P d
+      o := o ++ [("graph", graphJson gr),
+        ("committed", Lean.toJson (if own.size == gr.g.n then Partition.derivedCommitted gr.g own else #[]))]
       detail := detail.push (Lean.Json.mkObj o)
     let loc := (Array.range units.population).map fun i => match units.locate i with
       | some (p, k, u, path) => Lean.Json.arr #[Lean.toJson i, Lean.toJson #[p, k, u],
           Lean.Json.arr (path.toArray.map fun (a, b, c) => Lean.toJson #[a, b, c])]
       | none => Lean.Json.null
-    return Lean.Json.mkObj (base ++ [("detail", Lean.Json.arr detail), ("locate", Lean.Json.arr loc)])
+    let owners := Lean.Json.arr (calls.map fun (k, _, c) => Lean.Json.arr #[Lean.toJson k, Lean.toJson c.owner])
+    let od := hexOf (Sha512.hash ("verity/partition/v1/owners".toUTF8.push 0 ++ (← canon owners).toUTF8))
+    return Lean.Json.mkObj (base ++ [("owners_digest", Lean.Json.str od), ("detail", Lean.Json.arr detail),
+      ("locate", Lean.Json.arr loc)])
   let line := match res with
-    | .ok r => r.setObjVal! "ok" (Lean.Json.bool true)
+    | .ok r => r.setObjVal! "ok" (Lean.Json.bool !(r.getObjVal? "inapplicable").isOk)
     | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
   IO.println s!"QWORDPROGRAM {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)

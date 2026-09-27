@@ -1051,7 +1051,12 @@ graphs (7000 agree).
   types, reference sequences and aliases, the decoder's refusals, the layout and scope resolution.
   - Primitives are taken as the descriptor declares them, since the verifier evaluates none. An `Input<w>_v1` must declare
     no parameters and `Value<w>`.
+- **Applicability.** A program that is not topological is no computation, so every query is inapplicable to it
+  (`Prog.orderViolation`, core's `order_violation`). Its first reference that names neither a parameter nor an earlier node
+  refuses it, walking the bodies breadth-first from the root, callees in node order. A root `batch` or `scan` node is
+  inapplicable too.
 - **Each Call's graph** is built as core's `CallGraph` builds it:
+  - a primitive Call as one gate reading its parameters;
   - operands resolved in layout order, a gate reading itself or a later gate refused;
   - wide gates (more than 4096 operands) external, listing only their operands inside the Call;
   - constants, wiring, and values computed from constants alone as structure;
@@ -1061,8 +1066,10 @@ graphs (7000 agree).
 - **Evaluation.** Separable bodies and the memo by Definition feed the cut above.
 - **`qword_program_agree.py`** checks all of it against core's `decode_program` and `partition_object.evaluate`:
   - #111's pinned vector, every field of every Call's graph, owners, units and committed set, and `locate`;
-  - #120's format vectors: the wide-gate graph, the forward reference `Q_word` refuses, and all 31 decoder refusals
-    refused;
+  - #120's format vectors: the wide-gate graph, the forward references (both refusals' details), and all 31 decoder
+    refusals refused;
+  - #111's `qword_vectors.json`: all 8 evaluations (population, owners digest, and each Call's graph, owners, kinds,
+    units and committed set), the 3 order refusals' details, and the root batch and scan refused;
   - a real #101 descriptor (the Llama-3.2-1B step Build, `art:a4ea1a18`): all 167 Calls' units, and every Definition's
     owners and flat graph by SHA-512, in 14.5 s.
 

@@ -671,6 +671,36 @@ partial def resolve (P : Prog) : Scope → Ref → V Nat
       let (m, jj) := if j < c then (node.n - 1, j) else ((j - c) / y.leaves, c + (j - c) % y.leaves)
       resolve P (.child sc node.fn (o + m * callee.gates) k m) (callee.body.ret.get jj)
 
+/-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
+(a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each
+Definition once; its detail `{definition, node, arg, reference, why}`, or none when the program is topological. -/
+def Prog.orderViolation (P : Prog) : Option Json := Id.run do
+  let mut seen : Std.HashSet Nat := {}
+  let mut todo : Array Nat := #[P.root]
+  let mut at_ := 0
+  while at_ < todo.size do
+    let d := todo[at_]!
+    at_ := at_ + 1
+    if seen.contains d then continue
+    seen := seen.insert d
+    let defn := P.defs[d]!
+    if defn.prim then continue
+    let body := defn.body
+    for k in [0:body.nodes.size] do
+      let node := body.nodes[k]!
+      for i in [0:node.args.size] do
+        for part in node.args[i]!.seq.parts do
+          let names : Array (Bool × Nat) := match part with
+            | .affine p idx _ c => if c > 0 then #[(p, idx)] else #[]
+            | .strided p idx _ _ _ _ c => if c > 0 then #[(p, idx)] else #[]
+            | .explicit it => it.map fun r => (r.p, r.i)
+          for (p, idx) in names do
+            if !(if p then idx < body.params.size else idx < k) then
+              return some (Json.mkObj [("definition", Json.str defn.key), ("node", Lean.toJson k), ("arg", Lean.toJson i),
+                ("reference", Json.arr #[Json.str (if p then "p" else "n"), Lean.toJson idx]), ("why", Json.str "not topological")])
+      todo := todo.push node.fn
+  return none
+
 /-- The root body's Calls (`partition_object.calls`): every node that is not an Input node, with its root-body index. -/
 def Prog.calls (P : Prog) : Array Nat :=
   let nodes := (P.defs[P.root]!).body.nodes
