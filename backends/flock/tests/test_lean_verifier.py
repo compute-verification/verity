@@ -195,3 +195,23 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
+    """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
+    (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
+    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    for goal, witness in [
+        ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
+         "Or.inl ⟨ByteArray.mk #[0], ByteArray.empty, ByteArray.empty, ByteArray.mk #[0], by decide, by decide, by decide, "
+         "by decide, by decide, rfl⟩"),
+        ("MerkleScheme.hm96Sha512.Collision",
+         "Or.inl ⟨ByteArray.mk #[0], ByteArray.empty, ByteArray.empty, ByteArray.mk #[0], by decide, by decide, by decide, "
+         "by decide, by decide, rfl⟩"),
+    ]:
+        f = tmp_path / "Split.lean"
+        f.write_text(f"import FlockProofs\nopen Flock\nexample : {goal} :=\n  {witness}\n")
+        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+        assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])

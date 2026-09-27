@@ -1243,8 +1243,21 @@ uses `native_decide`.
 
 Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
 `Classical.choice` and `Quot.sound`):
-- **1b, Merkle:** `merkle_binding` is proved, for any `MerkleScheme`. Two accepted checks against one cap at the same
-  positions, whose rows differ at a query, give a node or leaf collision (`climb_binding`, `opens_binding`).
+- **1b, Merkle:** `merkle_binding` is proved for any `MerkleScheme` whose nodes and leaves have its digest width
+  (`Sized`; `MerkleScheme.all_sized` proves it for every scheme the verifier knows, from `Sha256.hash_size` and
+  `Sha512.hash_size`, which are proved from the definitions). Two accepted checks against one cap at the same positions,
+  whose rows differ at a query, give a collision (`climb_binding`, `opens_binding`):
+  - either two different pairs of digest-width children with one node;
+  - or two different rows with one leaf, under any salts.
+  - `MerkleScheme.collision_hash`: for each known scheme, such a collision is a SHA-256 or SHA-512 collision.
+    - A node's input is its two children, concatenated at a fixed split, so different pairs are different inputs.
+    - The row encoding is injective (`rowBytes_inj`).
+    - An `hm96-sha512/v1` leaf binds its inner digest and its salt (`Hm96.Default512.leaf_binding`). Equal leaves are a
+      collision of the outer hash, the salt digest or the row hash.
+  - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
+    and the running digests are hash outputs. Nodes and leaves are not tag-separated in the unsalted schemes. Binding
+    doesn't need it: both openings climb from a leaf at one position through `d − c` nodes, so a leaf is only ever
+    compared with a leaf.
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
 - **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its
