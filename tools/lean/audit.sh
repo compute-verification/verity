@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Independent build and axiom audit of the Lean packages (coordinator job, PRs #85 and #89 merged with main).
+# Independent build and axiom audit of Lean packages.
 #   bash tools/lean/audit.sh PKG_DIR[:CHECK_FILE] ...
 # For each package: `setup.sh`, `lake build`, then `lake env lean CHECK_FILE` (default: the package's CheckAxioms.lean). Passes
 # only when every build succeeds, no `.lean` file declares an `axiom`, and every `#print axioms` line in the check files reports

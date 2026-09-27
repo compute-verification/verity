@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lean for a Lake package on a Linux machine: elan at the package's `lean-toolchain`, its dependencies from `lake-manifest.json`,
-# and Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them. Idempotent; `check`'s Lean step reuses it.
+# and Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them. Idempotent.
 #   bash tools/lean/setup.sh PACKAGE_DIR
 set -euo pipefail
 pkg=${1:?usage: setup.sh PACKAGE_DIR}
