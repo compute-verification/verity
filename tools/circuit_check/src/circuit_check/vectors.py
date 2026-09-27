@@ -1,0 +1,104 @@
+"""Input vectors for the correspondence checks: every edge word of a leaf's width first, then seeded random words.
+
+A circuit is total by default (it matches the hardware on every input bit pattern), so the vectors read each leaf as every
+float format its width can hold and put that format's edges in: NaN (quiet, signalling, negative), +-inf, +-0, the smallest
+and largest subnormals, the smallest normal, +-max-finite and +-1.  Width 16 carries the BF16 and FP16 edges, 32 the FP32
+ones, 8 the E4M3 and E5M2 ones, 64 the FP64 ones, and every width the integer edges (0, 1, the sign bit alone or with 1, all
+ones, all ones but the sign).
+
+Instance ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
+operand at once; the random instances then draw each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
+floats only: arithmetic in the range serving sees) or a uniform word.
+"""
+from __future__ import annotations
+
+from typing import Sequence
+
+import numpy as np
+
+from verity.evaluation.batch import type_dtype, type_shape
+from verity.ir.types import Type
+
+BF16 = (0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0x3F80, 0xBF80)
+FP16 = (0x7C00, 0xFC00, 0x7E00, 0x7D00, 0x7BFF, 0xFBFF, 0x03FF, 0x0400, 0x3C00)
+FP32 = (0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x7F800000, 0xFF800000,
+        0x7FC00000, 0xFFC00000, 0x7F800001, 0x3F800000, 0xBF800000)
+E4M3 = (0x00, 0x80, 0x01, 0x81, 0x07, 0x08, 0x7E, 0xFE, 0x7F, 0xFF, 0x38, 0xB8)
+E5M2 = (0x7C, 0xFC, 0x7D, 0x7E, 0x7B, 0xFB, 0x03, 0x04, 0x3C)
+FP64 = (0x7FF0000000000000, 0xFFF0000000000000, 0x7FF8000000000000, 0x7FF0000000000001, 0x7FEFFFFFFFFFFFFF, 0x000FFFFFFFFFFFFF,
+        0x0010000000000000, 0x3FF0000000000000, 0xBFF0000000000000)
+FLOATS = {8: E4M3 + E5M2, 16: BF16 + FP16, 32: FP32, 64: FP64}
+#: (exponent bits, bias) of the format a random "near 1.0" word is drawn in, per width
+_NEAR_ONE = {16: (8, 127), 32: (8, 127)}
+
+
+def integer_edges(w: int) -> tuple[int, ...]:
+    mask = (1 << w) - 1
+    top = 1 << (w - 1)
+    return tuple(dict.fromkeys((0, 1, top, top | 1, mask, mask ^ top)))
+
+
+def edges(w: int) -> tuple[int, ...]:
+    """Every edge word of width ``w``, floats first, each once."""
+    return tuple(dict.fromkeys(FLOATS.get(w, ()) + integer_edges(w)))
+
+
+def _near_one(rng: np.random.Generator, w: int) -> int:
+    e_bits, bias = _NEAR_ONE[w]
+    m_bits = w - 1 - e_bits
+    e = bias + int(rng.integers(-8, 9))
+    return (int(rng.integers(0, 2)) << (w - 1)) | (e << m_bits) | int(rng.integers(0, 1 << m_bits))
+
+
+def _word(rng: np.random.Generator, w: int) -> int:
+    r = rng.random()
+    if r < 0.25:
+        ws = edges(w)
+        return ws[int(rng.integers(0, len(ws)))]
+    if r < 0.5 and w in _NEAR_ONE:
+        return _near_one(rng, w)
+    return int.from_bytes(rng.bytes((w + 7) // 8), "little") & ((1 << w) - 1)
+
+
+def edge_count(params: Sequence[Type]) -> int:
+    return max((len(edges(w)) for pt in params for w in pt.leaf_widths()), default=0)
+
+
+def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
+    """``n`` instances of the parameters ``params`` in ``evaluate_batch`` layout (one array per parameter, leading batch axis):
+    the all-edge instances first (as many as fit in ``n``), then random ones."""
+    rng = np.random.default_rng(seed)
+    E = min(n, edge_count(params))
+    out = []
+    for pt in params:
+        widths = pt.leaf_widths()
+        rows = []
+        for j in range(n):
+            if j < E:
+                rows.append([edges(w)[j % len(edges(w))] for w in widths])
+            else:
+                rows.append([_word(rng, w) for w in widths])
+        dt = type_dtype(pt)
+        a = np.array(rows, dtype=object if dt.kind == "O" else dt).reshape((n, *type_shape(pt)))
+        out.append(a)
+    return out
+
+
+def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) -> list:
+    """Instance ``i`` as `verity.evaluation.evaluate` takes it: an int per ``Value``, a flat int list per aggregate."""
+    from verity.ir.types import Value
+
+    args = []
+    for pt, a in zip(params, arrays):
+        row = np.asarray(a[i]).reshape(-1)
+        args.append(int(row[0]) if isinstance(pt, Value) else [int(v) for v in row])
+    return args
+
+
+def flat(arrays: Sequence[np.ndarray]) -> np.ndarray:
+    """``(n, leaves)`` uint64: every instance's input leaves in parameter order (what a C-Flock lowering evaluates)."""
+    n = arrays[0].shape[0] if arrays else 0
+    return np.concatenate([np.asarray(a, dtype=np.uint64).reshape(n, -1) for a in arrays], axis=1) if arrays else np.zeros((n, 0), np.uint64)
+
+
+__all__ = ["BF16", "E4M3", "E5M2", "FP16", "FP32", "FP64", "edge_count", "edges", "flat", "instance_args", "integer_edges", "vectors"]
