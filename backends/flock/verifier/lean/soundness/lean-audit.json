@@ -1,0 +1,771 @@
+{
+ "roots": ["FlockSoundness", "FlockSoundnessTest.AssumptionIsArkLibs"],
+ "exempt": {
+  "FlockSoundness.Check": "the lane's #print axioms list, which this audit supersedes (every declaration is audited)"
+ },
+ "assumptions": ["FlockSoundness.Assumptions"],
+ "meaning": ["FlockSoundness", "FlockLevel3"],
+ "pins": {
+  "FlockSoundness.Merkle.opening_binding": {
+   "signature": [
+    "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
+    "  (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D) (hc : c ≠ c')",
+    "  (h : FlockSoundness.Merkle.Verifies H E cap depth pos c sibs)",
+    "  (h' : FlockSoundness.Merkle.Verifies H E cap depth pos c' sibs') : FlockSoundness.Merkle.Collision H"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000deee5660"
+  },
+  "FlockSoundness.execArith_correct": {
+   "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
+   "assumptions": [],
+   "type_hash": "00000000f4d0def7"
+  },
+  "FlockSoundness.table_sound": {
+   "signature": [
+    "FlockSoundness.table_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]",
+    "  (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
+    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)",
+    "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
+    "      (FlockSoundness.Model.table A S sch hm ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "000000003b47bb96"
+  },
+  "FlockSoundness.table_sound_compiled": {
+   "signature": [
+    "FlockSoundness.table_sound_compiled {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] {D : Type} (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K)",
+    "  (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc (List F) D)",
+    "  (S : FlockSoundness.Model.Statement) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)",
+    "  (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext })",
+    "  (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ :",
+    "    (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
+    "        mPts).Strategy) :",
+    "  FlockSoundness.Game.expect",
+    "      (FlockSoundness.Game.ind fun out =>",
+    "        out.accepted = true ∧",
+    "          ¬FlockSoundness.Committed A S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext }",
+    "              (FlockSoundness.C0star A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
+    "                mPts σ.fst σ.snd))",
+    "      (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal mPts)",
+    "      σ ≤",
+    "    FlockSoundness.Accounting.tableError { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } (S.shape mPts) +",
+    "          √(2 ^ l₀.logLen * (2 * ↑l₀.queries) *",
+    "              FlockSoundness.adv₀ A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal mPts",
+    "                σ) +",
+    "        ∑ r ∈ Finset.range 2,",
+    "          ∑ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,",
+    "            √(2 ^ (FlockSoundness.lvOf { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } ℓ).logLen *",
+    "                  ↑(FlockSoundness.lvOf { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } ℓ).queries *",
+    "                FlockSoundness.advR A H E S m k0 l₀ l₁ rest ext ⋯ hm ptLocal mPts r ℓ σ) +",
+    "      FlockSoundness.Game.expect",
+    "        (FlockSoundness.Game.ind",
+    "          (FlockSoundness.SelfClash H E { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext }))",
+    "        (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
+    "          mPts)",
+    "        σ"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "000000005fae07d4"
+  },
+  "FlockSoundness.table_sound_exec": {
+   "signature": [
+    "FlockSoundness.table_sound_exec (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m)",
+    "  (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "000000003f17c9a1"
+  },
+  "FlockSoundness.table_sound_exec_fast100": {
+   "signature": [
+    "FlockSoundness.table_sound_exec_fast100 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
+    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
+    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (2 ^ (-195.5))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "00000000d627bb2f"
+  },
+  "FlockSoundness.table_sound_exec_fast100_34_35": {
+   "signature": [
+    "FlockSoundness.table_sound_exec_fast100_34_35 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
+    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
+    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (2 ^ (-195.4))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "0000000026f3eb6e"
+  },
+  "FlockSoundness.table_sound_fast100": {
+   "signature": [
+    "FlockSoundness.table_sound_fast100 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
+    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
+    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
+    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (2 ^ (-195.5))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "00000000bc426dc5"
+  },
+  "FlockSoundness.table_sound_fast100_34_35": {
+   "signature": [
+    "FlockSoundness.table_sound_fast100_34_35 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
+    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
+    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
+    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
+    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
+    "    ENNReal.ofReal (2 ^ (-195.4))"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "type_hash": "0000000074c9083c"
+  }
+ },
+ "reads": {
+  "FlockLevel3.ArithFacts": {
+   "digest": "16108cbf154c708038a30c392f4fd5b1",
+   "definitions": [
+    "FlockLevel3.f128Equiv",
+    "FlockLevel3.f256Equiv",
+    "FlockLevel3.instDecidableEqGF128",
+    "FlockLevel3.instDecidableEqGF256",
+    "FlockLevel3.instFintypeGF128",
+    "FlockLevel3.instFintypeGF256",
+    "FlockLevel3.lo",
+    "FlockLevel3.omega",
+    "FlockLevel3.pack",
+    "FlockLevel3.pinnedF",
+    "FlockLevel3.unpack"
+   ],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.Bits": {
+   "digest": "8874c37c6725189df9eccdb123c28376",
+   "definitions": ["FlockLevel3.P", "FlockLevel3.natPoly"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.GF128": {
+   "digest": "238daf9bf2ee59921fa3ba13d8c1e929",
+   "definitions": ["FlockLevel3.F128.poly", "FlockLevel3.G", "FlockLevel3.S", "FlockLevel3.w128"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.GF128Field": {
+   "digest": "91ec5e88b728fc0ff5cc5d9fba715bd5",
+   "definitions": ["FlockLevel3.GF128", "FlockLevel3.GF128.of", "FlockLevel3.instFieldGF128"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.GF128Ring": {
+   "digest": "db948c0e549630056b909131e7015803",
+   "definitions": ["FlockLevel3.equivAdj", "FlockLevel3.toAdj"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.GF256": {
+   "digest": "355df6e78e523fa70c72a0e090cef1f6",
+   "definitions": [
+    "FlockLevel3.GF256",
+    "FlockLevel3.GF256.of",
+    "FlockLevel3.K",
+    "FlockLevel3.Q",
+    "FlockLevel3.equivPhi",
+    "FlockLevel3.instFieldGF256",
+    "FlockLevel3.phi",
+    "FlockLevel3.xK"
+   ],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.Nodes": {
+   "digest": "c402244b2facacaff70397b10b28a915",
+   "definitions": ["FlockLevel3.combW", "FlockLevel3.lagS", "FlockLevel3.lagΛ"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.NovelBasis": {
+   "digest": "d01acbb9a93c9e336f3880b3f7d4584b",
+   "definitions": ["FlockLevel3.What", "FlockLevel3.beta", "FlockLevel3.sPoly"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockLevel3.Seam": {
+   "digest": "ae5680e645a7a3c7ab37a7afa4a15183",
+   "definitions": ["FlockLevel3.GF128.val", "FlockLevel3.embed", "FlockLevel3.u"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Accounting.Bound": {
+   "digest": "a734a553cf2fb20da04e46029a71b51f",
+   "definitions": [
+    "FlockSoundness.Accounting.Level.foldError",
+    "FlockSoundness.Accounting.Level.listBound",
+    "FlockSoundness.Accounting.Level.mcaA",
+    "FlockSoundness.Accounting.Level.queryError",
+    "FlockSoundness.Accounting.Level.radius",
+    "FlockSoundness.Accounting.Level.rate",
+    "FlockSoundness.Accounting.Schedule.listBound₀",
+    "FlockSoundness.Accounting.Stmt",
+    "FlockSoundness.Accounting.Stmt.kLog",
+    "FlockSoundness.Accounting.Stmt.mPts",
+    "FlockSoundness.Accounting.Stmt.nClaims",
+    "FlockSoundness.Accounting.Stmt.nRegions",
+    "FlockSoundness.Accounting.ceilLog2",
+    "FlockSoundness.Accounting.eta",
+    "FlockSoundness.Accounting.lastLevelError",
+    "FlockSoundness.Accounting.ligeritoError",
+    "FlockSoundness.Accounting.linkError",
+    "FlockSoundness.Accounting.midLevelError",
+    "FlockSoundness.Accounting.pairs",
+    "FlockSoundness.Accounting.piopError",
+    "FlockSoundness.Accounting.qF",
+    "FlockSoundness.Accounting.qK",
+    "FlockSoundness.Accounting.repError",
+    "FlockSoundness.Accounting.tableError"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Accounting.Fast100": {
+   "digest": "b56386638df300238ae4dd4c77c2946f",
+   "definitions": [
+    "FlockSoundness.Accounting.Level.Ok",
+    "FlockSoundness.Accounting.Stmt.InRange",
+    "FlockSoundness.Accounting.instDecidableOk"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Accounting.Schedule": {
+   "digest": "1d4df1d55570ddec45d724b95fa016e7",
+   "definitions": [
+    "FlockSoundness.Accounting.Level",
+    "FlockSoundness.Accounting.Level.lanes",
+    "FlockSoundness.Accounting.Level.logCols",
+    "FlockSoundness.Accounting.Level.logInvRate",
+    "FlockSoundness.Accounting.Level.logLen",
+    "FlockSoundness.Accounting.Level.queries",
+    "FlockSoundness.Accounting.Schedule",
+    "FlockSoundness.Accounting.Schedule.ext",
+    "FlockSoundness.Accounting.Schedule.k0",
+    "FlockSoundness.Accounting.Schedule.levels",
+    "FlockSoundness.Accounting.Schedule.m",
+    "FlockSoundness.Accounting.fast100",
+    "FlockSoundness.Accounting.instInhabitedLevel",
+    "FlockSoundness.Accounting.instInhabitedLevel.default",
+    "FlockSoundness.Accounting.queriesAt"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Assumptions": {
+   "digest": "3bbb81d392f3ace37ec35c5c9c05dea4",
+   "definitions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.CompiledLock": {
+   "digest": "703ed11cb8289e0e443a40539e2782a6",
+   "definitions": [
+    "FlockSoundness.AgreeRep",
+    "FlockSoundness.FoldRel",
+    "FlockSoundness.IRep",
+    "FlockSoundness.OodRel",
+    "FlockSoundness.QueryRel",
+    "FlockSoundness.RecInv",
+    "FlockSoundness.RecRel",
+    "FlockSoundness.RecStruct",
+    "FlockSoundness.ReqShape",
+    "FlockSoundness.StRel",
+    "FlockSoundness.TopRel",
+    "FlockSoundness.getRep",
+    "FlockSoundness.instInhabitedOracle",
+    "FlockSoundness.lockFold",
+    "FlockSoundness.lockLig",
+    "FlockSoundness.lockQuery",
+    "FlockSoundness.lockQuery.lockQuery'",
+    "FlockSoundness.lockRec",
+    "FlockSoundness.lockRep",
+    "FlockSoundness.lockTable",
+    "FlockSoundness.lockTwoOod",
+    "FlockSoundness.slotOf",
+    "FlockSoundness.tabAt",
+    "FlockSoundness.tableCmp",
+    "FlockSoundness.tableOrc"
+   ],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.CompiledSound": {
+   "digest": "896bd03046ccb99b547909edd8d33742",
+   "definitions": [
+    "FlockSoundness.C0star",
+    "FlockSoundness.Clash",
+    "FlockSoundness.SelfClash",
+    "FlockSoundness.Verified",
+    "FlockSoundness.advR",
+    "FlockSoundness.adv₀",
+    "FlockSoundness.lvOf",
+    "FlockSoundness.opOf",
+    "FlockSoundness.opR",
+    "FlockSoundness.opens₀",
+    "FlockSoundness.op₀",
+    "FlockSoundness.plurC",
+    "FlockSoundness.rowFin",
+    "FlockSoundness.slotOpens",
+    "FlockSoundness.tabOf"
+   ],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Defs": {
+   "digest": "1cc2134a37060fbf2b00703ce87a654e",
+   "definitions": [
+    "FlockSoundness.Accounting.Level.Fits",
+    "FlockSoundness.Accounting.Schedule.level₀",
+    "FlockSoundness.Committed",
+    "FlockSoundness.Model.Arith.Correct",
+    "FlockSoundness.Model.Statement.shape",
+    "FlockSoundness.asTable",
+    "FlockSoundness.instDecidableFits"
+   ],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Game.Basic": {
+   "digest": "634ba2028d8a1545aad522a08e4877e1",
+   "definitions": [
+    "FlockSoundness.Game",
+    "FlockSoundness.Game.Strategy",
+    "FlockSoundness.Game.bind",
+    "FlockSoundness.Game.draw",
+    "FlockSoundness.Game.instMonad",
+    "FlockSoundness.Game.map",
+    "FlockSoundness.Game.prob",
+    "FlockSoundness.Game.recv"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Game.Expect": {
+   "digest": "1d9ca2b4c76019fbe50326b120a9da3d",
+   "definitions": [
+    "FlockSoundness.Game.expect",
+    "FlockSoundness.Game.expect₂",
+    "FlockSoundness.Game.ind",
+    "FlockSoundness.Rewinding.IsPluralityE"
+   ],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Game.Interleave": {
+   "digest": "6e09f08ba672c6c5ab53cf845ffde115",
+   "definitions": ["FlockSoundness.Game.interleave", "FlockSoundness.Game.interleaveWith"],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Game.Lock": {
+   "digest": "6c2d5f6a6f6ced6a7034bbb8d4ffbba5",
+   "definitions": [
+    "FlockSoundness.Game.Lock",
+    "FlockSoundness.Game.Lock.Chooser",
+    "FlockSoundness.Game.Lock.Disjoint",
+    "FlockSoundness.Game.Lock.RPair",
+    "FlockSoundness.Game.Lock.bind",
+    "FlockSoundness.Game.Lock.embedLeft",
+    "FlockSoundness.Game.Lock.embedRight",
+    "FlockSoundness.Game.Lock.forkE",
+    "FlockSoundness.Game.Lock.getPair",
+    "FlockSoundness.Game.Lock.interleaveLock",
+    "FlockSoundness.Game.Lock.lockWith",
+    "FlockSoundness.Game.Lock.same"
+   ],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Instance": {
+   "digest": "614e3e3f08e4cd9422ad82c3c4444147",
+   "definitions": ["FlockSoundness.execArith"],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.LigeritoPhase": {
+   "digest": "51ffa969bd83769f695fec00a772b059",
+   "definitions": ["FlockSoundness.levelGood", "FlockSoundness.levelsChained"],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.LinkSound": {
+   "digest": "6c32c076a0c9c1cc6f968128ffc221ac",
+   "definitions": ["FlockSoundness.Model.Statement.LinkLayout"],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Merkle": {
+   "digest": "84a6380af28fe8d0d3144cd777760087",
+   "definitions": [
+    "FlockSoundness.Merkle.Collision",
+    "FlockSoundness.Merkle.Enc",
+    "FlockSoundness.Merkle.Enc.col",
+    "FlockSoundness.Merkle.Enc.dig",
+    "FlockSoundness.Merkle.Verifies",
+    "FlockSoundness.Merkle.reach",
+    "FlockSoundness.Merkle.up",
+    "FlockSoundness.Merkle.walk"
+   ],
+   "pins": ["FlockSoundness.Merkle.opening_binding", "FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Model.Basic": {
+   "digest": "f28feff001cc0b255c696bcf7cd396e2",
+   "definitions": [
+    "FlockSoundness.Model.Arith",
+    "FlockSoundness.Model.Arith.What",
+    "FlockSoundness.Model.Arith.Xhat",
+    "FlockSoundness.Model.Arith.combW",
+    "FlockSoundness.Model.Arith.embed",
+    "FlockSoundness.Model.Arith.encodeAt",
+    "FlockSoundness.Model.Arith.lagS",
+    "FlockSoundness.Model.Arith.lagΛ",
+    "FlockSoundness.Model.Arith.lo",
+    "FlockSoundness.Model.Arith.ofLimbs",
+    "FlockSoundness.Model.Arith.omega",
+    "FlockSoundness.Model.Arith.pack",
+    "FlockSoundness.Model.Arith.pinned",
+    "FlockSoundness.Model.Arith.u",
+    "FlockSoundness.Model.Arith.unpack",
+    "FlockSoundness.Model.eqAt"
+   ],
+   "pins": [
+    "FlockSoundness.execArith_correct",
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Model.Compiled": {
+   "digest": "7a6b0e12b02e6a5fd5965fd9ff330a36",
+   "definitions": [
+    "FlockSoundness.Model.Cap",
+    "FlockSoundness.Model.LigStateC",
+    "FlockSoundness.Model.LigStateC.caps",
+    "FlockSoundness.Model.LigStateC.cons",
+    "FlockSoundness.Model.LigStateC.level",
+    "FlockSoundness.Model.LigStateC.levels",
+    "FlockSoundness.Model.LigStateC.oods",
+    "FlockSoundness.Model.LigStateC.prevLevel",
+    "FlockSoundness.Model.LigStateC.q",
+    "FlockSoundness.Model.LigStateC.reqs",
+    "FlockSoundness.Model.LigStateC.s",
+    "FlockSoundness.Model.LigStateC.splitDim",
+    "FlockSoundness.Model.Opens",
+    "FlockSoundness.Model.OpensOK",
+    "FlockSoundness.Model.OutC",
+    "FlockSoundness.Model.OutC.accepted",
+    "FlockSoundness.Model.OutC.cap₀",
+    "FlockSoundness.Model.OutC.opens",
+    "FlockSoundness.Model.OutC.pend",
+    "FlockSoundness.Model.PendL",
+    "FlockSoundness.Model.PendL.caps",
+    "FlockSoundness.Model.PendL.reject",
+    "FlockSoundness.Model.PendL.reqs",
+    "FlockSoundness.Model.PendL.verdict",
+    "FlockSoundness.Model.Req",
+    "FlockSoundness.Model.Req.depth",
+    "FlockSoundness.Model.Req.lanes",
+    "FlockSoundness.Model.Req.level",
+    "FlockSoundness.Model.Req.positions",
+    "FlockSoundness.Model.capDepth",
+    "FlockSoundness.Model.capOf",
+    "FlockSoundness.Model.consValueO",
+    "FlockSoundness.Model.foldRoundsC",
+    "FlockSoundness.Model.ligeritoC",
+    "FlockSoundness.Model.pathLen",
+    "FlockSoundness.Model.queryAndBatchC",
+    "FlockSoundness.Model.recursiveRoundsC",
+    "FlockSoundness.Model.repC",
+    "FlockSoundness.Model.tableC",
+    "FlockSoundness.Model.twoOodC"
+   ],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Model.Ligerito": {
+   "digest": "7fc3a806055498d6e804461c35306af5",
+   "definitions": [
+    "FlockSoundness.Model.ConsCtx",
+    "FlockSoundness.Model.ConsCtx.positions",
+    "FlockSoundness.Model.ConsCtx.start",
+    "FlockSoundness.Model.ConsCtx.α",
+    "FlockSoundness.Model.ConsCtx.β",
+    "FlockSoundness.Model.LigState",
+    "FlockSoundness.Model.LigState.cons",
+    "FlockSoundness.Model.LigState.levels",
+    "FlockSoundness.Model.LigState.oods",
+    "FlockSoundness.Model.LigState.prev",
+    "FlockSoundness.Model.LigState.prevLevel",
+    "FlockSoundness.Model.LigState.q",
+    "FlockSoundness.Model.LigState.s",
+    "FlockSoundness.Model.LigState.splitDim",
+    "FlockSoundness.Model.OodCtx",
+    "FlockSoundness.Model.OodCtx.split",
+    "FlockSoundness.Model.OodCtx.z",
+    "FlockSoundness.Model.OodCtx.β",
+    "FlockSoundness.Model.Oracle",
+    "FlockSoundness.Model.Quad",
+    "FlockSoundness.Model.Quad.addScaled",
+    "FlockSoundness.Model.Quad.eval",
+    "FlockSoundness.Model.bHat",
+    "FlockSoundness.Model.bitsK",
+    "FlockSoundness.Model.cff",
+    "FlockSoundness.Model.cffFrom",
+    "FlockSoundness.Model.consValue",
+    "FlockSoundness.Model.drawK",
+    "FlockSoundness.Model.eqList",
+    "FlockSoundness.Model.finalCheck",
+    "FlockSoundness.Model.foldColumn",
+    "FlockSoundness.Model.foldRounds",
+    "FlockSoundness.Model.fromMsg",
+    "FlockSoundness.Model.ligerito",
+    "FlockSoundness.Model.positions",
+    "FlockSoundness.Model.queryAndBatch",
+    "FlockSoundness.Model.recursiveRounds",
+    "FlockSoundness.Model.strata",
+    "FlockSoundness.Model.strata.go",
+    "FlockSoundness.Model.twoOod"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Model.Piop": {
+   "digest": "bae52f818f3e8bac6e47d68830832bbd",
+   "definitions": [
+    "FlockSoundness.Model.OpenOut",
+    "FlockSoundness.Model.OpenOut.T",
+    "FlockSoundness.Model.OpenOut.b",
+    "FlockSoundness.Model.ZcOut",
+    "FlockSoundness.Model.ZcOut.r",
+    "FlockSoundness.Model.ZcOut.va",
+    "FlockSoundness.Model.ZcOut.vb",
+    "FlockSoundness.Model.ZcOut.vc",
+    "FlockSoundness.Model.ZcOut.z",
+    "FlockSoundness.Model.ZcOut.ρ",
+    "FlockSoundness.Model.cClaim",
+    "FlockSoundness.Model.comb",
+    "FlockSoundness.Model.foldAll",
+    "FlockSoundness.Model.foldTop",
+    "FlockSoundness.Model.lincheck",
+    "FlockSoundness.Model.lincheckRounds",
+    "FlockSoundness.Model.opening",
+    "FlockSoundness.Model.packedWeight",
+    "FlockSoundness.Model.phi",
+    "FlockSoundness.Model.recombine",
+    "FlockSoundness.Model.residualRounds",
+    "FlockSoundness.Model.residualStep",
+    "FlockSoundness.Model.zcVector",
+    "FlockSoundness.Model.zerocheck"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Model.Session": {
+   "digest": "a54083c848891d77b7c97326b41481d1",
+   "definitions": [
+    "FlockSoundness.Model.extraClaims",
+    "FlockSoundness.Model.regionClaim",
+    "FlockSoundness.Model.regionPoint",
+    "FlockSoundness.Model.regionValue",
+    "FlockSoundness.Model.rep",
+    "FlockSoundness.Model.table"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Model.Statement": {
+   "digest": "18f85f2a8be8ec204339f6b6b09c2128",
+   "definitions": [
+    "FlockSoundness.Model.Claim",
+    "FlockSoundness.Model.Claim.skip",
+    "FlockSoundness.Model.Claim.value",
+    "FlockSoundness.Model.Claim.x",
+    "FlockSoundness.Model.Close",
+    "FlockSoundness.Model.CommittedSatisfies",
+    "FlockSoundness.Model.Message",
+    "FlockSoundness.Model.Region",
+    "FlockSoundness.Model.Region.bits",
+    "FlockSoundness.Model.Region.fixedBits",
+    "FlockSoundness.Model.Region.free",
+    "FlockSoundness.Model.Region.inBlock",
+    "FlockSoundness.Model.Statement",
+    "FlockSoundness.Model.Statement.A₀",
+    "FlockSoundness.Model.Statement.B₀",
+    "FlockSoundness.Model.Statement.Satisfies",
+    "FlockSoundness.Model.Statement.addr",
+    "FlockSoundness.Model.Statement.block",
+    "FlockSoundness.Model.Statement.kLog",
+    "FlockSoundness.Model.Statement.m",
+    "FlockSoundness.Model.Statement.nbl",
+    "FlockSoundness.Model.Statement.pin",
+    "FlockSoundness.Model.Statement.regions",
+    "FlockSoundness.Model.Table",
+    "FlockSoundness.Model.Witness",
+    "FlockSoundness.Model.encode",
+    "FlockSoundness.Model.witnessOf"
+   ],
+   "pins": [
+    "FlockSoundness.table_sound",
+    "FlockSoundness.table_sound_compiled",
+    "FlockSoundness.table_sound_exec",
+    "FlockSoundness.table_sound_exec_fast100",
+    "FlockSoundness.table_sound_exec_fast100_34_35",
+    "FlockSoundness.table_sound_fast100",
+    "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Rewinding": {
+   "digest": "4d9e617c66a3a0138f1cedde8348aa39",
+   "definitions": ["FlockSoundness.Rewinding.ConflictAt"],
+   "pins": ["FlockSoundness.table_sound_compiled"]
+  }
+ }
+}
