@@ -1,7 +1,7 @@
 [project]
 name = "verity-sampled-proofs"
 version = "0.1.0"
-description = "Sampled proofs: the two-stage sampling law, its beacon-derived draws, and verification plans over Verity Programs."
+description = "Sampled proofs: the two-stage sampling law, its draws from the verifier's own randomness, and verification plans over Verity Programs."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 

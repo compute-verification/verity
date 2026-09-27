@@ -44,7 +44,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `protocols/`: one distribution per protocol, and each imports only the
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
- two-stage law, its beacon-keyed draws, and verification plans. See its
+ two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,

@@ -47,7 +47,7 @@ Obligations are built from a call's declared interface (`args`, `returns`). The 
 
 ## Not here yet
 
-- **The audit driver:** steps 1 to 6 as one object, with the registration log and the beacon client. The prototype's
+- **The audit driver:** steps 1 to 6 as one object, with the registration log and the verifier's draws. The prototype's
   version is on `cursor/protocol-prototype-9816`. It lands with the first real consumer of the full lifecycle. Today
   that is vLLM, whose replay runs on one post-commit challenge, with its strata as RUs at `p = 1`.
 - **The security function** and the red-team review (decision 41).
