@@ -576,4 +576,23 @@ it, so `ksFail` is "the unit is wrong", `SessionSound` gives `KnowledgeSound`, a
   `m = nv` gives each wrong chain the escape `1 − p` for Bernoulli(`p`), which is `L₁`'s own escape. So that reading is
   one-stage over the coarse partition with `L₁`, and the prover beats it whenever the first stage draws something and
   the second leaves a gate undrawn.
-- **To write:** the Bernoulli first stage's closed form for (b2).
+- **(b2) thinned** (`effEscape_bernoulli`) is proved on NOT chains, where every chain has `nv` fine units. Each Bernoulli
+  coordinate contributes the factor `(num·a + (den − num))/den` (`bernFactor`, `bernoulli_avg_prod`). A uniform
+  `k₂`-subset misses one gate with `a = (nv − k₂)/nv` (`choose_ratio`, from `Nat.choose_mul_succ_eq`). That factor is
+  exactly the Bernoulli(`num·k₂/(den·nv)`) factor at `a = 0` (`bernFactor_thin`).
+
+### 12.5 The Flock instantiation (to write)
+
+The audit theorems take the per-unit proof system through named hypotheses, so that the Flock theorems instantiate
+them.
+
+- **Oracle layer.** `table_sound_exec` has the shape `∀ σ, Pr[accept ∧ ¬ Committed] ≤ tableError`, the shape of
+  `SessionSound` once two things are in place:
+  - a drawn wrong unit's statement has no committed satisfying witness (the lowering theorem, level 3);
+  - the batched session projects to that unit's table: the other tables' coins are the prover's private randomness, a
+    mixture of deterministic strategies.
+
+  The second is a strategy-level analogue of `Game.value_interleave_le`, to write.
+- **Compiled layer.** `KnowledgeSound` is `table_knowledge_sound_joint` (the knowledge-soundness review, §4a), averaged
+  over the prover's states with the first wrong drawn unit as target (§4b). `LinkSound` is the link theorem (§4d), and
+  `AnchorsSound` is `registered_weights`.

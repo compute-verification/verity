@@ -177,6 +177,6 @@ theorem prob_bind_of_const (f : α → Game β) (p : β → Prop) (P : α → Pr
     ∀ (g : Game α) (s : Strategy (g.bind f)), prob p (g.bind f) s = prob P g (Strategy.ofBind f g s)
   | .ret a, s => hf a s
   | .send _ k, s => prob_bind_of_const f p P hf (k s.1) s.2
-  | @Game.coin _ C _ _ k, s => congrArg avg (funext fun c => prob_bind_of_const f p P hf (k c) (s c))
+  | @Game.coin _ _ _ _ k, s => congrArg avg (funext fun c => prob_bind_of_const f p P hf (k c) (s c))
 
 end FlockSoundness.Game

@@ -449,6 +449,55 @@ theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ n
   simp only [hω.ne_empty, ite_false]
   exact ENNReal.mul_pos (ENNReal.inv_ne_zero.2 (ENNReal.natCast_ne_top _)) (pow_ne_zero _ hq)
 
+/-! ## (b2) with a Bernoulli first stage is one-stage over the coarse partition, thinned -/
+
+/-- A uniform `k₂`-subset of `nv` misses one given unit with probability `1 − k₂/nv`. -/
+theorem choose_ratio {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1 ≤ nv) :
+    ((nv - 1).choose k₂ : ℝ≥0∞) / (nv.choose k₂ : ℝ≥0∞) = ((nv - k₂ : ℕ) : ℝ≥0∞) / (nv : ℝ≥0∞) := by
+  rw [ENNReal.div_eq_div_iff (by exact_mod_cast (show nv ≠ 0 by omega)) (ENNReal.natCast_ne_top _)
+    (by exact_mod_cast (Nat.choose_pos hk).ne') (ENNReal.natCast_ne_top _)]
+  have := Nat.choose_mul_succ_eq (nv - 1) k₂
+  rw [show nv - 1 + 1 = nv by omega] at this
+  rw [mul_comm]
+  exact_mod_cast this
+
+/-- The factor identity behind thinning: a coordinate drawn with probability `num/den` and then
+missed with probability `1 − k₂/nv` is a coordinate drawn with probability `num·k₂/(den·nv)`. -/
+theorem bernFactor_thin {num den k₂ : ℕ} (hnum : num ≤ den) (hden : 1 ≤ den) (hk : k₂ ≤ nv)
+    (hnv : 1 ≤ nv) :
+    Law.bernFactor num den (((nv - k₂ : ℕ) : ℝ≥0∞) / (nv : ℝ≥0∞)) =
+      Law.bernFactor (num * k₂) (den * nv) 0 := by
+  unfold Law.bernFactor
+  rw [mul_zero, zero_add]
+  have hnv0 : (nv : ℝ≥0∞) ≠ 0 := by exact_mod_cast (show nv ≠ 0 by omega)
+  rw [ENNReal.div_eq_div_iff (by exact_mod_cast (show den * nv ≠ 0 by positivity))
+    (ENNReal.natCast_ne_top _) (by exact_mod_cast (show den ≠ 0 by omega)) (ENNReal.natCast_ne_top _)]
+  have hnat : num * (nv - k₂) + nv * (den - num) = den * nv - num * k₂ := by
+    have := Nat.mul_le_mul hnum hk
+    zify [hk, hnum, this]
+    ring
+  calc ((den * nv : ℕ) : ℝ≥0∞) * ((num : ℝ≥0∞) * (((nv - k₂ : ℕ) : ℝ≥0∞) / nv) + ((den - num : ℕ) : ℝ≥0∞))
+      = den * (num * (nv * (((nv - k₂ : ℕ) : ℝ≥0∞) / nv)) + nv * ((den - num : ℕ) : ℝ≥0∞)) := by
+        push_cast; ring
+    _ = den * (num * ((nv - k₂ : ℕ) : ℝ≥0∞) + nv * ((den - num : ℕ) : ℝ≥0∞)) := by
+        rw [ENNReal.mul_div_cancel hnv0 (ENNReal.natCast_ne_top _)]
+    _ = den * ((den * nv - num * k₂ : ℕ) : ℝ≥0∞) := by
+        congr 1
+        exact_mod_cast hnat
+
+/-- **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli(`num/den`) first
+stage and a uniform `k₂`-subset of each drawn chain's `nv` gates, the effective escape of any set of
+chains is its escape under the one-stage Bernoulli(`num·k₂/(den·nv)`) draw. -/
+theorem effEscape_bernoulli {num den k₂ : ℕ} [NeZero den] [NeZero nv] (hnum : num ≤ den)
+    (hk : k₂ ≤ nv) (B : Finset (Fin K)) :
+    effEscape (Law.bernoulli K num den) (L₂ K nv hk) (refines K nv).parent B =
+      (Law.bernoulli K (num * k₂) (den * nv)).escape B := by
+  have hnv : 1 ≤ nv := Nat.one_le_iff_ne_zero.2 (NeZero.ne nv)
+  have hden : 1 ≤ den := Nat.one_le_iff_ne_zero.2 (NeZero.ne den)
+  rw [effEscape_chains hk hnv B, Law.bernoulli_escape (Nat.mul_le_mul hnum hk) B]
+  simp only [← Finset.prod_const]
+  rw [Law.bernoulli_avg_prod hnum, choose_ratio hk hnv, bernFactor_thin hnum hden hk hnv]
+
 /-! ## Fine values chosen after the fine draw -/
 
 /-- **(b) with the interior committed after the second draw**: the naive ordering. -/

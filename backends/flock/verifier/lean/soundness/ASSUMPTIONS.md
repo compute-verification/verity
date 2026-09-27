@@ -337,7 +337,7 @@ before the session's first coin, not bounds state by state.
 - `Partition.oracle_count`, `oracle_profile`, `oracle_cone`: the same at the oracle layer, from `SessionSound ε`, with
   $\delta_{link} = \delta_{in} = 0$.
 
-**Theorems, laws** (`Audit/Law.lean`): `subset_escape`, the uniform $k$-subset's escape
+**Theorems, laws** (`Audit/Law.lean`): `bernoulli_escape`, a Bernoulli($p$) draw's escape $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's escape
 $\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_minimax`, **uniform is
 optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$.
 
@@ -366,5 +366,8 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 - `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a wrong chain is accepted
   with probability 1.
 
-**Not yet:** the Bernoulli first stage's closed form $\prod_{u \in B}(1 - p\,k_2/n_v(u))$ for (b2); the Flock
-instantiation of `SessionSound`, which needs the batched session's projection to one table.
+- `effEscape_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
+  the effective escape of any set of chains is its escape under the one-stage Bernoulli($p\,k_2/n_v$) draw,
+  $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
+
+**Not yet:** the Flock instantiation of `SessionSound`, `KnowledgeSound` and `LinkSound` (DESIGN.md §12.5).

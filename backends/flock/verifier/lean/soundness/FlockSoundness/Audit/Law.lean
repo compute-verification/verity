@@ -1,6 +1,7 @@
 import FlockSoundness.Game.Prob
 import Mathlib.Data.Fintype.Powerset
 import Mathlib.Data.Nat.Choose.Basic
+import Mathlib.Data.Fintype.Fin
 
 /-!
 # Draw laws
@@ -147,6 +148,74 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
       (by simpa using hK)
     have := (subset n k hk).escape_le_miss (K := K) hB.ge
     rwa [subset_escape, hB] at this
+
+/-! ## Bernoulli draws -/
+
+/-- Each unit drawn independently with probability `num / den`. -/
+abbrev bernoulli (n num den : ℕ) [NeZero den] : Law n where
+  Ω := Fin n → Fin den
+  draw ω := Finset.univ.filter fun u => (ω u).val < num
+
+/-- One Bernoulli coordinate's average of `a` when drawn and `1` when not. -/
+noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
+  ((num : ℝ≥0∞) * a + ((den - num : ℕ) : ℝ≥0∞)) / den
+
+theorem avg_bern {num den : ℕ} [NeZero den] (h : num ≤ den) (a : ℝ≥0∞) :
+    avg (fun x : Fin den => if x.val < num then a else 1) = bernFactor num den a := by
+  classical
+  unfold avg bernFactor
+  rw [← Finset.mul_sum, Finset.sum_ite, Finset.sum_const, Finset.sum_const, Fintype.card_fin,
+    ENNReal.div_eq_inv_mul]
+  congr 1
+  have h1 : (Finset.univ.filter fun x : Fin den => x.val < num).card = num := by
+    rw [Fin.card_filter_val_lt]; omega
+  have h2 : (Finset.univ.filter fun x : Fin den => ¬ x.val < num).card = den - num := by
+    have := Finset.card_filter_add_card_filter_not (s := (Finset.univ : Finset (Fin den)))
+      (fun x : Fin den => x.val < num)
+    rw [Finset.card_univ, Fintype.card_fin, h1] at this
+    omega
+  rw [h1, h2, nsmul_eq_mul, nsmul_eq_mul, mul_one]
+
+/-- **Independent inclusions.** Under a Bernoulli draw, the mean of a product over the drawn units of
+`B` is the product over `B` of each unit's Bernoulli factor. -/
+theorem bernoulli_avg_prod {num den : ℕ} [NeZero den] (h : num ≤ den) (f : Fin n → ℝ≥0∞)
+    (B : Finset (Fin n)) :
+    avg (fun ω : (bernoulli n num den).Ω => ∏ u ∈ B ∩ (bernoulli n num den).draw ω, f u) =
+      ∏ u ∈ B, bernFactor num den (f u) := by
+  classical
+  have key : ∀ ω : (bernoulli n num den).Ω, ∏ u ∈ B ∩ (bernoulli n num den).draw ω, f u =
+      ∏ u, (if u ∈ B then (if (ω u).val < num then f u else 1) else 1) := by
+    intro ω
+    have hB : B ∩ (bernoulli n num den).draw ω = B.filter fun u => (ω u).val < num := by
+      ext u; simp
+    rw [hB, Finset.prod_filter, Finset.prod_ite_mem, Finset.univ_inter]
+  simp only [key]
+  rw [avg_pi_prod (Ω := fun _ : Fin n => Fin den)
+    (fun u (x : Fin den) => if u ∈ B then (if x.val < num then f u else 1) else 1)]
+  rw [← Finset.prod_filter_mul_prod_filter_not Finset.univ (· ∈ B)]
+  have h1 : ∏ u ∈ Finset.univ.filter (· ∉ B),
+      avg (fun x : Fin den => if u ∈ B then (if x.val < num then f u else 1) else 1) = 1 :=
+    Finset.prod_eq_one fun u hu => by
+      rw [Finset.mem_filter] at hu
+      simp only [hu.2, ite_false]
+      exact avg_const 1
+  rw [h1, mul_one, Finset.filter_mem_eq_inter, Finset.univ_inter]
+  refine Finset.prod_congr rfl fun u hu => ?_
+  simp only [hu, ite_true]
+  exact avg_bern h (f u)
+
+/-- **The Bernoulli escape**: `((den − num)/den)^|B|`. -/
+theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
+    (bernoulli n num den).escape B = bernFactor num den 0 ^ B.card := by
+  classical
+  rw [← Finset.prod_const, ← bernoulli_avg_prod h (fun _ => 0) B, escape, ← avg_ite_eq_prCoin]
+  refine congrArg avg (funext fun ω => ?_)
+  rw [Finset.prod_const, Finset.inter_comm]
+  by_cases hd : Disjoint ((bernoulli n num den).draw ω) B
+  · simp [hd, Finset.disjoint_iff_inter_eq_empty.1 hd]
+  · have : ((bernoulli n num den).draw ω ∩ B).card ≠ 0 := by
+      rw [Ne, Finset.card_eq_zero, ← Finset.disjoint_iff_inter_eq_empty]; exact hd
+    simp [hd, zero_pow this]
 
 /-! ## The uniform subset is optimal
 
