@@ -302,10 +302,7 @@ def serving_view(build_dir: str | Path, *, row: dict[str, Any] | None = None, gr
     top = N.add("serving", None, "serving", workload_digest=(amap or {}).get("workload_digest"), gates_total=(amap or {}).get("gates"),
                 input_gates=(amap or {}).get("input_gates"), shared=(amap or {}).get("shared"), requests=[r["request_id"] for r in requests],
                 ranks=ranks)
-    leaf_of: dict[tuple[str, int], np.ndarray] = {}                 # (request id, rank) -> per Call leaf node index
-    for rq in requests:
-        for rank in ranks:
-            leaf_of[(rq["request_id"], rank)] = np.full(by_label[rq["label"]][rank].n, -1, dtype=np.int64)
+    leaf_of = {(rq["request_id"], rank): np.full(by_label[rq["label"]][rank].n, -1, dtype=np.int64) for rq in requests for rank in ranks}
     member_of: dict[tuple[str, int], str] = {}
     req_by_id = {r["request_id"]: r for r in requests}
     hashes: dict[str, str] = {}
@@ -316,93 +313,7 @@ def serving_view(build_dir: str | Path, *, row: dict[str, Any] | None = None, gr
             rq = req_by_id[rid]
             mem = N.add("member", en["id"], f"{rid} step {s}", request_id=rid, s=s, phase=phase, program_digest=rq["program_digest"])
             member_of[(rid, s)] = mem["id"]
-            runner = N.add("runner", mem["id"], "model runner")
-            model = N.add("model", runner["id"], "model")
-            sampler = N.add("sampler", runner["id"], "sampler")
-            mod_nodes: dict[str, dict[str, Any]] = {}
-            body_keys: dict[str, Counter] = {}
-            for rank in ranks:
-                p = by_label[rq["label"]][rank]
-                ks = np.nonzero(p.step == s)[0]
-                if rank == ranks[0]:
-                    lo = ks.min() if ks.size else 0
-                    runs = _runs(ks.tolist())
-                    mem["call_runs"] = runs
-                    if rq["gates"] is not None and len(runs) == 1:
-                        base = rq["gates"][0] + int(p.gates[:lo].sum())
-                        mem["gate_range"] = [base, base + int(p.gates[ks].sum())]
-                own = p.samplers[s:s + 1]
-                smp = set(own) | {k for k in ks.tolist() for o in own if p.constant_of[k] == o}
-                if smp:
-                    arr = np.array(sorted(smp), dtype=np.int64)
-                    rn = N.add("rank", sampler["id"], f"rank {rank}", rank=rank, spec=p.spec[own[0]], call=int(own[0]), module=p.module[own[0]],
-                               group=gid.get(p.keys[own[0]]), inputs=p.sampler_inputs.get(own[0], {}),
-                               with_calls=[{"call": int(k), "spec": p.spec[k], "group": gid.get(p.keys[k])} for k in arr.tolist() if k != own[0]])
-                    _sum(rn, p, arr)
-                    _sum(sampler, p, arr)
-                    sampler.setdefault("spec", p.spec[own[0]])
-                    leaf_of[(rid, rank)][arr] = int(rn["id"][1:])
-                model_ks = np.array([k for k in ks.tolist() if k not in smp], dtype=np.int64)
-                present = {p.module[k] for k in model_ks.tolist()}
-                known = set(present)
-                for m in list(present):
-                    q = m
-                    while "." in q:
-                        q = q.rsplit(".", 1)[0]
-                        known.add(q)
-                known.discard("")
-                first: dict[str, int] = {}
-                for k in model_ks.tolist():
-                    m = p.module[k]
-                    first.setdefault(m, k)
-                    q = m
-                    while "." in q:
-                        q = q.rsplit(".", 1)[0]
-                        first.setdefault(q, k)
-                for m in sorted(known | ({""} & present), key=lambda x: (first.get(x, 1 << 62), x)):
-                    if m in mod_nodes:
-                        continue
-                    par = PG._parent(m, known) if m else None
-                    parent = model if not m or par == "" else mod_nodes[par]
-                    mod_nodes[m] = N.add("module", parent["id"], m or "(no module)", path=m, body=m in present)
-                by_mod: dict[str, list[int]] = {}
-                for k in model_ks.tolist():
-                    by_mod.setdefault(p.module[k], []).append(k)
-                for m, kl in by_mod.items():
-                    arr = np.array(kl, dtype=np.int64)
-                    node = mod_nodes[m]
-                    rn = N.add("rank", node["id"], f"rank {rank}", rank=rank)
-                    _sum(rn, p, arr)
-                    _sum(node, p, arr)
-                    node.setdefault("groups", sorted({gid[p.keys[k]] for k in kl if p.keys[k] in gid}, key=lambda g: int(g[1:])))
-                    body_keys.setdefault(m, Counter()).update(p.shapes[k] for k in kl)
-                    leaf_of[(rid, rank)][arr] = int(rn["id"][1:])
-                _sum(model, p, model_ks)
-                _sum(mem, p, ks)
-                _sum(runner, p, ks)
-
-            def subtree(nid: str) -> str:
-                nd = N.nodes[int(nid[1:])]
-                if nid not in hashes:
-                    kids = [c for c in nd["children"] if N.nodes[int(c[1:])]["kind"] == "module"]
-                    hashes[nid] = _h([sorted(body_keys.get(nd.get("path"), Counter()).items()), [subtree(c) for c in kids]])
-                return hashes[nid]
-
-            for m, node in mod_nodes.items():
-                node["subtree_hash"] = subtree(node["id"])
-            model["subtree_hash"] = _h([subtree(c) for c in model["children"] if N.nodes[int(c[1:])]["kind"] == "module"])
-            for node in [model, *mod_nodes.values()]:
-                seen: dict[str, str] = {}
-                for c in node["children"]:
-                    cn = N.nodes[int(c[1:])]
-                    if cn["kind"] != "module":
-                        continue
-                    if cn["subtree_hash"] in seen:
-                        cn["fold_of"] = seen[cn["subtree_hash"]]
-                    else:
-                        seen[cn["subtree_hash"]] = c
-            mem["structure_hash"] = _h([model["subtree_hash"], sampler.get("spec", "").split("{")[0]])
-
+            _member(N, mem, rq, [by_label[rq["label"]][rank] for rank in ranks], gid, leaf_of, hashes)
     for node in reversed(N.nodes):                                  # children have larger ids: subtree totals bottom-up
         if node["kind"] in ("module", "engine_step", "serving"):
             kids = [N.nodes[int(c[1:])] for c in node["children"]]
@@ -410,22 +321,123 @@ def serving_view(build_dir: str | Path, *, row: dict[str, Any] | None = None, gr
                 node["body_calls"] = sum(k["calls"] for k in kids if k["kind"] == "rank")
             for f in FIELDS:
                 node[f] = sum(k.get(f, 0) for k in kids)
+    checks = _checks(N, requests, ranks, by_label, leaf_of, member_of, recorded)
+    edges, checks["edges"] = _edges(N, by_label, requests, ranks, leaf_of)
+    checks["ok"] = checks["ok"] and checks["edges"]["ok"]
+    if graph is not None:
+        checks["graph"] = _graph_check(graph, acc, gid, N)
+    out = {"schema": SCHEMA, "row": row or {}, "build": {"dir": str(root), "chronology": chron is not None, "address_map": amap is not None,
+                                                          "request_programs": [{"label": p.label, "rank": p.rank, "program_digest": p.digest, "calls": p.n,
+                                                                                "gates": int(p.gates.sum()), "sampler_rule": p.sampler_rule}
+                                                                               for p in progs]},
+           "query": word_query.query_id(X, W, 0), "requests": requests,
+           "steps": [dict(st, members=[{"request_id": a, "s": b, "phase": c, "node": member_of[(a, b)]} for a, b, c in st["members"]]) for st in steps],
+           "nodes": N.nodes, "edges": edges, "checks": checks, "rules": RULES}
+    if not checks["ok"]:
+        raise ValueError(f"serving view does not partition the Build's Calls: {json.dumps(checks)[:2000]}")
+    return out
 
-    # partition: every Call of every (request, rank) Program in exactly one leaf
+
+def _member(N: _Nodes, mem: dict[str, Any], rq: dict[str, Any], progs: list[RequestProgram], gid: dict, leaf_of: dict, hashes: dict) -> None:
+    """A member's model runner (the model's module tree, the sampler) with one leaf per (module body or sampler, rank)."""
+    rid, s = mem["request_id"], mem["s"]
+    runner = N.add("runner", mem["id"], "model runner")
+    model = N.add("model", runner["id"], "model")
+    sampler = N.add("sampler", runner["id"], "sampler")
+    mod_nodes: dict[str, dict[str, Any]] = {}
+    body_keys: dict[str, Counter] = {}
+    for j, p in enumerate(progs):
+        ks = np.nonzero(p.step == s)[0]
+        if j == 0:
+            runs = mem["call_runs"] = _runs(ks.tolist())
+            if rq["gates"] is not None and len(runs) == 1:
+                base = rq["gates"][0] + int(p.gates[:runs[0][0]].sum())
+                mem["gate_range"] = [base, base + int(p.gates[ks].sum())]
+        own = p.samplers[s:s + 1]
+        smp = set(own) | {k for k in ks.tolist() for o in own if p.constant_of[k] == o}
+        if smp:
+            arr = np.array(sorted(smp), dtype=np.int64)
+            rn = N.add("rank", sampler["id"], f"rank {p.rank}", rank=p.rank, spec=p.spec[own[0]], call=int(own[0]), module=p.module[own[0]],
+                       group=gid.get(p.keys[own[0]]), inputs=p.sampler_inputs.get(own[0], {}),
+                       with_calls=[{"call": int(k), "spec": p.spec[k], "group": gid.get(p.keys[k])} for k in arr.tolist() if k != own[0]])
+            _sum(rn, p, arr)
+            _sum(sampler, p, arr)
+            sampler.setdefault("spec", p.spec[own[0]])
+            leaf_of[(rid, p.rank)][arr] = int(rn["id"][1:])
+        model_ks = np.array([k for k in ks.tolist() if k not in smp], dtype=np.int64)
+        _modules(N, model, mod_nodes, body_keys, p, model_ks, gid, leaf_of[(rid, p.rank)])
+        _sum(model, p, model_ks)
+        _sum(mem, p, ks)
+        _sum(runner, p, ks)
+
+    def subtree(nid: str) -> str:
+        nd = N.nodes[int(nid[1:])]
+        if nid not in hashes:
+            kids = [c for c in nd["children"] if N.nodes[int(c[1:])]["kind"] == "module"]
+            hashes[nid] = _h([sorted(body_keys.get(nd.get("path"), Counter()).items()), [subtree(c) for c in kids]])
+        return hashes[nid]
+
+    for node in mod_nodes.values():
+        node["subtree_hash"] = subtree(node["id"])
+    model["subtree_hash"] = _h([subtree(c) for c in model["children"] if N.nodes[int(c[1:])]["kind"] == "module"])
+    for node in [model, *mod_nodes.values()]:
+        seen: dict[str, str] = {}
+        for c in node["children"]:
+            cn = N.nodes[int(c[1:])]
+            if cn["kind"] != "module":
+                continue
+            if cn["subtree_hash"] in seen:
+                cn["fold_of"] = seen[cn["subtree_hash"]]
+            else:
+                seen[cn["subtree_hash"]] = c
+    mem["structure_hash"] = _h([model["subtree_hash"], sampler.get("spec", "").split("{")[0]])
+
+
+def _modules(N: _Nodes, model: dict, mod_nodes: dict, body_keys: dict, p: RequestProgram, model_ks: np.ndarray, gid: dict, leaf: np.ndarray) -> None:
+    """One rank's model Calls of a member under their module nodes (created on first sight, parents first), one leaf per body."""
+    present = {p.module[k] for k in model_ks.tolist()}
+    known = set(present)
+    first: dict[str, int] = {}
+    for k in model_ks.tolist():
+        q = p.module[k]
+        first.setdefault(q, k)
+        while "." in q:
+            q = q.rsplit(".", 1)[0]
+            known.add(q)
+            first.setdefault(q, k)
+    known.discard("")
+    for m in sorted(known | ({""} & present), key=lambda x: (first.get(x, 1 << 62), x)):
+        if m in mod_nodes:
+            continue
+        par = PG._parent(m, known) if m else None
+        parent = model if not m or par == "" else mod_nodes[par]
+        mod_nodes[m] = N.add("module", parent["id"], m or "(no module)", path=m, body=m in present)
+    by_mod: dict[str, list[int]] = {}
+    for k in model_ks.tolist():
+        by_mod.setdefault(p.module[k], []).append(k)
+    for m, kl in by_mod.items():
+        arr = np.array(kl, dtype=np.int64)
+        node = mod_nodes[m]
+        rn = N.add("rank", node["id"], f"rank {p.rank}", rank=p.rank)
+        _sum(rn, p, arr)
+        node.setdefault("groups", sorted({gid[p.keys[k]] for k in kl if p.keys[k] in gid}, key=lambda g: int(g[1:])))
+        body_keys.setdefault(m, Counter()).update(p.shapes[k] for k in kl)
+        leaf[arr] = int(rn["id"][1:])
+
+
+def _checks(N: _Nodes, requests: list[dict], ranks: list[int], by_label: dict, leaf_of: dict, member_of: dict, recorded: dict) -> dict[str, Any]:
+    """Every Call of every (request, rank) Program in exactly one leaf; each request's members sum to its Program; its Calls' gates
+    equal its address-map span; each member equals the node and gate range the chronology records for it."""
     checks: dict[str, Any] = {"partition": {}, "members": {}, "gates": {}}
     part_ok = True
     for rq in requests:
         for rank in ranks:
-            p = by_label[rq["label"]][rank]
             lf = leaf_of[(rq["request_id"], rank)]
-            if (lf < 0).any():
-                part_ok = False
-            checks["partition"][f"{rq['request_id']}/rank{rank}"] = {"calls": p.n, "unplaced": int((lf < 0).sum())}
+            part_ok &= not (lf < 0).any()
+            checks["partition"][f"{rq['request_id']}/rank{rank}"] = {"calls": int(lf.size), "unplaced": int((lf < 0).sum())}
     leaves = [n for n in N.nodes if n["kind"] == "rank"]
     total_calls = sum(by_label[rq["label"]][rank].n for rq in requests for rank in ranks)
-    checks["partition"]["ok"] = part_ok and sum(n["calls"] for n in leaves) == total_calls
-    checks["partition"]["leaves"] = len(leaves)
-    checks["partition"]["calls"] = total_calls
+    checks["partition"].update(ok=part_ok and sum(n["calls"] for n in leaves) == total_calls, leaves=len(leaves), calls=total_calls)
     for rq in requests:
         p = by_label[rq["label"]][ranks[0]]
         mems = [N.nodes[int(v[1:])] for (rid, _s), v in member_of.items() if rid == rq["request_id"]]
@@ -435,7 +447,6 @@ def serving_view(build_dir: str | Path, *, row: dict[str, Any] | None = None, gr
         if rq["gates"] is not None:
             span = rq["gates"][1] - rq["gates"][0]
             checks["gates"][rq["request_id"]] = {"address_map_span": span, "calls_gates": int(p.gates.sum()), "ok": span == int(p.gates.sum())}
-    edges, checks["edges"] = _edges(N, by_label, requests, ranks, leaf_of)
     agree, differ, absent = 0, [], 0
     for (rid, s), nid in member_of.items():
         nodes_, gates_ = recorded.get((rid, s), (None, None))
@@ -448,21 +459,9 @@ def serving_view(build_dir: str | Path, *, row: dict[str, Any] | None = None, gr
         else:
             differ.append(f"{rid}/{s}")
     checks["chronology_ranges"] = {"agree": agree, "differ": differ, "not_recorded": absent, "ok": not differ}
-    checks["ok"] = (checks["partition"]["ok"] and all(v["ok"] for v in checks["members"].values()) and all(v["ok"] for v in checks["gates"].values())
-                    and checks["edges"]["ok"] and checks["chronology_ranges"]["ok"])
-    if graph is not None:
-        checks["graph"] = _graph_check(graph, acc, gid, N)
-    out = {"schema": SCHEMA, "row": row or {}, "build": {"dir": str(root), "chronology": chron is not None, "address_map": amap is not None,
-                                                          "request_programs": [{"label": p.label, "rank": p.rank, "program_digest": p.digest, "calls": p.n,
-                                                                                "gates": int(p.gates.sum()), "sampler_rule": p.sampler_rule}
-                                                                               for p in progs]},
-           "query": word_query.query_id(X, W, 0), "requests": requests, "steps": [dict(st, members=[{"request_id": a, "s": b, "phase": c,
-                                                                                                    "node": member_of[(a, b)]}
-                                                                                                   for a, b, c in st["members"]]) for st in steps],
-           "nodes": N.nodes, "edges": edges, "checks": checks, "rules": RULES}
-    if not checks["ok"]:
-        raise ValueError(f"serving view does not partition the Build's Calls: {json.dumps(checks)[:2000]}")
-    return out
+    checks["ok"] = (checks["partition"]["ok"] and all(v["ok"] for v in checks["members"].values())
+                    and all(v["ok"] for v in checks["gates"].values()) and checks["chronology_ranges"]["ok"])
+    return checks
 
 
 KINDS = ("flow", "token", "state", "backward")
@@ -571,7 +570,7 @@ RULES = {
                    "without one, the request steps (arrival not recorded); where the chronology records a member's node and gate range, the "
                    "member's Calls must be exactly that range (checks.chronology_ranges)",
     "request_step": "per Call: the first step s whose sampler needs it (the sampler or an ancestor of it); a Call no sampler needs: max over the "
-                    "Calls it reads of their step, +1 past a sampler.  Sampler of step s: the Call producing element s of the request Program's "
+                    "Calls it reads of their step, +1 past a sampler; the sampler of step s: the Call producing element s of the request Program's "
                     "return (sampler_rule 'return'), else the s-th Call of a sampling-event Definition (sampler_rule 'sampling-event')",
     "sampler": "the step's sampler Call and its constants (Calls that read no Call and are read by the sampler alone); inputs = the request inputs "
                "it reads as [lo, hi) leaf runs (splits: the one leaf s)",
