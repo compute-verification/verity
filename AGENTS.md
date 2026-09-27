@@ -82,9 +82,11 @@ small binding in `circuit_check.targets`, which the suite enforces.
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, and the Lean
-verifier's build with its upstream cross-check once PR #85 is on `main`. `--record` runs it through `research run` as an
-Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
-passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
+verifier's build with its upstream cross-check once PR #85 is on `main`, at once on a multi-core CPU pod, with caches that hit
+only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into
+`main` only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence
+store, or when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on
+one `check` of the merged tree.
 
 ## Working principles
 

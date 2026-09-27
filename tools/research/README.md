@@ -79,6 +79,7 @@ research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
+research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
 ~~~
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
@@ -86,6 +87,12 @@ research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the mer
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
 The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`); `research` only reads
 its attempts.
+
+`research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree (one `--no-ff` merge each,
+so the chain's commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine and
+polled there), and fast-forwards the target to it when it passes: the exact tree checked is the one that lands. When it fails,
+the prefixes are bisected (each checked the same way) to the first ref whose merge breaks it, and the target fast-forwards to
+the longest prefix that passed.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
