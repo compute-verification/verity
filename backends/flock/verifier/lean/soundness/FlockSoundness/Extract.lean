@@ -201,30 +201,18 @@ theorem tail_of_fixed (g : Game β) (s : Strategy g) (Fm : List β → ℝ) (X :
 
 omit [Fintype P] [DecidableEq V] in
 open Classical in
-/-- **The product form**: `ε · Pr[fails] ≤ 2ε_c + 2·E[mass]`, with no condition on `ε`. -/
+/-- **The product form**: `ε · Pr[fails] ≤ ε_c + E[mass]`, with no condition on `ε`. Run list by
+run list, `ε · 1[fails] ≤ ε_c + mass`. -/
 theorem joint_of_fixed (g : Game β) (s : Strategy g) (Fm : List β → ℝ) (X : List β → Prop)
-    (hF : ∀ bs, 0 ≤ Fm bs) (ε εc : ℝ) (hε0 : 0 ≤ ε) (hεc : 0 ≤ εc)
+    (hF : ∀ bs, 0 ≤ Fm bs) (ε εc : ℝ) (hεc : 0 ≤ εc)
     (hX : ∀ bs, ¬ X bs → ε ≤ εc + Fm bs) (K : ℕ) :
-    ε * expectN g s K (ind fun bs => ¬ X bs) ≤ 2 * εc + 2 * expectN g s K Fm := by
-  have hle1 : expectN g s K (ind fun bs => ¬ X bs) ≤ 1 := by
-    rw [← expectN_const g s 1 K]
-    exact expectN_mono g s (fun bs => ind_le_one _ _) K
-  have hEF : 0 ≤ expectN g s K Fm := expectN_nonneg g s hF K
-  have hP0 : 0 ≤ expectN g s K (ind fun bs => ¬ X bs) := expectN_nonneg g s (ind_nonneg _) K
-  by_cases hbig : ε ≤ 2 * εc
-  · calc ε * expectN g s K (ind fun bs => ¬ X bs) ≤ ε * 1 := mul_le_mul_of_nonneg_left hle1 hε0
-      _ ≤ 2 * εc + 2 * expectN g s K Fm := by linarith
-  · push_neg at hbig
-    have htail := tail_of_fixed g s Fm X hF ε εc (by linarith) hX K
-    have hpos : 0 < ε - εc := by linarith
-    calc ε * expectN g s K (ind fun bs => ¬ X bs)
-        ≤ ε * (expectN g s K Fm / (ε - εc)) := mul_le_mul_of_nonneg_left htail hε0
-      _ = (ε / (ε - εc)) * expectN g s K Fm := by ring
-      _ ≤ 2 * expectN g s K Fm := by
-          refine mul_le_mul_of_nonneg_right ?_ hEF
-          rw [div_le_iff₀ hpos]
-          linarith
-      _ ≤ 2 * εc + 2 * expectN g s K Fm := by linarith
+    ε * expectN g s K (ind fun bs => ¬ X bs) ≤ εc + expectN g s K Fm := by
+  rw [← expectN_const_mul, ← expectN_const g s εc K, ← expectN_add]
+  refine expectN_mono g s (fun bs => ?_) K
+  unfold ind
+  split_ifs with h
+  · linarith [hX bs h]
+  · linarith [hF bs]
 
 end Extract
 
