@@ -153,8 +153,9 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   - With `K = 2^21.6/(ε − ε_c⁻)`, failure is at most `1/4 + (t·2^-244.7/(ε − ε_c⁻))²`. The hash term is squared, so
     `κ = ε_c⁻ + t·2^-243.7`.
   - The product form the audit consumes needs no condition on `ε`:
-    `Pr[accepted ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))` (`table_knowledge_sound_joint`). At
-    `K = √(N₀/(e·Adv₀))` this is `2ε_c⁻ + t·2^-243.7`, which is `2^-159.8` at `t = 2^80` above `2ε_c⁻`.
+    `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint_tight`). Rerun list by rerun
+    list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
+    `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
   - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
     `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
 - **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
@@ -168,14 +169,63 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
-  - On paper (`note:20260927T0705Z-draft-link-term`, pending review): define `X`'s value layer the way the extractor
-    fills its table, from auxiliary extractions, and charge failed extractions to the joint form at the same `K`.
-    Knowledge plus link then cost about `2√(t·2^-220.5)` for audit B at m = 33, which is `2^-69.3` at `t = 2^80`
-    (the review's first estimate was `2^-65.3`).
-  - The square root is inherent to strict-time collision resistance here. It dominates the audit bound. An
-    expected-time assumption or the random-oracle column removes it.
-  - The lifetime numbers don't change until the review accepts it.
+  - The analysis is `note:20260927T0705Z-draft-link-term`, pending review.
+  - The lifetime numbers don't change until the decision below.
 - **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
+
+**The link term: a spec decision.** One audit's knowledge-plus-link term, under the assumption in Table 1 today and
+under the two alternatives. $N_s$ is the leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length
+(m = 33), and $t$ the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
+
+| Assumption | Knowledge + link | A | B | C | D |
+|---|---|---|---|---|---|
+| **Strict-time collision resistance** (Table 1 today) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
+| **(i) Expected-time collision resistance** | $t\cdot N_s\,(4N_0/e)/2^{256.5}$ | $t\cdot2^{-216.2}$ | $t\cdot2^{-206.6}$ | $t\cdot2^{-200.6}$ | $t\cdot2^{-194.9}$ |
+| **(ii) Random oracle** (tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
+
+The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which (i) doubles (below).
+
+The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
+
+| Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
+|---|---|---|---|---|
+| Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
+| (i) Expected-time | −142.6 | −126.6 | −106.6 | −96.6 |
+| (ii) Random oracle | −383 | −351 | −311 | −291 |
+| $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
+
+At $t=2^{80}$ the audits read −72.2, −69.8, −68.3 and −66.8 under strict time, and −136.2, −126.6, −120.6 and −114.9
+under (i).
+
+- **Strict time.** Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows linearly
+  with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at $t=2^{80}$,
+  audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's protocol (CDGSY24).
+- **(i) Expected-time collision resistance.**
+  - **The assumption:** an algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with
+    probability at most $T/2^{256.5}$.
+  - **Why linear in $T$.** This is SHA-512's generic bound for such finders, since
+    $\min(1,q^2/2^{513})\le q/2^{256.5}$. It is linear rather than quadratic because a finder can gamble, making
+    $2^{256.5}$ evaluations with small probability. The quadratic form $T^2/2^{513}$ would be false for this reason.
+  - **The reductions become expected-time,** as in Chiesa–Dall'Agnol–Guan–Spooner–Yogev (ePrint 2024/1434,
+    Theorem 2). The extractor runs the session once. Only if that run accepts does it rerun, until $cN_0/e$ reruns
+    have accepted, about $cN_0/(e\varepsilon)$ runs at acceptance probability $\varepsilon$.
+    - An extraction then costs about $(1+cN_0/e)\,t$ in expectation, whatever $\varepsilon$, and needs no estimate
+      of it.
+    - The joint form's missing term becomes about $\varepsilon/c$.
+  - **The link finder** samples auxiliary extractions until one recovers the position it needs. That is at most $N_s$
+    extractions in expectation, so about $N_s(cN_0/e)\,t$ evaluations.
+  - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
+    $\Pr[\text{accept}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+N_s(cN_0/e)\,t/2^{256.5}$, plus a conflict term
+    of order $t\cdot2^{-244}$. The square root goes.
+  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the table's $t\cdot N_s(4N_0/e)/2^{256.5}$. It doubles the
+    other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 23 bits below the link term.
+  - **The status.** It is a new assumption, not in Table 1, and this analysis is on paper, not in Lean.
+- **(ii) The random-oracle column** (lifetime doc §7). The extractor reads the commit strings, the `hm96` openings and
+  the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one global
+  $t^2/2^{511}$. `ASSUMPTIONS.md` §4 keeps the random oracle as a cross-check only; the decision would be to quote it
+  for the audit's value layer.
+- **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
+  proved under strict-time collision resistance.
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
@@ -319,107 +369,50 @@ verifier (§6), not to non-interactive proofs.
 
 ## 9. Quantum provers and verifiers
 
-The full analysis, with sources, is `note:20260926T2240Z-finding-post-quantum`.
+The full analysis, with sources and the Lean landscape, is `note:20260926T2240Z-finding-post-quantum`.
 
 **The theorem is classical, and only its compiled layer is affected.**
 
 - **The oracle layer holds against quantum provers as it stands.** `table_sound` is statistical, and every message and
-  coin is classical. A quantum prover is therefore one more randomized strategy, which `table_sound` already bounds.
-- **The compiled layer does not carry over.** §2 rewinds `P*` from a snapshot taken at the commitment.
-  - A quantum state cannot be copied, and measuring the first run's openings disturbs it. So there is no second
-    independent run, and no plurality table.
-  - Collision resistance is also the wrong property. Some hashes that resist quantum collision-finding give commitments
-    that do not bind quantum adversaries (Ambainis–Rosmanis–Unruh 2014). The replacement is **collapsing** (Unruh
-    2016).
-  - Classical proof frameworks, ours and VCVio included, are unsound for quantum adversaries by design.
+  coin is classical, so a quantum prover is one more randomized strategy.
+- **The compiled layer does not carry over.** §2 rewinds `P*`, but a quantum state can't be copied, or measured without
+  disturbing it. Collision resistance is also the wrong property: the replacement is **collapsing** (Unruh 2016).
+  Classical frameworks, ours and VCVio included, are unsound for quantum adversaries by design.
 
-**What is known, and what applies to live coins.**
+**What applies to live coins.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947, Theorem 6.1) prove
+interactive BCS post-quantum sound: `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`, for a public-coin semi-adaptive
+IOP with a collapse-position-binding vector commitment and openings at the end.
 
-- **Kilian's protocol.** Chiesa–Ma–Spooner–Zhandry (FOCS 2021) prove Kilian's argument (one PCP commitment) post-quantum
-  sound in the standard model, with a collapsing hash.
-- **Our setting.** Chiesa–Dall'Agnol–Di–Guan–Spooner (TCC 2025, ePrint 2025/947) extend this to interactive BCS: any
-  public-coin semi-adaptive IOP, a collapse-position-binding vector commitment, and openings at the end. Their Theorem
-  6.1 gives `ε_ARG ≤ ε_IOP + Σ_i L_i·(q_i + 5)·ε_collapse + ϵ`.
-- **Flock fits:**
-  - the coins are public;
-  - Merkle caps are a vector commitment, and hash trees over a collapsing hash are collapsing;
-  - Ligerito's queries depend only on coins, so the IOP is non-adaptive, hence semi-adaptive;
-  - `ε_IOP` is the oracle-layer bound;
-  - the kept round bytes fix every message before its coins.
+- Flock fits: its coins are public and its commitments are Merkle caps. Its queries depend only on coins, `ε_IOP` is
+  the oracle-layer bound, and the kept round bytes fix every message before its coins.
+- So **if SHA-512 is collapsing, Flock is post-quantum sound with error `tableError + negl(λ)`.** This is a paper-level
+  corollary, not yet written out.
+- SHA-512 is collapsing if its compression function is (Unruh 2016; Fehr 2018). Table 1 would need a new property,
+  `collapsing/sha-512`.
 
-  So **if SHA-512 is collapsing, Flock's interactive protocol is post-quantum sound with error `tableError + negl(λ)`.**
-  This is a paper-level corollary, not yet written out.
-- **Fiat–Shamir (§8).** The reference is the quantum random-oracle model: `O(t²·ε_rbr + t³/2^λ)` (Chiesa–Manohar–Spooner,
-  TCC 2019).
+**No concrete bound follows at our parameters, for any prover size.**
 
-**Is SHA-512 collapsing?** It is conjectured. Random oracles are collapsing (Unruh 2016), and Merkle–Damgård preserves
-collapsing (Unruh, Asiacrypt 2016; Fehr, TCC 2018). So SHA-512 is collapsing if its compression function is. No attack
-is known beyond generic collision search. Table 1 would need a new property for it (`collapsing/sha-512`).
-
-**The loss makes the corollary asymptotic only.** The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs,
-and its advantage is multiplied by `Σ_i L_i·(q_i + 5)`. At m = 33, `L_max = 2^21`, that sum is about `2^30`, and a table
-has 150–200 rounds.
-
-- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 prover runs.
-- Even at 2^157 queries, the generic quantum collision probability `q³/2^512 = 2^-41`, times `2^30`, is `2^-11`.
-
-**So no concrete post-quantum bound follows at our parameters, for any prover size.** A number would need one of:
-
-- the quantum random-oracle model, with straight-line extraction by Zhandry's compressed oracle, and a target of
-  `ε_stat + O(t³/2^512)`, which no one has proved for the interactive case;
-- a tighter standard-model rewinding, which is open.
-
-**Grover and BHT margins for SHA-512.**
-
-| Attack | Quantum cost |
-|---|---|
-| Preimage or second preimage (Grover) | 2^256 queries, sequential; `P` machines gain only `√P` |
-| Collision (Brassard–Høyer–Tapp) | 2^170.7 queries, and as much quantum-accessible memory |
-| Collision with small quantum memory (Chailloux–Naya-Plasencia–Schrottenloher) | 2^204.8 time |
-| Collision, generic limit (Zhandry) | success at most `O(q³/2^512)` |
-
-- **The hash has ample margin**, the reduction's loss is what blocks a number. SHA-256 collisions cost 2^85.3 by BHT;
-  NIST's post-quantum category 4 is SHA-384 collision search, and SHA-512 sits above it.
-- **`seed` coins** (PR #83) sit at exactly 2^128: Grover on the 256-bit seed, and on SHA-256 as a PRF.
+- The reduction's collapse adversary costs `poly(k·L_max/ϵ)` prover runs, and its advantage is multiplied by
+  `Σ_i L_i·(q_i + 5) ≈ 2^30` at m = 33.
+- A 2^-128 target needs `ϵ ≤ 2^-128`, hence at least 2^157 runs. At that many queries even the generic `q³/2^512` is
+  2^-41, which is 2^-11 after the loss.
+- A number needs straight-line extraction in the quantum random-oracle model (Zhandry's compressed oracle), or tighter
+  rewinding. Both are open for the interactive case.
+- The hash itself has ample margin: collisions cost 2^170.7 queries by Brassard–Høyer–Tapp. `seed` coins (PR #83) sit
+  at 2^128, from Grover on the 256-bit seed.
 
 **Zero knowledge against quantum verifiers.**
 
-- **The special honest-verifier ZK lemma (§11) is unaffected.** For fixed coins the view is classical and
-  statistically close to the simulation, and statistical distance bounds quantum distinguishers too. Halevi–Micali
-  hiding, masks and padding are statistical.
-- **Malicious-verifier ZK with the single-rewind simulator** (§11) needs quantum rewinding of a verifier whose state may
-  be quantum. The reserve route of a registered verifier key (§11.2) is straight-line and avoids it.
-  - The closest result: Lombardi–Ma–Spooner (FOCS 2022) prove Goldreich–Kahan, where the verifier commits to its
-    challenges first, post-quantum ZK. It needs the verifier's commitment to be collapse-binding and statistically
-    hiding.
-  - Constant-round black-box post-quantum ZK is impossible (Chia–Chung–Liu–Yamakawa, FOCS 2021). Ours has 150–200
-    rounds, so that does not apply, but adapting LMS22 to coins revealed round by round is research.
-  - **Design consequence:** the coin-seed commitment would need a 128-bit quantum margin, so SHA-384 or SHA-512, not
-    SHA-256.
+- Special honest-verifier ZK (§11) is statistical, so it is unaffected.
+- Malicious-verifier ZK with the single-rewind simulator needs quantum rewinding. The registered-verifier-key route
+  (§11.2) is straight-line.
+- A coin-seed commitment that must hold against quantum verifiers needs SHA-384 or SHA-512, not SHA-256.
 
-**What a post-quantum statement would take:**
-
-1. **The asymptotic corollary, on paper (small).** Show that Flock is interactive BCS over a public-coin, non-adaptive
-   IOP, and apply CDDGS25 under "SHA-512 is collapsing". It needs a quantum-cryptography reviewer, and it gives
-   `tableError + negl(λ)`, not a number.
-2. **A concrete number (research).** Either interactive BCS in the quantum random-oracle model with concrete terms, or
-   tighter quantum rewinding.
-3. **Lean.**
-   - **What exists:** Lean 4 quantum-information libraries (Lean-QIT, 2026; QICLean) with states, channels,
-     measurements, entropy and some QKD. They are outside Mathlib and not on our pins.
-   - **What no proof assistant has:** quantum adversaries with superposition queries in a game model like ours,
-     collapsing, CMSZ21's rewinding engine (Jordan's lemma, Marriott–Watrous), CDDGS25's multi-round argument, or
-     Zhandry's compressed oracle. The nearest tools, qrhl-tool (Isabelle) and EasyPQC (EasyCrypt), handle quantum
-     random-oracle proofs such as Fujisaki–Okamoto and Full Domain Hash, but no rewinding.
-   - **A full Lean statement** is a research formalization program, larger than this whole classical development, and
-     not plannable now.
-   - **A cheap intermediate:** CDDGS25's theorem as a named `Prop`, like A1, with the application proved (Flock is
-     public-coin and non-adaptive, with `ε_IOP = tableError`). It is honest, but adds little while the conclusion is
-     asymptotic.
-
-**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. A fair statement is: the
-statistical layer holds against quantum provers; the compiled protocol is post-quantum sound asymptotically if SHA-512
-is collapsing (CDDGS25); no concrete post-quantum bound is known at these parameters.
+**Recommendation.** Keep the theorem classical, and claim no post-quantum number in Table 1. The statistical layer
+holds against quantum provers. The compiled protocol is post-quantum sound asymptotically if SHA-512 is collapsing
+(CDDGS25), and no concrete bound is known at these parameters. A Lean statement would be a research program, because no
+proof assistant has quantum rewinding. The cheap intermediate is CDDGS25 as a named `Prop`, with Flock's application
+proved.
 
 ## 10. One root, many proofs
 

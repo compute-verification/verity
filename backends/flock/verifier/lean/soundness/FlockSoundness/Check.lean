@@ -114,7 +114,15 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Extract.tail_of_fixed
 #print axioms FlockSoundness.Extract.joint_of_fixed
 #print axioms FlockSoundness.table_knowledge_sound
+#print axioms FlockSoundness.table_knowledge_sound_joint_tight
 #print axioms FlockSoundness.table_knowledge_sound_joint
+-- a table inside a batched session: one position's lockstep in a batch, the oracle session bounded
+-- by the table, and the compiled bound and knowledge soundness for the table in the session
+#print axioms FlockSoundness.Game.value_batch_getD_le
+#print axioms FlockSoundness.Game.Lock.Aligned.batchLock
+#print axioms FlockSoundness.orcSess_value_le
+#print axioms FlockSoundness.session_sound_of_table
+#print axioms FlockSoundness.session_knowledge_sound
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
