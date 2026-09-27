@@ -83,11 +83,25 @@ fn zk_layout(st: &Stmt) -> Layout {
     Layout::new(st.m, st.c.k_log, lc.ood_samples[0], lc.initial_k)
 }
 
-/// Ligerito level 0's query count under its padding (`zk_veil::level0_queries`, from Fast100's rate-1/2 count upwards).
+/// Ligerito level 0's query count per rep under its padding: at RoPE's sizes the counts the soundness lane and the red team
+/// agreed (m = 25, 26, 27: 277, 242, 229, a little above the least counts, 268, 239, 227), elsewhere the least count
+/// (`zk_veil::level0_queries`); either way at least 100 bits per run. `--zk` refuses m <= 24: no count works at rate 1/2.
 fn zk_queries0(m: usize) -> Result<usize, String> {
+    if m <= 24 {
+        return Err(format!("m = {m}: --zk needs m >= 25 (Ligerito level 0's padding outgrows its lanes at rate 1/2)"));
+    }
     let lc = params(m, LigeritoProfile::Fast100).ligerito_prover_config()?;
-    zkv::level0_queries(1 << lc.initial_log_msg_cols, lc.queries[0])
-        .ok_or(format!("m = {m}: Ligerito level 0's padding outgrows its lanes at rate 1/2 (M1's masked protocol needs m >= 25)"))
+    let l = 1usize << lc.initial_log_msg_cols;
+    let q = match m {
+        25 => 277,
+        26 => 242,
+        27 => 229,
+        _ => zkv::level0_queries(l, lc.queries[0]).ok_or(format!("m = {m}: no level-0 query count reaches 100 bits at rate 1/2"))?,
+    };
+    if zkv::level0_t_pad(q) > l || zkv::level0_bits(l, q) < 100.0 {
+        return Err(format!("m = {m}: {q} level-0 queries give {:.1} bits per run", zkv::level0_bits(l, q)));
+    }
+    Ok(q)
 }
 
 /// Ligerito level 0's padding per lane (`zk_veil::level0_t_pad`).

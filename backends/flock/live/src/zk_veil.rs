@@ -57,22 +57,25 @@ pub const INNER_LOG_INV_RATE: usize = 3;
 pub const STREAM_PADS: u64 = 4;
 pub const STREAM_DOT_MASK: u64 = 5;
 
-/// Ligerito level 0's padding per lane for `q0` queries: both reps' openings of the one root, plus 64 for the OOD value, the
-/// lane-round messages and the extra lanes' sums (any that many positions of a lane are uniform).
+/// Ligerito level 0's padding per lane for `q0` queries per rep: every distinct level-0 position the session opens (both
+/// reps' queries), so those positions of a lane are uniform. Nothing else evaluates the padded lanes: the OOD value, the
+/// lane-round messages and each pair's sums are masked by the algebraic pads, and each rep's `ybar` by its own pair's padding.
 pub fn level0_t_pad(q0: usize) -> usize {
-    2 * q0 + 64
+    2 * q0
 }
 
-/// Level 0's query count under its padding. With `l` message words per lane the code is `RS[2l, l + t_pad]`, of rate
-/// `ρ' = (l + t_pad) / 2l`, and Fast100's rule holds at every level: `Q log₂(1/(√ρ' + η)) ≥ 100`, `η = 1/50` (the Johnson
-/// slack of the soundness lane's `Accounting/Bound.lean`). The least such `Q ≥ q_min`; `None` when the padding outgrows the
+/// Level 0's query bits per run: with `l` message words per lane the code is `RS[2l, l + t_pad]`, of rate
+/// `ρ' = (l + t_pad) / 2l`, and `q` queries give `q log₂(1/(√ρ' + η))`, `η = 1/50` (the Johnson slack of the soundness lane's
+/// `Accounting/Bound.lean`).
+pub fn level0_bits(l: usize, q: usize) -> f64 {
+    let rate = (l + level0_t_pad(q)) as f64 / (2 * l) as f64;
+    -(q as f64) * (rate.sqrt() + 0.02).log2()
+}
+
+/// The least `q ≥ q_min` with Fast100's 100 bits per run at level 0 ([`level0_bits`]); `None` when the padding outgrows the
 /// lane first.
 pub fn level0_queries(l: usize, q_min: usize) -> Option<usize> {
-    let bits = |q: usize| {
-        let rate = (l + level0_t_pad(q)) as f64 / (2 * l) as f64;
-        -(q as f64) * (rate.sqrt() + 0.02).log2()
-    };
-    (q_min..).take_while(|&q| level0_t_pad(q) <= l).find(|&q| bits(q) >= 100.0)
+    (q_min..).take_while(|&q| level0_t_pad(q) <= l).find(|&q| level0_bits(l, q) >= 100.0)
 }
 
 /// Where each pad sits, per rep. Exposed values first, in proof-field order: zerocheck `round1_ab[64]`, `round1_c[64]`, the
@@ -1114,10 +1117,15 @@ mod tests {
     }
 
     #[test]
-    fn level0_queries_are_the_soundness_lanes_counts() {
-        for (l, q) in [(1 << 12, Some(277)), (1 << 13, Some(242)), (1 << 14, Some(229)), (1 << 17, Some(219)), (1 << 18, Some(219)),
+    fn level0_query_counts() {
+        // the least counts at t_pad = 2q (the red team's table), and none where the padding outgrows the lane at rate 1/2
+        for (l, q) in [(1 << 12, Some(268)), (1 << 13, Some(239)), (1 << 14, Some(227)), (1 << 17, Some(219)), (1 << 18, Some(219)),
                        (1 << 19, Some(218)), (1 << 9, None), (1 << 10, None), (1 << 11, None)] {
             assert_eq!(level0_queries(l, 218), q, "l = {l}");
+        }
+        // the agreed counts at RoPE's sizes keep 100 bits per run
+        for (l, q) in [(1 << 12, 277), (1 << 13, 242), (1 << 14, 229)] {
+            assert!(level0_bits(l, q) >= 100.0 && level0_bits(l, q - 10) < 100.0, "l = {l}");
         }
     }
 
