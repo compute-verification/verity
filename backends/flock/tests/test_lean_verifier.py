@@ -36,6 +36,22 @@ def test_no_escape_hatches():
     assert not hits, hits
 
 
+AUDIT = LEAN / "soundness" / "FlockSoundness" / "Audit"
+AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|FlockSoundness\.Game\.|FlockSoundness\.Audit\.)")
+
+
+def test_audit_layer_is_abstract():
+    """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
+    (`soundness/DESIGN.md` §12); no Flock theorem is imported there, and no proof is admitted."""
+    files = sorted(AUDIT.glob("*.lean"))
+    assert files
+    bad = [f"{p.name}: {line}" for p in files for line in p.read_text().splitlines()
+           if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
+    assert not bad, bad
+    admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
+    assert not admitted, admitted
+
+
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 
