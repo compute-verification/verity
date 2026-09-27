@@ -96,6 +96,55 @@ def test_shared_rows_are_tables_and_refs(tmp_path):
     assert "shared_rows" not in per and per["frame_v3"]["roots"] != head["frame_v3"]["roots"]
 
 
+def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
+    """Tables and refs as given (a value-independent layout): an equal row stays a separate table row with its own salt, the
+    refs and the committer's salts are written as given."""
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+
+    s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
+    names = [nm for nm, _, _ in json.loads(text.split("\n", 2)[1][5:])["ports"]]
+    base = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1) for nm in names}
+    tables = {"x": base["x"][[0, 1, 0]], "cs": base["cs"][[0, 1]]}
+    refs = {"x": [0, 1, 2, 1], "cs": [0, 1, 0, 1]}
+    outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[[0, 1, 0, 1]] for p in s.subcircuit.outputs}
+    salts = {nm: [bytes([k, r]) * (FC.SALT_BYTES // 2) for r in range(len(tables[nm]))] for k, nm in enumerate(names)}
+    head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", share_rows=True, outs=outs, tables=tables, refs=refs,
+                    salts=salts)
+    assert head["shared_rows"] == {"x": 3, "cs": 2}
+    prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
+    n_rows = sum(len(tables[nm]) for nm in names)
+    got = np.frombuffer(verifier[n_rows * FC.BC_BYTES:][:16 * len(names)], dtype="<u4").reshape(4, len(names))
+    assert got.tolist() == [[refs[nm][i] for nm in names] for i in range(4)]
+    rows_len = sum(2 * t.size for t in tables.values())
+    at, row = 0, 0
+    for nm in names:
+        for r, words in enumerate(tables[nm]):
+            assert (np.frombuffer(prover[at:at + 2 * words.size], dtype="<u2") == words).all()
+            assert prover[rows_len + row * FC.SALT_BYTES:][:FC.SALT_BYTES] == salts[nm][r]
+            bc = verifier[row * FC.BC_BYTES:][:FC.BC_BYTES]
+            assert bc == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words.tolist(), 16, ROLE_X), salts[nm][r])
+            at, row = at + 2 * words.size, row + 1
+    x_start = sum(len(tables[nm]) for nm in names[:names.index("x")])
+    x0, x2 = (verifier[(x_start + r) * FC.BC_BYTES:][:FC.BC_BYTES] for r in (0, 2))
+    assert x0 != x2, "equal rows, different salts: different leaves"
+    with pytest.raises(ValueError, match="one ref per instance"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", share_rows=True, outs=outs, tables=tables, refs={**refs, "x": [0, 1, 3, 1]})
+
+
+def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
+    """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
+    its display id: RMSNorm's EPS is its f64 hex."""
+    from verity.ir.codec import _spec_id
+
+    s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
+    got = FC.program_digests(s.subcircuit, FC.set_statics(s))
+    assert list(got) == [_spec_id(s.subcircuit.definition(**FC.set_statics(s)))]
+    assert '"f64":"0x1.4f8b588e368f1p-17"' in next(iter(got))
+    assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
+
+
 def test_leaf_scheme_reserves_what_hm96_needs():
     import hashlib
 

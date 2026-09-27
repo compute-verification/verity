@@ -92,6 +92,21 @@ def set_statics(input_set) -> dict:
     return dict(sub.instance_statics_of({p.name: input_set.port(p.name, 0, 1)[0] for p in sub.inputs}))
 
 
+def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
+    """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
+    descriptor id (``verity.ir.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
+    reference no core Definition wraps keeps its own key."""
+    from verity.ir.codec import _spec_id
+
+    digests = sub.program_digests([statics or {}])
+    try:
+        key = _spec_id(sub.definition(**(statics or {})))
+    except (AssertionError, AttributeError, TypeError, ValueError):
+        return digests
+    (value,) = digests.values()
+    return {key: value}
+
+
 def program_sha512(sub, statics: dict | None = None) -> str:
     """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
     statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
@@ -310,7 +325,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
-    programs = sub.program_digests([statics or {}])
+    programs = program_digests(sub, statics)
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
                         "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)], "lookups": lk}}
@@ -440,7 +455,8 @@ def share(rows: dict) -> tuple[dict, dict]:
 
 
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
-          share_rows: bool = False, rows: dict | None = None, outs: dict | None = None) -> dict:
+          share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
+          refs: dict | None = None, salts: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
     every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
@@ -450,20 +466,39 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``share_rows``: each input port's distinct rows are one committed table (header ``shared_rows: {port: R_p}``, the port's
     frame-v3 tree over them; :func:`share`), and the rows, salts and ``b || c`` are the tables' (port-major, table order), with
     every instance's refs (u32 LE, instance-major, ports in order) between the ``b || c`` and the outputs. ``rows`` and ``outs``
-    (``{port: (n, words)}``) replace the set's range as the instances' words."""
+    (``{port: (n, words)}``) replace the set's range as the instances' words.
+
+    ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``): the shared-row tables and refs as given, in their
+    order and with no dedupe (a value-independent layout: equal rows stay separate rows, each with its own salt). ``salts``
+    (``{port: [192-byte salt, ...]}``, one per table row, or per instance without tables): the committer's own salts."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
     ports = [Port(nm, w) for nm, w, _ in meta["ports"]]
     out_ports = [tuple(x) for x in meta["out_ports"]]
-    if rows is None:
-        rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
     if outs is None:
         outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
-    refs = None
-    if share_rows:
-        rows, refs = share({p.name: rows[p.name] for p in ports})
-    salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
+    if (tables is None) != (refs is None) or (tables is not None and not share_rows):
+        raise ValueError("tables and refs are given together, with share_rows")
+    if tables is not None:
+        if set(tables) != {p.name for p in ports} or set(refs) != {p.name for p in ports}:
+            raise ValueError("tables and refs: one per input port")
+        rows = {p.name: np.ascontiguousarray(tables[p.name], dtype=np.uint16).reshape(-1, p.words) for p in ports}
+        refs = {p.name: np.asarray(refs[p.name], dtype=np.int64).reshape(-1) for p in ports}
+        for p in ports:
+            r = refs[p.name]
+            if len(r) != n or not len(rows[p.name]) or r.min(initial=0) < 0 or r.max(initial=0) >= len(rows[p.name]):
+                raise ValueError(f"port {p.name}: one ref per instance, each a row of its table")
+    else:
+        if rows is None:
+            rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
+        refs = None
+        if share_rows:
+            rows, refs = share({p.name: rows[p.name] for p in ports})
+    if salts is None:
+        salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
+    elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
+        raise ValueError("salts: one 192-byte salt per row")
     fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
     G = meta["vus_per_block"]
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
