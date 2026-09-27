@@ -20,24 +20,23 @@ def positions (lv : Level) (coins : Array F128) : Array Nat := Id.run do
       j := j + 1
   return out
 
+/-- The first `k` subspace-polynomial steps from `x`: `s ← s² + sv[j]·s` for `j < k` (§13.4). -/
+def sIter (sv : Array F128) : Nat → F128 → F128
+  | 0, x => x
+  | k + 1, x => let y := sIter sv k x; y * y + sv[k]! * y
+
 /-- `s_i(v_i)` for `i < n`: the subspace polynomials' normalisers (§13.4). -/
-def svTable (n : Nat) : Array F128 := Id.run do
-  let mut sv : Array F128 := #[]
-  for i in [0:n] do
-    let mut s := F128.monomial i
-    for j in [0:i] do
-      s := s * s + sv[j]! * s
-    sv := sv.push s
-  return sv
+def svTable : Nat → Array F128
+  | 0 => #[]
+  | n + 1 => let sv := svTable n; sv.push (sIter sv n (F128.monomial n))
+
+/-- From step `i` with `s = s_i(ω)`: push `s · sv[i]⁻¹` and step, `fuel` times. -/
+def whatsGo (sv : Array F128) : Nat → Nat → F128 → Array F128 → Array F128
+  | 0, _, _, out => out
+  | fuel + 1, i, s, out => whatsGo sv fuel (i + 1) (s * s + sv[i]! * s) (out.push (s * (sv[i]!).inv))
 
 /-- `Ŵ_i(ω_q)` for `i < n`. -/
-def whats (sv : Array F128) (q : Nat) (n : Nat) : Array F128 := Id.run do
-  let mut out := #[]
-  let mut s : F128 := ⟨q.toUInt64, 0⟩
-  for i in [0:n] do
-    out := out.push (s * (sv[i]!).inv)
-    s := s * s + sv[i]! * s
-  return out
+def whats (sv : Array F128) (q : Nat) (n : Nat) : Array F128 := whatsGo sv n 0 ⟨q.toUInt64, 0⟩ #[]
 
 /-- `eq` over K points (LSB first). -/
 def eqTableK (r : Array F256) : Array F256 := Id.run do
