@@ -184,6 +184,30 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
     assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
 
 
+@pytest.mark.parametrize("name,table", [("MufuTanh_v1", "tanh_mufu"), ("TanhF32Rn_v1", "tanh_rn")])
+def test_the_tanh_pieces_match_the_ir_primitives(name, table):
+    """Gemma's tanh (a table read over |x|): each region's bounds and their neighbours, both signs, NaNs and infinities, and random
+    words across the table's region, exact bits."""
+    from verity_flock import tail_pieces as TP
+
+    lo, hi = TP.TANH_BOUNDS[table]
+    rng = random.Random(8)
+    words = [lo - 1, lo, lo + 1, hi - 1, hi, hi + 1, 0, 1, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x3F800000, 0x41200000]
+    words += [rng.randrange(lo, hi) for _ in range(6000)] + [rng.randrange(0, 0x7F800000) for _ in range(1000)]
+    vecs = [[w | (rng.getrandbits(1) << 31)] for w in words] + [[w | 0x80000000] for w in words[:14]]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
+def test_the_gelu_piece_matches_the_ir_primitive_on_every_gate_word():
+    """``GeluTanhMulBf16``: every bf16 gate word (the activation table's whole domain), each with a random up word, exact bits."""
+    rng = random.Random(3)
+    ups = bf16_words(rng, 1 << 16)
+    vecs = [[g, u] for g, u in zip(range(1 << 16), ups)]
+    ref = _registered()["GeluTanhMulBf16_v1"].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["GeluTanhMulBf16_v1"], (16, 16), 16, vecs)) if g != ref(*v)] == []
+
+
 def test_bit_at_selects_the_bit_or_zero():
     """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
     from verity_vllm.program.registry.sampling import bit_at

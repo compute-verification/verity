@@ -15,10 +15,16 @@ from . import fp
 from . import gf2
 from .gf2 import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 
-#: table name -> index bits (each table's sha256 is ir_lower.TABLES[name])
-TABLE_BITS = {"rsq": 24, "sqrt": 24, "rcp": 23, "ex2": 23}
-#: the bits of a table word a piece reads: exponent and mantissa (bit 31 is zero in every measured table)
+#: table name -> index bits (the MUFU tables' sha256 is ir_lower.TABLES[name], the others' TABLE_SHA256[name])
+TABLE_BITS = {"rsq": 24, "sqrt": 24, "rcp": 23, "ex2": 23, "tanh_mufu": 27, "tanh_rn": 27, "gelu_tanh_bf16": 16}
+#: the bits of a table word a piece reads: exponent and mantissa (bit 31 is zero in every measured table and for |tanh|)
 VALUE_BITS = 31
+TABLE_VALUE_BITS = {"gelu_tanh_bf16": 16}
+#: the tables that are not MUFU tables of the Flock statement's tail: gemma's tanh (the measured MUFU.TANH; the IR's RN32 tanh)
+#: over the 2^27 words their low 27 bits index, and the gelu-tanh activation of every bf16 word
+TABLE_SHA256 = {"tanh_mufu": "4c25bacba332fda09d215e64dc5ca3ec9a7dfdc98a3ea7971f5422054b2943e0",
+                "tanh_rn": "32fb35b4a1d0402a8f4b96a601c8ffc5e986266d20666a224eaf3bffeace308a",
+                "gelu_tanh_bf16": "892c2fbca46fed05daf5b4fca3b49a392e93fdc6b826f8fd7bfa3c9bae0d8865"}
 QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
@@ -29,18 +35,80 @@ QUARTER = 0x3E800000   # 0.25
 TWO24 = 0x4B800000     # 2^24
 
 
+def table_sha256(name: str) -> str:
+    from .ir_lower import TABLES
+    return TABLES.get(name) or TABLE_SHA256[name]
+
+
 def _load_table(name: str):
     import hashlib
 
     import numpy as np
-    from verity_vllm.program.kernels import fa2_relation, rms_relation
 
-    from .ir_lower import TABLES
-    t = fa2_relation.tables() if name == "ex2" else rms_relation.tables("cuda")
-    arr = np.ascontiguousarray(getattr(t, name), dtype="<u4")
-    if hashlib.sha256(arr.tobytes()).hexdigest() != TABLES[name]:
-        raise ValueError(f"the {name} table is not the pinned one ({TABLES[name]})")
+    if name in TABLE_SHA256:
+        arr = np.ascontiguousarray(_DERIVED[name](), dtype="<u4")
+    else:
+        from verity_vllm.program.kernels import fa2_relation, rms_relation
+        t = fa2_relation.tables() if name == "ex2" else rms_relation.tables("cuda")
+        arr = np.ascontiguousarray(getattr(t, name), dtype="<u4")
+    if hashlib.sha256(arr.tobytes()).hexdigest() != table_sha256(name):
+        raise ValueError(f"the {name} table is not the pinned one ({table_sha256(name)})")
     return arr
+
+
+#: [identity below, saturated from) on |x| of each tanh table: the words its table holds. MUFU.TANH's are the IR's measured rules
+#: (``prims.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x itself below
+#: 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
+TANH_BOUNDS = {"tanh_mufu": (0x3B800001, 0x41000000), "tanh_rn": (0x39B89BA3, 0x41102CB4)}
+
+
+def _tanh_index(lo: int, hi: int):
+    assert 0 < hi - lo <= 1 << 27, "a contiguous region of at most 2^27 words has distinct low 27 bits"
+
+
+def _mufu_tanh_table():
+    """``MufuTanh_v1``'s measured table (``prims._tanh_shards``) at every positive word of [identity_below, saturate_from), by the
+    word's low 27 bits."""
+    import numpy as np
+    from verity_vllm.program.registry import prims as RP
+
+    lo, hi = TANH_BOUNDS["tanh_mufu"]
+    assert (lo, hi) == (RP.MUFU_TANH_RULES["identity_below"], RP.MUFU_TANH_RULES["saturate_from"])
+    (sh,) = RP._tanh_shards()
+    out = np.zeros(1 << 27, np.uint32)
+    for k in range((lo - sh.lo) // sh.block_words, (hi - 1 - sh.lo) // sh.block_words + 1):
+        b = sh.block(k)
+        w = sh.lo + k * sh.block_words + np.arange(len(b), dtype=np.int64)
+        m = (w >= lo) & (w < hi)
+        assert not (b[m] >> 31).any()
+        out[w[m] & 0x7FFFFFF] = b[m]
+    return out
+
+
+def _tanh_rn_table():
+    """``TanhF32Rn_v1`` (RN32 of ``math.tanh``) at every positive word of its table region, by the word's low 27 bits."""
+    import math
+
+    import numpy as np
+
+    lo, hi = TANH_BOUNDS["tanh_rn"]
+    out = np.zeros(1 << 27, np.uint32)
+    for c0 in range(lo, hi, 1 << 22):
+        w = np.arange(c0, min(c0 + (1 << 22), hi), dtype=np.uint32)
+        t = np.array(list(map(math.tanh, w.view(np.float32).astype(np.float64).tolist())), np.float64).astype(np.float32)
+        out[w & 0x7FFFFFF] = t.view(np.uint32)
+    return out
+
+
+def _gelu_table():
+    """``GeluTanhMulBf16_v1``'s activation word ``dense.gelu_tanh_bf16_bits(g)`` for every bf16 word g."""
+    import numpy as np
+    from verity_vllm.program.registry import dense
+
+    return np.array([dense.gelu_tanh_bf16_bits(g) for g in range(1 << 16)], np.uint32)
+
+
+_DERIVED = {"tanh_mufu": _mufu_tanh_table, "tanh_rn": _tanh_rn_table, "gelu_tanh_bf16": _gelu_table}
 
 
 for _name in TABLE_BITS:
@@ -48,9 +116,9 @@ for _name in TABLE_BITS:
 
 
 def table_read(C, table: str, idx):
-    """The pinned MUFU table ``table``'s word at ``idx`` (its low 31 bits)."""
+    """The pinned table ``table``'s word at ``idx`` (its low 31 bits, or ``TABLE_VALUE_BITS``)."""
     assert len(idx) == TABLE_BITS[table]
-    return C.lookup(table, list(idx), VALUE_BITS)
+    return C.lookup(table, list(idx), TABLE_VALUE_BITS.get(table, VALUE_BITS))
 
 
 # --- helpers ---------------------------------------------------------------------------------------------------------------
@@ -453,6 +521,37 @@ def f32_to_e4m3_sat(C, x):
     return mux(C, C.AND(e_max, m_nz), const_bits(0x7F, 8), out)
 
 
+# --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
+
+def _tanh(C, x, table: str, nan_word: int):
+    lo, hi = TANH_BOUNDS[table]
+    _tanh_index(lo, hi)
+    a, s = x[:31], x[31]
+    t = table_read(C, table, a[:27])
+    return _word(C, [(_is_nan(C, x), _c32(nan_word)), (NOT(_ult_const(C, a, hi)), const_bits(ONE_F, 31) + [s]),
+                     (_ult_const(C, a, lo), list(x))], list(t) + [s])
+
+
+def mufu_tanh(C, x):
+    """``MufuTanh_v1`` (MUFU.TANH on sm_89): x below the identity bound, ±1 from the saturation bound, 0x7FFFFFFF for NaN, else
+    the measured table at |x| with x's sign (the table's odd symmetry, measured with 0 violations)."""
+    return _tanh(C, x, "tanh_mufu", QNAN_MUFU)
+
+
+def tanh_rn(C, x):
+    """``TanhF32Rn_v1``: RN32(tanh(x)); x below the identity bound, ±1 from the saturation bound (both found by scanning every
+    word), 0x7FC00000 for NaN, else its table at |x| with x's sign."""
+    return _tanh(C, x, "tanh_rn", 0x7FC00000)
+
+
+def gelu_tanh_mul_bf16(C, g, u):
+    """``GeluTanhMulBf16_v1``: ``bf16(f32(act(g)) * (f32(u) + 0))``, act the gelu-tanh activation word of g (a 2^16 table of the
+    IR's own function), both conversions RN with the F2FP NaN 0x7FFF."""
+    act = table_read(C, "gelu_tanh_bf16", list(g))
+    uf = fp.f32_add(C, fp.bf16_to_f32(u), _c32(0), ir_nan=True)
+    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, ir_nan=True), 0x7FFF)
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -493,6 +592,9 @@ PIECES = {
     "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],
     "I32Eq_v1": lambda C, a, b: [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])],
     "HopperE4m3QgmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:])),
+    "MufuTanh_v1": mufu_tanh,
+    "TanhF32Rn_v1": tanh_rn,
+    "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at}
