@@ -12,7 +12,8 @@ M1 (lane `flock-zk`, `backends/flock/live/PROTOCOL.md` §7) changes level 0 of e
 * **after the lane rounds**, which send no message after their last coin (`foldRoundsNL`), the
   prover sends `e^r_i`, one value per extra lane, the verifier draws `ρ^r_1 … ρ^r_e`, and the prover
   sends `ybar^r`, `t` values over `K`. The claim restarts at `s + Σ_i ρ_i·e_i`, and the code-switch
-  message and level 1 follow as before;
+  message and level 1 follow as before. An honest `e_i` is extra lane `i`'s value against the running
+  claim's weight: `b(r̄, ·)` plus level 0's out-of-domain claim `β₀·eq(z₀, (r̄, ·))`;
 * **the level-0 row check** at rep `r`'s queries adds the rep's extra lanes, weighted by `ρ`, and
   the padding correction `Σ_j ybar_j·(c₀·X̂_j + X̂_{2^cols + j})` to the folded witness lanes
   (`padColumn`). The induced basis is unchanged, so the final check is.
