@@ -318,6 +318,12 @@ to its committed inputs (`Partition.Correct`). Every bound holds for every prove
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
 before the session's first coin, not bounds state by state.
 
+**What the reviewer checks here.** The theorems hold for every choice of committed transcript `X` and extractor `ext`,
+so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
+(`Partition.oracle`). At the compiled layer it is the plurality of what the extractor recovers behind each commit
+string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
+roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
+
 **Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the draw misses $B$:
 
 - `audit_le`: $\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset] +
