@@ -3,9 +3,9 @@
 - SHA-256 and SHA-512 compression (FIPS 180-4) with one-AND-per-bit adders, Ch and Maj;
 - GF(2^128) multiplication (PROTOCOL.md §2.1): Karatsuba down to single bits (3^7 ANDs), then the XOR-only reduction.
 
-`check_program` evaluates every costly operation of an evaluated program through its gadget circuit, instance by
-instance in bit-sliced form, and compares with the native values: the gate-level check that the program's native
-semantics are the circuit's.
+`gate_check` runs sampled instances of an evaluated operation through its gadget circuit, in bit-sliced form, and compares
+with the native values (`program.evaluate(..., gate_sample=k)`): the gate-level check that the program's native semantics
+are the circuit's.
 """
 from __future__ import annotations
 
@@ -283,35 +283,32 @@ def md_pad(algo: str, n_bytes: int) -> bytes:
 # the gate-level check of an evaluated program
 # ---------------------------------------------------------------------------------------------------------------------
 
-def check_program(prog, vals, sample: int | None = None, rng=None) -> dict[str, int]:
-    """Evaluate each fmul / sha op through its gadget circuit (all instances, or `sample` per op) and compare with the
-    native outputs. Returns instances checked per gadget; raises on the first disagreement."""
-    rng = rng or np.random.default_rng(0)
-    checked: dict[str, int] = {}
-    for o in prog.ops:
-        if o.name == "fmul":
-            a, b = (np.broadcast_to(vals[i], vals[o.outs[0]].shape).reshape(-1, 2) for i in o.ins)
-            out = vals[o.outs[0]].reshape(-1, 2)
-            sel = np.arange(len(out)) if sample is None or len(out) <= sample else rng.choice(len(out), sample, replace=False)
-            bits = lambda x: np.unpackbits(np.ascontiguousarray(x[sel]).view(np.uint8), axis=1, bitorder="little").T
-            got = run_sliced(gf_mul_circuit(), np.concatenate([bits(a), bits(b)]))
-            if not np.array_equal(got, bits(out)):
-                raise AssertionError(f"fmul ({o.component}): gate-level product differs from the native one")
-            checked["gf128_mul"] = checked.get("gf128_mul", 0) + len(sel)
-        elif o.name in ("sha256", "sha512"):
-            st, bl = (vals[i] for i in o.ins)
-            H = SHA_STATE[o.name]
-            lead = vals[o.outs[0]].shape[:-1]
-            st = np.broadcast_to(st, lead + (H,)).reshape(-1, H)
-            bl = np.broadcast_to(bl, lead + bl.shape[-2:]).reshape(-1, *bl.shape[-2:])
-            sel = np.arange(len(st)) if sample is None or len(st) <= sample else rng.choice(len(st), sample, replace=False)
-            cur = st[sel]
-            circ = sha_circuit(o.name)
-            for j in range(bl.shape[1]):
-                inp = np.concatenate([np.unpackbits(cur, axis=1, bitorder="little").T,
-                                      np.unpackbits(np.ascontiguousarray(bl[sel, j]), axis=1, bitorder="little").T])
-                cur = np.packbits(run_sliced(circ, inp).T, axis=1, bitorder="little")
-            if not np.array_equal(cur, vals[o.outs[0]].reshape(-1, H)[sel]):
-                raise AssertionError(f"{o.name} ({o.component}): gate-level compression differs from the native one")
-            checked[o.name] = checked.get(o.name, 0) + len(sel) * bl.shape[1]
-    return checked
+def gate_check(op: str, ins: list, out: np.ndarray, k: int, rng) -> int:
+    """Run k random instances of one evaluated fmul / sha op through its gadget circuit; raise on any disagreement.
+    For a compression chain, a sampled instance is one (chain, block): the chain is replayed natively up to the block."""
+    if op == "fmul":
+        a, b = (np.broadcast_to(x, out.shape).reshape(-1, 2) for x in ins)
+        o = out.reshape(-1, 2)
+        sel = rng.choice(len(o), min(k, len(o)), replace=False)
+        bits = lambda x: np.unpackbits(np.ascontiguousarray(x[sel]).view(np.uint8), axis=1, bitorder="little").T
+        if not np.array_equal(run_sliced(gf_mul_circuit(), np.concatenate([bits(a), bits(b)])), bits(o)):
+            raise AssertionError("fmul: the gadget circuit disagrees with the native product")
+        return len(sel)
+    H = SHA_STATE[op]
+    lead = out.shape[:-1]
+    st = np.broadcast_to(ins[0], lead + (H,)).reshape(-1, H)
+    bl = np.broadcast_to(ins[1], lead + ins[1].shape[-2:]).reshape(-1, *ins[1].shape[-2:])
+    n, nb = bl.shape[:2]
+    picks = rng.choice(n * nb, min(k, n * nb), replace=False)
+    inst, blk = picks // nb, picks % nb
+    before = np.stack([sha_native(op, st[i], bl[i, :j]) if j else st[i] for i, j in zip(inst, blk)])
+    after = np.stack([sha_native(op, st[i], bl[i, :j + 1]) for i, j in zip(inst, blk)])
+    inp = np.concatenate([np.unpackbits(before, axis=1, bitorder="little").T,
+                          np.unpackbits(np.ascontiguousarray(bl[inst, blk]), axis=1, bitorder="little").T])
+    got = np.packbits(run_sliced(sha_circuit(op), inp).T, axis=1, bitorder="little")
+    if not np.array_equal(got, after):
+        raise AssertionError(f"{op}: the gadget circuit disagrees with the native compression")
+    final = sha_native(op, st[inst], bl[inst])
+    if not np.array_equal(final, out.reshape(-1, H)[inst]):
+        raise AssertionError(f"{op}: the native chain disagrees with the op's output")
+    return len(picks)

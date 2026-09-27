@@ -154,7 +154,17 @@ class Program:
         return r
 
     def take(self, a: Reg, idx) -> Reg:
-        """A static rearrangement: `a[idx]` with numpy indexing on a's shape."""
+        """A static rearrangement: `a[idx]` with numpy indexing on a's shape (basic indexing is recorded as a slice)."""
+        t = idx if isinstance(idx, tuple) else (idx,)
+        if all(isinstance(x, (int, np.integer, slice)) or x is Ellipsis for x in t):
+            if Ellipsis in t:
+                k = t.index(Ellipsis)
+                t = t[:k] + (slice(None),) * (len(a.shape) - len(t) + 1) + t[k + 1:]
+            t = tuple(int(x) if isinstance(x, (int, np.integer)) else x for x in t)
+            shape = np.broadcast_to(np.zeros((), np.uint8), a.shape)[t].shape
+            r = self._reg(a.kind, shape)
+            self._op("slice", (a,), (r,), idx=t)
+            return r
         flat = np.arange(a.size, dtype=np.int64).reshape(a.shape)[idx]
         return self.gather(a, np.asarray(flat))
 
@@ -172,7 +182,9 @@ class Program:
             rest = int(np.prod([s for s in shape if s != -1]))
             shape = shape[:k] + (a.size // rest,) + shape[k + 1:]
         assert int(np.prod(shape)) == a.size
-        return self.gather(a, np.arange(a.size, dtype=np.int64).reshape(shape))
+        r = self._reg(a.kind, shape)
+        self._op("reshape", (a,), (r,), shape=shape)
+        return r
 
     def concat(self, regs: list[Reg], axis: int = 0) -> Reg:
         kind = regs[0].kind
@@ -296,6 +308,7 @@ class Program:
 class Result:
     vals: list
     failed: list[tuple[str, int]]
+    gates: dict = field(default_factory=dict)
 
     @property
     def accepted(self) -> bool:
@@ -347,10 +360,14 @@ def benes_apply(x: np.ndarray, sw: np.ndarray) -> np.ndarray:
     return x
 
 
-def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False) -> Result:
+def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False, gate_sample: int = 0,
+             seed: int = 0) -> Result:
     """Run the program natively. Each assertion is checked when its register is computed; registers are freed after their
-    last use unless `keep` (then `Result.vals` holds every register, for inspection and `gadgets.check_program`)."""
-    from .gadgets import sha_native
+    last use unless `keep`. With `gate_sample` k, every fmul and sha op also runs k random instances through its Boolean
+    gadget (`gadgets.gate_check`); `Result.gates` counts them."""
+    from .gadgets import gate_check, sha_native
+    rng = np.random.default_rng(seed)
+    gates: dict[str, int] = {}
     vals: list = [None] * len(prog.regs)
     shapes = {r.id: r for r in prog.regs}
     last = {}
@@ -378,6 +395,10 @@ def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False) -
             a = ins[0]
             flat = a.reshape((-1, 2)) if out.kind == "F" else a.reshape(-1)
             v = flat[o.params["idx"]]
+        elif o.name == "slice":
+            v = ins[0][o.params["idx"]]
+        elif o.name == "reshape":
+            v = np.ascontiguousarray(ins[0]).reshape(out.shape + ((2,) if out.kind == "F" else ()))
         elif o.name == "concat":
             v = np.concatenate([np.broadcast_to(x, x.shape) for x in ins], axis=o.params["axis"])
         elif o.name == "xorsum":
@@ -419,6 +440,8 @@ def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False) -
             want = out.shape + ((2,) if out.kind == "F" else ())
             v = np.broadcast_to(v, want) if v.shape != want else v
             vals[o.outs[0]] = v
+            if gate_sample and o.name in ("fmul", "sha256", "sha512"):
+                gates[o.name] = gates.get(o.name, 0) + gate_check(o.name, ins, v, gate_sample, rng)
             for why in asserted.get(out.id, ()):
                 bad = int(np.count_nonzero(np.any(v.reshape(out.size, -1) != 0, axis=-1)))
                 if bad:
@@ -427,4 +450,4 @@ def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False) -
             for x in o.ins:
                 if last.get(x) == i:
                     vals[x] = None
-    return Result(vals, failed)
+    return Result(vals, failed, gates)
