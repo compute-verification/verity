@@ -74,7 +74,7 @@ noncomputable def radius (l : Level) : ℝ := 1 - Real.sqrt l.rate - eta
 noncomputable def queryError (l : Level) : ℝ := (Real.sqrt l.rate + eta) ^ l.queries
 
 /-- The numerator `a` of the Johnson-range mutual-correlated-agreement bound `a / |field|`
-(BCHKS25 Theorem 4.6, in the printed form ArkLib pins as `rs_mcaError_le_in_johnson_range`), for
+(BCHKS25 Theorem 4.6's printed numerator, which `mcaError_le_bchks25` proves from DKT26), for
 this level's code `RS[n = 2^d, k = 2^logCols]` at radius `γ`. -/
 noncomputable def mcaA (l : Level) : ℝ :=
   let n : ℝ := (2 : ℝ) ^ l.logLen

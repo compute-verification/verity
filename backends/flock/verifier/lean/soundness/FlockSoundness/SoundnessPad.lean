@@ -102,7 +102,7 @@ theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext
 
 /-- **One rep with the padded level 0 is sound**: from a doomed start over the padded witnesses,
 the rep accepts with probability at most `padRepError`. -/
-theorem rep_sound_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
@@ -178,7 +178,7 @@ theorem rep_sound_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.
           · cases o₃ with
             | none => simp
             | some op =>
-              refine ligeritoPad_sound hMCA A hA sch hshape t hpad c₀ e r op.T op.b C fun M hM => ?_
+              refine ligeritoPad_sound A hA sch hshape t hpad c₀ e r op.T op.b C fun M hM => ?_
               have := ho₃ (padWit c₀ M) (padWit_mem_padWits A sch t c₀ e r C M hM)
               rw [show sch.m = S.m from hmS]
               exact this
@@ -248,7 +248,7 @@ theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
 /-- **Soundness of one table with the padded level 0** (interactive-oracle layer). For every prover
 strategy, the verifier accepts both reps while the committed values do not satisfy the statement
 with probability at most `padTableError`. -/
-theorem table_sound_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
@@ -284,9 +284,9 @@ theorem table_sound_pad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : 
       (link_sound_pad A hA S sch t hpad c₀ ptLocal mPts C hC hlay) fun pts hpts => ?_).trans ?_
     · rw [not_not] at hpts
       rw [value_bind_ret]
-      have h0 := rep_sound_pad hMCA A hA S sch hshape hmsch hm t hpad c₀ e 0 mPts C _
+      have h0 := rep_sound_pad A hA S sch hshape hmsch hm t hpad c₀ e 0 mPts C _
         (extraClaims_length S ptLocal mPts pts) hpts
-      have h1 := rep_sound_pad hMCA A hA S sch hshape hmsch hm t hpad c₀ e 1 mPts C _
+      have h1 := rep_sound_pad A hA S sch hshape hmsch hm t hpad c₀ e 1 mPts C _
         (extraClaims_length S ptLocal mPts pts) hpts
       calc value (fun acc : Bool × Bool =>
               (acc.1 && acc.2, C).1 = true ∧ ¬ CommittedPad A S sch t c₀ (acc.1 && acc.2, C).2)
@@ -316,14 +316,14 @@ item 6): `m = 25, 26, 27`, level-0 query counts `277, 242, 229`, padding `t = 2q
 lanes per rep. For every prover strategy, the verifier accepts a table while the committed values
 do not satisfy the statement with probability at most `2^-196.5`, for every statement shape in
 range. -/
-theorem table_sound_pad_m1 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 27) (c₀ : F) (ptLocal mPts : ℕ)
     (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule S.m) (m1Pad S.m) c₀ out.2)
       (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(196.5 : ℝ))) :=
-  (table_sound_pad hMCA A hA S (m1Schedule S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m S.m hm1 hm2)
+  (table_sound_pad A hA S (m1Schedule S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m S.m hm1 hm2)
     (by omega) (m1Pad S.m) (m1_padOK S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
     (m1_rep_nonneg S.m hm1 hm2 _) σ).trans
     (ENNReal.ofReal_le_ofReal (padTableError_le_m1 S.m hm1 hm2 _ hshape))

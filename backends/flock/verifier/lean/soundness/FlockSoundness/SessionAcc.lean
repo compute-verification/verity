@@ -29,7 +29,7 @@ open Classical in
 `Acc` of the session's outputs that implies the table accepts, with probability `ε`: `ε` times the
 probability that the table extracted from `k ≥ 1` reruns of everything after `Commit` in which `Acc`
 holds is uncommitted, is at most `ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`. -/
-theorem session_knowledge_sound_acc (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem session_knowledge_sound_acc (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -68,7 +68,7 @@ theorem session_knowledge_sound_acc (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
                   (fun _ _ => 0) bs) ω p)
             (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ := by
     intro bs hbs
-    have h := session_sound_of_table_acc hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts
+    have h := session_sound_of_table_acc A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts
       hlay pre post cap₀ Acc hAcc
       (extractTableS H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs) σ
     have e1 : (ind fun outs : List (OutC F D) => Acc outs ∧

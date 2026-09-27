@@ -83,7 +83,7 @@ open Classical in
 /-- **Knowledge soundness of table `j` in a batched session, from accepted reruns**, in the product
 form: `Pr[the session accepts] · Pr[table j's extraction fails] ≤ ε_c⁻ + √(k·adv₀) + N₀/(ek) ·
 Pr[the session accepts]`, over `k ≥ 1` reruns in which the session accepts. -/
-theorem joint_le_accB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem joint_le_accB (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (k : ℕ) (hk : 1 ≤ k) (τ : Strategy (sessionB A H E ts)) :
     expect (ind (acceptedB ts)) (sessAfterB (gamesB A H E ts τ.1)) τ.2 *
@@ -95,7 +95,7 @@ theorem joint_le_accB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.
     intro outs h
     rw [take_gamesB_length]
     exact h j
-  have h := session_knowledge_sound_acc hMCA A hA H E (ts.get j).S (ts.get j).m (ts.get j).k0
+  have h := session_knowledge_sound_acc A hA H E (ts.get j).S (ts.get j).m (ts.get j).k0
     (ts.get j).l₀ (ts.get j).l₁ (ts.get j).rest (ts.get j).ext (ts.get j).hsch (ts.get j).hm
     (ts.get j).ptLocal mPts (ts.get j).hlay ((gamesB A H E ts τ.1).take j)
     ((gamesB A H E ts τ.1).drop (j + 1)) (τ.1 j) (acceptedB ts) hAcc (stratB A H E ts j τ) k hk

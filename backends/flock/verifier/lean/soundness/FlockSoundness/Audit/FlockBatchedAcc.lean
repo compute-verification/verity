@@ -19,9 +19,9 @@ $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\
   `FlockBatched.lean` on the table extracted from accepted reruns.
 
 At `k = cN₀/e`, `1/(1 − r) = c/(c−1)`, which is `2` at the record's `c = 2`. The knowledge term is
-its own bound averaged over the draw (`flock_batched_knowledgeSoundE`), with BCHKS25 Theorem 4.6 its
-only named assumption. The link term stays named (`LinkSound`), for the link theorem under
-expected-time collision resistance (`Assumptions.SHA512ExpectedTimeCR`).
+its own bound averaged over the draw (`flock_batched_knowledgeSoundE`), with no named assumption.
+The link term stays named (`LinkSound`), for the link theorem under expected-time collision
+resistance (`Assumptions.SHA512ExpectedTimeCR`).
 -/
 
 namespace FlockSoundness.Audit
@@ -57,7 +57,7 @@ theorem prob_batchedSession_eq (S : Finset (Fin n)) (R : Reg)
 /-- **The batched audit's analysis, with the expected-time extractor.** `X` is the committed
 transcript (the link theorem defines it), `decode` reads each drawn unit from its table's witness,
 and `k` is the number of accepted reruns, with `N₀/(ek) < 1` for every table of every plan. -/
-noncomputable def analysisBE (hMCA : Assumptions.BCHKS25Thm46)
+noncomputable def analysisBE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) (k : ℕ)
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1)
@@ -93,7 +93,7 @@ noncomputable def analysisBE (hMCA : Assumptions.BCHKS25Thm46)
         positivity
       · have h1 := one_le_fail_add_accB execArith H E (plan S R) (tab S R u) k
           (batchStrat H E plan τ) _ hG hpos
-        have h2 := joint_le_accB hMCA execArith execArith_correct H E (plan S R) (tab S R u) k hk
+        have h2 := joint_le_accB execArith execArith_correct H E (plan S R) (tab S R u) k hk
           (batchStrat H E plan τ)
         rw [← add_div, le_div_iff₀ hr1]
         nlinarith
@@ -111,11 +111,11 @@ noncomputable def ksAvgBE (k : ℕ) (R : Reg) (τ : Cont L Reg (batchedSession H
 
 /-- **`ε_ks` with the expected-time extractor**: the analysis's knowledge term is its own bound,
 averaged over the draw. -/
-theorem flock_batched_knowledgeSoundE (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_knowledgeSoundE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode) :
-    (P.analysisBE H E plan tab hMCA decode Xc k hk hr hlow).KnowledgeSound (ksAvgBE H E plan k) := by
+    (P.analysisBE H E plan tab decode Xc k hk hr hlow).KnowledgeSound (ksAvgBE H E plan k) := by
   intro R τ tgt
   refine avg_mono fun ω => atTgt_le (fun u _ => ?_) (tgt ω)
   exact le_iSup (fun j : Fin (plan (L.draw ω) R).length =>
@@ -124,33 +124,33 @@ theorem flock_batched_knowledgeSoundE (hMCA : Assumptions.BCHKS25Thm46)
 
 /-- **The batched Flock audit's count curve, with the expected-time extractor**:
 `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_countE (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_countE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab hMCA decode Xc k hk hr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_count (P.analysisBE H E plan tab hMCA decode Xc k hk hr hlow)
-    (P.flock_batched_knowledgeSoundE H E plan tab hMCA decode Xc hk hr hlow) hlink K σ
+  extraction_audit_count (P.analysisBE H E plan tab decode Xc k hk hr hlow)
+    (P.flock_batched_knowledgeSoundE H E plan tab decode Xc hk hr hlow) hlink K σ
 
 /-- **Drawn units of the batched Flock audit, with the expected-time extractor**, are correct up to
 `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_drawnE (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_drawnE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab hMCA decode Xc k hk hr hlow).LinkSound δlink)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_drawn (P.analysisBE H E plan tab hMCA decode Xc k hk hr hlow)
-    (P.flock_batched_knowledgeSoundE H E plan tab hMCA decode Xc hk hr hlow) hlink σ
+  extraction_audit_drawn (P.analysisBE H E plan tab decode Xc k hk hr hlow)
+    (P.flock_batched_knowledgeSoundE H E plan tab decode Xc hk hr hlow) hlink σ
 
 end Partition
 

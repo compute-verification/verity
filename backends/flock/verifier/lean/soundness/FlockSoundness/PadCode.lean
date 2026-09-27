@@ -15,7 +15,7 @@ file gives that code what `ListSize`, `LigeritoLevels` and `LigeritoDecode` give
 * a `K` combination of the `k` monomials that vanishes on `k` positions is zero (`encKAt_eq_zero`);
 * at most `⌊25·2^d/k⌋` row families encode within `1 − √(k/2^d) − η` of a table
   (`card_closeRows_le`, ArkLib's Johnson bound);
-* the named assumption bounds its MCA events by `padMcaA / 2^256` (`prCoin_pad_mca_le`).
+* `prCoin_mca_le` bounds its MCA events by `padMcaA / 2^256` (`prCoin_pad_mca_le`).
 -/
 
 namespace FlockSoundness
@@ -266,7 +266,7 @@ theorem card_closeRows_le (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k 
   rw [Nat.le_div_iff_mul_le hk0]
   exact_mod_cast h3
 
-/-! ## The named assumption on the padded code -/
+/-! ## The MCA bound on the padded code -/
 
 theorem padRate_pos (l : Level) (t : ℕ) : 0 < l.padRate t := by
   unfold Level.padRate
@@ -289,18 +289,18 @@ theorem padRadius_lt_johnson (l : Level) (t : ℕ) :
   unfold Level.padRadius Accounting.eta
   linarith
 
-/-- **The named assumption on the padded code.** Whatever two words the prover fixes, the MCA
+/-- **The MCA bound on the padded code.** Whatever two words the prover fixes, the MCA
 event of `RS[2^d, 2^cols + t]` over `K` at the padded radius has probability at most
 `padMcaA / 2^256`. -/
-theorem prCoin_pad_mca_le (hMCA : Assumptions.BCHKS25Thm46) (l : Level) (t : ℕ)
+theorem prCoin_pad_mca_le (l : Level) (t : ℕ)
     (hd : l.logLen ≤ 64) (hk : 1 < 2 ^ l.logCols + t) (hr : 0 < l.padRadius t)
     (U : Fin 2 → Fin (2 ^ l.logLen) → K) :
     prCoin (fun γ : K => IsMCA (AffineLineGenerator K)
       (ReedSolomon.code (domainK A hA l.logLen hd) (2 ^ l.logCols + t)) γ U (l.padRadius t)) ≤
       ENNReal.ofReal (l.padMcaA t / qK) := by
   have hJ := padRadius_lt_johnson l t
-  have h := prCoin_mca_le hMCA (domainK A hA l.logLen hd) (2 ^ l.logCols + t)
-    (l.padRadius t).toNNReal hk (Real.toNNReal_pos.2 hr)
+  have h := prCoin_mca_le (domainK A hA l.logLen hd) (2 ^ l.logCols + t)
+    (l.padRadius t).toNNReal hk
     (by rw [Fintype.card_fin, Real.coe_toNNReal _ hr.le]; push_cast; exact hJ) U
   rw [Real.coe_toNNReal _ hr.le] at h
   refine h.trans (le_of_eq ?_)

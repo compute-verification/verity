@@ -34,7 +34,7 @@ the verifier parses and "each template's rows compute its gates" is ASSUMPTIONS.
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
 $$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
-from `table_knowledge_sound_joint_tight` (BCHKS25 Theorem 4.6 its only named assumption). The link term
+from `table_knowledge_sound_joint_tight`, with no named assumption. The link term
 stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
 resistance (`Assumptions.SHA512ExpectedTimeCR`, DESIGN.md §3).
 
@@ -95,10 +95,10 @@ noncomputable def ksBound [Inhabited D] (Kr : ℕ) (σ : Strategy (T.game H E)) 
 theorem ksJoint_nonneg (Kr : ℕ) (σ : Strategy (T.game H E)) : 0 ≤ T.ksJoint H E Kr σ :=
   expectN_nonneg _ _ (fun _ => expect_nonneg (ind_nonneg _) _ _) _
 
-/-- **The table**: `table_knowledge_sound_joint_tight`, given BCHKS25 Theorem 4.6. -/
-theorem ksJoint_le [Inhabited D] (hMCA : Assumptions.BCHKS25Thm46) (Kr : ℕ) (hK : 1 ≤ Kr)
+/-- **The table**: `table_knowledge_sound_joint_tight`. -/
+theorem ksJoint_le [Inhabited D] (Kr : ℕ) (hK : 1 ≤ Kr)
     (σ : Strategy (T.game H E)) : T.ksJoint H E Kr σ ≤ T.ksBound H E Kr σ :=
-  table_knowledge_sound_joint_tight hMCA execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
+  table_knowledge_sound_joint_tight execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
     T.rest T.ext T.hsch T.hm T.ptLocal T.mPts T.hlay σ Kr hK
 
 end FlockTableC
@@ -244,19 +244,19 @@ theorem atTgt_le_const (S : Finset (Fin n)) (t : Option (Fin n)) (c : ℝ≥0∞
   | some u => simp only [atTgt, Option.elim_some]; split_ifs <;> simp
 
 /-- **`ε_ks` is discharged at the compiled layer.** The compiled audit's analysis is
-`KnowledgeSound` with the table theorem's bound averaged over the draw, given BCHKS25 Theorem 4.6. -/
-theorem flock_compiled_knowledgeSound (hMCA : Assumptions.BCHKS25Thm46)
+`KnowledgeSound` with the table theorem's bound averaged over the draw. -/
+theorem flock_compiled_knowledgeSound
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode) :
     (P.analysisC H E plan decode Xc Kr hlow).KnowledgeSound (ksAvg H E plan Kr) := by
   intro R τ tgt
   exact avg_mono fun ω => (atTgt_le_const _ _ _).trans
-    (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E hMCA Kr hK _))
+    (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E Kr hK _))
 
 /-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`, with
 `ε_ks` the table theorem's bound averaged over the draw, and `δ_link` named. -/
-theorem flock_compiled_count (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_compiled_count
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
@@ -269,10 +269,10 @@ theorem flock_compiled_count (hMCA : Assumptions.BCHKS25Thm46)
   show prob (fun o => o.1 = true ∧ K ≤ ((P.analysisC H E plan decode Xc Kr hlow).wrong
     ((P.analysisC H E plan decode Xc Kr hlow).committedOf σ)).card) _ σ ≤ _
   exact extraction_audit_count (P.analysisC H E plan decode Xc Kr hlow)
-    (P.flock_compiled_knowledgeSound H E plan hMCA decode Xc hK hlow) hlink K σ
+    (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink K σ
 
 /-- **Drawn units of the compiled Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_compiled_drawn (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_compiled_drawn
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
@@ -283,7 +283,7 @@ theorem flock_compiled_drawn (hMCA : Assumptions.BCHKS25Thm46)
         (audit L Reg (sessionC H E plan)) σ ≤
       ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_drawn (P.analysisC H E plan decode Xc Kr hlow)
-    (P.flock_compiled_knowledgeSound H E plan hMCA decode Xc hK hlow) hlink σ
+    (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink σ
 
 end Partition
 
