@@ -217,4 +217,6 @@ def test_max_scaled_is_not_in_the_fa_stream():
         assert W.committed_today(scope, "F32MulFtz_v1") is None
         assert W.tap_kernel(scope, "F32MulFtz_v1") == "FA2 / FA3 tap build (MS plane, `max_scaled`)"
         assert W.committed_today(scope, "F32Max_v1") == "ROW row_max"
+        assert W.committed_today(scope, "GuardNegInfZero_v1") is None                           # opt-in taps stay new taps (norm scales, router)
+        assert W.tap_kernel(scope, "GuardNegInfZero_v1") == "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"
     assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}", "F32MulFtz_v1") == "vLLM batch-invariant Triton _rms_norm_kernel"

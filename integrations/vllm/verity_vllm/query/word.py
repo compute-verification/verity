@@ -482,8 +482,10 @@ _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "Atten
 _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
            "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
-#: attention values the stream does not carry, by primitive: the tap each needs (ROW word 2 is the kernel's visit index, not max * scale)
-_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)"}
+#: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
+#: kernel's visit index, not max * scale)
+_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)",
+               "GuardNegInfZero_v1": "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"}
 #: the kernel a new tap goes in, by the Definition family holding the value
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
