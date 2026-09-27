@@ -54,6 +54,8 @@ import FlockSoundness.Lowering
 import FlockSoundness.ExecRows
 import FlockSoundness.ExecDelta
 import FlockSoundness.ExecPlacement
+import FlockSoundness.ExecParse
+import FlockSoundness.ExecCircuit
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
