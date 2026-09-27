@@ -521,7 +521,7 @@ pub fn prove_pure(
     let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), ch);
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
-        let k = 1usize << pb::UNIT_LOG;
+        let k = 1usize << st.ul;
         let pad = |rows: &Vec<Vec<usize>>| {
             let mut r = rows.clone();
             r.resize(k, Vec::new());
@@ -606,8 +606,8 @@ pub fn prove_pure(
         mode: 1,
         comp_slots: lay.comp_slots() as i32,
         units: units as i32,
-        unit_log: pb::UNIT_LOG as i32,
-        unit_pos0: lay.unit_pos0() as i32,
+        unit_log: st.ul as i32,
+        unit_pos0: lay.unit_pos0(st.ul) as i32,
         u_a_col_ptr: u.0.as_ptr(),
         u_a_rows: u.1.as_ptr(),
         u_a_nnz: u.1.len() as u32,

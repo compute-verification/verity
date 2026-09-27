@@ -13,7 +13,7 @@ production root.
 - Conformance: `packages/verity/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
-All hashes are SHA-256. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
+All hashes are SHA-256; §10 specifies `vllm-v1-sha512`, the same framing through SHA-512. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
 `‖` is concatenation. Byte strings in the vectors are lowercase hex.
 
 ## 1. Base hash
@@ -121,6 +121,12 @@ A published root is a raw SHA-256 over a tag and fixed-width fields, and wraps t
   (`profile/request/prompt_len/step`) and native-host `_ctx_digest` (`run_id/step=s`). Both are injective only
   because their trailing fields are decimal integers and the profile id is fixed-width hex, so the integration
   must keep those fields that way.
+- **The hm96 context suffix.** Under the opt-in `hm96-sha256/v1` leaves (`verity.commitments.hm96`, §5), native-host
+  `ctx` is `SHA-256(run_id/step=s ‖ "/leaf=" ‖ scheme_digest(key))`, with the scheme digest as 32 raw bytes.
+  - The committer computes it only for a step whose leaves it salted, so no hm96-bound root sits over unsalted leaves.
+  - Without hm96, `ctx` is byte-identical to before, and so are today's roots.
+  - The suffix is fixed-length and follows the decimal step, so the encoding stays injective as long as the scheme
+    digest contains neither `/step=` nor `/leaf=`. That holds for the pinned key; the integration's tests check it.
 
 ## 5. Domain and position binding
 
@@ -133,6 +139,7 @@ reference makes that explicit as one domain type per tree kind, built only from 
 |---|---|---|---|---|---|
 | C0 semantic | `SemanticDomain` | position leaf | path shape from (N, i); meaning = `unrank(i)` of the template | root (`u64 N`) | program, query_id, template, ctx, epoch |
 | native-host step, host path | `StepDomain(chunk=None)` | position leaf | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step), geo, layout |
+| native-host step, host path, hm96 (opt-in) | `StepDomain(chunk=None)` wrapped by `hm96.Hm96Sha256` | hm96 leaf over the position leaf: `SHA-256(leaf_prefix(key) ‖ b ‖ c)`, recomputed from the value and its salt | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step, and the scheme digest through `/leaf=`, §4), geo, layout |
 | native-host step, GPU tree | `StepDomain(chunk=…)` | chunk leaf | chunk header's `chunk_index` = i, and the path | root (`u64 N`) | as above, plus the header fields |
 | `fa2h` stream | `StreamDomain` | chunk leaf | `chunk_index` = i, and the path | `stream_ctx` | layout, `launch_tag`, `src_mask`, `chunk_words` |
 | `fa2h` thread | `ThreadDomain` | thread leaf | header (slab, m_block, n_block, tidx) and i = `((slab·num_m_block + m_block)·NB + n_block)·128 + tidx` | `geo` only: N = HB·num_m_block·NB·128 | geo, `launch_tag`, `src_mask` |
@@ -143,7 +150,16 @@ reference makes that explicit as one domain type per tree kind, built only from 
 **Why unbound nodes are enough.** Suppose every preimage encoding is injective, and no leaf preimage is a node
 or lift preimage (§2). Then a root determines the whole tree structure, down to which digests are leaves.
 So one root fixes N and every leaf's position, as long as the verifier recomputes each leaf from bytes and derives
-the path shape itself. No two values at the same verifier-derived position can both verify. The same argument
+the path shape itself. The hm96 leaf keeps §2's separation: every preimage's first bytes tell its kind.
+
+| preimage | first bytes |
+|---|---|
+| hm96 leaf | `verity/hm96-sha256/leaf/v1\0` |
+| position leaf | `verity/pos-leaf/v0` |
+| node or lift | `00 00 00 13` |
+| `fa2h` leaf | the `fa2h` tag |
+
+An hm96 leaf also binds its key's digest. No two values at the same verifier-derived position can both verify. The same argument
 covers a parameter the verifier gets wrong, such as N, the chunk size or the leaf rule: the honest opening fails
 (a liveness failure), but no forged opening passes.
 
@@ -152,7 +168,9 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 1. derives the path shape from (index, N) and rejects any other shape before hashing;
 2. recomputes the leaf from the opened bytes through the domain, never accepting a leaf digest from the prover.
    For `fa2h` leaves that means deriving the header from the claimed position;
-3. fixes the leaf rule from its own configuration of the committer path, never from a prover-side label (see §7);
+3. fixes the leaf rule from its own configuration of the committer path, never from a prover-side label (see §7).
+   Under hm96 it recomputes the leaf from the opened value and the salt the opening carries, and it refuses an
+   opening of a step whose salts don't number one per leaf;
 4. builds the root binding from its own copies of every context field and N;
 5. checks a step root against the run root by re-folding all S step roots;
 6. for thread trees, derives the visited slots from the geometry (`n_block_max`) and never opens an unvisited
@@ -262,7 +280,8 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
    and absorbs `domain_digest(domain)` into its statement digest and Fiat–Shamir transcript.
 
    `domain_digest(domain)` is `identity_digest("verity/vllm-v1/domain/v1", {kind, leaf_count, <fields>})`, with byte
-   fields in hex. The verifier builds the domain from its own Program, input set and range, never from the
+   fields in hex. For a `vllm-v1-sha512` domain it is `identity_digest_sha512` over the same document plus
+   `"hash": "sha512"` (§10). The verifier builds the domain from its own Program, input set and range, never from the
    proof.
 
    This is the external stand-in for frame-v3's verifier-derived `domain_id`. Without it, two statements over the
@@ -270,8 +289,13 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
 2. **The bound root, never the bare tree root.** The statement's public root is the §4 binding. The verifier
    recomputes it from the domain and the tree root, natively or in the circuit from `binding_preimage`. A bare
    `vllm-v1` tree root is bound to nothing.
-3. **The leaf rule of each port.** This is the layout kind (position, `fa2h` chunk, thread or id), fixed by the
-   statement's scheme configuration, because no root binds it (§7, finding 1).
+3. **The leaf rule of each port.** This is the layout kind (position, `fa2h` chunk, thread, id, or
+   `hm96-sha256/v1` over a position leaf, together with its key), fixed by the statement's scheme configuration.
+   - A position-leaf root doesn't bind the rule (§7, finding 1).
+   - An hm96 step root binds the rule through the `/leaf=` context suffix (§4), and each hm96 leaf binds its key's
+     digest. The statement still names the rule and the key's `hm96.scheme_digest`.
+   - A circuit takes the key as a constant, or as a public input checked against that digest, never as a witness
+     (`hm96/PROTOCOL.md` §5).
 4. **Each position's value length and interpretation.** A position leaf carries no id, dtype or shape. The
    statement fixes `value_len` per position from the template or layout, and the gadget constrains the value to
    exactly that many bytes, so the length prefix is public, not prover-chosen.
@@ -287,3 +311,84 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
 
 With 1–7 in place, a `vllm-v1` opening in a backend statement means what a frame-v3 opening does: this value, at
 this verifier-derived position, of this verifier-derived commitment. §5's injectivity argument carries over unchanged.
+
+## 10. `vllm-v1-sha512`
+
+`vllm-v1` with SHA-512 in place of SHA-256 for every hash the scheme computes, for SHA-512 data commitments (Daniel, 2026-09-26:
+SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+- every leaf, tree and root function takes `hash="sha512"`;
+- the domain types take a `hash="sha512"` field;
+- `VllmV1` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
+
+Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-baseline switches its committers.
+
+**Digest widths.**
+
+| width | what |
+|---|---|
+| 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds; `domain_digest` (§9) |
+| 32 bytes: IR identity digests from the integration, SHA-256 until the re-baseline | `program`, `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests |
+| variable, unchanged | `query_id` |
+
+**What carries over unchanged:**
+- **The bytes around the hash.** Tags, prefixes, headers and field order are unchanged, and preimages stay fixed-width except
+  `query_id`, so §4's one-way parsing holds.
+- **The first-byte separation of §2 and §5**, including the hm96 leaf: `hm96-sha512/v1`'s leaf tag starts `verity/hm96-sha512/`.
+- **§5's binding argument and every verifier duty.**
+
+**What differs:**
+- **Domain digests.** For a SHA-512 domain, `domain_digest` is `identity_digest_sha512` (64 bytes) over the document with
+  `"hash": "sha512"`. That is the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
+  `verity/tagged-sha512/v1\0`. SHA-256 domain digests are unchanged.
+- **Thread trees.** Unvisited slots hold 64 zero bytes.
+- **Hiding leaves.** hm96 over this scheme is `hm96-sha512/v1` (`Hm96Sha512`). Under it, the §4 context suffix carries that rule's
+  64-byte scheme digest.
+
+**Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
+
+**What the integration changes at the re-baseline.**
+- The committers hash with SHA-512: the Python `commit.scheme` rules, and the CUDA copies `native_tree.cu`, `hidden_gpu_tree.cu`,
+  `native_leafhash.cu` and the FA2 tap's `Verity_sha_ctx`.
+- They match `vectors_sha512.json` byte for byte.
+
+**Vectors.** `vectors_sha512.json`, written by `python -m verity.commitments.vllm_v1.vectors_sha512`, covers:
+- H over the node, lift and empty tags;
+- position, chunk and thread leaves;
+- trees of 0–7 leaves with their paths;
+- all six root bindings;
+- per domain kind, one accepted opening and one with a changed value that is rejected, with domain digests.
+
+`test_sha512_framings.py` checks them.
+
+**Cost.** Native compressions per message:
+
+| message | `vllm-v1` | `vllm-v1-sha512` |
+|---|---|---|
+| node | 2 | 2 |
+| lift | 2 | 1 |
+| step root | 4 | 2 |
+| run root, before the fold | 3 | 2 |
+| position leaf of R bytes | ⌈(R + 35)/64⌉: 49 at R = 3,072 | ⌈(R + 43)/128⌉: 25 at R = 3,072 |
+
+- **Per byte.** A SHA-512 compression processes 128 bytes, so a leaf takes about half as many. Each one costs more wherever SHA-256
+  has hardware support (SHA-NI) and SHA-512 doesn't.
+- **Opening paths** double in bytes.
+- **In a circuit** the tree is native at the verifier; only leaf digests are proven, and `hm96/PROTOCOL.md` §5 and §6 give their ANDs.
+- **Measured.** `benchmarks/commitments/commit_cost.py --scheme vllm-v1-sha512` measures it.
+
+**Hashes.**
+- **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the scheme computes: leaves, nodes,
+  lifts, the empty root, the stream and thread contexts, every root binding, and `domain_digest`. Binding a value inside a
+  verifier-held domain rests on `cr/sha-512` alone.
+- **What still rests on SHA-256.** The root bindings absorb the integration's IR identity digests, all 32-byte SHA-256 digests:
+  `program`, `ctx` (context), `geo` (geometry) and `layout`, and in the semantic and weights roots `template` and `names`. So which
+  program, context and step a root belongs to also rests on SHA-256.
+- **What that means for Table 1.** Until then, a Table 1 row that cites `vllm-v1-sha512` cites `cr/sha-256` beside `cr/sha-512`.
+
+**The remaining SHA-256 dependency, for the re-baseline.** Daniel's rule is SHA-512 on every commitment path, and E4 extends to the
+identity and domain digests at the re-baseline. What is left:
+1. the IR identity digests `program`, `ctx`, `geo` and `layout`, and the integration's `template` and `names`;
+2. frame-v3's `binding` (frame-v3 §6).
+
+Each becomes a 64-byte SHA-512 digest. That is a fixed-width change to these preimages, applied to every field at once, with new
+vectors. Accepting both widths at once would break the one-way parsing of §4, so neither variant does.

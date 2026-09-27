@@ -1,4 +1,4 @@
-# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas
+# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512`
 
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
@@ -95,3 +95,76 @@ Table 1 lists these hashes, all of class standard:
 
 The Poseidon2 row leaf `poseidon2-babybear-w24/row/v2h` (`rowleaf.SCHEMA_ROW`) stays in the code so that recorded
 results keep verifying. It is algebraic, so no core scheme configuration offers it.
+
+## 6. `frame-v3-sha512`
+
+frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, for SHA-512 data commitments (Daniel, 2026-09-26:
+SHA-512 on every commitment path; re-baseline prerequisite E4). It is opt-in:
+- a port's domain is `CommitmentDomain(binding, owner, positions, hash="sha512")`;
+- `FrameV3` over such ports is named `frame-v3-sha512`;
+- nothing recorded moves.
+
+**What changes.**
+- The frame string, the tags and the part framing are the same bytes. The hash is SHA-512.
+- Domain ids, leaves, pads, nodes, empty roots and roots are 64 bytes, and each enters the next message with u64be length 64.
+- The domain id absorbs the positions' SHA-512 identity (`identity_sha512()`, 64 bytes), not their SHA-256 `identity_digest`. It is
+  the same manifest and tag under `identity_digest_sha512`: the tagged-hash frame of `identity_digest`, through SHA-512, with prefix
+  `verity/tagged-sha512/v1\0`.
+- `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
+
+**What stays: the one SHA-256 input.** `binding` is the caller's 32-byte SHA-256 identity digest of what the commitment may not
+outlive: a header, a replay phase or a weights tag. It is an identity from the protocol and the IR, not something the frame computes.
+It moves to SHA-512 with the other identity digests at the re-baseline, which Daniel's rule of 2026-09-26 extends E4 to. That makes
+it a fixed-width change to this section, with new vectors.
+
+**Row leaves.** A SHA-512 frame binds `sha512/row/v1` rows only. `FrameV3` refuses SHA-256 and BLAKE3 rows under it, and SHA-512 rows
+under a SHA-256 frame.
+
+~~~text
+prefix = ( "verity/sha512-row/v1\0" ‖ u8 role ‖ u8 word_bits ‖ u32be n_words )  zero-padded to 128 bytes
+digest = SHA-512( prefix ‖ row_bytes )
+~~~
+
+The prefix is one SHA-512 block, so a gadget starts from a constant midstate. The tree leaf is the frame leaf over the 64-byte digest,
+with schema `sha512/row/v1`.
+
+**Hiding rows.** A hiding row wraps this digest in `hm96-sha512/v1` (`hm96/PROTOCOL.md`):
+
+~~~text
+tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_leaf(key, b ‖ c))
+~~~
+
+The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. The SHA-256 frame's counterpart is
+`hm96-sha256/row/v1`, over `hm96.SHA256.tree_leaf(key, b ‖ c)`. `rowleaf.row_leaf` accepts both at their widths.
+
+**Openings and multiproofs.**
+- Paths carry 64-byte siblings.
+- `verify_opening` and `FrameV3.verify_path` reject a sibling, leaf or root of the other size.
+- `multiproof(tree, ranks)` reads the hash from the tree's domain, and `verify_multiproof(…, hash="sha512")` checks one.
+
+**Vectors.** `vectors_sha512.json`, written by `python -m verity.commitments.frame_v3.vectors_sha512`, covers SHA-512 row digests,
+trees with their pads and paths, word leaves and an empty root. `test_sha512_framings.py` checks them.
+
+**Cost.** Native compressions per message:
+
+| message | SHA-256 frame | SHA-512 frame |
+|---|---|---|
+| word leaf (`u16`) | 3 | 2 |
+| row leaf over a row digest | 3 | 2 |
+| pad | 2 | 2 |
+| node (level and index under 256) | 3 | 3 |
+
+- **Per byte.** A SHA-512 compression processes 128 bytes, so the tree takes about as many compressions as SHA-256's. Each one costs
+  more wherever SHA-256 has hardware support (SHA-NI) and SHA-512 doesn't.
+- **Opening paths** double in bytes.
+- **In a circuit** the frame is native at the verifier; only the row digest is proven. `sha512/row/v1` costs 58,120 ANDs per 128-byte
+  block, against 22,696 per 64-byte block for `sha256/row/v1`: 1.28× per byte (`hm96/PROTOCOL.md` §5 has the model).
+- **Measured.** `benchmarks/commitments/commit_cost.py --scheme frame-v3-sha512 --scheme frame-v3-sha512-row` measures it.
+
+**Hashes.**
+- **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the SHA-512 frame computes: the
+  domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
+  rests on `cr/sha-512` alone.
+- **What still rests on SHA-256.** Which statement and which session a root belongs to also rests on `binding`, a 32-byte SHA-256
+  identity digest from the protocol and the IR. Until the re-baseline moves identities to SHA-512, a Table 1 row that cites this
+  frame cites `cr/sha-256` beside `cr/sha-512`.

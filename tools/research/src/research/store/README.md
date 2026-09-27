@@ -423,7 +423,7 @@ prints the table; the groups are:
   B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
-  `omitted` (list), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
+  `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
@@ -533,6 +533,8 @@ from its record. A failure whose key had expired says so in the marker's `error`
 
 ~~~text
 bench-result/v1          a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?
+bench-point/v1           a sweep harness's raw result for its chosen point (result.json kind bench-point/v1): kept by the
+                         run's attempt with its run files; `bench.cell register` makes the cell's one bench-result/v1
 tc-evidence/v1           one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees,
                          first_mismatches, seed, n} ; payload tree = probe_results.json, capture_sample.json, tiles_*.npz
 dataset-snapshot/v1      meta {name, note, query?}; refs.members = [art:...]; payload null

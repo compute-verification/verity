@@ -19,8 +19,10 @@ from research.store.local import LocalStore  # noqa: E402
 from test_tables import REDTEAM, store  # noqa: E402, F401  (store: the fixture)
 from test_views import NONGEMM, committed, nongemm  # noqa: E402
 
+PROVEN = [s for s in NONGEMM if not s.startswith("rmsnorm")]   # the RMSNorms leave their row tail to the verifier (census)
+
 ROW101 = next(w for w in census.raw("workloads") if w["source"]["row"] == 101)
-SPEC = dataclasses.replace(V.SPEC, interaction_validated=False)
+SPEC = dataclasses.replace(V.SPEC, interaction_validated=False, headline_strict_verifier=False)   # the footnote machinery; V.SPEC is strict
 L40S = census.HARDWARE["l40s-48gb/bf16"]
 
 
@@ -91,19 +93,19 @@ def test_covered_share_and_work_weighted_overhead(store: LocalStore) -> None:
     w = served_on(ROW101, "h100-sxm5-80gb/bf16")
     rec = H.headline(views, [w])[0]
     row = next(r for r in rec["backends"] if r["backend"] == "C-interactive")
-    assert {x["subcircuit"]: x["artifact"] for x in row["covered"]} == arts
+    assert {x["subcircuit"]: x["artifact"] for x in row["covered"]} == {s: a for s, a in arts.items() if s in PROVEN}
     P = {c.subcircuit: c.throughput["instances_per_second"] for c in views.admissible}
     for b in H.BASES:
-        cov = [by(rec, subcircuit=s)["native_seconds"][b.id] for s in NONGEMM]
+        cov = [by(rec, subcircuit=s)["native_seconds"][b.id] for s in PROVEN]
         allw = [g["native_seconds"][b.id] for g in rec["subcircuits"]]
-        prove = sum(by(rec, subcircuit=s)["units"] / P[s] for s in NONGEMM)
+        prove = sum(by(rec, subcircuit=s)["units"] / P[s] for s in PROVEN)
         clo, chi = sum(x[0] for x in cov), sum(x[1] for x in cov)
         tlo, thi = sum(x[0] for x in allw), sum(x[1] for x in allw)
         got = row["bases"][b.id]
         assert got["share"] == pytest.approx((clo / (clo + (thi - chi)), chi / (chi + (tlo - clo))))
         assert got["overhead"] == pytest.approx((prove / chi, prove / clo)) and got["proving_seconds"] == pytest.approx(prove)
         assert got["share"][0] == pytest.approx(got["share"][1])  # #101's per-T counts make attention's work exact
-    assert {u["reason"] for u in row["uncovered"]} == {"commitment opening", "no result"}
+    assert {u["reason"] for u in row["uncovered"]} == {"commitment opening", "no result", "omits verifier-evaluated parts"}
     # the other backends have no result on these subcircuits
     assert all(r["covered"] == [] for r in rec["backends"] if r["backend"] != "C-interactive")
 
@@ -203,7 +205,7 @@ def test_the_any_hardware_preview_counts_the_cells_on_other_gpus_and_the_publish
     loose = next(r for r in H.headline(V.build(store, dataclasses.replace(SPEC, headline_any_hardware=True))) if r["workload"] == ROW101["id"])
     row = lambda rec: next(r for r in rec["backends"] if r["backend"] == "C-interactive")  # noqa: E731
     assert row(strict)["covered"] == [] and not SPEC.headline_any_hardware
-    assert {c["subcircuit"] for c in row(loose)["covered"]} == set(NONGEMM)
+    assert {c["subcircuit"] for c in row(loose)["covered"]} == set(PROVEN)
 
 
 # --- #101 on the L40S: the hardware line the served run divides by, the same semantics ids --------------------------------------
@@ -302,10 +304,11 @@ def test_l40s_cells_land_on_the_l40s_line_with_101s_statement_ids(store: LocalSt
     # the headline: #101's GEMM and elementwise work is covered by C-interactive, attention and sampling are not, embedding never
     rec = next(x for x in H.headline(views) if x["workload"] == ROW101["id"])
     row = next(x for x in rec["backends"] if x["backend"] == "C-interactive")
-    assert {x["subcircuit"] for x in row["covered"]} == {*GEMM101, *NONGEMM}
+    assert {x["subcircuit"] for x in row["covered"]} == {*GEMM101, *PROVEN}
     assert {u["subcircuit"]: u["reason"] for u in row["uncovered"]} == {
         "attention-head/d64-bn128/sm80-fa2-bf16": "no result", "gumbel-top-p-token-select/v128256/fp32": "no result",
-        "embedding-row/v128256-h2048/bf16": "commitment opening"}
+        "embedding-row/v128256-h2048/bf16": "commitment opening",
+        **{s: "omits verifier-evaluated parts" for s in NONGEMM if s not in PROVEN}}
     tp, mb = row["bases"]["tensor-peak"], row["bases"]["memory-bound"]
     assert 0.15 < tp["share"][0] < 0.4 and tp["share"][0] == pytest.approx(tp["share"][1]) and 0.98 < mb["share"][0] < 0.995
     assert tp["overhead"] is not None and mb["overhead"] is not None
@@ -568,3 +571,29 @@ def test_a_broken_class_cell_is_rejected_not_guessed(store: LocalStore) -> None:
     views = V.build(store, SPEC)
     why = next(r for r in views.rejected if r["artifact"] == none)["codes"][0]
     assert why[0] == "X" and "no creditable key count (T 1: no per_key_count timing)" in why[1]
+
+
+def test_the_strict_verifier_preview_leaves_every_verifier_evaluated_template_uncovered(store: LocalStore) -> None:
+    """Daniel's standing rule (2026-09-26), as a preview: the verifier evaluates no part of the computation, so attention (the
+    softmax), the RMSNorms (the row tail) and sampling are not covered; RoPE, which leaves nothing to the verifier, still is."""
+    from verity.proofs.target import FIRST
+
+    rms = "rmsnorm-fused-cuda/n2048-eps1e-05/bf16"
+    l40s_cell(store, ATT, T=4)
+    l40s_cell(store, rms, profile=FIRST.name)
+    l40s_cell(store, "rope-head/d64/neox-bf16", profile=FIRST.name)
+    l40s_cell(store, "gumbel-top-p-token-select/v128256/fp32", profile=FIRST.name)
+
+    def row(rules):
+        rec = next(r for r in H.headline(V.build(store, rules)) if r["workload"] == ROW101["id"])
+        return next(x for x in rec["backends"] if x["backend"] == "C-interactive")
+
+    loose = {x["subcircuit"] for x in row(SPEC)["covered"]}            # the RMSNorm row tail is never counted (census, 2026-09-26)
+    assert {ATT, "rope-head/d64/neox-bf16"} <= loose and rms not in loose
+    assert V.SPEC.headline_strict_verifier                                # the published rules are the strict reading
+    strict = row(dataclasses.replace(SPEC, headline_strict_verifier=True, headline_count_omitted=True))
+    assert {x["subcircuit"] for x in strict["covered"]} == {"rope-head/d64/neox-bf16"}
+    gaps = {u["subcircuit"]: u for u in strict["uncovered"]}
+    assert gaps[ATT]["reason"] == gaps[rms]["reason"] == "omits verifier-evaluated parts"
+    assert "row tail" in gaps[rms]["text"] and "softmax" in gaps[ATT]["text"]
+    assert gaps["gumbel-top-p-token-select/v128256/fp32"]["reason"] == "omits verifier-evaluated parts"

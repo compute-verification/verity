@@ -323,6 +323,24 @@ def manifest_engine(path: str) -> str:
     return q.get("engine") if isinstance(q, dict) else ""
 
 
+def manifest_norm_scales(path: str) -> bool:
+    """Whether a manifest was built under the norm-scale policy (`query.norm_scales`); False when unreadable."""
+    from verity_vllm.query.norm_scales import policy_of
+    try:
+        return policy_of(json.load(open(path)))
+    except (OSError, ValueError):
+        return False
+
+
+def manifest_guarded_max(path: str) -> bool:
+    """Whether a manifest was built under the guarded-max policy (`query.guarded_max`); False when unreadable."""
+    from verity_vllm.query.guarded_max import policy_of
+    try:
+        return policy_of(json.load(open(path)))
+    except (OSError, ValueError):
+        return False
+
+
 def program_digest_of_record(d: str, batch: int) -> str:
     """The Build's Program digest of record, read from ``build_summary.json``, never from the manifest: B=1 the declared
     (cap-shape) request Program's digest; B>=2 GP-01's workload digest, else the fold of the per-shape request digests."""

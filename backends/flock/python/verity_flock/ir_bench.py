@@ -25,11 +25,13 @@ import sys
 import time
 from pathlib import Path
 
-from .bench import PER_PROOF_LOG2, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
+from .bench import PER_PROOF_LOG2, _EXITED, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
 STATEMENT = "verity/flock-ir-frame/v3"
 SCHEME = "frame-v3/blake3-keyed"
+#: the kind the runner publishes a run's result.json under (``research.store.attempt.publish`` reads ``result.kind``)
+POINT_KIND = "bench-point/v1"
 
 
 def relation(template: str) -> str:
@@ -45,6 +47,47 @@ def _lowering(template: str, input_set):
     return mod.frame_lowering(input_set.subcircuit)
 
 
+class KeyClass:
+    """A key-count class (``flock-ir-class/v1``) of a template whose module defines ``class_manifest`` (attention): the input
+    set's instances span T values of one class; each sub-batch is one T, proved with that T's netlist under the class pin (the
+    manifest's sha256; ``flock-ir-frame --class``)."""
+
+    def __init__(self, mod, input_set, out: Path):
+        self.mod, self.sub, self.out = mod, input_set.subcircuit, out
+        self.T = mod.key_counts(input_set)
+        classes = {mod.key_class(t) for t in self.T}
+        if len(classes) != 1:
+            raise ValueError(f"{input_set.name}: key counts of several classes {sorted(classes)}")
+        self.lo, self.hi = classes.pop()
+        self.manifest = out / "class.json"
+        self.manifest.write_bytes(mod.class_manifest(self.sub, self.lo, self.hi))
+        self.pin = hashlib.sha256(self.manifest.read_bytes()).hexdigest()
+        self.args = ["--class", str(self.manifest)]
+
+    def lowering(self, T: int):
+        return self.mod.cached_lowering(self.sub, T)
+
+    def net(self, T: int) -> Path:
+        p = self.out / f"net-t{T}.txt"
+        if not p.exists():
+            p.write_text(self.lowering(T).text)
+        return p
+
+    def subs(self, total: int, per: int) -> list[tuple[int, int]]:
+        out, i = [], 0
+        while i < total:
+            j = i
+            while j < total and self.T[j] == self.T[i]:
+                j += 1
+            out += [(x, min(j, x + per)) for x in range(i, j, per)]
+            i = j
+        return out
+
+
+def _net(a, net: Path, lo: int) -> Path:
+    return a.klass.net(a.klass.T[lo]) if a.klass else net
+
+
 def frame_module(template: str):
     """The statement's staging module: ``ir_sampling`` (``verity/flock-ir-sampling/v1``) for the sampling template, else
     ``ir_frame``. Each has ``STATEMENT``, ``stage(low, input_set, lo, hi, dir)`` and ``serve_args(path)``."""
@@ -55,12 +98,29 @@ def frame_module(template: str):
 
 def stage_point(a, low, input_set, total: int, d: Path) -> tuple[list[tuple[int, int]], float]:
     d.mkdir(parents=True, exist_ok=True)
-    subs = subbatches(total, a.per_proof)
+    k = getattr(a, "klass", None)
+    subs = k.subs(total, a.per_proof) if k else subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
-        p = frame_module(a.template).stage(low, input_set, lo, hi, d / f"stage-s{i}")
+        p = frame_module(a.template).stage(k.lowering(k.T[lo]) if k else low, input_set, lo, hi, d / f"stage-s{i}")
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
+
+
+def _gpu_released(limit_s: float = 20.0) -> None:
+    """After our prover exits, NVML can list its context for a while (under another pid namespace, so the guard can't tell it is
+    ours). Wait until no compute process is listed, up to ``limit_s``, before the next sub-batch: a process the guard sees after
+    that is not ours. The wait is between sub-batches, outside every timed session."""
+    t0 = time.time()
+    while time.time() - t0 < limit_s:
+        try:
+            out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"], capture_output=True, text=True,
+                                 timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        if not out.strip():
+            return
+        time.sleep(0.5)
 
 
 def _sum_buckets(r: dict) -> dict:
@@ -102,8 +162,8 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     guard = tg.Guard(sampler=_sampler).start()
     t1 = time.time()
     parts, rcs, rss = [], [], None
-    for i, _ in enumerate(subs):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+    for i, (lo, _hi) in enumerate(subs):
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(_net(a, net, lo)), *a.class_args]
         srv, addr = None, a.verifier
         if addr:
             _probe(addr)
@@ -123,8 +183,10 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             try:
                 rcs.append(pr.wait())
                 time.sleep(2)
+                _gpu_released()
             finally:
                 _OURS.discard(pr.pid)
+                _EXITED.append(time.monotonic())
         finally:
             if srv is not None:
                 time.sleep(1)
@@ -145,15 +207,23 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     live = _merge(parts) if ok else []
     timed = [r for r in live if not r.get("warm")]
     ok = ok and len(timed) == a.runs
+    per_sub = []
+    if ok:
+        for (lo, hi), x in zip(subs, parts):
+            t = [r for r in x if not r.get("warm")]
+            per_sub.append({"lo": lo, "hi": hi, "T": a.klass.T[lo] if a.klass else None, "e2e_s": statistics.median(r["e2e_s"] for r in t),
+                            "prove_s": statistics.median(sum(r["prove_s"]) for r in t),
+                            "verify_s": statistics.median(r["verdict"].get("verify_s", 0.0) for r in t)})
     return {"total": total, "rc": max(rcs) if rcs else None, "ok": ok, "live": live, "timed": timed, "gen_s": gen_s, "wall_s": wall,
-            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs}
+            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs, "per_sub": per_sub}
 
 
 def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     d = out / q["dir"]
     per = []
-    for i, _ in enumerate(q["subbatches"]):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+    subs = q["subbatches"][: a.loopback_subs] if a.klass else q["subbatches"]
+    for i, (lo, _hi) in enumerate(subs):
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(_net(a, net, lo)), *a.class_args]
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7391", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
                                 *common, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{i}.bin")],
@@ -170,7 +240,8 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
                 per.append(r["wait_s"] / r["calls"])
     return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
             "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's instance "
-                      f"files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
+                      f"files{f' (its first {len(subs)} sub-batches)' if len(subs) < len(q['subbatches']) else ''} with the same binary "
+                      f"against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
 
 
 def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
@@ -188,6 +259,11 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     first = timed[0]
     sub = input_set.subcircuit
     statement = frame_module(a.template).STATEMENT
+    extra = {}
+    if a.klass:
+        Ts = a.klass.T[:n]
+        extra = {"key_counts": {str(t): Ts.count(t) for t in sorted(set(Ts))},
+                 "key_class": {"T": [a.klass.lo, a.klass.hi], "pin": pin, "manifest": "flock-ir-class/v1"}}
     fp = contract.fingerprint(
         profile=None, domain="finite", K=None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
@@ -196,17 +272,20 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         hardware=contract.probe_hardware(),
         software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
                               "statement": statement, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
-                              "unit": low.name, "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"},
+                              "unit": (low.name.rsplit("/", 1)[0] + f"/class-t{a.klass.lo}-{a.klass.hi}") if a.klass else low.name,
+                              "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its batch's rows afresh (commit.seconds) before proving",
         retention="retained", instances=input_set.ref(0, n, a.art), N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
         scheme=SCHEME, statement=statement, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
-        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n,
+        roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"],
+        units_per_instance=({str(t): a.klass.lowering(t).units.n for t in sorted(set(a.klass.T[:n]))} if a.klass else low.units.n),
         n_blake3=first["n_blake3"], n_units=first["n_units"],
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
-        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)"})
+        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)"},
+        **extra)
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
           {"name": "commit.seconds", "value": med("rows_s"), "unit": "s"},
@@ -254,6 +333,16 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
            "protocol": {"warm": True, "runs": len(timed), "statistic": "median", "contended": p["contention"].get("contended"),
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
            "runs": [{"e2e_s": r["e2e_s"], "rows_s": r["rows_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"]} for r in timed]}
+    if a.klass:
+        per_t: dict = {}
+        for x in p["per_sub"]:
+            e = per_t.setdefault(str(x["T"]), {"heads": 0, "e2e_s": 0.0, "prove_s": 0.0, "verify_s": 0.0})
+            e["heads"] += x["hi"] - x["lo"]
+            for k in ("e2e_s", "prove_s", "verify_s"):
+                e[k] += x[k]
+        doc["per_key_count"] = per_t
+        doc["per_key_count_method"] = ("per T: the sum over its sub-batches of the median over the timed runs (each sub-batch one T); "
+                                       "the cell's e2e.seconds is the median over timed runs of the sum over all sub-batches")
     doc["validation"]["contract_problems"] = contract.validate(doc)
     return doc
 
@@ -265,11 +354,11 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     for i, total in enumerate(plan):
         d = out / f"p{i}-{total}"
         subs, _ = stage_point(a, low, input_set, total, d)
-        jobs += [(d, j) for j in range(len(subs))]
+        jobs += [(d, j, lo) for j, (lo, _hi) in enumerate(subs)]
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
-    for d, j in jobs:
-        rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
-                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
+    for d, j, lo in jobs:
+        rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin, *a.class_args,
+                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(_net(a, net, lo)), "--sessions", str(a.runs + 2),
                               "--operator", a.operator, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{j}.bin")],
                              stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
@@ -297,18 +386,29 @@ def main(argv=None) -> int:
     ap.add_argument("--operator", default="")
     ap.add_argument("--rtt-target", default="")
     ap.add_argument("--loopback", action="store_true")
+    ap.add_argument("--loopback-subs", type=int, default=4, help="a key-count class cell's loopback probe: its first N sub-batches")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     input_set = InputSet.open(a.input_set)
     if input_set.subcircuit.template.id != a.template:
         print(f"input set {input_set.name} is not a {a.template} set", file=sys.stderr)
         return 2
-    low = _lowering(a.template, input_set)
+    from verity_numerical.bench import lowerings
+
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    net = out / "net.txt"
-    net.write_text(low.text)
-    pin = hashlib.sha256(net.read_bytes()).hexdigest()
+    mod = lowerings.registry("C-Flock").module(a.template)
+    a.klass = KeyClass(mod, input_set, out) if hasattr(mod, "class_manifest") and len(set(mod.key_counts(input_set))) > 1 else None
+    a.class_args = a.klass.args if a.klass else []
+    if a.klass:
+        low = a.klass.lowering(a.klass.T[0])
+        net, pin = a.klass.net(a.klass.T[0]), a.klass.pin
+        print(f"CLASS\t{json.dumps({'T': [a.klass.lo, a.klass.hi], 'pin': pin, 'key_counts': len(set(a.klass.T))})}", flush=True)
+    else:
+        low = _lowering(a.template, input_set)
+        net = out / "net.txt"
+        net.write_text(low.text)
+        pin = hashlib.sha256(net.read_bytes()).hexdigest()
     a.tables = []
     if low.units.cut:  # the cut templates' tails, and the sampling statement's native DivFullRcp
         from . import ir_lower
@@ -356,7 +456,9 @@ def main(argv=None) -> int:
             pd = (out / q["dir"]).resolve()
             if pd.is_relative_to(rd):
                 doc["artifacts"] = [str(pd.relative_to(rd))]
-            Path(rd, "result.json").write_text(json.dumps(doc, indent=1, default=str))
+            # the runner publishes the run's result.json as its own kind: a point, not a cell. The cell's one bench-result/v1 is
+            # bench.cell register's (verity_flock.register drops the kind)
+            Path(rd, "result.json").write_text(json.dumps(dict(doc, kind=POINT_KIND), indent=1, default=str))
     summary = {"id": sid, "template": a.template, "rule": RULE, "stopped": stop, "plateau_total": best["total"],
                "points": [{k: x.get(k) for k in ("total", "ok", "vu_per_second", "wall_s", "peak_rss", "dir", "err")} for x in points]}
     (out / "sweep.json").write_text(json.dumps(summary, indent=1))

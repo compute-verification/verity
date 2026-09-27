@@ -317,11 +317,15 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                 anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
                 ve = verifier_evaluated(g["template"])
                 count_ve = getattr(V.rules, "headline_count_omitted", False)     # the one switch for verifier-evaluated parts
+                strict = getattr(V.rules, "headline_strict_verifier", False)      # Daniel 2026-09-26: the verifier evaluates nothing
+                parts = ve.parts if ve is not None else None
 
                 def counted(c: Any, ve: Any = ve, count_ve: bool = count_ve) -> bool:
                     """Verifier-evaluated parts (the template's census record, or the cell's ``omitted`` label) count where the census
                     records a ruling that counts them (attention: red-team-flock-3's grant), else only under the switch."""
                     left = getattr(V, "omitted_of", {}).get(c.artifact)
+                    if strict:
+                        return not (ve is not None or left)
                     if ve is None and not left:
                         return True
                     return count_ve or bool(ve is not None and ve.counted)
@@ -401,7 +405,7 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     elsewhere.append({"artifact": c.artifact, "prover_hardware": h.id if h else None, "prover_gpu": V.prover_gpu.get(c.artifact),
                                       "on_served_hardware": T.same_sku(V.prover_gpu.get(c.artifact), served.device),
                                       "cleared": not c.provisional and not c.legacy.finding,
-                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (ve.parts if ve is not None and not counted(c) else None)})
+                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (parts if parts and not counted(c) else None)})
                 opening = getattr(census.SUBCIRCUIT_TEMPLATES.get(g["template"] or ""), "commitment_opening", None)
                 if opening is not None and not elsewhere:
                     why, code = f"a commitment opening: {opening.note}", "commitment opening"

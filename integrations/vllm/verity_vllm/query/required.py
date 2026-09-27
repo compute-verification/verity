@@ -478,8 +478,8 @@ def query_header(profile: str, hidden_family: str, *, return_slots: bool) -> dic
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
                      workload: Mapping[str, Any] | None = None, artifact: Mapping[str, Any] | None = None, program_dir: str | None = None,
-                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True) -> BridgeResult:
-    """The v1-shaped manifest of ONE request Program (B=1 component) under Q_module_body_v1."""
+                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None) -> BridgeResult:
+    """The v1-shaped manifest of ONE request Program (B=1 component) under Q_module_body_v1 (+ `norm_scales`: `query.norm_scales.POLICY`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
     hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
@@ -497,9 +497,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     arr = sweep.get("arrive_steps") or []
     arrive = int(arr[k_req] if k_req < len(arr) else (arr[0] if arr else 0)) if sweep else 0
     n_seq = 1
-
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
-    pop = population(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None))
+    pop = (norm_scales.population if norm_scales else population)(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None))
     events, step_of, record_fields, record_params = pop.events, pop.step_of, pop.record_fields, pop.record_params
     B, policy, req, literals = pop.B, pop.policy, pop.required, pop.literals
 
@@ -635,6 +634,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
 
     for f in alias_faults + pop.tp_faults:
         unmodelled[f] += 1
+    scales = norm_scales.kernel_rows(pop, add, impl, aliases) if norm_scales else None     # the norm-scale tap's rows: interior to the kernel norms
     identities.sort(key=fmt.row_key)
     q = query_header(profile, hidden_family, return_slots=return_slots)
     if prog_world > 1:
@@ -655,7 +655,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "correspondence": corr.provenance(),                 # which reader gave the owning modules: the runtime-correspondence/v1 record or the v1 annotations
            "workload": {"row_id": sweep.get("row_id"), "batch": sweep.get("batch"), "request_id": request_id, "workload_request_id": workload_request_id,
                         "arrive_step": arrive} if workload else None,
-           "query": q, "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
+           "query": norm_scales.header(q, scales) if norm_scales else q, "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
            "flash_attn_version": fa, "ranks": ranks, "rank": rank,
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),

@@ -43,6 +43,9 @@ def _guard():
 
 
 _OURS: set[int] = set()
+#: when our prover subprocesses exited (monotonic): NVML can list an exited context for a while, under a pid we can't match
+_EXITED: list[float] = []
+EXIT_GRACE_S = 10.0
 
 
 def _sampler():
@@ -52,7 +55,9 @@ def _sampler():
     if s.get("pids") is not None:
         mine = [p for p in s["pids"] if int(p) in _OURS] if s["pids"] else []
         rest = [p for p in s["pids"] if p not in mine]
-        drop = max(0, len(_OURS) - len(mine))
+        now = time.monotonic()
+        lingering = sum(1 for t in _EXITED if now - t < EXIT_GRACE_S)
+        drop = max(0, len(_OURS) + lingering - len(mine))
         s["pids"] = rest[drop:]
         s["n_other"] = len(s["pids"])
     return s

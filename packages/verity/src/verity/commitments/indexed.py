@@ -15,7 +15,7 @@ from typing import Protocol, cast, runtime_checkable
 
 from verity.errors import InvalidArtifact
 
-from .identity import Digest, JSONValue, identity_digest
+from .identity import Digest, JSONValue, identity_digest, identity_digest_sha512
 
 Position = int
 
@@ -88,6 +88,10 @@ class ExplicitIndexedDomain[T]:
     @property
     def items(self) -> tuple[T, ...]:
         return self._items
+
+    def identity_sha512(self) -> bytes:
+        """The same identity manifest under :func:`identity_digest_sha512`: what a SHA-512 frame's domain id absorbs."""
+        return identity_digest_sha512("veritor/indexed-domain/explicit/v1", {"items": cast(JSONValue, list(self._items))})
 
     @property
     def count(self) -> int:
@@ -165,6 +169,10 @@ class RangeIndexedDomain:
     @property
     def digest(self) -> Digest:
         return self.identity_digest
+
+    def identity_sha512(self) -> bytes:
+        """The same identity manifest under :func:`identity_digest_sha512`: what a SHA-512 frame's domain id absorbs."""
+        return identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": self.start, "step": self.step, "stop": self.stop})
 
     def contains(self, item: int) -> bool:
         return (
