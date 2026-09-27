@@ -3,25 +3,23 @@
 The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
 **Input.**  The program's descriptor, `codec.canonical_json(codec.encode_program(program))` minus `annotations` (schema
-`verity-ir/descriptor/v1`), decoded by `codec.decode_program`: the root specialization and every definition it reaches -- a primitive
-by `{form, id, params, ret}`, a composite by its bindings and body (`params`, `ret_type`, `nodes` with `form` call / batch / scan /
-primitive, `fn`, `args` of typed reference sequences, `axes`, `out`, and `ret`).  Gates follow the canonical layout (`layout.Circuit`):
-a body's gates are its nodes' in order, node k at `body.offsets[k]`, a batch node's members contiguous (member m at offset
-`m * callee.gates`), a primitive node one gate per member, recursively; `layout.resolve` maps a reference (`("p", param, leaf)` or
-`("n", node, leaf)`, `refs.Affine` / `Strided` / `Concat` / `Explicit` sequences) to a gate id.
+`verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
+specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
 0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
    parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
    whose root body's nodes other than its Input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
-   `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).
-1. **Calls.**  The root body's nodes whose callee's family is not `Input`, in body order.  Each is cut as its Definition's activation
+   `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).  `CallGraph`'s own check
+   (step 3: an operand inside the Call comes before its gate) is a backstop the program-level rule already implies.
+1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.
 2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body
    (`separable`: no scan node, every node reads only parameters, the body returns every leaf each node produces) is its nodes'
    members' cuts, in node then member order.  Any other body is `cut_word(CallGraph(fn), X)`.
 3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
-   * operands: the gate's operand ids; a gate with more than `WIDE_FAN_IN` (4096) operands is *wide*: its operands are
+   * operands: the gate's operand ids (one inside the Call must come before the gate, or the query is inapplicable: the Call is not
+     topological); a gate with more than `WIDE_FAN_IN` (4096) operands is *wide*: its operands are
      enumerated per argument (`_wide_operands`), skipping an argument that is a whole parameter of the Call; an operand outside the
      Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
    * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
@@ -178,6 +176,9 @@ class CallGraph:
             mine = []
             for o in it:
                 if 0 <= o - lo < n:
+                    if o - lo >= j:
+                        raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",
+                                                {"definition": fn.id, "gate": j, "reads": o - lo, "why": "not topological"})
                     mine.append(o - lo)
                 else:
                     ext = True

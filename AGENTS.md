@@ -12,7 +12,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   from the owning module (`from verity.ir import Program`), never a
   convenience re-export at `verity`.
   - `verity.ir`: types, definitions, canonical layout, evaluator, descriptor
-    codec. Stdlib only; imports no other core module. The partition checker's
+    codec. Stdlib only; imports no other core module. The program format
+    (descriptor v1, canonical JSON = RFC 8785, layout, scope resolution) is
+    specified in `verity/ir/PROTOCOL.md`, every rule pinned by
+    `tests/ir/format_vectors.json`. The partition checker's
     references live here: `cut` (the query `Q_word` v1's canonical evaluator:
     each Call's computing graph, the cut, the width rule in bits; the algorithm
     is written in its docstring), `partition.validate_unit_cut` (the invariant)
