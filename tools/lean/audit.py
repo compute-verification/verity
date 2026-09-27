@@ -18,8 +18,8 @@ environment extension loaded, so none of the package's code runs), and replays t
     compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
                  each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`
     policy       the package has no `lean-audit.json` (the message carries a template)
-    dependencies the built `.olean` files of a fetched package (Mathlib's cache, ArkLib's build) or of the toolchain differ
-                 from the record, which changes only at a bump
+    dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
+                 toolchain provides differ from the record, which changes only at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
@@ -446,10 +446,9 @@ def olean_files(lib: Path) -> list[Path]:
                                                                                                          ".olean.private"))))
 
 
-def olean_digest(lib: Path) -> str:
+def olean_digest(lib: Path, files: list[Path]) -> str:
     from concurrent.futures import ThreadPoolExecutor
 
-    files = olean_files(lib)
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
         hashes = list(ex.map(sha256, files))
     h = hashlib.sha256()
@@ -458,17 +457,23 @@ def olean_digest(lib: Path) -> str:
     return h.hexdigest()
 
 
-def dependency_digests(pkg: Path, toolchain: str) -> dict[str, str]:
-    """A digest of the built `.olean` files of each package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache,
-    ArkLib's local build...) and of the toolchain's own library. Lean's `.olean` files are reproducible, so these hold across
-    machines and change only at a bump."""
-    out = {}
+def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
+    """A digest of the `.olean` files (every part) of the modules the package imports (``oleans``, which `Facts.lean`
+    reports), per package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache, ArkLib's local build...) and for
+    the toolchain's own library. A dependency's other modules may be built or not (the upstream watch's exact pass builds
+    all of ArkLib) without changing the record. Lean's `.olean` files are reproducible, so the record holds across machines
+    and changes only at a bump."""
     packages_dir = pkg / ".lake" / "packages"
-    for dep in sorted(packages_dir.iterdir()) if packages_dir.is_dir() else []:
-        if (lib := dep / ".lake" / "build" / "lib" / "lean").is_dir():
-            out[dep.name] = olean_digest(lib)
-    if (lib := toolchain_bins(toolchain)[0].parent.parent / "lib" / "lean").is_dir():
-        out["toolchain"] = olean_digest(lib)
+    libs = [(d.name, d / ".lake" / "build" / "lib" / "lean") for d in sorted(packages_dir.iterdir())] if packages_dir.is_dir() else []
+    libs.append(("toolchain", toolchain_bins(toolchain)[0].parent.parent / "lib" / "lean"))
+    loaded = [Path(o).resolve() for o in oleans]
+    out = {}
+    for name, lib in libs:
+        lib = lib.resolve()
+        files = sorted(p for o in loaded if o.is_relative_to(lib)
+                       for p in (o, o.with_name(o.name + ".server"), o.with_name(o.name + ".private")) if p.is_file())
+        if files:
+            out[name] = olean_digest(lib, files)
     return out
 
 
@@ -520,7 +525,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails, new = judge(policy, facts, files, update)
     fails = scans(pkg, files, policy) + fails
     s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"])
+    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
     rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
     if update:
         new["dependencies"] = deps

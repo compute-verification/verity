@@ -29,9 +29,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason, and the package
   has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
-- the built `.olean` files of every fetched package (Mathlib's downloaded cache, ArkLib's build) and of the toolchain are
-  the ones recorded under `dependencies`. Lean's `.olean` files are reproducible, so the record holds on any machine and
-  changes only at a bump (about 20 s for Mathlib);
+- the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
+  build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
+  built or not. Lean's `.olean` files are reproducible, so the record holds on any machine and changes only at a bump
+  (seconds);
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
 - the pinned theorems say what their records say (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
@@ -82,7 +83,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
 - `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
-- `dependencies` is written by `--update`: a digest of each fetched package's `.olean` files and of the toolchain's.
+- `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
+  modules the package imports.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
   build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
   definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a

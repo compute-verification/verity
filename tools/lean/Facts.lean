@@ -203,7 +203,11 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
     ctx { env }
+  let mut oleans := #[]
+  for m in mnames do
+    oleans := oleans.push (toString (← findOLean m))
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
+    ("oleans", toJson oleans),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("pins", Json.mkObj pinned.toList)]

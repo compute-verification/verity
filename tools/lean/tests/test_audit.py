@@ -173,16 +173,20 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
     assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "pins": {}}')
 
 
-def test_dependency_digests_cover_every_olean_part(tmp_path):
+def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):
     lib = tmp_path / "p" / ".lake" / "packages" / "dep" / ".lake" / "build" / "lib" / "lean"
     (lib / "D").mkdir(parents=True)
     for rel, text in (("D.olean", "a"), ("D/E.olean", "b"), ("D/E.olean.private", "c"), ("D/E.ilean", "d")):
         (lib / rel).write_text(text)
-    before = A.dependency_digests(tmp_path / "p", "none/none:none")
+    loaded = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / "p" / ".lake" / "build" / "lib" / "P.olean")]
+    digests = lambda: A.dependency_digests(tmp_path / "p", "none/none:none", loaded)
+    before = digests()
+    assert list(before) == ["dep"]
     (lib / "D" / "E.ilean").write_text("changed")
-    assert A.dependency_digests(tmp_path / "p", "none/none:none") == before
+    (lib / "D" / "F.olean").write_text("a module the package does not import, built or not")
+    assert digests() == before
     (lib / "D" / "E.olean.private").write_text("changed")
-    assert A.dependency_digests(tmp_path / "p", "none/none:none")["dep"] != before["dep"]
+    assert digests()["dep"] != before["dep"]
 
 
 def test_package_files_stop_at_nested_packages_and_lake(tmp_path):
