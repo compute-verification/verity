@@ -2383,7 +2383,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                 SRW.after_commit(args.serving_rows_dir, partition_file=args.serving_rows_partition, programs=_progs, bmap=_bm,
                                                  committed=OC.OpenedReader(com, rc), weights=_wp,
                                                  manifest=(required_manifest if isinstance(required_manifest, dict) else None), run_root=rc.run_root,
-                                                 run=os.environ.get("RESEARCH_RUN_ID") or Path(args.out).name, arrivals=_arr,
+                                                 run=os.environ.get("RESEARCH_RUN_ID") or Path(args.out).name, row=args.label or None, arrivals=_arr,
                                                  program_dirs={_k: _v.get("dir") for _k, _v in _loaded.items()},
                                                  committer={"source": os.environ.get("RESEARCH_SOURCE_SHA")})
                             except Exception as _se:  # noqa: BLE001
