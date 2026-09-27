@@ -147,6 +147,19 @@ def test_discovery_skips_the_controls(tmp_path):
     assert A.FIXTURES not in A.packages(A.HERE.parent)
 
 
+def test_a_file_changed_during_the_run_is_reported(tmp_path):
+    tool, late = tmp_path / "Audit.lean", tmp_path / "lean"
+    tool.write_text("a")
+    seals = {str(tool): A.sha256(tool)}
+    assert A.tampered(seals, [late]) == []
+    late.write_text("x")
+    assert A.tampered(seals, [late]) == [] and str(late) in seals
+    tool.write_text("b")
+    late.write_text("y")
+    assert A.tampered(seals, [late]) == [str(tool), str(late)]
+    assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_controls(tmp_path):
     toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()

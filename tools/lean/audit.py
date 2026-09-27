@@ -4,7 +4,7 @@
     python tools/lean/audit.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
 
 For each package it imports the policy's `roots` into a file that `Audit.lean` completes, runs it with `lake env lean`, and
-replays the audited modules through the kernel (`lake env leanchecker`). It fails a package when:
+replays the audited modules through the kernel (`Replay.lean`). It fails a package when:
 
     axioms       a declaration of an audited module uses an axiom outside `axioms` (default propext, Classical.choice,
                  Quot.sound): `sorryAx` is a sorry, `Lean.ofReduceBool` or `Lean.trustCompiler` a native_decide
@@ -21,7 +21,12 @@ replays the audited modules through the kernel (`lake env leanchecker`). It fail
                  named assumptions, type hash, and (under `reads`) the definitions the pinned statements read, per module
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
-                 only this catches it (the `kernel` control)
+                 only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
+                 differ from those the `.olean` files recorded; a replay killed by a signal is reported as a kill
+    fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
+                 Mathlib and core included
+    tamper       this tool's files or the toolchain's `lean`, `lake` or `leanchecker` changed during the run (a build runs
+                 arbitrary code); the Lean files are run from a copy taken before the first build
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
 axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them: its diff is the
@@ -48,6 +53,8 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+#: where the Lean files are run from: `main` points it at a copy taken before the first build
+TOOL = HERE
 ROOT = HERE.parents[1]
 POLICY = "lean-audit.json"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
@@ -146,7 +153,7 @@ def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
             f"def pins : Array Lean.Name := {lit(sorted(policy.get('pins', {})))}",
             f"def out : System.FilePath := {json.dumps(str(out))}", "end LeanAudit.Config", ""]
     src = work / "LeanAuditRun.lean"
-    src.write_text("\n".join(head) + "\n" + (HERE / "Audit.lean").read_text())
+    src.write_text("\n".join(head) + "\n" + (TOOL / "Audit.lean").read_text())
     rc, text = run(["lake", "env", "lean", str(src)], pkg, work / "lean.log")
     if rc or not out.exists():
         raise RuntimeError(f"`lake env lean` on the audit file failed (exit {rc}):\n{text[-3000:]}")
@@ -265,7 +272,13 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     return fails, out
 
 
-def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, log=print) -> dict:
+def killed(rc: int) -> bool:
+    """A process ended by a signal (the machine's OOM killer, a timeout), which says nothing about the kernel's verdict."""
+    return rc < 0 or rc >= 128
+
+
+def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
+          log=print) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes)."""
     policy = load(pkg)
     tag = re.sub(r"[^A-Za-z0-9]+", "_", str(pkg.resolve().relative_to(ROOT)) if pkg.resolve().is_relative_to(ROOT) else pkg.name)
@@ -276,7 +289,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep = {"package": str(pkg), "toolchain": (pkg / "lean-toolchain").read_text().strip(), "seconds": {}, "failures": []}
     t = time.monotonic()
     if build:
-        for step, argv in (("setup", ["bash", str(HERE / "setup.sh"), str(pkg)]), ("build", ["lake", "build"]),
+        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]), ("build", ["lake", "build"]),
                            ("build-roots", ["lake", "build", *(f"+{r}" for r in policy["roots"])])):
             s = time.monotonic()
             rc, text = run(argv, pkg, work / f"{step}.log")
@@ -296,11 +309,28 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = unchecked(pkg, files) + fails
     if replay:
         s = time.monotonic()
-        rc, text = run(["lake", "env", "lean", "--run", str(HERE / "Replay.lean"), *facts["modules"]], pkg, work / "replay.log")
-        if rc:
+        found = work / "replay.json"
+        found.unlink(missing_ok=True)
+        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *facts["modules"]], pkg,
+                       work / "replay.log")
+        if killed(rc):
+            fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
+        elif rc or not found.exists():
             fails.append(f"replay: the kernel rejected a declaration under {', '.join(policy['roots'])} (exit {rc}):\n"
                          f"{text[-2000:]}")
+        elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
+            fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
+                         f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
         rep["seconds"]["replay"] = round(time.monotonic() - s, 1)
+    if fresh:
+        s = time.monotonic()
+        for r in policy["roots"]:
+            rc, text = run(["lake", "env", "leanchecker", "--fresh", r], pkg, work / f"fresh-{r}.log")
+            if killed(rc):
+                fails.append(f"fresh: `leanchecker --fresh {r}` was killed (exit {rc}; out of memory?), not a kernel verdict")
+            elif rc:
+                fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
+        rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
     if update and new != policy:
         dump(pkg, new)
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build")
@@ -365,14 +395,35 @@ def controls(toolchain: str, out: Path, log=print) -> list[str]:
     return fails
 
 
+def sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def toolchain_bins(toolchain: str) -> list[Path]:
+    """The toolchain's `lean`, `lake` and `leanchecker`, where elan installs them."""
+    d = Path.home() / ".elan" / "toolchains" / toolchain.replace("/", "--").replace(":", "---")
+    return [d / "bin" / b for b in ("lean", "lake", "leanchecker")]
+
+
+def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
+    """Paths among ``seals`` whose content changed; ``watch`` paths seen for the first time are sealed now."""
+    for p in watch:
+        if str(p) not in seals and p.exists():
+            seals[str(p)] = sha256(p)
+    return [p for p, h in seals.items() if not Path(p).exists() or sha256(Path(p)) != h]
+
+
 def main(argv: list[str]) -> int:
+    global TOOL
     ap = argparse.ArgumentParser(prog="audit.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
     ap.add_argument("--root", type=Path, default=Path.cwd(), help="--all: where to look for lean-audit.json (default .)")
     ap.add_argument("--build", action="store_true", help="`setup.sh` (elan, the toolchain, Mathlib's cache) and `lake build` first")
     ap.add_argument("--update", action="store_true", help="write the pins' records from the build instead of comparing them")
-    ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`leanchecker`)")
+    ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
+                    "included, through the kernel (slow: see README)")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default a temporary directory)")
     a = ap.parse_args(argv)
     pkgs = packages(a.root.resolve()) if a.all else a.package
@@ -380,15 +431,22 @@ def main(argv: list[str]) -> int:
         ap.error("name package directories, or --all (which does not --update)")
     out = a.out or Path(tempfile.mkdtemp(prefix="lean-audit-"))
     out.mkdir(parents=True, exist_ok=True)
+    TOOL = out / "tool"
+    shutil.rmtree(TOOL, ignore_errors=True)
+    shutil.copytree(HERE, TOOL, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    seals = {str(p): sha256(p) for d in (HERE, TOOL) for p in sorted(d.iterdir()) if p.is_file()}
+    toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs})
+    bins = [b for tc in toolchains for b in toolchain_bins(tc)]
     failed = []
     reports = []
     if a.all:
-        for tc in sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs}):
+        for tc in toolchains:
             if fs := controls(tc, out):
                 failed.append(f"controls ({tc})")
                 print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
     for pkg in pkgs:
-        rep = audit(pkg, out, a.build, a.update, not a.no_replay)
+        rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh)
+        rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
         reports.append(rep)
         n = sum(rep.get("declarations", {}).values())
         head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
