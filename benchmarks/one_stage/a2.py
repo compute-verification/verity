@@ -12,6 +12,10 @@ and the unit index; nothing else changes.
   domain (`registration.served_domain`) from the record's program, partition and `window.run`, composes the bound circuit
   itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
   verifier doesn't yet derive it from #101's program, and the audit record says so.
+* **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
+  verifier's own re-headered copies for M0's unbound statement (no `units.classes`, the unbound circuit's pin): the leaf
+  layer, every `b || c` and output word, is byte for byte serving's, so the roots are unchanged; only the statement no
+  longer carries the partition. For a Lean verifier that doesn't yet read the bound header.
 """
 from __future__ import annotations
 
@@ -31,6 +35,27 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity_one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
 
+def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
+    """The verifier's own copies of the public and prover files for M0's unbound statement: the same body, a header whose
+    `units` has no `classes` and whose `circuit_sha512` is the unbound circuit's pin (composed by the verifier)."""
+    ub = out / "unbound"
+    ub.mkdir(parents=True, exist_ok=True)
+    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
+               out / "compose-unbound.log", {"PYTHONPATH": a.unbound_m0_pythonpath or a.m0_pythonpath})
+    pin = json.loads(p.stdout.strip().splitlines()[-1])["pin"]
+    for name in (f"pub-{n}.bin", f"inst-{n}.bin"):
+        with open(st["dir"] / name, "rb") as f:
+            head = json.loads(f.readline())
+            body = f.read()
+        head["units"] = {k: v for k, v in head["units"].items() if k != "classes"}
+        head["circuit_sha512"] = pin
+        with open(ub / name, "wb") as f:
+            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+    text = (ub / "circuit.txt").read_text()
+    new = {"dir": ub, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": pin}
+    return new, a0.public_header(ub, n)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--served", required=True)
@@ -42,6 +67,8 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=256)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7531)
+    ap.add_argument("--unbind", action="store_true", help="run the session on re-headered copies for M0's unbound statement")
+    ap.add_argument("--unbound-m0-pythonpath", default=None, help="M0's tree for the unbound circuit (default --m0-pythonpath)")
     a = ap.parse_args()
     out, served = Path(a.out), Path(a.served)
     out.mkdir(parents=True, exist_ok=True)
@@ -92,6 +119,9 @@ def main() -> int:
         return 1
 
     # the draw, the session, the verifiers, the audit record
+    if a.unbind:
+        st, header = unbound_copy(st, header, n, a, out)
+        summary["unbound"] = {"pin": st["pin"], "rule": "leaf layer byte for byte serving's; the statement no longer binds the partition"}
     t = time.time()
     record, live = a0.session(a.bin, st, n, f"subset:{a.k}", a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
