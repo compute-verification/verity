@@ -53,6 +53,22 @@ def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
             *lean_steps(out)]
 
 
+def env() -> dict[str, str]:
+    """The steps' environment: PYTHONPATH keeps only entries inside this tree, so every package tested is the tree's own (on a
+    machine, `research run` puts its shipped tool snapshot first); a git identity when none is set."""
+    out = dict(os.environ)
+    keep = [p for p in out.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    if keep:
+        out["PYTHONPATH"] = os.pathsep.join(keep)
+    else:
+        out.pop("PYTHONPATH", None)
+    for k in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):          # tests commit in throwaway repos; a fresh machine has no identity
+        out.setdefault(k, "check")
+    for k in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        out.setdefault(k, "check@localhost")
+    return out
+
+
 def run(out: Path) -> tuple[bool, list[dict]]:
     done: list[dict] = []
     for name, argv, cwd in steps(out):
@@ -65,7 +81,7 @@ def run(out: Path) -> tuple[bool, list[dict]]:
             return False, done
         print(f"check: {name}: {' '.join(argv)}", flush=True)
         t0 = time.monotonic()
-        rc = subprocess.run(argv, cwd=cwd).returncode
+        rc = subprocess.run(argv, cwd=cwd, env=env()).returncode
         done.append({"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "seconds": round(time.monotonic() - t0, 1)})
         print(f"check: {name}: {'passed' if rc == 0 else f'failed (exit {rc})'} in {done[-1]['seconds']} s", flush=True)
         if rc:

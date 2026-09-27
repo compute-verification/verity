@@ -40,3 +40,11 @@ def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):
     r = RES.check(tmp_path, "r20260927-010000-abcd")
     assert r.valid, r.errors
     assert r.validation_status == "failed" and r.doc["kind"] == "check/v1" and r.doc["artifacts"] == ["circuit-check.json"]
+
+
+def test_the_steps_see_the_trees_packages_only(monkeypatch):
+    """On a machine the runner's PYTHONPATH starts with its own shipped `research`; the steps must import the tree's."""
+    monkeypatch.setenv("PYTHONPATH", f"/opt/research-tool:{ROOT / 'tools/research/src'}:/elsewhere")
+    assert CHECK.env()["PYTHONPATH"] == str(ROOT / "tools/research/src")
+    monkeypatch.setenv("PYTHONPATH", "/opt/research-tool")
+    assert "PYTHONPATH" not in CHECK.env()
