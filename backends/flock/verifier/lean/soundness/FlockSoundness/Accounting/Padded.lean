@@ -71,10 +71,13 @@ noncomputable def padLigeritoError (s : Schedule) (t e : ℕ) : ℝ :=
   | _ => 1
 
 /-- **One rep with the padded level 0.** As `repError`, with the padded list bound before
-Ligerito and the padded level 0 in it. -/
+Ligerito (whose level-0 out-of-domain coin `piopError` counts) and the padded level 0 in it. -/
 noncomputable def padRepError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
-  piopError s.m st.kLog st.nClaims ((s.levels.headD default).padListBound t) +
-    padLigeritoError s t e
+  match s.levels with
+  | l₀ :: l₁ :: rest =>
+      piopError s.m st.kLog st.nClaims (l₀.padListBound t) + padMidLevelError l₀ l₁ t e
+        + ligeritoError (l₁ :: rest)
+  | _ => 1
 
 /-- The link points, over the padded list. -/
 noncomputable def padLinkError (s : Schedule) (st : Stmt) (t : ℕ) : ℝ :=
