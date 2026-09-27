@@ -43,9 +43,15 @@ def test_compression_circuit():
 
 def test_hm96_row_circuit():
     inst = hm96.SHA512
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+
     H = S.hm96_row()
-    xs, ys = [os.urandom(64) for _ in range(2)], [os.urandom(192) for _ in range(2)]
-    outs, _ = H.evaluate({"x": _sliced([_pack(S.words_be(x)) for x in xs], 512),
+    words = [[random.Random(i).getrandbits(16) for _ in range(64)] for i in range(2)]
+    prefix = S.sha512_row_prefix(64)
+    cvs = [S.midstate(prefix + b"".join(w.to_bytes(2, "little") for w in ws)) for ws in words]
+    pad = S.words_be(S.pad_tail(128 + 128))
+    ys = [os.urandom(192) for _ in range(2)]
+    outs, _ = H.evaluate({"cv": _sliced([_pack(cv) for cv in cvs], 512), "pad": _sliced([_pack(pad)] * 2, 1024),
                           "y": _sliced([int.from_bytes(y, "little") for y in ys], 1536)}, 2)
     got = [v.to_bytes(128, "little") for v in _unsliced(outs["bc"], 2)]
-    assert got == [inst.commit_string(inst.default_key, x, y) for x, y in zip(xs, ys)]
+    assert got == [inst.commit_string(inst.default_key, sha512_row_digest(ws, 16, ROLE_X), y) for ws, y in zip(words, ys)]
