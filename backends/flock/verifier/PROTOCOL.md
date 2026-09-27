@@ -1094,6 +1094,22 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
   units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the
   population's. A null `unit_draw` is no draw. U1–U3 then hold of the record and this statement.
+- **Shared-row files (from PR #83 `967b8d06`; statement `verity/flock-circuit@967b8d06`).** The header may carry
+  `shared_rows = {port: R_p}`, naming exactly the circuit's input ports, each `R_p ≥ 1` (a value that is not a non-negative
+  integer counts as 0). Input port `p`'s rows are then a table of `R_p` rows, committed once:
+  - the body is every table row's `b ‖ c` (port-major, `Σ R_p` of them), then every instance's refs (u32 LE, instance-major,
+    ports in order, each below its table's `R_p`), then the output words; the public digest covers all of it, refs included;
+  - port `p`'s frame-v3 tree has `R_p` row leaves, leaf `r` over table row `r`'s `b ‖ c`;
+  - instance `i`'s `Digest(p)` value is the `b ‖ c` of table `p`'s row `refs[i · ports + p]`, so the row the circuit hashes
+    for that instance is the committed row its ref names;
+  - a drawn statement keeps the population's tables, its instances carry their refs, and its public digest covers the
+    population's tables, every refs and every output word.
+  A file without `shared_rows` is read exactly as before, and the earlier statement names refuse a file that has it (their
+  upstream builds reject its length). `@967b8d06` is also the identity text of `68ae79f2`: `round_digest`, `statement_digest`
+  and `sigma` read `sha512`. Set 14 (a shared-row RoPE file whose six instances repeat three rows) agrees 23 of 23 with
+  upstream on M0's selftest records, `row_ref_claim_false` included; set 15 (the same instances per instance) agrees 22 of 22.
+  The `967b8d06` vectors patch writes each false statement as the verifier's file (`<case>.pub.bin`) under its real public
+  digest, so replaying those negatives reaches the proof's openings rather than the session parameters.
 - **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
   canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
   Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
