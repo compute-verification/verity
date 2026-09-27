@@ -105,6 +105,11 @@ int64_t verity_tap_hdims() {
 }
 // R13 lane fa2 (v8): the tap layout version compiled in (8 = parametric (BN, D) layout; the R9 build has no such op).
 int64_t verity_tap_layout_version() { return 8; }
+// What word 3 of a ROW entry holds: 0 = never written, 1 = GuardNegInfZero(row_max) after a row's first key block (VERITY_ROW_GUARD=1).
+#ifndef VERITY_ROW_GUARD
+#define VERITY_ROW_GUARD 0
+#endif
+int64_t verity_tap_row3() { return VERITY_ROW_GUARD; }
 
 // Number of launches on which the tap had to be disabled (num_splits > 1 or capacity).
 int64_t verity_tap_skipped() { return g_verity_tap_skipped; }
@@ -149,6 +154,7 @@ STABLE_TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
     ops.def("verity_set_tap_v8(int mode, Tensor? diag, int HB, int M, int NB, int BN, int D, int tag) -> ()");
     ops.def("verity_tap_hdims() -> int");
     ops.def("verity_tap_layout_version() -> int");
+    ops.def("verity_tap_row3() -> int");
 #endif
 }
 
@@ -167,6 +173,7 @@ STABLE_TORCH_LIBRARY_IMPL_EXPAND(TORCH_EXTENSION_NAME, CompositeExplicitAutograd
     ops.impl("verity_set_tap_v8", TORCH_BOX(&FLASH_NAMESPACE::verity_set_tap_v8));
     ops.impl("verity_tap_hdims", TORCH_BOX(&FLASH_NAMESPACE::verity_tap_hdims));
     ops.impl("verity_tap_layout_version", TORCH_BOX(&FLASH_NAMESPACE::verity_tap_layout_version));
+    ops.impl("verity_tap_row3", TORCH_BOX(&FLASH_NAMESPACE::verity_tap_row3));
 }
 #endif
 

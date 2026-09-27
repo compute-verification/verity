@@ -36,17 +36,23 @@ def _load(p: str) -> Any:
 
 def rebuild(*, program: str | None = None, workload: str | None = None, fixture: str | None = None, programs_root: str | None = None,
             workload_digest: str | None = None, rank: int = 0, ranks: int = 1, profile: str | None = None, norm_scales: bool = False,
-            log=None) -> dict[str, Any]:
+            guarded_max: bool = False, log=None) -> dict[str, Any]:
     """The manifest of this Program x workload by the query path (`manifest.build` at B=1, `manifest.build_global` at B>=2), under the
-    norm-scale policy when the caller's row runs it (`norm_scales`; the policy is the caller's, never read off the manifest checked)."""
+    norm-scale / guarded-max policies when the caller's row runs them (the policies are the caller's, never read off the manifest checked)."""
     from verity_vllm.pipeline import manifest
     if program:
         wl = _load(workload) if workload else None
-        return manifest.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, norm_scales=norm_scales, log=log)
+        return manifest.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, norm_scales=norm_scales, guarded_max=guarded_max,
+                              log=log)
     if fixture and programs_root:
         return manifest.build_global(_load(fixture), programs_root, workload_digest=workload_digest, rank=rank, ranks=ranks, profile=profile,
-                                     norm_scales=norm_scales, log=log)
+                                     norm_scales=norm_scales, guarded_max=guarded_max, log=log)
     raise SystemExit("manifest_verify: give --program [--workload] (B=1) or --fixture --programs-root [--workload-digest] (B>=2)")
+
+
+def _guarded_max(man: dict[str, Any]) -> dict[str, Any] | None:
+    q = man.get("query")
+    return q.get("guarded_max") if isinstance(q, dict) else None
 
 
 def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str | None = None) -> dict[str, Any]:
@@ -56,9 +62,13 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
            "used_identities": len(used.get("identities") or []), "rebuilt_identities": rebuilt["populations"]["identities"], "rebuilt_complete": rebuilt.get("complete"),
            "used_query": (used.get("query") or {}).get("engine") if isinstance(used.get("query"), dict) else None,
            "rebuilt_engine": ENGINE}
-    rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"] and rebuilt.get("complete") is True)
+    gu, gb = _guarded_max(used), _guarded_max(rebuilt)          # a query-header policy: the identities do not tell it apart
+    if gu or gb:
+        rec.update(used_guarded_max=gu, rebuilt_guarded_max=gb)
+    rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
+                     and rebuilt.get("complete") is True and gu == gb)
     if not rec["ok"]:
-        why = []
+        why = [] if gu == gb else [f"guarded-max policy {gu} != the rebuilt {gb}"]
         if rec["used_digest"] != rows_digest:
             why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
         if rows_digest != rec["rebuilt_digest"]:
@@ -89,6 +99,8 @@ class Options:
     ranks: int = option("--ranks", type=int, default=1)
     norm_scales: bool = option("--norm-scales", default=False, action="store_true",
                                help="rebuild under the norm-scale policy (the row runs NORM_TAP=1; opt-in, never the record)")
+    guarded_max: bool = option("--guarded-max", default=False, action="store_true",
+                               help="rebuild under the guarded-max policy (the row runs GUARDED_MAX_TAP=1; opt-in, never the record)")
     out: str | None = option("--out", default=None, help="write the verification record (json)")
 
 
@@ -96,7 +108,7 @@ def main(a: Options) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     used = _load(a.manifest)
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
-                      rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales, log=log)
+                      rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales, guarded_max=a.guarded_max, log=log)
     rec = verify(used, rebuilt, manifest_path=a.manifest)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

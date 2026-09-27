@@ -9,7 +9,8 @@
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
 are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `--norm-scales` (opt-in, never the record) adds the norm-scale
-policy (`query.norm_scales`).  `compare` classifies every identity difference (`compare.summarize`).
+policy (`query.norm_scales`), `--guarded-max` (likewise) the guarded-max policy (`query.guarded_max`: a query-header statement, the
+identities are the record's).  `compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import compose_global, merge_ranks, request_manifest
+from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import word as word_query
 
@@ -61,7 +63,8 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
-          profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, log=None) -> dict[str, Any]:
+          profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, guarded_max: bool = False,
+          log=None) -> dict[str, Any]:
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))
@@ -72,6 +75,8 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
                          profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None)
     if word:
         word_check(P, corr, r.required, word, acquired=dict(NS.TAP_WORDS) if norm_scales else None, log=log)
+    if guarded_max:
+        r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P))
     if log:
         pop = r.manifest["populations"]
         log(f"  {os.path.basename(program_dir)}: {len(P.calls)} calls -> {pop['identities']} identities ({pop['steps']} steps, {pop['units']} units, "
@@ -105,7 +110,7 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
 
 def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
                  profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                 log=None) -> dict[str, Any]:
+                 guarded_max: bool = False, log=None) -> dict[str, Any]:
     declared = [dict(r, index=int(r.get("index", i))) for i, r in enumerate(fixture["requests"])]
     if len({r["index"] for r in declared}) != len(declared):
         raise ValueError("workload declaration: duplicate request index")
@@ -119,15 +124,18 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
         d = dirs[str(r["workload_request_id"])]
         wl = {"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}}
         parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, word=word,
-                           norm_scales=norm_scales, log=log)
+                           norm_scales=norm_scales, guarded_max=guarded_max, log=log)
         if len(parts[rid]["steps"]) != int(r["max_tokens"]):
             raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
-    return compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
+    man = compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
+    if guarded_max:
+        man["query"] = GM.merged(man["query"], [p["query"] for p in parts.values()])
+    return man
 
 
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                       log=None) -> dict[str, Any]:
+                       guarded_max: bool = False, log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
     wds = list(workload_digests or [None] * len(roots))
     if len(ranks) != len(roots) or len(wds) != len(roots):
@@ -135,7 +143,7 @@ def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[in
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
     parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, word=word,
-                          norm_scales=norm_scales, log=log)
+                          norm_scales=norm_scales, guarded_max=guarded_max, log=log)
              for root, r, wd in zip(roots, ranks, wds)]
     return merge_ranks(parts) if world > 1 else parts[0]
 
@@ -196,6 +204,8 @@ def _write(man: dict[str, Any], out: str) -> None:
 
 NORM_SCALES_HELP = ("opt-in, never the record: the norm-scale policy (verity_vllm.query.norm_scales) -- one norm_scales identity per norm "
                     "Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
+GUARDED_MAX_HELP = ("opt-in, never the record: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention stream's ROW word 3 "
+                    "carries GuardNegInfZero(m) after a row's first key block; the Commit then needs the guarded-max tap build")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -210,6 +220,7 @@ class BuildOptions:
     word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
     norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
+    guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
 
@@ -229,6 +240,7 @@ class BuildGlobalOptions:
     word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
     norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
+    guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 
@@ -270,14 +282,15 @@ def main(a: Any) -> int:
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,
-                    word=a.word_check, norm_scales=a.norm_scales, log=log)
+                    word=a.word_check, norm_scales=a.norm_scales, guarded_max=a.guarded_max, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
         return 0
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
-                                 profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales, log=log)
+                                 profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
+                                 guarded_max=a.guarded_max, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
