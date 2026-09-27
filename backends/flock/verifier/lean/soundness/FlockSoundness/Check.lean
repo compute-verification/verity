@@ -121,6 +121,8 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.phaseA0Pad
 #print axioms FlockSoundness.ligeritoPad_sound
 #print axioms FlockSoundness.zerocheck_phase_of_list
+#print axioms FlockSoundness.lincheck_phase_of_list
+#print axioms FlockSoundness.opening_phase_of_list
 #print axioms FlockSoundness.link_sound_of_list
 #print axioms FlockSoundness.rep_sound_pad
 #print axioms FlockSoundness.table_sound_pad

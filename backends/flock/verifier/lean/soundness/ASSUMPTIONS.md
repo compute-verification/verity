@@ -45,7 +45,8 @@ at most `tableError(fast100 m, shape)`:
   - **New in the proof:**
     - the novel basis's degree structure, `deg X̂_c ≤ c` (`NovelBasis.lean`, derived from `Arith.Correct.xhat_poly`);
     - the padded code's list size, MCA and decoding (`PadCode.lean`, `LigeritoPadDecode.lean`);
-    - the phases before Ligerito, over any list (`PiopList.lean`).
+    - the phases before Ligerito over any list of messages (`zerocheck_phase_of_list` and its three siblings, which
+      the `…_of_card` wrappers instantiate at the close messages).
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
