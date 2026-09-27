@@ -123,6 +123,13 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.orcSess_value_le
 #print axioms FlockSoundness.session_sound_of_table
 #print axioms FlockSoundness.session_knowledge_sound
+-- several tables in one batched session: each table's place in it, its knowledge bound in the
+-- product form, and the cover of its failure and link events
+#print axioms FlockSoundness.sessAfterB_gamesB
+#print axioms FlockSoundness.joint_le_B
+#print axioms FlockSoundness.joint_le_B'
+#print axioms FlockSoundness.one_le_fail_add_B
+#print axioms FlockSoundness.one_le_fail_add_B'
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
