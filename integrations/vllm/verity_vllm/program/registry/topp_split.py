@@ -540,22 +540,30 @@ def mask_kernel(x: np.ndarray, stats: np.ndarray, parts: np.ndarray, p: float, S
     trace["z_split"] = bool(ch[0].get("Z", 0) != ch[1].get("Z", 0))
     trace["half_divergence"] = (ch[0]["early"] != ch[1]["early"]) or (ch[0]["early"] is None and ch[0]["ties"] != ch[1]["ties"])
     keep_all = np.ones(V, dtype=bool)
-    if ch[0]["early"] is not None:
+    # every lane follows its own warp half's early return (`sampling.topp_keep`); a stopped lane is kept and not counted as a dup
+    stopped = [ch[h]["early"] is not None for h in (0, 1)]
+    trace["stopped"] = stopped
+    if all(stopped):
         trace["keep"] = keep_all
         return out
-    M = ch[0]["M"]
-    Zb = _z_for_block(BLOCK, np.array([ch[0]["Z"], ch[1]["Z"]], f32), cfg, S)
+    h0 = stopped.index(False)                               # half 0 when it goes on; its scalars stand in for a stopped half's
+    val = lambda key: np.array([ch[h0 if stopped[h] else h][key] for h in (0, 1)], f32)   # noqa: E731
+    M = ch[h0]["M"]
+    Zb = _z_for_block(BLOCK, val("Z"), cfg, S)
     hb = lane_half(np.arange(BLOCK), cfg, S)
-    pivot_logit_b = np.array([ch[0]["pivot_logit"], ch[1]["pivot_logit"]], f32)[hb]
-    dup_b = np.array([ch[0]["dup"], ch[1]["dup"]], f32)[hb]
-    numkeep_b = np.array([ch[0]["numkeep"], ch[1]["numkeep"]], f32)[hb]
-    ties = ch[0]["ties"]
+    stop_b = np.array(stopped)[hb]
+    pivot_logit_b = val("pivot_logit")[hb]
+    dup_b = val("dup")[hb]
+    numkeep_b = val("numkeep")[hb]
+    ties = ch[h0]["ties"]
     trace["ties"] = ties
     slice_len = (V + S - 1) // S
     for s in range(S):
         num_preceding_h = np.zeros(2, f32)
         if ties:
             for h in (0, 1):
+                if stopped[h]:
+                    continue
                 fin, dup = ch[h]["fin"], ch[h]["dup"]
                 fin_round = int(np.trunc(f32(fin / f32(F))))
                 fin_slot = int(f32(fin - f32(f32(fin_round) * f32(F))))
@@ -570,10 +578,11 @@ def mask_kernel(x: np.ndarray, stats: np.ndarray, parts: np.ndarray, p: float, S
             keep = xb > pivot_logit_b
             if ties:
                 with np.errstate(invalid="ignore"):
-                    dmask = tl_div(tl_exp((xb - M).astype(f32), cfg), Zb, cfg) == dup_b
+                    dmask = (tl_div(tl_exp((xb - M).astype(f32), cfg), Zb, cfg) == dup_b) & ~stop_b
                 cum = (np.cumsum(dmask.astype(np.int32)).astype(f32) + num_preceding_b).astype(f32)
                 keep_dup = dmask & (cum <= numkeep_b)
                 keep = keep & (~dmask | keep_dup)
+            keep = keep | stop_b
             out[i:i + n] = np.where(keep, xb, NEG_INF)[:n]
             keep_all[i:i + n] = keep[:n]
     trace["keep"] = keep_all
@@ -597,5 +606,6 @@ def topp_split_row(x_in: np.ndarray, p: float, S: int, F: int = SPLIT_FANOUT, R:
 
 def topp_keep_row(x_in: np.ndarray, p: float, S: int) -> np.ndarray:
     """The mask kernel's `keep` predicate per vocabulary lane (all True when the pipeline leaves the row untouched: p >= 1,
-    (nearly) uniform / empty row, or a `nomask` search outcome)."""
+    (nearly) uniform / empty row, or a `nomask` search outcome; True on a warp half's lanes when only that half stops,
+    `sampling.topp_keep`)."""
     return topp_split_row(x_in, p, S)[3]["keep"]
