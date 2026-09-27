@@ -235,3 +235,128 @@ def test_the_wrong_unit_bound_matches_worst_case_and_scales():
     big = IntegrityProfile((Level("unit"),), (183680,), {"unit": Subset(256)}, 2.0 ** -20)
     b = audit.wrong_units_bound(big)
     assert 9600 < b < 9750   # (1 - f)^256 = 2^-20 gives f ~ 5.27%, ~9,680 of 183,680
+
+
+# ---- the stratified law: strata per template, k_s = max(1, round(k n_s / n)) ---------------------------------------
+
+def _template(i: int):
+    """A distinct one-input test template (its own descriptor id)."""
+    return bind(CompositeDefinition(f"OneStageTestT{i}", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                                    lambda B, S, x, i=i: B.call(XOR8, x[i % 2], x[(i + 1) % 2]), register=False))
+
+
+def test_strata_group_units_by_template_in_order_of_first_unit():
+    prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    assert P.strata(prog, q) == [(XOR3.id, [[0, 2], [5, 6]]), (PAIR.id, [[2, 5]])]
+    merged = P.mixed_population_program([(PAIR, 2), (PAIR, 3), (XOR3, 1)])
+    assert P.strata(merged, q) == [(PAIR.id, [[0, 5]]), (XOR3.id, [[5, 6]])]
+    assert P.strata(P.population_program(PAIR, 4), P.template_instance_query(PAIR.id)) == [(PAIR.id, [[0, 4]])]
+
+
+def test_the_stratified_rule_rounds_half_up_with_a_floor_of_one():
+    assert [D.stratum_k(5, s, 4) for s in (1, 2, 3, 4)] == [1, 3, 4, 5]        # 1.25, 2.5 -> 3, 3.75, 5
+    assert D.stratum_k(1, 1, 100) == 1 and D.stratum_k(5, 3, 8) == 2 and D.stratum_k(4, 1, 8) == 1
+    assert all(1 <= D.stratum_k(k, s, n) <= s for n in range(1, 30) for s in range(1, n + 1) for k in range(1, n + 1))
+
+
+def test_derive_expands_the_rule_over_the_verifiers_program():
+    prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    law = D.derive(prog, q, D.parse_law("stratified:4"))
+    assert law == {"law": "stratified", "k": 4, "strata": [{"template": XOR3.id, "units": [[0, 2], [5, 6]], "k": 2},
+                                                          {"template": PAIR.id, "units": [[2, 5]], "k": 2}]}
+    assert D.derive(prog, q, law) == law and D.derive(prog, q, LAW) == LAW and D.strata_problem(law, 6) is None
+    for bad in ("stratified:0", "stratified:x"):
+        with pytest.raises(ValueError):
+            D.parse_law(bad)
+    with pytest.raises(ValueError):
+        D.derive(prog, q, {"law": "stratified", "k": 7})
+    with pytest.raises(P.QueryRefused):
+        D.derive(prog, P.template_instance_query(PAIR.id), law)
+
+
+def _stratified_registration():
+    prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    ports = _ports(prog, q, 6)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    rule = D.parse_law("stratified:4")
+    return prog, q, rule, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
+
+
+def test_r1_holds_the_registered_strata_to_the_verifiers_own():
+    prog, q, rule, rec = _stratified_registration()
+    assert rec["law"]["law"] == "stratified" and [s["k"] for s in rec["law"]["strata"]] == [2, 2]
+    assert _check(rec, prog, q, law=rule).ok and _check(rec, prog, q, law=rec["law"]).ok
+    strata = rec["law"]["strata"]
+    tampered = [dict(rec["law"], strata=[{**strata[0], "k": 1}, strata[1]]),                          # a stratum's k
+                dict(rec["law"], strata=[{**strata[0], "units": [[0, 3]]}, {**strata[1], "units": [[3, 6]]}]),  # its units
+                dict(rec["law"], strata=list(reversed(strata))),                                       # their order
+                dict(rec["law"], k=5), {"law": "subset", "k": 4}]
+    for law in tampered:
+        assert _check({**rec, "law": law}, prog, q, law=rule).codes == ("R1-law",), law
+    assert _check(rec, prog, q, law=D.parse_law("stratified:3")).codes == ("R1-law",)
+    assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
+
+
+def test_stratified_draw_checks():
+    prog, q, rule, rec = _stratified_registration()
+    law = D.derive(prog, q, rule)
+    good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
+    assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
+    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid draw
+    assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, law).codes == ("strata-count",)
+    assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
+    assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
+    assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's law
+    assert D.check_draw({k: v for k, v in good.items() if k != "strata"}, rec, law).codes == ("keys",)
+    bad_strata = [{**law["strata"][0], "units": [[0, 2], [2, 3]]}, law["strata"][1]]   # adjacent ranges not merged
+    assert "strata" in D.check_draw({**good, "strata": bad_strata}, rec, law).codes
+    for problem in ([law["strata"][0]], [law["strata"][0], {**law["strata"][1], "template": XOR3.id}],
+                    [{**law["strata"][0], "extra": 1}, law["strata"][1]]):
+        assert D.strata_problem({"k": 4, "strata": problem}, 6) is not None
+
+
+def test_audit_record_under_the_stratified_law():
+    """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
+    profile carries the whole law."""
+    from verity.proofs.profile import Stratified, Stratum
+    prog, q, rule, rec = _stratified_registration()
+    law = D.derive(prog, q, rule)
+    d = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, law, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
+    core = Stratified((Stratum(XOR3.id, 3, 2), Stratum(PAIR.id, 3, 2)))
+    assert r["accepted"] and r["law"] == law and r["integrity_profile"]["law"] == law
+    assert r["profile"] == {**core.to_json(), "delta": 0.25, "drawn": {XOR3.id: 2, PAIR.id: 2}}
+    assert r["wrong_units"]["bound"] == core.count_bound(0.25) and r["wrong_units"]["of"] == 6
+    assert r["wrong_units"]["per_template"] == {XOR3.id: core.stratum_bound(XOR3.id, 0.25), PAIR.id: core.stratum_bound(PAIR.id, 0.25)}
+    wrong = audit.audit_record(rec, R.receipt(rec, "verifier-test"), {**d, "units": [0, 1, 3, 5]}, law, [0, 1, 3, 5], 4, {},
+                               {"lean": lean}, 0.25)
+    assert not wrong["accepted"] and wrong["checks"]["draw"]["codes"] == ["strata-count"] and wrong["profile"] is None
+
+
+def test_the_subset_bound_is_now_the_exact_count():
+    _, _, rec = _registration(6)
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
+    assert r["wrong_units"]["bound"] == max(K for K in range(7) if Fraction(comb(6 - K, 2), comb(6, 2)) >= Fraction(0.25))
+    assert "per_template" not in r["wrong_units"]
+
+
+def test_a4_under_the_stratified_rule():
+    """A4 P6's population (six templates, 6,771,765 units) under `stratified:1024`: k_s = 1, 933, 2, 1, 1, 89, and at
+    most 91,063 wrong units at 2^-20 (uniform subset:1024: 91,051), with a floor in every template."""
+    sizes = (287, 6_171_648, 11_480, 287, 287, 587_776)
+    temps = [_template(i) for i in range(6)]
+    prog = P.mixed_population_program(list(zip(temps, sizes)))
+    q = P.template_instances_query([t.id for t in temps])
+    law = D.derive(prog, q, D.parse_law("stratified:1024"))
+    assert [s["k"] for s in law["strata"]] == [1, 933, 2, 1, 1, 89]
+    assert [s["units"] for s in law["strata"]][:2] == [[[0, 287]], [[287, 6_171_935]]]
+    assert D.strata_problem(law, sum(sizes)) is None
+    core = audit.core_law(law, sum(sizes))
+    assert core.count_bound(2.0 ** -20) == 91_063 and core.stratum_bound(temps[0].id, 2.0 ** -20) == 286
+    assert core.escape({temps[0].id: 287}) == 0

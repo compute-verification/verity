@@ -2,7 +2,7 @@
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
-     "population": <units the query derives>, "law": {"law": "subset", "k": K},
+     "population": <units the query derives>, "law": {"law": "subset", "k": K} | {"law": "stratified", "k": K, "strata": [...]},
      "scheme": "<leaf and tree scheme>",
      "roots": [{"port": ..., "root": ..., "leaves": ..., "domain": ...}, ...],
      "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
@@ -30,7 +30,7 @@ from verity.commitments.merkle import CommitmentDomain
 from verity.ir.codec import canonical_json
 from verity.ir.program import Program
 
-from . import partition as P
+from . import draw as D, partition as P
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -57,10 +57,12 @@ def served_domain(program: str, partition: str, port: str, schema: str, leaves: 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`)."""
+    """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
+    `law` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata)."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     return {"format": FORMAT, "protocol": PROTOCOL, "program": part["program"], "query": query_digest(part["query"]),
-            "partition": P.digest(part), "population": P.units(program, query), "law": dict(law), "scheme": scheme,
+            "partition": P.digest(part), "population": P.units(program, query), "law": D.derive(program, query, law),
+            "scheme": scheme,
             "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
             "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
 
@@ -81,7 +83,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     """R1-R6 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, and its log of this prover's
     earlier records.  `partition`: the verifier's own partition object when it isn't the canonical one (a record made
-    before the canonical envelope); its program must still be `program`'s, and the population is `query`'s."""
+    before the canonical envelope); its program must still be `program`'s, and the population is `query`'s.  R1 holds
+    the registered law to the verifier's own law expanded over its program and query (`draw.derive`): for `stratified`,
+    the strata by template descriptor id and each stratum's k by the rule."""
     c = _Collect()
     if not isinstance(rec, Mapping) or set(rec) != _KEYS:
         c.fail("keys", sorted(set(rec) ^ _KEYS) if isinstance(rec, Mapping) else rec)
@@ -89,8 +93,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
-    if rec["law"] != dict(law):
-        c.fail("R1-law", {"registered": rec["law"], "verifier": dict(law)})
+    try:
+        mine = D.derive(program, query, law)
+    except (P.QueryRefused, ValueError) as e:
+        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
+    else:
+        if rec["law"] != mine:
+            c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
     if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
         c.fail("window", rec["window"])
     # R2
