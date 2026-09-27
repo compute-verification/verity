@@ -49,23 +49,42 @@ theorem xor64_cancel {x x' m : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64
   rw [getElem!_pos _ i (by simpa using hi), getElem!_pos _ i (by simpa using hi)] at this
   simpa [Array.getElem_map, Array.getElem_range] using this
 
-/-- The binding argument for a Halevi–Micali leaf `SHA512(P ‖ (x ⊕ M(y)) ‖ SHA512(S ‖ y))`, for any prefixes `P`, `S` and any
-mask `M`: two different pairs of 64-byte inner digests and salts with one leaf give a SHA-512 collision. -/
-theorem leaf_binding_of (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y y' : ByteArray) (hx : x.size = 64)
+/-- **The extractor for a Halevi–Micali leaf** `SHA512(P ‖ (x ⊕ M(y)) ‖ SHA512(S ‖ y))`: the two SHA-512 inputs that collide
+when two pairs `(x, y)`, `(x', y')` have one leaf. The outer inputs if they differ, else the salt digest's. -/
+def leafPair (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y y' : ByteArray) : ByteArray × ByteArray :=
+  let u := P ++ (xor64 x (M y) ++ Sha512.hash (S ++ y))
+  let u' := P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y'))
+  if u = u' then (S ++ y, S ++ y') else (u, u')
+
+/-- `leafPair`'s output collides: for any prefixes `P`, `S` and any mask `M`, two different pairs of 64-byte inner digests
+and salts with one leaf. If the outer inputs are one, the salts differ (else the masks cancel and `x = x'`), and the salt
+digests are one. -/
+theorem leafPair_collides (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y y' : ByteArray) (hx : x.size = 64)
     (hx' : x'.size = 64) (hne : (x, y) ≠ (x', y'))
     (h : Sha512.hash (P ++ (xor64 x (M y) ++ Sha512.hash (S ++ y))) =
-      Sha512.hash (P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y')))) : Sha512.Collision := by
+      Sha512.hash (P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y')))) :
+    (leafPair P S M x x' y y').1 ≠ (leafPair P S M x x' y y').2 ∧
+      Sha512.hash (leafPair P S M x x' y y').1 = Sha512.hash (leafPair P S M x x' y y').2 := by
   by_cases ho : P ++ (xor64 x (M y) ++ Sha512.hash (S ++ y)) = P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y'))
-  · have hcs := (ByteArray.append_right_inj P).mp ho
+  · simp only [leafPair, ho, ↓reduceIte]
+    have hcs := (ByteArray.append_right_inj P).mp ho
     have hb : xor64 x (M y) = xor64 x' (M y') := ByteArray.append_inj_left hcs (by rw [xor64_size, xor64_size])
     rw [hb] at hcs
     have hc : Sha512.hash (S ++ y) = Sha512.hash (S ++ y') := (ByteArray.append_right_inj _).mp hcs
-    by_cases hs : S ++ y = S ++ y'
-    · have hy : y = y' := (ByteArray.append_right_inj S).mp hs
-      subst hy
-      exact absurd (by rw [xor64_cancel hx hx' hb]) hne
-    · exact ⟨_, _, hs, hc⟩
-  · exact ⟨_, _, ho, h⟩
+    refine ⟨fun hs => ?_, hc⟩
+    have hy : y = y' := (ByteArray.append_right_inj S).mp hs
+    subst hy
+    exact hne (by rw [xor64_cancel hx hx' hb])
+  · simp only [leafPair, ho, ↓reduceIte]
+    exact ⟨ho, h⟩
+
+/-- The binding argument for a Halevi–Micali leaf, as a proposition (`leafPair_collides` is the extractor). -/
+theorem leaf_binding_of (P S : ByteArray) (M : ByteArray → ByteArray) (x x' y y' : ByteArray) (hx : x.size = 64)
+    (hx' : x'.size = 64) (hne : (x, y) ≠ (x', y'))
+    (h : Sha512.hash (P ++ (xor64 x (M y) ++ Sha512.hash (S ++ y))) =
+      Sha512.hash (P ++ (xor64 x' (M y') ++ Sha512.hash (S ++ y')))) : Sha512.Collision :=
+  let hp := leafPair_collides P S M x x' y y' hx hx' hne h
+  ⟨_, _, hp.1, hp.2⟩
 
 /-- **The `hm96-sha512/v1` leaf under its default key binds its inner digest and its salt.** Two different pairs `(x, y)`,
 `(x', y')` of 64-byte inner digests and any salts with one leaf give a SHA-512 collision: of the outer hash (different
