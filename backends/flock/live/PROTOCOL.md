@@ -398,6 +398,19 @@ to `β = 0` at rep 0's β round (the prover refuses it before sending `Y`). `zkr
 simulated views per strategy, and `tests/zk_rewind_stats.py` compares how they end (a permutation test), their verdicts,
 rep 0's first 256 masked values, every received proof's checked fields and the session relations of §7.
 
+Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V* tape, `t = 2`:
+
+| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | rewinds | failures |
+|---|---|---|---|---|---|
+| honest | 40 / 40, all accepted | identical | 40 of 40 | 40 | 0 |
+| abort | 26 / 28, all accepted | 0.48 | 28 of 40 | 40 | 0 |
+| adaptive-coins | 22 / 25, all accepted | 0.41 | 25 of 40 | 36 | 0 |
+| zero-beta | 0 / 0 (all stop at the β round) | identical | 0 of 40 | 0 | 0 |
+
+Rep 0's online values, the proofs' checked fields (11 classes) and the session relations are indistinguishable real
+against simulated wherever there are enough views (smallest p-value 0.001, α = 10^-3 per test). Evidence is kept in the
+private store.
+
 Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
 `zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_dummy_witness_passes_the_region_claims` (the dummy is
 rejected by the inner proof alone).
