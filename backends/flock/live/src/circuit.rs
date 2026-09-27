@@ -760,6 +760,18 @@ fn units_entry(c: &Composite, indices: &[usize]) -> Value {
            "classes": vec![crate::hex(&c.class_sha512); indices.len()]})
 }
 
+/// Whether `units` is `units_entry(c, indices)`, checked in place (a population's has millions of entries).
+fn units_match(c: &Composite, indices: &[usize], units: &Value) -> bool {
+    let class = crate::hex(&c.class_sha512);
+    let (Some(u), Some(blocks), Some(classes)) = (units.as_object(), units["blocks"].as_array(), units["classes"].as_array()) else {
+        return false;
+    };
+    let block_ok = |b: &Value, ch: &[usize]| b.as_array().is_some_and(|b| b.len() == ch.len() && b.iter().zip(ch).all(|(x, &i)| x.as_u64() == Some(i as u64)));
+    u.len() == 5 && units["vus_per_block"] == json!(c.g) && units["units_per_vu"] == json!(c.upv)
+        && blocks.len() == indices.len().div_ceil(c.g) && blocks.iter().zip(indices.chunks(c.g)).all(|(b, ch)| block_ok(b, ch))
+        && classes.len() == indices.len() && classes.iter().all(|x| x.as_str() == Some(class.as_str()))
+}
+
 impl Instances {
     pub fn load(path: &str, c: &Composite) -> Result<Self, String> {
         let b = std::fs::read(path).map_err(|e| format!("instances: {e}"))?;
@@ -817,7 +829,7 @@ impl Instances {
         };
         let indices: Vec<usize> = header["units"]["indices"].as_array().ok_or("header: units.indices")?.iter()
             .map(|x| x.as_u64().map(|v| v as usize).ok_or("header: a unit index")).collect::<Result<_, _>>()?;
-        if indices.len() != n || indices.windows(2).any(|w| w[0] >= w[1]) || header["units"] != units_entry(c, &indices) {
+        if indices.len() != n || indices.windows(2).any(|w| w[0] >= w[1]) || !units_match(c, &indices, &header["units"]) {
             return Err("header: the instances' unit indices are not ascending, one per instance, blocks of vus_per_block".into());
         }
         if header.get("unit_draw").is_some() {
@@ -828,9 +840,21 @@ impl Instances {
         Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None, tables })
     }
 
+    /// SHA-512 of the header's compact key-sorted JSON and the public bytes. serde_json's maps are sorted (no `preserve_order`), so
+    /// the header serializes key-sorted as it is, streamed into the hash (a population's header is about a gigabyte).
     fn public_digest(header: &Value, pubs: &[u8]) -> [u8; 64] {
+        struct Hash<'a>(&'a mut Sha512);
+        impl std::io::Write for Hash<'_> {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.update(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
         let mut h = Sha512::new();
-        h.update(serde_json::to_vec(&sorted(header)).unwrap());
+        serde_json::to_writer(Hash(&mut h), header).unwrap();
         h.update(pubs);
         h.finalize().into()
     }
@@ -846,7 +870,9 @@ impl Instances {
         let np = c.ports.len();
         let (rb, n_out) = (c.row_bytes(), c.out_words.iter().sum::<usize>());
         let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
-        let mut header = self.header.clone();
+        // the population's header but its units (millions of entries), which the draw's replace
+        let mut header: Value = self.header.as_object().map(|m| m.iter().filter(|(k, _)| k.as_str() != "units").map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<serde_json::Map<_, _>>().into()).unwrap_or_default();
         header["unit_draw"] = draw.clone();
         header["instances"] = json!(units.len());
         header["population"] = json!(self.n);
@@ -1794,6 +1820,13 @@ impl Stmt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn headers_serialize_key_sorted_as_they_are() {
+        // public_digest streams the header without sorting it: that holds while serde_json's maps are sorted (no preserve_order)
+        let v: Value = serde_json::from_str(r#"{"z": 1, "a": {"y": [2, {"q": 3, "b": 4}], "c": null}, "m": "s"}"#).unwrap();
+        assert_eq!(serde_json::to_vec(&v).unwrap(), serde_json::to_vec(&sorted(&v)).unwrap());
+    }
 
     #[test]
     fn native_compression_is_sha512() {

@@ -310,9 +310,9 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     (WitData::Host((z, a, b, zl)), t.elapsed().as_secs_f64())
 }
 
-fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_cpu(st: &Stmt, wt: WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
     #[allow(irrefutable_let_patterns)]
-    let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("the CPU prover takes a host witness") };
+    let WitData::Host((z, a, b, zl)) = wt else { panic!("the CPU prover takes a host witness") };
     let tp = Instant::now();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
         &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
@@ -458,7 +458,14 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false, seed);
     let (wt0, tw0) = witness(st, &w0, device);
-    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed), device) } else { (wt0.clone(), 0.0) };
+    // rep 1 proves from rep 0's witness unless it has its own: the CPU prover consumes a witness, so rep 0 takes a copy and rep 1
+    // the original (two copies at most, never one per rep plus the original)
+    let (mut wt0, (mut wt1, tw1)) = (Some(wt0), if plan.rep1_other_witness {
+        let (w, t) = witness(st, &wit(st, inst, plan, true, seed), device);
+        (Some(w), t)
+    } else {
+        (None, 0.0)
+    });
     let witness_s = tw0 + tw1;
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
@@ -512,7 +519,16 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 e
             };
             let tp = Instant::now();
-            let wt = if rep == 0 { &wt0 } else { &wt1 };
+            // FC_WITNESS_PER_REP: rep 1 rebuilds its witness rather than rep 0 proving from a copy (one copy at a time)
+            let per_rep = std::env::var("FC_WITNESS_PER_REP").is_ok();
+            let own = |wt0: &mut Option<WitData>, wt1: &mut Option<WitData>| -> WitData {
+                match (rep, wt1.is_some()) {
+                    (0, true) => wt0.take(),
+                    (0, false) if per_rep => wt0.take(),
+                    (0, false) => wt0.clone(),
+                    _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device).0)),
+                }.expect("a rep's witness")
+            };
             #[cfg(feature = "sha512")]
             if let Some(l0) = &level0 {
                 let s = salts.clone();
@@ -523,7 +539,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 }));
             }
             let proved = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts) } else { prove_cpu(st, wt, lig, &mut hook, &mut lch) }
+                if plan.gpu {
+                    let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
+                    prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts)
+                } else {
+                    prove_cpu(st, own(&mut wt0, &mut wt1), lig, &mut hook, &mut lch)
+                }
             }));
             #[cfg(feature = "sha512")]
             if level0.is_some() {
