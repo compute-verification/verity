@@ -1,5 +1,5 @@
 """`verity/annotations/v0`: names, descriptions, formats and groupings of a program's parts, keyed by ids the program already
-has, outside every digest (prototype; see the Project doc ``docs/workstreams.md``, "Annotations").
+has, outside every digest.
 
     {"format": "verity/annotations/v0",
      "entries": [
@@ -16,11 +16,12 @@ specialization) or its stem ``Name_vN`` (every specialization in the program).
 * ``def:D``; ``node:D/k`` (body node k); ``wire:D/k/a`` (argument a of node k: the values it reads) or ``wire:D/ret``;
   ``port:D/in/p`` (parameter p, by index or name) or ``port:D/out`` / ``port:D/out/a:b`` (result leaves [a, b));
 * ``call:k``, a Call of one program (root body node k, not an Input node), with the entry's ``program`` digest;
-* ``group:<slug>``, a named set: ``members`` lists keys (groups included), each of which must resolve.
+* ``group:<slug>``, a named set: ``members`` lists keys, each of which must resolve (a group member must be an entry).
 
 A stem key must resolve in every specialization the program has.  ``callee`` (on a node or wire key: the stem of node k's callee)
-and ``digest`` (on a ``def`` key with a full id: `definition_digest`) are staleness guards: the key still resolves, but the
-entry was written against another body.
+and ``digest`` (on a ``def`` key with a full id: `definition_digest`) are staleness guards: the key still resolves, but the entry
+was written against another body.  Fields: ``name``, ``description``, ``format`` (strings), ``aliases`` (strings), each set at most
+once per key in one file; `merge` layers files, a later file's field replacing an earlier one's.
 
 **Digests.**  Annotations never enter a program digest: `attach` puts them in the descriptor's ``annotations`` field, which
 `codec.program_digest` and `partition_object.program_sha512` exclude (``PROTOCOL.md`` §1).  Validation reads only the descriptor's
@@ -31,10 +32,11 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from .codec import canonical_json
 from .program import INPUT_ID
+from .types import type_from_json
 
 FORMAT = "verity/annotations/v0"
 TEXT_FIELDS = ("name", "description", "format")
@@ -42,6 +44,7 @@ FIELDS = {"key", "members", "callee", "digest", "program", "aliases", *TEXT_FIEL
 _KIND = re.compile(r"^(def|node|wire|port|call|group):(.+)$")
 _STEM = re.compile(r"^[A-Za-z0-9_\[\]]+_v[1-9][0-9]*$")
 _SHA512 = re.compile(r"^[0-9a-f]{128}$")
+_TARGET = {"node": r"(.+)/(\d+)", "wire": r"(.+)/(\d+/\d+|ret)", "port": r"(.+)/(in/[^/]+|out(?:/\d+:\d+)?)"}
 
 
 def _resolved(desc: Mapping[str, Any], entry: Mapping[str, Any]) -> dict:
@@ -63,16 +66,33 @@ def _stem(fid: str) -> str:
     return fid.split("{", 1)[0]
 
 
-def _specs(desc: Mapping[str, Any], d: str) -> list[str]:
-    defs = desc["definitions"]
-    if d in defs:
-        return [d]
-    return [k for k, e in defs.items() if _stem(k) == d] if _STEM.match(d) else []
-
-
 def _callee(desc: Mapping[str, Any], node: Mapping[str, Any]) -> str:
-    fn = node["fn"]
-    return desc["callees"][fn] if "callees" in desc else fn
+    return desc["callees"][node["fn"]] if "callees" in desc else node["fn"]
+
+
+def _in_definition(desc: Mapping[str, Any], fid: str, kind: str, rest: str) -> str | None:
+    """Why ``kind:fid/rest`` names nothing in the definition ``fid``, or None."""
+    e = desc["definitions"][fid]
+    if kind == "def":
+        return None
+    primitive = e.get("form") != "composite"
+    if primitive and kind in ("node", "wire"):
+        return f"{fid} is a primitive: it has no body"
+    body = {"params": e["params"], "ret_type": e["ret"], "nodes": []} if primitive else e["body"]
+    nodes = body["nodes"]
+    if kind == "node":
+        return None if int(rest) < len(nodes) else f"{fid} has no node {rest}"
+    if kind == "wire":
+        if rest == "ret":
+            return None
+        k, a = map(int, rest.split("/"))
+        return None if k < len(nodes) and a < len(nodes[k]["args"]) else f"{fid} has no argument {rest}"
+    if rest.startswith("in/"):
+        p, names = rest[3:], [n for n, _ in body["params"]]
+        return None if (p.isdigit() and int(p) < len(names)) or p in names else f"{fid} has no parameter {p}"
+    m = re.fullmatch(r"out(?:/(\d+):(\d+))?", rest)
+    n = type_from_json(body["ret_type"]).leaves
+    return None if m[1] is None or int(m[1]) < int(m[2]) <= n else f"{fid} returns {n} leaves, not [{m[1]}, {m[2]})"
 
 
 @dataclass
@@ -83,119 +103,118 @@ class Verdict:
     absent: list[str] = field(default_factory=list)      # keys of Definitions this program does not have
 
 
-def _part(desc: Mapping[str, Any], fid: str, kind: str, rest: str) -> str | None:
-    """Why ``kind:fid/rest`` does not resolve in the definition ``fid``, or None."""
-    e = desc["definitions"][fid]
-    if kind == "def":
-        return None
-    primitive = e.get("form") != "composite"
-    if primitive and kind in ("node", "wire"):
-        return f"{fid} is a primitive: it has no body"
-    body = {"params": e["params"], "ret_type": e["ret"], "nodes": []} if primitive else e["body"]
-    nodes = body["nodes"]
-    if kind == "node":
-        return None if rest.isdigit() and int(rest) < len(nodes) else f"{fid} has no node {rest}"
-    if kind == "wire":
-        if rest == "ret":
-            return None
-        m = re.fullmatch(r"(\d+)/(\d+)", rest)
-        if not m or int(m[1]) >= len(nodes) or int(m[2]) >= len(nodes[int(m[1])]["args"]):
-            return f"{fid} has no argument {rest}"
-        return None
-    m = re.fullmatch(r"in/(.+)", rest)
-    if m:
-        names = [p[0] for p in body["params"]]
-        ok = (m[1].isdigit() and int(m[1]) < len(names)) or m[1] in names
-        return None if ok else f"{fid} has no parameter {m[1]}"
-    m = re.fullmatch(r"out(?:/(\d+):(\d+))?", rest)
-    if m:
-        if m[1] is None:
-            return None
-        from .types import type_from_json
-        n = type_from_json(body["ret_type"]).leaves
-        return None if int(m[1]) < int(m[2]) <= n else f"{fid} returns {n} leaves, not [{m[1]}, {m[2]})"
-    return f"port {rest!r}: in/<parameter> or out[/a:b]"
+class _Program:
+    """What keys resolve against: one descriptor (and, for ``call`` keys, its SHA-512)."""
+
+    def __init__(self, desc: Mapping[str, Any], sha512: str | None) -> None:
+        self.desc, self.sha512 = desc, sha512
+        root = desc["definitions"][desc["root"]]["body"]["nodes"]
+        self.calls = {k for k, n in enumerate(root) if not INPUT_ID.match(_callee(desc, n))}
+
+    def specs(self, d: str) -> list[str]:
+        defs = self.desc["definitions"]
+        if d in defs:
+            return [d]
+        return [k for k in defs if _stem(k) == d] if _STEM.match(d) else []
+
+    def resolve(self, key: str, entry: Mapping[str, Any] | None = None) -> tuple[str, Any]:
+        """("ok" | "absent" | "error", detail) for a non-group key; ``entry`` supplies a ``call`` key's program."""
+        m = _KIND.match(key)
+        if not m or m[1] == "group":
+            return "error", {"code": "key", "key": key}
+        kind, target = m[1], m[2]
+        if kind == "call":
+            program = (entry or {}).get("program")
+            if not isinstance(program, str) or not _SHA512.match(program):
+                return "error", {"code": "program", "key": key}
+            if self.sha512 is None or program != self.sha512:
+                return "ok", []                                          # another program's Call: checked against that program
+            ok = target.isdigit() and int(target) in self.calls
+            return ("ok", []) if ok else ("error", {"code": "unresolved", "key": key, "why": f"root node {target} is not a Call"})
+        if kind == "def":
+            d, rest = target, ""
+        else:
+            t = re.fullmatch(_TARGET[kind], target)
+            if not t:
+                return "error", {"code": "key", "key": key}
+            d, rest = t[1], t[2]
+        specs = self.specs(d)
+        if not specs:
+            return ("absent", key) if _STEM.match(d) or "{" in d else ("error", {"code": "key", "key": key})
+        for fid in specs:
+            why = _in_definition(self.desc, fid, kind, rest)
+            if why:
+                return "error", {"code": "unresolved", "key": key, "definition": fid, "why": why}
+        return "ok", specs
 
 
-def _split(kind: str, target: str) -> tuple[str, str]:
-    """(D, rest) of a node/wire/port target; D may hold '/' only inside its binding record."""
-    pat = {"node": r"(.+)/(\d+)", "wire": r"(.+)/(\d+/\d+|ret)", "port": r"(.+)/(in/[^/]+|out(?:/\d+:\d+)?)"}[kind]
-    m = re.fullmatch(pat, target)
-    return (m[1], m[2]) if m else (target, "")
+def _entry_errors(e: Mapping[str, Any], i: int) -> list[dict]:
+    out = []
+    if set(e) - FIELDS:
+        out.append({"code": "entry", "entry": i, "extra": sorted(set(e) - FIELDS)})
+    if any(not isinstance(e[f], str) for f in TEXT_FIELDS if f in e) or \
+            ("aliases" in e and not (isinstance(e["aliases"], list) and all(isinstance(x, str) for x in e["aliases"]))):
+        out.append({"code": "text", "key": e["key"]})
+    return out
 
 
 def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_sha512: str | None = None) -> Verdict:
     """The annotations against one program's descriptor: every entry well formed, every key resolved (or absent: a Definition the
-    program does not have), groups closed, each (key, field) set once, the guards current."""
+    program does not have), groups closed, each (key, field) set once, the guards current.  ``program_sha512`` enables the checks of
+    ``call`` keys naming this program."""
     v = Verdict(True)
-
-    def err(code: str, **what: Any) -> None:
-        v.errors.append({"code": code, **what})
-
-    if annotations.get("format") != FORMAT or set(annotations) != {"format", "entries"} or not isinstance(annotations["entries"], list):
-        err("format", got=sorted(annotations) if isinstance(annotations, Mapping) else type(annotations).__name__)
+    if not isinstance(annotations, Mapping) or set(annotations) != {"format", "entries"} or annotations.get("format") != FORMAT \
+            or not isinstance(annotations.get("entries"), list):
+        v.errors.append({"code": "format"})
         v.ok = False
         return v
+    prog = _Program(desc, program_sha512)
     entries = annotations["entries"]
-    keys = {e.get("key") for e in entries if isinstance(e, Mapping)}
+    keys = {e["key"] for e in entries if isinstance(e, Mapping) and isinstance(e.get("key"), str)}
     seen: dict[tuple[str, str], int] = {}
-    calls = {k for k, n in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]) if not INPUT_ID.match(_callee(desc, n))}
     for i, e in enumerate(entries):
-        if not isinstance(e, Mapping) or not isinstance(e.get("key"), str) or set(e) - FIELDS:
-            err("entry", entry=i, extra=sorted(set(e) - FIELDS) if isinstance(e, Mapping) else None)
+        if not isinstance(e, Mapping) or not isinstance(e.get("key"), str):
+            v.errors.append({"code": "entry", "entry": i})
             continue
+        v.errors += _entry_errors(e, i)
         key = e["key"]
-        if any(not isinstance(e.get(f, ""), str) for f in TEXT_FIELDS):
-            err("text", key=key)
-        for f in (*TEXT_FIELDS, "members"):
+        for f in (*TEXT_FIELDS, "aliases", "members"):
             if f in e:
                 if (key, f) in seen:
-                    err("duplicate", key=key, field=f, entries=[seen[(key, f)], i])
+                    v.errors.append({"code": "duplicate", "key": key, "field": f, "entries": [seen[(key, f)], i]})
                 seen[(key, f)] = i
-        m = _KIND.match(key)
-        if not m:
-            err("key", key=key)
-            continue
-        kind, target = m[1], m[2]
-        if kind == "group":
+        if key.startswith("group:"):
             members = e.get("members")
             if not isinstance(members, list) or not members or not all(isinstance(x, str) for x in members):
-                err("members", key=key)
-            else:
-                missing = [x for x in members if x not in keys and not _KIND.match(x)]
-                if missing:
-                    err("members", key=key, unknown=missing)
+                v.errors.append({"code": "members", "key": key})
+                continue
+            for x in members:
+                if x.startswith("group:"):
+                    if x not in keys:
+                        v.errors.append({"code": "members", "key": key, "unknown": x})
+                    continue
+                status, detail = prog.resolve(x, next((y for y in entries if isinstance(y, Mapping) and y.get("key") == x), None))
+                if status == "error":
+                    v.errors.append({"code": "members", "key": key, "member": detail})
             continue
-        if kind == "call":
-            if not isinstance(e.get("program"), str) or not _SHA512.match(e["program"]):
-                err("program", key=key)
-            elif program_sha512 is not None and e["program"] == program_sha512 and not (target.isdigit() and int(target) in calls):
-                err("unresolved", key=key, why=f"root node {target} is not a Call")
+        status, detail = prog.resolve(key, e)
+        if status == "error":
+            v.errors.append(detail)
             continue
-        d, rest = (target, "") if kind == "def" else _split(kind, target)
-        specs = _specs(desc, d)
-        if not specs:
-            if _STEM.match(d) or "{" in d:
-                v.absent.append(key)
-            else:
-                err("key", key=key)
+        if status == "absent":
+            v.absent.append(detail)
             continue
-        for fid in specs:
-            why = _part(desc, fid, kind, rest)
-            if why:
-                err("unresolved", key=key, definition=fid, why=why)
-                break
-            if "callee" in e and kind in ("node", "wire") and rest != "ret":
-                got = _stem(_callee(desc, desc["definitions"][fid]["body"]["nodes"][int(rest.split("/")[0])]))
+        specs = detail
+        if "callee" in e and key.startswith(("node:", "wire:")) and not key.endswith("/ret"):
+            k = int(re.fullmatch(_TARGET[key[:4]], key[5:])[2].split("/")[0])
+            for fid in specs:
+                got = _stem(_callee(desc, desc["definitions"][fid]["body"]["nodes"][k]))
                 if got != e["callee"]:
                     v.stale.append({"key": key, "definition": fid, "callee": got, "written_for": e["callee"]})
-        if "digest" in e and kind == "def" and len(specs) == 1 and definition_digest(desc, specs[0]) != e["digest"]:
-            v.stale.append({"key": key, "definition": specs[0], "digest": definition_digest(desc, specs[0])})
-    for e in entries:
-        if isinstance(e, Mapping) and str(e.get("key", "")).startswith("group:"):
-            for x in e.get("members") or ():
-                if isinstance(x, str) and x.startswith("group:") and x not in keys:
-                    err("members", key=e["key"], unknown=[x])
+        if "digest" in e and key.startswith("def:") and len(specs) == 1:
+            got = definition_digest(desc, specs[0])
+            if got != e["digest"]:
+                v.stale.append({"key": key, "definition": specs[0], "digest": got})
     v.ok = not v.errors
     return v
 
@@ -216,8 +235,4 @@ def merge(*layers: Mapping[str, Any]) -> dict:
     return {"format": FORMAT, "entries": list(by_key.values())}
 
 
-def keys_in(annotations: Mapping[str, Any]) -> Iterable[str]:
-    return (e["key"] for e in annotations["entries"])
-
-
-__all__ = ["FORMAT", "Verdict", "definition_digest", "validate", "attach", "merge", "keys_in"]
+__all__ = ["FORMAT", "Verdict", "definition_digest", "validate", "attach", "merge"]

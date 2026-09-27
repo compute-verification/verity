@@ -1,5 +1,6 @@
 """`verity/annotations/v0` (`verity.ir.annotations`): keys resolve against a descriptor's structure, stem keys in every
-specialization, guards report staleness, groups close, and attaching annotations moves no program digest."""
+specialization, guards report staleness, groups close and their members resolve, and attaching annotations moves no program
+digest."""
 from __future__ import annotations
 
 import pytest
@@ -77,6 +78,9 @@ def test_keys_resolve_against_the_descriptor(desc):
     ({"key": "def:APair_v1", "colour": "red"}, "entry"),
     ({"key": "group:g", "members": []}, "members"),
     ({"key": "group:g", "members": ["group:missing"]}, "members"),
+    ({"key": "group:g", "members": ["node:APair_v1/9"]}, "members"),      # a member must resolve like any key
+    ({"key": "def:APair_v1", "aliases": "pair"}, "text"),
+    (["not", "an", "entry"], "entry"),
 ])
 def test_refusals(desc, entry, code):
     v = A.validate(ann(entry), desc, PO.program_sha512(desc))
