@@ -80,6 +80,8 @@ def lean_run(a, public, sessions):
         cmd += ["--comp", archived(a, a.comp)]
     if a.partition:
         cmd += ["--partition", archived(a, a.partition)]
+    if a.program:
+        cmd += ["--program", archived(a, a.program)]
     if a.coins:
         cmd += ["--coins", a.coins]
     p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
@@ -118,6 +120,7 @@ def main():
         ap.add_argument(k, required=True)
     ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
     ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
+    ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")

@@ -9,6 +9,7 @@ The verifier evaluates no part of the computation: it recomputes the rows' const
 circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and the pinned dummy `b ‖ c` from the zero row.
 -/
 import Flock.Statement
+import Flock.TemplateQuery
 
 namespace Flock
 
@@ -464,6 +465,7 @@ def checkPartitionObject (obj : Json) : V (String × Nat) := do
       match (ps.getObjVal? k).toOption with
       | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
       | _ => throw s!"partition: {k} is not a positive integer"
+  if let some ts := TemplateQuery.templatesOf name version ps then discard ts
   return (name, version)
 
 /-- `SHA-512("verity/partition/v1\0" ‖ canon(object))`. -/
@@ -484,6 +486,36 @@ def PartitionFinding.toJson (f : PartitionFinding) : Json :=
   Json.mkObj [("rule", Json.str f.rule), ("query", Json.str f.query), ("digest", Json.str f.digest),
     ("units", Json.str (if f.derived then "derived" else "as stated")), ("note", Json.str f.note)]
 
+/-- The circuit's template: META `program_digests`' one key (the Definition it lowers). -/
+def circuitTemplate (c : Circuit) : Option String :=
+  match (c.metaJ.getObjVal? "program_digests").toOption with
+  | some (.obj kvs) => if kvs.toArray.size == 1 then some kvs.toArray[0]!.1 else none
+  | _ => none
+
+/-- A template query's units, derived from the verifier's own program: the program is the object's, the query applies to it,
+the circuit's template is one it lists, and every unit the statement claims (`indices`) is an instance of that template. -/
+def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let name := (q.getObjValAs? String "name").toOption.getD ""
+  let version := (q.getObjValAs? Nat "version").toOption.getD 0
+  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
+    | throw s!"partition: {name} v{version} is not a template query"
+  let ts ← ts
+  let d ← TemplateQuery.Desc.parse program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let rs ← match TemplateQuery.evaluate d ts with
+    | .ok rs => pure rs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  if !ts.contains t then throw s!"partition: the circuit's template {t} is not one the query lists"
+  let pop := TemplateQuery.population rs
+  for i in indices do
+    match TemplateQuery.locate rs i with
+    | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
+    | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
+  return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -500,7 +532,9 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
       throw "partition: the circuit's partition digest is not the verifier's partition object's"
     if (o.getObjValAs? String "program").toOption != (c.metaJ.getObjValAs? String "program_sha512").toOption then
       throw "partition: the partition object is over another program than META's program_sha512"
-    let note := if EVALUABLE.contains (name, version) then
+    let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
+        s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
+      else if EVALUABLE.contains (name, version) then
         s!"units taken as stated, not derived: {name} v{version} is a query the verifier evaluates (Flock.Qword), but it does not yet decode the program into its Call graphs"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }
@@ -636,9 +670,9 @@ end HmRow
 /-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
 drawn units' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
-    (draw : Option Json := none) (partition : Option Json := none) : V Stmt := do
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
   let c ← HmRow.parse tags circuitFile tables
-  let finding ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
+  let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   let pop ← HmRow.loadPublic tags c publicFile
@@ -646,6 +680,15 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
     | some d => HmRow.drawn c pop d
     | none => pure pop
   HmRow.checkPublic c pub
+  -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
+  let finding ← match finding0, partition, program with
+    | some f, some obj, some prog =>
+      let q := (obj.getObjVal? "query").toOption.getD Json.null
+      if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
+        let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+        pure (some { f with derived := true, note := ← HmRow.deriveTemplateUnits c obj prog indices })
+      else pure (some f)
+    | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
   let nbl := max 3 (log2ceil (max blocksReal 1))
