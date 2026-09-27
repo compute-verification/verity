@@ -76,21 +76,65 @@ def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
 named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8);
 without it, the files at those paths. -/
 def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
-  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | return .error "--circuit, --comp and --public are required"
+  let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
+    | return .error "--circuit and --public are required"
+  let comp := argOf args "--comp"
   match argOf args "--archive" with
-  | none => return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, ← IO.FS.readBinFile comp, ← readTables args)
+  | none =>
+    let cm ← match comp with | some f => IO.FS.readBinFile f | none => pure ByteArray.empty
+    return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, cm, ← readTables args)
   | some dir =>
     let get := fun hex => archiveGet dir hex
     let c ← match ← get circuit with | .ok b => pure b | .error e => return .error s!"circuit: {e}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
-    let cm ← match ← get comp with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
+    let cm ← match comp with
+      | none => pure ByteArray.empty
+      | some h => match ← get h with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
     -- `Circuit.parse` hashes each table a lookup uses against its pinned SHA-512, the key it is held under here
     let mut tables := []
     for t in MUFU_TABLES do
       let p : System.FilePath := dir ++ s!"/sha512/{t.sha512}"
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
+
+/-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
+session, is the drawn units' statement over the registered population (§7.3). -/
+def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none) : V Stmt :=
+  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
+  else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+
+/-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
+it derives a template query's units. -/
+def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
+  let some f := argOf args "--program" | return .ok none
+  match argOf args "--archive" with
+  | none => try return .ok (some (← IO.FS.readBinFile f)) catch e => return .error s!"program: {e}"
+  | some dir => return (← archiveGet dir f).map some
+
+/-- `--partition F`: the verifier's own copy of the `verity/partition/v1` object the circuit binds (a path, or with `--archive`
+its SHA-512). -/
+def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) := do
+  let some f := argOf args "--partition" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"partition: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "partition: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return .ok (some j)
+      | .error e => return .error s!"partition: not JSON: {e}"
+
+/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
+def recordDraw (record : String) : Option Lean.Json :=
+  match Lean.Json.parse record with
+  | .ok j => match j.getObjVal? "unit_draw" with
+    | .ok Lean.Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  | .error _ => none
 
 /-- `archive-put DIR FILE...`: store each file under `DIR/sha512/<its SHA-512>`, and print the digests. -/
 def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
@@ -107,20 +151,29 @@ tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp`
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
 verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--coins seed|os] --session DIR..."
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
-    | .ok st => pure (Except.ok (Setup.ofCircuit st))
-    | .error e => pure (Except.error s!"setup: {e}")
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  let program ← match ← programInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition program with
+    | .ok st => Except.ok (Setup.ofCircuit st, st.partition)
+    | .error e => Except.error s!"setup: {e}"
+  let setup := setupOf none
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
+  let mut drawn : Array (String × Except String (Setup × Lean.Json)) := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
@@ -129,31 +182,56 @@ def verifyCmd (args : List String) : IO UInt32 := do
         let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
         pure (Except.ok (record, proofs))
       catch e => pure (Except.error s!"session files: {e}")
-    let verdict := do let (record, proofs) ← files; verify (← setup) record proofs
+    -- a drawn session is verified against the drawn units' statement (Σ covers the draw)
+    let mut st := setup
+    if tags.hm96Rows then
+      if let .ok (record, _) := files then
+        if let some d := recordDraw record then
+          let key := (canon d).toOption.getD ""
+          match drawn.find? (·.1 == key) with
+          | some (_, s) => st := s
+          | none =>
+            st := setupOf (some d)
+            drawn := drawn.push (key, st)
+    let verdict := do let (record, proofs) ← files; verify (← st).1 record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
-    let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)]
+    -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
+    let part := match st with | .ok (_, p) => p | .error _ => Lean.Json.null
+    let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
+      (if part.isNull then [] else [("partition", part)]))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
-  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os]"; return 2
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public")
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  let program ← match ← programInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition program with
   | .ok st =>
-    let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), ("circuit_sha256", Lean.Json.str (hexOf st.c.sha)),
+    let dk := if tags.hm96Rows then "sha512" else "sha256"
+    let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
       ("statement_digest", Lean.Json.str (hexOf st.digest)), ("sigma", Lean.Json.str (hexOf st.sigma)),
-      ("public_sha256", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
+      (s!"public_{dk}", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
       ("identity", Lean.Json.str ((canon tags.identity).toOption.getD "")),
-      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2))]
+      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2)),
+      ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
+      ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
+      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null), ("partition_check", st.partition)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
@@ -171,7 +249,7 @@ def merkleTest (path : String) : IO UInt32 := do
       let hexes := fun (x : String) => ((x.splitOn ",").map bytesOfHex).toArray
       let row := fun (x : String) => ((x.splitOn ".").filterMap parseHex128).toArray
       let got := merkleCheck ms (hexes cap) (nat c) (nat d) ((pos.splitOn ",").map nat).toArray
-        ((rows.splitOn ",").map row).toArray (hexes sibs) (nat lanes)
+        ((rows.splitOn ",").map row).toArray (hexes sibs) #[] (nat lanes)
       let ok := match got with | .ok () => "1" | .error _ => "0"
       if ok != want then bad := bad + 1
     | _ => bad := bad + 1
@@ -262,6 +340,35 @@ def drawTest (path : String) : IO UInt32 := do
     IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
   return 0
 
+/-- `template-query FILE...`: a template-instance query on a program (`Flock.TemplateQuery`) for each case `{"descriptor", "query"}`
+(the descriptor's bytes as a string): the program's SHA-512, the population, the ranges and every unit's root node, member and
+gates, or the refusal. One `TEMPLATEQUERY` line per file. -/
+def templateQueryCmd (paths : List String) : IO UInt32 := do
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Lean.Json.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
+      let q := (j.getObjVal? "query").toOption.getD Lean.Json.null
+      let name := (q.getObjValAs? String "name").toOption.getD ""
+      let version := (q.getObjValAs? Nat "version").toOption.getD 0
+      let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Lean.Json.null)
+        | throw s!"partition: query-unknown: {name} v{version}"
+      let ts ← ts
+      let d ← TemplateQuery.Desc.parse ((j.getObjValAs? String "descriptor").toOption.getD "").toUTF8
+      let rs ← TemplateQuery.evaluate d ts
+      let pop := TemplateQuery.population rs
+      let units := (Array.range pop).map fun i => match TemplateQuery.locate rs i, TemplateQuery.gates d rs i with
+        | some (k, m, _), some (lo, hi) => Lean.toJson #[i, k, m, lo, hi]
+        | _, _ => Lean.Json.null
+      return Lean.Json.mkObj [("program_sha512", Lean.Json.str (hexOf d.sha512)), ("population", Lean.toJson pop),
+        ("ranges", Lean.Json.arr (rs.map fun r => Lean.Json.arr #[Lean.toJson r.node, Lean.Json.str r.template, Lean.toJson r.first, Lean.toJson r.count])),
+        ("units", Lean.Json.arr units)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    IO.println s!"TEMPLATEQUERY {line.compress}"
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -269,6 +376,7 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
+  | "template-query" :: paths => templateQueryCmd paths
   | "draw" :: rest => drawCmd rest
   | ["draw-test", path] => drawTest path
   | "statement" :: rest => statementCmd rest

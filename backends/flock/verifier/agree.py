@@ -1,7 +1,7 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
-    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F --comp F --public F \
-        [--tables DIR] [--expect FILE]... --out DIR --sessions DIR...
+    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] --public F \
+        [--tables DIR] [--expect FILE]... [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
@@ -15,6 +15,7 @@ their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreeme
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -27,18 +28,12 @@ def groups(a):
     return g
 
 
-def lean_verdicts(a):
-    out = {}
-    for public, sessions in groups(a).items():
-        out.update(lean_run(a, public, sessions))
-    return out
-
-
-def upstream_verdicts(a):
-    out = {}
-    for public, sessions in groups(a).items():
-        out.update(upstream_run(a, public, sessions))
-    return out
+def drawn(s):
+    """The session's record carries a unit draw (PR #83 from eb90718f)."""
+    try:
+        return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
+    except (OSError, ValueError):
+        return False
 
 
 def archived(a, path):
@@ -55,55 +50,111 @@ def archived(a, path):
     return h
 
 
-def lean_run(a, public, sessions):
+#: sessions per verifier process at least, where there are enough: each process sets its statement up once (about 20 s)
+MIN_CHUNK = 4
+
+
+def chunks(xs, k):
+    """`xs` dealt round-robin into at most `k` non-empty chunks of about `MIN_CHUNK` or more (costly and cheap sessions spread
+    evenly)."""
+    k = max(1, min(k, len(xs) // MIN_CHUNK or 1))
+    return [xs[i::k] for i in range(k)]
+
+
+def lean_cmd(a, public):
+    """The Lean verifier's command for a public file: every statement object from the run's archive, by SHA-512."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
     cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(a.out / "archive"), "--circuit", archived(a, a.circuit),
-           "--comp", archived(a, a.comp), "--public", archived(a, public)]
+           "--public", archived(a, public)]
+    if a.comp:
+        cmd += ["--comp", archived(a, a.comp)]
+    if a.partition:
+        cmd += ["--partition", archived(a, a.partition)]
+    if a.program:
+        cmd += ["--program", archived(a, a.program)]
     if a.coins:
         cmd += ["--coins", a.coins]
-    p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
-    with open(a.out / "lean.txt", "a") as f:
-        f.write(p.stdout)
-    with open(a.out / "lean.err", "a") as f:
-        f.write(p.stderr)
-    out = {}
-    for line in p.stdout.splitlines():
-        if line.startswith("VERDICT "):
-            v = json.loads(line[8:])
-            out[v["session"]] = {"accepted": v["accepted"], "why": v["why"]}
-    return out
+    return cmd + ["--session"]
 
 
-def upstream_run(a, public, sessions):
+def upstream_cmd(a, public, extra=()):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    p = subprocess.run([a.upstream, "replay", "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
-                       capture_output=True, text=True)
-    with open(a.out / "upstream.txt", "a") as f:
-        f.write(p.stdout)
-    with open(a.out / "upstream.err", "a") as f:
-        f.write(p.stderr)
-    out = {}
-    for line in p.stdout.splitlines():
-        if line.startswith("UPSTREAM\t"):
-            v = json.loads(line.split("\t", 1)[1])
-            out[v["session"]] = v["verdict"]
-    return out
+    return [a.upstream, "replay", *extra, "--instances", public, flag, a.circuit, *tables, "--sessions"]
 
 
-def main():
+def verdicts(a, slots=None):
+    """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
+    one upstream process per chunk, and each drawn session in its own upstream process (`replay --drawn-only` builds only its
+    drawn units' statement; upstream leaks a statement's matrices, so one process holds one statement). A session's verdict does
+    not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
+    tasks = []                                                        # (kind, order, command, sessions)
+    order = {}
+    for gi, (public, sessions) in enumerate(groups(a).items()):
+        for si, s in enumerate(sessions):
+            order[s] = (gi, si)
+        base = lean_cmd(a, public)
+        for c in chunks(sessions, a.jobs):
+            tasks.append(("lean", base, c))
+        plain = [s for s in sessions if not drawn(s)]
+        for c in chunks(plain, a.jobs) if plain else []:
+            tasks.append(("upstream", upstream_cmd(a, public), c))
+        for s in sessions:
+            if drawn(s):
+                tasks.append(("upstream", upstream_cmd(a, public, ["--drawn-only"]), [s]))
+
+    def run(t):
+        # `slots` (ci.py): one budget of verifier processes shared by every set running at once
+        if slots is not None:
+            slots.acquire()
+        try:
+            p = subprocess.run(t[1] + t[2], capture_output=True, text=True)
+        finally:
+            if slots is not None:
+                slots.release()
+        return p.stdout, p.stderr
+
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
+        done = list(ex.map(run, tasks))
+    lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
+    for (kind, _cmd, _c), (out, err) in zip(tasks, done):
+        lines, errs = logs[kind]
+        errs.append(err)
+        for line in out.splitlines():
+            if kind == "lean" and line.startswith("VERDICT "):
+                v = json.loads(line[8:])
+                lean[v["session"]] = {"accepted": v["accepted"], "why": v["why"]}
+                lines.append((order.get(v["session"], (1 << 30, 0)), line))
+            elif kind == "upstream" and line.startswith("UPSTREAM\t"):
+                v = json.loads(line.split("\t", 1)[1])
+                up[v["session"]] = v["verdict"]
+                lines.append((order.get(v["session"], (1 << 30, 0)), line))
+            else:
+                lines.append(((1 << 30, len(lines)), line))
+    for kind in ("lean", "upstream"):
+        lines, errs = logs[kind]
+        (a.out / f"{kind}.txt").write_text("".join(l + "\n" for _k, l in sorted(lines, key=lambda x: x[0])))
+        (a.out / f"{kind}.err").write_text("".join(errs))
+    return lean, up
+
+
+def main(argv=None, slots=None, quiet=False):
     ap = argparse.ArgumentParser()
-    for k in ("--lean", "--upstream", "--circuit", "--comp", "--public"):
+    for k in ("--lean", "--upstream", "--circuit", "--public"):
         ap.add_argument(k, required=True)
+    ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
+    ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
+    ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
     ap.add_argument("--expect", action="append", default=[])
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
-    a = ap.parse_args()
+    ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")
+    a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     for f in ("lean.txt", "lean.err", "upstream.txt", "upstream.err"):
         (a.out / f).write_text("")
@@ -112,7 +163,7 @@ def main():
         case = Path(s) / "case.json"
         if case.exists():
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
-    lean, up = lean_verdicts(a), upstream_verdicts(a)
+    lean, up = verdicts(a, slots)
     rows, bad = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], []
     for s in a.sessions:
         name = Path(s).name
@@ -129,7 +180,8 @@ def main():
     result = {"statement": a.statement, "sessions": len(a.sessions), "agree": len(a.sessions) - len(bad), "disagree": bad,
               "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted"))}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
-    print(json.dumps(result))
+    if not quiet:
+        print(json.dumps(result))
     return 1 if bad else 0
 
 

@@ -1055,6 +1055,92 @@ lowering theorem, not at run time.
 The target statement (the circuit statement once its leaves move) pins SHA-256 on every commitment path: Halevi–Micali
 serving leaves on SHA-256 hashed in the circuit, SHA-256 Merkle trees, SHA-256 round digests (§2.5).
 
+### 16.10 The hm96-sha512 row statement (PR #83 from `eb90718f`; with the e2e bindings from `e51e2b86`, the default `verity/flock-circuit`)
+
+M0's format (`note:20260927T0445Z-handoff-from-flock-netlist-format`) changes three things from §16.5: serving rows are
+`hm96-sha512/row/v1` leaves proved in the circuit (no BLAKE3, no `comp.rows`), every identity and binding digest is
+SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the lincheck fold, PIOP and PCS are §10–§14.
+
+- **Tags.** META `scheme` is `frame-v3-sha512/hm96-sha512` and `row_schema` is `hm96-sha512/row/v1`. The public file's
+  circuit key is `circuit_sha512`. `Hello` adds `"digests":"sha512"`. The identity carries META `leaf_scheme`
+  (`hm96-sha512/v1`: salts a ChaCha20 expansion of a per-proof OS key, `key_sha512`) and `seed_injection` (true only in
+  the selftest harness's build: statement `verity/flock-circuit+seed-injection`).
+- **Rows.** For a port of `words` u16 words (`2·words` a multiple of 128): `x = SHA-512(prefix ‖ row)` with `prefix =
+  pad128("verity/sha512-row/v1\0" ‖ 01 ‖ 10 ‖ be32 words)`, `b = x ⊕ M(key)·y`, `c = SHA-512(salt_prefix ‖ y)` for the
+  row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
+  after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
+  a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
+- **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
+  1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
+  ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
+  slot `p` for port `p`. The `sha512x3` range is `packed` (aligned to one slot, spanning its count); every other range is
+  aligned to its power-of-two span.
+- **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
+  compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
+  midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
+  forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
+  bit `t % 8` (compression `B / 128`, word `o / 8`, bit `56 − 8·(o % 8) + t % 8` for `o = B % 128`; a zero leaf from its own
+  forced-zero row); every wire.
+- **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
+  `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
+- **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
+  instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
+  `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
+  `SHA-512(canon(header, rows = false) ‖ body)`. The frame-v3-sha512 roots (§16.6 with SHA-512) are over the population:
+  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))`, output leaves `u16` words. Each port's
+  `dummy.bc` must be the zero row's: `SHA-512(prefix ‖ 0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)`.
+- **The drawn statement.** For a record with a `unit_draw` over the population's `N` instances, instance `i` is population
+  position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
+  units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the
+  population's. A null `unit_draw` is no draw. U1–U3 then hold of the record and this statement.
+- **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
+  canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
+  Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
+  ‖ circuit SHA-512 ‖ statement digest ‖ public digest)`, 64 bytes, is `Hello`'s `link.sigma` and root_F.
+- **Record.** Every digest is SHA-512 of the same bytes as before under a `_sha512` key: `link.root_f_sha512`,
+  `link.root_b_sha512.<t>`, `link.publics_sha512.<t>`, `link_sha512`, `streams[i].root_sha512`, `rounds[k].msg_sha512`,
+  `proof_sha512[j] = {stream, sha512, bytes}`. The coin commitment is `coin-commit/sha512`; the derivation stays SHA-256.
+- **The e2e bindings (from `e51e2b86`; the default statement, and `@eb90718f` without them).** META carries
+  `program_sha512` (a SHA-512 hex digest) and `partition = {rule, digest}`, the rule `verity/partition/v1` or the
+  provisional `flock-circuit/unit-cover/v0` and the digest SHA-512 hex. Both are part of the circuit file, so the circuit
+  pin binds them into the statement digest and Σ. The public header's `units` adds `classes`, one per instance: each must be
+  the verifier's own class of the circuit, `SHA-512(head ‖ "\nMETA " ‖ canon(META without partition, program_sha512,
+  program_digests) ‖ "\n" ‖ the file after its META line)`. For a `verity/partition/v1` binding the verifier needs its own copy
+  of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
+  exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
+  natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1: exactly
+  `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  `program` must be META's `program_sha512`. The provisional unit cover takes no object.
+- **Tail outputs, packed ranges and leaf cuts (from PR #83 `15260468`, GEMM).** META may name `out_net`, the circuit whose
+  output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
+  - When a tail stage returns the outputs: the unit range need not be a power of two and the units return none; that stage's
+    only output group is one 16-bit port per output word (`16 · words` a power of two); and the `Out` region is that group,
+    free bits `[0, log2(16 · words))` and the stage range's slot bits, valued at each VU's output words (u16 LE).
+  - Any range may be packed except those a region reads (`hm96`, `out_net`, the mask).
+  - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
+    the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
+    wires.
+  - Set 13 (GEMM k1024, recorded on a CPU pod) agrees 27 of 27.
+- **The template queries** (`Flock.TemplateQuery`; core's `TemplatePartition`, #131): `Q_template_instance` v0 (`{template}`, a
+  string) and `Q_template_instances` v0 (`{templates}`, a non-empty list of distinct strings). With the verifier's own copy of
+  the program (`--program`, its `verity-ir/descriptor/v1` bytes, by path or archive digest), whose SHA-512 over the canonical
+  descriptor without `annotations` must be the object's `program`, the verifier decodes the program's callees, definitions
+  and root nodes, and applies the query. Every non-Input root node must be a `call` or `batch` of a listed template, matched
+  by the descriptor id in the program's bytes. Each call is one unit and each batch member one unit, in node then member
+  order, and a unit's gates are its instance's interval. Every listed template has an instance, or the query refuses. The
+  circuit's template (the one key of META `program_digests`) must be listed, and every unit the header's `units.indices`
+  claims must be an instance of it: then the statement's units are derived. `template_query_agree.py` checks the decoding
+  against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
+  the refusals word for word, the malformed parameters).
+- **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
+  `units` is `derived` when the verifier derived the statement's units itself: the template queries, given `--program`.
+  For `Q_word` v1 (`Flock.Qword`) the program's Call graphs are not extracted yet, and any other query is not evaluated;
+  then `units` is `as stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
+- **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
+  carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
+  `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record
