@@ -72,6 +72,24 @@ pub fn level0_bits(l: usize, q: usize) -> f64 {
     -(q as f64) * (rate.sqrt() + 0.02).log2()
 }
 
+/// Goldreich–Kahan's estimate of a verifier's completion probability `p` (M2's simulator): fresh runs (`run`: whether one
+/// reached the proofs) until `t` of them do, with no cap and without the extraction run; returns the runs, so
+/// `p̃ = t / runs`. `t = Θ(λ)` keeps `p̃` within `[p/2, 2p]` except with probability `2^-Ω(λ)`. The estimation follows an
+/// extraction run that reached the proofs (probability `p`), so it costs `t` runs in expectation.
+pub fn gk_estimate(t: usize, mut run: impl FnMut() -> bool) -> usize {
+    let (mut ok, mut runs) = (0, 0);
+    while ok < t {
+        runs += 1;
+        ok += run() as usize;
+    }
+    runs
+}
+
+/// The simulator's rewinds after an estimate from `runs` runs: `4t / p̃ = 4·runs`.
+pub fn gk_rewinds(runs: usize) -> usize {
+    4 * runs
+}
+
 /// The least `q ≥ q_min` with Fast100's 100 bits per run at level 0 ([`level0_bits`]); `None` when the padding outgrows the
 /// lane first.
 pub fn level0_queries(l: usize, q_min: usize) -> Option<usize> {
@@ -1317,6 +1335,28 @@ mod tests {
             assert!(leak(6, [0, 0], &c) > 0, "a shared pair should leak (red-team-m1-zk F1)");
             // padding below the distinct opened positions leaks too
             assert!(leak(4, [0, 1], &c) > 0, "t_pad below the opened positions should leak");
+        }
+    }
+
+    /// The estimate runs until `t` successes whatever `p` (red-team-m2-zk G2: a cap of 64t runs let a tiny `p` stop it at one
+    /// success), lands within `[p/2, 2p]`, and the rewinds it allows all fail with probability `(1 − p)^(4·runs) ≈ e^-4t`.
+    #[test]
+    fn the_gk_estimate_is_uncapped_and_its_rewinds_suffice() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([31; 32]));
+        let t = 32;
+        for (i, p) in [1.0, 0.5, 1.0 / 64.0, 1.0 / 4096.0].into_iter().enumerate() {
+            let mut k = 0u64;
+            let mut coin = || {
+                k += 1;
+                (rng.f128s(9, (i as u64) << 40 | k, 1)[0].lo as f64 / u64::MAX as f64) < p
+            };
+            let runs = gk_estimate(t, &mut coin);
+            let est = t as f64 / runs as f64;
+            assert!(runs >= t && est >= p / 2.0 && est <= 2.0 * p, "p = {p}: p̃ = {est} from {runs} runs");
+            if p < 1.0 {
+                let fail = (1.0 - p).powi(gk_rewinds(runs) as i32);
+                assert!(fail < 2f64.powi(-(t as i32)), "p = {p}: the rewinds all fail with probability {fail}");
+            }
         }
     }
 

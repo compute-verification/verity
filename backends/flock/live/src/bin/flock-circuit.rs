@@ -1256,25 +1256,46 @@ fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, points: &[Ve
     Ok(Rewound::Complete)
 }
 
+/// A fresh dummy opening for the extracted coins, with no interaction with V*: the honest prover on the dummy witness (fresh
+/// masks, level-0 padding, extra lanes and salts) against a local coin server that commits to exactly those coins.
+#[cfg(feature = "seed-injection")]
+fn fresh_dummy(st: &Arc<Stmt>, inst: &Arc<Instances>, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>]) -> Result<Vec<Vec<u8>>, String> {
+    let mut s = server(st, inst);
+    let (pts, cs) = (points.concat(), coins.to_vec());
+    s.inject_coin_edit(Box::new(move |stream, round, b| {
+        if stream == flock_live::coin_tree::SESSION && round == 0 {
+            b[..pts.len()].copy_from_slice(&pts);
+        } else if let Some(c) = (0..2).find(|&r| stream == rep_stream(TABLE, r)).and_then(|r| cs[r].get(round)) {
+            b[..c.len()].copy_from_slice(c);
+        }
+    }));
+    let (v, proofs) = session(st, inst, shared(InProc(Arc::new(Mutex::new(s)))), &Plan { zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
+    if proofs.len() != 2 {
+        return Err(format!("the fresh dummy run on the extracted coins did not reach the proofs: {}", v["prover_stopped"]));
+    }
+    Ok(proofs)
+}
+
 /// The Goldreich–Kahan simulator (soundness ASSUMPTIONS.md §6): V*'s view of one session from the public statement alone.
 /// 1. Extraction: the honest prover on a dummy witness (zero, the public regions written in) against V*. Every message before
 ///    the proofs is masked, committed or public, so this run is distributed as a real one until the proofs, which follow the
 ///    last coin. If it does not reach the proofs (V* aborted or cheated, or the prover refused a degenerate coin), its view
 ///    is the output.
-/// 2. Estimation: more such runs until `t` of them reach the proofs; `p̃ = t / runs`.
-/// 3. Rewind to just after the coin commitment and simulate from the extracted coins, at most `4 t / p̃` times, until V* does
-///    not stop the simulation; the output is that view. Failing that, or if V* opens another coin than it did in step 1 (a
-///    binding failure), the simulator fails.
+/// 2. Estimation (`zk_veil::gk_estimate`): fresh dummy runs against V*, uncapped, until `t` of them reach the proofs;
+///    `p̃ = t / runs`, the extraction run not counted. `t = Θ(λ)`.
+/// 3. At most `4t / p̃` rewinds to just after the coin commitment, each with a fresh dummy opening for the extracted coins
+///    (`fresh_dummy`), so the rewinds are independent trials; the first that V* does not stop is the output. Failing that,
+///    or if V* opens another coin than it did in step 1 (a binding failure), the simulator fails.
 #[cfg(feature = "seed-injection")]
 fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, make: &dyn Fn() -> VStar, t: usize) -> (View, Value) {
-    let dummy_run = || -> (View, Vec<Vec<u8>>) {
+    let dummy_run = || -> View {
         let v = make();
         let view = v.view.clone();
-        let (_, proofs) = session(st, inst, shared(v), &Plan { zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
+        session(st, inst, shared(v), &Plan { zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
         let log = view.lock().unwrap_or_else(PoisonError::into_inner).clone();
-        (log, proofs)
+        log
     };
-    let (view, dummy) = dummy_run();
+    let view = dummy_run();
     if !complete(&view) {
         return (view, json!({"extraction_complete": false}));
     }
@@ -1282,26 +1303,25 @@ fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, make: &dyn Fn() -> VStar, 
         Ok(x) => x,
         Err(e) => return (Vec::new(), json!({"extraction_complete": true, "fail": format!("extraction: {e}")})),
     };
-    let (mut ok, mut runs) = (1usize, 1usize);
-    while ok < t && runs < 64 * t {
-        runs += 1;
-        ok += complete(&dummy_run().0) as usize;
-    }
-    let bound = (4 * t * runs).div_ceil(ok);
+    let runs = zkv::gk_estimate(t, || complete(&dummy_run()));
+    let bound = zkv::gk_rewinds(runs);
     let mut rng = flock_live::zk_hooks::ProverRng::from_os();
+    let stats = |rewinds: usize, fail: Option<String>| json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": t,
+                                                              "rewinds": rewinds, "bound": bound, "fail": fail});
     for attempt in 0..bound {
+        let dummy = match fresh_dummy(st, inst, &points, &coins) {
+            Ok(d) => d,
+            Err(e) => return (Vec::new(), stats(attempt + 1, Some(e))),
+        };
         let v = make();
         let view = v.view.clone();
-        let stats = |fail: Option<String>| json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": ok, "rewinds": attempt + 1,
-                                                  "fail": fail});
         match rewind(st, inst, v, &points, &coins, &dummy, &mut rng, attempt as u64) {
-            Ok(Rewound::Complete) => return (view.lock().unwrap_or_else(PoisonError::into_inner).clone(), stats(None)),
+            Ok(Rewound::Complete) => return (view.lock().unwrap_or_else(PoisonError::into_inner).clone(), stats(attempt + 1, None)),
             Ok(Rewound::Aborted) => continue,
-            Err(e) => return (Vec::new(), stats(Some(e))),
+            Err(e) => return (Vec::new(), stats(attempt + 1, Some(e))),
         }
     }
-    (Vec::new(), json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": ok, "rewinds": bound,
-                        "fail": format!("no rewind reached the proofs in {bound} (p̃ = {ok}/{runs})")}))
+    (Vec::new(), stats(bound, Some(format!("no rewind reached the proofs in {bound} (p̃ = {t}/{runs})"))))
 }
 
 #[cfg(feature = "seed-injection")]
