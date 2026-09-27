@@ -13,6 +13,9 @@ Steps, in order; `check` stops at the first that fails:
                     the run's result
     lean-build      `lake build` of the Lean verifier (PR #85, `backends/flock/verifier/lean`), then
     lean-unit-cut   its partition check against `verity.ir.partition` on random cuts (`unit_cut_agree.py`), then
+    lean-audit      `tools/lean/audit.py --all --build`: every Lake package with a `lean-audit.json` built and audited
+                    (axioms, sorry, declared axioms, escapes, files, kernel bypasses, pinned statements, a kernel replay),
+                    after the controls; its reports under `lean-audit/`, then
     lean-agreement  its agreement with upstream's Rust verifier (`ci-pod.sh`) when the run is sent the input bundle
                     (`--send ci-bundle.tar.gz`); skipped by name without one (`lean_steps`)
 
@@ -57,6 +60,8 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
+            ("lean-audit", [sys.executable, str(ROOT / "tools" / "lean" / "audit.py"), "--all", "--build", "--root", str(ROOT),
+                            "--out", str(out / "lean-audit")], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -111,7 +116,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("circuit-check.json",) if (run_dir / p).exists()]}
+           "steps": done, "artifacts": [p for p in ("circuit-check.json", "lean-audit/") if (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")

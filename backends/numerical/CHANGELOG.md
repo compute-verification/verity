@@ -1,5 +1,20 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-27: a cell's `domain` is its statement's, not a hardcoded `finite`
+
+- **The bug:** every writer recorded `workload_fingerprint.domain: finite`, whatever its statement covered, and `finite` is not a
+  vocab value. red-team-flock-3 found it in the M0 statement review (coordinator 13:45Z).
+- **`contract`:**
+  - `DOMAINS` = (`total`, `finite-only`), the vocab's values. `fingerprint()` refuses the old `finite` on new writes.
+  - `DOMAIN` (the FIRST relations', whose circuits assert their operands finite) is now `finite-only`.
+  - `validate_fingerprint` still reads `finite` on results written before (`LEGACY_DOMAINS`). `identity()` reads it as
+    `finite-only`, so `incomparable` keeps comparing old results with new ones.
+- **The flock writers:**
+  - `ir_bench` records the IR lowering's `Lowering.domain`: `total` when the unit asserts nothing, which every IR lowering does.
+  - `bench` records the pure unit's `Pipe.domain`: `finite-only`, or `total` for a total unit.
+- **`views`:** the fingerprint fallback goes through `identity()`, so a legacy `finite` shows `finite-only`. A value outside the
+  vocab shows nothing. A `domain` label still wins.
+
 ## 2026-09-27: the placement probe finds the pod id in an ssh-started job
 
 - `bench.placement.probe` reads `RUNPOD_POD_ID`, `RUNPOD_PUBLIC_IP` and `RUNPOD_DC_ID` from the container's init process
