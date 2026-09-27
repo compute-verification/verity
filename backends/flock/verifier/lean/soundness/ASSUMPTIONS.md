@@ -30,6 +30,8 @@ at most `tableError(fast100 m, shape)`:
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
   `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
+- **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
+  strategy. This form composes across the tables of a batched session (§9, `value_batch_le`).
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
@@ -51,7 +53,7 @@ after its level-0 cap):
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
 
-### 1.3 Knowledge soundness (`table_knowledge_sound`, `registered_weights`, to write)
+### 1.3 Knowledge soundness (`table_knowledge_sound`, `table_knowledge_sound_joint`; `registered_weights` to write)
 
 It is needed for any claim about which data a proof used ("these proofs used the registered weights"), and for the
 recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
@@ -61,18 +63,41 @@ hiding, so every commit string opens to essentially every value, and plain sound
 unit used. The audit bound defines a wrong unit through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
-- **`table_knowledge_sound`.** An extractor that reruns any classical prover accepted with probability ε outputs a
-  satisfying witness or a SHA-512 collision, with probability at least `ε − κ`. Here `κ` is the compiled soundness error
-  plus extraction terms.
+- **The extractor** (`Knowledge.lean`) works in three steps:
+  - It reruns the prover after its level-0 cap `K` times.
+  - It fills each level-0 position with the first verifying opening it saw there, and zero elsewhere.
+  - It decodes the full table at the level-0 radius. There are at most `L₀` candidates (`closeMsgs_card_le`), and it
+    succeeds when one of them packs a satisfying witness.
+
+  Its cost is `K` reruns, `K·t` hash evaluations.
+- **`table_knowledge_sound`.** If `P*` is accepted with probability `ε > ε_c⁻`, extraction fails with probability at
+  most `(K·Adv₀ + N₀/(eK))/(ε − ε_c⁻)`.
+  - `ε_c⁻` (`epsCminus`) is the compiled error without its level-0 rewinding term: `tableError`, the reps' cap terms
+    and the self-clash probability.
+  - It rests on `table_sound_compiled_of_table`: for any level-0 table `T`,
+    `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`. The reps' cap terms do not
+    depend on `T` (`advRT_eq`).
+- **`table_knowledge_sound_joint_tight`,** the form the audit consumes:
+  `Pr[a fresh run accepts ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)`, for every `ε`
+  (`table_knowledge_sound_joint` states it with `2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))`). At
+  `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
+- **`session_knowledge_sound`** (`Session.lean`) is the same form for one table inside a batched session.
+  - The session is the protocol's (PROTOCOL.md §5). `Commit` carries every level-0 cap before any coin, the link
+    points are one draw, and then every table runs concurrently in any order. The rest of the session is arbitrary.
+  - The extractor reruns everything after `Commit`.
+  - `ε_c⁻` and `Adv₀` are the table's terms computed in the session (`epsS`, `adv₀S`).
+  - It rests on `session_sound_of_table`, the compiled bound for any level-0 table in the session. The oracle
+    prover plays the whole session there, and the table's value bounds it (`orcSess_value_le`).
+- **Several tables in one session** (`SessionBatch.lean`). `sessionB` is the protocol's batch: `Commit` with every
+  level-0 cap, one link-point draw, then every table concurrently.
+  - For each table `j`, `joint_le_B'` bounds `Pr[the session accepts] · Pr[table j's extraction fails]` by table `j`'s
+    `ε_c⁻ + K·Adv₀ + N₀/(eK)` in the session (`ksBoundB`).
+  - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
+- **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link term `δ_link`
+  (DESIGN.md §3). The first two need the SHA-512 leaf layout in the model; `δ_link` probably dominates the audit bound.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
   statement links that root, or Halevi–Micali binding gives a SHA-512 collision. So
   `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
-- **Proved groundwork.**
-  - `table_sound_compiled_of_table` is the compiled bound for any level-0 table `T` the oracle prover could send. It
-    adds `dev₀`, the probability of opening a position where `T`'s rows differ from the plurality's. At positions no
-    run opens, `T` is free.
-  - `Rewinding.expect_offsum_le` bounds the expected number of positions a run opens off the plurality by
-    `√(N·Q·Pr₂[conflict])`.
 
 ### 1.4 Status
 
@@ -97,10 +122,12 @@ link term per audit.
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
-| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write** (DESIGN.md §3); the compiled bound for any table and the summed rewinding lemma are proved; required for sampled audits (§7) |
+| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems proved; `registered_weights` and `δ_link` **to write** (DESIGN.md §3); required for sampled audits (§7) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
+| Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (§9) | (composition) | `Audit/*` | proved; per-unit terms named |
+| The Flock audit at the oracle layer: the batched session's projection to one table, `2^-195.4` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
@@ -289,12 +316,147 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
-   registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
-   term (DESIGN.md §3).
+1. **Knowledge soundness, the rest** (§1.3). The table theorems are proved. Remaining:
+   - the link term `δ_link` (DESIGN.md §3), which the sampled-audit composition needs;
+   - the canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout in the model.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
    honest-verifier ZK lemma, then single-rewind simulation of one batched session.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
+
+## 9. The audit layer (`Audit/`)
+
+The sampled audit's guarantee, the integrity profile of `docs/audit-protocols.md` §2, over any Boolean circuit, any
+partition, any draw law, and any per-unit proof system. The derivations and the deviations from that plan are in
+DESIGN.md §12. Everything here is proved; the per-unit proof system enters only through named hypotheses.
+
+**The model.** The prover registers `R` (its roots); the verifier draws units from its own randomness after registration;
+one batched session proves the drawn units (`audit`). The **committed transcript** `X` is an analysis function of the
+prover's state at registration (its registration and its session strategy for every draw), so the draw is independent of
+its wrong units; nobody computes it. A unit is **wrong** in `X` when its committed outputs differ from its gates applied
+to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy (`Game.prob … σ`), the form
+`table_sound_exec` takes.
+
+**Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`):
+
+| Hypothesis | Term | Meaning | To be discharged by |
+|---|---|---|---|
+| `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
+| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | the link theorem, to write (flock-soundness review of the extraction analysis, §4d) |
+| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
+| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-195.4`), given `InputsLoweringSound` |
+| `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-195.4`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
+
+Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
+before the session's first coin, not bounds state by state.
+
+**What the reviewer checks here.** The theorems hold for every choice of committed transcript `X` and extractor `ext`,
+so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
+(`Partition.oracle`). At the compiled layer it is the plurality of what the extractor recovers behind each commit
+string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
+roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
+
+**Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the draw misses $B$:
+
+- `audit_le`: $\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset] +
+  \varepsilon_{ks} + \delta_{link}$ for every event $E$ on the committed transcript and the draw;
+- `audit_profile`: $\Pr[\text{accept} \wedge \mathrm{wrong}(X) \in \mathcal B] \le \sup_{B \in \mathcal B} e_L(B) +
+  \varepsilon_{ks} + \delta_{link}$;
+- `audit_count`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks} + \delta_{link}$;
+- `audit_drawn`: drawn units are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
+  the draw;
+- `audits_seq`: audits in sequence fail with at most the sum of their bounds, each holding from every history. Nested,
+  this is the lifetime union bound, with every term against a prover that took part in all the audits;
+- `Partition.audit_cone`: for committed wires $T$ fixed before the draw, $\Pr[\text{accept} \wedge X_T \ne
+  \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
+- `Partition.audit_cone_count`: at least $j$ wrong units in a cone;
+- `Partition.audit_covered`: a cone inside the draw, for wires chosen even after the draw: $\varepsilon_{ks} +
+  \delta_{link} + \delta_{in}$;
+- `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
+  `SessionSound ε` and `InputsSound δ_in`, with $\delta_{link} = 0$.
+
+**Theorems, laws** (`Audit/Law.lean`): `bernoulli_escape`, a Bernoulli($p$) draw's escape $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's escape
+$\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_escape_le_prod`, the product bound $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 -
+k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound; `subset_minimax`, **uniform is
+optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$; `demo_count_590`, the demo's
+point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability at most $2^{-20}$, by exact arithmetic.
+
+**Theorems, two-stage** (`Audit/TwoStage.lean`):
+
+- `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape
+  $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
+  $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
+- `effEscape_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
+- `effEscape_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
+  any second stage, $m_u$ the largest second-stage miss probability inside $u$;
+- `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
+- `Partition.Refines.exists_wrong_fine`: a wrong coarse unit has a wrong fine unit under every interior, the lemma
+  behind (b).
+- `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
+  (`SessionSound₂ ε`), with the link term zero. These are the plan's `two_stage_b_profile` and
+  `two_stage_full_eq_one_stage` as stated there.
+
+**Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
+evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
+
+**Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
+fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
+
+- `two_stage_b_tight`: for every first-stage law, a prover whose chains are all wrong is accepted with probability
+  exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 -
+  k_2/n_v$;
+- `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first draws anything, that exceeds
+  $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
+  `TwoStageLaw.profile` at $m = n_v$) would give. Nested sampling dilutes;
+- `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a wrong chain is accepted
+  with probability 1.
+
+- `effEscape_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
+  the effective escape of any set of chains is its escape under the one-stage Bernoulli($p\,k_2/n_v$) draw,
+  $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
+
+**The Flock instantiation, oracle layer** (`Audit/Flock.lean`, the only audit file that imports Flock's theorems):
+
+- `value_batch_le`: in a batched session, whose tables run concurrently on a schedule the prover chooses, every table
+  accepting is at most as likely as any one table accepting (`Game.value_interleave_le`, table by table);
+- `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-195.4` for `22 ≤ m ≤ 35`;
+- `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-195.4`, given `LoweringSound`;
+- `flock_inputs_sound`: the input unit, likewise, given `InputsLoweringSound`;
+- `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-195.4}$,
+  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-195.4}$ for the uniform $k$-subset;
+- `flock_oracle_drawn`: drawn units correct up to $2^{-195.4}$;
+- `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-195.4}$.
+
+- `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
+  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-195.4}$, given the fine partition's lowering.
+
+The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
+
+**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12):
+
+- `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
+  extractor**. Per drawn unit, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
+  probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
+  on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
+  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+- `flock_compiled_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit with one table per session and
+  the leaf layer registered (the demo's configuration). The knowledge term is `table_knowledge_sound_joint`'s bound
+  for the prover's table strategy after each draw, averaged over the draw (`ksAvg`):
+  $\mathbb E_\omega[2\varepsilon_c^-(\sigma_\omega) + 2(K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK))]$, which is
+  $2\varepsilon_c^- + t\cdot2^{-243.7}$ at the best $K$ under the generic collision bound. Its only named
+  assumption is BCHKS25 Theorem 4.6;
+- `flock_compiled_count`, `flock_compiled_drawn`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
+  \delta_{link}(\sigma)$, and drawn units up to $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
+
+| Named at the compiled layer | Meaning | Discharged by |
+|---|---|---|
+| `ExtractionAnalysis.LinkSound` (`analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
+| `Partition.LoweringSoundC` | a message packing a witness that satisfies the table's statement decodes to values on which every drawn unit is correct | the lowering theorem (level 3), with the `hm96` leaf layout (`decode`) |
+
+**Not yet:** sessions of several compiled tables, where `ks` for a unit is `session_knowledge_sound` for the one table
+of the plan that unit reads (flock-soundness, not yet merged); the serving-tree term when the leaf layer is not
+registered; `LinkSound` itself.
