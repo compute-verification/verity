@@ -58,6 +58,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
+    "pous": ("verity_vllm.pipeline.pous_run", "POUS end to end: serve from the P3 encoding, audit the live server"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
