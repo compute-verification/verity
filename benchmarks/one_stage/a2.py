@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+from verity.ir.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity_one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
@@ -108,7 +109,9 @@ def main() -> int:
     shutil.copy(served / "index.json", out / "index.json")
     text = (st_dir / "circuit.txt").read_text()
     (st_dir / "partition.json").write_text(json.dumps(part, sort_keys=True))
-    st = {"dir": st_dir, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": mine["pin"], "partition_file": st_dir / "partition.json"}
+    (st_dir / "program.json").write_bytes(canonical_json(encode_program(program)))
+    st = {"dir": st_dir, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": mine["pin"], "partition_file": st_dir / "partition.json",
+          "program_file": st_dir / "program.json"}
     header = a0.public_header(st_dir, n)
     fv = header["frame_v3"]
 

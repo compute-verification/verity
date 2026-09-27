@@ -26,7 +26,7 @@ from pathlib import Path
 from verity.commitments.identity import identity_digest
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.ir.codec import program_digest
+from verity.ir.codec import canonical_json, encode_program, program_digest
 from verity.ir.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity_one_stage import audit, draw as D, partition as P, registration as R
@@ -165,16 +165,19 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     archive = out / "archive"
     tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     part = [str(st["partition_file"])] if st.get("partition_file") else []
-    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part],
+    prog = [str(st["program_file"])] if st.get("program_file") else []
+    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part, *prog],
             out / "archive-put.log")
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
+    bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, "--session", str(sessions[-1].parent)], out / "lean-verify.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
+            "partition": v.get("partition"),
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
@@ -245,7 +248,8 @@ def main() -> int:
     st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
     if a.bind:
         (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
-        st["partition_file"] = st["dir"] / "partition.json"
+        (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
+        st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
     header = public_header(st["dir"], n)
     summary["stage_s"] = round(time.time() - t, 1)
     head_digest = program_digest(Program(template))
