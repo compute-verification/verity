@@ -11,21 +11,11 @@ KNOWN_PIECES = {
                  "compares NaNs as a class",
     "F32Mul_v1": "NaN payloads, as F32Add_v1",
 }
-_TOPP = ("the top-p keep word raises unless its committed `splits` operand is one of (1, 2, 4, 8, 16, 32) "
-         "(verity_vllm.program.registry.sampling.topp_mask_word): partial on a committed, private value")
 #: other failures main has, by "<check>/<code> <Definition family>", and why
 KNOWN: dict[str, str] = {
-    "correspondence/reference-not-total TopPMaskWordx16_v1": _TOPP,
-    "correspondence/reference-not-total TopPMaskWordx64_v1": _TOPP,
-    "correspondence/reference-not-total TopPMask_v1": _TOPP,
-    "correspondence/reference-not-total GumbelTopPTokenSelect_v1": _TOPP,
-    "correspondence/reference-not-total GumbelTopPTokenSelectSharedGreedy_v1": _TOPP,
     "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
         "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
         "word.unit_rule partitions the batch's members one by one and does not see it",
-    "partition/committed-unread DeriveRefBf16ToF32_v1": "a Call that is only wiring (Bf16ToF32 per element): its outputs are its "
-        "inputs rearranged, so the cut commits inputs no unit reads (verity.ir.partition.validate_unit_cut counts a returned "
-        "wiring value as no read)",
 }
 
 
