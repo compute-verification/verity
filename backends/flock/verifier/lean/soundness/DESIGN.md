@@ -615,6 +615,32 @@ unnecessary: the audit's hypothesis is per strategy, and `prob ≤ value` closes
 - **The lowering hypothesis** is level 3's lowering theorem, stated for the audit: at the oracle layer a unit's statement
   carries its committed inputs and outputs, and it is satisfiable only if the unit's gates map one to the other.
 
-**Compiled layer, to write.** `KnowledgeSound` is `table_knowledge_sound_joint` (the knowledge-soundness review, §4a),
-averaged over the prover's states with the first wrong drawn unit as target (§4b). `LinkSound` is the link theorem (§4d),
-and `AnchorsSound` is `registered_weights`.
+**Compiled layer.** §12.6 discharges `KnowledgeSound`. `LinkSound` is the link theorem (the knowledge-soundness review,
+§4d), and `AnchorsSound` is `registered_weights`.
+
+### 12.6 The compiled layer: `ε_ks` from `table_knowledge_sound_joint`
+
+- **Why the one-stage analysis is restated.** Two things differ from `Analysis`:
+  - The table's extractor is randomized: it succeeds or fails depending on its `K` reruns after the level-0 cap.
+  - Its bound depends on the prover, through `epsCminus σ` and `adv₀ σ`.
+
+  So `ExtractionAnalysis` carries failure probabilities, and `cover` asks that, for a drawn wrong unit, the extraction
+  and link failure probabilities add up to at least 1. That holds outcome by outcome. The named bounds are functions of
+  the prover's state. The proof of `extraction_audit_le` is `audit_le`'s, with
+  `Pr[accept] ≤ Pr[accept]·(ksFail + linkFail)` at the first wrong drawn unit.
+- **The product is the joint form.** Given the state, the session's fresh run and the extractor's reruns are
+  independent. So `Pr[accept] · E_bs[1(fail bs)] = E_bs[Pr[accept ∧ fail bs]]` (`expect_ind_and_const`,
+  `expectN_const_mul`), which is exactly `table_knowledge_sound_joint`'s left side (`FlockTableC.joint_le`). No Jensen
+  step is needed: the audit keeps the bound per state and averages it over the draw.
+- **The configuration.** One table per session, with the leaf layer registered: the demo's, audit-protocols §0.2.
+  - The verifier derives the table's statement from the draw and the registration (`plan`), so no serving-tree term
+    arises.
+  - With several tables, the joint theorem is needed for one table inside a batched session strategy, where the other
+    tables are part of the prover. That is flock-soundness's to state
+    (`note:audit-lean/20260927T0735Z-handoff-from-audit-lean`, §4).
+- **The link event is the weakest one** (`LinkEvent`): the extraction succeeds, but every close message packing a
+  satisfying witness disagrees with the committed transcript on the unit's wires.
+  - `cover` then needs only the lowering (`LoweringSoundC`) and `correct_congr`.
+  - The link theorem needs only that some satisfying candidate agrees with `X`.
+  - `X` and `decode` are parameters the link theorem supplies. If `X` depends on auxiliary randomness, the bound holds
+    for each draw of it.
