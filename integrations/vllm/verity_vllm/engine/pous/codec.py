@@ -5,11 +5,11 @@ of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `veri
 encoding with it must have the server's root, and `tests/engine/test_pous_codec.py` checks each piece against it.
 
     tag_s   = salt (24 B) || u64(s)
-    Pi      = Feistel-10 on M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : (M + 64) / 2]
+    Pi, Pi2 = Feistel-10 on M + 64 or 2M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : width / 2]
     P_T     = Feistel-10 on M bytes,      F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : M / 2],  T = tag_s || u8(layer) || u16(v)
-    H       = the reference's `KeyDerivation` (`key_mode`): the sponge over Pi, or the overwrite chain over Pi2 (Feistel-10 on
-              2M + 64 bytes), absorbing the header, the parents newest first (c_{v-1} .. c_{v-npar}, npar = min(v, 12)) and a
-              pad10*1 block
+    H       = the reference's `KeyDerivation` (`key_mode`): the overwrite chain over Pi2 (Feistel-10 on 2M + 64 bytes, the
+              default) or the XOR sponge over Pi, absorbing the header, the parents newest first (c_{v-1} .. c_{v-npar},
+              npar = min(v, 12)) and a pad10*1 block
     c1_v    = P_(tag,0,v)(W_v ^ H(tag, 0, v, c1_par(v)))
     c2_v    = P_(tag,1,v)(transpose(c1)_v ^ H(tag, 1, v, c2_par(v)))
 
@@ -74,22 +74,28 @@ def p_t(x: torch.Tensor, tags: torch.Tensor, layer: int, vs: torch.Tensor, inver
     native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse)
 
 
-def key_mode(h) -> str:
-    """Which GPU twin computes the reference `KeyDerivation` `h`, read off its interface: its call schedule for `K` parents
-    (`h.steps`) and the width of its permutation (`h.pi.width`).  `sponge`: a header call, the parents newest first and a pad
-    call, each XORing its block into the rate of `Pi` (`m + 512` bits).  `overwrite`: the header in the chaining value, then
-    `(r, h) <- Pi2(B || h)` for the parents newest first and the pad, `Pi2` of `2m + 512` bits, the key the pad call's `r`."""
+def key_mode(prims) -> str:
+    """Which GPU twin computes the reference `Primitives` `prims`, read off their interfaces: `P_T` must be `FeistelP`, the key
+    derivation's permutation `FeistelPi`, and its call schedule for `K` parents (`h.steps`) and width decide the mode.
+    `overwrite`: the header in the chaining value, then `(r, h) <- Pi2(B || h)` for the parents newest first and the pad, `Pi2`
+    of `2m + 512` bits, the key the pad call's `r` (`OverwriteChain`, the default).  `sponge`: a header call, the parents and
+    the pad each XORed into the rate of `Pi` of `m + 512` bits (`XorSponge`, broken, kept to check the code on).  Anything
+    else, feed-forward modes included, fails closed."""
+    h = prims.h
+    perm = getattr(h, "pi2", None) or getattr(h, "pi", None)
     newest = [(u,) for u in reversed(range(K))]
     steps = [tuple(x) for x in h.steps(range(K))]
-    width = getattr(getattr(h, "pi", None), "width", None)
-    if steps == [(), *newest, ()] and width == 8 * M + primitives.CAPACITY_BITS:
-        return "sponge"
-    if steps == [*newest, ()] and width == 16 * M + primitives.CAPACITY_BITS:
-        return "overwrite"
-    raise NotImplementedError(f"no GPU twin of the key derivation {type(h).__name__} (steps {steps[:2]}..., width {width})")
+    width = getattr(perm, "width", None)
+    feistel = isinstance(prims.p, primitives.FeistelP) and isinstance(perm, primitives.FeistelPi)
+    if feistel and not getattr(h, "feed_forward", False):
+        if steps == [*newest, ()] and width == 16 * M + primitives.CAPACITY_BITS:
+            return "overwrite"
+        if steps == [(), *newest, ()] and width == 8 * M + primitives.CAPACITY_BITS:
+            return "sponge"
+    raise NotImplementedError(f"no GPU twin of {type(h).__name__} over {type(perm).__name__} with {type(prims.p).__name__}")
 
 
-MODE = key_mode(primitives.reference(OPERATING_POINT).h)
+MODE = key_mode(primitives.reference(OPERATING_POINT))
 
 
 def _header(tags: torch.Tensor, layer: int, vs: torch.Tensor, npar: torch.Tensor) -> torch.Tensor:

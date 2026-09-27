@@ -75,9 +75,10 @@ def test_permutations_and_keys_match_the_reference(ext):
     labels = torch.randint(0, 256, (2, P.n, M), dtype=torch.uint8, generator=g).cuda()
     host = [[bytes(r) for r in seg.tolist()] for seg in labels.cpu()]
 
-    width = prims.h.pi.width
+    perm = getattr(prims.h, "pi2", None) or prims.h.pi
+    width = perm.width
     state = torch.randint(0, 256, (2, width // 8), dtype=torch.uint8, generator=g).cuda()
-    want = [to_bytes(prims.h.pi.forward(from_bytes(r, width)), width) for r in _rows(state)]
+    want = [to_bytes(perm.forward(from_bytes(r, width)), width) for r in _rows(state)]
     ext.feistel_rows(state, state.new_empty((2, 0)), codec.PI_DOMAIN, False)
     assert _rows(state) == want
 
@@ -98,31 +99,40 @@ def test_permutations_and_keys_match_the_reference(ext):
     assert torch.equal(x, labels[0, :3])
 
 
-@needs_cuda
-def test_overwrite_chain_keys_match_the_spec(ext, monkeypatch):
-    """`docs/p3-instantiation.md` §1's overwrite chain over the reference's own `FeistelPi` of 2m + 512 bits: h_0 is the header
-    zero-filled to m + 64 B, then (r, h) <- Pi2(B || h) for the parents newest first and the pad block, and the key is r."""
-    from verity_pous.primitives import CAPACITY_BITS, FeistelPi, WideSponge
+def test_the_default_key_derivation_has_a_gpu_twin_and_others_fail_closed():
+    from verity_pous import primitives
 
     from verity_vllm.engine.pous import codec
 
-    monkeypatch.setattr(codec, "MODE", "overwrite")
-    pi2 = FeistelPi(2 * P.m + CAPACITY_BITS)
+    assert codec.MODE == "overwrite"
+    sponge = primitives.Primitives(primitives.XorSponge(P, primitives.FeistelPi(P.m + 512)), primitives.FeistelP(P.m))
+    assert codec.key_mode(sponge) == "sponge"
+    for bad in (primitives.Primitives(primitives.MiyaguchiPreneel(P, primitives.FeistelPi(P.m + 512)), primitives.FeistelP(P.m)),
+                primitives.heuristic_arx(P)):
+        with pytest.raises(NotImplementedError):
+            codec.key_mode(bad)
+
+
+@needs_cuda
+def test_xor_sponge_keys_match_the_reference(ext, monkeypatch):
+    """The sponge mode (broken as `H`, kept so both GPU modes are checked) against the reference's `XorSponge`."""
+    from verity_pous import primitives
+
+    from verity_vllm.engine.pous import codec
+
+    monkeypatch.setattr(codec, "MODE", "sponge")
+    prims = primitives.Primitives(primitives.XorSponge(P, primitives.FeistelPi(P.m + 512)), primitives.FeistelP(P.m))
     g = torch.Generator().manual_seed(4)
     salt = bytes(range(3, 3 + codec.SALT_BYTES))
     labels = torch.randint(0, 256, (1, P.n, M), dtype=torch.uint8, generator=g).cuda()
-    host = [bytes(r) for r in labels[0].cpu().tolist()]
+    ints = [from_bytes(bytes(r), P.m) for r in labels[0].cpu().tolist()]
     vs = torch.tensor([0, 5, 13], device="cuda")
-    got = _rows(codec.keys(codec.segment_tags(salt, [2], "cuda")[[0, 0, 0]], 0, vs, labels, torch.zeros(3, dtype=torch.long,
-                                                                                                        device="cuda")))
+    got = _rows(codec.keys(codec.segment_tags(salt, [2], "cuda")[[0, 0, 0]], 0, vs, labels,
+                           torch.zeros(3, dtype=torch.long, device="cuda")))
     t = tag(salt_value(salt), 2)
     for r, v in enumerate(vs.tolist()):
-        npar = min(v, P.k)
-        h = WideSponge.header(t, 0, v, npar).ljust(M + CAPACITY_BITS // 8, b"\0")
-        for block in [host[v - j] for j in range(1, npar + 1)] + [b"\x01" + bytes(M - 2) + b"\x80"]:
-            out = to_bytes(pi2.forward(from_bytes(block + h, pi2.width)), pi2.width)
-            key, h = out[:M], out[M:]
-        assert got[r] == key, v
+        key, _ = run_prog(key_program(prims.h, key_query(P, t, 0, v, ints)), prims)
+        assert got[r] == to_bytes(key, P.m), v
 
 
 @needs_cuda
