@@ -17,24 +17,37 @@
   Call, then within the Call's cut; the input unit is not a unit (always checked, never drawn).  The width rule's X and W are the
   query's parameters (EXTRAS = 0), integers in 1..2^16.  It applies to a program whose root Calls are `call` or `primitive` nodes
   (`cut`'s step 0); otherwise `evaluate` raises `QueryInapplicable` and `verify` refuses (`query-inapplicable`).
+* **Q_template_instance v0**, `params = {"template": <descriptor id>}` (`TemplatePartition`).  The root body's nodes other than its
+  Input nodes must each be a `call` or a `batch` whose callee's descriptor id (`codec.descriptor_id`, the `callees` entry) is the
+  template.  Each call is one unit and each batch member one unit, numbered in canonical order (node order, then member); the input
+  unit is not a unit; no width rule.  A unit owns every gate of its instance (`gates(i)`, one interval); the committed set is derived
+  as for Q_word: a gate is committed when a unit other than its own reads it (Input gates as the input unit's), or the root returns
+  it (`committed`).  The query is inapplicable to any other program (`query-inapplicable`): a node of another function, a `scan`, a primitive at the root, or no
+  instance of the template (a unit, not a node: a batch of 0 members is no instance).
+* **Q_template_instances v0**, `params = {"templates": [<descriptor id>, ...]}` (non-empty, distinct, order as given).  The same, a node
+  an instance of any listed template, every listed template with at least one instance; the unit order is node order, not list order.
+  `tests/ir/test_template_instance.py` pins both (`template_instance_vectors.json`).  Like every query, both apply only to a
+  topological program (below), so an instance never reads its own gates.
 * **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
   nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
   refuse the same programs (`query-inapplicable`, with the definition, node, argument and reference).
 * `validate` checks the object's form (exact keys; a known query with exactly its parameters); `digest` digests only a valid object.
   `verify` evaluates the query and checks every Call's cut on its derived graph (the invariant, the width rule), and, given what serving
   commits, holds it to the derived committed set: every Call that commits must be given and no other key (`served-missing`,
-  `served-unknown`).  `tests/ir/qword_vectors.json` pins every refusal code of both.
+  `served-unknown`).  `tests/ir/qword_vectors.json` pins every refusal code of both.  For the template queries `verify` checks that the
+  query applies to the program; `served` is Q_word's.
 """
 from __future__ import annotations
 
 import bisect
 import hashlib
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from .codec import canonical_json, encode_program
+from .codec import canonical_json, descriptor_id, encode_program
 from .codec import SCHEMA_V1
-from .cut import WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition
+from .cut import WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition, member_refs
+from .layout import resolve
 from .partition import CutVerdict
 from .program import is_input
 from .refs import Concat, Explicit
@@ -44,9 +57,29 @@ _KEYS = {"format", "program", "query"}
 _QUERY_KEYS = {"name", "version", "params"}
 _SHA512 = re.compile(r"^[0-9a-f]{128}$")
 
-#: the queries a partition may name: (name, version) -> the parameter names, each an integer in 1..PARAM_MAX
-QUERIES: dict[tuple[str, int], tuple[str, ...]] = {("Q_word", 1): ("X", "W")}
 PARAM_MAX = 1 << 16
+
+
+def _is_int(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _templates_ok(t: Any) -> bool:
+    return isinstance(t, list) and len(t) > 0 and all(isinstance(x, str) for x in t) and len(set(t)) == len(t)
+
+
+Q_TEMPLATE_INSTANCE = ("Q_template_instance", 0)
+Q_TEMPLATE_INSTANCES = ("Q_template_instances", 0)
+
+#: the queries a partition may name: (name, version) -> (its parameter names, the check its parameters pass)
+QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any]], bool]]] = {
+    ("Q_word", 1): (("X", "W"), lambda p: all(_is_int(v) and 0 < v <= PARAM_MAX for v in p.values())),
+    Q_TEMPLATE_INSTANCE: (("template",), lambda p: isinstance(p["template"], str)),
+    Q_TEMPLATE_INSTANCES: (("templates",), lambda p: _templates_ok(p["templates"])),
+}
+
+#: one-stage's name for the template queries' refusal
+QueryRefused = QueryInapplicable
 
 
 def program_sha512(program_or_desc: Any) -> str:
@@ -61,6 +94,20 @@ def query(X: int = 16, W: int = 32) -> dict[str, Any]:
     if not all(_is_int(v) and 0 < v <= PARAM_MAX for v in (X, W)):
         raise ValueError(f"Q_word's X and W are integers in 1..{PARAM_MAX}, not {X!r}, {W!r}")
     return {"name": "Q_word", "version": 1, "params": {"X": X, "W": W}}
+
+
+def _template_id(t: Any) -> str:
+    return t if isinstance(t, str) else descriptor_id(t)
+
+
+def template_instance_query(template: Any) -> dict[str, Any]:
+    """`Q_template_instance` v0 over `template` (a Definition, written as its descriptor id, or that id)."""
+    return {"name": Q_TEMPLATE_INSTANCE[0], "version": Q_TEMPLATE_INSTANCE[1], "params": {"template": _template_id(template)}}
+
+
+def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
+    """`Q_template_instances` v0 over `templates`, in the order given."""
+    return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [_template_id(t) for t in templates]}}
 
 
 def build(program: Any, q: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -100,18 +147,13 @@ def validate(obj: Any) -> CutVerdict:
     if not isinstance(q, Mapping) or set(q) != _QUERY_KEYS:
         fail("query-keys", sorted(set(q) ^ _QUERY_KEYS, key=repr) if isinstance(q, Mapping) else q)
     else:
-        names = QUERIES.get((q["name"], q["version"])) if isinstance(q["name"], str) and _is_int(q["version"]) else None
-        if names is None:
+        known = QUERIES.get((q["name"], q["version"])) if isinstance(q["name"], str) and _is_int(q["version"]) else None
+        if known is None:
             fail("query-unknown", [q["name"], q["version"]])
-        elif not isinstance(q["params"], Mapping) or set(q["params"]) != set(names) or \
-                not all(_is_int(v) and 0 < v <= PARAM_MAX for v in q["params"].values()):
+        elif not isinstance(q["params"], Mapping) or set(q["params"]) != set(known[0]) or not known[1](q["params"]):
             fail("query-params", q["params"])
     codes = tuple(bad)
     return CutVerdict(not codes, codes, {k: {"n": len(v), "gates": v[:64]} for k, v in bad.items()})
-
-
-def _is_int(x: Any) -> bool:
-    return isinstance(x, int) and not isinstance(x, bool)
 
 
 def calls(program: Any) -> list[tuple[int, Any]]:
@@ -170,6 +212,69 @@ class Partition:
         return derived_committed(self.graph(p), self.owner(p))
 
 
+class TemplatePartition:
+    """`Q_template_instance` v0 or `Q_template_instances` v0 applied to a program: every instance of a listed template is one unit.
+    `ranges`: per root node, (root-body index, template, first unit, units); `population`; `locate(i)` -> (root-body index, member);
+    `gates(i)`, the instance's gates [lo, hi); `inputs(i)` / `outputs(i)`, the gates its parameter / result leaves resolve to; the
+    derived `committed()` set."""
+
+    def __init__(self, program: Any, q: Mapping[str, Any]) -> None:
+        kind = (q.get("name"), q.get("version"))
+        if kind not in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES) or not isinstance(q.get("params"), Mapping) or \
+                set(q["params"]) != set(QUERIES[kind][0]) or not QUERIES[kind][1](q["params"]):
+            raise QueryInapplicable(f"not a template-instance query with its parameters: {dict(q)!r}", {"query": dict(q)})
+        self.query = dict(q)
+        self.templates = [q["params"]["template"]] if kind == Q_TEMPLATE_INSTANCE else list(q["params"]["templates"])
+        self.program = program
+        self.ranges: list[tuple[int, str, int, int]] = []
+        nodes = program.root.body.nodes
+        at = 0
+        for k, fn in calls(program):
+            tid = descriptor_id(fn)
+            if nodes[k].form not in ("call", "batch") or tid not in self.templates:
+                raise QueryInapplicable(f"root node {k} is a {nodes[k].form} of {tid!r}: an instance is a call or batch of one of {self.templates!r}",
+                                        {"call": k, "form": nodes[k].form, "definition": tid})
+            n = nodes[k].n if nodes[k].form == "batch" else 1
+            self.ranges.append((k, tid, at, n))
+            at += n
+        missing = [t for t in self.templates if not any(tid == t and n for _k, tid, _a, n in self.ranges)]
+        if missing:
+            raise QueryInapplicable(f"the program has no instance of {missing!r}", {"missing": missing})
+        self.population = at
+        self._start = [a for _k, _t, a, _n in self.ranges]
+
+    def locate(self, i: int) -> tuple[int, int]:
+        if not 0 <= i < self.population:
+            raise IndexError(f"unit {i} outside 0..{self.population - 1}")
+        k, _t, a, _n = self.ranges[bisect.bisect_right(self._start, i) - 1]
+        return k, i - a
+
+    def gates(self, i: int) -> tuple[int, int]:
+        k, m = self.locate(i)
+        fn = self.program.root.body.nodes[k].fn
+        lo = self.program.root.body.offsets[k] + m * fn.gates
+        return lo, lo + fn.gates
+
+    def inputs(self, i: int) -> list[int]:
+        k, m = self.locate(i)
+        node, rs = self.program.root.body.nodes[k], self.program.circuit.root_scope
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        return [resolve(rs, r) for a, ax in zip(node.args, axes) for r in (member_refs(a, ax, m) if node.form == "batch" else a.refs)]
+
+    def outputs(self, i: int) -> list[int]:
+        k, m = self.locate(i)
+        L = self.program.root.body.nodes[k].fn.out_leaves
+        rs = self.program.circuit.root_scope
+        return [resolve(rs, ("n", k, m * L + j)) for j in range(L)]
+
+    def committed(self) -> list[int]:
+        """The gates a unit other than their own reads (an instance's inputs never lie in the instance), and the root's outputs."""
+        out = set(self.program.circuit.root_outputs())
+        for i in range(self.population):
+            out.update(self.inputs(i))
+        return sorted(out)
+
+
 def order_violation(program: Any) -> dict | None:
     """The first reference of the program that names neither a parameter of its body nor an earlier node of it (a body's `ret` may
     name any of its nodes), over every body the root reaches, root first and callees in node order, each Definition once; None when the
@@ -210,13 +315,21 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     return None
 
 
-def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition:
+def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition | TemplatePartition:
     """The query `q` (default `Q_word{16, 32}` v1) applied to `program`: `QueryInapplicable` when the program is not topological
     (`order_violation`), checked once here for every query, or when the query does not apply to it."""
     bad = order_violation(program)
     if bad is not None:
         raise QueryInapplicable(f"{bad['definition']} node {bad['node']} names {bad['reference']}: not a parameter or an earlier node", bad)
-    return Partition(program, dict(q or query()), memo)
+    q = dict(q or query())
+    if (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES):
+        return TemplatePartition(program, q)
+    return Partition(program, q, memo)
+
+
+def ranges_digest(part: TemplatePartition) -> str:
+    """SHA-512 over a template partition's units: `"verity/partition/v1/ranges\\0" || canon([[root-body index, template, first, count], ...])`."""
+    return hashlib.sha512(f"{FORMAT}/ranges".encode() + b"\0" + canonical_json([list(r) for r in part.ranges])).hexdigest()
 
 
 def owners_digest(part: Partition) -> str:
@@ -234,15 +347,21 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     computing gates (compacted, in layout order; not the Call's raw gate indices).  Its keys must be exactly Calls, including every
     Call whose derived committed set is not empty (`served-missing`: such a Call not given; `served-unknown`: a key that is no Call;
     `served-malformed`: a Call's entry that is not a list of distinct non-negative integers);
-    each given Call is held to its derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`, under `cut`)."""
+    each given Call is held to its derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`, under `cut`).  A template
+    query commits whole instances' inputs and results; `served` with one is refused (`served-unsupported`)."""
     v = validate(obj)
     if not v.ok:
         return v
     bad: dict[str, list] = {}
     if obj["program"] != program_sha512(program):
         bad["program"] = [obj["program"]]
+    template = (obj["query"]["name"], obj["query"]["version"]) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
+    if template and served is not None:
+        bad["served-unsupported"] = [obj["query"]["name"]]
     try:
-        _verify_calls(evaluate(program, obj["query"]), served, bad)
+        part = evaluate(program, obj["query"])
+        if not template:
+            _verify_calls(part, served, bad)
     except QueryInapplicable as e:
         bad["query-inapplicable"] = [e.detail]
     return _verdict(bad)
@@ -282,5 +401,6 @@ def _verdict(bad: dict[str, list]) -> CutVerdict:
     return CutVerdict(not codes, codes, {k: {"n": len(x), "gates": x[:64]} for k, x in bad.items()})
 
 
-__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
+__all__ = ["FORMAT", "QUERIES", "PARAM_MAX", "QueryInapplicable", "QueryRefused", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCES",
+           "template_instance_query", "template_instances_query", "TemplatePartition", "ranges_digest", "program_sha512", "query", "build", "canonical", "digest", "validate", "calls", "Partition", "evaluate",
            "owners_digest", "verify"]

@@ -19,9 +19,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     references live here: `cut` (the query `Q_word` v1's canonical evaluator:
     each Call's computing graph, the cut, the width rule in bits; the algorithm
     is written in its docstring), `partition.validate_unit_cut` (the invariant)
-    and `partition_object` (`verity/partition/v1` = program digest + query:
+    and `partition_object` (`verity/partition/v1` = program digest + query,
+    `Q_word` v1 or the instance-granular `Q_template_instance(s)` v0:
     `evaluate`, `locate`, `validate`, `verify`; pinned by
-    `tests/ir/partition_vectors.json`).
+    `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
