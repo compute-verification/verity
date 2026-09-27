@@ -42,11 +42,12 @@ AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|FlockSoundness\.Game\.|FlockSound
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib and each other, so any backend can instantiate them
-    (`soundness/DESIGN.md` §12). `Flock.lean`, the Flock instantiation, is the one file that imports Flock's theorems.
-    No proof is admitted."""
+    (`soundness/DESIGN.md` §12). The Flock instantiations, `Flock.lean` (oracle layer) and `FlockCompiled.lean`, are
+    the only files that import Flock's theorems. No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
-    assert files and (AUDIT / "Flock.lean") in files
-    bad = [f"{p.name}: {line}" for p in files if p.name != "Flock.lean" for line in p.read_text().splitlines()
+    flock = {"Flock.lean", "FlockCompiled.lean"}
+    assert files and flock <= {p.name for p in files}
+    bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
            if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
     assert not bad, bad
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
