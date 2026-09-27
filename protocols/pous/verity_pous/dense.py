@@ -103,9 +103,10 @@ class DenseParams:
                 "segments": self.segments}
 
 
-SECURE_FIRST = DenseParams(512, 524_480)
-"""The secure-first point (POUS `docs/scheme-choice-e2e.md`): 512 blocks of 65,560 B per segment (33.6 MB), audited
-at `D = 5` calls of at least 483 µs with `k = 106`."""
+SECURE_FIRST = DenseParams(512, 524_288)
+"""The secure-first point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls
+of at least 483 µs with `k = 106`: the point `dense_meets_64` certifies (POUS `lean/submissions/dense/DenseReCert.lean`,
+`docs/scheme-choice-e2e.md`)."""
 
 
 def dom(t: int, i: int) -> int:

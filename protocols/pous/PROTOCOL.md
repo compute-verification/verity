@@ -16,7 +16,8 @@ The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set o
 
 ## The dense scheme (secure-first)
 
-`dense.SECURE_FIRST` has `B = 512` blocks of `ℓ = 65,560` B per segment, so a segment is 33.6 MB. The audit runs with
+`dense.SECURE_FIRST` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
+point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
 `k = 106` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
@@ -192,8 +193,12 @@ the timed audit and the simulator with the dense codec as default.
 
 ## Not here yet
 
-- A GPU codec for the dense scheme (#172's is P3's).
+Done in the random-oracle model (POUS `lean/submissions/dense/DenseReCert.lean`): the dense re-certificate at
+`SECURE_FIRST`'s point (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB). Pending:
 
+- `ChainExPostFacto`, which carries them from the random oracle to the overwrite chain (`sponge-dense`), with the
+  multi-segment lemma's global block index aligned to the code's per-segment `tag_s` (`DISCREPANCIES.md` D2, D5).
+- A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at
   3 calls, and `n10prime` over all segments (`DISCREPANCIES.md`).

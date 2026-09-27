@@ -8,7 +8,7 @@ A spec-level reference for POUS, the proof-of-unique-storage encoding, with two 
   connector and a tweakable `P` (Lean's `p3Scheme`).
 
 It matches the Lean models' definitions and is the oracle for GPU kernels. Pure Python, stdlib plus `verity`. It is
-slow by design: a 33.6 MB dense segment encodes in about 8 minutes, and a 14.4 MB P3 segment in about 21 s.
+slow by design: a 32 MiB dense segment encodes in about 8 minutes, and a 14.4 MB P3 segment in about 21 s.
 
 `PROTOCOL.md` describes the lifecycle, the API and the byte formats. `DISCREPANCIES.md` lists where the Lean model,
 the prose spec and this code differ.
