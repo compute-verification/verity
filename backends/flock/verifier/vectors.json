@@ -4271,6 +4271,44 @@
     "forgeries": "art:3104c2f9/gemm-k1024/extra",
     "selftest_note": "every selftest case that runs a session and the draw cases (unit_draw_session, unit_draw_from_file, unit_draw_ignored_refused); m = 26: replay on a machine with more than 15 GB",
     "agreement": "r20260927-074433-43a6 (on the pod): 27/27"
+   },
+   {
+    "tags": "verity/flock-circuit (shared-row public files: header shared_rows, tables and u32 refs)",
+    "pr83": "967b8d06",
+    "generator": "stage.py in the artifact (PR #83 967b8d06's verity_flock.circuit.write with share_rows); flock-circuit selftest --record-dir (967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:0eea3abf/rope-shared/stage/circuit.txt",
+     "public": "art:0eea3abf/rope-shared/stage/pub-6.bin",
+     "partition": "art:0eea3abf/partition.json",
+     "program": "art:0eea3abf/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "RoPE d64, six instances repeating three rows (shared_rows x: 3, cs: 3; refs 0,1,0,2,1,0) at [3, 17, 40, 1001, 1500, 1999] of set 12's Q_template_instance population, units derived"
+    },
+    "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
+    "selftest": [
+     "art:0eea3abf/rope-shared/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session (row_ref_claim_false: instance 0's x ref names another row; its false statement, like digest_claim_false's and output_claim_false's, is its own pub.bin, so both verifiers reject at the proof's openings), and the draw cases",
+    "agreement": "23/23 (local, 2026-09-27T10:05Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (68ae79f2's identity text, a per-instance file)",
+    "pr83": "967b8d06",
+    "generator": "the same instances as set 14 as a per-instance file (stage.py per); selftest records as set 14's",
+    "statement": {
+     "circuit": "art:0eea3abf/rope-shared/stage/circuit.txt",
+     "public": "art:0eea3abf/rope-per/stage/pub-6.bin",
+     "partition": "art:0eea3abf/partition.json",
+     "program": "art:0eea3abf/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "set 14's instances without shared_rows: the file reads as before, under the 967b8d06 statement name"
+    },
+    "lean_statement": "verity/flock-circuit@967b8d06+seed-injection",
+    "selftest": [
+     "art:0eea3abf/rope-per/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session, and the draw cases (no row_ref_claim_false: no table)",
+    "agreement": "22/22 (local, 2026-09-27T10:05Z)"
    }
   ],
   "recorded_runs": [

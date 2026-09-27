@@ -1,5 +1,6 @@
 import FlockSoundness.Audit.OneStage
 import FlockSoundness.Audit.TwoStage
+import FlockSoundness.Game.Batch
 import FlockSoundness.Instance
 
 /-!
@@ -24,8 +25,9 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_two_stage_sound`, `flock_two_stage_full_profile`: two-stage (b1) on Flock, one-stage over
   the coarse partition plus `2^-195.4`.
 
-The only other hypothesis is BCHKS25 Theorem 4.6 (`Assumptions.BCHKS25Thm46`). This is the only
-file of `Audit/` that imports the Flock theorems.
+The only other hypothesis is BCHKS25 Theorem 4.6 (`Assumptions.BCHKS25Thm46`). Of `Audit/`, only
+this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`) import the Flock
+theorems.
 -/
 
 namespace FlockSoundness.Audit
@@ -33,12 +35,7 @@ namespace FlockSoundness.Audit
 open Game Model Accounting
 open scoped ENNReal
 
-/-! ## Tables run concurrently -/
-
-/-- A batched session: its interactions run concurrently, the prover choosing the schedule. -/
-def batch {α : Type} : List (Game α) → Game (List α)
-  | [] => .ret []
-  | g :: gs => (g.interleave (batch gs)).map fun x => x.1 :: x.2
+/-! ## Tables run concurrently (`Game.batch`) -/
 
 /-- **Projection to one table.** Every interaction of a batch satisfying `Q` is at most as likely,
 for an optimal prover, as any one of them satisfying `Q`. -/

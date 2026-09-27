@@ -32,6 +32,8 @@ import numpy as np
 from verity.ir.layout import WIDE_FAN_IN, resolve
 from verity.ir.refs import Affine, Concat, Strided
 
+from verity.ir import cut as CUT
+
 from verity_vllm.query import call_scope as CS
 from verity_vllm.query.program_view import iter_instance_rows, spec_base, spec_statics
 
@@ -121,7 +123,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
         n = _ret_leaves(fn)
         if not params:
             r = Support({}, {}, np.zeros(n, np.int64))
-        elif fn.id in CS.WIRING:
+        elif fn.id in CUT.WIRING:
             r = Support({}, {}, np.full(n, full, np.int64))
         else:
             r = Support({full: 1}, {full: frozenset({fn.id})}, np.full(n, full, np.int64))
@@ -146,7 +148,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
             elif ax == 0:
                 cols.append(_leaf_masks(a.refs, pmask, outs).reshape(n, -1))
             else:
-                cols.append(np.stack([_leaf_masks(CS._member_refs(a, ax, m), pmask, outs) for m in range(n)]))
+                cols.append(np.stack([_leaf_masks(CUT.member_refs(a, ax, m), pmask, outs) for m in range(n)]))
         if not hasattr(e, "body"):
             sub = analyze(e, memo)
             if sub.gates:
@@ -165,7 +167,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
                 for c in cols:
                     if c.shape[1]:
                         red |= np.bitwise_or.reduce(c, axis=1)
-                outs.append(np.repeat(red if e.id in CS.WIRING else np.zeros(n, np.int64), sub.out.shape[0]))
+                outs.append(np.repeat(red if e.id in CUT.WIRING else np.zeros(n, np.int64), sub.out.shape[0]))
             continue
         pure = all((c.shape[1] == 0) or bool((c == c[:, :1]).all()) for c in cols)
         if pure:
@@ -198,7 +200,7 @@ def _wide(gate: Any, call: Any) -> Iterator[Any]:
     m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
     at_call = s.spec is call.spec and s.offset == call.offset
     for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
-        refs = CS._member_refs(a, ax, m)
+        refs = CUT.member_refs(a, ax, m)
         if at_call and isinstance(refs, Affine) and refs.space == "p":
             yield ("p", refs.idx)
             continue
@@ -207,7 +209,7 @@ def _wide(gate: Any, call: Any) -> Iterator[Any]:
 
 
 def _gates(fn: Any) -> tuple[Any, Any, int, int, list[int]]:
-    c, call = CS._call_scope(fn)
+    c, call = CUT.call_scope(fn)
     bounds, t = [], 0
     for _, ty in _params(fn):
         t += int(ty.leaves)
@@ -237,7 +239,7 @@ def _expand(fn: Any, leaf_masks: np.ndarray) -> Support:
             else:
                 m |= int(leaf_masks[o])
         mask[j] = m
-        if m and gate.prim.params and gate.prim.id not in CS.WIRING:
+        if m and gate.prim.params and gate.prim.id not in CUT.WIRING:
             g[m] += 1
             p[m].add(gate.prim.id)
     ret = []
@@ -525,7 +527,7 @@ def _structure(fn: Any, memo: dict) -> tuple[list[tuple[str, tuple[int, ...], bo
             o_ = g.operands
             wide = len(o_) > WIDE_FAN_IN
             ops = () if wide else tuple(o - lo if lo <= o < lo + n else -1 - o for o in o_)
-            gates.append((g.prim.id if not wide else "", ops, bool(g.prim.params) and g.prim.id not in CS.WIRING))
+            gates.append((g.prim.id if not wide else "", ops, bool(g.prim.params) and g.prim.id not in CUT.WIRING))
         got = memo[key] = (gates, bounds)
     return got
 
@@ -592,7 +594,7 @@ def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
         for m in range(n_members(node) if batch else 1):
             args = []
             for a, ax in zip(node.args, node.axes if batch else (None,) * len(node.args)):
-                refs = CS._member_refs(a, ax, m) if batch else a.refs
+                refs = CUT.member_refs(a, ax, m) if batch else a.refs
                 if isinstance(refs, Strided) and refs.count > LONG_OPERAND * (refs.inner if refs.inner_stride == 1 else 1):
                     args.append({"strided": [refs.space, refs.idx, refs.base, refs.inner, refs.outer_stride, refs.inner_stride, refs.count]})
                 else:

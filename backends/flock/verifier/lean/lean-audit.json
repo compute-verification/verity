@@ -9,43 +9,94 @@
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it"
  },
  "pins": {
-  "Flock.climb_binding": {
+  "Flock.MerklePair.hm96_inputs": {
    "signature": [
-    "Flock.climb_binding (ms : Flock.MerkleScheme) (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat) :",
-    "  s1.length = s2.length → a ≠ b → Flock.climb ms a idx s1 = Flock.climb ms b idx s2 → ms.Collision"
+    "Flock.MerklePair.hm96_inputs (p : Flock.MerklePair) (h : Flock.MerklePair.Collides Flock.MerkleScheme.hm96Sha512 p) :",
+    "  p.hm96Inputs.fst ≠ p.hm96Inputs.snd ∧ Flock.Sha512.hash p.hm96Inputs.fst = Flock.Sha512.hash p.hm96Inputs.snd"
    ],
    "assumptions": [],
-   "type_hash": "00000000e358eaf8"
+   "type_hash": "00000000fe81cab5"
+  },
+  "Flock.MerklePair.sha256_inputs": {
+   "signature": [
+    "Flock.MerklePair.sha256_inputs (id : String) (p : Flock.MerklePair)",
+    "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha256 id) p) :",
+    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha256.hash p.shaInputs.fst = Flock.Sha256.hash p.shaInputs.snd"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000e191f17"
+  },
+  "Flock.MerklePair.sha512_inputs": {
+   "signature": [
+    "Flock.MerklePair.sha512_inputs (id : String) (p : Flock.MerklePair)",
+    "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha512 id) p) :",
+    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha512.hash p.shaInputs.fst = Flock.Sha512.hash p.shaInputs.snd"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000f3d5d62d"
+  },
+  "Flock.MerkleScheme.all_sized": {
+   "signature": ["Flock.MerkleScheme.all_sized (ms : Flock.MerkleScheme) : ms ∈ Flock.MerkleScheme.all → ms.Sized"],
+   "assumptions": [],
+   "type_hash": "0000000039d140ab"
+  },
+  "Flock.MerkleScheme.collision_hash": {
+   "signature": [
+    "Flock.MerkleScheme.collision_hash (ms : Flock.MerkleScheme) :",
+    "  ms ∈ Flock.MerkleScheme.all → ms.Collision → Flock.Sha256.Collision ∨ Flock.Sha512.Collision"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003ffc6eca"
+  },
+  "Flock.climb_binding": {
+   "signature": [
+    "Flock.climb_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat) :",
+    "  s1.length = s2.length →",
+    "    (∀ (x : ByteArray), x ∈ s1 → x.size = ms.digestLen) →",
+    "      (∀ (x : ByteArray), x ∈ s2 → x.size = ms.digestLen) →",
+    "        a.size = ms.digestLen →",
+    "          b.size = ms.digestLen →",
+    "            a ≠ b →",
+    "              Flock.climb ms a idx s1 = Flock.climb ms b idx s2 →",
+    "                Flock.MerklePair.Collides ms (Flock.climbPair ms s1 s2 a b idx)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000fe23f657"
   },
   "Flock.merkleCheck_opens": {
    "signature": [
     "Flock.merkleCheck_opens (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)",
-    "  (rows : Array (Array Flock.F128)) (siblings : Array ByteArray) (lanes : Nat)",
-    "  (h : Flock.merkleCheck ms cap c d positions rows siblings lanes = Except.ok ()) (j : Nat) (hj : j < positions.size) :",
-    "  Flock.opens ms cap c d lanes positions[j]! rows[j]! (Flock.sibsOf siblings (d - c) j) = true"
+    "  (rows : Array (Array Flock.F128)) (siblings salts : Array ByteArray) (lanes : Nat)",
+    "  (h : Flock.merkleCheck ms cap c d positions rows siblings salts lanes = Except.ok ()) (j : Nat)",
+    "  (hj : j < positions.size) :",
+    "  Flock.opens ms cap c d lanes positions[j]! rows[j]! (salts.getD j ByteArray.empty) (Flock.sibsOf siblings (d - c) j) =",
+    "    true"
    ],
    "assumptions": [],
-   "type_hash": "000000003673a1c9"
+   "type_hash": "00000000192488c1"
   },
   "Flock.merkle_binding": {
    "signature": [
-    "Flock.merkle_binding (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)",
-    "  (rows1 rows2 : Array (Array Flock.F128)) (sib1 sib2 : Array ByteArray) (lanes : Nat)",
-    "  (h1 : Flock.merkleCheck ms cap c d positions rows1 sib1 lanes = Except.ok ())",
-    "  (h2 : Flock.merkleCheck ms cap c d positions rows2 sib2 lanes = Except.ok ()) (j : Nat) (hj : j < positions.size)",
-    "  (hr : rows1[j]! ≠ rows2[j]!) : ms.Collision"
+    "Flock.merkle_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d : Nat)",
+    "  (positions : Array Nat) (rows1 rows2 : Array (Array Flock.F128)) (sib1 sib2 salt1 salt2 : Array ByteArray)",
+    "  (lanes : Nat) (h1 : Flock.merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = Except.ok ())",
+    "  (h2 : Flock.merkleCheck ms cap c d positions rows2 sib2 salt2 lanes = Except.ok ()) (j : Nat)",
+    "  (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) :",
+    "  Flock.MerklePair.Collides ms (Flock.merklePair ms c d positions rows1 rows2 sib1 sib2 salt1 salt2 j)"
    ],
    "assumptions": [],
-   "type_hash": "000000007698f2b1"
+   "type_hash": "00000000df3a73f7"
   },
   "Flock.opens_binding": {
    "signature": [
-    "Flock.opens_binding (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d lanes pos : Nat) (r1 r2 : Array Flock.F128)",
-    "  (s1 s2 : List ByteArray) (h1 : Flock.opens ms cap c d lanes pos r1 s1 = true)",
-    "  (h2 : Flock.opens ms cap c d lanes pos r2 s2 = true) (hr : r1 ≠ r2) : ms.Collision"
+    "Flock.opens_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d lanes pos : Nat)",
+    "  (r1 r2 : Array Flock.F128) (y1 y2 : ByteArray) (s1 s2 : List ByteArray)",
+    "  (hw1 : ∀ (x : ByteArray), x ∈ s1 → x.size = ms.digestLen) (hw2 : ∀ (x : ByteArray), x ∈ s2 → x.size = ms.digestLen)",
+    "  (h1 : Flock.opens ms cap c d lanes pos r1 y1 s1 = true) (h2 : Flock.opens ms cap c d lanes pos r2 y2 s2 = true)",
+    "  (hr : r1 ≠ r2) : Flock.MerklePair.Collides ms (Flock.opensPair ms pos r1 y1 s1 r2 y2 s2)"
    ],
    "assumptions": [],
-   "type_hash": "0000000080c6f70b"
+   "type_hash": "000000002d308eb1"
   },
   "Flock.squeeze_answers": {
    "signature": [
@@ -71,10 +122,42 @@
   }
  },
  "reads": {
+  "FlockProofs.Hash": {
+   "digest": "a481dc312234461e46ba285cadf4b271",
+   "definitions": {
+    "Flock.Hm96.leafPair": "b4bf28ca826525ea",
+    "Flock.Hm96.xor64": "dbce741ca19bc58e",
+    "Flock.Sha256.Collision": "7b84693561fac7e7",
+    "Flock.Sha512.Collision": "e8c4eb0d16296d82"
+   },
+   "pins": ["Flock.MerklePair.hm96_inputs", "Flock.MerkleScheme.collision_hash"]
+  },
   "FlockProofs.Merkle": {
-   "digest": "89e5d9d71d02d76b750ef406a53d6860",
-   "definitions": ["Flock.MerkleScheme.Collision"],
-   "pins": ["Flock.climb_binding", "Flock.merkle_binding", "Flock.opens_binding"]
+   "digest": "a5741b8c677009f13330f0fe789962b5",
+   "definitions": {
+    "Flock.MerklePair": "29e02b12b83d0586",
+    "Flock.MerklePair.Collides": "8c9bcfd8351cc8e0",
+    "Flock.MerklePair.hm96Inputs": "2b06fe8642cf0aca",
+    "Flock.MerklePair.leaf": "2bd6284720240b5d",
+    "Flock.MerklePair.node": "eb392dedaec4fb2a",
+    "Flock.MerklePair.render": "3648e1c7232d5441",
+    "Flock.MerklePair.shaInputs": "8f02bf17a0f700e3",
+    "Flock.MerkleScheme.Collision": "dd21237148cedcd8",
+    "Flock.MerkleScheme.Sized": "b52d9f2a32a77c84",
+    "Flock.climbPair": "fa1dd289df953f42",
+    "Flock.merklePair": "2957882c9ea81728",
+    "Flock.opensPair": "503b97dd1cb6dff0"
+   },
+   "pins": [
+    "Flock.MerklePair.hm96_inputs",
+    "Flock.MerklePair.sha256_inputs",
+    "Flock.MerklePair.sha512_inputs",
+    "Flock.MerkleScheme.all_sized",
+    "Flock.MerkleScheme.collision_hash",
+    "Flock.climb_binding",
+    "Flock.merkle_binding",
+    "Flock.opens_binding"
+   ]
   }
  }
 }

@@ -110,6 +110,25 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.aligned_lockTable
 #print axioms FlockSoundness.advRT_eq
 #print axioms FlockSoundness.table_sound_compiled_of_table
+-- M1's padded level 0 (§1.1): the novel basis's degree structure, the padded code's list size,
+-- MCA and decoding, Ligerito with the padded level 0, the phases over any list, the table theorem
+-- for any padding and extra lanes, and its value at M1's parameters
+#print axioms FlockSoundness.xP_natDegree_le
+#print axioms FlockSoundness.card_closeRows_le
+#print axioms FlockSoundness.prCoin_pad_mca_le
+#print axioms FlockSoundness.decode_pad
+#print axioms FlockSoundness.value_drawKs_affine_le
+#print axioms FlockSoundness.value_drawKs_extras_le
+#print axioms FlockSoundness.phaseA0Pad
+#print axioms FlockSoundness.ligeritoPad_sound
+#print axioms FlockSoundness.zerocheck_phase_of_list
+#print axioms FlockSoundness.lincheck_phase_of_list
+#print axioms FlockSoundness.opening_phase_of_list
+#print axioms FlockSoundness.link_sound_of_list
+#print axioms FlockSoundness.rep_sound_pad
+#print axioms FlockSoundness.table_sound_pad
+#print axioms FlockSoundness.Accounting.padTableError_le_m1
+#print axioms FlockSoundness.table_sound_pad_m1
 #print axioms FlockSoundness.Extract.expect_off_firstTable_le'
 #print axioms FlockSoundness.Extract.tail_of_fixed
 #print axioms FlockSoundness.Extract.joint_of_fixed
@@ -130,6 +149,16 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.joint_le_B'
 #print axioms FlockSoundness.one_le_fail_add_B
 #print axioms FlockSoundness.one_le_fail_add_B'
+-- the compiled lowering: the audit's circuit is the rows the verifier parses; a satisfied table makes
+-- every placed unit correct, for every template; a program's circuit makes every unit its rows
+#print axioms FlockSoundness.Audit.Partition.IsRowsUnit.correct
+#print axioms FlockSoundness.rowsSat_of_satisfies
+#print axioms FlockSoundness.lowering_sound
+#print axioms FlockSoundness.Placement.one_eq
+#print axioms FlockSoundness.UnitPlace.correct
+#print axioms FlockSoundness.UnitPlace.decode_one
+#print axioms FlockSoundness.Prog.topo
+#print axioms FlockSoundness.Prog.isRowsUnit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
@@ -203,3 +232,12 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_count
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
+#print axioms FlockSoundness.Audit.Partition.loweringSoundC_of_place
+-- several tables per session: the protocol's batched session, a decoder per drawn unit
+#print axioms FlockSoundness.Audit.atTgt_le
+#print axioms FlockSoundness.Audit.Partition.prob_batchedSession
+#print axioms FlockSoundness.Audit.Partition.loweringSoundB_of_place
+#print axioms FlockSoundness.Audit.Partition.analysisB
+#print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSound
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn

@@ -1479,7 +1479,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         if _latest(c.labels, "omitted"):
             V.omitted_of[c.art] = _latest(c.labels, "omitted")
-        dom = _latest(c.labels, "domain") or {"finite": "finite-only", "total": "total"}.get(str(c.meta["workload_fingerprint"].get("domain")))
+        fp_dom = contract.identity(c.meta["workload_fingerprint"])["domain"]
+        dom = _latest(c.labels, "domain") or (fp_dom if fp_dom in contract.DOMAINS else None)
         if dom:
             V.domain_of[c.art] = str(dom)
         if c.key_class:
@@ -2031,7 +2032,7 @@ HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("
                   "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
 #: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
 #: is cited once, as the ``random-oracle`` model.
-HASH_PROPERTIES = (("collision resistance", "cr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
+HASH_PROPERTIES = (("collision resistance", "cr"), ("expected-time collision resistance", "ecr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
                    ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
 #: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
