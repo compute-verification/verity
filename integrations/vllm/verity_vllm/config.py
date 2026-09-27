@@ -293,6 +293,14 @@ class CommitConfig:
                                   help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
                                        "first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written by the "
                                        "guarded-max FA2/FA3 tap build; the manifest and the run root then differ from the record")
+    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
+                             help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
+                                  "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "
+                                  "root then differ from the record")
+    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="0",
+                            help="1 opts in, never the record: commit each TP rank's vocabulary-range values per token row (verity_vllm.query."
+                                 "vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source); the manifest and run "
+                                 "root then differ from the record")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs
@@ -321,6 +329,7 @@ class RunEnv:
     hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build, used when --guarded-max-tap 1")
     hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build, used when --guarded-max-tap 1")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used when --norm-tap 1")
+    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used when --router-tap 1")
     hot_root: str = option("--hot-root", env="HOT_ROOT")
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
