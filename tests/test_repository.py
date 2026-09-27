@@ -28,8 +28,8 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
-#: The Flock soundness package's named hypotheses: its ``ASSUMPTIONS.md`` indexes them, and each one's justification is
-#: its own file here, so that no one document outgrows its cap.
+#: The Flock soundness package's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), one
+#: file each, so that no one document outgrows its cap.
 SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
 #: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may

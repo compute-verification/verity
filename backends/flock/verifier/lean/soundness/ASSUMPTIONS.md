@@ -1,53 +1,87 @@
-# Flock interactive soundness: the named hypotheses
+# Flock interactive soundness: what the theorems assume
 
-For the expert reviewer and for Table 1: every hypothesis the Flock soundness theorems take, and what discharges it. Each
-is a `Prop` or a structure taken as an argument. The development declares no `axiom`, so `#print axioms` lists only
-Lean's three standard axioms (`FlockSoundness/Check.lean`). A mis-stated hypothesis can make a theorem vacuous, but it
-can never make Lean prove something false.
-
-Each hypothesis's justification is its own file under `assumptions/`. What is proved is in `README.md` and, for the audit
-layer, `FlockSoundness/Audit/README.md`. The derivations are in `DESIGN.md`.
+For the expert reviewer and for Table 1. This file states every named assumption and every named hypothesis the Flock
+soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
+and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
 ## Named assumptions (taken without proof)
 
-| | Statement | Lean | Taken by | Justification |
-|---|---|---|---|---|
-| **A2** | Expected-time collision resistance of SHA-512: a finder whose expected number of SHA-512 evaluations is `T` finds a collision with probability at most `T/2^256` | `Assumptions.SHA512ExpectedTimeCR` (`hCR`), for each commit string's finder | the link theorem (`flock_batched_linkSoundE`) and the composed audit (`Audit/FlockLinked.lean`) | `assumptions/a2-sha512-expected-time-cr.md` |
-| **L1** | Each template's rows compute its gates in the program's Boolean circuit | outside Lean: the theorems are about the rows | every claim about the program's circuit | `assumptions/l1-template-rows.md` |
+There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem takes as a hypothesis (`hCR`).
+`README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
+mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
-## Hypotheses of the proof, still to discharge
+**A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
+audit's value layer (Daniel, Sep 27; constant corrected the same day).
 
-| Hypothesis | Lean | Taken by | To be discharged by | Justification |
-|---|---|---|---|---|
-| The link points' layout | `Statement.LinkLayout` (`hlay`) | every table theorem | the statement: PROTOCOL.md §16's statements satisfy it | `assumptions/link-layout.md` |
-| The placement | `Placement`, `UnitPlace` | `lowering_sound`, `loweringSoundB_of_place`, `loweringSoundC_of_place`, the `_placed` forms | the statement builder (level 3) | `assumptions/placement.md` |
-| The lowering | `Partition.LoweringSound`, `InputsLoweringSound`, `LoweringSoundB`, `LoweringSoundC` | the Flock audit theorems | compiled layer: `UnitPlace` and L1; oracle layer: the lowering theorem (level 3) | `assumptions/lowering.md` |
-| Value binding | `Audit.Partition.ValueBinding` (`vb`) | the link theorem and the composed audit | the `hm96-sha512` leaf layout (M0) | `assumptions/value-binding.md` |
-| The anchors | `Partition.AnchorsSound` (`δ_in`) | the audit's cone theorems | oracle layer: `InputsSound`, proved for Flock; compiled layer: `registered_weights` | `assumptions/anchors.md` |
+- **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
+  most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
+  record the pair output and the evaluations made, `t` for each run of the prover.
+- **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
+  stated for all finders: the link theorem takes it for the finder it builds from the prover.
+- **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
 
-## Discharged for Flock
+- **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
+  the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
+  about the program's Boolean circuit only through L1.
+  - **The evidence for it, and the path to discharge it:** `assumptions/l1-template-rows.md`.
 
-The generic layers name these, and the Flock theorems prove them (`README.md`, `FlockSoundness/Audit/README.md`):
+A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved (`README.md` §1.6).
 
-- `Arith.Correct` (`hA`), the GHASH arithmetic's facts: `execArith_correct`, for the executable's instance;
-- `Analysis.KnowledgeSound` (`ε_ks`): `flock_batched_knowledgeSound`, `flock_compiled_knowledgeSound` and
-  `flock_batched_knowledgeSoundE`;
-- `Analysis.LinkSound` (`δ_link`): `flock_batched_linkSoundE`, under A2 and `ValueBinding`;
-- `Partition.SessionSound` and `Partition.InputsSound` (oracle layer): `flock_session_sound` and `flock_inputs_sound`, at
-  `2^-205`, given the lowering.
+## Named hypotheses of the proof
 
-## Proved, not assumed
+- **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
+  read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
+  statements of PROTOCOL.md §16 satisfy it.
+- **The placement** (`Placement`; `lowering_sound`, `README.md` §1.5):
+  - Placed (`Placement`) means two things:
+    - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
+    - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
 
-Reed–Solomon mutual correlated agreement up to the Johnson bound (A1 until Sep 27; `mcaError_le_bchks25`, from DKT26),
-Merkle binding, ring switching, the Johnson list bounds, the sumcheck rounds and the pinned zerocheck coordinates
-(`README.md` §1.6).
+**The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
+`FlockSoundness/Audit/README.md`):
 
-## Outside the theorem
+| Hypothesis | Term | Meaning | To be discharged by |
+|---|---|---|---|
+| `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
+| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
+| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
+| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
+| `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
 
-- **Cryptography and coins** (`assumptions/cryptography-and-coins.md`): plain collision resistance of SHA-512 for the
-  compiled theorem, charged as explicit collision-finder terms rather than a hypothesis; the coins; statement binding;
-  and what Table 1 cites.
-- **Trusted components** (`assumptions/trusted-components.md`): Lean's kernel, compiler and runtime, the model against
-  the executable verifier, `Arith.Correct`'s range, the statements themselves, and the pinned dependencies.
+Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
+before the session's first coin, not bounds state by state.
 
-A new hypothesis gets a row here and a justification file under `assumptions/`, named for it.
+| Named at the compiled layer | Meaning | Discharged by |
+|---|---|---|
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` (level 3) and L1 |
+
+## Cryptographic assumptions and coins
+
+- **Collision resistance of SHA-512** (`cr/sha-512`) for the Merkle openings (spec §14, with SHA-512 leaves and nodes).
+  It is the only hash assumption of the compiled theorem: plain collision resistance, for every classical prover.
+  The audit's value layer adds A2 (above).
+  DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's width.
+- **No assumption for the rounds.** The coin server keeps each round's bytes, then draws that round's coins, and the
+  replay compares bytes. This replaces the SHA-256 round digests. Keeping the bytes costs about the proof size, 0.7 MB
+  per rep.
+- **Statement binding** (the statement digest, Σ and `link_sha256`). These are in round 0's kept bytes, fixed before any
+  coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
+  this theorem.
+- **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
+  come from the coin server's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved.
+- **`seed` coins** (PR #83, `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and
+  SHA-256 in counter mode is a PRF. They are needed only if the seed mode becomes the verifier of record's source.
+- **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
+- **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
+  compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
+  (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
+  claimed.
+- **Table 1** cites `computational-soundness` under `cr/sha-512` and `live-verifier`; A1's proof took
+  `rs-proximity-johnson` off. An audit's integrity profile would add A2, a new claim once a render cites it.
+
+## Trusted components
+
+Not assumptions of the theorem, though the verdict depends on them: `assumptions/trusted-components.md`.

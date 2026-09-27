@@ -115,6 +115,10 @@ passing `check` of that exact commit in the evidence store, or when `main` has m
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
   `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
   handoff names them.
+- A named assumption, or a hand-proved lemma a dependency could prove, has an entry in the package's `upstream` watch
+  list. The audit fails when the pinned dependency proves a theorem about it that nobody has acknowledged
+  (`tools/lean/upstream.py`). A document's "status upstream" cites that output; it is never written by hand.
+- Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
