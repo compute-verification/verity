@@ -207,3 +207,15 @@ def test_a_record_over_an_explicit_partition_object():
     assert "R2-partition" in _check(rec, prog, q).codes
     assert R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
     assert "R2-program" in R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
+
+
+def test_the_wrong_unit_bound_matches_worst_case_and_scales():
+    """The direct Subset(k) bound equals the generic worst_case where that one can run, and serves N = 183,680."""
+    from verity.ir.partition import Level
+    from verity.proofs.profile import IntegrityProfile, Subset
+    for n, k, delta in ((1024, 256, 2.0 ** -20), (1024, 16, 0.01), (344, 128, 2.0 ** -20), (6, 2, 0.25), (50, 50, 0.01)):
+        p = IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
+        assert abs(audit.wrong_units_bound(p) - p.worst_case(lambda m: float(m))) < 1e-6, (n, k, delta)
+    big = IntegrityProfile((Level("unit"),), (183680,), {"unit": Subset(256)}, 2.0 ** -20)
+    b = audit.wrong_units_bound(big)
+    assert 9600 < b < 9750   # (1 - f)^256 = 2^-20 gives f ~ 5.27%, ~9,680 of 183,680

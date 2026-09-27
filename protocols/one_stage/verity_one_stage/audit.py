@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 from fractions import Fraction
+from math import comb, inf, log
 from typing import Any, Mapping, Sequence
 
 from verity.ir.codec import canonical_json
@@ -43,8 +44,37 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
                             drawn={LEVEL: len(draw["units"])})
 
 
+def _log_comb(n: int, k: int) -> float:
+    return log(comb(n, k)) if 0 <= k <= n else -inf
+
+
 def wrong_units_bound(p: IntegrityProfile) -> float:
-    return p.worst_case(lambda m: float(m))
+    """The most wrong units an accepted transcript can hold except with probability delta: `worst_case` with utility m.
+
+    For one level drawn `Subset(k)` over n units it is computed directly: rho(m) = ln C(n, k) - ln C(n - m, k) is convex
+    with rho(0) = 0, so the linear relaxation's optimum lies between the largest m with rho(m) <= ln(1/delta) and the next,
+    found by bisection with exact integer binomials (the generic `worst_case` tries every pair of m, and its float
+    `accept(m)` underflows, so it can't serve a population of 10^5).  Otherwise it is `worst_case`."""
+    law = next(iter(p.draws.values()))
+    if len(p.levels) != 1 or not isinstance(law, Subset):
+        return p.worst_case(lambda m: float(m))
+    n, k, budget = p.sizes[0], law.k, log(1 / p.delta)
+    base = _log_comb(n, k)
+
+    def rho(m: int) -> float:
+        return base - _log_comb(n - m, k)
+
+    if rho(n) <= budget:
+        return float(n)
+    lo, hi = 0, n            # rho(lo) <= budget < rho(hi)
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if rho(mid) <= budget:
+            lo = mid
+        else:
+            hi = mid
+    ra, rb = rho(lo), rho(hi)
+    return lo + (0.0 if rb == inf else (budget - ra) / (rb - ra))
 
 
 def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
