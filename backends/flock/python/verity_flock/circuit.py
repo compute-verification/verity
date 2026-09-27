@@ -450,7 +450,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
     public += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()
     if path is not None:
-        private = b"".join(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")[i].tobytes() for i in range(n))
+        # the ports' rows side by side, instance-major: one concatenation (inside the loop it was quadratic in n)
+        private = np.ascontiguousarray(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")).tobytes()
         private += b"".join(salts[p.name][i] for i in range(n) for p in ports)
         with open(path, "wb") as f:
             f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + private + public)
