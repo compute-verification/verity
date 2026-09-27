@@ -447,6 +447,187 @@ theorem leafE_off_le {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
         exact leafE_off_le op row slot Q hQ plur hplur _ σ'.2
           (by rw [hkeep _ _ slot (Ne.symm hs), hi])
 
+/-! ## Two locksteps of one compiled game with the same slots -/
+
+/-- Two locksteps of one compiled game with the same table slots. Their oracle games and leaf
+relations may differ; `forkE` reads only the compiled side and the slots (`forkE_congr`). -/
+inductive Aligned {I : Type} {get : I → ℕ → Option (T × D)} {R₁ R₂ : I → α → β → Prop} :
+    {i₁ i₂ : I} → {g₁ g₂ : Game α} → {g' : Game β} →
+      Lock T D get R₁ i₁ g₁ g' → Lock T D get R₂ i₂ g₂ g' → Prop
+  | ret {i₁ i₂ : I} {a₁ a₂ : α} {b : β} (h₁ : R₁ i₁ a₁ b) (h₂ : R₂ i₂ a₂ b) :
+      Aligned (Lock.ret h₁) (Lock.ret h₂)
+  | coin {i₁ i₂ : I} (C : Type) [Fintype C] [Nonempty C] {k₁ k₂ : C → Game α} {k' : C → Game β}
+      {L₁ : (c : C) → Lock T D get R₁ i₁ (k₁ c) (k' c)}
+      {L₂ : (c : C) → Lock T D get R₂ i₂ (k₂ c) (k' c)} :
+      (∀ c, Aligned (L₁ c) (L₂ c)) → Aligned (Lock.coin C L₁) (Lock.coin C L₂)
+  | send {i₁ i₂ : I} (M : Type) {k₁ k₂ : M → Game α} {k' : M → Game β}
+      {L₁ : (m : M) → Lock T D get R₁ i₁ (k₁ m) (k' m)}
+      {L₂ : (m : M) → Lock T D get R₂ i₂ (k₂ m) (k' m)} :
+      (∀ m, Aligned (L₁ m) (L₂ m)) → Aligned (Lock.send M L₁) (Lock.send M L₂)
+  | table {i₁ i₂ : I} (slot : ℕ) {upd₁ upd₂ : T → D → I} {k₁ k₂ : T → Game α} {k' : D → Game β}
+      {hf₁ : get i₁ slot = none} {hs₁ : ∀ t d, get (upd₁ t d) slot = some (t, d)}
+      {hk₁ : ∀ t d s, s ≠ slot → get (upd₁ t d) s = get i₁ s}
+      {hf₂ : get i₂ slot = none} {hs₂ : ∀ t d, get (upd₂ t d) slot = some (t, d)}
+      {hk₂ : ∀ t d s, s ≠ slot → get (upd₂ t d) s = get i₂ s}
+      {L₁ : (t : T) → (d : D) → Lock T D get R₁ (upd₁ t d) (k₁ t) (k' d)}
+      {L₂ : (t : T) → (d : D) → Lock T D get R₂ (upd₂ t d) (k₂ t) (k' d)} :
+      (∀ t d, Aligned (L₁ t d) (L₂ t d)) →
+        Aligned (Lock.table slot upd₁ hf₁ hs₁ hk₁ L₁) (Lock.table slot upd₂ hf₂ hs₂ hk₂ L₂)
+
+/-- A lockstep is aligned with itself. -/
+theorem Aligned.refl : ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'),
+    Aligned L L
+  | _, _, _, .ret h => .ret h h
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L => .coin C fun c => Aligned.refl (L c)
+  | _, _, _, .send M L => .send M fun m => Aligned.refl (L m)
+  | _, _, _, .table slot _ _ _ _ L => .table slot fun t d => Aligned.refl (L t d)
+
+/-- **Aligned locksteps have the same fork probability.** -/
+theorem forkE_congr (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ)
+    {R₁ R₂ : I → α → β → Prop} {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
+    {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'} (h : Aligned L₁ L₂) :
+    ∀ σ' : Strategy g', forkE plur slot Φ L₁ σ' = forkE plur slot Φ L₂ σ' := by
+  induction h with
+  | ret => intro σ'; rfl
+  | coin C _ ih =>
+      intro σ'
+      simp only [forkE]
+      exact congrArg (· / _) (Finset.sum_congr rfl fun c _ => ih c (σ' c))
+  | send M _ ih => intro σ'; exact ih σ'.1 σ'.2
+  | table s _ ih =>
+      intro σ'
+      simp only [forkE]
+      split_ifs
+      · rfl
+      · exact ih _ σ'.1 σ'.2
+
+/-- **Sequencing preserves alignment.** -/
+theorem Aligned.bind {α₂ β₂ : Type} {R₁ R₂ : I → α → β → Prop} {R₁' R₂' : I → α₂ → β₂ → Prop}
+    {f₁ f₂ : α → Game α₂} {f' : β → Game β₂}
+    {h₁ : ∀ i a b, R₁ i a b → Lock T D get R₁' i (f₁ a) (f' b)}
+    {h₂ : ∀ i a b, R₂ i a b → Lock T D get R₂' i (f₂ a) (f' b)}
+    (hh : ∀ i₁ a₁ i₂ a₂ b (r₁ : R₁ i₁ a₁ b) (r₂ : R₂ i₂ a₂ b),
+      Aligned (h₁ i₁ a₁ b r₁) (h₂ i₂ a₂ b r₂))
+    {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
+    {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'} (h : Aligned L₁ L₂) :
+    Aligned (Lock.bind h₁ L₁) (Lock.bind h₂ L₂) := by
+  induction h with
+  | ret r₁ r₂ => exact hh _ _ _ _ _ r₁ r₂
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | table s _ ih => exact .table s ih
+
+section InterleaveAligned
+
+variable {α₁ β₁ α₂ β₂ I₁ I₂ : Type} {get₁ : I₁ → ℕ → Option (T × D)}
+  {get₂ : I₂ → ℕ → Option (T × D)} [Inhabited T] [Inhabited D]
+  {R₁ R₁' : I₁ → α₁ → β₁ → Prop} {R₂ R₂' : I₂ → α₂ → β₂ → Prop}
+
+theorem Aligned.embedLeft (hd : Disjoint get₁ get₂) {i₂ i₂' : I₂} {a₂ a₂' : α₂} {b₂ : β₂}
+    (h₂ : R₂ i₂ a₂ b₂) (h₂' : R₂' i₂' a₂' b₂) {i₁ i₁' : I₁} {g₁ g₁'' : Game α₁} {g₁' : Game β₁}
+    {L : Lock T D get₁ R₁ i₁ g₁ g₁'} {L' : Lock T D get₁ R₁' i₁' g₁'' g₁'} (h : Aligned L L') :
+    Aligned (embedLeft hd h₂ L) (embedLeft hd h₂' L') := by
+  induction h with
+  | ret r r' => exact .ret ⟨r, h₂⟩ ⟨r', h₂'⟩
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | table s _ ih => exact .table s ih
+
+theorem Aligned.embedRight (hd : Disjoint get₁ get₂) {i₁ i₁' : I₁} {a₁ a₁' : α₁} {b₁ : β₁}
+    (h₁ : R₁ i₁ a₁ b₁) (h₁' : R₁' i₁' a₁' b₁) {i₂ i₂' : I₂} {g₂ g₂'' : Game α₂} {g₂' : Game β₂}
+    {M : Lock T D get₂ R₂ i₂ g₂ g₂'} {M' : Lock T D get₂ R₂' i₂' g₂'' g₂'} (h : Aligned M M') :
+    Aligned (embedRight hd h₁ M) (embedRight hd h₁' M') := by
+  induction h with
+  | ret r r' => exact .ret ⟨h₁, r⟩ ⟨h₁', r'⟩
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | table s _ ih => exact .table s ih
+
+theorem Aligned.lockWith (hd : Disjoint get₁ get₂) {i₁ i₁' : I₁}
+    {adv₁ adv₁' : Game α₂ → Game (α₁ × α₂)} {advC : Game β₂ → Game (β₁ × β₂)}
+    {fin₁ fin₁' : α₂ → Game (α₁ × α₂)} {finC : β₂ → Game (β₁ × β₂)}
+    {hadv : ∀ {i₂ : I₂} {g₂ : Game α₂} {g₂' : Game β₂}, Lock T D get₂ R₂ i₂ g₂ g₂' →
+      Lock T D (getPair get₁ get₂) (RPair R₁ R₂) (i₁, i₂) (adv₁ g₂) (advC g₂')}
+    {hadv' : ∀ {i₂ : I₂} {g₂ : Game α₂} {g₂' : Game β₂}, Lock T D get₂ R₂' i₂ g₂ g₂' →
+      Lock T D (getPair get₁ get₂) (RPair R₁' R₂') (i₁', i₂) (adv₁' g₂) (advC g₂')}
+    {hfin : ∀ {i₂ : I₂} {a₂ : α₂} {b₂ : β₂}, R₂ i₂ a₂ b₂ →
+      Lock T D (getPair get₁ get₂) (RPair R₁ R₂) (i₁, i₂) (fin₁ a₂) (finC b₂)}
+    {hfin' : ∀ {i₂ : I₂} {a₂ : α₂} {b₂ : β₂}, R₂' i₂ a₂ b₂ →
+      Lock T D (getPair get₁ get₂) (RPair R₁' R₂') (i₁', i₂) (fin₁' a₂) (finC b₂)}
+    (hA : ∀ {i₂ i₂' : I₂} {g₂ g₂'' : Game α₂} {g₂' : Game β₂} {M : Lock T D get₂ R₂ i₂ g₂ g₂'}
+      {M' : Lock T D get₂ R₂' i₂' g₂'' g₂'}, Aligned M M' → Aligned (hadv M) (hadv' M'))
+    (hF : ∀ {i₂ i₂' : I₂} {a₂ a₂' : α₂} {b₂ : β₂} (r : R₂ i₂ a₂ b₂) (r' : R₂' i₂' a₂' b₂),
+      Aligned (hfin r) (hfin' r')) :
+    ∀ {i₂ i₂' : I₂} {g₂ g₂'' : Game α₂} {g₂' : Game β₂} {M : Lock T D get₂ R₂ i₂ g₂ g₂'}
+      {M' : Lock T D get₂ R₂' i₂' g₂'' g₂'}, Aligned M M' →
+        Aligned (lockWith hd hadv hfin M) (lockWith hd hadv' hfin' M')
+  | _, _, _, _, _, _, _, .ret r r' => hF r r'
+  | _, _, _, _, _, _, _, @Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ _ _ hL => by
+      simp only [Lock.lockWith]
+      refine .send Bool fun first => ?_
+      cases first
+      · exact @Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ _ _ fun c =>
+          Aligned.lockWith hd hA hF (hL c)
+      · exact hA (@Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ _ _ hL)
+  | _, _, _, _, _, _, _, .send M hL => by
+      simp only [Lock.lockWith]
+      refine .send Bool fun first => ?_
+      cases first
+      · exact .send M fun m => Aligned.lockWith hd hA hF (hL m)
+      · exact hA (.send M hL)
+  | _, _, _, _, _, _, _, .table s hL => by
+      simp only [Lock.lockWith]
+      refine .send Bool fun first => ?_
+      cases first
+      · exact .table s fun t d => Aligned.lockWith hd hA hF (hL t d)
+      · exact hA (.table s hL)
+
+theorem Aligned.interleaveLock (hd : Disjoint get₁ get₂) :
+    ∀ {i₁ i₁' : I₁} {g₁ g₁'' : Game α₁} {g₁' : Game β₁} {L : Lock T D get₁ R₁ i₁ g₁ g₁'}
+      {L' : Lock T D get₁ R₁' i₁' g₁'' g₁'}, Aligned L L' →
+    ∀ {i₂ i₂' : I₂} {g₂ g₂'' : Game α₂} {g₂' : Game β₂} {M : Lock T D get₂ R₂ i₂ g₂ g₂'}
+      {M' : Lock T D get₂ R₂' i₂' g₂'' g₂'}, Aligned M M' →
+        Aligned (interleaveLock hd L M) (interleaveLock hd L' M')
+  | _, _, _, _, _, _, _, .ret r r', _, _, _, _, _, _, _, hM => Aligned.embedRight hd r r' hM
+  | _, _, _, _, _, _, _, @Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ L₁ L₂ hL,
+      _, _, _, _, _, _, _, hM =>
+      Aligned.lockWith hd
+        (hadv := fun M => @Lock.coin _ _ _ _ _ _ _ _ C iF iN _ _ fun c =>
+          Lock.interleaveLock hd (L₁ c) M)
+        (hadv' := fun M => @Lock.coin _ _ _ _ _ _ _ _ C iF iN _ _ fun c =>
+          Lock.interleaveLock hd (L₂ c) M)
+        (hfin := fun r => Lock.embedLeft hd r (@Lock.coin _ _ _ _ _ _ _ _ C iF iN _ _ L₁))
+        (hfin' := fun r => Lock.embedLeft hd r (@Lock.coin _ _ _ _ _ _ _ _ C iF iN _ _ L₂))
+        (fun hM' => @Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ _ _ fun c =>
+          Aligned.interleaveLock hd (hL c) hM')
+        (fun r r' => Aligned.embedLeft hd r r' (@Aligned.coin _ _ _ _ _ _ _ _ _ _ C iF iN _ _ _ _ _ hL))
+        hM
+  | _, _, _, _, _, _, _, @Aligned.send _ _ _ _ _ _ _ _ _ _ M _ _ _ L₁ L₂ hL,
+      _, _, _, _, _, _, _, hM =>
+      Aligned.lockWith hd
+        (hadv := fun M' => Lock.send M fun m => Lock.interleaveLock hd (L₁ m) M')
+        (hadv' := fun M' => Lock.send M fun m => Lock.interleaveLock hd (L₂ m) M')
+        (hfin := fun r => Lock.embedLeft hd r (Lock.send M L₁))
+        (hfin' := fun r => Lock.embedLeft hd r (Lock.send M L₂))
+        (fun hM' => .send M fun m => Aligned.interleaveLock hd (hL m) hM')
+        (fun r r' => Aligned.embedLeft hd r r' (.send M hL)) hM
+  | _, _, _, _, _, _, _,
+      @Aligned.table _ _ _ _ _ _ _ _ _ _ s upd₁ upd₂ _ _ _ hf₁ hs₁ hk₁ hf₂ hs₂ hk₂ L₁ L₂ hL,
+      _, _, _, _, _, _, _, hM =>
+      Aligned.lockWith hd
+        (hadv := fun {i₂ _ _} M => Lock.table s (fun t d => (upd₁ t d, i₂))
+          (getPair_fresh₁ hd hf₁ hs₁ i₂) (getPair_set₁ hs₁ i₂)
+          (fun t d s' h => getPair_keep₁ hk₁ i₂ t d s' h) fun t d => Lock.interleaveLock hd (L₁ t d) M)
+        (hadv' := fun {i₂ _ _} M => Lock.table s (fun t d => (upd₂ t d, i₂))
+          (getPair_fresh₁ hd hf₂ hs₂ i₂) (getPair_set₁ hs₂ i₂)
+          (fun t d s' h => getPair_keep₁ hk₂ i₂ t d s' h) fun t d => Lock.interleaveLock hd (L₂ t d) M)
+        (hfin := fun r => Lock.embedLeft hd r (Lock.table s upd₁ hf₁ hs₁ hk₁ L₁))
+        (hfin' := fun r => Lock.embedLeft hd r (Lock.table s upd₂ hf₂ hs₂ hk₂ L₂))
+        (fun hM' => .table s fun t d => Aligned.interleaveLock hd (hL t d) hM')
+        (fun r r' => Aligned.embedLeft hd r r' (.table s hL)) hM
+
+end InterleaveAligned
+
 end Lock
 
 end Game
