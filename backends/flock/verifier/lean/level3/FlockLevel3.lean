@@ -7,3 +7,4 @@ import FlockLevel3.Assembly
 import FlockLevel3.Seam
 import FlockLevel3.ArithFacts
 import FlockLevel3.Pinned
+import FlockLevel3.Nodes

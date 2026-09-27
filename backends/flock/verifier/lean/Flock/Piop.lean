@@ -25,7 +25,7 @@ def den7Inv : F128 := (den 7).inv
 
 /-- Lagrange weights on a node set of dimension 6 (a subspace or a coset), with the indicator rule. -/
 def lagrange (nodes : Array F128) (denInv : F128) (z : F128) : Array F128 :=
-  match nodes.findIdx? (· == z) with
+  match nodes.findIdx? (fun n => decide (n = z)) with
   | some i => (Array.range nodes.size).map fun j => if j == i then 1 else 0
   | none =>
     let zn := nodes.foldl (fun acc n => acc * (z + n)) 1
@@ -38,7 +38,7 @@ def skipWeights (z : F128) : Array F128 := lagrange nodesS den6Inv z
 /-- The weights of `Pcomb(z)` (§9.2): zero on `S`; the indicator at a node of `Λ`; else
 `Z_{S∪Λ}(z) · den_7⁻¹ · (z + φ8(64+i))⁻¹`. -/
 def combWeights (z : F128) : Array F128 :=
-  match nodesS.findIdx? (· == z), nodesL.findIdx? (· == z) with
+  match nodesS.findIdx? (fun n => decide (n = z)), nodesL.findIdx? (fun n => decide (n = z)) with
   | some _, _ => (Array.range 64).map fun _ => 0
   | none, some i => (Array.range 64).map fun j => if j == i then 1 else 0
   | none, none =>
