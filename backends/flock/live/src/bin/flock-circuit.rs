@@ -83,10 +83,16 @@ fn zk_layout(st: &Stmt) -> Layout {
     Layout::new(st.m, st.c.k_log, lc.ood_samples[0], lc.initial_k)
 }
 
-/// Ligerito level 0's padding per lane: both reps' queries plus 64 (any of those positions of a lane are then uniform).
+/// Ligerito level 0's query count under its padding (`zk_veil::level0_queries`, from Fast100's rate-1/2 count upwards).
+fn zk_queries0(m: usize) -> Result<usize, String> {
+    let lc = params(m, LigeritoProfile::Fast100).ligerito_prover_config()?;
+    zkv::level0_queries(1 << lc.initial_log_msg_cols, lc.queries[0])
+        .ok_or(format!("m = {m}: Ligerito level 0's padding outgrows its lanes at rate 1/2 (M1's masked protocol needs m >= 25)"))
+}
+
+/// Ligerito level 0's padding per lane (`zk_veil::level0_t_pad`).
 fn zk_t_pad(m: usize) -> usize {
-    let lc = params(m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
-    (2 * lc.queries[0] + 64).min(1 << lc.initial_log_msg_cols)
+    zkv::level0_t_pad(zk_queries0(m).expect("checked when the statement is built"))
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
@@ -98,7 +104,8 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
     let draw = |rng: &mut flock_live::zk_hooks::ProverRng, stream: u64, i: usize, n: usize| {
         if zero { vec![F128::ZERO; n] } else { rng.f128s(stream, (i as u64) << 32, n) }
     };
-    Level0Zk { t_pad: t, extra: [draw(rng, 6, 0, l), draw(rng, 6, 1, l)], pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
+    Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, extra: [draw(rng, 6, 0, l), draw(rng, 6, 1, l)],
+               pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
 }
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
@@ -114,9 +121,9 @@ fn zk_identity(c: &Composite) -> Value {
            "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with 2 q_0 + 64 uniform coefficients (c = x); two padded uniform \
                                lanes folded in after the lane rounds (rho_0, rho_1 F128-independent); the ood value, the lane-round messages and the \
                                extra lanes' sums padded; T' and ybar sent (uniform)",
+           "ligerito_level0_queries": "the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100, rho' = (L + 2 q_0 + 64) / 2L",
            "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128"],
-           "not_yet_masked": [],
-           "soundness_pending": "level 0's code now has message length L + t_pad in 2L positions; its query count is Fast100's for rate 1/2 (not recomputed)"})
+           "not_yet_masked": []})
 }
 
 
@@ -221,7 +228,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     }
     let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
     let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
-    let cfg = pcs.ligerito_verifier_config()?;
+    let cfg = flock_core::pcs::ligerito::zk::verifier_config(pcs.ligerito_verifier_config()?, zk_queries0(st.m)?);
     let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
                                                                    pcs.opening_grinding(), Some(zk_t_pad(st.m)), ch)
         .map_err(|e| format!("opening: {e:?}"))?
@@ -868,8 +875,8 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
-    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().unwrap();
-    let ligerito = json!({"m": st.m, "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
+    let lc = flock_core::pcs::ligerito::zk::prover_config(params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
+    let ligerito = json!({"m": st.m, "t_pad0": zk_t_pad(st.m), "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
         "recursive_log_msg_cols": lc.recursive_log_msg_cols, "log_inv_rates": lc.log_inv_rates, "queries": lc.queries, "ood_samples": lc.ood_samples,
         "grinding_bits": lc.grinding_bits});
     let out = json!({"statement": STATEMENT, "unit": st.c.name, "instances": st.n, "ligerito": ligerito,
@@ -1703,6 +1710,9 @@ fn main() {
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+    if zk_mode() {
+        zk_queries0(st.m).unwrap_or_else(|e| refuse(e));
+    }
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {

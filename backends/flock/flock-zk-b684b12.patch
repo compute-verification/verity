@@ -160,10 +160,10 @@ index c36ce18..5f5b2cd 100644
              )
          },
 diff --git a/crates/flock-core/src/pcs/commit.rs b/crates/flock-core/src/pcs/commit.rs
-index 497b3fc..28e959f 100644
+index 497b3fc..8c2474b 100644
 --- a/crates/flock-core/src/pcs/commit.rs
 +++ b/crates/flock-core/src/pcs/commit.rs
-@@ -837,6 +837,35 @@ fn commit_encode_finish(
+@@ -837,6 +837,36 @@ fn commit_encode_finish(
      codeword
  }
  
@@ -192,7 +192,8 @@ index 497b3fc..28e959f 100644
 +    give_f128(base);
 +    let bytes: &[u8] = unsafe { from_raw_parts(codeword.as_ptr() as *const u8, codeword.len() * size_of::<F128>()) };
 +    let merkle_tree = merkle_tree(bytes, params.n_leaves(), params.merkle_hash);
-+    let cap = cap_layer(&merkle_tree, params.n_leaves(), params.level_zero_cap_depth()).to_vec();
++    let cfg = super::ligerito::zk::prover_config(params.ligerito_prover_config().expect("Ligerito config"), zk.queries0);
++    let cap = cap_layer(&merkle_tree, params.n_leaves(), cfg.level_zero_cap_depth()).to_vec();
 +    (Commitment { cap, params: params.clone() }, ProverData { codeword, merkle_tree })
 +}
 +
@@ -200,10 +201,10 @@ index 497b3fc..28e959f 100644
  pub fn commit_merkle(codeword: Vec<F128>, params: &PcsParams) -> (Commitment, ProverData) {
      let timing = std::env::var_os("FLOCK_COMMIT_TIMING").is_some();
 diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
-index 2dce928..12512f0 100644
+index 2dce928..83eb4b4 100644
 --- a/crates/flock-core/src/pcs/ligerito.rs
 +++ b/crates/flock-core/src/pcs/ligerito.rs
-@@ -64,6 +64,93 @@ use crate::{
+@@ -64,6 +64,107 @@ use crate::{
  
  pub(crate) mod extension;
  
@@ -218,7 +219,7 @@ index 2dce928..12512f0 100644
 +pub mod zk {
 +    use rayon::prelude::*;
 +
-+    use super::{AdditiveNttF128, F128, F256};
++    use super::{AdditiveNttF128, F128, F256, ProverConfig, VerifierConfig};
 +
 +    pub const LABEL_OPEN: &[u8] = b"verity-flock-zk-l0-open-v0";
 +    pub const LABEL_CLOSE: &[u8] = b"verity-flock-zk-l0-close-v0";
@@ -227,9 +228,23 @@ index 2dce928..12512f0 100644
 +    /// The padding polynomial's constant `c` (the element `x`, outside GF(2)).
 +    pub const PAD_C: F128 = F128::new(2, 0);
 +
++    /// The padded level-0 code `RS[2L, L + t_pad]` has rate above the profile's, so level 0 takes the caller's query count
++    /// `queries0` (the level-0 tree's cap depth follows it): both sides' configs with it, restratified.
++    pub fn prover_config(mut cfg: ProverConfig, queries0: usize) -> ProverConfig {
++        cfg.queries[0] = queries0;
++        cfg.with_default_stratified()
++    }
++
++    pub fn verifier_config(mut cfg: VerifierConfig, queries0: usize) -> VerifierConfig {
++        cfg.queries[0] = queries0;
++        cfg.with_default_stratified()
++    }
++
 +    /// The prover's level-0 randomness: `pads[l]` (`t_pad` words) for every lane `l` (the witness's, then the extra ones),
 +    /// and the extra lanes' messages.
 +    pub struct Level0Zk {
++        /// level 0's query count ([`prover_config`])
++        pub queries0: usize,
 +        pub t_pad: usize,
 +        pub extra: [Vec<F128>; EXTRA_LANES],
 +        pub pads: Vec<Vec<F128>>,
@@ -297,7 +312,7 @@ index 2dce928..12512f0 100644
  // ===================================================================
  // Config
  // ===================================================================
-@@ -2200,6 +2287,12 @@ pub struct LigeritoProof {
+@@ -2200,6 +2301,12 @@ pub struct LigeritoProof {
      /// queried consistency equations.
      #[serde(default)]
      pub consistency_batch_grinding_nonces: Vec<u64>,
@@ -310,7 +325,7 @@ index 2dce928..12512f0 100644
  }
  
  impl LigeritoProof {
-@@ -4762,6 +4855,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
+@@ -4762,6 +4869,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
          None,
          None,
          None,
@@ -318,7 +333,7 @@ index 2dce928..12512f0 100644
          challenger,
      )
  }
-@@ -4800,6 +4894,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
+@@ -4800,6 +4908,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
          }),
          round1_lookahead,
          None,
@@ -326,7 +341,7 @@ index 2dce928..12512f0 100644
          challenger,
      )
  }
-@@ -4829,6 +4924,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4829,6 +4938,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
      l0_jit_basis: Option<BasisWindowFn<'_>>,
      l0_virtual_basis: Option<VirtualEqBasis>,
      seeded_stats: Option<Vec<F128>>,
@@ -334,7 +349,7 @@ index 2dce928..12512f0 100644
      challenger: &mut Ch,
  ) -> LigeritoProof {
      recursive_prover_with_basis_impl(
-@@ -4848,6 +4944,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4848,6 +4958,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
          }),
          round1_lookahead,
          seeded_stats,
@@ -342,7 +357,7 @@ index 2dce928..12512f0 100644
          challenger,
      )
  }
-@@ -5034,6 +5131,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -5034,6 +5145,8 @@ fn recursive_prover_inner<Ch: Challenger>(
                  fold_grinding_nonces: Vec::new(),
                  claim_batch_grinding_nonces: Vec::new(),
                  consistency_batch_grinding_nonces: Vec::new(),
@@ -634,7 +649,7 @@ index c1c6d04..7f3c0d6 100644
          let mut ch = FsChallenger::new(b"non-identity-c-test");
          assert!(matches!(
 diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
-index f53418c..da7c91f 100644
+index f53418c..34a7baa 100644
 --- a/crates/flock-prover/src/prover.rs
 +++ b/crates/flock-prover/src/prover.rs
 @@ -1850,6 +1850,7 @@ fn prove_fast_core_with_codeword<Ch: Challenger>(
@@ -645,7 +660,7 @@ index f53418c..da7c91f 100644
          challenger,
      )
  }
-@@ -1868,6 +1869,25 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+@@ -1868,10 +1869,33 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
      lincheck_circuit: &dyn LincheckCircuit,
      hook: &mut dyn FnMut(&Commitment) -> Vec<Vec<F128>>,
      challenger: &mut Ch,
@@ -671,7 +686,15 @@ index f53418c..da7c91f 100644
  ) -> (R1csProofLigerito, Commitment) {
      let lig_config = pcs_params
          .ligerito_prover_config()
-@@ -1893,6 +1913,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+         .expect("Ligerito default config; bump m for tiny instances");
++    let lig_config = match zk0 {
++        Some(z) => pcs::ligerito::zk::prover_config(lig_config, z.queries0),
++        None => lig_config,
++    };
+     let mut extra: Vec<Vec<F128>> = Vec::new();
+     let ProveCore {
+         zc_proof,
+@@ -1893,6 +1917,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
          lincheck_circuit,
          None,
          &mut |cm| extra = hook(cm),
@@ -679,7 +702,7 @@ index f53418c..da7c91f 100644
          challenger,
      );
      let padding = r1cs.padding_spec();
-@@ -1901,7 +1922,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+@@ -1901,7 +1926,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
      let x_refs: Vec<&[F128]> = x_fulls.iter().map(|v| v.as_slice()).collect();
      let mut pre: Vec<Option<&[F128]>> = vec![s_hat_v_ab.as_deref(), Some(s_hat_v_c.as_slice())];
      pre.resize(x_refs.len(), None);
@@ -688,7 +711,7 @@ index f53418c..da7c91f 100644
          z_packed,
          &prover_data,
          &commitment,
-@@ -1911,6 +1932,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+@@ -1911,6 +1936,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
          &padding,
          &lig_config,
          pcs_params.opening_grinding(),
@@ -696,7 +719,7 @@ index f53418c..da7c91f 100644
          challenger,
      );
      (
-@@ -1934,11 +1956,13 @@ fn prove_fast_core_hooked<Ch: Challenger>(
+@@ -1934,11 +1960,13 @@ fn prove_fast_core_hooked<Ch: Challenger>(
      lincheck_circuit: &dyn LincheckCircuit,
      prefaulted_codeword: Option<Vec<F128>>,
      hook: &mut dyn FnMut(&Commitment),
