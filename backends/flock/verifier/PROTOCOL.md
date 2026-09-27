@@ -192,6 +192,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
 | S4 | `link.sigma = hex(Σ)` | the session is about this statement |
+| U1–U3 | the record's `unit_draw` is the statement's, well formed, and the statement's instances are the drawn units (§7.3) | the drawn units are the proved ones |
 | S5 | for every configured table `t`: `root_b.<t>` present, non-empty, and `SHA-256(root_b.<t>) = root_b_sha256.<t>` (keys for other tables are ignored, as upstream does) | L1/L3 |
 | S6 | `SHA-256(root_f) = root_f_sha256` and `root_f` non-empty; for these statements `root_f = Σ` (intended divergence D1, §17.1) | L1: statements without a prime half commit Σ as root_F |
 | S7 | for every configured `t`: `SHA-256(publics.<t>) = publics_sha256.<t>` (absent key = empty bytes; other keys ignored) | C4 prerequisites |
@@ -302,6 +303,39 @@ store (rounds are grouped by stream, and interleaved reps are allowed). Recommen
 Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
 of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
+
+### 7.3 The unit draw
+
+The verifier draws the sampled units itself, in the clear, between registration and the session
+(`note:20260927T0210Z-finding-unit-draw-placement`). Serving registers its roots; the verifier draws the unit set from
+its operating system's randomness and sends it; the drawn units' statements are fixed; only then does the verifier send
+its coin commitment. The draw is not under the coin commitment, and no hash derives it.
+
+The samplers are `verity.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
+`uniform(n)` takes big-endian words of `w = ⌈(bitlen(n) + 64) / 8⌉` bytes and returns the first `x < 2^(8w) − 2^(8w) mod n`,
+mod `n`. `subset(k, n)` is the partial Fisher–Yates of `Key.subset`: for `i < k`, `j = i + uniform(n − i)`, swap `i` and
+`j`, and return the first `k`, sorted. `bernoulli(p)` over `[0, N)` takes unit `u` when `uniform(den) < num`. A stream
+that runs out is extended and the sampler rerun, so the draw stays exact.
+
+The draw is the object
+
+~~~text
+{"law": "subset",    "population": N, "k": K,          "units": [u_0 < u_1 < …]}
+{"law": "bernoulli", "population": N, "p": "num/den",  "units": [u_0 < u_1 < …]}
+~~~
+
+The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
+and the record keeps it as `unit_draw`. The offline checks:
+
+| check | rule |
+|---|---|
+| U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1` |
+| U3 | the statement's `instances` is the number of drawn units |
+
+Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
+session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
+public header with it and records it; until then no recorded session carries one.
 
 ## 8. The proof container
 
@@ -987,12 +1021,13 @@ the partition, and the leaf positions derived from it.
 ### 16.8 Objects by content
 
 The verifier loads each statement's objects from its own archive, keyed by content, and never from the prover's session
-directory: `verify --archive DIR --circuit H --public H --comp H` reads `DIR/sha256/<H>` for each, and rejects an object
-that is not held or does not hash to its key. The lookup tables are those `MUFU_TABLES` pins, loaded by those digests.
-A digest is only a lookup key into what the verifier holds: the statement it verifies is the one those objects define,
-and the record must bind that statement (S1). `archive-put DIR FILE...` stores files under their digests. A session
-directory supplies only the record and the openings. Without `--archive`, the flags are paths (the development and
-agreement tools). `agree.py` drives the Lean verifier through an archive.
+directory: `verify --archive DIR --circuit H --public H --comp H` reads `DIR/sha512/<H>` for each (`H` a SHA-512), and
+rejects an object that is not held or does not hash to its key. The lookup tables are those `MUFU_TABLES` pins, held
+under their SHA-512; `Circuit.parse` checks each table a lookup uses against that SHA-512, and the META's `sha256` against
+the SHA-256 pin (#83's format). A digest is only a lookup key into what the verifier holds: the statement it verifies is
+the one those objects define, and the record must bind that statement (S1). `archive-put DIR FILE...` stores files under
+their SHA-512. A session directory supplies only the record and the openings. Without `--archive`, the flags are paths
+(the development and agreement tools). `agree.py` drives the Lean verifier through an archive.
 
 The same applies to the program and partition (§16.7) once the verifier holds the IR program, and to `flock-live serve`
 (PR #83).
@@ -1019,6 +1054,56 @@ lowering theorem, not at run time.
 
 The target statement (the circuit statement once its leaves move) pins SHA-256 on every commitment path: Halevi–Micali
 serving leaves on SHA-256 hashed in the circuit, SHA-256 Merkle trees, SHA-256 round digests (§2.5).
+
+### 16.10 The hm96-sha512 row statement (PR #83 from `eb90718f`, the default `verity/flock-circuit`)
+
+M0's format (`note:20260927T0445Z-handoff-from-flock-netlist-format`) changes three things from §16.5: serving rows are
+`hm96-sha512/row/v1` leaves proved in the circuit (no BLAKE3, no `comp.rows`), every identity and binding digest is
+SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the lincheck fold, PIOP and PCS are §10–§14.
+
+- **Tags.** META `scheme` is `frame-v3-sha512/hm96-sha512` and `row_schema` is `hm96-sha512/row/v1`. The public file's
+  circuit key is `circuit_sha512`. `Hello` adds `"digests":"sha512"`. The identity carries META `leaf_scheme`
+  (`hm96-sha512/v1`: salts a ChaCha20 expansion of a per-proof OS key, `key_sha512`) and `seed_injection` (true only in
+  the selftest harness's build: statement `verity/flock-circuit+seed-injection`).
+- **Rows.** For a port of `words` u16 words (`2·words` a multiple of 128): `x = SHA-512(prefix ‖ row)` with `prefix =
+  pad128("verity/sha512-row/v1\0" ‖ 01 ‖ 10 ‖ be32 words)`, `b = x ⊕ M(key)·y`, `c = SHA-512(salt_prefix ‖ y)` for the
+  row's 192-byte salt `y` under `hm96-sha512/v1`'s default key. The verifier recomputes each row's `prefix`, the midstate
+  after it (one SHA-512 compression from the IV), and the padding block `0x80 ‖ 0 ‖ be128(8·(128 + 2·words))`, and refuses
+  a META `rows` entry that differs, and a `row_key_sha512` other than SHA-512 of the default key.
+- **Slots.** `sha512x3` (inputs `(cv 512, msg 1024) × 3`, outputs `out 512 × 3`) and `hm96` (inputs `cv 512, pad 1024, y
+  1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
+  ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
+  slot `p` for port `p`. The `sha512x3` range is `packed` (aligned to one slot, spanning its count); every other range is
+  aligned to its power-of-two span.
+- **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
+  compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
+  midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
+  forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,
+  bit `t % 8` (compression `B / 128`, word `o / 8`, bit `56 − 8·(o % 8) + t % 8` for `o = B % 128`; a zero leaf from its own
+  forced-zero row); every wire.
+- **Regions.** `Digest(p)` per port: the hm96 range's `bc` group, free bits `[0, 10)` and the `log2 G` VU bits above slot
+  `p`, valued at each VU's `b ‖ c` (a padding VU's the pinned `dummy.bc`); then `Out` (§16.5).
+- **Public file.** `flock-circuit-inputs`: header `units = {vus_per_block, units_per_vu, indices (ascending, one per
+  instance), blocks (indices in chunks of G)}`, `frame_v3.frame = "frame-v3-sha512"`, `frame_v3.row_key_sha512`; body
+  `b ‖ c` (128 bytes per instance and port, instance-major), then the output words. The public digest is
+  `SHA-512(canon(header, rows = false) ‖ body)`. The frame-v3-sha512 roots (§16.6 with SHA-512) are over the population:
+  row leaves `leaf(dom, i, "hm96-sha512/row/v1", SHA-512(leaf_prefix ‖ b ‖ c))`, output leaves `u16` words. Each port's
+  `dummy.bc` must be the zero row's: `SHA-512(prefix ‖ 0^(2·words)) ‖ SHA-512(salt_prefix ‖ 0^192)`.
+- **The drawn statement.** For a record with a `unit_draw` over the population's `N` instances, instance `i` is population
+  position `units[i]`; the header is the population's with `unit_draw`, `instances = K`, `population = N` and the drawn
+  units' indices in `units`; the public digest covers that header and the population's body, so the roots stay the
+  population's. A null `unit_draw` is no draw. U1–U3 then hold of the record and this statement.
+- **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
+  canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
+  Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
+  ‖ circuit SHA-512 ‖ statement digest ‖ public digest)`, 64 bytes, is `Hello`'s `link.sigma` and root_F.
+- **Record.** Every digest is SHA-512 of the same bytes as before under a `_sha512` key: `link.root_f_sha512`,
+  `link.root_b_sha512.<t>`, `link.publics_sha512.<t>`, `link_sha512`, `streams[i].root_sha512`, `rounds[k].msg_sha512`,
+  `proof_sha512[j] = {stream, sha512, bytes}`. The coin commitment is `coin-commit/sha512`; the derivation stays SHA-256.
+- **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
+  carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
+  `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
 
 ## 17. Acceptance, assumptions and trust
 

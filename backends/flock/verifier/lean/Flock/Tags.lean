@@ -36,6 +36,9 @@ structure Tags where
   pinnedLeafScheme : Option Json := none
   /-- the coin server retains every round's bytes (`Hello`'s `rounds`; every recorded round carries `msg`, §6.2) -/
   retainRounds : Bool := false
+  /-- PR #83 from `eb90718f`: serving rows are `hm96-sha512/row/v1` leaves proved in the circuit (`Flock.HmRow`), and every
+  identity and binding digest is SHA-512 (the circuit pin, the public digest, the statement digest, Σ, the record's) -/
+  hm96Rows : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -106,11 +109,11 @@ def leafSchemeSha512 : Json :=
       ("salt_source", s "os generator, one draw per leaf"), ("key", s "default_key, a statement constant for every tree"),
       ("key_sha512", s (hexOf (Sha512.hash Hm96.sha512.keyFromLabel)))])]
 
-/-- `verity/flock-circuit` on SHA-512 (PR #83 at `631567f7`, Daniel's SHA-512 decision): every Ligerito level's Merkle tree on
-SHA-512 (64-byte digests), the SHA-512 coin commitment, and the coin server retaining every round's bytes. -/
-def circuit : Tags :=
+/-- `verity/flock-circuit` on SHA-512 trees (PR #83 at `631567f7`, Daniel's SHA-512 decision): every Ligerito level's Merkle
+tree on SHA-512 (64-byte digests), the SHA-512 coin commitment, and the coin server retaining every round's bytes. -/
+def circuit631567f7 : Tags :=
   { circuit19c7269a with
-    name := "verity/flock-circuit", merkleLeaf := "flock-leaf/sha512-unsalted", coinScheme := "coin-commit/sha512",
+    name := "verity/flock-circuit@631567f7", merkleLeaf := "flock-leaf/sha512-unsalted", coinScheme := "coin-commit/sha512",
     identity := Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
       ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
       ("flavor", s "rs"), ("leaf_scheme", leafSchemeSha512),
@@ -122,8 +125,38 @@ def circuit : Tags :=
       ("hooks", hooksNoMask)],
     pinnedLeafScheme := some leafSchemeSha512, retainRounds := true }
 
+/-- META `leaf_scheme` from PR #83 `b32e1a7b`: `hm96-sha512/v1` leaves at every Ligerito level, salts a ChaCha20 expansion of
+a per-proof OS key (`key_sha512`: SHA-512 of the default key, from its label). -/
+def leafSchemeHm96 : Json :=
+  Json.mkObj [("id", s "hm96-sha512/v1"), ("inner", s "sha512 column digest"), ("salt_bytes", n 192),
+    ("salt_source", s "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored"),
+    ("key", s "default_key, a statement constant for every tree"), ("key_sha512", s (hexOf (Sha512.hash Hm96.Default512.key)))]
+
+/-- The identity of PR #83's statement from `eb90718f`; `seedInjection` is true only in the selftest harness's build. -/
+def identityHm96 (seedInjection : Bool) : Json :=
+  Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
+    ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
+    ("flavor", s "rs"), ("leaf_scheme", leafSchemeHm96), ("seed_injection", Json.bool seedInjection),
+    ("hashes", Json.mkObj [("merkle", s "hm96-sha512 (every Ligerito level)"),
+      ("round_digest", s "sha256 (framing: the coin server retains every round's bytes and the replay compares them)"),
+      ("statement_digest", s "sha256"), ("sigma", s "sha256"), ("coin_commitment", s "sha512"),
+      ("coin_derivation", s "sha256 (verity.randomness)"), ("frame_v3_tree", s "sha512 (frame-v3-sha512)"),
+      ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "hm96-sha512/row/v1 over sha512/row/v1")]),
+    ("hooks", hooksNoMask)]
+
+/-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
+every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
+def circuit : Tags :=
+  { circuit631567f7 with
+    name := "verity/flock-circuit", publicCircuitKey := "circuit_sha512", merkleLeaf := "hm96-sha512/v1",
+    identity := identityHm96 false, pinnedLeafScheme := some leafSchemeHm96, hm96Rows := true }
+
+/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
+def circuitSelftest : Tags :=
+  { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHm96 true }
+
 /-- The versions this verifier knows, by name. -/
-def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit]
+def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuit, circuitSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

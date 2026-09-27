@@ -4062,7 +4062,7 @@
      "tool": "redigest.py art:82c73709/honest OUT; redigest.py --retain art:82c73709/honest OUT --upstream-checks link_sigma,retained_bytes",
      "cases": "as in the first set; the proofs' 64-byte digests are read off PcsParams.merkle_hash; retained-not-digest is rejected by both (no divergence at 631567f7)"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:2fb50856",
     "forgeries_note": "14 selftest forgeries that run a session, expectations in each case.json; cross_session_replay_both_reps is now caught at R2 by the retained bytes (both verifiers)",
     "fuzz": {
@@ -4107,7 +4107,7 @@
     "mutants": {
      "tool": "as in the previous set, on art:24aba3a2/honest"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:d13d622c",
     "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63"
@@ -4129,7 +4129,7 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rope-head/records-cpu",
      "art:1100e385/rope-head/records-gpu"
@@ -4155,18 +4155,37 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rmst128/records-cpu",
      "art:1100e385/rmst128/records-gpu"
     ],
     "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38"
+   },
+   {
+    "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
+    "pr83": "eb90718f",
+    "generator": "flock-circuit selftest --record-dir (PR #83 eb90718f with circuit-vectors-eb90718f.patch, which also records the two draw cases), converted by selftest_records.py; extra/: the patch's honest vector, two draw negatives and a salt mutant",
+    "statement": {
+     "circuit": "art:c49cb61e/rope-head/stage/circuit.txt",
+     "public": "art:c49cb61e/rope-head/stage/pub-4.bin",
+     "circuit_sha512": "c84261e71e7b76c1c169cd4a04a87edf4109947c8fb11d35c39807c37b1c9279530c489d6f5642d3cdc232e8e3871b62ec224ac07b7caa5fe5cbfc7f71519141",
+     "detail": "RoPE d64, 4 instances (population), CPU selftest build (seed_injection: true)"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:c49cb61e/rope-head/records-cpu"
+    ],
+    "forgeries": "art:c49cb61e/rope-head/extra",
+    "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
+    "agreement": "r20260927-060508-66c0 (result art:294b6cf1, run files art:2b8201f1): 25/25"
    }
   ],
   "recorded_runs": [
    "r20260926-232948-22a9: sets 0-3, 217/217 (result art:ab9fa582)",
-   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)"
+   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)",
+   "r20260927-060508-66c0: set 8 (eb90718f), 25/25 (result art:294b6cf1)"
   ]
  }
 }
