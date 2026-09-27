@@ -182,6 +182,17 @@ pub fn prove<Ch: Challenger>(rels: &[Relation], m: usize, z: &[bool], ch: &mut C
     (GlueProof { rounds, value: zz[0] }, rho)
 }
 
+/// [`prove`] over a packed witness: address `a` is bit `a % 128` of word `a / 128` (`2^(m-7)` words).
+pub fn prove_packed<Ch: Challenger>(rels: &[Relation], m: usize, words: &[F128], ch: &mut Ch) -> (GlueProof, Vec<F128>) {
+    assert_eq!(words.len() << 7, 1 << m);
+    let z: Vec<bool> = (0..1usize << m).map(|a| {
+        let w = words[a >> 7];
+        let t = a & 127;
+        (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1 == 1
+    }).collect();
+    prove(rels, m, &z, ch)
+}
+
 /// `W̃(ρ)` from the relations alone.
 pub fn weight_at(rels: &[Relation], m: usize, gamma: F128, u: &[F128], rho: &[F128]) -> F128 {
     let eq = |p: &[F128]| p.iter().zip(rho).fold(F128::ONE, |acc, (&a, &r)| acc * (a * r + (a + F128::ONE) * (r + F128::ONE)));
@@ -292,6 +303,23 @@ mod tests {
         let mut free = z.clone();
         free[(5 << 4) + 1] = !free[(5 << 4) + 1];
         assert!(run(&rels, &free).0.is_ok(), "an unglued bit is free");
+    }
+
+    #[test]
+    fn packed_witness_proves_the_same() {
+        let (rels, z) = statement();
+        let words: Vec<F128> = z.chunks(128).map(|c| {
+            let (mut lo, mut hi) = (0u64, 0u64);
+            for (t, &b) in c.iter().enumerate() {
+                if b {
+                    if t < 64 { lo |= 1 << t } else { hi |= 1 << (t - 64) }
+                }
+            }
+            F128::new(lo, hi)
+        }).collect();
+        let a = prove(&rels, M, &z, &mut FsChallenger::new(b"glue-test"));
+        let b = prove_packed(&rels, M, &words, &mut FsChallenger::new(b"glue-test"));
+        assert_eq!(a, b);
     }
 
     #[test]
