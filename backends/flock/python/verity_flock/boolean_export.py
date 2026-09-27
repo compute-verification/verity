@@ -766,18 +766,29 @@ def parse_id(did: str) -> tuple[str, dict]:
 
 
 class DefStore:
-    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id."""
+    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id, plus those a
+    graph carries inline (``definitions``: a graph not yet catalogued)."""
 
     def __init__(self, pg_dir: Path):
         self.dir = Path(pg_dir) / "definitions"
         self.ix = json.loads((self.dir / "index.json").read_text())["definitions"]
         self.shards: dict[str, dict] = {}
+        self.inline: dict[str, dict] = {}
         self.by_name: dict[str, list] = {}
         for did in self.ix:
             name, ps = parse_id(did)
             self.by_name.setdefault(name, []).append((did, ps))
 
+    def add_inline(self, defs: dict) -> None:
+        for did, d in defs.items():
+            if did not in self.ix and did not in self.inline:
+                self.inline[did] = d
+                name, ps = parse_id(did)
+                self.by_name.setdefault(name, []).append((did, ps))
+
     def get(self, did: str):
+        if did in self.inline:
+            return self.inline[did]
         e = self.ix.get(did)
         if e is None:
             return None
@@ -1077,7 +1088,7 @@ class Commitments:
             raise AssertionError(f"{fid}: the partition is not deterministic")
         c, call = WQ._call_scope(fn)
         lo = call.offset
-        leaves = [(name, w) for name, t in fn.signature()[0] for w in t.leaf_widths()]
+        leaves = _leaf_lookup(fn.signature()[0])
         scopes: dict[str, int] = {}
         pieces: dict = {}
         sid: dict[int, int] = {}
@@ -1199,6 +1210,37 @@ def _empty(fid, gates) -> dict:
             "committed_interior_words": 0, "scopes": [], "pieces": [], "units": [], "committed": [], "structure": {}, "violations": []}
 
 
+def _leaf_lookup(params):
+    """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
+    parameter has over 10^8)."""
+    from verity.ir.types import Array, Record, Tuple
+
+    starts, names, types, o = [], [], [], 0
+    for name, t in params:
+        starts.append(o)
+        names.append(name)
+        types.append(t)
+        o += t.leaves
+
+    def leaf(k):
+        i = bisect.bisect_right(starts, k) - 1
+        t, k = types[i], k - starts[i]
+        while True:
+            if isinstance(t, Array):
+                t, k = t.elem, k % t.elem.leaves
+            elif isinstance(t, (Tuple, Record)):
+                for f in t.fields:
+                    f = f[1] if isinstance(t, Record) else f
+                    if k < f.leaves:
+                        t = f
+                        break
+                    k -= f.leaves
+            else:
+                return names[i], t.w
+
+    return leaf
+
+
 def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> dict:
     """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
     ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
@@ -1215,7 +1257,7 @@ def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> di
     inputs: dict[tuple, int] = {}
     if len(ireads):
         for inp, b in ireads[owner[ireads[:, 1]] == u].tolist():
-            name, w = leaves[G.input_ids[inp]]
+            name, w = leaves(G.input_ids[inp])
             inputs[(at[b], name)] = inputs.get((at[b], name), 0) + w
     reads += [[-1, d, w, name] for (d, name), w in inputs.items()]
     return {"part_nodes": [[s, k] for s, k, _g in info], "wiring": wiring, "reads": reads,
@@ -1407,6 +1449,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
 def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
                checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
+    walker.store.add_inline(p.get("definitions") or {})
     row = p["row"]
     nodes, used = [], []
     into: dict[str, list[dict]] = {}
