@@ -97,12 +97,6 @@ This is the model half a multi-segment `Meets` needs: it plugs into `Pous.Pinned
 (each segment `2^28` bits = 32 MiB, `448·32 MiB = 14 GB`). Kept in the random-oracle model; the concrete overwrite-chain
 `H` slots in by replacing the oracle, leaving `segDAG`/`seg_hard` untouched. -/
 
-/-- The disjoint union of `N` complete DAGs on `B` blocks, on global indices `Fin (N*B)`: node `k`'s parents are the
-earlier blocks of its own segment (`j/B = k/B` and `j < k`). -/
-def segDAG (N B : ℕ) : Labelling.TopoDAG (N * B) where
-  par k := Finset.univ.filter fun j => j.val / B = k.val / B ∧ j.val < k.val
-  par_lt _ _ hj := (Finset.mem_filter.1 hj).2.2
-
 /-- **Disjoint-union reach.** From `P₀` pebbles, `D` rounds pebble at most `P₀.card + N*D` nodes: each round adds at most
 one node per segment (a second new node of a segment would be a parent of the later one, hence already reached). -/
 theorem card_reach_seg (N B : ℕ) (P₀ : Finset (Fin (N * B))) :
@@ -157,18 +151,6 @@ The disjoint-union scheme `segScheme N B ℓ` is `denseScheme` on `segDAG N B` (
 queries only its own segment's `≤ B` earlier blocks. `seg_timedINC` is the B5 glue with `seg_hard`, and the certificate at
 `N = 448`, `B = 2^9`, `ℓ = 524288` gives **14 GB** (`448·2^28` bits) with **k = 106**, `β = 119067414778`,
 `S = ⌊(18/19)·N·B·ℓ⌋ = 113929658799`. -/
-
-/-- The dense scheme on the disjoint union of `N` complete DAGs of `B` blocks: `segDAG N B` in place of `completeDAG`. -/
-def segScheme (N B ℓ : ℕ) [NeZero (N * B)] : Scheme (denseModel (N * B) ℓ) where
-  n := (N * B) * ℓ
-  t := 0
-  B := N * B
-  ℓ := ℓ
-  B_pos := Nat.pos_of_ne_zero (NeZero.ne (N * B))
-  Coins := Unit
-  enc W H _ := (fun i => i.elim0, fun i => label (segDAG N B) (blocks (N * B) ℓ W) H i)
-  dec _ C f := codeEquiv (N * B) ℓ fun i =>
-    bxor (C i) (f (i, fun j => if j ∈ (segDAG N B).par i then some (C j) else none))
 
 /-- Bit-exact public decoding for the segmented scheme. -/
 theorem segScheme_correct (N B ℓ : ℕ) [NeZero (N * B)] : (segScheme N B ℓ).Correct := by
