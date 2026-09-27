@@ -248,8 +248,9 @@ theorem vacuous, but it can never make Lean prove something false.
 domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), proved in ArkLib at our pin
 (`ReedSolomon.mcaError_affineLine_johnson_le`, #907). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
 `(8/3)·n·t'³/ρ`, where `t' = max(⌈√ρ/(2η)⌉, 3) + ½ ≤ m + ½` for BCHKS25's `m = max(⌈√ρ/η⌉, 3)`, so below BCHKS25's
-numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3, `prCoin_mca_le`). The accounting keeps `a`, so no number
-changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a term below 2^-170.
+numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3,
+`prCoin_mca_le`). The accounting keeps `a`, so no number changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a
+term below 2^-170.
 
 **A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
 audit's value layer (Daniel, Sep 27; constant corrected the same day).
