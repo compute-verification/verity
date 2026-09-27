@@ -627,7 +627,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
     for (fam, head), (w, bits) in sorted(taps.items(), key=lambda kv: -kv[1][0]):
         today = word_query.committed_today(fam, head)
         tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)), "committed_today": today,
-                         "new_tap_in": None if today else word_query.tap_kernel(fam)})
+                         "new_tap_in": None if today else word_query.tap_kernel(fam, head)})
     g["q_word_v1"] = {"query": word_query.query_id(X, W, extras), **dict(tot), "units_per_gate": round(tot["units"] / tot["gates"], 4) if tot["gates"] else None,
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}

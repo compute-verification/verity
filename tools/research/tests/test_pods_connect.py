@@ -4,6 +4,7 @@ sync ships (git-visible only); prune-what-we-shipped; the source stamp.  The syn
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -86,6 +87,8 @@ def test_git_visible_files_are_tracked_existing_plus_unignored_untracked(repo):
 
 @pytest.mark.parametrize("rsync", [True, False], ids=["rsync", "tar-stream"])
 def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_path, rsync):
+    if rsync and shutil.which("rsync") is None:
+        pytest.skip("rsync is not installed here (the transport then falls back to the tar stream, the other case)")
     dest = tmp_path / "pod" / "src"
     t = C.LocalTransport(rsync=rsync)
     rep = C.sync(repo, str(dest), t)

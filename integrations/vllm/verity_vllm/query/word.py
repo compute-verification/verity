@@ -28,7 +28,6 @@ where it does not today).  `unit_rule` summarises one specialization; `check_que
 """
 from __future__ import annotations
 
-import json
 from array import array
 from collections import Counter
 from typing import Any, Callable, Iterable, Mapping
@@ -39,11 +38,10 @@ from verity.ir.defs import PrimitiveDefinition
 from verity.ir.layout import WIDE_FAN_IN, resolve
 from verity.ir.refs import Affine
 
+from verity_vllm.query.call_scope import WIRING, QueryRuleViolation, _call_scope, _member_refs, specialization
+
 QUERY_ID = "Q_word_v1"
 
-#: primitives that only rearrange bits (each output bit a constant or a copy of one input bit; `tests/query/test_word.py` checks it):
-#: wiring, like constants, is computed in no unit, may be read by any, and is never committed
-WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
 #: the rule's name in the query id
 RULE = "no-recompute"
@@ -63,54 +61,6 @@ def parse(spec: str) -> tuple[int, int, int]:
     body, _, e = str(spec).partition("+")
     x, _, w = body.partition("/")
     return int(x), int(w) if w else max(int(x), 32), int(e or 0)
-
-
-class QueryRuleViolation(ValueError):
-    """A Program whose units cannot satisfy `Q_word_v1{X,W}`: named per Definition and module, never widened."""
-
-
-def specialization(fam: str, statics: dict[str, Any]):
-    """The registered Definition `fam` bound to `statics` (a primitive as it is); function-valued statics (`DOT`, rendered
-    `{"fn": id}` or as the bare id) resolve to the registered Definition they name."""
-    from verity.ir.codec import lookup_primitive
-    from verity_vllm.query.program_view import _registry
-    reg, _errors = _registry()
-    d = reg.defs.get(fam)
-    if d is None:
-        return lookup_primitive(reg, fam)
-
-    def fn_value(v: Any) -> Any:
-        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v[:5] == '{"fn"' else v)
-        if not isinstance(fid, str):
-            return v
-        try:
-            return lookup_primitive(reg, fid)
-        except KeyError:
-            return reg.defs[fid] if fid in reg.defs else v
-
-    return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
-
-
-def _call_scope(fn: Any) -> tuple[Any, Any]:
-    """(circuit, activation of `fn`) in a one-Call Program: the Call's parameters are Input gates, its returned leaves designated
-    outputs.  A returned leaf a real Program does not read only shrinks out(S), so widths here bound those in any Program."""
-    from verity.ir.defs import CompositeDefinition
-    from verity.ir.program import Program
-    params, ret = fn.signature()
-    shell = CompositeDefinition(f"Word[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
-    c = Program(shell).circuit
-    rs = c.root_scope
-    k = next(k for k, n in enumerate(rs.spec.body.nodes) if n.fn is fn)
-    return c, rs.child(k)
-
-
-def _member_refs(a: Any, ax: int | None, m: int) -> Any:
-    if ax is None:
-        return a.refs
-    if ax == 0:
-        L = a.type.elem.leaves
-        return a.refs.slice(m * L, (m + 1) * L)
-    return a.take(ax, m).refs
 
 
 def _wide_operands(gate: Any, call: Any) -> Iterable[int]:
@@ -232,10 +182,16 @@ class Graph:
         self.src = np.frombuffer(src, np.int64) if len(src) else np.zeros(0, np.int64)
         self.dst = np.frombuffer(dst, np.int64) if len(dst) else np.zeros(0, np.int64)
         outs: list[int] = []
+        returned_inputs: set[int] = set()
         for g in (resolve(call, r) - lo for r in fn.body.ret):
             if 0 <= g < n:
-                outs += [int(idx[u]) for u in (srcs[g] if free[g] else (g,)) if u >= 0]
+                for u in (srcs[g] if free[g] else (g,)):
+                    if u >= 0:
+                        outs.append(int(idx[u]))
+                    else:
+                        returned_inputs.add(-1 - u)
         self.outputs = outs
+        self.returned_inputs = sorted(returned_inputs)              # input indices a returned wiring value reads (returned as they are)
         self.prim_names = {v: k for k, v in self.prims.items()}
         self.scope_names = {v: k for k, v in self.scopes.items()}
         self.free_by_prim = Counter({self.prim_names[k]: v for k, v in self.free_by_prim.items()})
@@ -341,8 +297,8 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     k = len(G.input_ids)
     reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
     committed = np.flatnonzero(head >= 0).tolist() + list(range(G.n, G.n + k))
-    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs, committed, range(G.n, G.n + k),
-                            G.recomputed)
+    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs + [G.n + i for i in G.returned_inputs],
+                            committed, range(G.n, G.n + k), G.recomputed)
     if not cut.ok:                                                 # the Call's gate ids (its canonical layout), not the compacted ones
         ids = G.keep.tolist() + [f"input:{g}" for g in G.input_ids]
         for k in cut.codes:
@@ -426,7 +382,13 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
         rule = _finish(fn.id, 1, classes, [], X, W, extras)
     elif (sep := _separable(fn)) is not None:
+        from verity_vllm.query.cross_call import members_check
         rule = _combine(fn.id, fn.gates, [(unit_rule(c, X, W, extras, memo=memo, max_gates=max_gates), m) for c, m in sep], X, W, extras)
+        across = members_check(fn, memo)                            # the members are cut one by one: a value two of them compute
+        if across["recomputes"]:
+            rule["violations"].append({"definition": fn.id, "class": "cut", "codes": ["gate-recomputed"],
+                                       "detail": {"gate-recomputed": {"n": across["recomputed_gates"], "between": "node members",
+                                                                      "classes": across["recomputes"][:8]}}})
     elif fn.gates > max_gates:
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": max_gates}]
@@ -481,8 +443,11 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
 _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
-           "F32MulFtz_v1": "ROW step (max * scale)", "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums",
-           "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+           "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+#: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
+#: kernel's visit index, not max * scale)
+_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)",
+               "GuardNegInfZero_v1": "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"}
 #: the kernel a new tap goes in, by the Definition family holding the value
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
@@ -500,8 +465,11 @@ def committed_today(scope: str | None, head: str | None) -> str | None:
     return None
 
 
-def tap_kernel(scope: str | None) -> str:
+def tap_kernel(scope: str | None, head: str | None = None) -> str:
+    """The kernel a new tap for a committed interior value goes in (`head`: the value's primitive)."""
     fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
+    if fam in _ATTENTION and head in _STREAM_NEW:
+        return _STREAM_NEW[head]
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
