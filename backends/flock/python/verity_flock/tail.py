@@ -253,11 +253,28 @@ def _ex2_post(C, ctx, v):
 
 MUFU["MufuEx2Ftz_v1"] = (_ex2_pre, _ex2_post)
 
+
+def _invsum_pre(C, args):
+    """FA2 ``normalize_softmax_lse``: MUFU.RCP of the row sum (the rcp table, indexed by its mantissa)."""
+    (x,) = args
+    return "rcp", list(x[:23]), [x]
+
+
+def _invsum_post(C, ctx, t):
+    """``(sum == 0 || sum != sum) ? 1 : MUFU.RCP(sum)``."""
+    (x,) = ctx
+    nan = C.AND(and_reduce(C, x[23:31]), or_reduce(C, x[:23]))
+    return mux(C, OR(C, is_zero_bits(C, x[:31]), nan), const_bits(ONE_F, 32), rcp_post(C, x, t))
+
+
+MUFU["Fa2InvSum_v1"] = (_invsum_pre, _invsum_post)
+
 #: every other tail primitive -> piece(C, *operand words)
 OPS = {"F32Add_v1": fp.f32_add, "F32Mul_v1": fp.f32_mul, "F32Fma_v1": fp.f32_fma, "F32Div_v1": _f32_div, "DivFullScaleA_v1": _div_scale_a,
        "F32AddFtz_v1": _ftz_op(fp.f32_add), "F32MulFtz_v1": _ftz_op(fp.f32_mul), "F32FmaFtz_v1": _ftz_op(fp.f32_fma),
        "F32FmaSubFtz_v1": _fma_sub_ftz, "F32Max_v1": _f32_max,
-       "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, 0x7FFF) + [ZERO] * 16}
+       "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, 0x7FFF) + [ZERO] * 16, "F32SubFtz_v1": _ftz_op(fp.f32_sub),
+       "GuardNegInfZero_v1": lambda C, m: mux(C, _eq_const(C, m, 0xFF800000), const_bits(0, 32), m)}
 
 
 # --- stages ---------------------------------------------------------------------------------------------------------------

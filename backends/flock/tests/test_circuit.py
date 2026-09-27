@@ -81,7 +81,7 @@ def test_attention_has_no_verifier_evaluated_form():
         FC.compose(Low(), None)
 
 
-@pytest.mark.parametrize("prim", sorted(p for p in TL.MUFU if p != "MufuEx2Ftz_v1"))
+@pytest.mark.parametrize("prim", sorted(p for p in TL.MUFU if p not in ("MufuEx2Ftz_v1", "Fa2InvSum_v1")))
 def test_mufu_pieces_match_the_ir(prim):
     from verity_vllm.program.kernels import rms_relation
     from verity_vllm.program.registry import prims as P
@@ -131,7 +131,7 @@ def _run(C, inputs, t):
 
 
 @pytest.mark.parametrize("name,arity", [("F32AddFtz_v1", 2), ("F32MulFtz_v1", 2), ("F32FmaFtz_v1", 3), ("F32FmaSubFtz_v1", 3),
-                                        ("F32Max_v1", 2), ("F2fpBf16_v1", 1)])
+                                        ("F32Max_v1", 2), ("F2fpBf16_v1", 1), ("F32SubFtz_v1", 2), ("GuardNegInfZero_v1", 1)])
 def test_attention_tail_ops_match_the_ir(name, arity):
     """Exact on encodings, but for a NaN result's payload (canonical here, as for F32Add; every NaN meets a bf16 cast or a
     NaN-blind consumer before it leaves the tail)."""
@@ -169,3 +169,26 @@ def test_mufu_ex2_matches_the_ir():
     ins["v"] = ([int(ex2[j]) & 0x7FFFFFFF for j in o1["idx"]], TL.VALUE_BITS)
     got = _run(c2, ins, t)["y"]
     assert [hex(x) for x, g in zip(xs, got) if g != P.MufuEx2Ftz.evaluate(x)] == []
+
+
+def test_fa2_inv_sum_matches_the_ir():
+    from verity_vllm.program.kernels import fa2_relation
+    from verity_vllm.program.registry import prims as P
+
+    rcp = np.asarray(fa2_relation.tables().rcp, dtype=np.uint32)
+    xs = _f32_samples(300, 9)
+    t = len(xs)
+    pre, post = TL.MUFU["Fa2InvSum_v1"]
+    c1 = Circuit()
+    table, idx, ctx = pre(c1, [c1.input("x", 32)])
+    assert table == "rcp"
+    c1.output("idx", idx)
+    for i, w in enumerate(ctx):
+        c1.output(f"c{i}", w)
+    o1 = _run(c1, {"x": (xs, 32)}, t)
+    c2 = Circuit()
+    c2.output("y", post(c2, [c2.input(f"c{i}", 32) for i in range(len(ctx))], c2.input("v", TL.VALUE_BITS)))
+    ins = {f"c{i}": (o1[f"c{i}"], 32) for i in range(len(ctx))}
+    ins["v"] = ([int(rcp[j]) & 0x7FFFFFFF for j in o1["idx"]], TL.VALUE_BITS)
+    got = _run(c2, ins, t)["y"]
+    assert [hex(x) for x, g in zip(xs, got) if g != P.Fa2InvSum.evaluate(x)] == []
