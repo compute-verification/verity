@@ -12,6 +12,7 @@ import pytest
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.registry import sampling as SM
+from verity.ir.cut import call_scope
 from verity_vllm.query import word as W
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
@@ -21,7 +22,7 @@ SPECIAL_TEMPS = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xF
 
 def _canon(fn, table: dict) -> tuple[int, ...]:
     """Each returned leaf as an interned gate DAG (primitive, operands; inputs by position): equal ids, the same function."""
-    c, call = W._call_scope(fn)
+    c, call = call_scope(fn)
     lo, n = call.offset, fn.gates
     ids = [0] * n
     for j in range(n):

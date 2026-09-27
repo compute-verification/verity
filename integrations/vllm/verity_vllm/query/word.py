@@ -11,11 +11,13 @@ The rule (no recomputes):
     are no public inputs: the Call's inputs (weights, tokens, earlier Calls' outputs) are committed, private values.  Constants and
     wiring (`WIRING`: bit rearrangement, such as BF16 -> FP32 zero-extension) are circuit structure: hardwired into each unit's
     statement, never committed, not counted as gates; a unit reads through wiring to its source.
-  * **Width** counts committed elements: a unit passes at |out(S)| <= X (16, where the word allows it), or when out(S) is ONE value of at
-    most W bits (32: float interiors such as a norm scale, attention's max, sum and inverse sum).  No dtype is read.
+  * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
+    bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
+    max, sum and inverse sum).  No dtype is read.
   * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
 
-The cut of one Call (`partition`), on its computing gates (`Graph`: wiring and constants removed, reads through them re-pointed):
+The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ir.cut.CallGraph`: wiring and constants removed,
+reads through them re-pointed):
 
   1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
   2. Backward over the gates (the layout is topological): a gate joins its consumers' unit when they all belong to one; a gate
@@ -34,11 +36,10 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
+from verity.ir.cut import WIRING, CallGraph, fits
 from verity.ir.defs import PrimitiveDefinition
-from verity.ir.layout import WIDE_FAN_IN, resolve
-from verity.ir.refs import Affine
 
-from verity_vllm.query.call_scope import WIRING, QueryRuleViolation, _call_scope, _member_refs, specialization
+from verity_vllm.query.call_scope import QueryRuleViolation, specialization
 
 QUERY_ID = "Q_word_v1"
 
@@ -63,138 +64,19 @@ def parse(spec: str) -> tuple[int, int, int]:
     return int(x), int(w) if w else max(int(x), 32), int(e or 0)
 
 
-def _wide_operands(gate: Any, call: Any) -> Iterable[int]:
-    """A wide fan-in gate's operands, skipping whole arguments that are the Call's own parameters (Input gates, outside the Call)."""
-    s = gate.scope
-    body = s.spec.body
-    k = body.node_at(gate.index - s.offset)
-    node = body.nodes[k]
-    m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
-    at_call = s.spec is call.spec and s.offset == call.offset
-    for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
-        refs = _member_refs(a, ax, m)
-        if at_call and isinstance(refs, Affine) and refs.space == "p":
-            continue
-        for j in range(len(refs)):
-            yield resolve(s, refs[j])
+def _np(a: Any, dtype: Any = np.int64) -> np.ndarray:
+    return np.frombuffer(a, dtype).astype(np.int64) if len(a) else np.zeros(0, np.int64)
 
 
-class Graph:
-    """The explicit gates of one Call activation that COMPUTE (local index), with wiring and constants removed: declared width,
-    primitive and activation per gate, whether it reads a Call parameter, and the wires between them (`src[e]` -> `dst[e]`), a read
-    through wiring standing for reads of the wiring's source gates.  `outputs`: the returned gates in return order (a returned wiring
-    value: its sources; a returned constant: nothing).  `total` / `free` / `free_by_prim`: the Call's gates, and the free ones."""
+class Graph(CallGraph):
+    """`verity.ir.cut.CallGraph` (the core reference: the computing gates of one activation, structure removed) with numpy views of
+    the per-gate arrays the cut computes on: `keep`, `width`, `prim`, `scope`, `external` and the reads `src` -> `dst`."""
 
     def __init__(self, fn: Any) -> None:
-        c, call = _call_scope(fn)
-        lo, n = call.offset, fn.gates
-        width = np.empty(n, np.int64)
-        prim = np.empty(n, np.int64)
-        scope = np.empty(n, np.int64)
-        external = np.zeros(n, bool)
-        free = np.zeros(n, bool)
-        const = np.zeros(n, bool)
-        self.prims: dict[str, int] = {}
-        self.scopes: dict[str, int] = {}
-        ops: list[list[int]] = []
-        inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
-        wide: set[int] = set()
-        for j in range(n):
-            g = c.gate(lo + j)
-            width[j] = g.prim.ret.w
-            prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
-            scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
-            const[j] = not g.prim.params
-            free[j] = const[j] or g.prim.id in WIRING
-            it = g.operands
-            ext = False
-            if len(it) > WIDE_FAN_IN:
-                it = _wide_operands(g, call)
-                ext = True
-                wide.add(j)
-            mine = []
-            for o in it:
-                if 0 <= o - lo < n:
-                    mine.append(o - lo)
-                else:
-                    ext = True
-                    if j not in wide:                                  # a wide gate's inputs: reads of committed inputs, not listed
-                        mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
-            external[j] = ext
-            ops.append(mine)
-        for j in range(n):                                          # a value computed from constants alone is a constant too
-            if not free[j] and not external[j] and ops[j] and all(o >= 0 and const[o] for o in ops[j]):
-                const[j] = free[j] = True
-        # recomputes: a computation gate with the primitive and the operands (by value: constants, inputs, wiring, earlier canonical
-        # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing
-        tok = array("q", bytes(8 * n))                               # a value's token: equal tokens, equal values
-        first: dict[int, int] = {}                                  # key hash -> the first gate with that key
-        dup: list[tuple[int, int]] = []
-
-        def key(j: int) -> tuple:
-            return (int(prim[j]),) + tuple(hash(("i", -o)) if o < 0 else tok[o] for o in ops[j])   # -o >= 1: hash(-1) == hash(-2)
-
-        for j in range(n):
-            k = key(j)
-            h = hash(k)
-            if free[j]:
-                tok[j] = hash(("s", h))
-            elif j in wide:
-                tok[j] = hash(("u", j))
-            elif h in first and key(first[h]) == k:
-                dup.append((j, first[h]))
-                tok[j] = tok[first[h]]
-            else:
-                first.setdefault(h, j)
-                tok[j] = hash(("g", j))
-        srcs: dict[int, tuple[int, ...]] = {}
-        for j in np.flatnonzero(free).tolist():
-            s: set[int] = set()
-            for o in ops[j]:
-                s.update(srcs[o] if o >= 0 and free[o] else (o,))
-            srcs[j] = tuple(sorted(s))
-        keep = np.flatnonzero(~free)
-        idx = np.full(n, -1, np.int64)
-        idx[keep] = np.arange(len(keep))
-        src, dst = array("q"), array("q")
-        self.input_reads: list[tuple[int, int]] = []                 # (input index, computing gate)
-        for j in keep.tolist():
-            seen: set[int] = set()
-            for o in ops[j]:
-                for u in (srcs[o] if o >= 0 and free[o] else (o,)):
-                    if u in seen:
-                        continue
-                    seen.add(u)
-                    if u < 0:
-                        self.input_reads.append((-1 - u, int(idx[j])))
-                    else:
-                        src.append(int(idx[u]))
-                        dst.append(int(idx[j]))
-        self.input_ids = sorted(inputs, key=inputs.__getitem__)       # root gate id of each input gate read
-        self.total, self.free = n, int(free.sum())
-        self.free_by_prim = Counter()
-        for k, v in zip(*np.unique(prim[free], return_counts=True)):
-            self.free_by_prim[k] = int(v)
-        self.n = len(keep)
-        self.keep = keep                                           # computation gate -> the Call's gate id
-        self.recomputed = [(int(idx[a]), int(idx[b])) for a, b in dup]   # (gate, earlier gate computing the same value)
-        self.width, self.prim, self.scope, self.external = width[keep], prim[keep], scope[keep], external[keep]
-        self.src = np.frombuffer(src, np.int64) if len(src) else np.zeros(0, np.int64)
-        self.dst = np.frombuffer(dst, np.int64) if len(dst) else np.zeros(0, np.int64)
-        outs: list[int] = []
-        returned_inputs: set[int] = set()
-        for g in (resolve(call, r) - lo for r in fn.body.ret):
-            if 0 <= g < n:
-                for u in (srcs[g] if free[g] else (g,)):
-                    if u >= 0:
-                        outs.append(int(idx[u]))
-                    else:
-                        returned_inputs.add(-1 - u)
-        self.outputs = outs
-        self.returned_inputs = sorted(returned_inputs)              # input indices a returned wiring value reads (returned as they are)
-        self.prim_names = {v: k for k, v in self.prims.items()}
-        self.scope_names = {v: k for k, v in self.scopes.items()}
-        self.free_by_prim = Counter({self.prim_names[k]: v for k, v in self.free_by_prim.items()})
+        super().__init__(fn)
+        self.keep, self.width, self.prim, self.scope = _np(self.keep), _np(self.width), _np(self.prim), _np(self.scope)
+        self.external = np.frombuffer(self.external, np.uint8).astype(bool) if len(self.external) else np.zeros(0, bool)
+        self.src, self.dst = _np(self.src), _np(self.dst)
 
 
 def _targets(G: Graph, X: int) -> list[list[int]]:
@@ -274,6 +156,22 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
     return own, kinds, head
 
 
+def partition_object(program: Any, X: int = 16, *, classes: Callable[[int, int], str] | None = None) -> dict[str, Any]:
+    """`verity/partition/v1` (`verity.ir.partition_object`) of `program`: every `call` node of its root body, cut by `partition` (a unit
+    per computing gate; committed: the heads).  `classes`: see `partition_object.build`."""
+    from verity.ir.partition_object import build
+    cuts, memo = [], {}
+    for k, node in enumerate(program.fn.body.nodes):
+        if node.form != "call" or not hasattr(node.fn, "body"):
+            continue
+        r = memo.get(node.fn.id)
+        if r is None:
+            own, _kinds, head = partition(Graph(node.fn), X)
+            r = memo[node.fn.id] = (own.tolist(), np.flatnonzero(head >= 0).tolist())
+        cuts.append((k, *r))
+    return build(program, cuts, classes)
+
+
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned), and
     the partition invariant's check (`verity.ir.partition.validate_unit_cut` over the gates the cut commits; violations by gate id)."""
@@ -304,7 +202,7 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
         for k in cut.codes:
             if k != "gate-count":
                 cut.detail[k]["gates"] = [[ids[a] for a in x] if isinstance(x, list) else ids[x] for x in cut.detail[k]["gates"]]
-    ok = (out_bits <= X + extras) | ((out_gates == 1) & (out_bits <= W + extras))
+    ok = fits(out_bits, out_gates, X, W, extras)
     return {"owner": owner, "kinds": kinds, "gates": gates, "out_bits": out_bits, "out_gates": out_gates, "ok": ok, "cut": cut,
             "head_prim": np.where(first >= 0, G.prim[np.maximum(first, 0)], -1),
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
@@ -557,5 +455,6 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
     return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired)
 
 
-__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition", "units",
+__all__ = ["QUERY_ID", "WIRING", "RULE", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse", "specialization", "Graph", "partition",
+           "partition_object", "units",
            "unit_rule", "check_calls", "call_groups", "check_query"]

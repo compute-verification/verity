@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from verity.ir.layout import GateSelection
+from verity.ir.cut import call_scope
 from verity_vllm.query import word as W
 
 
@@ -48,7 +49,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     fn = _fn(fam, **statics)
     G = W.Graph(fn)
     R = W.units(G, 16, 32)
-    c, call = W._call_scope(fn)
+    c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
         out = GateSelection(c, gates).out
@@ -222,3 +223,35 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     R = W.units(G, 16, 32)
     assert G.n == 0 and len(G.returned_inputs) == 8 and R["cut"].ok, R["cut"].codes
     assert W.unit_rule(f)["violations"] == []
+
+
+def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
+    # word.Graph is verity.ir.cut.CallGraph with numpy views; a Program's cut, as verity/partition/v1, checks in core
+    from verity.ir import cut, partition_object as PO
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.program import Program
+    from verity.ir.refs import tuple_of
+    from verity.ir.types import Tuple
+    fns = [_fn("RMSNormTriton_v1", N=64, EPS=1e-05), _fn("TokenSelect_v1", V=8), _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128)]
+    for f in fns:
+        c, g = cut.CallGraph(f), W.Graph(f)
+        assert (c.n, c.free, c.outputs, c.recomputed, c.input_reads) == (g.n, g.free, g.outputs, g.recomputed, g.input_reads)
+        assert list(c.src) == g.src.tolist() and list(c.width) == g.width.tolist()
+        R = W.units(g, 16, 32)
+        ob, og = cut.boundary_widths(c, R["owner"].tolist(), len(R["kinds"]))
+        assert ob == R["out_bits"].tolist() and og == R["out_gates"].tolist()
+    sig = [f.signature() for f in fns]
+    params = tuple((f"p{i}_{n}", t) for i, (ps, _r) in enumerate(sig) for n, t in ps)
+
+    def body(B, S, *a):
+        outs, i = [], 0
+        for f, (ps, _r) in zip(fns, sig):
+            outs.append(B.call(f, *a[i:i + len(ps)]))
+            i += len(ps)
+        return tuple_of(*outs)
+
+    P = Program(bind(CompositeDefinition("PartitionTop", 1, (), lambda S: (params, Tuple(*[r for _p, r in sig])), body, register=False)))
+    obj = W.partition_object(P)
+    assert PO.validate(obj).ok and PO.verify(obj, P).ok and len(obj["calls"]) == 3
+    assert len(obj["units"]) == sum(W.unit_rule(f)["units_per_call"] for f in fns[:2]) + len(set(obj["calls"][2]["owner"]))
+    assert PO.digest(obj) == PO.digest(W.partition_object(P))
