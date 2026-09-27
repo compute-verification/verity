@@ -1,4 +1,5 @@
-"""The two-stage law: exact stages, draws from the verifier's own randomness (and LEGACY's derived keys) addressed by replay-unit index, and the integrity profile it implies."""
+"""The two-stage law: exact stages, draws from the verifier's own randomness (and LEGACY's derived keys) addressed by
+replay-unit index, and the integrity profile it implies."""
 
 from __future__ import annotations
 

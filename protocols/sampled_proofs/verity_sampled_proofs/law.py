@@ -171,5 +171,6 @@ def check_probability(law: TwoStageLaw, cls: str, n_v: int) -> Fraction:
     return Fraction(stage.p) * Fraction(stage.checked(n_v), n_v) if n_v else Fraction(0)
 
 
-__all__ = ["CHECK", "REPLAY", "RU_DOMAIN", "VU_DOMAIN", "Draws", "OwnRandomness", "ReplayUnit", "Stage", "TwoStageLaw", "check_probability",
+__all__ = ["CHECK", "REPLAY", "RU_DOMAIN", "VU_DOMAIN", "Draws", "OwnRandomness", "ReplayUnit", "Stage", "TwoStageLaw",
+           "check_probability",
            "ru_key", "select_replay_units", "select_verification_units", "vu_key"]
