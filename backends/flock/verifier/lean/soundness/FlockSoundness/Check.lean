@@ -81,6 +81,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and
 -- `link_sound`
 #print axioms FlockSoundness.rep_sound
+#print axioms FlockSoundness.table_value_sound
 #print axioms FlockSoundness.table_sound
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
@@ -114,3 +115,64 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Extract.joint_of_fixed
 #print axioms FlockSoundness.table_knowledge_sound
 #print axioms FlockSoundness.table_knowledge_sound_joint
+-- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
+#print axioms FlockSoundness.Game.prob_or_le
+#print axioms FlockSoundness.Game.prob_map
+#print axioms FlockSoundness.Audit.Law.escape_le_of_mem
+#print axioms FlockSoundness.Audit.Law.subset_escape
+#print axioms FlockSoundness.Audit.Law.subset_miss
+#print axioms FlockSoundness.Audit.Law.avg_escape_subsets
+#print axioms FlockSoundness.Audit.Law.choose_support
+#print axioms FlockSoundness.Audit.Law.subset_minimax
+#print axioms FlockSoundness.Audit.Law.subset_escape_le_prod
+#print axioms FlockSoundness.Audit.Law.bernoulli_avg_prod
+#print axioms FlockSoundness.Audit.Law.bernoulli_escape
+#print axioms FlockSoundness.Audit.Law.demo_count_590
+#print axioms FlockSoundness.Audit.Partition.compose
+#print axioms FlockSoundness.Audit.Partition.compose_cone
+#print axioms FlockSoundness.Audit.Partition.correct_congr
+#print axioms FlockSoundness.Audit.Partition.Refines.exists_wrong_fine
+#print axioms FlockSoundness.Audit.Partition.Refines.card_wrong_le
+#print axioms FlockSoundness.Audit.audit_le
+#print axioms FlockSoundness.Audit.audit_profile
+#print axioms FlockSoundness.Audit.audit_count
+#print axioms FlockSoundness.Audit.audit_drawn
+#print axioms FlockSoundness.Game.prob_bind_le
+#print axioms FlockSoundness.Audit.audits_seq
+#print axioms FlockSoundness.Audit.Partition.audit_cone
+#print axioms FlockSoundness.Audit.Partition.audit_cone_count
+#print axioms FlockSoundness.Audit.Partition.audit_covered
+#print axioms FlockSoundness.Audit.Partition.oracle_count
+#print axioms FlockSoundness.Audit.Partition.oracle_profile
+#print axioms FlockSoundness.Audit.Partition.oracle_drawn
+#print axioms FlockSoundness.Audit.Partition.oracle_cone
+-- two-stage audits and their relation to one-stage
+#print axioms FlockSoundness.Game.prCoin_pi_forall
+#print axioms FlockSoundness.Audit.twoStage_profile
+#print axioms FlockSoundness.Audit.twoStage_count
+#print axioms FlockSoundness.Audit.effEscape_full
+#print axioms FlockSoundness.Audit.twoStage_full_profile
+#print axioms FlockSoundness.Audit.effEscape_bernoulli_prod
+#print axioms FlockSoundness.Audit.Partition.two_stage_a_coarse
+#print axioms FlockSoundness.Audit.Partition.Refines.analysis₂
+#print axioms FlockSoundness.Audit.Partition.Refines.oracle₂_profile
+#print axioms FlockSoundness.Audit.Partition.Refines.oracle₂_full_profile
+-- tightness and insecurity on NOT chains
+#print axioms FlockSoundness.Audit.NotChains.effEscape_chains
+#print axioms FlockSoundness.Audit.NotChains.prob_σT
+#print axioms FlockSoundness.Audit.NotChains.two_stage_b_tight
+#print axioms FlockSoundness.Audit.NotChains.naive_two_level_unsound
+#print axioms FlockSoundness.Audit.NotChains.late_interior_insecure
+#print axioms FlockSoundness.Audit.NotChains.effEscape_bernoulli
+-- the Flock instantiation at the oracle layer
+#print axioms FlockSoundness.Audit.value_batch_le
+#print axioms FlockSoundness.Audit.FlockTable.value_le
+#print axioms FlockSoundness.Audit.Partition.flockSession_le
+#print axioms FlockSoundness.Audit.Partition.flock_session_sound
+#print axioms FlockSoundness.Audit.Partition.flock_inputs_sound
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_count
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_count_subset
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_drawn
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_cone
+#print axioms FlockSoundness.Audit.Partition.flock_two_stage_sound
+#print axioms FlockSoundness.Audit.Partition.flock_two_stage_full_profile

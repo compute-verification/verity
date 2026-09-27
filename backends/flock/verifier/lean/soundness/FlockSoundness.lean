@@ -47,3 +47,10 @@ import FlockSoundness.Game.Runs
 import FlockSoundness.CompiledAlign
 import FlockSoundness.Extract
 import FlockSoundness.Knowledge
+import FlockSoundness.Game.Prob
+import FlockSoundness.Audit.Law
+import FlockSoundness.Audit.Circuit
+import FlockSoundness.Audit.OneStage
+import FlockSoundness.Audit.TwoStage
+import FlockSoundness.Audit.Examples
+import FlockSoundness.Audit.Flock
