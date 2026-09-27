@@ -16,8 +16,9 @@ import PousProofs.Thm1.Theorem1iiSeq
 /-!
 # The dense single-layer scheme meets the requirement: `PousDense.dense_meets`
 
-The first end-to-end `Pous.Meets` with no named assumption (`docs/p3-scheme.md` §4, S1). The scheme and the
-statement are `DenseMeetsDraft.lean`'s, verbatim. The proof composes five pieces:
+The first end-to-end `Pous.Meets` with no named assumption, in the random-oracle model (`docs/p3-scheme.md` §4,
+S1). The scheme is the trusted `Pous.Dense.denseScheme`, and the statement is `DenseMeetsDraft.lean`'s, verbatim.
+The proof composes five pieces:
 
 1. **Reach** (`card_reach_le`, `complete_hard`). Greedy pebbling of the complete DAG adds at most the least
    unpebbled node per round, so `B − D − 1` pebbles reach at most `B − 1` nodes in `D` rounds.
@@ -148,39 +149,7 @@ end PousB5
 
 namespace PousDense
 
-open Pous Pous.Labelling
-open scoped ENNReal
-
-/-- The complete DAG on `Fin B`: every earlier node is a parent. -/
-def completeDAG (B : ℕ) : TopoDAG B where
-  par i := Finset.univ.filter fun j => j < i
-  par_lt _ _ hj := (Finset.mem_filter.1 hj).2
-
-/-- The dense scheme's model: B5's random oracle on label-shaped queries. -/
-abbrev denseModel (B ℓ : ℕ) : IdealModel := IdealModel.randomOracle (LabelQry B ℓ) (Bits ℓ)
-
-/-- The `B` blocks of `W`. -/
-def blocks (B ℓ : ℕ) (W : Bits (B * ℓ)) : Fin B → Bits ℓ := (codeEquiv B ℓ).symm W
-
-/-- **S1, the dense single-layer data-carrying labeling** (`docs/p3-scheme.md` §4), on one segment of `B` blocks
-of `ℓ` bits. `C_i = ℓ_i = H(i, ℓ_{<i}) ⊕ W_i` over the complete DAG, with no `pp` and no coins, at rate 1.
-Decoding recomputes `W_i = C_i ⊕ H(i, C_{<i})` with one query per block. -/
-def denseScheme (B ℓ : ℕ) [NeZero B] : Scheme (denseModel B ℓ) where
-  n := B * ℓ
-  t := 0
-  B := B
-  ℓ := ℓ
-  B_pos := Nat.pos_of_ne_zero (NeZero.ne B)
-  Coins := Unit
-  enc W H _ := (fun i => i.elim0, fun i => label (completeDAG B) (blocks B ℓ W) H i)
-  dec _ C f := codeEquiv B ℓ fun i =>
-    bxor (C i) (f (i, fun j => if j ∈ (completeDAG B).par i then some (C j) else none))
-
-end PousDense
-
-namespace PousDense
-
-open Pous Pous.Labelling
+open Pous Pous.Labelling Pous.Dense
 open scoped ENNReal
 
 /-! ### Reach on the complete DAG: `s + D` -/
@@ -331,13 +300,13 @@ end PousDense
 answer, `k = 107` challenges and `ε_crypto = 2^-128`: it is correct, at rate 1, and every `⌊ρ|C|⌋`-bit adversary is
 accepted with probability at most `1% + 2^-128`. -/
 theorem PousDense.dense_meets :
-    Pous.Meets (PousDense.denseScheme (2 ^ 16) 8192) .sequential 64 (2 ^ 20) 107 ((2⁻¹ : ENNReal) ^ 128) := by
+    Pous.Meets (Pous.Dense.denseScheme (2 ^ 16) 8192) .sequential 64 (2 ^ 20) 107 ((2⁻¹ : ENNReal) ^ 128) := by
   refine ⟨le_rfl, PousDense.denseScheme_correct _ _, le_rfl, ?_, ?_⟩
   · show (((2 ^ 16 * 8192 + 0 : ℕ)) : ℚ) ≤ Pous.Params.expansion * ((2 ^ 16 * 8192 : ℕ) : ℚ)
     norm_num [Pous.Params.expansion]
   · intro W A₁ A₂
-    refine (PousProofs.theorem1_ii_seq (PousDense.denseScheme (2 ^ 16) 8192) 64 (2 ^ 20) 531499840
-      ((PousDense.denseScheme (2 ^ 16) 8192).stateBound Pous.Params.ρ) 107 _
+    refine (PousProofs.theorem1_ii_seq (Pous.Dense.denseScheme (2 ^ 16) 8192) 64 (2 ^ 20) 531499840
+      ((Pous.Dense.denseScheme (2 ^ 16) 8192).stateBound Pous.Params.ρ) 107 _
       (PousDense.dense_timedINC (2 ^ 16) 8192 64 (2 ^ 20) 531499840 (by norm_num)) W A₁ A₂).trans ?_
     rw [PousDense.stateBound_dense, add_comm]
     exact add_le_add PousDense.dense_sampling_term PousDense.dense_union_term
