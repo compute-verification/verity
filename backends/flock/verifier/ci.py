@@ -45,7 +45,10 @@ def run_set(i, s, a, ups, store):
         return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
     w = a.work / f"set{i}"
     st = s["statement"]
-    circuit, public, comp = fetch(st["circuit"], store), fetch(st["public"], store), fetch(st["comp"], store)
+    circuit, public = fetch(st["circuit"], store), fetch(st["public"], store)
+    comp = fetch(st["comp"], store) if "comp" in st else None
+    partition = fetch(st["partition"], store) if "partition" in st else None
+    program = fetch(st["program"], store) if "program" in st else None
     tables = fetch(st["tables"], store) if "tables" in st else None
     checks = ",".join(s.get("upstream_checks", [])) or "none"
     sessions, expects = [], []
@@ -72,7 +75,8 @@ def run_set(i, s, a, ups, store):
         py(HERE / "selftest_records.py", fetch(rd, store), d)
         sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
     cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
-           "--circuit", circuit, "--comp", comp, "--public", public, *(x for e in expects for x in ("--expect", e)),
+           "--circuit", circuit, *(("--comp", comp) if comp else ()), *(("--partition", partition) if partition else ()), *(("--program", program) if program else ()),
+           "--public", public, *(x for e in expects for x in ("--expect", e)),
            "--out", w / "agree", "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
