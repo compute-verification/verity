@@ -43,6 +43,10 @@ import FlockSoundness.LigeritoPhases
 import FlockSoundness.LigeritoMid
 import FlockSoundness.LigeritoPhase
 import FlockSoundness.Instance
+import FlockSoundness.Game.Runs
+import FlockSoundness.CompiledAlign
+import FlockSoundness.Extract
+import FlockSoundness.Knowledge
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
@@ -54,3 +58,5 @@ import FlockSoundness.Game.Runs
 import FlockSoundness.CompiledAlign
 import FlockSoundness.Extract
 import FlockSoundness.Knowledge
+import FlockSoundness.Audit.Extraction
+import FlockSoundness.Audit.FlockCompiled

@@ -423,4 +423,27 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 
 The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 
-**Not yet:** the compiled instantiation, `KnowledgeSound` and `LinkSound` for Flock (DESIGN.md §12.5).
+**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12):
+
+- `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
+  extractor**. Per drawn unit, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
+  probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
+  on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
+  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+- `flock_compiled_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit with one table per session and
+  the leaf layer registered (the demo's configuration). The knowledge term is `table_knowledge_sound_joint`'s bound
+  for the prover's table strategy after each draw, averaged over the draw (`ksAvg`):
+  $\mathbb E_\omega[2\varepsilon_c^-(\sigma_\omega) + 2(K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK))]$, which is
+  $2\varepsilon_c^- + t\cdot2^{-243.7}$ at the best $K$ under the generic collision bound. Its only named
+  assumption is BCHKS25 Theorem 4.6;
+- `flock_compiled_count`, `flock_compiled_drawn`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
+  \delta_{link}(\sigma)$, and drawn units up to $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
+
+| Named at the compiled layer | Meaning | Discharged by |
+|---|---|---|
+| `ExtractionAnalysis.LinkSound` (`analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
+| `Partition.LoweringSoundC` | a message packing a witness that satisfies the table's statement decodes to values on which every drawn unit is correct | the lowering theorem (level 3), with the `hm96` leaf layout (`decode`) |
+
+**Not yet:** sessions of several compiled tables, where `ks` for a unit is `session_knowledge_sound` for the one table
+of the plan that unit reads (flock-soundness, not yet merged); the serving-tree term when the leaf layer is not
+registered; `LinkSound` itself.
