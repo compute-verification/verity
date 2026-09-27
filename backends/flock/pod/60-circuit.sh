@@ -19,7 +19,7 @@ TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) /
 F=/workspace/flock-gpu-link/flock; FEAT="--features sha512"
 # SHA-512 Merkle trees, leaves and nodes, every Ligerito level (64-byte digests): the Rust side on every build, the device side
 # after the circuit prover is generated (it widens both provers' trees)
-(cd $F && git apply $REPO/backends/flock/flock-sha512-b684b12.patch) || exit 1
+(cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_circuit_patch.py && python3 $REPO/backends/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
