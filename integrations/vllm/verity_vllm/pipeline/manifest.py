@@ -10,8 +10,9 @@ a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>
 are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `--norm-scales` (opt-in, never the record) adds the norm-scale
 policy (`query.norm_scales`), `--guarded-max` (likewise) the guarded-max policy (`query.guarded_max`: a query-header statement, the
-identities are the record's).  `--cross-call-check` (opt-in) fails the Build when a value is computed in two Calls
-(`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
+identities are the record's); `--router-softmax` and `--vocab-range` (opt-in, never the record) add the router-softmax and vocabulary-range
+policies (`query.router_softmax`, `query.vocab_range`).  `--cross-call-check` (opt-in) fails the Build when a value is
+computed in two Calls (`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -32,9 +33,19 @@ from verity_vllm.query.required import compose_global, merge_ranks, request_mani
 from verity_vllm.query import cross_call
 from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
+from verity_vllm.query import router_softmax as RS
+from verity_vllm.query import vocab_range as VR
 from verity_vllm.query import word as word_query
 
-__all__ = ["build", "build_global", "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["TAPS", "taps_of", "build", "build_global", "build_global_ranks", "cross_call_check", "main"]
+
+#: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
+TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
+
+
+def taps_of(router_softmax: bool = False, vocab_range: bool = False) -> tuple[str, ...]:
+    """The tap policy names a manifest is built under, in `TAPS` order."""
+    return tuple(name for name, on in ((RS.FAMILY, router_softmax), (VR.FAMILY, vocab_range)) if on)
 
 
 def _load_json(p: str) -> Any:
@@ -72,8 +83,7 @@ def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
           profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, guarded_max: bool = False,
-          cross_call: bool = False,
-          log=None) -> dict[str, Any]:
+          taps: tuple[str, ...] = (), cross_call: bool = False, log=None) -> dict[str, Any]:
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))
@@ -81,9 +91,11 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     art = _load_json(art_p) if os.path.exists(art_p) else None
     corr = Correspondence.of(P, program_dir, implementation_paths=Correspondence.implementation_paths_of(res))   # the record when the Build carries it, else v1 annotations
     r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
-                         profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None)
+                         profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None,
+                         taps=tuple(TAPS[t] for t in taps))
     if word:
-        word_check(P, corr, r.required, word, acquired=dict(NS.TAP_WORDS) if norm_scales else None, log=log)
+        acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}}
+        word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps) else None, log=log)
     if guarded_max:
         r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P))
     if cross_call:
@@ -121,7 +133,7 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
 
 def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
                  profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                 guarded_max: bool = False, cross_call: bool = False, log=None) -> dict[str, Any]:
+                 guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, log=None) -> dict[str, Any]:
     declared = [dict(r, index=int(r.get("index", i))) for i, r in enumerate(fixture["requests"])]
     if len({r["index"] for r in declared}) != len(declared):
         raise ValueError("workload declaration: duplicate request index")
@@ -135,7 +147,7 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
         d = dirs[str(r["workload_request_id"])]
         wl = {"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}}
         parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, word=word,
-                           norm_scales=norm_scales, guarded_max=guarded_max, cross_call=cross_call, log=log)
+                           norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, log=log)
         if len(parts[rid]["steps"]) != int(r["max_tokens"]):
             raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
     man = compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
@@ -146,7 +158,7 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
 
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                       guarded_max: bool = False, cross_call: bool = False, log=None) -> dict[str, Any]:
+                       guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
     wds = list(workload_digests or [None] * len(roots))
     if len(ranks) != len(roots) or len(wds) != len(roots):
@@ -154,7 +166,7 @@ def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[in
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
     parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, word=word,
-                          norm_scales=norm_scales, guarded_max=guarded_max, cross_call=cross_call, log=log)
+                          norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, log=log)
              for root, r, wd in zip(roots, ranks, wds)]
     return merge_ranks(parts) if world > 1 else parts[0]
 
@@ -213,6 +225,10 @@ def _write(man: dict[str, Any], out: str) -> None:
         json.dump(man, f, separators=(",", ":"))
 
 
+ROUTER_SOFTMAX_HELP = ("opt-in, never the record: the router-softmax policy (verity_vllm.query.router_softmax) -- one router_softmax identity "
+                       "per (step, MoE layer) of the selection-order router, `moe/L<k>/router_softmax`; the Commit then needs --router-tap-so")
+VOCAB_RANGE_HELP = ("opt-in, never the record: the vocabulary-range policy (verity_vllm.query.vocab_range) -- one vocab_range identity per "
+                    "(step, TP embedding site), `<embedding module>/vocab_range`; the Commit then needs --vocab-range")
 NORM_SCALES_HELP = ("opt-in, never the record: the norm-scale policy (verity_vllm.query.norm_scales) -- one norm_scales identity per norm "
                     "Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
 CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
@@ -233,6 +249,8 @@ class BuildOptions:
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
     norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
+    router_softmax: bool = option("--router-softmax", default=False, action="store_true", help=ROUTER_SOFTMAX_HELP)
+    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
@@ -254,6 +272,8 @@ class BuildGlobalOptions:
                                     help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
     norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
     guarded_max: bool = option("--guarded-max", default=False, action="store_true", help=GUARDED_MAX_HELP)
+    router_softmax: bool = option("--router-softmax", default=False, action="store_true", help=ROUTER_SOFTMAX_HELP)
+    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
@@ -296,7 +316,7 @@ def main(a: Any) -> int:
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,
-                    word=a.word_check, norm_scales=a.norm_scales, guarded_max=a.guarded_max,
+                    word=a.word_check, norm_scales=a.norm_scales, guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
                     cross_call=a.cross_call_check, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
@@ -305,7 +325,8 @@ def main(a: Any) -> int:
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
                                  profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
-                                 guarded_max=a.guarded_max, cross_call=a.cross_call_check, log=log)
+                                 guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
+                                 cross_call=a.cross_call_check, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
