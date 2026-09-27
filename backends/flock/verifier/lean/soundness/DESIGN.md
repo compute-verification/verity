@@ -554,6 +554,7 @@ If real concurrency is ever needed:
   - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
-    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1. `unitPlace_of_setupH` gives
+    the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the spec
     decides between expected-time collision resistance and the random-oracle column.

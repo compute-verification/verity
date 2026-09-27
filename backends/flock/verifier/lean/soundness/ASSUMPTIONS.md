@@ -123,12 +123,12 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems proved; `registered_weights` and `δ_link` **to write** (DESIGN.md §3); required for sampled audits (§7) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean` (§1.5) | the generic step proved; the placement and L1 remain |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; L1 remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (§9) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-195.4` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
-| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
+| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | L1: each template's rows compute its gates (§1.5) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
@@ -164,7 +164,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     the pin. Those facts are what the verifier's matrices (L3-A's `placedA`/`placedB`) and Δ give, next.
   - **Δ's rows** (`delta_rows`, `ExecDelta.lean`): every row `HmRow.delta` writes is a slot constant other than the pin,
     or an input-port bit of a net slot (a row's first `cv`, an hm96 `pad`, a unit's leaf or leaf-cut bit, a wire's
-    destination). That none is a unit's computed row follows from the layout checks, next.
+    destination). That none is a unit's computed row follows from the layout checks (`delta_split`, `deltaIn_inBit`).
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the transcript decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
@@ -174,9 +174,25 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
-- **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
-  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (§5); the plan is
-  `note:audit-lean/20260927T1030Z-draft-row-placement-plan`, and its first step, `Rows.ofNet`, is proved.
+- **The placement, from the executable's accept step** (`placement_of_setupH`, `ExecSetup.lean`). When `Stmt.setupH`
+  accepts, VU `g`'s stacked unit slots are placed at `ur.slot (g·upv + u)`, the shared constant at the pin, in the model
+  statement of the matrices the verifier folds (flock-verifier's `placedA`/`placedB`, PR #156; `Layout.model`).
+  `unitPlace_of_setupH` is the `UnitPlace` that `loweringSoundB_of_place` takes, given the unit's instance in the audit
+  circuit (`IsRowsUnit`, the circuit side).
+  - `Layout.placement` (`ExecPlacement.lean`) proves `Placement` from the layout facts `Layout` names. At a unit copy's
+    computed rows only its slot has entries (pairwise-apart spans, `rangesEntry_of_covers`) and Δ has none. At its
+    constant Δ's `(k, k)` cancels the row's own entry and `(k, pin)` reads the pin. The pin's row reads itself.
+  - `setupH_layout` derives `Layout`:
+    - `HmRow.parse` gives text nets and lookup slots only (`parse_facts`);
+    - `HmRow.check` gives the layout (`check_facts`);
+    - `HmRow.pin` gives the pin's range;
+    - `HmRow.delta`'s first loop writes exactly the slot constants' pairs, and every later pair is an input bit of a
+      net slot (`delta_split`, `deltaIn_inBit`).
+  - Two executable checks were added for it, proposed to flock-verifier:
+    - `Net.parse` refuses a net whose input rows reach its constant. Otherwise an input port can cover a slot's
+      constant column, and Δ's copies rewrite that row.
+    - `HmRow.pin` refuses a pin range with no slot. Otherwise the pin's row is empty, or, for a packed range, lands
+      inside another range.
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
   about the program's Boolean circuit only through L1.
@@ -228,7 +244,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     extracted (§1.3).
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
-  step, for every template, is proved here (§1.5). The placement for the executable's statement and L1 remain.
+  step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
+  (`placement_of_setupH`). L1 remains.
 
 ## 3. Named assumptions (mathematics taken without proof)
 
@@ -529,7 +546,7 @@ the link makes the readings agree.
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
 | `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, §1.5), given the statement builder's `Placement` (level 3) and L1 |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, §1.5); `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and L1 |
 
-**Not yet:** the serving-tree term when the leaf layer is not registered; `LinkSound` itself; `Placement` for the
-executable's statements.
+**Not yet:** the serving-tree term when the leaf layer is not registered; `LinkSound` itself; which instance each drawn
+unit is (the draw's unit index to its block and VU).
