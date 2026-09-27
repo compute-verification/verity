@@ -507,6 +507,11 @@ The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
   `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+- `extraction_audit_le_rel`, `extraction_audit_count_rel`: the same with a **relative** knowledge term, as an
+  expected-time extractor gives it (`KnowledgeSoundRel α εks`: at most `α·Pr[accept] + ε_ks` at the picked unit), so
+  $\delta(K) = \mathrm{miss}_L(K) + (\varepsilon_{ks} + \delta_{link})/(1-\alpha)$. With expected-time collision resistance
+  for SHA-512 (the assumption of record for the value layer) and $\alpha = 2/c$, $c = 4$, this is where the profile's
+  per-unit $t\cdot2^{-205.6}$ for audit B comes from; the link theorem and the extractor are flock-soundness's, next;
 - `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
   of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each drawn unit is read from one
   table of the plan (`tab`). The knowledge term is, after each draw, the largest over the plan's tables of the table's

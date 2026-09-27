@@ -244,3 +244,6 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 -- the rows Δ writes, by loop (HmRow.delta)
 #print axioms FlockSoundness.forIn_id_inv
 #print axioms FlockSoundness.delta_rows
+-- the audit with a relative knowledge term (an expected-time extractor)
+#print axioms FlockSoundness.Audit.extraction_audit_le_rel
+#print axioms FlockSoundness.Audit.extraction_audit_count_rel

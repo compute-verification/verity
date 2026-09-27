@@ -18,6 +18,11 @@ in the joint form the table and session theorems state (agreed with lane flock-s
 The named hypotheses bound `ks` and `link` at the unit a rule picks before the session's first coin,
 averaged over the draw (`KnowledgeSound`, `LinkSound`); the bounds are functions of the prover's
 state. `extraction_audit_le` is `audit_le` in this form; the count curve is `extraction_audit_count`.
+
+**An expected-time extractor** bounds the knowledge term relative to acceptance: at the picked unit
+it is at most `α` times the acceptance probability there, plus `ε_ks` (`KnowledgeSoundRel`; `α = 2/c`
+for an extractor that reruns until `c·N₀/e` reruns accept). With `cover`, acceptance at a hit is then
+at most `(ε_ks + δ_link)/(1 − α)` (`extraction_audit_le_rel`, `extraction_audit_count_rel`).
 -/
 
 namespace FlockSoundness.Audit
@@ -76,6 +81,14 @@ def LinkSound (δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Pro
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u (A.committed R τ)) ≤
       δlink R τ
+
+/-- **Knowledge soundness, relative** (an expected-time extractor): at the picked unit, the knowledge
+term is at most `α` times the acceptance probability there, plus `ε_ks`, averaged over the draw. -/
+def KnowledgeSoundRel (α : ℝ≥0∞) (εks : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
+  ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
+    avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) ≤
+      α * avg (fun ω => atTgt (L.draw ω) (tgt ω) fun _ => prob (· = true) (session (L.draw ω) R) (τ ω)) +
+        εks R τ
 
 end ExtractionAnalysis
 
@@ -196,5 +209,94 @@ theorem extraction_audit_drawn (A : ExtractionAnalysis L Reg session)
     le_antisymm ((prCoin_mono (q := fun _ => False) fun ω h => h.1 h.2.symm).trans
       prCoin_false.le) (zero_le)
   rw [this, zero_add]
+
+theorem le_div_of_le_mul_add {H α c : ℝ≥0∞} (hα : α < 1) (hH : H ≠ ⊤) (h : H ≤ α * H + c) :
+    H ≤ c / (1 - α) := by
+  have hne : (1 - α) ≠ 0 := (tsub_pos_of_lt hα).ne'
+  rw [ENNReal.le_div_iff_mul_le (Or.inl hne) (Or.inl (ne_top_of_le_ne_top ENNReal.one_ne_top tsub_le_self))]
+  have hαH : α * H ≠ ⊤ := ENNReal.mul_ne_top (ne_top_of_lt (hα.trans ENNReal.one_lt_top)) hH
+  rw [ENNReal.mul_sub (fun _ _ => hH), mul_one]
+  exact tsub_le_iff_left.2 (by rw [mul_comm]; exact h)
+
+/-- **The one-stage audit bound with a relative knowledge term**:
+`Pr[accept ∧ E] ≤ Pr[E ∧ the draw misses the wrong set] + (ε_ks + δ_link)/(1 − α)`. -/
+theorem extraction_audit_le_rel (A : ExtractionAnalysis L Reg session) {α : ℝ≥0∞} (hα : α < 1)
+    {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSoundRel α εks)
+    (hlink : A.LinkSound δlink) (E : A.Tr → Finset (Fin n) → Prop)
+    (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ E (A.committedOf σ) o.2) (audit L Reg session) σ ≤
+      prCoin (fun ω => E (A.committedOf σ) (L.draw ω) ∧
+        Disjoint (L.draw ω) (A.wrong (A.committedOf σ))) +
+      (εks (reg σ) (cont σ) + δlink (reg σ) (cont σ)) / (1 - α) := by
+  classical
+  obtain ⟨R, τ'⟩ := σ
+  set τ : Cont L Reg session R := cont ⟨R, τ'⟩
+  set X := A.committed R τ with hX
+  show prob _ (audit L Reg session) ⟨R, τ'⟩ ≤
+    prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.wrong X)) + (εks R τ + δlink R τ) / (1 - α)
+  let tgt : L.Ω → Option (Fin n) := fun ω =>
+    if h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.wrong X then some (Classical.choose h) else none
+  let acc : L.Ω → ℝ≥0∞ := fun ω =>
+    atTgt (L.draw ω) (tgt ω) fun _ => prob (· = true) (session (L.draw ω) R) (τ ω)
+  have step : ∀ ω, prob (fun ok => ok = true ∧ E X (L.draw ω)) (session (L.draw ω) R) (τ ω) ≤
+      (if E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.wrong X) then 1 else 0) + acc ω := by
+    intro ω
+    by_cases hd : Disjoint (L.draw ω) (A.wrong X)
+    · rw [prob_and_const]
+      by_cases hE : E X (L.draw ω)
+      · simp only [hE, hd, and_self, ite_true]
+        exact (prob_le_one _ _ _).trans le_self_add
+      · simp only [hE, ite_false, false_and, zero_le]
+    · have h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.wrong X := by
+        obtain ⟨u, hu, hu'⟩ := Finset.not_disjoint_iff.1 hd
+        exact ⟨u, hu, hu'⟩
+      have ht : tgt ω = some (Classical.choose h) := by simp only [tgt, h, dite_true]
+      obtain ⟨hmem, -⟩ := Classical.choose_spec h
+      have hacc : acc ω = prob (· = true) (session (L.draw ω) R) (τ ω) := by simp [acc, atTgt, ht, hmem]
+      rw [hacc]
+      exact (prob_mono (fun ok h => h.1) _ _).trans le_add_self
+  -- at the target, acceptance is covered by the knowledge and link terms
+  have hcov : ∀ ω, acc ω ≤ atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω)) +
+      atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u X := by
+    intro ω
+    by_cases h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.wrong X
+    · have ht : tgt ω = some (Classical.choose h) := by simp only [tgt, h, dite_true]
+      obtain ⟨hmem, hw⟩ := Classical.choose_spec h
+      simp only [acc, atTgt, ht, Option.elim_some, hmem, ite_true]
+      exact A.cover _ R _ _ X hmem hw
+    · have ht : tgt ω = none := by simp only [tgt, h, dite_false]
+      simp [acc, atTgt, ht]
+  have hH : avg acc ≤ α * avg acc + (εks R τ + δlink R τ) := by
+    calc avg acc ≤ avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) +
+          avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u X) :=
+        (avg_mono hcov).trans (avg_add _ _).le
+      _ ≤ (α * avg acc + εks R τ) + δlink R τ := add_le_add (hks R τ tgt) (hlink R τ tgt)
+      _ = _ := by rw [add_assoc]
+  have hfin : avg acc ≠ ⊤ := by
+    refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+    calc avg acc ≤ avg (fun _ => (1 : ℝ≥0∞)) :=
+          avg_mono fun ω => atTgt_le (fun u _ => prob_le_one _ _ _) (tgt ω)
+      _ = 1 := avg_const 1
+  calc prob (fun o => o.1 = true ∧ E X o.2) (audit L Reg session) ⟨R, τ'⟩
+      = avg fun ω => prob (fun ok => ok = true ∧ E X (L.draw ω)) (session (L.draw ω) R) (τ ω) :=
+        congrArg avg (funext fun ω => prob_map _ _ _ _)
+    _ ≤ avg fun ω => (if E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.wrong X) then 1 else 0) + acc ω :=
+        avg_mono step
+    _ = _ := avg_add _ _
+    _ ≤ _ := add_le_add (avg_ite_eq_prCoin _).le (le_div_of_le_mul_add hα hfin hH)
+
+/-- **The count curve with a relative knowledge term**:
+`Pr[accept ∧ at least K wrong units] ≤ miss K + (ε_ks(σ) + δ_link(σ))/(1 − α)`. -/
+theorem extraction_audit_count_rel (A : ExtractionAnalysis L Reg session) {α : ℝ≥0∞} (hα : α < 1)
+    {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSoundRel α εks)
+    (hlink : A.LinkSound δlink) (K : ℕ) (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ K ≤ (A.wrong (A.committedOf σ)).card) (audit L Reg session) σ ≤
+      L.miss K + (εks (reg σ) (cont σ) + δlink (reg σ) (cont σ)) / (1 - α) := by
+  refine (extraction_audit_le_rel A hα hks hlink (fun X _ => K ≤ (A.wrong X).card) σ).trans ?_
+  gcongr
+  by_cases hB : K ≤ (A.wrong (A.committedOf σ)).card
+  · exact (prCoin_mono fun ω h => h.2).trans (L.escape_le_miss hB)
+  · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans
+      (prCoin_false.le.trans (zero_le))
 
 end FlockSoundness.Audit
