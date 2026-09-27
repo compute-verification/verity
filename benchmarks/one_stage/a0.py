@@ -9,8 +9,8 @@ verifier, the Lean verifier's draw checks, and the audit record with its integri
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the registration says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
-* **Verifier of record.** Lean's `verify` doesn't parse M0's `eb90718f` statement yet, so it is recorded as not run, and
-  the audit record is incomplete. Lean checks U1-U3 on the draw; M0's own verifier (`flock-circuit serve`) checks the proof.
+* **Verifier of record.** Lean's `flock-verify verify` (PR #118) replays the session offline with the circuit and the public
+  file held by content; Lean also checks U1-U3 on the draw, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
 
@@ -34,8 +34,7 @@ from verity_one_stage import audit, draw as D, partition as P, registration as R
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
 STAND_IN_BINDING = "verity/flock-ir-frame/binding/v1"   # M0's set-bound frame domains (verity_flock.ir_frame.BINDING_TAG)
-LEAN_VERIFY_NOT_RUN = ("flock-verify parses M0's previous statement formats; the eb90718f format (hm96-sha512 rows in the "
-                       "circuit, SHA-512 statement and record) is the Lean verifier lane's follow-up to #113")
+STATEMENT_ID = "verity/flock-circuit"
 
 
 def sha512_file(path: Path) -> str:
@@ -157,13 +156,32 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
+def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
+    """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
+    held by content (`--archive`, SHA-512 keys)."""
+    sessions = sorted((out / "sessions").glob("*/session.json"))
+    if not sessions:
+        return {"accepted": False, "of_record": True, "why": "no session recorded"}
+    archive = out / "archive"
+    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin")], out / "archive-put.log")
+    keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
+    t = time.time()
+    p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
+             "--public", keys.get(f"pub-{n}.bin", ""), "--session", str(sessions[-1].parent)], out / "lean-verify.log")
+    line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
+    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
+    return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
+            "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
+
+
 def proved_units(header: dict, live: dict) -> list[int]:
     """The drawn statement's units as global unit indices: the population header's index of each drawn position."""
     pop = header["units"]["indices"]
     return [pop[u] for u in (live.get("unit_draw") or {}).get("units", [])]
 
 
-def audit_session(rec: dict, receipt: dict, header: dict, law: dict, record, live, lean: str, out: Path, delta: float) -> dict:
+def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, record, live, lean: str, lean118: str, out: Path,
+                  delta: float) -> dict:
     """Every check on one session, then the audit record."""
     draw = (record or {}).get("unit_draw")
     verifier = (record or {}).get("verdict") or {}
@@ -172,13 +190,13 @@ def audit_session(rec: dict, receipt: dict, header: dict, law: dict, record, liv
     statement = {"circuit_sha512": (live or {}).get("circuit_sha512"), "statement_digest": (live or {}).get("statement_digest"),
                  "public_sha512": (live or {}).get("public_sha512"), "sigma": (live or {}).get("sigma"),
                  "roots": (live or {}).get("roots"), "coin_commitment": ((record or {}).get("coin_seed") or {}).get("commitment"),
-                 "roots_are_registered": (live or {}).get("roots") == rec["roots"]}
+                 "roots_are_registered": (live or {}).get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
     verdicts = {
         "m0-verifier": {"accepted": verifier.get("accepted") is True and statement["roots_are_registered"],
                         "why": verifier.get("why"), "tool": "flock-circuit serve (M0, PR #83 eb90718f)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
                             "tool": "flock-verify draw-test (PR #113 9d0d53df)"},
-        "lean-verify": {"accepted": None, "of_record": True, "why": LEAN_VERIFY_NOT_RUN, "tool": "flock-verify verify --archive"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive (PR #118)"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
@@ -192,13 +210,15 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True)
+    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks (PR #113)")
+    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify (PR #118); default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     a = ap.parse_args()
+    a.lean_verify = a.lean_verify or a.lean
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     s = InputSet.open(a.set)
@@ -250,7 +270,7 @@ def main() -> int:
     t = time.time()
     record, live = session(a.bin, st, n, law_text, a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
-    result = audit_session(rec, receipt, header, law, record, live, a.lean, out / "session", a.delta)
+    result = audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean_verify, out / "session", a.delta)
     result["checks_before_draw"] = checks
     result["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "tp_s", "proof_bytes", "k_log", "units")}
     result["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
@@ -313,10 +333,12 @@ def main() -> int:
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},
                     leaf_layer=sha512_file(tst["dir"] / f"pub-{tn}.bin"))
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
-    tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), theader, tlaw, trecord, tlive, a.lean,
-                         out / "session-tampered", a.delta)
+    tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), tst, theader, tlaw, trecord, tlive, a.lean,
+                         a.lean_verify, out / "session-tampered", a.delta)
     neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None,
                                 "verifier": ((trecord or {}).get("verdict") or {}).get("why"),
+                                "lean": tres.get("verdicts", {}).get("lean-verify", {}).get("why"),
+                                "lean_refused": tres.get("verdicts", {}).get("lean-verify", {}).get("accepted") is False,
                                 "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
     summary["negatives"] = {k: v.get("refused", v.get("passed")) for k, v in neg.items()}
