@@ -1,7 +1,18 @@
-"""The Commit stage's opt-in serving rows: every head of the run's ``RoPE_v1`` rows, read exactly as the replay reads them (``x``
-and ``out`` from the committed store through an opened reader, ``cs`` from the registered weights), committed in M0's serving
-row format by :mod:`verity_vllm.commit.serving_rows`.  Off unless the row stage writes a request (``commit --serving-rows``):
-``{"dir", "partition", "run", "committer"}``, the partition file being the verifier's, fixed before serving.
+"""The Commit stage's opt-in serving rows: the units of the verifier's partition, read exactly as the replay reads them (committed
+members through an opened reader, registered weights for weight slices), committed in M0's serving row format by
+:mod:`verity_vllm.commit.serving_rows`.  Off unless the row stage writes a request (``commit --serving-rows``):
+``{"dir", "partition", "run", "committer"}``.  The partition file (``{partition, partition_digest, population, scope?}``) is the
+verifier's, fixed before serving; ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``).
+
+Members come from the partition's query, in its order (``Q_template_instances``' ``params.templates``, or
+``Q_template_instance``'s one ``template``), each named by its descriptor id:
+
+  ``RoPEHead_v1{D=64}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (64 words each)
+  any other ``<Family>{...}``      every row of that family, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
+                                   committed member (``vu_export._decompose_row``'s port rule)
+
+Units go in request order, then Program row index, then head (``commit.serving_rows.ORDER``).  In a prefill step the Program lists
+a layer's q rows for every token before its k rows, so RoPE's heads are q heads for every prefill token, then k heads.
 """
 from __future__ import annotations
 
@@ -20,6 +31,9 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.query.manifest import format as RM
+
+ROPE, ROPE_FAMILY, D = "RoPEHead_v1", "RoPE_v1", 64
+_LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
 def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs: dict[str, dict[str, Any]], bmap: dict[str, Any],
@@ -43,53 +57,108 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
     return weights, OpenedReader(com, rc)
 
 
-def rope_rows(programs: dict[str, dict[str, Any]], program_dirs: dict[str, str] | None = None) -> list[tuple[str, Any, dict, dict]]:
-    """The ``RoPE_v1`` rows in ``commit.serving_rows.ORDER``: (request, its ProgramIndex, the row, its description).  The population
-    is the sum of their NHEADS, fixed by the Build's Programs before serving."""
-    out = []
+def templates(partition: dict[str, Any]) -> list[str]:
+    """The partition's templates (descriptor ids), in its order."""
+    q = partition["query"]
+    params = q.get("params") or {}
+    if "templates" in params:
+        return list(params["templates"])
+    if "template" in params or "template" in q:
+        return [params.get("template") or q["template"]]
+    raise ValueError(f"no templates in the partition's query {q.get('name')!r}")
+
+
+def _family(template: str) -> str:
+    name = template.split("{", 1)[0]
+    if name == ROPE:
+        return ROPE_FAMILY
+    if name.startswith("GemmCoordinate"):
+        raise NotImplementedError(f"{template}: GEMM coordinates are committed as shared rows (P6), not by this reader yet")
+    return name
+
+
+def _statics_match(template: str, statics: dict[str, Any]) -> bool:
+    """The row's integer statics, as ``NAME=value``, all appear in the descriptor id (RoPE: only ``D``)."""
+    if template.startswith(ROPE):
+        return f"D={statics.get('D')}" in template
+    return all(f"{k}={v}" in template for k, v in statics.items() if isinstance(v, int))
+
+
+def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
+                program_dirs: dict[str, str] | None = None) -> list[list[tuple[str, Any, dict, dict]]]:
+    """Per template, its rows in order: (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
+    prefix).  Fixed by the Build's Programs before serving."""
+    fams = [_family(t) for t in tmpls]
+    out: list[list[tuple[str, Any, dict, dict]]] = [[] for _ in tmpls]
     for rid, inst in programs.items():
         pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)))
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
-            if RM.spec_family(r["spec"]) == CS.FAMILY:
-                d = pi.describe(r)
-                if int(d["statics"]["D"]) != CS.D:
-                    raise ValueError(f"row {i}: RoPE_v1 D={d['statics']['D']}; serving rows commit D={CS.D} heads only")
-                out.append((str(rid), pi, r, d))
-    if not out:
-        raise LookupError(f"no {CS.FAMILY} rows in the run's Programs")
+            f = RM.spec_family(r["spec"])
+            if f not in fams:
+                continue
+            d = pi.describe(r)
+            if d is None or (scope and not d["op_path"].startswith(scope)):
+                continue
+            k = fams.index(f)
+            if not _statics_match(tmpls[k], d["statics"]):
+                raise ValueError(f"row {i} ({r['spec']}) is not an instance of {tmpls[k]}")
+            out[k].append((str(rid), pi, r, d))
+    for t, rows in zip(tmpls, out, strict=True):
+        if not rows:
+            raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else ""))
     return out
 
 
-def population(programs: dict[str, dict[str, Any]], program_dirs: dict[str, str] | None = None) -> int:
-    return sum(int(d["statics"]["NHEADS"]) for _, _, _, d in rope_rows(programs, program_dirs))
+def members(tmpls: Sequence[str], rows: Sequence[list[tuple[str, Any, dict, dict]]]) -> list[CS.Member]:
+    """Each template's ports, instance count and base, read off its first row."""
+    out, base = [], 0
+    for t, rs in zip(tmpls, rows, strict=True):
+        _rid, _pi, r, d = rs[0]
+        if t.startswith(ROPE):
+            n = sum(int(x[3]["statics"]["NHEADS"]) for x in rs)
+            m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
+        else:
+            groups = tuple((f"in{g}", sum(int(sl[3]) - int(sl[2]) for sl in grp)) for g, grp in enumerate(r["args"]))
+            m = CS.Member(t, groups, tuple((f"out.{mm[0]}", int(mm[1])) for mm in d["members"]), len(rs), base)
+        out.append(m)
+        base += m.n
+    return out
 
 
-_LAYER = re.compile(r"\.layers\.(\d+)\.")
-
-
-def rope_units(rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable, *, arrivals: dict[str, int] | None = None,
-               ) -> tuple[list[list[Any]], dict[str, np.ndarray], np.ndarray]:
-    """Every head of every row, its words read from the committed store (``x``, ``out``) and the registered weights (``cs``)
-    exactly as the replay reads them.  Returns (index entries, rows per input port, out)."""
+def read(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable,
+         arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
+    """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
+    index entries."""
+    cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     entries: list[list[Any]] = []
-    xs, css, outs = [], [], []
-    n = 0
+    lo = m.base
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
-        nh = int(d["statics"]["NHEADS"])
         ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
-        (member, width, _dt), = d["members"]
-        w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
-        if w is None:
-            raise LookupError(f"row {r['i']} output: {why}")
-        xs.append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, CS.D))
-        css.append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, CS.D), (nh, CS.D)))
-        outs.append(np.asarray(w, dtype=np.uint16).reshape(nh, CS.D))
-        m = _LAYER.search(d["op_path"])
-        entries.append([n, n + nh, rid, arrive + int(d["step"]), int(m.group(1)) if m else None, d["op_path"], str(member), int(d["row"]), int(r["i"])])
-        n += nh
-    return entries, {"x": np.concatenate(xs), "cs": np.concatenate(css)}, np.concatenate(outs)
+        outs = {}
+        for member, width, _dt in d["members"]:
+            w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
+            if w is None:
+                raise LookupError(f"row {r['i']} output {member}: {why}")
+            outs[member] = np.asarray(w, dtype=np.uint16)
+        if m.template.startswith(ROPE):
+            nh = int(d["statics"]["NHEADS"])
+            cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
+            cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
+            cols["out"].append(next(iter(outs.values())).reshape(nh, D))
+        else:
+            nh = 1
+            for g, a in enumerate(ops):
+                cols[f"in{g}"].append(np.asarray(a, dtype=np.uint16).reshape(1, -1))
+            for member, a in outs.items():
+                cols[f"out.{member}"].append(a.reshape(1, -1))
+        layer = _LAYER.search(d["op_path"])
+        entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
+                        ",".join(str(mm[0]) for mm in d["members"]), int(d["row"]), int(r["i"])])
+        lo += nh
+    data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
+    return data, entries
 
 
 def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> np.ndarray:
@@ -124,24 +193,29 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None) -> dict[str, Any]:
-    """The Commit stage's opt-in hook, after the vllm-v1 roots are final and before any challenge: commit the run's RoPE heads
-    and write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
+    """The Commit stage's opt-in hook, after the vllm-v1 roots are final and before any challenge: commit the partition's units and
+    write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     served = {CS.program_sha512(dirs[str(r)]) for r in programs}
     if len(served) != 1:
         raise NotImplementedError(f"serving rows register one served Program; this run has {len(served)}")
-    window = CS.Window.from_file(partition_file, run)
-    rows = rope_rows(programs, dirs)
-    entries, cols, out = rope_units(rows, CommittedStore.of_record(bmap, committed, manifest), weights, arrivals=arrivals)
+    pf = json.loads(Path(partition_file).read_text())
+    tmpls = templates(pf["partition"])
+    rows = member_rows(programs, tmpls, (pf.get("scope") or {}).get("op_path_prefix"), dirs)
+    ms = members(tmpls, rows)
+    window = CS.Window.from_file(partition_file, run, ms)
+    store = CommittedStore.of_record(bmap, committed, manifest)
+    got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
-    c = CS.commit(window, cols, out, workers=workers or min(16, os.cpu_count() or 1))
+    c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
     source = {"row": row, "run": run, "committer": dict(committer or {}, module=CS.__name__), "served_program": served.pop(),
-              "served_program_digest": sorted({str(i.get("digest")) for i in programs.values()}), "vllm_v1_run_root": bytes(run_root).hex()}
+              "served_program_digest": sorted({str(i.get("digest")) for i in programs.values()}), "vllm_v1_run_root": bytes(run_root).hex(),
+              "scope": pf.get("scope")}
     c.seconds["read_s"] = round(t_read - t0, 3)
-    res = CS.write(c, out_dir, source, CS.index_doc(entries, run))
+    res = CS.write(c, out_dir, source, CS.index_doc(ms, [g[1] for g in got], run))
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
-    print(f"[serving-rows] {c.n} {CS.FAMILY} heads committed ({CS.SCHEME}): roots " + ", ".join(f"{p} {c.roots[p].hex()[:16]}" for p in c.roots)
-          + f"; registration {res['registration_sha512'][:16]}; {res['seconds']}", flush=True)
+    print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "
+          + ", ".join(f"{m.template} {m.n}" for m in ms) + f"; registration {res['registration_sha512'][:16]}; {res['seconds']}", flush=True)
     return res
