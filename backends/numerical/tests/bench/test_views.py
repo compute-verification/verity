@@ -149,7 +149,8 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
               B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None,
-              backend: str | None = None, proof_class: str | None = None, joints: dict | None = None) -> str:
+              backend: str | None = None, proof_class: str | None = None, joints: dict | None = None,
+              domain: str | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security, **({"joints": joints, "buckets": {"lookup": 0.1 * t_total}} if joints else {}))
@@ -167,6 +168,8 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
     fp = doc["workload_fingerprint"]
     if backend is not None:
         fp["software"]["backend"]["name"] = backend
+    if domain is not None:
+        fp["domain"] = domain
     if proof_class is not None:
         fp["proof_class"] = proof_class
         if proof_class.startswith("NON_ZK"):
@@ -982,6 +985,14 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     assert not any(r in i for i in ent["claims"] for r in retired)
 
 
+def test_an_expected_time_collision_resistance_hash_cites_ecr_beside_cr() -> None:
+    cfg = dataclasses.replace(V.FLOCK_CONFIG, hashes=(
+        V.Hash("SHA-512", V._INTERNAL, V._CR + " (Merkle caps)"),
+        V.Hash("SHA-512", V._INTERNAL, "expected-time collision resistance (audit value layer; CDGSY24 Thm 2)")))
+    ids = [a["id"] for a in V.claims_of(cfg)[0]["assumptions"]]
+    assert ids[:2] == ["cr/sha-512", "ecr/sha-512"]
+
+
 def test_entities_backends_are_backend_families_by_interaction_mode_with_their_claims_in_full() -> None:
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
@@ -1507,6 +1518,20 @@ def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalSto
     assert res[a]["domain"] == fp_domain
     backend = next(x for x in site["backends"] if x["id"] == res[a]["backend"])
     assert fp_domain in backend["domains"]
+
+
+def test_a_total_statements_cell_shows_total_without_a_label(store: LocalStore) -> None:
+    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): the fingerprint's ``domain`` is the statement's, so a cell of a
+    total statement shows ``total`` with no label.  A cell registered before the fix wrote the hardcoded ``finite`` and still
+    shows ``finite-only`` unless a ``domain`` label corrects it; a value outside the vocab shows nothing."""
+    total = committed(store, t_total=0.4, domain="total")
+    legacy = committed(store, t_total=0.5, domain="finite")
+    corrected = committed(store, t_total=0.6, domain="finite", labels=[("domain", "total", "bench-spine", "2026-09-27T14:00:00Z")])
+    odd = committed(store, t_total=0.7, domain="exact")
+    views = V.build(store)
+    assert [views.domain_of.get(a) for a in (total, legacy, corrected, odd)] == ["total", "finite-only", "total", None]
+    site = V.render_entities(views, rendered_at="2026-09-27T14:00:00Z", commit="abc")
+    assert next(r for r in site["results"] if r["artifact"] == total)["domain"] == "total"
 
 
 def test_a_cell_lists_every_interaction_attempt_and_a_linked_attempt_is_never_the_cell(store: LocalStore) -> None:
