@@ -199,6 +199,7 @@ struct Hm96Ctx {
     Hm96TreeCb tree_cb = nullptr;
     void* ctx = nullptr;
     int trees = 0;
+    long long level0_leaves = 0;
     Hm96Key key{};
     uint64_t* d_tables = nullptr;   // [192][256][8]: per salt byte and value, the XOR of its set bits' columns
     uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
@@ -274,11 +275,15 @@ inline std::vector<uint8_t> hm96_opened_salts(const uint8_t* d_tree, const std::
     return out;
 }
 
-// One proof's hm96 context (a null tree callback leaves the build unsalted); the salt key is zeroed when it ends.
+// One proof's hm96 context (a null tree callback leaves the build unsalted); the salt key is zeroed when it ends. The context is
+// process-global: a second install while one is live is refused (two proofs would share a key, a tree counter and level 0).
 struct Hm96Guard {
-    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* key, const uint8_t* prefixes, const uint64_t* tables) {
+    bool mine = false;
+    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* key, const uint8_t* prefixes, const uint64_t* tables, long long level0_leaves) {
         if (!tree_cb) return;
-        g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.nonce.clear();
+        if (g_hm96.tree_cb) { fprintf(stderr, "hm96: a salt context is already installed (one proof at a time per process)\n"); abort(); }
+        mine = true;
+        g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.nonce.clear(); g_hm96.level0_leaves = level0_leaves;
         memcpy(g_hm96.key.k, key, 32);
         size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
         cudaMalloc(&g_hm96.d_tables, tb);
@@ -292,12 +297,13 @@ struct Hm96Guard {
         cudaFree(d_pre);
     }
     ~Hm96Guard() {
+        if (!mine) return;
         if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
         if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
         volatile uint32_t* vk = g_hm96.key.k;
         for (int j = 0; j < 8; j++) vk[j] = 0;
         g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr;
-        g_hm96.trees = 0; g_hm96.nonce.clear();
+        g_hm96.trees = 0; g_hm96.nonce.clear(); g_hm96.level0_leaves = 0;
     }
 };
 
@@ -314,6 +320,10 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
     }
     if (g_hm96.tree_cb) {
         uint64_t nonce = (uint64_t)g_hm96.tree_cb(g_hm96.ctx, g_hm96.trees++);
+        if (nonce == 0 && num_leaves != g_hm96.level0_leaves) {
+            fprintf(stderr, "hm96: salt stream 0 is level 0's (%lld leaves), refused for a tree of %lld\n", g_hm96.level0_leaves, num_leaves);
+            abort();
+        }
         hm96_finish_leaves<<<(unsigned)((num_leaves + tpb - 1) / tpb), tpb>>>(d_tree, g_hm96.key, nonce, g_hm96.d_tables, num_leaves,
                                                                                 g_hm96.d_mid);
         g_hm96.nonce[d_tree] = nonce;

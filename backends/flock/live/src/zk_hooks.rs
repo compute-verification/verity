@@ -63,19 +63,20 @@ impl ProverSeed {
 /// (an injected seed's `STREAM_SALT` bytes in a test harness only), never reused, never written anywhere, and zeroed on drop.
 /// The device expands the same stream (`hm96_finish_leaves`).
 pub struct LeafSalts {
-    key: [u8; 32],
+    /// on the heap, so moving a `LeafSalts` copies no key byte
+    key: Box<[u8; 32]>,
     next: u64,
 }
 
 impl LeafSalts {
     pub fn for_seed(seed: &ProverSeed) -> Self {
-        let mut key = [0u8; 32];
+        let mut key = Box::new([0u8; 32]);
         if seed.injected {
             let mut r = ChaCha20Rng::from_seed(seed.seed);
             r.set_stream(STREAM_SALT);
-            r.fill_bytes(&mut key);
+            r.fill_bytes(&mut key[..]);
         } else {
-            getrandom::fill(&mut key).expect("the OS random generator failed: refusing to commit without a salt key");
+            getrandom::fill(&mut key[..]).expect("the OS random generator failed: refusing to commit without a salt key");
         }
         LeafSalts { key, next: 1 }
     }
@@ -89,6 +90,15 @@ impl LeafSalts {
     pub fn next_id(&mut self) -> u64 {
         self.next += 1;
         self.next - 1
+    }
+
+    /// Leaf `i`'s salt in tree `id`.
+    pub fn salt(&self, id: u64, i: u64) -> [u8; SALT_BYTES] {
+        let mut s = [0u8; SALT_BYTES];
+        for j in 0..3 {
+            s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(&self.key, 3 * i + j as u64, id));
+        }
+        s
     }
 
     /// Tree `id`'s salts, `leaves` × 192 bytes.
@@ -106,10 +116,23 @@ impl LeafSalts {
 
 impl Drop for LeafSalts {
     fn drop(&mut self) {
-        for b in self.key.iter_mut() {
-            unsafe { std::ptr::write_volatile(b, 0) };
-        }
-        std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+        zero(&mut self.key[..]);
+    }
+}
+
+fn zero(b: &mut [u8]) {
+    for x in b.iter_mut() {
+        unsafe { std::ptr::write_volatile(x, 0) };
+    }
+    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+}
+
+/// A byte buffer holding key material, zeroed when dropped (a panic unwinding past it included).
+pub struct ZeroOnDrop(pub Vec<u8>);
+
+impl Drop for ZeroOnDrop {
+    fn drop(&mut self) {
+        zero(&mut self.0);
     }
 }
 
@@ -238,7 +261,17 @@ mod tests {
     fn chacha20_block_matches_rfc7539() {
         let key: [u8; 32] = std::array::from_fn(|i| i as u8);
         let b = chacha20_block(&key, 1 | (0x0900_0000u64 << 32), 0x4a00_0000);
-        assert_eq!(crate::hex(&b[..16]), "10f1e7e4d13b5915500fdd1fa32071c4");
+        assert_eq!(crate::hex(&b), concat!("10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e",
+                                           "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"));
+    }
+
+    #[test]
+    fn a_leaf_salt_is_its_slice_of_the_tree_expansion() {
+        let s = LeafSalts::for_seed(&ProverSeed::from_os());
+        let all = s.expand(7, 5);
+        for i in 0..5 {
+            assert_eq!(s.salt(7, i as u64).to_vec(), all[SALT_BYTES * i..SALT_BYTES * (i + 1)]);
+        }
     }
 
     #[test]

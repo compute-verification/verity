@@ -76,6 +76,7 @@ struct CircuitParams {
     hm96_key: *const u8,
     hm96_prefixes: *const u8,
     hm96_tables: *const u64,
+    hm96_level0_leaves: i64,
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
@@ -140,6 +141,18 @@ unsafe extern "C" fn mid_cb(ctx: *mut c_void, cut: *const u32, groups: i64, late
 unsafe extern "C" {
     fn flock_cuda_prove_circuit(p: *const ProveParams, n: *const CircuitParams, out: *mut *mut u8, out_len: *mut usize) -> i32;
     fn flock_cuda_free(p: *mut u8);
+    #[cfg(feature = "sha512")]
+    fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
+}
+
+/// The salts of leaves `idx` of tree `nonce` under `key` as the device expands them (192 bytes each): a test vector against
+/// `zk_hooks::LeafSalts::salt`.
+#[cfg(feature = "sha512")]
+pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
+    let mut out = vec![0u8; 192 * idx.len()];
+    let rc = unsafe { flock_cuda_hm96_salts(key.as_ptr(), nonce, idx.as_ptr(), idx.len() as i32, out.as_mut_ptr()) };
+    assert_eq!(rc, 0, "device salt expansion failed ({rc})");
+    out
 }
 
 /// Where a rep's witness comes from.
@@ -398,6 +411,7 @@ pub fn prove_circuit(
         hm96_key: std::ptr::null(),
         hm96_prefixes: std::ptr::null(),
         hm96_tables: std::ptr::null(),
+        hm96_level0_leaves: 0,
     };
     #[cfg(feature = "sha512")]
     let hm96_prefixes: Vec<u8> = {
@@ -405,12 +419,13 @@ pub fn prove_circuit(
         [c.salt_prefix, c.leaf_prefix].concat()
     };
     #[cfg(feature = "sha512")]
-    let key_guard = salts.map(|s| s.lock().unwrap_or_else(std::sync::PoisonError::into_inner).key().to_vec());
+    let key_guard = salts.map(|s| crate::zk_hooks::ZeroOnDrop(s.lock().unwrap_or_else(std::sync::PoisonError::into_inner).key().to_vec()));
     #[cfg(feature = "sha512")]
     if let (Some(s), Some(k)) = (salts, &key_guard) {
         p.hm96_tree = Some(hm96_tree as Hm96TreeCb);
         p.hm96_ctx = s as *const _ as *mut c_void;
-        p.hm96_key = k.as_ptr();
+        p.hm96_key = k.0.as_ptr();
+        p.hm96_level0_leaves = pcs.n_leaves() as i64;
         p.hm96_prefixes = hm96_prefixes.as_ptr();
         p.hm96_tables = flock_merkle::hm96::consts().tables.as_ptr() as *const u64;
     }
@@ -435,11 +450,7 @@ pub fn prove_circuit(
     let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
     drop(mctx);
     #[cfg(feature = "sha512")]
-    if let Some(mut k) = key_guard {
-        for b in k.iter_mut() {
-            unsafe { std::ptr::write_volatile(b, 0) };
-        }
-    }
+    drop(key_guard);
     assert_eq!(rc, 0, "CUDA circuit prover returned error {rc} at m={m}");
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };

@@ -49,7 +49,31 @@ typedef struct {
     const uint8_t* hm96_key;
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
+    long long hm96_level0_leaves;   // the level-0 tree's leaves: salt-stream id 0 is refused for a tree of any other size
 } FlockCircuitParams;
+
+// Salts of leaves idx[0..n) of tree `nonce` under `key`, expanded on the device (192 bytes each, in order): a test vector against
+// the host's zk_hooks::LeafSalts.
+__global__ void fc_hm96_salts(Hm96Key key, uint64_t nonce, const long long* __restrict__ idx, int n, uint32_t* __restrict__ out) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    if (k < n) hm96_salt(key, nonce, idx[k], out + 48 * k);
+}
+
+extern "C" int flock_cuda_hm96_salts(const uint8_t* key, uint64_t nonce, const long long* idx, int n, uint8_t* out) {
+    Hm96Key k{};
+    memcpy(k.k, key, 32);
+    long long* d_idx = nullptr;
+    uint32_t* d_out = nullptr;
+    if (cudaMalloc(&d_idx, n * sizeof(long long)) != cudaSuccess || cudaMalloc(&d_out, (size_t)n * 192) != cudaSuccess) return 1;
+    cudaMemcpy(d_idx, idx, n * sizeof(long long), cudaMemcpyHostToDevice);
+    fc_hm96_salts<<<(n + 127) / 128, 128>>>(k, nonce, d_idx, n, d_out);
+    cudaError_t e = cudaMemcpy(out, d_out, (size_t)n * 192, cudaMemcpyDeviceToHost);
+    cudaFree(d_idx);
+    cudaFree(d_out);
+    volatile uint32_t* vk = k.k;
+    for (int j = 0; j < 8; j++) vk[j] = 0;
+    return e == cudaSuccess ? 0 : 2;
+}
 
 __global__ void fc_comp_scatter(const F128* __restrict__ src, long long n_comp, int per_block, const uint32_t* __restrict__ slot,
                                 int k_log, F128* __restrict__ dst) {

@@ -69,6 +69,8 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
+           // a selftest build injects seeds (the determinism check); a proving build never has the feature
+           "seed_injection": cfg!(feature = "seed-injection"),
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
@@ -296,6 +298,8 @@ struct Plan {
     cut_flip: bool,
     tail_swapped: bool,
     rep1_other_witness: bool,
+    /// the cheating path: send rep 1 even when its level-0 root is not rep 0's (the verifier's R1 refuses it)
+    skip_level0_check: bool,
     fast: bool,
     /// send each rep's proof with one byte of its first opened hm96 salt flipped
     salt_flip: bool,
@@ -405,6 +409,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
     let mut cached: Option<Vec<Vec<F128>>> = None;
+    let mut root0: Option<Vec<u8>> = None;
+    let mut stop_why: Option<String> = None;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
@@ -421,6 +427,18 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
+                // red-team-hm96 C1: both reps' level-0 trees take salt stream 0, so they must be one tree; stop before rep 1
+                // opens anything (its openings would reveal id-0 salts over other leaves)
+                match &root0 {
+                    None => root0 = Some(root.to_vec()),
+                    Some(r0) if r0.as_slice() != root && !plan.skip_level0_check => {
+                        // the device prover's callback swallows the panic, so the reason is kept here too
+                        let why = "PROVER-STOPPED: rep 1's level-0 root is not rep 0's; the shared level-0 salts would open over two trees";
+                        stop_why = Some(why.into());
+                        panic!("{why}")
+                    }
+                    _ => {}
+                }
                 if let Some(c) = &cached {
                     return c.clone();
                 }
@@ -456,7 +474,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             if level0.is_some() {
                 flock_merkle::hm96::end();
             }
-            let (p, bk) = proved.map_err(panic_msg)?;
+            let (p, bk) = proved.map_err(|e| stop_why.clone().unwrap_or_else(|| panic_msg(e)))?;
             prove_s.push(tp.elapsed().as_secs_f64());
             buckets.push(bk);
             proofs.push(p);
@@ -519,13 +537,15 @@ const CASES: &[(&str, bool, bool)] = &[
     ("flags_forged", false, true),
     ("coins_before_y", false, false),
     ("reps_with_different_witness", false, false),
+    ("reps_differ_prover_stops", false, false),
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
     ("prover_file_differs_from_verifier_file", false, false),
     ("relabelled_circuit", false, false),
     ("relabelled_circuit_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
-    ("leaf_scheme_seeded_salts_refused", false, false),
+    ("leaf_salts_from_prover_seed_refused", false, false),
+    ("device_salts_match_host", true, false),
     ("leaf_key_witness_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
@@ -559,7 +579,8 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "key_substituted" => Plan { key_substituted: true, ..h },
         "flags_forged" => Plan { flags_forged: true, ..h },
         "coins_before_y" => Plan { no_y: true, ..h },
-        "reps_with_different_witness" => Plan { rep1_other_witness: true, ..h },
+        "reps_with_different_witness" => Plan { rep1_other_witness: true, skip_level0_check: true, ..h },
+        "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
         _ => h,
@@ -695,7 +716,20 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
-    if name == "leaf_scheme_seeded_salts_refused" || name == "leaf_key_witness_refused" {
+    if name == "device_salts_match_host" {
+        #[cfg(all(feature = "gpu", feature = "sha512"))]
+        if gpu {
+            let s = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os());
+            let idx: Vec<i64> = vec![0, 1, 2, 31, 1000, (1 << 22) + 3];
+            let ok = [0u64, 1, 5, u64::MAX].iter().all(|&nonce| {
+                let d = flock_live::gpu_circuit::device_salts(s.key(), nonce, &idx);
+                idx.iter().enumerate().all(|(k, &i)| d[192 * k..192 * (k + 1)] == s.salt(nonce, i as u64))
+            });
+            return json!({"case": name, "gpu": true, "expect": "the device's salts equal LeafSalts::salt", "pass": ok});
+        }
+        return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
+    }
+    if name == "leaf_salts_from_prover_seed_refused" || name == "leaf_key_witness_refused" {
         // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (red-team-hm96 F6: a
         // key chosen after commitment opens a leaf to any value), or chosen by the prover rather than the statement's constant
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
@@ -753,7 +787,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     record_case(name, want.1, &v, &rec, &proofs);
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
     let both = reps.len() == 2 && reps.iter().all(|r| r[1] == false);
-    let pass = acc == want.1 && (!want.2 || both);
+    let stopped = v["prover_stopped"].as_str().is_some_and(|x| x.contains("level-0 root"));
+    let pass = acc == want.1 && (!want.2 || both) && (name != "reps_differ_prover_stops" || stopped);
     json!({"case": name, "gpu": plan.gpu, "expect": if want.1 {"accept"} else {"reject"}, "accepted": acc, "pass": pass,
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"],
            "witness_s": v["witness_s"]})

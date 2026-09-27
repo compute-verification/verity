@@ -815,7 +815,7 @@ new file mode 100644
 index 0000000..d61bb03
 --- /dev/null
 +++ b/crates/flock-merkle/src/hm96.rs
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,197 @@
 +//! `hm96-sha512/v1` leaves for the proof's own Merkle trees (verity.commitments.hm96, PROTOCOL.md section 7; verity's patch).
 +//!
 +//! A leaf hides its column: x = SHA-512(column bytes), y = a 192-byte salt, c = SHA-512(salt_prefix || y),
@@ -961,7 +961,9 @@ index 0000000..d61bb03
 +/// Install one proof's salt context: `level0` (192 bytes per level-0 leaf) for its first tree, `draw(n)` (192 n bytes) for each
 +/// later tree.
 +pub fn begin(level0: Arc<Vec<u8>>, draw: Box<dyn FnMut(usize) -> Vec<u8> + Send>) {
-+    *ctx() = Some(SaltContext { level0, draw, trees: 0, by_root: HashMap::new() });
++    let mut g = ctx();
++    assert!(g.is_none(), "hm96-sha512: a salt context is already installed (one proof at a time per process)");
++    *g = Some(SaltContext { level0, draw, trees: 0, by_root: HashMap::new() });
 +}
 +
 +/// Remove the proof's salt context (its salts are dropped).
