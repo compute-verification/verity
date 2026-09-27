@@ -8,13 +8,11 @@ namespace Flock
 
 open Transcript
 
+/-- One coordinate of `eqTable`: the table so far for bit 0, then for bit 1 of the new index bit. -/
+def eqStep (t : Array F128) (rj : F128) : Array F128 := t.map (· * (rj + 1)) ++ t.map (· * rj)
+
 /-- `eq(r, u)` for every `u ∈ {0,1}^|r|`, index bit `j` ↔ `r[j]` (LSB first). -/
-def eqTable (r : Array F128) : Array F128 := Id.run do
-  let mut t : Array F128 := #[1]
-  for rj in r do
-    let a := rj + 1
-    t := t.map (· * a) ++ t.map (· * rj)
-  return t
+def eqTable (r : Array F128) : Array F128 := r.foldl eqStep #[1]
 
 def nodesS : Array F128 := (Array.range 64).map phi8
 def nodesL : Array F128 := (Array.range 64).map (fun i => phi8 (64 + i))

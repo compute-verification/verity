@@ -18,3 +18,5 @@ import FlockLevel3
 #print axioms FlockLevel3.GF256.mul_eq
 #print axioms FlockLevel3.T_xK
 #print axioms FlockLevel3.Q_irreducible
+#print axioms FlockLevel3.eqTable_size
+#print axioms FlockLevel3.eqTable_get
