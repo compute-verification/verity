@@ -3,7 +3,7 @@
 # --send set.tar -- bash benchmarks/one_stage/pod.sh). The inputs are `git archive`s of M0's tree (PR #83) and the Lean
 # verifier's tree (PR #113) at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
-# env: K=16 DELTA=0.01
+# env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out; W=/workspace/one-stage; mkdir -p $O $W/bin
@@ -40,5 +40,5 @@ M0PATH=$W/m0/packages/verity/src:$W/m0/backends/numerical/python:$W/m0/backends/
 export RAYON_NUM_THREADS=$(nproc)
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/integrations/vllm:$REPO/protocols/one_stage \
   $W/py/bin/python benchmarks/one_stage/a0.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
-  --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} 2>&1 | tee $O/a0.log | cut -c1-4000
+  --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} 2>&1 | tee $O/a0.log | cut -c1-4000
 exit ${PIPESTATUS[0]}

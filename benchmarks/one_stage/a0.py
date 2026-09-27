@@ -44,19 +44,41 @@ def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 360
     return p
 
 
-def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool = False) -> dict:
+def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool = False, bind: dict | None = None) -> dict:
+    """M0's staging; `bind` (the verifier's partition digest, program SHA-512 and unit indices) goes into the statement."""
     out.mkdir(parents=True, exist_ok=True)
     env = {"PYTHONPATH": m0_path}
+    extra: list[str] = []
+    if bind:
+        (out / "unit-indices.json").write_text(json.dumps(bind["indices"]))
+        extra = ["--partition", bind["partition"], "--program", bind["program"], "--unit-indices", str(out / "unit-indices.json")]
     if tampered:
-        cmd = [sys.executable, str(HERE / "stage_tampered.py"), "--input-set", set_dir, "--n", str(ns[0]), "--out", str(out)]
+        cmd = [sys.executable, str(HERE / "stage_tampered.py"), "--input-set", set_dir, "--n", str(ns[0]), "--out", str(out), *extra]
     else:
-        cmd = [sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--n", *map(str, ns), "--out", str(out)]
+        cmd = [sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--n", *map(str, ns), "--out", str(out), *extra]
     p = run(cmd, out / "stage.log", env)
     if p.returncode != 0:
         raise RuntimeError(f"staging failed: {p.stderr[-2000:]}")
     text = (out / "circuit.txt").read_text()
     meta = json.loads(text.split("\n", 2)[1][5:])
     return {"dir": out, "meta": meta, "pin": hashlib.sha512(text.encode()).hexdigest()}
+
+
+def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
+    """The class of every instance, from the verifier's own composition of the circuit (M0's `--class-only`)."""
+    p = run([sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--class-only"], out / "class.log", {"PYTHONPATH": m0_path})
+    return json.loads(p.stdout.strip().splitlines()[-1])["class_sha512"]
+
+
+def bindings(meta: dict, header: dict, rec: dict, cls: str) -> dict:
+    """What the staged statement binds, against the registration: the partition, the program, the global unit indices of
+    `Q_template_instance` (instance i is unit i), and one class per instance."""
+    n = rec["population"]
+    got = {"partition": meta.get("partition"), "program": meta.get("program_sha512"),
+           "indices": header["units"]["indices"] == list(range(n)), "classes": header["units"].get("classes") == [cls] * n}
+    ok = {"partition": got["partition"] == {"rule": P.FORMAT, "digest": rec["partition_digest"]},
+          "program": got["program"] == rec["partition"]["program"], "indices": got["indices"], "classes": got["classes"]}
+    return {"ok": all(ok.values()), "each": ok, "class_sha512": cls}
 
 
 def public_header(stage_dir: Path, n: int) -> dict:
@@ -152,6 +174,7 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--port", type=int, default=7511)
+    ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -160,17 +183,21 @@ def main() -> int:
     template = s.subcircuit.definition()
     law_text = f"subset:{a.k}"
     law = D.parse_law(law_text)
-    summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta}
+    summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
 
-    # 1. serving commits (the stand-in): M0 stages the captured values under frame-v3-sha512 / hm96-sha512
-    t = time.time()
-    st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath)
-    header = public_header(st["dir"], n)
-    summary["stage_s"] = round(time.time() - t, 1)
-
-    # 2. the partition: Q_template_instance v0 over the verifier's own population program
+    # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
     program = P.population_program(template, n)
     query = P.template_instance_query(template.id)
+    bind = None
+    if a.bind:
+        part = P.partition(program, query)
+        bind = {"partition": P.digest(part), "program": part["program"], "indices": list(range(P.units(program, query)))}
+
+    # serving commits (the stand-in): M0 stages the captured values under frame-v3-sha512 / hm96-sha512
+    t = time.time()
+    st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
+    header = public_header(st["dir"], n)
+    summary["stage_s"] = round(time.time() - t, 1)
     head_digest = program_digest(Program(template))
     summary["template_program"] = {"statement": st["meta"]["program_digests"], "verifier": {template.id: head_digest},
                                    "ok": st["meta"]["program_digests"].get(template.id) == head_digest}
@@ -181,8 +208,11 @@ def main() -> int:
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": R.check(rec, program, query).to_json(),
               "public": R.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
+    if a.bind:
+        checks["bindings"] = bindings(st["meta"], header, rec, unit_class(a.set, a.m0_pythonpath, out))
     summary["registration_digest"] = R.digest(rec)
     summary["partition_digest"] = rec["partition_digest"]
+    summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
         summary["checks"] = checks
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
@@ -212,6 +242,10 @@ def main() -> int:
     neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = R.check(rec, P.population_program(template, n - 1), query)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if a.bind:
+        other_part = P.digest(P.partition(P.population_program(template, n - 1), query))
+        b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
+        neg["statement-binds-another-partition"] = {"refused": not b["ok"], "each": b["each"]}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
     for name, bad in (("draw-over-another-population", {**draw, "population": n + 1}),
                       ("draw-outside-the-partition", {**draw, "units": draw["units"][:-1] + [n]}),
@@ -234,9 +268,11 @@ def main() -> int:
         key = "prover-ignores-the-draw (M0 selftest)" if case == "unit_draw_ignored_refused" else "m0-selftest-unit-draw-session"
         neg[key] = {"refused" if case == "unit_draw_ignored_refused" else "passed": bool(res and res.get("pass")), "case": res}
     tn = 8
-    tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True)
-    theader = public_header(tst["dir"], tn)
     tprog = P.population_program(template, tn)
+    tpart = P.partition(tprog, query)
+    tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
+    tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
+    theader = public_header(tst["dir"], tn)
     tfv = theader["frame_v3"]
     trec = R.record(theader["scheme"], tfv["roots"], leaves(tst["meta"], tn), tfv["domain_ids"], tprog, query,
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"})
