@@ -22,17 +22,17 @@ named).
 * **The value layer** (`Xplur`) is the plurality of the trial's single readings at each commit
   string. It is a function of the registration state.
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
-  (`outC`), so under A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256.5 + 1/(eM)`.
+  (`outC`), so under A2 the trial's link mass at `c` is at most `2t'(1 + k)/2^256 + 1/(eM)`.
 
 The link event at a drawn unit gives a reading other than the plurality at some commit string, so
 the audit's link term is at most the ideal link mass, summed over commit strings. The ideal extractor
 and the trial differ only by the waits that give up (`k/(eRw)`). Each commit string is weighted by
 the probability `π c` that a draw reads it (`flock_batched_linkSoundE`):
-$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256.5}}+\frac{1}{eM}+
+$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2(1+k)\,t'}{2^{256}}+\frac{1}{eM}+
 \frac{k}{eR_w}\Big),\qquad Q_s=\sum_c\pi_c,$$
 with `ρ ≥ N₀/(ek)` for every table. `Q_s` is the expected number of commit strings the drawn units
 read, at most the `N_s` leaves under the serving roots. At `k = ⌈2N₀/e⌉`, `ρ = 1/2`, this is the
-record's `t·N_s(8N₀/e)/2^256.5` with `Q_s` in place of `N_s`, up to lower-order terms.
+record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order terms.
 -/
 
 namespace FlockSoundness.Audit
@@ -477,7 +477,7 @@ theorem readsAt_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsDraw plan tab v
   exact h ⟨u, hu, hrd⟩
 
 /-- **The trial's link mass at `c`**, under A2 for the finder: at most
-`2t'(1 + k)/2^256.5 + 1/(eM)`. -/
+`2t'(1 + k)/2^256 + 1/(eM)`. -/
 theorem trial_mass_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (P.Ωc plan tab vb L c)]
     (hCR : Assumptions.SHA512ExpectedTimeCR Hc (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
@@ -485,7 +485,7 @@ theorem trial_mass_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (
       (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
     expect (trialVal plan R (P.psi H E plan tab vb R τ k Rw c))
         (P.trialG H E plan tab vb R τ c k Rw) (P.trialStrat H E plan tab vb R τ c k Rw) ≤
-      2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) := by
+      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
   set T := P.trialG H E plan tab vb R τ c k Rw
   set sT := P.trialStrat H E plan tab vb R τ c k Rw
   set rd := P.rdT H E plan tab vb R τ c
@@ -505,8 +505,8 @@ theorem trial_mass_le (k Rw M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (
     rw [this]
     unfold pRd
     ring
-  have h2 : 2 * expect (cT plan R t') T sT / 2 ^ (256.5 : ℝ) ≤
-      2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) :=
+  have h2 : 2 * expect (cT plan R t') T sT / 2 ^ (256 : ℝ) ≤
+      2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) :=
     div_le_div_of_nonneg_right (by linarith) (by positivity)
   linarith
 
@@ -523,14 +523,14 @@ theorem ideal_mass_le (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} 
         expectAcc (gameω H E plan R τ ω) (stratω H E plan R τ ω).2 (accω plan R ω) k
           (P.psi H E plan tab vb R τ k Rw c ω)) / Fintype.card L.Ω ≤
       (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω *
-        (2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := by
+        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) := by
   classical
   set f : L.Ω → ℝ := fun ω => expect (ind (accω plan R ω)) (gameω H E plan R τ ω)
       (stratω H E plan R τ ω).2 *
     expectAcc (gameω H E plan R τ ω) (stratω H E plan R τ ω).2 (accω plan R ω) k
       (P.psi H E plan tab vb R τ k Rw c ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
-  have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) +
+  have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
       k / (Real.exp 1 * Rw) := by positivity
   -- off the draws that read `c`, the trace vanishes
   have hoff : ∀ ω, ¬ P.ReadsDraw plan tab vb c ω → f ω = 0 := by
@@ -575,7 +575,7 @@ theorem ideal_mass_le (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} 
                 P.psi H E plan tab vb R τ k Rw c w.1 bs)) +
           Fintype.card (P.Ωc plan tab vb L c) * (k / (Real.exp 1 * Rw)) := by
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-      _ ≤ (2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M)) *
+      _ ≤ (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)) *
             Fintype.card (P.Ωc plan tab vb L c) +
           Fintype.card (P.Ωc plan tab vb L c) * (k / (Real.exp 1 * Rw)) := by linarith
       _ = _ := by field_simp
@@ -584,7 +584,7 @@ theorem ideal_mass_le (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} 
       Finset.sum_eq_zero fun w _ => (hempty w).elim
     rw [h0]
     have : 0 ≤ (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω *
-        (2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
+        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) :=
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
 
@@ -648,9 +648,7 @@ theorem avg_ofReal {Cc : Type} [Fintype Cc] [Nonempty Cc] (f : Cc → ℝ) (hf :
 with the expected-time extractor (`analysisBE`) and the plurality value layer (`Xplur`), given the
 binding of wires to commit strings (`ValueBinding`) and A2 for the explicit finder of each commit
 string (`hCR`):
-$$\delta_{
-m link}\lerac{Q_s}{1-
-ho}\Big(rac{2t'(1+k)}{2^{256.5}}+rac{1}{eM}+rac{k}{eR_w}\Big),$$
+$$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on
 every table's `N₀/(ek)`, `t'` the SHA-512 evaluations of one session run, `M` the finder's further
 trials and `Rw` the waits' length. -/
@@ -667,10 +665,10 @@ theorem flock_batched_linkSoundE
         (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
       (fun _ _ => ENNReal.ofReal
         ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
-          (2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) /
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) /
           (1 - ρ))) := by
   intro R τ tgt
-  set B := 2 * (t' * (1 + k)) / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)
+  set B := 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)
     with hBdef
   have hρ1 : 0 < 1 - ρ := by linarith
   set f : vb.Pos → L.Ω → ℝ := fun c ω => expect (ind (accω plan R ω)) (gameω H E plan R τ ω)

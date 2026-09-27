@@ -113,7 +113,7 @@ link term per audit.
 - **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
   `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
 - **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): under A2 and `ValueBinding` (named), `δ_link` is
-  at most `Q_s(2(1+k)t'/2^256.5 + …)/(1 − ρ)`, `Q_s ≤ N_s`. It dominates the audit's hash term.
+  at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`. It dominates the audit's hash term.
 - **Not yet:** the canonical HM96 values and `registered_weights`. Both need the SHA-512 leaf layout in the model,
   which also discharges `ValueBinding`.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
@@ -251,18 +251,20 @@ domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), prove
 numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3, `prCoin_mca_le`). The accounting keeps `a`, so no number
 changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a term below 2^-170.
 
-**A2. Expected-time collision resistance of SHA-512** (CDGSY24, ePrint 2024/1434, Theorem 2), for the audit's value
-layer (Daniel, Sep 27).
+**A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
+audit's value layer (Daniel, Sep 27; constant corrected the same day).
 
 - **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
-  most `T/2^256.5`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
+  most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
   record the pair output and the evaluations made, `t` for each run of the prover.
-- **Why it is plausible.** It is SHA-512's generic bound, since `min(1, q²/2^513) ≤ q/2^256.5`. It is linear in `T`
+- **Why it is plausible.** A random oracle meets it with 0.33 bits to spare: its sharp bound is `T/E[τ_N]`, and
+  hashing until the first collision costs `E[τ_N] ≈ √(π/2)·2^256 = 2^256.33` (DESIGN.md §3). The earlier `T/2^256.5`
+  came from the fixed-budget bound `min(1, q²/2^513) ≤ q/2^256.5`, which that attack beats. It is linear in `T`
   because a finder can gamble.
 - **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
   stated for all finders: the link theorem takes it for the finder it builds from the prover.
-- **Where it is used.** Only the link term, `t·Q_s(8N₀/e)/2^256.5` per audit, with `Q_s ≤ N_s` the commit strings
-  the drawn units read (audit B `t·2^-209.9`, `2^-129.9` at `t = 2^80`). The strict-time `2√(t·2^-221.5)` and the
+- **Where it is used.** Only the link term, `t·Q_s(8N₀/e)/2^256` per audit, with `Q_s ≤ N_s` the commit strings
+  the drawn units read (audit B `t·2^-209.4`, `2^-129.4` at `t = 2^80`). The strict-time `2√(t·2^-221.5)` and the
   random oracle's `t²/2^511` are comparisons (DESIGN.md §3).
   The compiled theorem, `δ_tree` and the knowledge term's conflicts keep strict-time `cr/sha-512` (§4).
 
@@ -383,8 +385,8 @@ The weights are committed once and every later proof opens that root. The analys
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
-  - Under A2 that term is `t·Q_s(8N₀/e)/2^256.5` (audit B: 2^-129.9 at `t = 2^80`; strict time 2^-69.8), and it
-    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^79` to `2^91`, with `N` counting audits.
+  - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; strict time 2^-69.8), and it
+    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4` to `2^90.4`, with `N` counting audits.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.
