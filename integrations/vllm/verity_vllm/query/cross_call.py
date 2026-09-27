@@ -1,0 +1,548 @@
+"""Cross-Call recomputes: the partition invariant across a Program's Calls (opt-in, `manifest build --cross-call-check`).
+
+`word.check_query` cuts each Call into units on its own; a unit never crosses Calls (every value a Call reads or outputs is
+committed).  So a value computed in two Calls is computed in two units: a recompute, which fails the build.  This pass finds
+them over a Program's instance sequence (`program_view.iter_instance_rows`).  Values are compared structurally: the same
+primitive over the same operands, constants by value, an input leaf by its Program identity (`("p", param, leaf)` or
+`("n", call, leaf)`, a duplicate Call's output read as its first copy's).
+
+  1. Calls.  A Call with the spec, form and operand runs (adjacent runs merged) of an earlier Call computes every one of its
+     gates again.  Calls that read no Program input (constants, or values computed from them) are structure, as in `word`.
+  2. Operand subsets.  A gate's support is the set of its Call's operands it depends on (`analyze`).  Two Calls of one spec
+     whose operands in `b` read the same runs compute every gate of support `b` twice.
+  3. Gates.  Any other gate computed in two Calls depends only on operands both Calls read, so its support lies in the
+     operands whose leaves another Call also reads (`shared`).  Those candidate gates are pre-filtered by primitive (the
+     lowest gate of a recomputed value reads only inputs, and two Calls must both hold one of the same primitive over common
+     leaves), then hashed gate by gate with their input leaves' Program identities.
+
+Each level is exact about what it reports; `unrefined` names what level 3 did not expand (a non-`call` form, a long operand,
+or `max_gates`).  `check_program` returns the report and, when `strict`, raises `RecomputeViolation` naming every Definition.
+"""
+from __future__ import annotations
+
+import bisect
+import hashlib
+from array import array
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from typing import Any, Callable, Iterable, Iterator
+
+import numpy as np
+
+from verity.ir.layout import WIDE_FAN_IN, resolve
+from verity.ir.refs import Affine, Concat, Strided
+
+from verity_vllm.query import word as W
+from verity_vllm.query.program_view import iter_instance_rows, spec_base, spec_statics
+
+CHECK_ID = "cross-call/v1"
+
+#: operands with more runs than this are not stored for levels 2 and 3 (attention's history); `unrefined` counts the Calls
+#: whose level-3 candidates would need one
+LONG_OPERAND = 64
+
+#: level 3 expands at most this many gates in all
+MAX_GATES = 20_000_000
+
+_SPACE = {"p": 0, "n": 1}
+
+
+class RecomputeViolation(W.QueryRuleViolation):
+    """A Program in which some value is computed in two Calls: named per Definition, with the Calls that compute it."""
+
+
+@dataclass(frozen=True)
+class Support:
+    """A Definition's computation gates by support (a bit per operand, over the caller's masks): how many (`gates`), their
+    primitives (`prims`), and each returned leaf's support (`out`).  Constants and wiring are structure (not counted)."""
+    gates: dict[int, int]
+    prims: dict[int, frozenset[str]]
+    out: np.ndarray
+
+    @property
+    def total(self) -> int:
+        return sum(self.gates.values())
+
+
+def _params(fn: Any) -> list[tuple[str, Any]]:
+    return list(fn.signature()[0])
+
+
+def _ret_leaves(fn: Any) -> int:
+    return int(fn.signature()[1].leaves)
+
+
+def _leaf_masks(refs: Any, pmask: list[int], outs: list[np.ndarray]) -> np.ndarray:
+    """The support of each leaf `refs` names: a parameter leaf its parameter's bit, a node leaf that node's output support."""
+    if isinstance(refs, (Affine, Strided)) and refs.space == "p":
+        return np.full(refs.count, pmask[refs.idx], np.int64)
+    if isinstance(refs, Affine):
+        return outs[refs.idx][refs.base:refs.base + refs.count]
+    if isinstance(refs, Strided):
+        j = np.arange(refs.count, dtype=np.int64)
+        return outs[refs.idx][refs.base + (j // refs.inner) * refs.outer_stride + (j % refs.inner) * refs.inner_stride]
+    if isinstance(refs, Concat):
+        parts = [_leaf_masks(p, pmask, outs) for p in refs.parts]
+        return np.concatenate(parts) if parts else np.zeros(0, np.int64)
+    return np.fromiter(((pmask[r[1]] if r[0] == "p" else int(outs[r[1]][r[2]])) for r in (refs[j] for j in range(len(refs)))),
+                       np.int64, len(refs))
+
+
+def _map_masks(masks: np.ndarray, per_param: np.ndarray) -> np.ndarray:
+    """Masks over a callee's parameters -> masks over the caller's (each callee parameter's bit replaced by its support)."""
+    out = np.zeros(masks.shape, np.int64)
+    for i, pm in enumerate(per_param.tolist()):
+        if pm:
+            out[(masks >> i) & 1 == 1] |= pm
+    return out
+
+
+def _add(acc_g: Counter, acc_p: dict, sub: Support, per_param: np.ndarray | None, k: int = 1) -> None:
+    for b, v in sub.gates.items():
+        ob = b if per_param is None else int(_map_masks(np.array([b], np.int64), per_param)[0])
+        if ob:
+            acc_g[ob] += v * k
+            acc_p[ob] = acc_p.get(ob, frozenset()) | sub.prims[b]
+
+
+def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
+    """The support of every computation gate of `fn` over its own operands (bit k = parameter k), exactly: a callee's analysis
+    is reused through each node whose arguments each come from one support (`memo`, by Definition id), and a node whose
+    argument mixes supports (a constant-padded block), or a body with a scan, is expanded gate by gate."""
+    memo = {} if memo is None else memo
+    got = memo.get(fn.id)
+    if got is not None:
+        return got
+    params = _params(fn)
+    if len(params) > 62:
+        raise ValueError(f"{fn.id}: {len(params)} operands (support masks hold 62)")
+    full = (1 << len(params)) - 1
+    if not hasattr(fn, "body"):
+        n = _ret_leaves(fn)
+        if not params:
+            r = Support({}, {}, np.zeros(n, np.int64))
+        elif fn.id in W.WIRING:
+            r = Support({}, {}, np.full(n, full, np.int64))
+        else:
+            r = Support({full: 1}, {full: frozenset({fn.id})}, np.full(n, full, np.int64))
+        memo[fn.id] = r
+        return r
+    pmask = [1 << k for k in range(len(params))]
+    if any(node.form not in ("call", "batch", "primitive") for node in fn.body.nodes):      # a scan: its carry is read gate by gate
+        r = memo[fn.id] = _expand(fn, np.repeat(np.array(pmask, np.int64), [int(ty.leaves) for _, ty in params]))
+        return r
+    g: Counter = Counter()
+    p: dict[int, frozenset[str]] = {}
+    outs: list[np.ndarray] = []
+    for node in fn.body.nodes:
+        e = node.fn
+        batch = node.form == "batch"
+        n = int(node.n) if batch else 1
+        cols = []
+        for a, ax in zip(node.args, node.axes if batch else (None,) * len(node.args)):
+            if not batch or ax is None:
+                m = _leaf_masks(a.refs, pmask, outs)
+                cols.append(np.broadcast_to(m, (n, len(m))))
+            elif ax == 0:
+                cols.append(_leaf_masks(a.refs, pmask, outs).reshape(n, -1))
+            else:
+                cols.append(np.stack([_leaf_masks(W._member_refs(a, ax, m), pmask, outs) for m in range(n)]))
+        if not hasattr(e, "body"):
+            sub = analyze(e, memo)
+            if sub.gates:
+                red = np.zeros(n, np.int64)
+                for c in cols:
+                    if c.shape[1]:
+                        red |= np.bitwise_or.reduce(c, axis=1)
+                u, k = np.unique(red, return_counts=True)
+                for b, kk in zip(u.tolist(), k.tolist()):
+                    if b:
+                        g[b] += int(kk)
+                        p[b] = p.get(b, frozenset()) | {e.id}
+                outs.append(np.repeat(red, sub.out.shape[0]))
+            else:
+                red = np.zeros(n, np.int64)
+                for c in cols:
+                    if c.shape[1]:
+                        red |= np.bitwise_or.reduce(c, axis=1)
+                outs.append(np.repeat(red if e.id in W.WIRING else np.zeros(n, np.int64), sub.out.shape[0]))
+            continue
+        pure = all((c.shape[1] == 0) or bool((c == c[:, :1]).all()) for c in cols)
+        if pure:
+            sub = analyze(e, memo)
+            per = np.stack([c[:, 0] if c.shape[1] else np.zeros(n, np.int64) for c in cols], axis=1) if cols else np.zeros((n, 0), np.int64)
+            u, inv, k = np.unique(per, axis=0, return_inverse=True, return_counts=True)
+            mapped = [_map_masks(sub.out, row) for row in u]
+            for row, kk in zip(u, k.tolist()):
+                _add(g, p, sub, row, kk)
+            outs.append(np.concatenate([mapped[i] for i in inv.reshape(-1).tolist()]) if n else np.zeros(0, np.int64))
+        else:
+            parts = []
+            for m in range(n):
+                sub = _expand(e, np.concatenate([c[m] for c in cols]) if cols else np.zeros(0, np.int64))
+                _add(g, p, sub, None)
+                parts.append(sub.out)
+            outs.append(np.concatenate(parts) if parts else np.zeros(0, np.int64))
+    out = _leaf_masks(fn.body.ret, pmask, outs).copy()
+    r = Support(dict(g), p, out)
+    memo[fn.id] = r
+    return r
+
+
+def _wide(gate: Any, call: Any) -> Iterator[Any]:
+    """A wide fan-in gate's operands: gate ids, or `("p", k)` for a whole argument that is the Call's parameter k."""
+    s = gate.scope
+    body = s.spec.body
+    k = body.node_at(gate.index - s.offset)
+    node = body.nodes[k]
+    m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
+    at_call = s.spec is call.spec and s.offset == call.offset
+    for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
+        refs = W._member_refs(a, ax, m)
+        if at_call and isinstance(refs, Affine) and refs.space == "p":
+            yield ("p", refs.idx)
+            continue
+        for j in range(len(refs)):
+            yield resolve(s, refs[j])
+
+
+def _gates(fn: Any) -> tuple[Any, Any, int, int, list[int]]:
+    c, call = W._call_scope(fn)
+    bounds, t = [], 0
+    for _, ty in _params(fn):
+        t += int(ty.leaves)
+        bounds.append(t)
+    return c, call, call.offset, fn.gates, bounds
+
+
+def _expand(fn: Any, leaf_masks: np.ndarray) -> Support:
+    """`fn` gate by gate, its input leaves carrying `leaf_masks` (the caller's supports; 0 = a constant)."""
+    c, call, lo, n, bounds = _gates(fn)
+    starts = [0] + bounds[:-1]
+    whole = [int(np.bitwise_or.reduce(leaf_masks[a:b])) if b > a else 0 for a, b in zip(starts, bounds)]
+    mask = np.zeros(n, np.int64)
+    g: Counter = Counter()
+    p: dict[int, set[str]] = defaultdict(set)
+    for j in range(n):
+        gate = c.gate(lo + j)
+        ops = gate.operands
+        if len(ops) > WIDE_FAN_IN:
+            ops = _wide(gate, call)
+        m = 0
+        for o in ops:
+            if isinstance(o, tuple):
+                m |= whole[o[1]]
+            elif lo <= o < lo + n:
+                m |= int(mask[o - lo])
+            else:
+                m |= int(leaf_masks[o])
+        mask[j] = m
+        if m and gate.prim.params and gate.prim.id not in W.WIRING:
+            g[m] += 1
+            p[m].add(gate.prim.id)
+    ret = []
+    for r in fn.body.ret:
+        o = resolve(call, r)
+        ret.append(int(mask[o - lo]) if lo <= o < lo + n else int(leaf_masks[o]))
+    return Support(dict(g), {k: frozenset(v) for k, v in p.items()}, np.array(ret, np.int64))
+
+
+def _norm(op: Iterable[Any], canon: dict[int, int]) -> list[tuple[int, int, int, int]]:
+    """An operand's runs with a duplicate Call's output read as its first copy's, adjacent runs merged."""
+    out: list[tuple[int, int, int, int]] = []
+    for r in op:
+        s, i, lo, hi = _SPACE[r[0]], int(r[1]), int(r[2]), int(r[3])
+        if s == 1:
+            i = canon.get(i, i)
+        if out and out[-1][0] == s and out[-1][1] == i and out[-1][3] == lo:
+            out[-1] = (s, i, out[-1][2], hi)
+        else:
+            out.append((s, i, lo, hi))
+    return out
+
+
+def _digest(*parts: Any) -> bytes:
+    h = hashlib.blake2b(digest_size=16)
+    for x in parts:
+        h.update(x if isinstance(x, bytes) else str(x).encode())
+        h.update(b"\x00")
+    return h.digest()
+
+
+def _runs_bytes(runs: list[tuple[int, int, int, int]]) -> bytes:
+    return array("q", [v for r in runs for v in r]).tobytes()
+
+
+@dataclass
+class _Call:
+    i: int
+    spec: str
+    form: str
+    name: str
+    ops: list[list[tuple[int, int, int, int]] | bytes]      # stored runs, or the digest of a long operand
+
+
+class _Ranges:
+    """Per producer, the leaf ranges read and by how many distinct Calls; `shared(run)`: another Call reads one of its leaves."""
+
+    def __init__(self) -> None:
+        self.r: dict[tuple[int, int], dict[tuple[int, int], list[int]]] = defaultdict(dict)
+        self.hot: set[tuple[int, int, int, int]] = set()
+
+    def add(self, run: tuple[int, int, int, int], call: int) -> None:
+        d = self.r[(run[0], run[1])]
+        x = d.get((run[2], run[3]))
+        if x is None:
+            d[(run[2], run[3])] = [1, call]
+        elif x[1] != call:
+            x[0] += 1
+            x[1] = call
+
+    def close(self) -> None:
+        for (s, i), d in self.r.items():
+            ks = sorted(d)
+            hi = -1
+            prev = None
+            for k in ks:
+                if d[k][0] > 1:
+                    self.hot.add((s, i) + k)
+                if prev is not None and k[0] < hi:
+                    self.hot.add((s, i) + k)
+                    self.hot.add((s, i) + prev)
+                if k[1] > hi:
+                    hi, prev = k[1], k
+        self.r.clear()
+
+    def shared(self, run: tuple[int, int, int, int]) -> bool:
+        return run in self.hot
+
+
+def _rows_of(source: Any) -> Callable[[], Iterable[dict[str, Any]]]:
+    if isinstance(source, str):
+        return lambda: iter_instance_rows(source)
+    rows = source["rows"] if isinstance(source, dict) else list(source)
+    return lambda: sorted(rows, key=lambda r: int(r["i"]))
+
+
+def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str, dict], Any] = W.specialization,
+                  max_gates: int = MAX_GATES, memo: dict | None = None, log=None) -> dict[str, Any]:
+    """Cross-Call recomputes in one Program: `source` = an instance sequence path (`instances.json.gz`), its document, or its rows.
+    Returns {"check", "ok", "calls", "structure_calls", "recomputes": [per (Definition, level): the Calls, the gates they compute
+    again, how many earlier Calls computed them first, examples [copy, original] by name], "recomputed_gates", "refined",
+    "unrefined"}; `strict` raises `RecomputeViolation` naming every one."""
+    rows = _rows_of(source)
+    memo = {} if memo is None else memo
+    fns: dict[str, Any] = {}
+
+    def fn_of(spec: str) -> Any:
+        f = fns.get(spec)
+        if f is None:
+            f = fns[spec] = specialize(spec_base(spec), spec_statics(spec))
+        return f
+
+    def gates_of(spec: str) -> int:
+        return analyze(fn_of(spec), memo).total
+
+    canon: dict[int, int] = {}
+    structure: set[int] = set()
+    first: dict[bytes, int] = {}
+    names: dict[int, str] = {}
+    ranges = _Ranges()
+    calls: dict[int, _Call] = {}
+    agg: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def note(level: str, spec: str, call: str, first_name: str, gates: int) -> None:
+        a = agg.setdefault((spec, level), {"definition": spec, "level": level, "calls": 0, "gates": 0, "originals": set(), "examples": []})
+        a["calls"] += 1
+        a["gates"] += gates
+        a["originals"].add(first_name)
+        if len(a["examples"]) < 4:
+            a["examples"].append([call, first_name])
+
+    # pass 1: level 1, the reads of every Call that is not structure or a copy
+    n = 0
+    for r in rows():
+        n += 1
+        i, spec, form, name = int(r["i"]), r["spec"], str(r.get("form") or "call"), str(r.get("name") or "")
+        ops = [_norm(op, canon) for op in (r.get("args") or ())]
+        if all(run[0] == 1 and run[1] in structure for op in ops for run in op):
+            structure.add(i)
+            continue
+        key = _digest(spec, form, b"".join(_runs_bytes(op) + b"|" for op in ops))
+        j = first.get(key)
+        if j is not None:
+            canon[i] = j
+            note("call", spec, name, names[j], gates_of(spec))
+            continue
+        first[key] = i
+        names[i] = name
+        for op in ops:
+            for run in op:
+                ranges.add(run, i)
+        calls[i] = _Call(i, spec, form, name, [op if len(op) <= LONG_OPERAND else _digest(_runs_bytes(op)) for op in ops])
+    ranges.close()
+
+    # pass 2: levels 2 and 3 over the stored Calls
+    seen2: dict[bytes, int] = {}
+    index3: dict[tuple[int, int, str], list[tuple[int, int, int]]] = defaultdict(list)
+    cand: dict[int, int] = {}                                  # Call -> the mask of its candidate operands
+    unrefined: Counter = Counter()
+    for c in calls.values():
+        if c.form != "call":
+            unrefined["form"] += 1
+            continue
+        shared = 0
+        long_ops = 0
+        for k, op in enumerate(c.ops):
+            if isinstance(op, bytes):
+                long_ops |= 1 << k
+            elif any(ranges.shared(run) for run in op):
+                shared |= 1 << k
+        if not shared and not long_ops:
+            continue
+        sup = analyze(fn_of(c.spec), memo)
+        full = (1 << len(c.ops)) - 1
+        masks = [b for b in sup.gates if b & ~(shared | long_ops) == 0]
+        if not masks:
+            continue
+        rest = 0
+        for b in masks:
+            if b != full:
+                key = _digest(c.spec, b, b"".join((op if isinstance(op, bytes) else _runs_bytes(op)) + b"|"
+                                                  for k, op in enumerate(c.ops) if b >> k & 1))
+                j = seen2.get(key)
+                if j is not None:
+                    note("operands", c.spec, c.name, names[j], sup.gates[b])
+                    continue
+                seen2[key] = c.i
+            if b & long_ops:
+                unrefined["long-operand"] += 1
+                continue
+            if b & ~shared:
+                continue
+            rest |= b
+            for k, op in enumerate(c.ops):
+                if b >> k & 1:
+                    for run in op:
+                        if ranges.shared(run):
+                            for prim in sup.prims[b]:
+                                index3[(run[0], run[1], prim)].append((run[2], run[3], c.i))
+        if rest:
+            cand[c.i] = rest
+
+    # level 3: Calls holding a candidate of one primitive over common leaves, hashed gate by gate
+    pairs = _overlapping(index3)
+    refined = {"calls": len(pairs), "gates": 0}
+    if pairs:
+        budget = sum(gates_of(calls[ci].spec) for ci in pairs)
+        if budget > max_gates:
+            unrefined["max-gates"] += len(pairs)
+        else:
+            owner: dict[int, tuple[int, int]] = {}
+            for ci in sorted(pairs):
+                c = calls[ci]
+                toks = _tokens(fn_of(c.spec), c.ops, cand[ci], ci)
+                refined["gates"] += len(toks)
+                dup = 0
+                for t, j in toks:
+                    o = owner.get(t)
+                    if o is None:
+                        owner[t] = (ci, j)
+                    elif o[0] != ci:
+                        dup += 1
+                if dup:
+                    firsts = {owner[t][0] for t, _ in toks if owner[t][0] != ci}
+                    note("gates", c.spec, c.name, names[min(firsts)], dup)
+    for a in agg.values():
+        a["originals"] = len(a["originals"])
+    viol = sorted(agg.values(), key=lambda a: (-a["gates"], a["definition"], a["level"]))
+    res = {"check": CHECK_ID, "ok": not viol, "calls": n, "structure_calls": len(structure), "recomputes": viol,
+           "recomputed_calls": sum(a["calls"] for a in viol if a["level"] == "call"),
+           "recomputed_gates": sum(a["gates"] for a in viol), "refined": refined, "unrefined": dict(unrefined)}
+    if log:
+        log(f"  {CHECK_ID}: {n} calls, {len(viol)} recompute class(es), {res['recomputed_gates']} gates computed again"
+            + (f"; unrefined {dict(unrefined)}" if unrefined else ""))
+    if strict and viol:
+        raise RecomputeViolation(f"{CHECK_ID}: {len(viol)} recompute(s): " + "; ".join(_name(a) for a in viol[:12])
+                                 + (" ..." if len(viol) > 12 else ""))
+    return res
+
+
+def _overlapping(index3: dict[Any, list[tuple[int, int, int]]]) -> set[int]:
+    """The Calls whose (lo, hi) ranges in one list overlap a range of another Call in it."""
+    out: set[int] = set()
+    for lst in index3.values():
+        if len({x[2] for x in lst}) < 2:
+            continue
+        lst.sort()
+        active: list[tuple[int, int]] = []
+        for lo, hi, ci in lst:
+            active = [x for x in active if x[0] > lo]
+            others = {w for _, w in active if w != ci}
+            if others:
+                out.update(others)
+                out.add(ci)
+            active.append((hi, ci))
+    return out
+
+
+def _tokens(fn: Any, ops: list[Any], allowed: int, call: int) -> list[tuple[int, int]]:
+    """(token, gate) for each computation gate of `fn` whose support lies in `allowed`, in one Call whose operands read `ops`:
+    equal tokens, the same value (input leaves by Program identity; other inputs unique to the Call)."""
+    c, cl, lo, n, bounds = _gates(fn)
+    starts = [0] + bounds[:-1]
+
+    def leaf(o: int) -> int:
+        k = bisect.bisect_right(bounds, o)
+        if not (allowed >> k & 1):
+            return hash(("u", call, o))
+        j = o - starts[k]
+        for s, i, a, b in ops[k]:
+            if j < b - a:
+                return hash(("l", s, i, a + j))
+            j -= b - a
+        return hash(("u", call, o))
+
+    tok = [0] * n
+    sup = [0] * n
+    out: list[tuple[int, int]] = []
+    for j in range(n):
+        gate = c.gate(lo + j)
+        o_ = gate.operands
+        if len(o_) > WIDE_FAN_IN:
+            tok[j] = hash(("u", call, lo + j))
+            sup[j] = -1
+            continue
+        m, parts = 0, []
+        for o in o_:
+            if lo <= o < lo + n:
+                m |= sup[o - lo] if sup[o - lo] >= 0 else -1
+                parts.append(tok[o - lo])
+            else:
+                m |= 1 << bisect.bisect_right(bounds, o)
+                parts.append(leaf(o))
+        sup[j] = m
+        tok[j] = hash((gate.prim.id, tuple(parts)))
+        if m > 0 and m & ~allowed == 0 and gate.prim.params and gate.prim.id not in W.WIRING:
+            out.append((tok[j], j))
+    return out
+
+
+def _name(a: dict[str, Any]) -> str:
+    return (f"{a['definition']}: {a['level']}, {a['calls']} Call(s) compute {a['gates']} gates of {a['originals']} earlier Call(s) again, "
+            f"e.g. {a['examples'][0][0]} = {a['examples'][0][1]}")
+
+
+def check_programs(paths: Iterable[str], *, strict: bool = True, log=None, **kw: Any) -> dict[str, Any]:
+    """`check_program` over several request Programs (one row), each on its own; the violations are named per Program."""
+    memo: dict = {}
+    per = {}
+    for p in paths:
+        per[p] = check_program(p, strict=False, memo=memo, log=log, **kw)
+    bad = {p: r for p, r in per.items() if not r["ok"]}
+    if strict and bad:
+        raise RecomputeViolation("; ".join(f"{p}: " + "; ".join(_name(a) for a in r["recomputes"][:6]) for p, r in list(bad.items())[:4]))
+    return {"check": CHECK_ID, "ok": not bad, "programs": per}
+
+
+__all__ = ["CHECK_ID", "RecomputeViolation", "Support", "analyze", "check_program", "check_programs"]
