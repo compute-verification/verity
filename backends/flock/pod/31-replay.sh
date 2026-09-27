@@ -7,11 +7,13 @@
 #   NEG=p3-8192/sessions-s0 (where the negatives run; empty: none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-replay}; O=$RD/out; W=/workspace/verify-flock-pure; mkdir -p $O $W
+REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-replay}; O=$RD/out; W=${WORKDIR:-/workspace/verify-flock-pure}; mkdir -p $O $W
 REL=${REL:-bf16-hopper}; PER=${PER:-8192}; TAG=${TAG:-sessions}; BIN=${BIN:-flock-pure-gpu}; SCHEME=${SCHEME:-frame-v3}; LEAF=${LEAF:-blake3}; TB=$([ $BIN = flock-vllm-v1 ] && echo vllm || echo pure); NEG=${NEG-p3-8192/sessions-s0}; O=$O/$TAG; mkdir -p $O
+if [ -z "${BINPATH:-}" ]; then  # BINPATH: a flock-pure-gpu already built from this tree (a CPU host without a pod)
 MODE=build GPU=0 bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env
 [ $BIN = flock-pure-gpu ] || (cd /workspace/flock-gpu-link/flock && cargo build --release -p flock-live --bin $BIN) >> $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+fi
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=$TH
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
@@ -36,7 +38,7 @@ for n in built:
 print(f"{len(built)} rebuilt arrays match the committed manifest; linked into {fz}")
 PYEOF
 fi
-B=/workspace/flock-gpu-link/flock/target/release/$BIN; sha256sum $B | tee $O/binary.sha256
+B=${BINPATH:-/workspace/flock-gpu-link/flock/target/release/$BIN}; sha256sum $B | tee $O/binary.sha256
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
 PIN=$(python3 -c "from verity_flock import lowering; print(lowering.PINS['$REL'])")
