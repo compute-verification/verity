@@ -50,3 +50,7 @@ import FlockSoundness.Audit.OneStage
 import FlockSoundness.Audit.TwoStage
 import FlockSoundness.Audit.Examples
 import FlockSoundness.Audit.Flock
+import FlockSoundness.Game.Runs
+import FlockSoundness.CompiledAlign
+import FlockSoundness.Extract
+import FlockSoundness.Knowledge
