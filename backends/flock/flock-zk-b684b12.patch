@@ -1,3 +1,26 @@
+diff --git a/crates/flock-core/src/lincheck.rs b/crates/flock-core/src/lincheck.rs
+index 0030fd7..82ef254 100644
+--- a/crates/flock-core/src/lincheck.rs
++++ b/crates/flock-core/src/lincheck.rs
+@@ -567,6 +567,10 @@ pub struct LincheckProof {
+     /// [`LincheckGrinding::disabled`].
+     #[serde(default)]
+     pub grinding_nonces: Vec<u64>,
++    /// Verity M1: the prover's `comb` folded to its length-`2^k_skip` collapse (what the final check pairs with
++    /// `z_partial`), kept for the prover's own replay of its checks. Never serialized: a verifier always folds its own.
++    #[serde(skip)]
++    pub comb_partial: Vec<F128>,
+ }
+ 
+ /// Fiat--Shamir grinding policy for the Boolean lincheck.
+@@ -1974,6 +1978,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
+         z_partial,
+         matrix_evals: Vec::new(),
+         grinding_nonces: take(grinding_nonces),
++        comb_partial: comb_vec,
+     };
+     let claim = LincheckClaim {
+         r_inner_skip,
 diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
 index c36ce18..5f5b2cd 100644
 --- a/crates/flock-core/src/pcs.rs
@@ -598,6 +621,18 @@ index 195c44a..0c11ec3 100644
      let Some(&msg) = proof.sumcheck_transcript_f256.get(tx) else {
          return false;
      };
+diff --git a/crates/flock-core/src/verifier.rs b/crates/flock-core/src/verifier.rs
+index c1c6d04..7f3c0d6 100644
+--- a/crates/flock-core/src/verifier.rs
++++ b/crates/flock-core/src/verifier.rs
+@@ -1622,6 +1622,7 @@ mod tests {
+             z_partial: Vec::new(),
+             matrix_evals: Vec::new(),
+             grinding_nonces: Vec::new(),
++            comb_partial: Vec::new(),
+         };
+         let mut ch = FsChallenger::new(b"non-identity-c-test");
+         assert!(matches!(
 diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
 index f53418c..da7c91f 100644
 --- a/crates/flock-prover/src/prover.rs

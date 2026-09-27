@@ -252,17 +252,19 @@ Evidence: `lanes/flock-zk/evidence/`.
   distance drops from `1/2` to `1/2 − t_pad/2L` (0.439 at `m = 25`). Its 218 queries are Fast100's for rate 1/2 and must
   be recomputed (the soundness lane). At production sizes (`2^18`-row lanes) the drop is below `2^-9`.
 - **A red-team review** of §4–§7.
-- **Cost.** Measured on a 4-core VM, per rep, from loopback sessions:
+- **Cost.** Measured on a 4-core VM, per rep, from loopback sessions (median of three timed runs):
 
   | | M0 prove | M1 prove | upstream under M1 | proof per rep |
   |---|---|---|---|---|
-  | RoPE `m = 25` | 0.25 s | 0.41 s (+64%) | 0.25–0.26 s | 560 → 759 KB |
-  | RoPE `m = 27` | 0.37 s | 0.57 s (+52%) | 0.38–0.40 s | 618 → 817 KB |
+  | RoPE `m = 25` | 0.25–0.29 s | 0.31–0.32 s (+12–24%) | 0.25–0.27 s | 560 → 759 KB |
+  | RoPE `m = 27` | 0.38 s | 0.46 s (+20%) | 0.39–0.40 s | 618 → 817 KB |
 
-  The fixed part is 0.13 s of replaying the lincheck's matrix fold (constant in `m`: upstream's lincheck prover already
-  holds it) plus 0.02 s for the pads commitment. Level 0's padding codewords are full NTTs per lane (66 × 2L); one
-  interleaved NTT of the padded input from layer 0 would cost about `66/64` of upstream's encoding. The inner proof's 168
-  paths (130 KB per rep) could share a cap.
+  - The prover's own replay takes its lincheck's folded `comb` (`LincheckProof::comb_partial`, never serialized). The
+    remaining fixed part is 0.026 s of replay and 0.02 s for the pads commitment.
+  - Upstream's share (+7% at `m = 27`) is mostly level 0's padding codewords, one full NTT per lane (66 × 2L). One
+    interleaved NTT of the padded input from layer 0 would cost about `66/64` of upstream's encoding.
+  - The proof grows by the inner proof, mostly its 168 paths (130 KB per rep), which could share a cap, plus `ybar`
+    (16 KB) and the two extra lanes' entries.
 
 ## 9. What M2 still needs
 

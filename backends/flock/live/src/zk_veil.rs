@@ -446,7 +446,7 @@ pub fn from_exposed(v: &[F128], lay: &Layout) -> (ZerocheckProof, LincheckProof)
     };
     let lc = LincheckProof {
         rounds: (0..lay.n_lc).map(|j| (v[lay.lc(j, 0)], v[lay.lc(j, 1)])).collect(),
-        z_partial: (0..SKIP).map(|i| v[lay.zp(i)]).collect(), matrix_evals: vec![], grinding_nonces: vec![],
+        z_partial: (0..SKIP).map(|i| v[lay.zp(i)]).collect(), matrix_evals: vec![], grinding_nonces: vec![], comb_partial: vec![],
     };
     (zc, lc)
 }
@@ -652,12 +652,20 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
     // ---- lincheck
     ch.observe_label(b"flock-lincheck-v0");
     let alpha = ch.sample_f128();
-    let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
-    let mut comb_vec = circuit.fold_alpha_batched(alpha, &eq_inner);
+    // the prover's own replay takes its lincheck's folded comb (`comb_partial`, never serialized); a verifier folds its own
+    let own = lc.comb_partial.len() == SKIP;
+    let mut comb_vec = if own {
+        Vec::new()
+    } else {
+        let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
+        circuit.fold_alpha_batched(alpha, &eq_inner)
+    };
     let mut running = a.scale(alpha).add(&b);
     if let Some(col) = circuit.const_pin_col() {
         let beta = ch.sample_f128();
-        comb_vec[col] += beta;
+        if !own {
+            comb_vec[col] += beta;
+        }
         running = running.add_const(beta);
     }
     let mut r_rounds = Vec::with_capacity(lay.n_lc);
@@ -670,12 +678,17 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
         let e0 = running.add(&e1);
         let c1 = e0.add(&e1).add(&einf);
         running = einf.scale(rr * rr).add(&c1.scale(rr)).add(&e0);
-        let half = comb_vec.len() / 2;
-        for i in 0..half {
-            comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
+        if !own {
+            let half = comb_vec.len() / 2;
+            for i in 0..half {
+                comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
+            }
+            comb_vec.truncate(half);
         }
-        comb_vec.truncate(half);
         r_rounds.push(rr);
+    }
+    if own {
+        comb_vec = lc.comb_partial.clone();
     }
     ch.observe_f128_slice(&lc.z_partial);
     let zp: Vec<Lin> = (0..SKIP).map(|i| Lin::masked(lc.z_partial[i], lay.zp(i), s)).collect();

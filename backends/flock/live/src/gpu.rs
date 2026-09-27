@@ -841,7 +841,9 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
         .collect();
     let proof = R1csProofLigerito {
         zerocheck: ZerocheckProof { round1_ab, round1_c, multilinear_rounds, final_a_eval, final_b_eval, final_c_eval, grinding_nonces: zc_nonces },
-        lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces },
+        lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces,
+                                  #[cfg(feature = "sha512")]
+                                  comb_partial: Vec::new() },
         pcs_open: BatchOpeningProofLigerito {
             ring_switches,
             batching_nonces,
