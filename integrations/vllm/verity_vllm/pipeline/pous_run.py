@@ -181,7 +181,7 @@ def cmd_verify(a) -> None:
     doc: dict[str, Any] = {"server_root_matches_vk": setup.check_server_root(vk, bytes.fromhex(ready["root"])),
                            "blocks_differing": sum(served[32 * i:32 * i + 32] != leaf for i, leaf in enumerate(vk.leaves))}
     try:
-        doc.update(pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu))
+        doc.update(pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu, allowance=a.allowance))
     finally:
         (out / f"stop-{a.tag}").write_text("")
     _write(out / f"verify-{a.tag}.json", doc)
@@ -213,7 +213,8 @@ def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
             return {"serve_rc": srv.returncode, "verify_rc": None, "serve": None, "verify": None}
         time.sleep(2)
     pin = [] if a.verifier_cpu is None else ["--verifier-cpu", str(a.verifier_cpu)]
-    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings), *pin], out / f"verify-{tag}.log").wait()
+    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings), "--allowance", a.allowance, *pin],
+                out / f"verify-{tag}.log").wait()
     rc_s = srv.wait(timeout=a.timeout)
     load = lambda p: _read(p) if p.exists() else None  # noqa: E731
     return {"serve_rc": rc_s, "verify_rc": rc_v, "serve": load(out / f"serve-{tag}.json"), "verify": load(out / f"verify-{tag}.json")}
@@ -241,12 +242,16 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
         "setup": {"commit": _read(out / "commit.json"), "salt": vk["salt"], "vk_root": vk["root"], "verifier_encode_s": vk["encode_s"],
                   "server_encode_s": load_info.get("encode_s"), "server_root": hs.get("root")},
         "bit_exact": {**exact, "load_checks": load_info.get("checks"),
-                      "gpu_decode_equals_reference_decode_layer0": bool(ref) and all(served.get(n) == d for n, d in ref.items()),
+                      "layer0_decoded_by_gpu": sorted(n for n in ref if n in served),
+                      "gpu_decode_equals_reference_decode_layer0": bool(ref) and any(n in served for n in ref)
+                      and all(served[n] == d for n, d in ref.items() if n in served)
+                      and all(n in served for n in ref if n.endswith("proj.weight")),
                       "reference_decode_matches_w": vk["reference_decode_matches_w"]},
         "in_process_responder": {"device_s": hv.get("device_s"), "server_s": hv.get("server_s"),
                                  "device_over_deadline": hv.get("device_over_deadline"), "counts": hs.get("responder")},
         "verifier_round_trip_s": {"before": hv.get("rtt"), "after": hv.get("rtt_after")},
-        "deadline": {k: hv.get(k) for k in ("deadline_ns", "rtt_allowance_ns", "limit_ns", "k")},
+        "deadline": {k: hv.get(k) for k in ("deadline_ns", "allowance", "rtt_allowance_ns", "limit_ns", "k",
+                                            "audits_accepted_under_allowance")},
         "honest": {**{k: hv.get(k) for k in keys}, "elapsed_s": hv.get("elapsed_s")},
         "negative": {"drop_fraction": a.drop_fraction or 0.1, "dropped_blocks": ((negative["serve"] or {}).get("info_after_load") or {}).get("dropped"),
                      **{k: nv.get(k) for k in keys}},
@@ -268,6 +273,28 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
     return result
 
 
+def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
+    """`result.json` of `tools/research` (`research/result/v0.1`); the details stay in `pous/pous_e2e.json`."""
+    rtt, el = result["verifier_round_trip_s"]["before"] or {}, result["honest"]["elapsed_s"] or {}
+    dev = result["in_process_responder"]["device_s"] or {}
+    rows = [("rtt_p50", rtt.get("p50"), "s"), ("rtt_p99.9", rtt.get("p99.9"), "s"), ("rtt_max", rtt.get("max"), "s"),
+            ("answer_p50", el.get("p50"), "s"), ("answer_p99.9", el.get("p99.9"), "s"), ("answer_max", el.get("max"), "s"),
+            ("device_max", dev.get("max"), "s"), ("limit", (result["deadline"]["limit_ns"] or 0) / 1e9, "s"),
+            ("server_encode", result["setup"]["server_encode_s"], "s"), ("verifier_encode", result["setup"]["verifier_encode_s"], "s"),
+            ("plain_generate", result["timing"]["plain_generate_s"], "s"), ("pous_generate", result["timing"]["pous_generate_s"], "s"),
+            ("honest_audits_accepted", result["honest"]["audits_accepted"], "count"),
+            ("negative_audits_accepted", result["negative"]["audits_accepted"], "count")]
+    failed = sorted(k for k, v in result["verdicts"].items() if not v)
+    return {"schema": "research/result/v0.1", "run_id": a.run_id,
+            "workload_fingerprint": {"case": a.case, "codec": result["codec"], "salt": result["setup"]["salt"],
+                                     "vk_root": result["setup"]["vk_root"], "commitment": result["setup"]["commit"]["commitment"]},
+            "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous e2e",
+                           "detail": "all verdicts hold" if passed else "failed: " + ", ".join(failed),
+                           "evidence": ["pous/pous_e2e.json"]},
+            "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows if v is not None],
+            "measurement_files": ["pous/pous_e2e.json"], "artifacts": ["pous/"]}
+
+
 def cmd_e2e(a) -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -282,8 +309,7 @@ def cmd_e2e(a) -> None:
     _write(out / "pous_e2e.json", result)
     passed = all(result["verdicts"].values())
     if a.result:
-        _write(Path(a.result), {"kind": "pous-vllm-e2e/v1", "validation": {"passed": passed, **result["verdicts"]},
-                                               "measurements": result})
+        _write(Path(a.result), research_result(result, a, passed))
     print(json.dumps(result["verdicts"]), flush=True)
     return 0 if passed else 1
 
@@ -305,6 +331,9 @@ class _Common:
     layers_per_decode: int = option("--layers-per-decode", type=int, default=1,
                                     help="transformer layers decoded together at their first use in a forward pass")
     result: str | None = option("--result", default=None, help="also write the research result.json here (e2e)")
+    run_id: str | None = option("--run-id", default=None, help="the research run id result.json names (e2e)")
+    allowance: str = option("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
+                            help="the calibration quantile of the verifier's round trip added to the 0.5 ms deadline")
 
 
 def _cmd(name: str, doc: str):

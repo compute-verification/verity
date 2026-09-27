@@ -113,8 +113,10 @@ def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
     return quantiles([r.roundtrip(OP_PING, 0) for _ in range(pings)])
 
 
-def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: int = audit.CHALLENGES, cpu: int | None = None) -> dict[str, Any]:
-    """Calibrate the round trip, fix the allowance, run `audits` audits (the first is the audit of record), recalibrate.
+def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: int = audit.CHALLENGES, cpu: int | None = None,
+        allowance: str = "p99.9") -> dict[str, Any]:
+    """Calibrate the round trip, fix the allowance (`allowance`: a quantile of the calibration, `p99.9` or `max`), run `audits`
+    audits (the first is the audit of record), recalibrate.  Every audit's verdict under the other allowances is recorded too.
 
     The verifier's own stalls count against the honest server, so the timed part runs with the garbage collector frozen and off,
     on one core (`cpu`) when given."""
@@ -126,7 +128,7 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
     r = LiveResponder(host, port, vk.params.block_bytes)
     try:
         rtt = calibrate(r, pings)
-        allowance_ns = int(rtt["max"] * 1e9)
+        allowance_ns = int(rtt[allowance] * 1e9)
         results = []
         for _ in range(audits):
             v = audit.TimedVerifier(vk, audit.challenge_key(os.urandom(32), vk), k=k, rtt_allowance_ns=allowance_ns)
@@ -137,8 +139,10 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
         gc.enable()
     answers = [a for _, res in results for a in res.answers]
     limit, first = results[0]
-    return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "rtt_allowance_ns": allowance_ns,
-            "limit_ns": limit, "k": k,
+    under = {q: sum(all(a.correct and a.elapsed_ns <= audit.DEADLINE_NS + int(rtt[q] * 1e9) for a in res.answers) for _, res in results)
+             for q in ("p50", "p99.9", "max")}
+    return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "allowance": allowance, "rtt_allowance_ns": allowance_ns,
+            "limit_ns": limit, "k": k, "audits_accepted_under_allowance": under,
             "audit_of_record": {"accepted": first.accepted, "correct": sum(a.correct for a in first.answers),
                                 "on_time": sum(a.on_time for a in first.answers),
                                 "elapsed_max_ns": max(a.elapsed_ns for a in first.answers)},
