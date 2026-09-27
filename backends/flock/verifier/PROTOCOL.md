@@ -860,7 +860,7 @@ included. Claims are listed region-major, then point 0 before point 1.
   roots (§16.6) from them and compares with the header. The rows are not public input: the current instance file carries
   them, and the vector tooling replaces them by their digests once.
 - Commit publics, per real block: the chunk chaining values (x chunks then W chunks, 8 le32 words each), `y16` (le32),
-  `acc_out` (le32), and for `ChunkTail` unit 15's `(y16, acc)`. `publicsCheck` (C4, legacy, §16.7): for `Chunk(n)` without
+  `acc_out` (le32), and for `ChunkTail` unit 15's `(y16, acc)`. `publicsCheck` (C4, legacy, §16.9): for `Chunk(n)` without
   the epilogue, the last block's `acc_out` of each VU equals its output word; for every layout with chaining values, each
   VU's chunk values fold through BLAKE3's keyed parent tree to its row digest.
 - Regions: `Key, Counter, Cv, AccIn, AccOut, [Y], [ChunkTail: Flags, CvMid, YMid | AccMid]` for the chunked layouts;
@@ -879,7 +879,7 @@ included. Claims are listed region-major, then point 0 before point 1.
 - Commit publics: each real block's run output chaining values. `publicsCheck` (C4, legacy): each row's last-run chaining
   values fold through the keyed parent tree (one chunk: its ROOT output) to the row digest.
 - Regions: `Params, CvIn, Cv, [Out], [CutIn, CutOut]`.
-- Admission (legacy, §16.7): `check_cut_words` evaluates the pinned tail on the file's cut words; `check_public_ports`
+- Admission (legacy, §16.9): `check_cut_words` evaluates the pinned tail on the file's cut words; `check_public_ports`
   hashes public ports.
 - `verity/flock-ir-sampling/v1` shares table `irf` and the v2 frame lineage; its admission evaluates `DivFullRcp` and the
   Gumbel noise. `verity/flock-ir-block/v1` is an older statement with public unit IO. Both are legacy-only.
@@ -961,7 +961,30 @@ schema's width. Row digests themselves are `blake3::keyed_hash(row_key(role), ro
 Recomputing a root over public digests is a check of the commitment scheme on public data, not an evaluation of the
 computation.
 
-### 16.7 Strict and legacy conformance
+### 16.7 The partition invariant
+
+The verifier checks the partition invariant itself, on its own copy of each circuit's cut (`Flock.Partition`,
+`flock-verify unit-cut`). A cut is `total_gates`, `structure_gates` (constants and wiring: circuit structure, never
+committed), `owner[g]` (`"input"` for an input gate, a computing unit `u ≥ 0` otherwise), the `reads` `(producer,
+consumer)`, the returned `outputs`, the `committed` gates, the `input_gates`, and the `recomputed` pairs `(gate, earlier
+gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_unit_cut`:
+
+| code | rule |
+|---|---|
+| `input-outside-input-unit` | every input gate is in the input unit |
+| `gate-not-certified-once` | every computed gate is computed in exactly one computing unit |
+| `gate-recomputed` | a recomputed value stays in the unit that computes it |
+| `gate-count` | certified gates + input gates + structure = `total_gates` |
+| `read-uncommitted` | a cross-unit read goes only through a committed value |
+| `output-uncommitted` | a returned value is committed |
+| `committed-unread` | a committed value is read across units or returned |
+
+With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
+circuit is malformed. `unit_cut_agree.py` checks the codes against the reference on random cuts (5000 agree, every code
+exercised). Still ahead, once the verifier holds the IR program (§16.8): the width rule, the claimed units' membership in
+the partition, and the leaf positions derived from it.
+
+### 16.9 Strict and legacy conformance
 
 Daniel's rules: the verifier checks proofs and never evaluates any part of the computation; circuits are total; the
 circuit is public and every value is private. The verifier of record implements them as two modules:

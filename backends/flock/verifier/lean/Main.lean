@@ -159,11 +159,30 @@ def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   IO.println s!"hm96-test: {n} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
+/-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file. -/
+def unitCutCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let line ← match (Lean.Json.parse (← IO.FS.readFile path)) with
+      | .error e => pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false),
+          ("error", Lean.Json.str s!"not JSON: {e}")])
+      | .ok j => match Partition.Cut.ofJson j with
+        | .error e => pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false),
+            ("error", Lean.Json.str e)])
+        | .ok c =>
+          let cs := Partition.validate c
+          pure (Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+            ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))])
+    all := all && (line.getObjValAs? Bool "ok").toOption.getD false
+    IO.println s!"CUT {line.compress}"
+  return (if all then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
+  | "unit-cut" :: paths => unitCutCmd paths
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

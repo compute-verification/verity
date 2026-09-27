@@ -62,3 +62,19 @@ LEVEL3 = LEAN / "level3"
 def test_field_proofs_use_only_standard_axioms():
     assert (LEVEL3 / "lean-toolchain").read_text().strip() == TOOLCHAIN
     check_axioms(LEVEL3, "FlockLevel3")
+
+
+def _has_unit_cut():
+    try:
+        from verity.ir.partition import validate_unit_cut  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_unit_cut(), reason="no Lean toolchain or no validate_unit_cut")
+def test_unit_cut_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
