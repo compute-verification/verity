@@ -457,6 +457,12 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
     let P ← Program.decode bytes
     let calls ← Extract.evaluate P X
     let units : Qword.Units := ⟨calls.map fun (k, _, c) => (k, c)⟩
+    -- `--template T --units i,j,…`: the claimed units' membership, as a Flock statement's finding checks it
+    if let some t := argOf args "--template" then
+      let idx := ((argOf args "--units").getD "").splitOn "," |>.filterMap String.toNat? |>.toArray
+      return match Extract.claimedUnits P calls t idx with
+        | .ok note => Lean.Json.mkObj [("members", Lean.Json.bool true), ("note", Lean.Json.str note)]
+        | .error e => Lean.Json.mkObj [("members", Lean.Json.bool false), ("note", Lean.Json.str e)]
     let base := [("program_sha512", Lean.Json.str (hexOf P.sha512)), ("population", Lean.toJson units.population),
       ("calls", Lean.Json.arr (calls.map fun (k, d, c) => Lean.Json.arr #[Lean.toJson k, Lean.Json.str (P.defs[d]!).key,
         Lean.toJson c.units]))]

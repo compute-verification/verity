@@ -10,6 +10,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 -/
 import Flock.Statement
 import Flock.TemplateQuery
+import Flock.Extract
 
 namespace Flock
 
@@ -516,6 +517,25 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
+/-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
+(`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
+template. The width rule on each Call's cut is the partition checker's, not checked here. -/
+def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let ps := (q.getObjVal? "params").toOption.getD Json.null
+  let X := (ps.getObjValAs? Nat "X").toOption.getD 0
+  let W := (ps.getObjValAs? Nat "W").toOption.getD 0
+  let P ← Program.decode program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let calls ← match Extract.evaluate P X with
+    | .ok cs => pure cs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  match Extract.claimedUnits P calls t indices with
+  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); the width rule on each Call's cut is not checked here"
+  | .error e => throw s!"partition: {e}"
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -535,7 +555,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
     let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else if EVALUABLE.contains (name, version) then
-        s!"units taken as stated, not derived: {name} v{version} is a query the verifier evaluates (Flock.Qword), but it does not yet decode the program into its Call graphs"
+        s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
@@ -684,9 +704,13 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
-      if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
-        let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+      let name := (q.getObjValAs? String "name").toOption.getD ""
+      let version := (q.getObjValAs? Nat "version").toOption.getD 0
+      let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+      if (TemplateQuery.templatesOf name version Json.null).isSome then
         pure (some { f with derived := true, note := ← HmRow.deriveTemplateUnits c obj prog indices })
+      else if (name, version) == ("Q_word", 1) then
+        pure (some { f with derived := true, note := ← HmRow.deriveQwordUnits c obj prog indices })
       else pure (some f)
     | f, _, _ => pure f
   let n := pub.n

@@ -231,4 +231,25 @@ def evaluate (P : Prog) (X : Nat) : V (Array (Nat × Nat × Qword.DCut)) := do
     out := out.push (k, node.fn, c)
   return out
 
+/-- The claimed units of a Flock statement over template `t`, against the Program's evaluated units: each index lies in the
+population and is one whole activation of `t`: the innermost Definition on its `locate` path is `t` (by descriptor id),
+and `t`'s cut is exactly one unit, so the statement's instance proves the unit's computation. The note on success. -/
+def claimedUnits (P : Prog) (calls : Array (Nat × Nat × Qword.DCut)) (t : String) (indices : Array Nat) : V String := do
+  let units : Qword.Units := ⟨calls.map fun (k, _, c) => (k, c)⟩
+  let pop := units.population
+  for i in indices do
+    let some (p, _, _, path) := units.locate i | throw s!"unit {i} is outside the partition's {pop} units"
+    let (_, d0, c0) := calls[p]!
+    let mut d := d0
+    let mut c := c0
+    for (node, _, _) in path do
+      d := ((P.defs[d]!).body.nodes[node]!).fn
+      c := match c with
+        | .parts ps => (ps[node]!.1).getD default
+        | x => x
+    let key := (P.defs[d]!).key
+    if key != t then throw s!"unit {i} is a unit of {key}, not of the circuit's template {t}"
+    if c.units != 1 then throw s!"unit {i} is one of {c.units} units of {t}'s cut, not a whole activation of it"
+  return s!"{pop} units; the statement's {indices.size} units are whole activations of {t}"
+
 end Flock.Extract

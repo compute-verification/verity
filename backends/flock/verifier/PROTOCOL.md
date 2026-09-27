@@ -1185,9 +1185,19 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
   the refusals word for word, the malformed parameters).
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
-  `units` is `derived` when the verifier derived the statement's units itself: the template queries, given `--program`.
-  For `Q_word` v1 (`Flock.Qword`) the program's Call graphs are not extracted yet, and any other query is not evaluated;
-  then `units` is `as stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
+  `units` is `derived` when the verifier derived the statement's units itself, given `--program`:
+  - **the template queries,** as above;
+  - **`Q_word` v1** (`Flock.Extract`, `Flock.Qword`, §16.7):
+    - the program must be the object's;
+    - the query must apply: every Call is a `call` or `primitive` node, and the layout is topological;
+    - every unit the header's `units.indices` claims must lie in the population and be one whole activation of the circuit's
+      template. That is, the innermost Definition on its `locate` path is the template, and the template's cut is exactly
+      one unit, so the instance proves the unit's computation.
+    - The width rule on each Call's cut is the partition checker's, and the note says it is not checked here.
+    - Set 10's object is over the RoPE subcircuit's own program (`57fab977`), whose root batches primitives. `Q_word` v1
+      doesn't apply to it, and the verifier refuses it with `--program`, as core's `evaluate` does.
+  - Any other query is not evaluated. Then, and without `--program`, `units` is `as stated`, with the reason in `note`, and
+    an audit reports it as a gap, not a complete check.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
