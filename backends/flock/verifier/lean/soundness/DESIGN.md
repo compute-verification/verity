@@ -52,7 +52,7 @@ on the hash's output width `n`.
 2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
    them).
 
-The compiled bound is then 2^-195.5 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
+The compiled bound is then 2^-205 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
 every prover, up to `t ≈ 2^110`. ASSUMPTIONS.md §1.2 states it, and §2 below derives it.
 
 **Outside the verifier,** the statement's data commitments (frame-v3 roots, row digests, Halevi–Micali leaves hashed
@@ -98,7 +98,7 @@ anyone.
 **The number.** `B_ℓ` makes at most `2t` SHA-512 evaluations when `P*` makes `t`, plus two verifications. Under the
 generic bound for SHA-512, `Adv ≤ (2t)²/2^513`, which gives
 
-> ε ≤ 2^-195.5 + `t·√2·S_m / 2^256` + `t²/2^511`,
+> ε ≤ 2^-205 + `t·√2·S_m / 2^256` + `t²/2^511`,
 
 with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.2). That is at most 2^-128 for `t` up to
 2^110.7 at m = 35 and 2^117 at m = 22. The hash term overtakes the statistical one from `t ≈ 2^43` (m = 35) to
@@ -123,7 +123,7 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
 Every step depends only on Lean's standard axioms (`Check.lean`).
 
 **Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
-committed tables (VCVio's Merkle extraction) and a tight bound, `2^-195.5 + O(t²/2^512) + t·(cap entries)/2^512`,
+committed tables (VCVio's Merkle extraction) and a tight bound, `2^-205 + O(t²/2^512) + t·(cap entries)/2^512`,
 without the square root. It is a cross-check only. The number above does not rest on it.
 
 ## 3. Knowledge soundness: the extractor, its analysis, its cost
@@ -278,14 +278,15 @@ strict time.
 
 ## 5. Accounting findings
 
-- **2^-195.5 holds for m ≤ 33 only.** At m = 34 and 35, `fast100` has a seventh Ligerito level. Its query term
-  (2^-102.6) moves the table bound to 2^-195.43. PROTOCOL.md §15 quotes 2^-195.5 per table, from the m = 33 ledger.
-  Both are far below 2^-128.
-- **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit: the list factor `L₀` before
-  Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and fold terms
-  per folding round rather than per level, and consistency batching at each level's own list size.
-- **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (50 at rate 1/2). Flock uses the sharper
-  `1/(2η√ρ)` (35). The bound uses ArkLib's, and the difference is below 0.001 bit.
+- **2^-205 holds for every m, 22 ≤ m ≤ 35,** at the analysis slack `η = 1/200`, the seventh Ligerito level at
+  m = 34, 35 included. At `η = 1/50` it was 2^-195.5 for m ≤ 33 and 2^-195.43 at m = 34, 35. PROTOCOL.md §15 quotes
+  2^-195.5 per table, from the m = 33 ledger at `η = 0.02`. All are far below 2^-128.
+- **Terms flock-128's ledger does not charge,** none moving the total by 0.001 bit at `η = 1/50`: the list factor
+  `L₀` before Ligerito's binding (paper Appendix A), the `r = 1` set (A5), the pin (A8), the link points (A14), MCA and
+  fold terms per folding round rather than per level, and consistency batching at each level's own list size.
+- **List sizes.** ArkLib proves the Johnson list bound as `1/(2ηρ)` (200 at rate 1/2). Flock uses the sharper
+  `1/(2η√ρ)` (141). The bound uses ArkLib's. Even the exact pairwise-Johnson lists (29 at level 0, m = 33) would add
+  only 0.17 bit (the proximity-gap scoping lane).
 
 ## 6. Zero knowledge: the masked protocol and the reference prover
 
@@ -347,7 +348,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 target 2^-128, and state the number the way the stages suggest:
 
 1. **The statistical part, per table:** `−log2` of the proven error against any prover at the oracle layer. That is
-   195.5 bits for m ≤ 33 and 195.4 bits for m = 34, 35.
+   205 bits for every m, 22 ≤ m ≤ 35.
    - Only machine-checked results are used: A1 is proved in Lean, not a conjectured proximity gap.
    - No bits are credited to grinding (proof of work).
    - A session with several tables adds their errors.
@@ -447,9 +448,9 @@ proved.
 The weights are committed once, as Halevi–Micali leaves under a Merkle root registered as the model's anchor, and every
 later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-root-reuse`.
 
-- **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus the root's straight-line binding
+- **Soundness over N tables**, by union bound: `N·2^-205 + N·t·2^{17.3−256}`, plus the root's straight-line binding
   once, `t²/2^513`.
-  - The statistical part allows N up to 2^67.5.
+  - The statistical part allows N up to 2^77.
   - The rewinding term needs `N·t ≤ 2^110.7`, about 2^30 tables at `t = 2^80`.
   - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
   - **Decision:** state security per table, or as a lifetime budget on `N·t`.
@@ -523,7 +524,7 @@ soundness:
 3. **Shared commitment, per-table streams: soundness unchanged.** Each table's bound holds for every prover strategy,
    and the other tables are just part of that strategy. Its coins are uniform and released only after its own round's
    bytes are recorded. So the union bound gives `Σ tableError` over the session's tables, and there is no barrier
-   across machines. Squaring 2^-97.8 into 2^-195.5 needs independent coins per repetition.
+   across machines. Squaring the per-rep error into the table's needs independent coins per repetition.
 4. **Latency.** A session lasts one machine's proving work plus about 220 round trips, paced by the slowest stream.
    - With tables spread across GPUs and a coin server co-located per datacenter, that is about 1–2 s.
    - Sessions run back to back, so a table waits at most one window plus one session: twice the session length.

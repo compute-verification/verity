@@ -1208,9 +1208,10 @@ rejects explicitly.
 Soundness of a verdict rests on:
 
 - **Statistical:** the Flock protocol's round-by-round errors for `fast100` (§15), squared over two reps on one root with
-  live coins: 2^-195.5 per table. The soundness lane proves it in Lean with no named assumption: mutual correlated
-  agreement up to the Johnson bound (BCHKS25 Theorem 4.6) is proved from DKT26 in ArkLib, and ring switching and
-  Ligerito's list-decoding analysis are proved there too (`lean/soundness/ASSUMPTIONS.md` §3).
+  live coins: 2^-195.5 per table by §15's ledger. The soundness lane proves 2^-205 per table in Lean, at the analysis
+  slack `η = 1/200`, with no named assumption: mutual correlated agreement up to the Johnson bound (BCHKS25 Theorem
+  4.6) is proved from DKT26 in ArkLib, and ring switching and Ligerito's list-decoding analysis are proved there too
+  (`lean/soundness/ASSUMPTIONS.md` §1.1, §3).
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
   With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
