@@ -136,7 +136,8 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V S
   let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
     ("tables", Json.arr #[Json.str tags.table]),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
-  canon (Json.mkObj (if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base))
+  let base := if coins == .seed then base ++ [("coins", Json.str tags.coinScheme)] else base
+  canon (Json.mkObj (if tags.retainRounds then base ++ [("rounds", Json.str "bytes retained")] else base))
 
 /-- `setup` (§3 step 1): parse and check everything, then derive the statement. -/
 def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins)
@@ -168,7 +169,8 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
 namespace Stmt
 
 def spec (st : Stmt) : SessionSpec :=
-  { table := st.tags.table, domain := st.tags.domain, sigma := st.sigma, hello := st.hello, mPts := st.mPts }
+  { table := st.tags.table, domain := st.tags.domain, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
+    retainRounds := st.tags.retainRounds }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 := Id.run do

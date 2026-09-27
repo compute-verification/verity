@@ -34,6 +34,8 @@ structure Tags where
   coinScheme : String
   /-- when set, META `leaf_scheme` must be this object (canonical JSON), not only carry the id -/
   pinnedLeafScheme : Option Json := none
+  /-- the coin server retains every round's bytes (`Hello`'s `rounds`; every recorded round carries `msg`, §6.2) -/
+  retainRounds : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -81,11 +83,11 @@ def leafSchemeFd02e847 : Json :=
       ("salt_source", s "os generator, one draw per leaf"), ("key", s "DEFAULT_KEY, a statement constant for every tree"),
       ("key_sha256", s (hexOf (Sha256.hash Hm96.sha256.keyFromLabel)))])]
 
-/-- `verity/flock-circuit`, final format (PR #83 at `fd02e847`): the tags of `19c7269a`; META `leaf_scheme` is the pinned
-object, and the identity carries it. -/
-def circuit : Tags :=
+/-- `verity/flock-circuit`, PR #83 at `fd02e847`: the tags of `19c7269a`; META `leaf_scheme` is the pinned object, and the
+identity carries it. -/
+def circuitFd02e847 : Tags :=
   { circuit19c7269a with
-    name := "verity/flock-circuit",
+    name := "verity/flock-circuit@fd02e847",
     identity := Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
       ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
       ("flavor", s "rs"), ("leaf_scheme", leafSchemeFd02e847),
@@ -96,8 +98,32 @@ def circuit : Tags :=
       ("hooks", hooksNoMask)],
     pinnedLeafScheme := some leafSchemeFd02e847 }
 
+/-- META `leaf_scheme` at PR #83 `b3baabd8`: the unsalted SHA-512 leaf, reserving `hm96-sha512/v1` (PR #93) with its pinned
+key (`key_sha512`, from `Hm96.sha512`'s key label). -/
+def leafSchemeSha512 : Json :=
+  Json.mkObj [("id", s "flock-leaf/sha512-unsalted"), ("salt_bytes", n 0),
+    ("target", Json.mkObj [("scheme", s "hm96-sha512/v1"), ("inner", s "sha512 column digest"), ("salt_bytes_per_leaf", n 192),
+      ("salt_source", s "os generator, one draw per leaf"), ("key", s "default_key, a statement constant for every tree"),
+      ("key_sha512", s (hexOf (Sha512.hash Hm96.sha512.keyFromLabel)))])]
+
+/-- `verity/flock-circuit` on SHA-512 (PR #83 at `631567f7`, Daniel's SHA-512 decision): every Ligerito level's Merkle tree on
+SHA-512 (64-byte digests), the SHA-512 coin commitment, and the coin server retaining every round's bytes. -/
+def circuit : Tags :=
+  { circuit19c7269a with
+    name := "verity/flock-circuit", merkleLeaf := "flock-leaf/sha512-unsalted", coinScheme := "coin-commit/sha512",
+    identity := Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
+      ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
+      ("flavor", s "rs"), ("leaf_scheme", leafSchemeSha512),
+      ("hashes", Json.mkObj [("merkle", s "sha512 (leaves and nodes, every Ligerito level)"),
+        ("round_digest", s "sha256 (framing: the coin server retains every round's bytes and the replay compares them)"),
+        ("statement_digest", s "sha256"), ("sigma", s "sha256"), ("coin_commitment", s "sha512"),
+        ("coin_derivation", s "sha256 (verity.randomness)"), ("frame_v3_tree", s "sha256"),
+        ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "blake3-keyed/row/v2")]),
+      ("hooks", hooksNoMask)],
+    pinnedLeafScheme := some leafSchemeSha512, retainRounds := true }
+
 /-- The versions this verifier knows, by name. -/
-def all : List Tags := [netlistV1, circuit19c7269a, circuit]
+def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

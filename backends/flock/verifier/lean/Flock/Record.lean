@@ -25,6 +25,8 @@ structure SessionSpec where
   hello : String
   mPts : Nat
   points : Nat := 2
+  /-- the statement's coin server retains every round's bytes: each round must carry them (§6.2) -/
+  retainRounds : Bool := false
   deriving Inhabited
 
 structure Session where
@@ -123,9 +125,10 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
       let coins ← f128s (← arr r "coins")
       check (1 ≤ n && n ≤ 65536 && coins.size == n && sha.size == 32) s!"S12: {name} round {k} is malformed"
       -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
+      check (!spec.retainRounds || !isNull r "msg") s!"S12: {name} round {k}: the statement retains round bytes and the record has none"
       let bytes ← if isNull r "msg" then pure none else do
         let b ← unhex (← str r "msg")
-        check (Sha256.hash b == sha) s!"S12: {name} round {k}: the retained bytes are not the recorded digest's"
+        check (Sha256.hash b == sha && b.size == (← nat r "msg_len")) s!"S12: {name} round {k}: the retained bytes are not the recorded digest's"
         pure (some b)
       pure (⟨n, sha, coins, bytes⟩ : Round)
     let rootSha := match (← fld s "root_sha256").getStr? with

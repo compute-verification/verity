@@ -3979,7 +3979,7 @@
      "cases": "as in the first set, plus retained, retained-edited (retained-not-digest: intended divergence, upstream ignores the bytes)"
     },
     "agreement": "art:78ef0a6e (27/27)",
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@fd02e847",
     "forgeries": "art:d306dfbd",
     "forgeries_note": "PR #83 selftest forgeries that run a session (prover-side witness attacks, false output/digest statements with their own pub.bin, coins before y, fast profile, cross-session replay, relabelled circuit, prover file differs): 14 on RoPE, expectations in each case.json; Lean and upstream agree 14/14",
     "fuzz": {
@@ -4020,7 +4020,7 @@
      "tool": "redigest.py art:77cb4bec/honest OUT",
      "cases": "as in the first set"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@fd02e847",
     "agreement": "art:f1fd1488 (27/27)",
     "forgeries": "art:7a526bff",
     "forgeries_note": "15 selftest forgeries incl. the tail cases (private cut word, swapped tail); Lean and upstream agree 15/15"

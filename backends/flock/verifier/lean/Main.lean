@@ -133,11 +133,10 @@ def merkleTest (path : String) : IO UInt32 := do
   IO.println s!"merkle-test: {lines.size} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
-/-- `hm96-test VECTORS`: PR #88's `hm96/vectors.json` against `Hm96.sha256`: the pinned key, the leaf prefix, every mask and
-every leaf. -/
-def hm96Test (path : String) : IO UInt32 := do
+/-- `hm96-test VECTORS [sha512]`: PR #88's `hm96/vectors.json` against `Hm96.sha256` (PR #93's `vectors_sha512.json` against
+`Hm96.sha512`): the pinned key, the leaf prefix, every mask and every leaf. -/
+def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   let some v := (Lean.Json.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
-  let h := Hm96.sha256
   let str := fun (j : Lean.Json) (k : String) => (j.getObjValAs? String k).toOption.getD ""
   let key := h.keyFromLabel
   let other := bytesOfHex (str v "other_key")
@@ -161,6 +160,7 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
   | ["hm96-test", path] => hm96Test path
+  | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

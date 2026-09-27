@@ -34,13 +34,12 @@ def bit (b : ByteArray) (t : Nat) : Bool := ((b.get! (t / 8)).toNat >>> (t % 8))
 def keyBits (h : Hm96) : Nat := 8 * h.digestBytes + 8 * h.saltBytes - 1
 def keyBytes (h : Hm96) : Nat := (h.keyBits + 7) / 8
 
-/-- The pinned key: `SHA-256(label ‖ be32 i)` for `i = 0, 1, …`, concatenated to `keyBytes`, the bits above `keyBits`
-cleared. -/
+/-- The pinned key: `H(label ‖ be32 i)` for `i = 0, 1, …`, concatenated to `keyBytes`, the bits above `keyBits` cleared. -/
 def keyFromLabel (h : Hm96) : ByteArray := Id.run do
   let mut out := ByteArray.empty
   let mut i := 0
-  for _ in [0:(h.keyBytes + 31) / 32] do
-    out := out ++ Sha256.hash (h.keyLabel ++ be32 i.toUInt32)
+  for _ in [0:(h.keyBytes + h.digestBytes - 1) / h.digestBytes] do
+    out := out ++ h.hash (h.keyLabel ++ be32 i.toUInt32)
     i := i + 1
   let k := out.extract 0 h.keyBytes
   let spare := 8 * h.keyBytes - h.keyBits
@@ -76,10 +75,9 @@ def sha256 : Hm96 :=
     saltTag := tag "verity/hm96-sha256/salt/v1", leafTag := tag "verity/hm96-sha256/leaf/v1",
     keyLabel := tag "verity/hm96-sha256/key/v1" }
 
-/-- On SHA-512 (the target statement: every commitment path). Provisional: tags and the salt size (`|y| = |x| + |c| + 512`
-bits, as `hm96-sha256/v1` sizes it) are placeholders until the scheme is published. -/
+/-- `hm96-sha512/v1` (PR #93): every commitment path of the target statement. -/
 def sha512 : Hm96 :=
-  { name := "hm96-sha512 (provisional)", hash := Sha512.hash, digestBytes := 64, saltBytes := 192, block := 128,
+  { name := "hm96-sha512/v1", hash := Sha512.hash, digestBytes := 64, saltBytes := 192, block := 128,
     saltTag := tag "verity/hm96-sha512/salt/v1", leafTag := tag "verity/hm96-sha512/leaf/v1",
     keyLabel := tag "verity/hm96-sha512/key/v1" }
 
