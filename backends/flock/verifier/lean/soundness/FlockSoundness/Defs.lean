@@ -193,4 +193,65 @@ def DOp (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) :
   | some op => ∀ M ∈ closeMsgs A sch C,
       (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) ≠ op.T
 
+/-! ## The doomed states over any list of messages
+
+The phases before Ligerito use the messages near the committed table (`closeMsgs`) only through
+membership and the list's size, so each is proved over any set `W` of messages (`…_of_list`). The
+doomed states above are these at `W = closeMsgs A sch C` (`repDoomed_iff`, `dZc_eq`, `dLc_eq`,
+`dOp_eq`). The padded level 0 takes `W` to be its padded code's witnesses (`SoundnessPad`). -/
+
+/-- A rep starts doomed over `W`: no message of `W` packs a witness that satisfies the block
+R1CS and the pin and makes every opened region claim true. -/
+def RepDoomedW (A : Arith F K) (S : Statement) (sch : Schedule)
+    (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) : Prop :=
+  ∀ M ∈ W, let z := witnessOf A S.m sch.k0 sch.level₀.logCols M
+    ¬ ((∀ o i, (S.A₀.mulVec (S.block z o)) i * (S.B₀.mulVec (S.block z o)) i = S.block z o i)
+        ∧ (∀ o, S.block z o S.pin = 1) ∧ ∀ c ∈ extra, c.Holds z)
+
+/-- Doomed after the zerocheck, over `W`. -/
+def DZcW (A : Arith F K) (S : Statement) (sch : Schedule)
+    (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) :
+    Option (ZcOut F S.m) → Prop
+  | none => True
+  | some zc => ∀ M ∈ W,
+      ¬ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S (wit A S sch M))
+          ∧ (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S (wit A S sch M))
+          ∧ (cClaim A zc).Holds (wit A S sch M)
+          ∧ pinMLE S (wit A S sch M) (zc.ρOut S) = 1
+          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
+
+/-- Doomed after the lincheck, over `W`. -/
+def DLcW (A : Arith F K) (S : Statement) (sch : Schedule)
+    (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m))
+    (zc : ZcOut F S.m) : Option (Claim F S.m) → Prop
+  | none => True
+  | some ab => ∀ M ∈ W,
+      ¬ (ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
+          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
+
+/-- Doomed after the opening, over `W`: no message of `W` has the batched value. -/
+def DOpW (S : Statement) (sch : Schedule) (W : Set (Message F sch.k0 sch.level₀.logCols)) :
+    Option (OpenOut F) → Prop
+  | none => True
+  | some op => ∀ M ∈ W,
+      (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) ≠ op.T
+
+theorem repDoomed_iff (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (extra : List (Claim F S.m)) :
+    RepDoomed A S sch C extra ↔ RepDoomedW A S sch (closeMsgs A sch C) extra := Iff.rfl
+
+theorem dZc_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (extra : List (Claim F S.m)) (o : Option (ZcOut F S.m)) :
+    DZc A S sch C extra o = DZcW A S sch (closeMsgs A sch C) extra o := by
+  cases o <;> rfl
+
+theorem dLc_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (extra : List (Claim F S.m)) (zc : ZcOut F S.m) (o : Option (Claim F S.m)) :
+    DLc A S sch C extra zc o = DLcW A S sch (closeMsgs A sch C) extra zc o := by
+  cases o <;> rfl
+
+theorem dOp_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (o : Option (OpenOut F)) : DOp A S sch C o = DOpW S sch (closeMsgs A sch C) o := by
+  cases o <;> rfl
+
 end FlockSoundness

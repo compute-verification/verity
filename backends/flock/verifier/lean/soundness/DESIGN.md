@@ -479,14 +479,14 @@ A session carries every table from a time window, and many GPUs or datacenters p
 serialized, and each is arbitrarily large. `ASSUMPTIONS.md` §2 states the rules. Why they give zero knowledge and keep
 soundness:
 
-1. **Zero knowledge needs only the single-rewind simulator.**
-   - A session has one coin commitment, however many tables and machines it spans. What forces repeated rewinding is
-     several commitments interleaved in time.
+1. **Zero knowledge needs only one rewind point** (the "single-rewind" simulator of §9).
+   - A session has one coin commitment, however many tables and machines it spans. What forces rewinding to several
+     points is several commitments interleaved in time.
    - The Goldreich–Kahan simulator makes one extraction phase: an honest prover on a dummy witness. That is
      indistinguishable from a real run until the final openings, because every earlier message is masked and those
-     openings come after the last coin. It then rewinds once, to just after step 0, and simulates every table from the
-     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. The simulator runs in
-     expected polynomial time, handling aborts as Goldreich–Kahan do.
+     openings come after the last coin. It then rewinds only to just after step 0, and simulates every table from the
+     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. Its rewinds, aborts and
+     completion estimate are as `ASSUMPTIONS.md` §6 states them, in expected polynomial time.
    - Serialized sessions compose sequentially (auxiliary-input zero knowledge, Goldreich–Oren 1994).
 2. **Coins committed under one root, per (table, repetition, round).** The commitment is a SHA-512 Merkle root over
    Halevi–Micali commitments to each coin, so each table's stream is a subtree. That keeps soundness to statistical
@@ -542,15 +542,18 @@ If real concurrency is ever needed:
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
   (`table_value_sound`), which projects a batched session onto one table through `value_interleave_le`. The lowering
   is a named hypothesis.
-- **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`). The table's extractor is randomized
-  and its bound depends on the prover, so the audit carries, per drawn unit, the joint probabilities
-  `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run and the
-  reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the prover's
-  state (the form agreed with flock-soundness). `ks` is `table_knowledge_sound_joint`'s left side
-  (`FlockTableC.ksJoint_le`), and ε_ks is its bound averaged over the draw. A deterministic extractor is the special
-  case (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
-  - The configuration is one table per session with the leaf layer registered.
-  - Several tables: each unit reads one table of the plan, and `ks` is flock-soundness's `session_knowledge_sound`
-    for that table.
+- **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
+  table's extractor is randomized and its bound depends on the prover, so the audit carries, per drawn unit, the joint
+  probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the
+  prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
+  (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
+  - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each drawn unit is read from
+    one table of the plan, `ks` is `Pr[accept]` times that table's extraction failure (the product is the joint
+    probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the draw.
+  - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
+  - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
+    `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
   - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the spec
     decides between expected-time collision resistance and the random-oracle column.
