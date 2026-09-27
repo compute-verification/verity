@@ -222,3 +222,15 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_batched_count
 #print axioms FlockSoundness.Audit.Partition.flock_batched_drawn
+-- the rows the verifier parses, as the audit's Rows: the parser's order check is Rows.topo (PR #147)
+#print axioms FlockSoundness.checkOrder_ok
+#print axioms FlockSoundness.Rows.ofOrdered
+#print axioms FlockSoundness.parse_checkOrder
+#print axioms FlockSoundness.parse_rowOrder
+#print axioms FlockSoundness.pushLe32_data
+#print axioms FlockSoundness.rd32_le32
+#print axioms FlockSoundness.ofRows_spec
+#print axioms FlockSoundness.ofRows_row
+#print axioms FlockSoundness.Rows.ofNet
+#print axioms FlockSoundness.Rows.ofNet_a
+#print axioms FlockSoundness.Rows.ofNet_b

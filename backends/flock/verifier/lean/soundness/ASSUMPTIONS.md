@@ -147,9 +147,14 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
       of `Rows`.
     - Its computed rows lie between the input region and the constant, its last column.
-  - The parser checks the input rows and the constant. `test_pinned_rows_read_earlier_columns`
-    (`backends/flock/tests/test_ir_lowering.py`) checks the rest on the pinned RoPE and SiLU files: every computed row
-    reads only earlier columns or the constant, and never a padding column.
+  - The parser checks the input rows, the constant and, since PR #147, the row order (`Net.checkOrder`): every computed
+    row reads only earlier columns or the constant, and never a padding column. So `Rows.topo` for a parsed net is
+    proved, not assumed (`ExecRows.lean`):
+    - `parse_rowOrder`: `Net.parse` accepted means the check passed on the very rows stored as `A` and `B`;
+    - `ofRows_row`: the stored sparse rows read back as those rows (columns below `2^32`);
+    - `Rows.ofNet`: the audit's `Rows` for a parsed net, whose computed rows are `net.a.row` and `net.b.row`.
+
+    `test_pinned_rows_read_earlier_columns` stays as a check on the pinned files.
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the transcript decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
@@ -160,7 +165,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
 - **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
-  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (§5).
+  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (§5); the plan is
+  `note:audit-lean/20260927T1030Z-draft-row-placement-plan`, and its first step, `Rows.ofNet`, is proved.
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
   about the program's Boolean circuit only through L1.
