@@ -27,11 +27,24 @@ mods=$(cd "$lib" && find . -name '*.olean' | sed 's#^\./##; s#\.olean$##; s#/#.#
 [ -n "$mods" ] || { echo "replay.sh: no built modules under $lib"; exit 1; }
 n=$(wc -w <<<"$mods")
 errs=$(mktemp -d)
+# A check killed by a signal (137: the cgroup's OOM killer; a module importing Mathlib takes several GB) is no kernel verdict: it is
+# retried alone, and reported as a kill if it dies again.  Only a checker that exits with an error is a replay failure.
 # shellcheck disable=SC2016
-if ! xargs -I{} -P "${REPLAY_JOBS:-4}" sh -c 'lake env "$0" "$1" > /dev/null 2> "$2/$1.err" || { echo "$1" >> "$2/FAILED"; }' \
-     "$bin" "{}" "$errs" <<<"$mods" || [ -s "$errs/FAILED" ]; then
-  first=$(head -n 1 "$errs/FAILED" 2>/dev/null)
-  echo "replay.sh: kernel replay FAILED on $(wc -l < "$errs/FAILED" 2>/dev/null || echo '?') module(s), first $first: $(head -c 400 "$errs/$first.err" 2>/dev/null)"
+check='lake env "$0" "$1" > /dev/null 2> "$2/$1.err"; rc=$?; [ $rc = 0 ] || echo "$1 $rc" >> "$2/rc"'
+xargs -I{} -P "${REPLAY_JOBS:-2}" sh -c "$check" "$bin" "{}" "$errs" <<<"$mods" || true
+if [ -s "$errs/rc" ]; then
+  mv "$errs/rc" "$errs/first"
+  while read -r m rc; do
+    if [ "$rc" -ge 128 ]; then sh -c "$check" "$bin" "$m" "$errs"; else echo "$m $rc" >> "$errs/rc"; fi
+  done < "$errs/first"
+fi
+if [ -s "$errs/rc" ]; then
+  read -r m rc < "$errs/rc"
+  if [ "$rc" -ge 128 ]; then
+    echo "replay.sh: replay KILLED (signal $((rc - 128)), e.g. out of memory: not a kernel verdict) on $(wc -l < "$errs/rc") module(s), first $m"
+  else
+    echo "replay.sh: kernel replay FAILED on $(wc -l < "$errs/rc") module(s), first $m (exit $rc): $(head -c 400 "$errs/$m.err")"
+  fi
   exit 1
 fi
 echo "replay.sh: $n module(s) replayed by the kernel ($ver, $(basename "$bin"))"
