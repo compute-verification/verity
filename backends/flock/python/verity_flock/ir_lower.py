@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Callable, Sequence
 
 import numpy as np
@@ -69,8 +69,8 @@ PIECES: dict[str, Callable] = {
     "Bf16ToF32_v1": lambda C, a: fp.bf16_to_f32(a),
     "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_F2FP),
     "F32ToBf16Rn_v1": lambda C, a: fp.f32_to_bf16(C, a, NAN_TORCH),
-    "F32Add_v1": fp.f32_add,
-    "F32Mul_v1": fp.f32_mul,
+    "F32Add_v1": partial(fp.f32_add, ir_nan=True),
+    "F32Mul_v1": partial(fp.f32_mul, ir_nan=True),
     "F32Fma_v1": fp.f32_fma,
     "F32Div_v1": _f32_div,
     "Bf16Add_v1": _bf16_add(NAN_TORCH),
