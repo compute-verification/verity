@@ -1071,7 +1071,8 @@ class Commitments:
         own2, _k, head = WQ.partition(G, X_BITS)
         if not (own2 == owner).all():
             raise AssertionError(f"{fid}: the partition is not deterministic")
-        c, call = WQ._call_scope(fn)
+        from verity.ir.cut import call_scope
+        c, call = call_scope(fn)
         lo = call.offset
         leaves = [(name, w) for name, t in fn.signature()[0] for w in t.leaf_widths()]
         scopes: dict[str, int] = {}

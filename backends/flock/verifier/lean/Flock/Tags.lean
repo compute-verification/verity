@@ -42,6 +42,8 @@ structure Tags where
   /-- PR #83 from `e51e2b86`: META binds `program_sha512` and a partition (`verity/partition/v1`, or the provisional unit cover),
   and the public header's `units` carries every instance's class (`Flock.HmRow.classOf`) -/
   bindings : Bool := false
+  /-- PR #83 from `967b8d06`: a public file may be a shared-row file (header `shared_rows`, `Flock.HmRow.sharedRows`) -/
+  sharedRows : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -135,14 +137,17 @@ def leafSchemeHm96 : Json :=
     ("salt_source", s "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored"),
     ("key", s "default_key, a statement constant for every tree"), ("key_sha512", s (hexOf (Sha512.hash Hm96.Default512.key)))]
 
-/-- The identity of PR #83's statement from `eb90718f`; `seedInjection` is true only in the selftest harness's build. -/
-def identityHm96 (seedInjection : Bool) : Json :=
+/-- The identity of PR #83's statement from `eb90718f`; `seedInjection` is true only in the selftest harness's build. From
+`68ae79f2` (`sha512Text`) its text names the round digest, the statement digest and Σ as SHA-512, as they are since
+`eb90718f`. -/
+def identityHm96 (seedInjection : Bool) (sha512Text : Bool := false) : Json :=
+  let h := if sha512Text then "sha512" else "sha256"
   Json.mkObj [("statement", s "verity/flock-circuit"), ("backend", s "C-interactive"),
     ("proof_class", s "NON_ZK_PROOF"), ("profile", s "fast100"), ("reps", n 2), ("commitments", s "one root, both reps (R1)"),
     ("flavor", s "rs"), ("leaf_scheme", leafSchemeHm96), ("seed_injection", Json.bool seedInjection),
     ("hashes", Json.mkObj [("merkle", s "hm96-sha512 (every Ligerito level)"),
-      ("round_digest", s "sha256 (framing: the coin server retains every round's bytes and the replay compares them)"),
-      ("statement_digest", s "sha256"), ("sigma", s "sha256"), ("coin_commitment", s "sha512"),
+      ("round_digest", s s!"{h} (framing: the coin server retains every round's bytes and the replay compares them)"),
+      ("statement_digest", s h), ("sigma", s h), ("coin_commitment", s "sha512"),
       ("coin_derivation", s "sha256 (verity.randomness)"), ("frame_v3_tree", s "sha512 (frame-v3-sha512)"),
       ("transcript", s "none (live verifier coins)"), ("row_leaf_in_circuit", s "hm96-sha512/row/v1 over sha512/row/v1")]),
     ("hooks", hooksNoMask)]
@@ -168,9 +173,17 @@ def circuit : Tags :=
 def circuitSelftest : Tags :=
   { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHm96 true }
 
+/-- `verity/flock-circuit` as of PR #83 `967b8d06`: `e51e2b86`'s statement with the identity text of `68ae79f2` (the round
+digest, the statement digest and Σ named SHA-512), and shared-row public files (`967b8d06`). -/
+def circuit967b8d06 : Tags :=
+  { circuit with name := "verity/flock-circuit@967b8d06", identity := identityHm96 false true, sharedRows := true }
+
+def circuit967b8d06Selftest : Tags :=
+  { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
+
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
-  circuit, circuitSelftest]
+  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 
