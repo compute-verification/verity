@@ -31,6 +31,16 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg �
 noncomputable def atTgt (S : Finset (Fin n)) (t : Option (Fin n)) (f : Fin n → ℝ≥0∞) : ℝ≥0∞ :=
   t.elim 0 fun u => if u ∈ S then f u else 0
 
+theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞} (h : ∀ u ∈ S, f u ≤ c)
+    (t : Option (Fin n)) : atTgt S t f ≤ c := by
+  cases t with
+  | none => exact zero_le
+  | some u =>
+    simp only [atTgt, Option.elim_some]
+    split_ifs with hu
+    · exact h u hu
+    · exact zero_le
+
 /-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
 and for each drawn unit the joint probabilities of the two ways its table can accept while it is
 wrong. -/
