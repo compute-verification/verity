@@ -78,9 +78,11 @@ required, name a model.
 `compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py` / `router_softmax_source.py` /
 `vocab_range_source.py`, attached by `taps.py`), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  The norm-scale
-tap (`NORM_TAP=1`, `query/norm_scales.py`), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered router's
-committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a TP
-rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change) are opt-in and never the record.
+tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so are the guarded-max tap (`GUARDED_MAX_TAP=1`,
+`query/guarded_max.py`: the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` / `pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write
+`GuardNegInfZero(m)` into word 3 of the stream's ROW entry), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
+router's committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a
+TP rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change).
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`

@@ -190,3 +190,22 @@ def test_a_recompute_fails_the_cut():
     G = W.Graph(f)
     R = W.units(G, 16, 32)
     assert R["cut"].codes == ("gate-recomputed",) and R["cut"].detail["gate-recomputed"]["gates"] == [[1, 0]]
+
+
+def test_a_value_computed_again_in_its_own_unit_is_redundant_not_a_recompute():
+    from verity.ir.partition import validate_unit_cut
+    assert validate_unit_cut(3, 0, [0, 0, 1], [(0, 2), (1, 2)], [2], {0, 2}, recomputed=[(1, 0)]).codes == ("read-uncommitted",)
+    v = validate_unit_cut(3, 0, [0, 0, 0], [(0, 2), (1, 2)], [2], {2}, recomputed=[(1, 0)])
+    assert v.ok and v.detail["redundant_gates"] == 1
+    v = validate_unit_cut(3, 0, [0, 1, 2], [(0, 2), (1, 2)], [2], {0, 1, 2}, recomputed=[(1, 0)])
+    assert v.codes == ("gate-recomputed",) and v.detail["gate-recomputed"]["gates"] == [[1, 0]] and v.detail["redundant_gates"] == 0
+
+
+def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import sampling as SM
+    G = W.Graph(bind(SM.GumbelTopPTokenSelect, V=16))
+    R = W.units(G, 16, 32)
+    (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
+    assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
+    assert R["kinds"] == ["output"] and R["cut"].ok and R["cut"].detail["redundant_gates"] == 1

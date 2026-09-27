@@ -342,6 +342,15 @@ def manifest_missing_policies(path: str, ck: Any) -> list[str]:
     return [key for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and not (isinstance(q, dict) and isinstance(q.get(key), dict))]
 
 
+def manifest_guarded_max(path: str) -> bool:
+    """Whether a manifest was built under the guarded-max policy (`query.guarded_max`); False when unreadable."""
+    from verity_vllm.query.guarded_max import policy_of
+    try:
+        return policy_of(json.load(open(path)))
+    except (OSError, ValueError):
+        return False
+
+
 def program_digest_of_record(d: str, batch: int) -> str:
     """The Build's Program digest of record, read from ``build_summary.json``, never from the manifest: B=1 the declared
     (cap-shape) request Program's digest; B>=2 GP-01's workload digest, else the fold of the per-shape request digests."""

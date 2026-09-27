@@ -20,6 +20,7 @@ type JSONScalar = None | bool | int | str
 type JSONValue = JSONScalar | Mapping[str, JSONValue] | Sequence[JSONValue]
 
 _TAGGED_HASH_PREFIX = b"veritor/tagged-sha256/v1\0"
+_TAGGED_SHA512_PREFIX = b"verity/tagged-sha512/v1\0"
 
 
 def _normalize_json(value: object, path: str = "$") -> JSONValue:
@@ -107,6 +108,23 @@ def identity_digest(tag: str, manifest: JSONValue) -> Digest:
     """Return a tagged SHA-256 digest of a canonical identity manifest."""
 
     return tagged_sha256(tag, canonical_json_bytes(manifest))
+
+
+def tagged_sha512(tag: str, payload: bytes | bytearray | memoryview) -> bytes:
+    """:func:`tagged_sha256`'s frame through SHA-512, under its own prefix: 64 bytes.  The identity hash of the SHA-512
+    commitment schemes (``frame-v3-sha512``, ``vllm-v1-sha512``, ``hm96-sha512/v1``)."""
+
+    if type(tag) is not str or not tag:
+        raise TypeError("hash tag must be a nonempty string")
+    tag_bytes, payload_bytes = tag.encode("utf-8"), bytes(payload)
+    return hashlib.sha512(_TAGGED_SHA512_PREFIX + len(tag_bytes).to_bytes(4, "big") + tag_bytes
+                          + len(payload_bytes).to_bytes(8, "big") + payload_bytes).digest()
+
+
+def identity_digest_sha512(tag: str, manifest: JSONValue) -> bytes:
+    """A tagged SHA-512 digest of a canonical identity manifest (64 bytes)."""
+
+    return tagged_sha512(tag, canonical_json_bytes(manifest))
 
 
 canonical_manifest_digest = identity_digest

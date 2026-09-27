@@ -28,7 +28,7 @@ import json
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 
@@ -58,6 +58,16 @@ def _parent(path: str, known: set[str]) -> str:
     return ""
 
 
+def _param_inputs(c: Counter | None) -> dict[str, dict[str, int]] | None:
+    """Per consumer parameter, the words it reads from each prescribed input (None when no instance rows were read)."""
+    if c is None:
+        return None
+    out: dict[str, dict[str, int]] = {}
+    for (param, name), w in sorted(c.items()):
+        out.setdefault(param, {})[name] = w
+    return out
+
+
 class _Acc:
     """The graph over one or more request Programs of one row."""
 
@@ -70,6 +80,7 @@ class _Acc:
         self.edge_ports: dict[tuple, Counter] = {}
         self.param_names: dict[str, list[str]] = {}
         self.param_reads: Counter = Counter()
+        self.param_inputs: dict[tuple[str, str], Counter] = {}
         self.programs: list[dict[str, Any]] = []
         self.call_keys: list[list[tuple[str, str]]] = []
 
@@ -159,7 +170,7 @@ class _Acc:
             inp = P.input(int(iid))
             self.param_reads[(gkeys[g], f"{inp.name}:{cols.port_names[pi]}" if cols.port_names[pi] != "out" else inp.name)] += int(cnt)
         if path is not None:
-            self._words(path, cols, call_group, gkeys)
+            self._words(path, cols, call_group, gkeys, P.params)
         self.call_keys.append([gkeys[g] for g in call_group.tolist()])
         self.programs.append({"label": label, "program_digest": digest, "calls": n, "modules": len(set(mods))})
 
@@ -173,18 +184,29 @@ class _Acc:
             self.param_names[spec] = names
         return names
 
-    def _words(self, path: str, cols: Any, call_group: np.ndarray, gkeys: list[tuple[str, str]]) -> None:
+    def _words(self, path: str, cols: Any, call_group: np.ndarray, gkeys: list[tuple[str, str]], inputs: Sequence[Any]) -> None:
         """Per group edge, the leaves the consumers' operand runs name in the producers' outputs (words), their declared bits, and
-        per (consumer parameter, producer port) the words landing there: the instance rows' runs `("n", producer, lo, hi)`."""
+        per (consumer parameter, producer port) the words landing there: the instance rows' runs `("n", producer, lo, hi)`; per
+        (consumer parameter, prescribed input) the words it reads there: the runs `("p", input, lo, hi)`."""
         tables, spec_idx, forms, form_idx = cols.port_tables, cols.spec_idx, cols.forms, cols.form_idx
         cg = call_group.tolist()
         words, bits, ports = self.edge_words, self.edge_bits, self.edge_ports
         for r in iter_instance_rows(path):
             gc = gkeys[cg[int(r["i"])]]
+            pin = self.param_inputs.setdefault(gc, Counter())
             names = None
             for j, operand in enumerate(r.get("args") or ()):
                 acc: dict[tuple, list[int]] = {}                      # (producer group, port) -> [words, bits] over this operand's runs
                 for run in operand:
+                    if run[0] == "p":
+                        if names is None:
+                            names = self._params_of(r["spec"])
+                        param, pv, lo, hi = names[j] if j < len(names) else str(j), inputs[run[1]], run[2], run[3]
+                        for p in pv.port_table:
+                            if len(pv.port_table) == 1 or p.lo < hi and lo < p.hi:
+                                w = hi - lo if len(pv.port_table) == 1 else min(hi, p.hi) - max(lo, p.lo)
+                                pin[(param, f"{pv.name}:{p.name}" if p.name != "out" else pv.name)] += w
+                        continue
                     if run[0] != "n":
                         continue
                     idx = run[1]
@@ -263,7 +285,8 @@ class _Acc:
                                "varying": g["varying"], "varying_calls": varying_calls if g["varying"] else None, "specs": len(g["specs"]), "spec": spec0 if len(g["specs"]) == 1 else None,
                                "calls": g["calls"], "template": t, "template_params": p, "instances": g["instances"],
                                "units_in_run": (units or {}).get(key), "exported_vus": (exported or {}).get(key),
-                               "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key}})
+                               "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key},
+                               "param_inputs": _param_inputs(self.param_inputs.get(key))})
         # structural hashes: a body's groups in order, reads by group index inside the body, outside reads by count
         body_hash: dict[str, str] = {}
         for m, keys in groups_of.items():
@@ -303,6 +326,8 @@ class _Acc:
                           "edge_words": "words: the leaves the consumers' operand runs name in the producers' outputs, summed over the edge's Calls "
                           "(a leaf named by two operands counts twice); bits: the same leaves at their declared widths; words_per_read = words / reads; "
                           "ports: words per (consumer parameter, producer port)",
+                          "param_inputs": "per group, per consumer parameter, the words it reads from each prescribed input (weights:<tensor>, "
+                          "prompt, seed, ...), summed over the group's Calls; null when no instance rows were read",
                           "varying_calls": "a varying group's Calls per value of its varying statics",
                           "body_hash": "sha256 over the body's groups in order: family, constant statics, varying static names, Call count, "
                           "reads inside the body by group index, reads from outside (count), prescribed-input reads (count)",
@@ -530,6 +555,9 @@ def _class_words(rule: dict[str, Any]) -> dict[tuple[str, str], tuple[float, flo
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
+_WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gates", "redundant_gates")
+
+
 def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None) -> dict[str, Any]:
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
     interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
@@ -557,7 +585,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             bn = x["statics"].get("BN") if a == "T" else None
             pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
             rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo) for v in pts}
-            per = {f: [float(rules[v][f]) for v in pts] for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}
+            per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}
             total = {f: int(round(sum(_interp(pts, per[f], v) * calls[v] for v in vals))) for f in per}
             cw = {v: _class_words(rules[v]) for v in pts}
             for k in {k for v in pts for k in cw[v]}:
@@ -575,20 +603,20 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             except (KeyError, TypeError, ValueError, AttributeError) as e:
                 x["q_word_v1"] = {"unresolved": f"{type(e).__name__}: {e}"[:300]}
                 continue
-            total = {f: rep.get(f, 0) * x["calls"] for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}
-            entry = {"per_call": {f: rep.get(f, 0) for f in ("units_per_call", "gates", "committed_interior_words", "free_gates")}, "interpolated": False}
+            total = {f: rep.get(f, 0) * x["calls"] for f in _WORD_FIELDS}
+            entry = {"per_call": {f: rep.get(f, 0) for f in _WORD_FIELDS}, "interpolated": False}
             for k, (w, bits) in _class_words(rep).items():
                 t = taps.setdefault(k, [0.0, 0.0])
                 t[0] += w * x["calls"]
                 t[1] += bits * x["calls"]
         entry.update(definition=rep["definition"] if x["definition"] in sub else None,
-                     units=total["units_per_call"], gates=total["gates"], free_gates=total["free_gates"],
+                     units=total["units_per_call"], gates=total["gates"], free_gates=total["free_gates"], redundant_gates=total["redundant_gates"],
                      committed_interior_words=total["committed_interior_words"], by_kind=rep["by_kind"], classes=rep["classes"][:8],
                      committed_interior=rep["committed_interior"][:8], violations=rep["violations"])
         if entry["definition"] is None:
             del entry["definition"]
         x["q_word_v1"] = entry
-        for f in ("units", "gates", "free_gates", "committed_interior_words"):
+        for f in ("units", "gates", "free_gates", "redundant_gates", "committed_interior_words"):
             tot[f] += entry[f]
             by_template.setdefault(x.get("template") or x["definition"], Counter())[f] += entry[f]
         for v in rep["violations"]:
@@ -604,9 +632,10 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity_vllm.query.word, no recomputes: each gate is computed in exactly one unit; a value read across units is committed once at "
-        "serving (constants, public inputs and wiring are fixed or free, never committed); outputs of <= X bits or one value of <= W bits; "
-        "per group: per_call and row totals (units, gates, free gates, committed interior words), classes (kind, head primitive @ activation, "
+        "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "committed once at serving (the Call's inputs are committed; constants and wiring are structure, never committed); outputs of <= X "
+        "bits or one value of <= W bits; per group: per_call and row totals (units, gates, free gates, redundant gates: a value computed "
+        "twice inside its own unit, committed interior words), classes (kind, head primitive @ activation, "
         "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "
         "interior value class with where serving commits it today or the kernel a new tap goes in")
     return g
