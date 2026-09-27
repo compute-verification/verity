@@ -66,6 +66,44 @@ theorem xorSum_eq_psum (z : ℕ → Bool) (n : ℕ) (l : List ℕ) (hl : ∀ c �
     rw [ih', listMask, psum_xor, psum_two_pow]
     simp [hc]
 
+theorem listMask_append (l m : List ℕ) : listMask (l ++ m) = listMask l ^^^ listMask m := by
+  induction l with
+  | nil => simp [listMask]
+  | cons c l ih => simp only [List.cons_append, listMask, ih, Nat.xor_assoc]
+
+theorem testBit_listMask_range' (a l i : ℕ) :
+    (listMask (List.range' a l)).testBit i = decide (a ≤ i ∧ i < a + l) := by
+  induction l generalizing a with
+  | zero => simp [listMask]
+  | succ l ih =>
+    rw [List.range'_succ, listMask, Nat.testBit_xor, ih, Nat.testBit_two_pow]
+    by_cases h1 : a = i
+    · subst h1; simp
+    · by_cases h2 : a + 1 ≤ i ∧ i < a + 1 + l
+      · simp [h1, h2, show a ≤ i ∧ i < a + (l + 1) by omega]
+      · have : ¬ (a ≤ i ∧ i < a + (l + 1)) := by omega
+        simp [h1, h2, this]
+
+/-- A run of `l` consecutive columns from `a`, as a mask (a product, which the kernel evaluates natively). -/
+theorem listMask_range' (a l : ℕ) : listMask (List.range' a l) = (2 ^ l - 1) * 2 ^ a := by
+  rw [← Nat.shiftLeft_eq]
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [testBit_listMask_range', Nat.testBit_shiftLeft, Nat.testBit_two_pow_sub_one]
+  by_cases h : a ≤ i
+  · simp [h, show i - a < l ↔ i < a + l by omega]
+  · simp [h]
+
+/-- Columns given as runs `(first, length)`, and their mask. -/
+def runsList (rs : List (ℕ × ℕ)) : List ℕ := rs.flatMap fun r => List.range' r.1 r.2
+
+def runsMask (rs : List (ℕ × ℕ)) : ℕ := rs.foldr (fun r m => (2 ^ r.2 - 1) * 2 ^ r.1 ^^^ m) 0
+
+theorem listMask_runsList (rs : List (ℕ × ℕ)) : listMask (runsList rs) = runsMask rs := by
+  induction rs with
+  | nil => rfl
+  | cons r rs ih => simp only [runsList, List.flatMap_cons, listMask_append, listMask_range'] at ih ⊢; rw [ih]; rfl
+
 /-! ## A map from wires to forms, for the kernel
 
 A complete binary tree of depth `d`, indexed by the low bits of the key: structural recursion, so the
@@ -174,8 +212,8 @@ def gatesWF : ℕ → List Gate → Bool
 /-- A linear form: a mask of committed columns, and the constant. -/
 abbrev Form := ℕ × Bool
 
-/-- The depth of the wire map: wires below `2 ^ 20`. -/
-def depth : ℕ := 20
+/-- The depth of the wire map: wires below `2 ^ 15`. -/
+def depth : ℕ := 15
 
 /-- The derivation's state: each wire's form, the next wire, the next AND's column, and the AND
 rows so far, latest first. -/
@@ -569,5 +607,286 @@ theorem rows_sound (C : Circ) (L : Lay) (hwf : gatesWF C.nIn C.gates = true)
   simp only [hW, decide_true, h1, Bool.and_true]
   rw [List.getD_eq_getElem _ _ hol, fval_srcForm z hall _ (houts _ hmem)]
   simp [Circ.eval, V, x]
+
+/-! ## The derivation in chunks
+
+The kernel checks a long derivation in chunks, each from a small checkpoint: the forms of the wires
+the rest of the derivation still reads. The frame lemma says two states that agree on the wires a
+chunk reads produce the same rows and agree afterwards. -/
+
+/-- Two states agree on the wires `P` picks. -/
+def Agree (P : ℕ → Prop) (s s' : St) : Prop := ∀ i, P i → PM.get depth s.forms i = PM.get depth s'.forms i
+
+/-- A gate's reads are in `P`. -/
+def Src.readsIn (P : ℕ → Prop) : Src → Prop
+  | .wire i => P i
+  | _ => True
+
+def Gate.readsIn (P : ℕ → Prop) : Gate → Prop
+  | .and a b => a.readsIn P ∧ b.readsIn P
+  | .xor a b => a.readsIn P ∧ b.readsIn P
+  | .not a => a.readsIn P
+
+theorem srcForm_agree {P : ℕ → Prop} {s s' : St} (h : Agree P s s') (a : Src) (ha : a.readsIn P) :
+    srcForm s.forms a = srcForm s'.forms a := by
+  cases a with
+  | zero => rfl
+  | one => rfl
+  | wire i => simp only [srcForm, h i ha]
+
+theorem step_frame {P : ℕ → Prop} {s s' : St} (hP : ∀ i, P i → i < 2 ^ depth) (h : Agree P s s')
+    (hw : s.w = s'.w) (hc : s.col = s'.col) (g : Gate) (hg : g.readsIn P) (hb : s.w < 2 ^ depth) :
+    Agree (fun i => P i ∨ i = s.w) (s.step g) (s'.step g) ∧ (s.step g).w = (s'.step g).w ∧
+      (s.step g).col = (s'.step g).col ∧
+      ∃ l, (s.step g).rows = l ++ s.rows ∧ (s'.step g).rows = l ++ s'.rows := by
+  have key : ∀ (f f' : Form), f = f' → ∀ i, (P i ∨ i = s.w) →
+      PM.get depth (PM.set depth s.forms s.w f) i = PM.get depth (PM.set depth s'.forms s'.w f') i := by
+    intro f f' hf i hi
+    have hi' : i < 2 ^ depth := by rcases hi with hi | hi; exact hP i hi; omega
+    rw [PM.get_set _ _ _ _ _ hb hi', PM.get_set _ _ _ _ _ (hw ▸ hb) hi', ← hw, hf]
+    by_cases he : s.w = i
+    · simp [he]
+    · rw [ite_eq_right he, ite_eq_right he]
+      rcases hi with hi | hi
+      · exact h i hi
+      · exact absurd hi.symm he
+  cases g with
+  | and a b =>
+    obtain ⟨ha, hb'⟩ := hg
+    refine ⟨fun i hi => key (2 ^ s.col, false) (2 ^ s'.col, false) (by rw [hc]) i hi, by simp [St.step, hw],
+      by simp [St.step, hc], [_], rfl, ?_⟩
+    simp [St.step, srcForm_agree h a ha, srcForm_agree h b hb']
+  | xor a b =>
+    obtain ⟨ha, hb'⟩ := hg
+    refine ⟨fun i hi => key _ _ (by rw [srcForm_agree h a ha, srcForm_agree h b hb']) i hi,
+      by simp [St.step, hw], by simp [St.step, hc], [], rfl, rfl⟩
+  | not a =>
+    refine ⟨fun i hi => key _ _ (by rw [srcForm_agree h a hg]) i hi, by simp [St.step, hw],
+      by simp [St.step, hc], [], rfl, rfl⟩
+
+theorem Src.readsIn_mono {P Q : ℕ → Prop} (h : ∀ i, P i → Q i) {a : Src} (ha : a.readsIn P) : a.readsIn Q := by
+  cases a <;> simp_all [Src.readsIn]
+
+theorem Gate.readsIn_mono {P Q : ℕ → Prop} (h : ∀ i, P i → Q i) {g : Gate} (hg : g.readsIn P) : g.readsIn Q := by
+  cases g with
+  | and a b => exact ⟨Src.readsIn_mono h hg.1, Src.readsIn_mono h hg.2⟩
+  | xor a b => exact ⟨Src.readsIn_mono h hg.1, Src.readsIn_mono h hg.2⟩
+  | not a => exact Src.readsIn_mono h hg
+
+theorem step_w (s : St) (g : Gate) : (s.step g).w = s.w + 1 := by cases g <;> rfl
+
+/-- **The frame lemma.** Two states that agree on every wire the gates read before making it
+produce the same new rows, and agree on those wires and every new one. -/
+theorem steps_frame (gs : List Gate) : ∀ (s s' : St) (P : ℕ → Prop), (∀ i, P i → i < 2 ^ depth) →
+    Agree P s s' → s.w = s'.w → s.col = s'.col →
+    (∀ k (hk : k < gs.length), gs[k].readsIn (fun i => P i ∨ (s.w ≤ i ∧ i < s.w + k))) →
+    s.w + gs.length ≤ 2 ^ depth →
+    Agree (fun i => P i ∨ (s.w ≤ i ∧ i < s.w + gs.length)) (s.steps gs) (s'.steps gs) ∧
+      (s.steps gs).w = (s'.steps gs).w ∧ (s.steps gs).col = (s'.steps gs).col ∧
+      ∃ l, (s.steps gs).rows = l ++ s.rows ∧ (s'.steps gs).rows = l ++ s'.rows := by
+  induction gs with
+  | nil =>
+    intro s s' P _ h hw hc _ _
+    refine ⟨fun i hi => h i ?_, hw, hc, [], rfl, rfl⟩
+    rcases hi with hi | hi; exact hi; simp at hi; omega
+  | cons g gs ih =>
+    intro s s' P hP h hw hc hr hb
+    simp only [List.length_cons] at hb
+    have hg : g.readsIn P := Gate.readsIn_mono (fun i hi => by rcases hi with hi | hi; exact hi; omega)
+      (hr 0 (by simp))
+    obtain ⟨h1, hw1, hc1, l1, hl1, hl1'⟩ := step_frame hP h hw hc g hg (by omega)
+    have hP1 : ∀ i, (P i ∨ i = s.w) → i < 2 ^ depth := fun i hi => by
+      rcases hi with hi | hi; exact hP i hi; omega
+    have hr1 : ∀ k (hk : k < gs.length), gs[k].readsIn (fun i => (P i ∨ i = s.w) ∨
+        ((s.step g).w ≤ i ∧ i < (s.step g).w + k)) := by
+      intro k hk
+      refine Gate.readsIn_mono (fun i hi => ?_) (hr (k + 1) (by simp; omega))
+      rw [step_w]
+      rcases hi with hi | hi
+      · exact Or.inl (Or.inl hi)
+      · by_cases he : i = s.w
+        · exact Or.inl (Or.inr he)
+        · exact Or.inr ⟨by omega, by omega⟩
+    obtain ⟨h2, hw2, hc2, l2, hl2, hl2'⟩ := ih (s.step g) (s'.step g) _ hP1 h1 hw1 hc1 hr1
+      (by rw [step_w]; omega)
+    refine ⟨fun i hi => h2 i ?_, hw2, hc2, l2 ++ l1, ?_, ?_⟩
+    · rw [step_w]
+      rcases hi with hi | hi
+      · exact Or.inl (Or.inl hi)
+      · by_cases he : i = s.w
+        · exact Or.inl (Or.inr he)
+        · exact Or.inr ⟨by omega, by simp at hi; omega⟩
+    · show ((s.step g).steps gs).rows = _; rw [hl2, hl1, List.append_assoc]
+    · show ((s'.step g).steps gs).rows = _; rw [hl2', hl1', List.append_assoc]
+
+theorem steps_append (s : St) (a b : List Gate) : s.steps (a ++ b) = (s.steps a).steps b := by
+  induction a generalizing s with
+  | nil => rfl
+  | cons g a ih => exact ih (s.step g)
+
+theorem gatesWF_append (w : ℕ) (a b : List Gate) :
+    gatesWF w (a ++ b) = (gatesWF w a && gatesWF (w + a.length) b) := by
+  induction a generalizing w with
+  | nil => simp [gatesWF]
+  | cons g a ih =>
+    simp only [List.cons_append, gatesWF, ih, List.length_cons, Bool.and_assoc]
+    rw [show w + 1 + a.length = w + (a.length + 1) by omega]
+
+/-! ### Checkpoints -/
+
+/-- A checkpoint: the next wire, the next AND's column, and the forms of the wires still read. -/
+structure CP where
+  w : ℕ
+  col : ℕ
+  entries : List (ℕ × Form)
+
+def CP.keys (cp : CP) : List ℕ := cp.entries.map Prod.fst
+
+/-- The state a checkpoint describes. -/
+def CP.st (cp : CP) : St := ⟨cp.entries.foldr (fun e t => PM.set depth t e.1 e.2) .leaf, cp.w, cp.col, []⟩
+
+/-- A state is at the checkpoint: its next wire and column, and the forms it lists. -/
+def CP.Good (cp : CP) (s : St) : Prop :=
+  s.w = cp.w ∧ s.col = cp.col ∧ ∀ e ∈ cp.entries, PM.get depth s.forms e.1 = some e.2
+
+theorem CP.st_good (cp : CP) (hn : cp.keys.Nodup) (hk : ∀ i ∈ cp.keys, i < 2 ^ depth) : cp.Good cp.st := by
+  refine ⟨rfl, rfl, ?_⟩
+  obtain ⟨w, col, es⟩ := cp
+  simp only [CP.st, CP.keys] at hn hk ⊢
+  induction es with
+  | nil => simp
+  | cons e es ih =>
+    simp only [List.map_cons, List.nodup_cons, List.mem_map, not_exists, not_and] at hn
+    have hk' : ∀ i ∈ es.map Prod.fst, i < 2 ^ depth := fun i hi => hk i (List.mem_cons_of_mem _ hi)
+    intro e' he'
+    simp only [List.foldr_cons]
+    rw [PM.get_set _ _ _ _ _ (hk e.1 List.mem_cons_self) (hk e'.1 (List.mem_map_of_mem he'))]
+    rcases List.mem_cons.mp he' with rfl | he'
+    · simp
+    · have hne : e.1 ≠ e'.1 := fun heq => hn.1 e' he' heq.symm
+      rw [ite_eq_right hne]
+      exact ih hn.2 hk' e' he'
+
+/-- A gate's reads are old wires the checkpoint lists, or new ones. -/
+def Src.okRead (keys : List ℕ) (w0 : ℕ) : Src → Bool
+  | .wire i => decide (w0 ≤ i) || keys.contains i
+  | _ => true
+
+def Gate.okRead (keys : List ℕ) (w0 : ℕ) : Gate → Bool
+  | .and a b => a.okRead keys w0 && b.okRead keys w0
+  | .xor a b => a.okRead keys w0 && b.okRead keys w0
+  | .not a => a.okRead keys w0
+
+/-- **One chunk's check**, which the kernel evaluates: from checkpoint `cp`, the gates `gs` read only
+what it lists, reach checkpoint `cp'`, and make the AND rows `out` (as masks, the constant at `k`). -/
+def checkChunk (k : ℕ) (cp : CP) (gs : List Gate) (cp' : CP) (out : List (ℕ × ℕ)) : Bool :=
+  let s := cp.st.steps gs
+  decide cp.keys.Nodup && cp.keys.all (· < 2 ^ depth) && gatesWF cp.w gs && gs.all (Gate.okRead cp.keys cp.w) &&
+    decide (cp.w + gs.length ≤ 2 ^ depth) && decide (s.w = cp'.w) && decide (s.col = cp'.col) &&
+    cp'.entries.all (fun e => decide (PM.get depth s.forms e.1 = some e.2) &&
+      (cp.keys.contains e.1 || decide (cp.w ≤ e.1 ∧ e.1 < cp'.w))) &&
+    decide (s.rows.reverse.map (fun p => (mask k p.1, mask k p.2)) = out)
+
+theorem gatesWF_get {w : ℕ} {gs : List Gate} (h : gatesWF w gs = true) (k : ℕ) (hk : k < gs.length) :
+    gs[k].below (w + k) = true := by
+  induction gs generalizing w k with
+  | nil => simp at hk
+  | cons g gs ih =>
+    simp only [gatesWF, Bool.and_eq_true] at h
+    cases k with
+    | zero => simpa using h.1
+    | succ k =>
+      simp only [List.getElem_cons_succ]
+      rw [show w + (k + 1) = (w + 1) + k by omega]
+      exact ih h.2 k (by simpa using hk)
+
+theorem Src.readsIn_of_ok {keys : List ℕ} {w0 n : ℕ} {a : Src} (h : a.okRead keys w0 = true)
+    (hb : a.below n = true) : a.readsIn (fun i => i ∈ keys ∨ (w0 ≤ i ∧ i < n)) := by
+  cases a with
+  | zero => trivial
+  | one => trivial
+  | wire i =>
+    simp only [Src.okRead, Bool.or_eq_true, decide_eq_true_eq, List.contains_iff_mem] at h
+    simp only [Src.below, decide_eq_true_eq] at hb
+    simp only [Src.readsIn]
+    rcases h with h | h
+    · exact Or.inr ⟨h, hb⟩
+    · exact Or.inl h
+
+theorem Gate.readsIn_of_ok {keys : List ℕ} {w0 n : ℕ} {g : Gate} (h : g.okRead keys w0 = true)
+    (hb : g.below n = true) : g.readsIn (fun i => i ∈ keys ∨ (w0 ≤ i ∧ i < n)) := by
+  cases g with
+  | and a b =>
+    simp only [Gate.okRead, Gate.below, Bool.and_eq_true] at h hb
+    exact ⟨Src.readsIn_of_ok h.1 hb.1, Src.readsIn_of_ok h.2 hb.2⟩
+  | xor a b =>
+    simp only [Gate.okRead, Gate.below, Bool.and_eq_true] at h hb
+    exact ⟨Src.readsIn_of_ok h.1 hb.1, Src.readsIn_of_ok h.2 hb.2⟩
+  | not a =>
+    simp only [Gate.okRead, Gate.below] at h hb
+    exact Src.readsIn_of_ok h hb
+
+/-- **A chunk that checks moves any state at its checkpoint to the next one**, making the chunk's rows. -/
+theorem chunk_step (k : ℕ) (cp cp' : CP) (gs : List Gate) (out : List (ℕ × ℕ)) (R : St)
+    (hR : cp.Good R) (hchk : checkChunk k cp gs cp' out = true) :
+    cp'.Good (R.steps gs) ∧ gatesWF cp.w gs = true ∧ cp'.w = cp.w + gs.length ∧
+      ∃ l, (R.steps gs).rows = l ++ R.rows ∧ l.reverse.map (fun p => (mask k p.1, mask k p.2)) = out := by
+  simp only [checkChunk, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hchk
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hn, hk⟩, hwf⟩, hok⟩, hb⟩, hsw⟩, hsc⟩, hent⟩, hrows⟩ := hchk
+  have hk' : ∀ i ∈ cp.keys, i < 2 ^ depth := fun i hi => by simpa using hk i hi
+  have hst := cp.st_good hn hk'
+  obtain ⟨hRw, hRc, hRe⟩ := hR
+  have hA : Agree (· ∈ cp.keys) R cp.st := by
+    intro i hi
+    obtain ⟨e, he, rfl⟩ := List.mem_map.mp hi
+    rw [hRe e he, hst.2.2 e he]
+  have hreads : ∀ j (hj : j < gs.length), gs[j].readsIn (fun i => i ∈ cp.keys ∨ (R.w ≤ i ∧ i < R.w + j)) := by
+    intro j hj
+    rw [hRw]
+    exact Gate.readsIn_of_ok (hok _ (List.getElem_mem hj)) (gatesWF_get hwf j hj)
+  obtain ⟨hA', hw', hc', l, hl, hl'⟩ := steps_frame gs R cp.st (· ∈ cp.keys) hk' hA (by rw [hRw]; rfl)
+    (by rw [hRc]; rfl) hreads (by rw [hRw]; exact hb)
+  have hsw' : cp'.w = cp.w + gs.length := by rw [← hsw, steps_w]; rfl
+  refine ⟨⟨by rw [hw', hsw], by rw [hc', hsc], ?_⟩, hwf, hsw', l, hl, ?_⟩
+  · intro e he
+    obtain ⟨hg, hm⟩ := hent e he
+    rw [hA' e.1 ?_, hg]
+    simp only [Bool.or_eq_true, List.contains_iff_mem, decide_eq_true_eq] at hm
+    rcases hm with hm | hm
+    · exact Or.inl hm
+    · exact Or.inr ⟨by rw [hRw]; exact hm.1, by rw [hRw]; omega⟩
+  · have : (cp.st.steps gs).rows = l := by rw [hl']; simp [CP.st]
+    rw [← this]; exact hrows
+
+/-- Every chunk checks, each from the checkpoint the previous one reached. -/
+def ChunksOK (k : ℕ) : CP → List (List Gate × CP × List (ℕ × ℕ)) → Prop
+  | _, [] => True
+  | cp, (gs, cp', out) :: rest => checkChunk k cp gs cp' out = true ∧ ChunksOK k cp' rest
+
+/-- The checkpoint the last chunk reaches. -/
+def lastCP : CP → List (List Gate × CP × List (ℕ × ℕ)) → CP
+  | cp, [] => cp
+  | _, (_, cp', _) :: rest => lastCP cp' rest
+
+/-- **Chunks that check compose**: from a state at the first checkpoint, the chunks' gates reach
+the last checkpoint and make the chunks' rows, in order. -/
+theorem chunks_sound (k : ℕ) (chs : List (List Gate × CP × List (ℕ × ℕ))) :
+    ∀ (cp : CP) (R : St), cp.Good R → ChunksOK k cp chs →
+      (lastCP cp chs).Good (R.steps (chs.flatMap (·.1))) ∧ gatesWF cp.w (chs.flatMap (·.1)) = true ∧
+      ∃ l, (R.steps (chs.flatMap (·.1))).rows = l ++ R.rows ∧
+        l.reverse.map (fun p => (mask k p.1, mask k p.2)) = chs.flatMap (·.2.2) := by
+  induction chs with
+  | nil => intro cp R hR _; exact ⟨hR, by simp [gatesWF], [], rfl, by simp⟩
+  | cons ch chs ih =>
+    obtain ⟨gs, cp', out⟩ := ch
+    intro cp R hR hok
+    obtain ⟨hchk, hrest⟩ := hok
+    obtain ⟨hG, hwf, hw, l1, hl1, hout1⟩ := chunk_step k cp cp' gs out R hR hchk
+    obtain ⟨hG', hwf', l2, hl2, hout2⟩ := ih cp' (R.steps gs) hG hrest
+    simp only [List.flatMap_cons, lastCP] at hG' hwf' hl2 hout2 ⊢
+    refine ⟨by rw [steps_append]; exact hG', ?_, l2 ++ l1, ?_, ?_⟩
+    · rw [gatesWF_append, hwf, ← hw, hwf']; rfl
+    · rw [steps_append, hl2, hl1, List.append_assoc]
+    · rw [List.reverse_append, List.map_append, hout1, hout2]
 
 end FlockSoundness.GateRows
