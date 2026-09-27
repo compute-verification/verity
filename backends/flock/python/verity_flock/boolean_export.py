@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import dataclasses
+import gc
 import gzip
 import hashlib
 import inspect
@@ -882,6 +883,19 @@ def prims() -> dict:
     return _PRIMS
 
 
+def _width_prim(pid: str):
+    """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
+    import re
+
+    from verity_vllm.program.registry import sampling
+
+    for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
+        m = re.fullmatch(pat, pid)
+        if m:
+            return make(int(m.group(1)))
+    return None
+
+
 def _words(t) -> list[int]:
     k = t[0]
     if k == "Value":
@@ -933,13 +947,15 @@ class Walker:
                 return C
             C, root = trace(build)
             self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "tc-step", list_root=True)
+            del C, root
+            gc.collect()
         return self.cache[key]
 
     def prim(self, pid: str, consts: tuple):
         """(child entry without count) for primitive ``pid`` with operand constants ``consts`` (None = free)."""
         if pid in IL.TC_STEPS:
             return {"ref": self.tc_unit(pid)}
-        p = prims().get(pid)
+        p = prims().get(pid) or _width_prim(pid)
         if p is None:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
         widths = [w for _, t in p.params for w in t.leaf_widths()]
@@ -956,6 +972,8 @@ class Walker:
                 try:
                     C, root = trace(build)
                     self.cache[ck] = self.reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                    del C, root
+                    gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     self.cache[ck] = str(e)
             got = self.cache[ck]
@@ -1037,6 +1055,9 @@ class Walker:
 # --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
+#: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
+#: lane its own constant index: GumbelNoiseLane, BitAtx)
+CONST_VARIANTS = 8
 UNIT_PARTS_LIMIT = 4096
 
 
@@ -1085,7 +1106,14 @@ class Commitments:
         nyl: dict[str, int] = {}
         parts: list[int] = []
         memo: dict = {}
+        variants: dict[str, int] = {}
+        generic = 0
         for sig in gates:
+            if sig not in memo and any(c is not None for c in sig[1]):
+                variants[sig[0]] = variants.get(sig[0], 0) + 1
+                if variants[sig[0]] > CONST_VARIANTS:
+                    generic += 1
+                    sig = (sig[0], (None,) * len(sig[1]))
             if sig not in memo:
                 memo[sig] = self.walker.prim(*sig)
             e = memo[sig]
@@ -1102,7 +1130,7 @@ class Commitments:
             else:
                 key = ("constant", True)
             parts.append(pieces.setdefault(key, len(pieces)))
-        return {**t, "not_yet_lowered": nyl, "parts": parts}
+        return {**t, "not_yet_lowered": nyl, "parts": parts, "generic": generic}
 
     def _primitive(self, fn, fid, WQ) -> dict:
         rec = _empty(fid, 1)
@@ -1196,6 +1224,8 @@ class Commitments:
                  "out_bits": ob, "out_gates": og, "ok": bool(R["ok"][u]),
                  "nodes": dict(Counter(G.prim_names[int(G.prim[i])] for i in gates).most_common()),
                  **{x: b[x] for x in ("and", "xor", "not", "not_yet_lowered")}}
+            if b["generic"]:
+                e["constants_not_propagated"] = b["generic"]
             if ng <= UNIT_PARTS_LIMIT:
                 e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads))
             units.append(e)
@@ -1375,6 +1405,8 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
                 try:
                     C, root = trace(build)
                     cache[ck] = reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                    del C, root
+                    gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     cache[ck] = str(e)
             if not cache[ck].startswith("sc-"):
@@ -1404,6 +1436,8 @@ def _unit(reg: Registry, units, name: str, cache: dict) -> str:
     if key not in cache:
         C, root = trace(units.circuit)
         cache[key] = reg.analyse(C, root, name, "c-flock-unit")
+        del C, root
+        gc.collect()
     return cache[key]
 
 
