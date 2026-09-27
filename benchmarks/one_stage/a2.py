@@ -68,6 +68,9 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7531)
     ap.add_argument("--unbind", action="store_true", help="run the session on re-headered copies for M0's unbound statement")
+    ap.add_argument("--legacy-partition", action="store_true",
+                    help="the served files bind the pre-canonical partition object {program, query: {name, version, template, "
+                         "width_rule}}; check them against it")
     ap.add_argument("--unbound-m0-pythonpath", default=None, help="M0's tree for the unbound circuit (default --m0-pythonpath)")
     a = ap.parse_args()
     out, served = Path(a.out), Path(a.served)
@@ -79,7 +82,11 @@ def main() -> int:
     program = P.population_program(template, n)
     query = P.template_instance_query(template.id)
     part = P.partition(program, query)
-    summary: dict = {"n": n, "k": a.k, "delta": a.delta, "source": rec.get("window", {}).get("kind"), "n_from": "registration"}
+    if a.legacy_partition:
+        part = {"program": part["program"], "query": {"name": query["name"], "version": query["version"], "template": template.id,
+                                                      "width_rule": None}}
+    summary: dict = {"n": n, "k": a.k, "delta": a.delta, "source": rec.get("window", {}).get("kind"), "n_from": "registration",
+                     "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else "verity/partition/v1"}
 
     # the verifier's own circuit, bound to its own partition and program
     st_dir = out / "stage"
@@ -103,7 +110,7 @@ def main() -> int:
     want = {port: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}
     leaf_layer = a0.sha512_file(st_dir / f"pub-{n}.bin")
-    checks = {"registration": R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
+    checks = {"registration": R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
               "public": R.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json(),
               "circuit": {"ok": header.get("circuit_sha512") == mine["pin"], "codes": [] if header.get("circuit_sha512") == mine["pin"] else ["pin"],
                           "detail": {"public": header.get("circuit_sha512"), "verifier": mine["pin"]}},
@@ -136,13 +143,14 @@ def main() -> int:
     nl = body.index(b"\n") + 1
     flipped = body[:nl] + bytes([body[nl] ^ 1]) + body[nl + 1:]
     import hashlib
-    v = R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest())
+    v = R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
     neg["public-file-b||c-byte-flipped (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = R.check(rec, program, query, law, a0.SCHEME,
                 {p_: {**w, "domain": R.served_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
-                 for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer)
+                 for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
+                partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = R.check(rec, P.population_program(template, n - 1), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
     v = D.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)

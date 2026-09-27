@@ -52,7 +52,7 @@ if [ "${RUN:-a0}" = a2 ]; then
     BOUND=$W/m0b/packages/verity/src:$W/m0b/backends/numerical/python:$W/m0b/backends/flock/python:$W/m0b/integrations/vllm
   fi
   $W/py/bin/python benchmarks/one_stage/a2.py --served $SERVED --template-set $SET --m0-pythonpath $BOUND --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} ${UNBIND:+--unbind --unbound-m0-pythonpath $M0PATH} \
+    --lean $W/bin/flock-verify --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} ${UNBIND:+--unbind --unbound-m0-pythonpath $M0PATH} ${LEGACY_PARTITION:+--legacy-partition} \
     2>&1 | tee $O/a2.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a3 ]; then
   $W/py/bin/python benchmarks/one_stage/a3.py --sets $W/set --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \

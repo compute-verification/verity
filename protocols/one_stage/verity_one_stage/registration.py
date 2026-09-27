@@ -56,9 +56,10 @@ def served_domain(program: str, partition: str, port: str, schema: str, leaves: 
 
 def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
-           previous: str | None = None) -> dict[str, Any]:
-    part = P.partition(program, query)
-    return {"format": FORMAT, "protocol": PROTOCOL, "program": part["program"], "query": query_digest(query),
+           previous: str | None = None, partition: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`)."""
+    part = dict(partition) if partition is not None else P.partition(program, query)
+    return {"format": FORMAT, "protocol": PROTOCOL, "program": part["program"], "query": query_digest(part["query"]),
             "partition": P.digest(part), "population": P.units(program, query), "law": dict(law), "scheme": scheme,
             "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
             "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
@@ -76,10 +77,11 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
-          log: Iterable[Mapping[str, Any]] = ()) -> Verdict:
+          log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R6 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, and its log of this prover's
-    earlier records."""
+    earlier records.  `partition`: the verifier's own partition object when it isn't the canonical one (a record made
+    before the canonical envelope); its program must still be `program`'s, and the population is `query`'s."""
     c = _Collect()
     if not isinstance(rec, Mapping) or set(rec) != _KEYS:
         c.fail("keys", sorted(set(rec) ^ _KEYS) if isinstance(rec, Mapping) else rec)
@@ -92,8 +94,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
         c.fail("window", rec["window"])
     # R2
-    part = P.partition(program, query)
-    for field, mine in (("program", part["program"]), ("query", query_digest(query)), ("partition", P.digest(part))):
+    part = dict(partition) if partition is not None else P.partition(program, query)
+    if part["program"] != P.program_sha512(program):
+        c.fail("R2-program", {"partition": part["program"], "verifier": P.program_sha512(program)})
+    for field, mine in (("program", part["program"]), ("query", query_digest(part["query"])), ("partition", P.digest(part))):
         if rec[field] != mine:
             c.fail(f"R2-{field}", {"registered": rec[field], "verifier": mine})
     try:

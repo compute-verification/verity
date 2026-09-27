@@ -1,17 +1,18 @@
-"""The partition as a named query over a program, P = Q(C), and the demo's query `Q_template_instance` v0.
+"""The partition as a named query over a program, P = Q(C), in `verity/partition/v1`'s one canonical form (PR #111), and the
+queries `Q_template_instance` v0 and `Q_template_instances` v0.
 
-    {"program": "<SHA-512 of the program>", "query": {"name": "Q_template_instance", "version": 0,
-                                                      "template": "<Definition id>", "width_rule": null}}
+    {"format": "verity/partition/v1", "program": "<SHA-512 of the program>",
+     "query": {"name": "Q_template_instance", "version": 0, "params": {"template": "<Definition id>"}}}
 
-* **Digest.** `SHA-512("verity/partition/v1\\0" || canon({program, query}))`, canon = `verity.ir.codec.canonical_json`.
+* **Digest.** `SHA-512("verity/partition/v1\\0" || canon(object))`, canon = `verity.ir.codec.canonical_json`.
 * **Program.** SHA-512 over the canonical descriptor `codec.program_digest` hashes with SHA-256 (annotations excluded).
-* **`Q_template_instance` v0.** Every instance of one template's Definition in the program's root body is one unit, in
-  canonical order (node order, then batch member). The `Input` gates are the input unit: always checked, never drawn.
-  No width rule is applied, so a unit is a whole instance however wide its outputs. The query refuses a program whose
-  root body computes anything but instances of its template.
-* **`Q_template_instances` v0.** The same over several templates (`templates`, a list of Definition ids): every instance
-  of any of them is one unit, in canonical order, and every listed template must have an instance. `ranges` gives each
-  root node's template and its units' first index and count.
+* **`Q_template_instance` v0**, `params = {"template": <Definition id>}`. The root body's nodes other than its `Input` nodes
+  must each be a `call` or a `batch` of that Definition; each call is one unit and each batch member one unit, numbered in
+  canonical order (node order, then member). The `Input` gates are the input unit: always checked, never drawn. No width
+  rule is applied, so a unit is a whole instance however wide its outputs. The query refuses any other program.
+* **`Q_template_instances` v0**, `params = {"templates": [<Definition id>, ...]}` (distinct). The same over several
+  templates: every node is an instance of one of them, every listed template has an instance, and the unit order is
+  still canonical node order. `ranges` gives each root node's template and its units' first index and count.
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
 unit index on the prover's word.
@@ -39,13 +40,11 @@ class QueryRefused(ValueError):
 
 
 def template_instance_query(template_id: str) -> dict[str, Any]:
-    return {"name": Q_TEMPLATE_INSTANCE, "version": Q_TEMPLATE_INSTANCE_VERSION, "template": template_id,
-            "width_rule": None}
+    return {"name": Q_TEMPLATE_INSTANCE, "version": Q_TEMPLATE_INSTANCE_VERSION, "params": {"template": template_id}}
 
 
 def template_instances_query(template_ids: Sequence[str]) -> dict[str, Any]:
-    return {"name": Q_TEMPLATE_INSTANCES, "version": Q_TEMPLATE_INSTANCES_VERSION, "templates": list(template_ids),
-            "width_rule": None}
+    return {"name": Q_TEMPLATE_INSTANCES, "version": Q_TEMPLATE_INSTANCES_VERSION, "params": {"templates": list(template_ids)}}
 
 
 def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]]) -> Program:
@@ -95,7 +94,7 @@ def program_sha512(program: Program) -> str:
 
 
 def partition(program: Program, query: Mapping[str, Any]) -> dict[str, Any]:
-    return {"program": program_sha512(program), "query": dict(query)}
+    return {"format": FORMAT, "program": program_sha512(program), "query": dict(query)}
 
 
 def digest(obj: Mapping[str, Any]) -> str:
@@ -105,17 +104,18 @@ def digest(obj: Mapping[str, Any]) -> str:
 def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, int]]:
     """`query` applied to `program`: per root node computing units, (template id, first unit index, unit count), in
     canonical order."""
-    kind = (query.get("name"), query.get("version"))
-    if kind == (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCE_VERSION):
-        templates = [query.get("template")]
-    elif kind == (Q_TEMPLATE_INSTANCES, Q_TEMPLATE_INSTANCES_VERSION):
-        templates = list(query.get("templates") or [])
+    if set(query) != {"name", "version", "params"} or not isinstance(query.get("params"), Mapping):
+        raise QueryRefused("a query is exactly {name, version, params}")
+    kind, params = (query["name"], query["version"]), query["params"]
+    if kind == (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCE_VERSION) and set(params) == {"template"} and isinstance(params["template"], str):
+        templates = [params["template"]]
+    elif (kind == (Q_TEMPLATE_INSTANCES, Q_TEMPLATE_INSTANCES_VERSION) and set(params) == {"templates"}
+          and isinstance(params["templates"], list) and all(isinstance(t, str) for t in params["templates"])):
+        templates = list(params["templates"])
         if len(set(templates)) != len(templates):
             raise QueryRefused("Q_template_instances lists a template twice")
     else:
-        raise QueryRefused(f"unknown query {query.get('name')!r} v{query.get('version')!r}")
-    if query.get("width_rule") is not None:
-        raise QueryRefused(f"{query['name']} v0 applies no width rule")
+        raise QueryRefused(f"unknown query {query['name']!r} v{query['version']!r}, or not its parameters")
     out: list[tuple[str, int, int]] = []
     at = 0
     for k, node in enumerate(program.root.body.nodes):

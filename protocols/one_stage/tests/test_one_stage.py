@@ -50,7 +50,8 @@ def test_the_query_makes_each_instance_one_unit():
 
 def test_the_query_refuses_what_it_does_not_describe():
     prog, q, _ = _registration(3)
-    for bad in ({**q, "template": "Other_v1"}, {**q, "version": 1}, {**q, "width_rule": [16, 32, 0]}, {**q, "name": "Q_word"}):
+    for bad in ({**q, "params": {"template": "Other_v1"}}, {**q, "version": 1}, {**q, "params": {**q["params"], "X": 16}},
+                {**q, "name": "Q_word"}, {**q, "width_rule": None}, {"name": q["name"], "version": 0, "template": PAIR.id}):
         with pytest.raises(P.QueryRefused):
             P.units(prog, bad)
     other = CompositeDefinition("OneStageTestMixed", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
@@ -78,8 +79,8 @@ def test_several_templates_one_population():
 def test_partition_digest_is_the_named_query_over_the_program():
     prog, q, _ = _registration(6)
     obj = P.partition(prog, q)
-    assert set(obj) == {"program", "query"} and len(obj["program"]) == 128
-    assert obj["query"] == {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}
+    assert set(obj) == {"format", "program", "query"} and obj["format"] == "verity/partition/v1" and len(obj["program"]) == 128
+    assert obj["query"] == {"name": "Q_template_instance", "version": 0, "params": {"template": PAIR.id}}
     assert P.digest(obj) == P.digest(dict(reversed(list(obj.items()))))
     assert P.digest(obj) != P.digest(P.partition(P.population_program(PAIR, 7), q))
 
@@ -191,3 +192,18 @@ def test_audit_record_needs_every_check_and_verdict():
                                  (rcpt, {}, [1, 4]), (bad_receipt, {"m0": {"accepted": True}}, [1, 4])):
         r = audit.audit_record(rec, r_, d, law, proved, 2, {}, verdicts, 0.25)
         assert not r["accepted"] and r["profile"] is None and r["integrity_profile"] is None
+
+
+def test_a_record_over_an_explicit_partition_object():
+    """A record made before the canonical envelope names its own object; the verifier checks it against that object,
+    whose program must still be the verifier's."""
+    prog = P.population_program(PAIR, 6)
+    q = P.template_instance_query(PAIR.id)
+    old = {"program": P.program_sha512(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
+    ports = _ports(prog, q, 6)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    rec = R.record(prog, q, LAW, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
+    assert rec["partition"] == P.digest(old) != P.digest(P.partition(prog, q))
+    assert "R2-partition" in _check(rec, prog, q).codes
+    assert R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
+    assert "R2-program" in R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
