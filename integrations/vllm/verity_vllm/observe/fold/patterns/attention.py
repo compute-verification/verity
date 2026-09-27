@@ -154,15 +154,21 @@ class AttentionScope:
         # INV = Fa2InvSum; native FA3: BN = fa3_kblock_n(D, max_seqlen_q, NH/KVH) (the sm90 tile rule), INV = Fa3InvSum.
         kernel_name = "flash_fwd_splitkv_kernel" if fa_v == 2 else "FlashAttnFwdSm90"
         pattern_name = self.name if fa_v == 2 else "attention.fa3_fwd"
-        groups: dict[int, list[int]] = {}
+        # under FA3's per-iteration Check_inf chain (`fa3_construction`) a row's tile is part of its Definition: rows group by (T, the row's
+        # index among its request's rows in this step); otherwise by T alone
+        check_inf = fa_v == 3 and _targets().fa3_check_inf(tp)
+        first_pos: dict = {}
+        for req, position in ctx.start.rows:
+            first_pos[req] = min(int(position), first_pos.get(req, int(position)))
+        groups: dict[tuple[int, int | None], list[int]] = {}
         for i, (req, position) in enumerate(ctx.start.rows):
             T = int(position) + 1
             seq = ctx.start.seq_lens.get(req)
             if seq is not None and T > seq:
                 return unsupported(node, "row position exceeds the request's KV length", row=i, request=req, T=T, seq_len=seq)
-            groups.setdefault(T, []).append(i)
+            groups.setdefault((T, int(position) - first_pos[req] if check_inf else None), []).append(i)
         computes: list[Compute] = []
-        for T, rows in groups.items():
+        for (T, row_in_request), rows in groups.items():
             try:
                 slots = tuple(kv_slots(ctx, ctx.start.rows[i][0], T, layer=layer_s) for i in rows)
             except GeometryError as e:
@@ -172,7 +178,7 @@ class AttentionScope:
             try:
                 # the launch's `max_seqlen_q` (FA3's tile rule reads it): the most query rows any ONE request has in this step
                 max_seqlen_q = max(collections.Counter(req for req, _ in ctx.start.rows).values())
-                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q)
+                spec = _targets().attention_spec(tp, T, NH, KVH, D, max_seqlen_q, row=row_in_request)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
             computes.append(Compute(spec, len(rows),

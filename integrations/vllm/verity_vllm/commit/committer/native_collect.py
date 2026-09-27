@@ -204,7 +204,7 @@ class NativeHiddenM1Source(HiddenM1Source):
         # R13 P0 (p0b): per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
         self._w.compact = os.environ.get("VERITY_FA2_COMPACT", "1").strip() not in ("0", "false", "no")
         self._w.zero_after = os.environ.get("VERITY_FA2_ZERO", "1").strip() not in ("0", "false", "no")
-        self.short_name = "hidden_m1"
+        self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
         # [R18 tap, F-r17-23] bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
         # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
         # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
@@ -259,8 +259,8 @@ class NativeHiddenM1Source(HiddenM1Source):
                 return w(*args, **kwargs)                         # the C++ wrapper refuses it by name (X-03)
             h, M = H, max_q
             NB = (max_k + BN - 1) // BN
-            per_seq = fa2_tap_words_per_seq(h, M, NB, BN, D)
-            total_bytes = fa2_tap_buffer_words(b, h, M, NB, BN, D) * 4
+            per_seq = fa2_tap_words_per_seq(h, M, NB, BN, D, me.ms)
+            total_bytes = fa2_tap_buffer_words(b, h, M, NB, BN, D, me.ms) * 4
             if total_bytes > me._tel["largest_unbounded_bytes"]:
                 me._tel["largest_unbounded_bytes"] = total_bytes  # what the unbounded path would have allocated for this launch
             if total_bytes <= me.tap_cap_bytes:
@@ -274,7 +274,7 @@ class NativeHiddenM1Source(HiddenM1Source):
                 groups = plan_fa2_tap_groups(b, per_seq, me.tap_cap_bytes // 4)
                 plan = []
                 for (g0, g1) in groups:
-                    gw = fa2_tap_buffer_words(g1 - g0, h, M, NB, BN, D) * 4
+                    gw = fa2_tap_buffer_words(g1 - g0, h, M, NB, BN, D, me.ms) * 4
                     if gw > me.tap_cap_bytes:
                         me._tel["cap_exceeded_seqs"] += 1
                     plan.append({"g0": g0, "g1": g1, "t0": cu[g0], "t1": cu[g1], "bytes": gw,
@@ -409,7 +409,7 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
         self._w = ext().Fa3Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
         # P0-03's rule for the FA3 tap: zero the staged whole buffer after staging on multi-sequence launches (B=1 unchanged)
         self._w.zero_after = os.environ.get("VERITY_FA3_ZERO", os.environ.get("VERITY_FA2_ZERO", "1")).strip() not in ("0", "false", "no")
-        self.short_name = "hidden_m1_fa3"
+        self.short_name, self._w.ms = "hidden_m1_fa3", self.ms
 
     def _wrapper(self):
         return self._w

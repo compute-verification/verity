@@ -547,7 +547,7 @@ def parse_type_repr(s: str):
 
 #: the integration's registry modules whose Definitions a derived Program names (imported once by `definition_ports`; a module that
 #: fails to import is reported with the port lookup that needed it, never treated as "not registered")
-REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad")
+REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad", "fa3_check_inf")
 _REGISTRY: dict[str, Any] = {}
 
 
