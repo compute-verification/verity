@@ -23,8 +23,9 @@ POLICY_TEXT = ("guarded max: in every attention Call, GuardNegInfZero(m) of each
                "(row, head, block)'s word of the stream's MS class (the guarded-max tap build)")
 
 
-def _attention_calls(P: Any) -> Iterable[tuple[str, int, int, int]]:
-    """(family, NH, T, BN) of every attention Call (`BN` = 64 where the Definition has no such static)."""
+def _attention_calls(P: Any) -> Iterable[tuple[str, int, int, int, int]]:
+    """(family, NH, T, BN, MASKED_FROM) of every attention Call (`BN` = 64 where the Definition has no such static; `MASKED_FROM` = 0,
+    every block guarded, except FA3's per-iteration Check_inf chain `Attention_v4`)."""
     from verity_vllm.query.required import FLASH_ATTENTION_LAUNCHES
 
     for c in P.calls:
@@ -33,15 +34,16 @@ def _attention_calls(P: Any) -> Iterable[tuple[str, int, int, int]]:
         st = c.statics
         if "T" not in st or "NH" not in st:
             raise ValueError(f"guarded max: {c.definition} has no (T, NH) statics; tensor-parallel attention is not covered")
-        yield c.family, int(st["NH"]), int(st["T"]), int(st.get("BN", 64))
+        yield c.family, int(st["NH"]), int(st["T"]), int(st.get("BN", 64)), int(st.get("MASKED_FROM", 0))
 
 
 def attention_words(P: Any) -> dict[str, int]:
     """The guarded maxes the query commits, by attention Definition family: NH x (ceil(T / BN) - 1) per Call, one per head and key block
-    after the query row's first."""
+    after the query row's first (under `Attention_v4`, only the blocks at or above MASKED_FROM: an unguarded block reads the running max
+    itself, ROW word 0)."""
     out: Counter = Counter()
-    for fam, NH, T, BN in _attention_calls(P):
-        out[fam] += NH * (-(-T // BN) - 1)
+    for fam, NH, T, BN, MF in _attention_calls(P):
+        out[fam] += NH * max(0, -(-T // BN) - 1 - MF)
     return dict(sorted(out.items()))
 
 
@@ -49,7 +51,7 @@ def max_scaled_words(P: Any) -> dict[str, int]:
     """The `max_scaled` values the query commits, by attention Definition family: per Call, NH x the key blocks with more than one visible
     key (a block's single exp2 unit whose FMA reads `max_scaled` absorbs it); the first block included."""
     out: Counter = Counter()
-    for fam, NH, T, BN in _attention_calls(P):
+    for fam, NH, T, BN, _mf in _attention_calls(P):
         nb = -(-T // BN)
         out[fam] += NH * (nb - (T - (nb - 1) * BN == 1))
     return dict(sorted(out.items()))

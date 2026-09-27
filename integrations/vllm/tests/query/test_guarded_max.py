@@ -46,6 +46,13 @@ def test_101_counts_the_tap_lists_97_280_guards_and_242_688_max_scaled():
     assert GM.max_scaled_words(_row_101()) == {"Attention_v3": 242_688}
 
 
+def test_under_fa3_per_iteration_check_inf_only_the_guarded_blocks_commit_a_guard():
+    # Attention_v4 blocks below MASKED_FROM read the running max itself (ROW word 0); max * scale is committed at every block
+    calls = [_call("Attention_v4", T=287, NH=32, KVH=8, D=128, BN=128, MASKED_FROM=mf) for mf in (2, 1, 0)]
+    P = SimpleNamespace(calls=calls)
+    assert GM.attention_words(P) == {"Attention_v4": 32 * (0 + 1 + 2)} and GM.max_scaled_words(P) == {"Attention_v4": 32 * 3 * 3}
+
+
 def test_tensor_parallel_attention_is_refused_by_name():
     with pytest.raises(ValueError, match="AttentionTP2_v1.*tensor-parallel"):
         GM.attention_words(SimpleNamespace(calls=[_call("AttentionTP2_v1", T=5, C={})]))

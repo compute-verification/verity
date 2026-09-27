@@ -13,6 +13,9 @@ A guarded-max build (`verity_tap_row3() == 1`, and its MS class with `verity_tap
 default build on the same GPU, `--baseline`:
 
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so --baseline DIR/fa_tap_exactness.json --out DIR_G
+
+An FA3 build is checked under FA3's per-iteration `Check_inf` chain with `--construction check-inf-per-iteration` (property (g)): the MS
+words against `AttnBlock_v4` and every output row against `Attention_v4` on the launch's inputs.
 """
 from __future__ import annotations
 
@@ -29,9 +32,9 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.properties.fa_tap_exactness import (FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_ms, check_row3,
-                                                expected_written, geometry, masked_digest, negative_ok, negatives, scale_log2_bits, seal,
-                                                verify_record, visited_rows)
+from verity_vllm.properties.fa_tap_exactness import (CONSTRUCTIONS, FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_ms,
+                                                check_row3, expected_written, geometry, masked_digest, masked_from, negative_ok, negatives,
+                                                scale_log2_bits, seal, verify_record, visited_rows)
 from verity_vllm.commit.hidden_stream import StreamLayout
 
 
@@ -137,7 +140,65 @@ def _armed(src, args: tuple, buf, decl: dict[str, int], tag: int) -> tuple[tuple
     return res, int(src.ns.verity_tap_skipped()) - skipped0
 
 
-def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, baseline: dict[tuple[str, int], str] | None = None) -> dict[str, Any]:
+def _words(x) -> np.ndarray:
+    """A bf16 tensor's words as uint16 (CPU)."""
+    import torch
+
+    return x.contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
+
+
+def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, Any]) -> dict[str, Any]:
+    """Every output row of an FA3 case against `Attention_v4` on the launch's inputs: per query token, each head's query over the T keys
+    its row sees (paged K/V gathered through the block table), block b guarded iff b >= the row's tile's `n_block_min_causal_local_mask`.
+    The twin (`derived_rows.attention_head_states`) evaluates the heads it covers; a head with a non-finite operand or accumulator goes to
+    the reference evaluator (`AttentionHead_v4`, gate by gate)."""
+    from verity.evaluation.reference import evaluate
+    from verity.ir.defs import bind
+    from verity_vllm.program.kernels import derived_rows as DR
+    from verity_vllm.program.registry import fa3_check_inf as F3
+    from verity_vllm.program.registry import hopper
+
+    q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
+    bt = t["block_table"].cpu().numpy()
+    H, Hk, BN, kBM = c["H"], c["Hk"], geo["BN"], geo["kBM"]
+    g = H // Hk
+    kvh = np.arange(H) // g
+    dot16, inv = DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]
+    rec: dict[str, Any] = {"rows": 0, "heads": 0, "mismatch": 0, "reference_heads": 0, "unevaluated": 0}      # mismatch: heads
+    tok = 0
+    for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
+        keys = np.arange(sk)
+        kseq, vseq = k[bt[seq, keys // PAGE], keys % PAGE], v[bt[seq, keys // PAGE], keys % PAGE]      # (sk, Hk, D)
+        for r in range(sq):
+            T = r + 1 + sk - sq
+            mf = F3.fa3_masked_from(T, BN, r, kBM, g)
+            kk = np.ascontiguousarray(np.transpose(kseq[:T], (1, 0, 2))[kvh])                            # (H, T, D)
+            vv = np.ascontiguousarray(np.transpose(vseq[:T], (1, 0, 2))[kvh])
+            st = DR.attention_head_states(q[tok + r], kk, vv, BN, dot16=dot16, inv=inv, masked_from=mf)
+            want = np.asarray(st["out"], dtype=np.uint16)
+            for h in np.flatnonzero(st["nonfinite"]):
+                spec = bind(F3.AttentionHeadV4, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=hopper.Fa3InvSum, MASKED_FROM=mf)
+                try:
+                    want[h] = np.asarray(evaluate(spec, q[tok + r, h].tolist(), kk[h].reshape(-1).tolist(), vv[h].reshape(-1).tolist()),
+                                         dtype=np.uint16)
+                    rec["reference_heads"] += 1
+                except Exception as e:  # noqa: BLE001
+                    rec["unevaluated"] += 1
+                    rec.setdefault("first_unevaluated", {"token": tok + r, "head": int(h), "error": f"{type(e).__name__}: {e}"[:200]})
+            bad = np.flatnonzero((want != o[tok + r]).any(axis=1))
+            rec["rows"] += 1
+            rec["heads"] += H
+            rec["mismatch"] += int(bad.size)
+            if bad.size and "first_mismatch" not in rec:
+                h = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "masked_from": mf,
+                                         "ir": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in o[tok + r, h][:4]]}
+        tok += sq
+    return rec
+
+
+def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, baseline: dict[tuple[str, int], str] | None = None,
+               construction: str = CONSTRUCTIONS[0]) -> dict[str, Any]:
     """One case at head dim `D`; a guarded-max build (`src.stats["row3"]`) also checks ROW word 3 and compares the rest of the six classes
     with the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`); a build with the MS class (`src.ms`) checks it."""
     import torch
@@ -166,8 +227,11 @@ def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, basel
         mine = (baseline or {}).get((c["name"], D))
         rec["row3"] = {**check_row3(words, layout, visited_rows(c, geo)),
                        "stream_eq_baseline": None if mine is None else mine == rec["stream_sha256_masked"]}
+    per_iteration = fa_version == 3 and construction == "check-inf-per-iteration"
     if src.ms:
-        rec["ms"] = check_ms(words, layout, visited_rows(c, geo), scale_log2_bits(c, D))
+        rec["ms"] = check_ms(words, layout, visited_rows(c, geo), scale_log2_bits(c, D), masked_from=masked_from(c, geo) if per_iteration else None)
+    if per_iteration:
+        rec["out_vs_ir"] = out_vs_ir(c, D, t, out_t, geo)
     rec["ok"] = case_ok(rec)
     return rec
 
@@ -209,7 +273,8 @@ def _baseline(path: str | None, fa_version: int, env: dict[str, Any]) -> tuple[d
     return ref, {(e["case"], int(e["D"])): e.get("stream_sha256_masked") for e in doc.get("cases") or []}
 
 
-def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, baseline: str | None = None) -> dict[str, Any]:
+def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, baseline: str | None = None,
+        construction: str = CONSTRUCTIONS[0]) -> dict[str, Any]:
     """Check the tap build at `so` on this GPU (a guarded-max build against the default build's record `baseline`) and write the sealed
     record to `<out>/fa_tap_exactness.json`."""
     import torch
@@ -231,6 +296,8 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
     if row3 and not baseline:
         raise SystemExit(f"{so} is a guarded-max build (verity_tap_row3 {row3}): give --baseline <the default build's record>")
     base_ref, base = _baseline(baseline, fa_version, env)
+    if construction != CONSTRUCTIONS[0] and fa_version != 3:
+        raise SystemExit(f"--construction {construction}: only an FA3 build has another attention construction")
     doc: dict[str, Any] = {
         "schema": SCHEMA, "backend": f"fa{fa_version}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv,
         "environment": env,
@@ -238,20 +305,21 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
                 "hdims": src.stats["hdims"], **({"row3": row3} if row3 else {})},
         "installed": {"op": ".".join(INSTALLED[fa_version]), "so": installed[0] if installed else None,
                       "sha256": _sha256(installed[0]) if installed else None},
-        **({"baseline": base_ref} if base_ref else {}),
+        **({"baseline": base_ref} if base_ref else {}), **({"construction": construction} if construction != CONSTRUCTIONS[0] else {}),
         "cases": [], "negatives": []}
     for D in hdims or src.stats["hdims"]:
         for i, c in enumerate(cases(fa_version, quick)):
-            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base)
+            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base, construction)
             doc["cases"].append(rec)
-            g, ms = rec.get("row3"), rec.get("ms")
+            g, ms, oi = rec.get("row3"), rec.get("ms"), rec.get("out_vs_ir")
             print(f"[fa-tap] fa{fa_version} hd{D} {c['name']:30s} " + (rec.get("error") or
                   f"tile {rec['kBM']}x{rec['BN']} HB={rec['HB']} M={rec['M']} NB={rec['NB']} skipped={rec['skipped']} "
                   f"==installed {rec['out_lse_eq_installed']} ==untapped {rec['out_lse_eq_untapped']} spill={rec['spill_outside_layout']} "
                   f"unwritten={rec['expected_but_unwritten']}" + (f" row3 guards={g['guard_words']} !=guard {g['guard_mismatch']} first!=0 "
                   f"{g['first_block_nonzero']} !=ir {g['ir_mismatch']}/{g['ir_sampled']} ==baseline {g['stream_eq_baseline']}" if g else "")
                   + (f" ms words={ms['ms_words']} !=ir-twin {ms['ms_mismatch']} (row_max -inf {ms['ms_mismatch_neg_inf_max']}) !=ir "
-                     f"{ms['ir_mismatch']}/{ms['ir_sampled']}" if ms else ""))
+                     f"{ms['ir_mismatch']}/{ms['ir_sampled']}" + (f" unguarded {ms['unguarded_words']}" if "unguarded_words" in ms else "") if ms else "")
+                  + (f" out-vs-IR rows={oi['rows']} !={oi['mismatch']} ref-heads={oi['reference_heads']} uneval={oi['unevaluated']}" if oi else ""))
                   + f" -> {'OK' if rec['ok'] else 'FAIL'}", flush=True)
         for j, (c, decl, why) in enumerate(negatives(fa_version, D)):
             rec = _guarded(check_negative, {"case": c["name"], "D": D, "why": why}, src, fa_version, c, D, decl, why, 7 * D + j)
@@ -275,6 +343,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true", help=f"only the cases {', '.join(QUICK)}")
     ap.add_argument("--baseline", metavar="RECORD", default=None,
                     help="a guarded-max build: the default build's record on this GPU, whose six classes (but ROW word 3) it must equal")
+    ap.add_argument("--construction", choices=CONSTRUCTIONS, default=CONSTRUCTIONS[0],
+                    help="FA3: the attention construction the MS words and outputs are checked against (check-inf-per-iteration: Attention_v4)")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
@@ -284,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems or not doc.get("ok") else 0
     if not (a.so and a.out):
         ap.error("--so and --out are required (or --verify RECORD)")
-    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick, a.baseline)
+    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick, a.baseline, a.construction)
     return 0 if doc["ok"] else 1
 
 
