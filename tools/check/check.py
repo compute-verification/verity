@@ -147,8 +147,40 @@ def session_jobs() -> int:
     return max(1, min(cores(), memory_gb() // int(m.group(1) if m else 8)))
 
 
+#: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
+AGREEMENT_MIN_GB = 32
+
+
+def _version(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+
+
+def agreement_preflight(pin: dict, bins: list[Path]) -> str | None:
+    """Why this machine cannot run the agreement (None when it can): too little memory, a glibc older than the pinned build
+    needs, or a binary the loader refuses.  Seconds, where the job itself would take an hour to disagree on every session."""
+    if (gb := memory_gb()) < AGREEMENT_MIN_GB:
+        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
+                f"than 15 GB): record check on a larger machine")
+    need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
+    if need and _version(have) < _version(need):
+        return (f"the pinned upstream build needs glibc {need}; this machine has {have or 'none'}: record check on a newer "
+                f"machine, or rebuild on this glibc (backends/flock/verifier/upstream-build.sh) and re-pin")
+    for b in bins:
+        try:
+            r = subprocess.run([str(b)], capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            continue
+        except OSError as e:                                  # not an executable for this machine at all
+            return f"{b.name} does not start here: {e}"
+        err = r.stderr + r.stdout
+        if "error while loading shared libraries" in err or re.search(r"version `GLIBC_[\d.]+' not found", err):
+            return f"{b.name} does not start here: {err.strip().splitlines()[0]}"
+    return None
+
+
 def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
-    """Unpack the pinned upstream build and inputs, check every binary against the pin, and run `ci.py` on every replayable set."""
+    """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
+    run `ci.py` on every replayable set."""
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -167,6 +199,9 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
+    if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])]):
+        print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
+        return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
@@ -377,13 +412,22 @@ def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list
     return not any(r["status"] == "failed" for r in results), results
 
 
+def agreement_verdicts(run_dir: Path) -> list[str]:
+    """The agreement's small outputs, published with the run: its result and each set's verdict table and verdict logs."""
+    w = run_dir / "flock-agreement"
+    files = [w / "result.json", *sorted(w.glob("work/set*/agree/agreement.tsv")), *sorted(w.glob("work/set*/agree/lean.txt")),
+             *sorted(w.glob("work/set*/agree/upstream.txt"))]
+    return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
+
+
 def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("circuit-check.json", *(s.get("log") for s in done)) if p and (run_dir / p).exists()]}
+           "steps": done, "artifacts": [p for p in ("circuit-check.json", *(s.get("log") for s in done), *agreement_verdicts(run_dir))
+                                        if p and (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")

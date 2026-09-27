@@ -18,7 +18,10 @@ def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, mo
     assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
 
 
-def _pinned(tmp_path, monkeypatch, binary=b"bin"):
+_BIN = b"#!/bin/sh\nexit 0\n"
+
+
+def _pinned(tmp_path, monkeypatch, binary=_BIN):
     """A verifier tree with a pin over a one-binary upstream build and an inputs tree, both built here."""
     import hashlib
     import io
@@ -43,11 +46,12 @@ def _pinned(tmp_path, monkeypatch, binary=b"bin"):
     sent.mkdir(parents=True)
     up = tgz(sent / "a.tar.gz", {"upstream-abc": binary, "BUILD.json": b"{}"})
     ins = tgz(sent / "b.tar.gz", {"0123/x": b"x"})
-    pin = {"upstream": {"art": "art:u", "sha256": up, "binaries": {"abc": hashlib.sha256(b"bin").hexdigest()}},
+    pin = {"upstream": {"art": "art:u", "sha256": up, "binaries": {"abc": hashlib.sha256(_BIN).hexdigest()}},
            "inputs": {"art": "art:i", "sha256": ins}, "ci": {"seed": 1, "fuzz": 2}}
     (v / "upstream.json").write_text(json.dumps(pin))
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", v / "upstream.json")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 64)
     return tmp_path / "out", sent
 
 
@@ -205,7 +209,7 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
     policy, other = "backends/flock/verifier/lean/lean-audit.json", "backends/flock/verifier/lean/Flock/lean-audit.json"
-    assert policy in files and policy not in closure and other in CHECK.agreement_closure([*files, other])
+    assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
     assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
     assert "backends/flock/verifier/upstream.json" in closure
     assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
@@ -216,3 +220,20 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     fake = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/soundness/lakefile.toml"]
     assert CHECK.agreement_closure(fake) == fake
+
+
+def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):
+    """Train E2's agreement disagreed on every session for an hour: the pinned binaries needed GLIBC_2.39 and the machine had 2.35.
+    Too little memory, an older glibc than the pin names, and a binary the loader refuses each fail the step at once, by name."""
+    ok = tmp_path / "ok"
+    ok.write_text("#!/bin/sh\nexit 2\n")
+    bad = tmp_path / "bad"
+    bad.write_text("#!/bin/sh\necho \"./bad: /lib/x86_64-linux-gnu/libc.so.6: version \\`GLIBC_2.39' not found\" >&2\nexit 1\n")
+    for p in (ok, bad):
+        p.chmod(0o755)
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 64)
+    assert CHECK.agreement_preflight({"upstream": {"glibc": "2.17"}}, [ok]) is None
+    assert "GLIBC_2.39' not found" in CHECK.agreement_preflight({"upstream": {}}, [ok, bad])
+    assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
+    assert "may use 16 GB; the agreement needs 32" in CHECK.agreement_preflight({"upstream": {}}, [ok])
