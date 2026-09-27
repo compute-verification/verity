@@ -21,7 +21,8 @@ keep bits:
   NaN (``lo >= 1e-30`` or NaN, times an ``exp``), so it adds the constants 0 and +inf to the block sums and minima.
 
 Where the reference raises (S >= 2 and warp half 1 stops early or finds no mask while half 0 does not: ``mask_kernel`` reads
-half 1's missing ``Z`` / ``pivot_logit``), the circuit gives each lane its own half's compare, as the kernel's threads would.
+half 1's missing ``Z`` / ``pivot_logit``), "keep all" follows half 0 as the reference's check does, and each lane compares with
+its own half's pivot logit, ties and quota, computed from that half's chain.
 """
 from __future__ import annotations
 
