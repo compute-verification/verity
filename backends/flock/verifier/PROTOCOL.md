@@ -1064,17 +1064,36 @@ graphs (7000 agree).
     a wide gate by itself;
   - reads through structure, and the returned values.
 - **Evaluation.** Separable bodies and the memo by Definition feed the cut above.
+- **Each Call's cut** (`Extract.checkCalls`, `qword-program [X [W]] --cuts`). As `partition_object.verify` runs `check_cut`,
+  each Definition's cut is checked once, on its Call's whole graph (a separable Call's too, since two members can compute
+  one value), with the derived committed set:
+  - **the partition invariant:** every computing gate in exactly one unit, and no value computed in two units
+    (`gate-recomputed`). With the derived committed set, the invariant's other clauses hold by construction;
+  - **the width rule `(X, W, 0)`:** each unit's boundary is at most `X` bits, or one value of at most `W` bits
+    (`unit-too-wide`, with the unit, its bits and its values).
+  - The check's graph has no input table. With the derived committed set, the Call's parameters (input gates) fail no
+    clause: every read of one and every returned one is committed, and their count cancels from the gate count.
+  - The recompute table is held by each key's hash, and a gate matches an earlier one only when their keys are equal, so
+    the tokens stay exact. #101's LM-head `Gemm` (16.5M gates) is checked in 100 s at 9 GB; all of #101 in 152 s.
 - **`qword_program_agree.py`** checks all of it against core's `decode_program` and `partition_object.evaluate`:
   - #111's pinned vector, every field of every Call's graph, owners, units and committed set, and `locate`;
   - #120's format vectors: the wide-gate graph, the forward references (both refusals' details), and all 31 decoder
     refusals refused;
   - #111's `qword_vectors.json`: all 8 evaluations (population, owners digest, and each Call's graph, owners, kinds,
     units and committed set), the 3 order refusals' details, and the root batch and scan refused;
+  - each Call's cut against core's `verify`: `qword_vectors.json`'s 3 pinned cut refusals, and its 10 programs at 5
+    `(X, W)` (the failing Calls, their codes and too-wide units), 19 of the 50 refused for their cuts;
+  - #101's cuts (`--cuts`) against core's `check_cut` at `X = 16`, `W = 32` and `16`, per Definition: the codes, the
+    too-wide units, and the graph's computing gates, recomputed pairs, committed set, widest boundary and boundary gates.
+    - 13 of the 16 Definitions agree. At `W = 16`, `Attention`, `GumbelTopPTokenSelect` and both RMSNorms fail the width
+      rule, with the same units.
+    - The three largest `Gemm`s (1.05M, 2.1M and 16.5M gates) exceed core's memory at 14.5 GB, so only Lean checks them.
+      Their statistics are the two compared `Gemm`s' per coordinate (129 gates at `K = 2048`, one committed 16-bit output,
+      no recompute), and they hold at both widths;
   - a real #101 descriptor (the Llama-3.2-1B step Build, `art:a4ea1a18`): all 167 Calls' units, and every Definition's
     owners and flat graph by SHA-512, in 14.5 s.
 
-Still ahead: the `Q_word` finding in a verdict (the claimed units' membership), the width rule on each Call's cut, and the
-leaf positions.
+Still ahead: the leaf positions.
 
 ### 16.8 Objects by content
 
@@ -1216,7 +1235,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     - every unit the header's `units.indices` claims must lie in the population and be one whole activation of the circuit's
       template. That is, the innermost Definition on its `locate` path is the template, and the template's cut is exactly
       one unit, so the instance proves the unit's computation.
-    - The width rule on each Call's cut is the partition checker's, and the note says it is not checked here.
+    - every Call's cut must hold the partition invariant and the width rule on its whole graph (`Extract.checkCalls`,
+      §16.7), as core's `verify` requires. A failing cut refuses the partition, naming the Call and its codes.
     - Set 10's object is over the RoPE subcircuit's own program (`57fab977`), whose root batches primitives. `Q_word` v1
       doesn't apply to it, and the verifier refuses it with `--program`, as core's `evaluate` does.
   - Any other query is not evaluated. Then, and without `--program`, `units` is `as stated`, with the reason in `note`, and

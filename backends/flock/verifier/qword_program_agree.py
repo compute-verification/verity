@@ -18,7 +18,7 @@
   can't hold here, checked by Lean only).
 Writes DIR/result.json; exits 1 unless everything agrees.
 """
-import argparse, gzip, hashlib, importlib, json, subprocess, sys
+import argparse, gc, gzip, hashlib, importlib, json, subprocess, sys
 from pathlib import Path
 
 
@@ -270,7 +270,9 @@ def check_program_cuts(a, P, part, out, bad):
             if r["cuts"].get(key) != want:
                 bad.append(("program cuts", key, W, r["cuts"].get(key), want))
         compared.append(key)
+        del g, own
         part._graphs.clear()
+        gc.collect()
     for W, r in lean_runs.items():
         want = [[k, cc["codes"]] for k, cc in ((k, r["cuts"][_spec_id(c.fn)]) for k, c in part.calls) if cc["codes"]]
         if r["cut"] != want:
