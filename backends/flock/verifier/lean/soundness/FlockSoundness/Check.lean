@@ -142,6 +142,14 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.orcSess_value_le
 #print axioms FlockSoundness.session_sound_of_table
 #print axioms FlockSoundness.session_knowledge_sound
+-- the expected-time extractor: accepted reruns, the accepted-only deviation, and the relative
+-- missing term
+#print axioms FlockSoundness.bad_pointwise_acc
+#print axioms FlockSoundness.session_sound_of_table_acc
+#print axioms FlockSoundness.Extract.expectN_prod_mul_sum
+#print axioms FlockSoundness.Extract.expectAcc_off_le
+#print axioms FlockSoundness.Extract.joint_acc_le
+#print axioms FlockSoundness.session_knowledge_sound_acc
 -- several tables in one batched session: each table's place in it, its knowledge bound in the
 -- product form, and the cover of its failure and link events
 #print axioms FlockSoundness.sessAfterB_gamesB

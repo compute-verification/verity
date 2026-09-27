@@ -270,11 +270,12 @@ noncomputable def epsS [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
 /-! ## The compiled bound for any table, in the session -/
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session.** For every session strategy
-after `Commit` and every table `T`: the table accepts with `T` uncommitted with probability at most
-`ε_c⁻` plus the probability that a run opens a level-0 position of the table off `T`. -/
-theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+/-- **Compiled soundness for any level-0 table, in a batched session, accepted runs only.** For
+every session strategy after `Commit` and every table `T`: the table accepts with `T` uncommitted
+with probability at most `ε_c⁻` plus the probability that the table accepts in a run that opens a
+level-0 position off `T`. The coupling's bad event requires acceptance (`bad_pointwise_acc`). -/
+theorem session_sound_of_table_acc (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -284,7 +285,7 @@ theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
         ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T)
       (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ ≤
     epsS A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts pre post cap₀ σ +
-      expect (ind fun outs : List (OutC F D) =>
+      expect (ind fun outs : List (OutC F D) => (outs.getD pre.length dfltOut).accepted = true ∧
           Off₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ T (outs.getD pre.length dfltOut))
         (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ := by
   have hk0 := (fast100_shape S.m _ hsch).2.1
@@ -324,7 +325,7 @@ theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
             (outs.getD pre.length dfltOut).opens)) outs)
     (fun i a b hR => by
       obtain ⟨x, -, hrel⟩ := hR
-      exact bad_pointwise H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T cap₀ i x (b.getD pre.length dfltOut) hrel) (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post T cap₀) σ
+      exact bad_pointwise_acc H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T cap₀ i x (b.getD pre.length dfltOut) hrel) (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post T cap₀) σ
   rw [Lock.leafE_add, Lock.leafE_add, Lock.leafE_const, Lock.leafE_const] at hsplit
   simp only [Lock.leafE_sum] at hsplit
   have hR : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
@@ -360,11 +361,11 @@ theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
         (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post T cap₀) σ ≤ _
     simpa [Nat.cast_pow] using this
   have hsum := Finset.sum_le_sum fun r hr => Finset.sum_le_sum fun ℓ hℓ => hR r hr ℓ hℓ
-  have e0 : expect (ind fun outs : List (OutC F D) =>
+  have e0 : expect (ind fun outs : List (OutC F D) => (outs.getD pre.length dfltOut).accepted = true ∧
         Off₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ T (outs.getD pre.length dfltOut))
       (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ =
     expect (fun outs : List (OutC F D) =>
-        ind (fun b => ∃ p, Rewinding.Off (op₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀) (rowT _ _ T) b p) (outs.getD pre.length dfltOut))
+        ind (fun b : OutC F D => b.accepted = true ∧ ∃ p, Rewinding.Off (op₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀) (rowT _ _ T) b p) (outs.getD pre.length dfltOut))
       (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ := rfl
   have eS : expect (ind fun outs : List (OutC F D) => SelfClash H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD pre.length dfltOut))
       (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ =
@@ -373,6 +374,28 @@ theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
   unfold epsS
   rw [e0, eS]
   linarith
+
+open Classical in
+/-- **Compiled soundness for any level-0 table, in a batched session.** For every session strategy
+after `Commit` and every table `T`: the table accepts with `T` uncommitted with probability at most
+`ε_c⁻` plus the probability that a run opens a level-0 position of the table off `T`. -/
+theorem session_sound_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (hlay : S.LinkLayout ptLocal mPts)
+    (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) (cap₀ : Cap D) (T : Oracle F)
+    (σ : Strategy (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
+    expect (ind fun outs : List (OutC F D) => (outs.getD pre.length dfltOut).accepted = true ∧
+        ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T)
+      (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ ≤
+    epsS A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts pre post cap₀ σ +
+      expect (ind fun outs : List (OutC F D) =>
+          Off₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ T (outs.getD pre.length dfltOut))
+        (sessAfter A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ :=
+  (session_sound_of_table_acc hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay pre post
+    cap₀ T σ).trans
+    (add_le_add le_rfl (expect_mono (fun outs => ind_mono (fun _ (h : _ ∧ _) => h.2) outs) _ _))
 
 /-! ## Knowledge soundness in the session -/
 
