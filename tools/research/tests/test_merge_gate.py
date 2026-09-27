@@ -60,6 +60,19 @@ def test_merge_needs_a_passing_check_of_the_exact_commit(tmp_path, monkeypatch, 
     assert _git(main, "rev-parse", "HEAD^2") == tip
 
 
+def test_an_attempt_recorded_on_another_machine_counts(tmp_path, monkeypatch, capsys):
+    """The run publishes to its store and the shared remote; the merger's store is empty until the gate refreshes its attempts."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    main, feat, tip = _repos(tmp_path)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "pod-store"))
+    assert _record(tmp_path, feat, monkeypatch, "true") == 0
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "merger-store"))
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0 and f"({tip[:12]}) may be merged into main" in capsys.readouterr().out
+
+
 def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch, capsys):
     main, feat, tip = _repos(tmp_path)
     assert _record(tmp_path, feat, monkeypatch, "true") == 0

@@ -2,7 +2,7 @@
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
-a usable remote the local catalog is refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
+a usable remote the catalog's attempts are refreshed first, so an attempt recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip must be an
 ancestor of REF), since then the merged tree is not the one that was checked; merge the target into the branch and check the new
 tip.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with --dry-run), 1 refused, 2 usage.
@@ -45,7 +45,7 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         raise Refused(f"{into} has moved past {commit[:12]}: merge {into} into the branch, then record `{tool}` on its new tip")
     if store.remote is not None:
         try:
-            store.refresh()
+            store.refresh(attempts_only=True)
         except Exception as e:  # noqa: BLE001  (the local catalog still answers; say it may be behind)
             log(f"research merge: refresh from the remote failed ({type(e).__name__}: {e}); using the local catalog")
     ids = passing(store, commit, tool)
