@@ -18,7 +18,7 @@ table only if it conflicts with the extractor run that supplied the row (a union
 fresh–extractor pairs, each distributed as `adv₀`'s two runs) or opens a position no extractor run
 opened (`Σ_p q_p (1 − q_p)^K ≤ N₀/(eK)`). One Markov step gives the tail form
 (`table_knowledge_sound`); the product form, the probability that a fresh run accepts while the
-extraction fails, needs no condition on `ε` (`table_knowledge_sound_joint`).
+extraction fails, needs no condition on `ε` (`table_knowledge_sound_joint_tight`).
 
 **Not knowing `ε`.** For the audit composition the extractor is an analysis device, and `K` may be
 chosen from `ε` and `adv₀`; the joint form is best at `K = √(N₀/(e·adv₀))`, where
@@ -156,8 +156,8 @@ theorem table_knowledge_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) 
 open Classical in
 /-- **Knowledge soundness of one table, the audit's form.** The probability that a fresh run
 accepts while the extraction from `K ≥ 1` independent reruns after the level-0 cap fails is at
-most `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`, with no condition on `ε`. -/
-theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with no condition on `ε`. -/
+theorem table_knowledge_sound_joint_tight (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -169,8 +169,8 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
             ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
               (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
           (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts) σ) ≤
-      2 * epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
-        2 * (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
+      epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
+        (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
           2 ^ l₀.logLen / (Real.exp 1 * Kr)) := by
   revert σ
   show ∀ σ : Strategy (Game.send (Cap D)
@@ -226,7 +226,6 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
     (fun bs => Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
       (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
     (fun bs => expect_nonneg (ind_nonneg _) _ _) ε _
-    (expect_nonneg (ind_nonneg _) _ _)
     (epsCminus_nonneg A H E S m k0 l₀ l₁ rest ext _ hm ptLocal mPts σ)
     (fun bs hbs => uncommitted_costs hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
       hbs) Kr
@@ -244,6 +243,36 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
     all_goals first
       | exact rfl
       | simp only [lvOf, List.getD_cons_zero, Nat.cast_pow, Nat.cast_ofNat]
+  linarith
+
+open Classical in
+/-- **The audit's form with `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`**, which
+`table_knowledge_sound_joint_tight` implies. -/
+theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (hlay : S.LinkLayout ptLocal mPts)
+    (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts))
+    (Kr : ℕ) (hK : 1 ≤ Kr) :
+    expectN (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2 Kr
+        (fun bs => expect (ind fun out : OutC F D => out.accepted = true ∧
+            ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+              (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
+          (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts) σ) ≤
+      2 * epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
+        2 * (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
+          2 ^ l₀.logLen / (Real.exp 1 * Kr)) := by
+  have h := table_knowledge_sound_joint_tight hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal
+    mPts hlay σ Kr hK
+  have h1 := epsCminus_nonneg A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal
+    mPts σ
+  have h2 : 0 ≤ adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ := by
+    unfold adv₀ expect₂
+    exact expect_nonneg (fun _ => expect_nonneg (fun _ => ind_nonneg _ _) _ _) _ _
+  have h3 : 0 ≤ (2 : ℝ) ^ l₀.logLen / (Real.exp 1 * Kr) := by positivity
+  have h4 : 0 ≤ (Kr : ℝ) * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ :=
+    mul_nonneg (Nat.cast_nonneg _) h2
   linarith
 
 end FlockSoundness
