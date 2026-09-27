@@ -168,14 +168,52 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
-  - On paper (`note:20260927T0705Z-draft-link-term`, pending review): define `X`'s value layer the way the extractor
-    fills its table, from auxiliary extractions, and charge failed extractions to the joint form at the same `K`.
-    Knowledge plus link then cost about `2√(t·2^-220.5)` for audit B at m = 33, which is `2^-69.3` at `t = 2^80`
-    (the review's first estimate was `2^-65.3`).
-  - The square root is inherent to strict-time collision resistance here. It dominates the audit bound. An
-    expected-time assumption or the random-oracle column removes it.
-  - The lifetime numbers don't change until the review accepts it.
+  - The analysis is `note:20260927T0705Z-draft-link-term`, pending review.
+  - The lifetime numbers don't change until the decision below.
 - **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
+
+**The link term: a spec decision.** One audit's knowledge-plus-link term, under the assumption in Table 1 today and
+under the two alternatives. $N_s$ is the leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length
+(m = 33), and $t$ the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
+
+| Assumption | Knowledge + link | A | B | C | D |
+|---|---|---|---|---|---|
+| **Strict-time collision resistance** (Table 1 today) | $2\sqrt{t\cdot 8N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-225.3}}$ | $2\sqrt{t\cdot2^{-220.5}}$ | $2\sqrt{t\cdot2^{-217.5}}$ | $2\sqrt{t\cdot2^{-214.7}}$ |
+| **(i) Expected-time collision resistance** | $t\cdot N_s\,(8N_0/e)/2^{256.5}$ | $t\cdot2^{-215.2}$ | $t\cdot2^{-205.6}$ | $t\cdot2^{-199.6}$ | $t\cdot2^{-193.9}$ |
+| **(ii) Random oracle** (tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
+
+The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
+
+| Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
+|---|---|---|---|---|
+| Strict-time | −77.3 | −69.3 | −59.3 | −54.3 |
+| (i) Expected-time | −141.6 | −125.6 | −105.6 | −95.6 |
+| (ii) Random oracle | −383 | −351 | −311 | −291 |
+| $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
+
+At $t=2^{80}$ the audits read −71.7, −69.3, −67.8 and −66.4 under strict time, and −135.2, −125.6, −119.6 and −113.9
+under (i).
+
+- **Strict time.** Balancing the knowledge term's $2N_0/(eK)$ against the link finder's cost, which grows linearly
+  with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at $t=2^{80}$,
+  audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's protocol (CDGSY24).
+- **(i) Expected-time collision resistance.**
+  - **The assumption:** an algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with
+    probability at most $T/2^{256.5}$.
+  - **Why linear in $T$.** This is SHA-512's generic bound for such finders, since
+    $\min(1,q^2/2^{513})\le q/2^{256.5}$. It is linear rather than quadratic because a finder can gamble, making
+    $2^{256.5}$ evaluations with small probability. The quadratic form $T^2/2^{513}$ would be false for this reason.
+  - **The reductions become expected-time,** as in Chiesa–Dall'Agnol–Guan–Spooner–Yogev (ePrint 2024/1434,
+    Theorem 2). The extractor runs the session once, and extracts only when it accepts. The link finder samples
+    auxiliary extractions until the position it needs is recovered, at an expected cost of about $N_s(8N_0/e)\,t$.
+    The square root goes.
+  - **The status.** It is a new assumption, not in Table 1, and this analysis is on paper, not in Lean.
+- **(ii) The random-oracle column** (lifetime doc §7). The extractor reads the commit strings, the `hm96` openings and
+  the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one global
+  $t^2/2^{511}$. `ASSUMPTIONS.md` §4 keeps the random oracle as a cross-check only; the decision would be to quote it
+  for the audit's value layer.
+- **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
+  proved under strict-time collision resistance.
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
