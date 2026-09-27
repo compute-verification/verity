@@ -11,7 +11,7 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
   and statement (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
   y; the commitment scheme (:data:`SCHEMES`); every hash of the soundness argument with its role, property and class; ZK class
   and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
-  proximity bounds (regime, proven or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
+  proximity bounds (regime, proven, machine-checked or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
 * **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
   ``verity.proofs.target.TARGETS`` entry and scheme some row's statement declares), a native column, one column per
   backend family (:data:`FAMILIES`).  ``N`` is the
@@ -184,7 +184,7 @@ class Hash:
 @dataclass(frozen=True)
 class Proximity:
     """One code-based component's proximity bound: the decoding regime its terms use and whether the bound is proven (with its
-    theorem) or conjectured."""
+    theorem), machine-checked in the configuration's own soundness proof (``MACHINE_CHECKED``), or conjectured."""
 
     component: str
     regime: str
@@ -215,6 +215,10 @@ _SP1_DOMINANT = ("field-bound terms over KoalaBear^4 (|F| = 2^123.95), LogUp-GKR
                  "log2(shards), and shards grow with the batch")
 _SP1_ASSUME = "KoalaBear^4 challenges; zerocheck and jagged-reduction lemmas as SP1 states them"
 _AGKR_PROX = (Proximity("Ligero IRS polynomial commitment", "unique decoding", "proven (BCIKS20 Thm 1.2, n/|F|^sigma)"),)
+#: A proximity bound proved inside the configuration's own Lean soundness theorem, so Table 1 cites no assumption for it.
+MACHINE_CHECKED = "machine-checked"
+_FLOCK_MCA = (f"{MACHINE_CHECKED} (Lean table_sound: Haböck ePrint 2025/2110, with BCHKS25's MCA bound proved from DKT26, "
+              "ArkLib #907)")
 _AGKR_DOMINANT = "IRS query term (2^-130.2 at t = 192) and the LogUp identity term; the (n+1)/|F|^sigma term grows with the committed length n"
 
 
@@ -330,7 +334,7 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
           Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
          "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
-         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)")),
+         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA)),
          "interactive: live-verifier-only (live prime and Flock coins in one session)",
          "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
          "verity-gkr-verify pins (PR #13) plus the Flock profile params and the link version (session-2xgf2_128/v2, verity/link-L/v2)"),
@@ -380,7 +384,7 @@ FLOCK_CONFIG = Configuration(
     "2^-195.5 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit); red-team-flock: NOT GRANTED until "
     "R1–R8 (reps bound to one commitment, a live challenger); under Fiat–Shamir at most 2^-75.6",
     "the Ligerito query term per run (2^-97.8), squared by the two live-coin reps; it does not grow with the batch",
-    (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)"),),
+    (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA),),
     "interactive: live-verifier-only", "GF(2^128) PIOP sites; the aarch64 AG r1 path gives about 14 bits of nonce choice (red-team-flock GAP)",
     "Flock b684b12 profile params pinned (commitment.params == expected)",
     interaction="live verifier: coins for every squeeze of both reps (Fiat–Shamir cannot reach 2^-128 for this profile); the verifier "
@@ -2065,7 +2069,7 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
 
     * soundness rests on every hash of the soundness argument but those assumed to be random oracles, the proximity bounds
-      and the configuration's other assumptions;
+      but those machine-checked in its own proof, and the configuration's other assumptions;
     * ZK: malicious-verifier ZK whose text names the coin commitment rests on the hashes that commit the coins; HVZK on an
       honest verifier;
     * non-interactive (transferable) rests on the random oracle, once per hash modelled as one; an interactive
@@ -2086,7 +2090,7 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     oracles = [h for h in cfg.hashes if h.prop.lower().startswith("random oracle")]
     sound = [rests(i, _role(h), h.text()) for h in cfg.hashes if h not in oracles for i in (hash_ids(h) or [None])]
     sound += [rests(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.component, x.text())
-              for x in cfg.proximity]
+              for x in cfg.proximity if not x.basis.startswith(MACHINE_CHECKED)]
     sound += [rests(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), "", a) for a in split_list(cfg.assumptions)]
     if transferable:
         sound += [rests("random-oracle", _role(h), h.text()) for h in oracles]

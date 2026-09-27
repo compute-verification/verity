@@ -23,6 +23,9 @@ replays the audited modules through the kernel (`Replay.lean`). It fails a packa
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
                  differ from those the `.olean` files recorded; a replay killed by a signal is reported as a kill
+    upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
+                 a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
+                 a bump that brings such a proof fails until someone has looked at it
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
     tamper       this tool's files or the toolchain's `lean`, `lake` or `leanchecker` changed during the run (a build runs
@@ -76,7 +79,17 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "layers", "pins", "reads")
+ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "layers", "upstream", "pins", "reads")
+
+
+def sibling(name: str):
+    """This directory's `name.py`, loaded by path (the directory is copied into other repositories, not installed)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(f"lean_{name}", HERE / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def lake_env() -> dict[str, str]:
@@ -366,6 +379,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     files = lean_modules(pkg)
     fails, new = judge(policy, facts, files, update)
     fails = unchecked(pkg, files) + fails
+    if "upstream" in policy:
+        s = time.monotonic()
+        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+        fails += missed
+        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
     if replay:
         s = time.monotonic()
         found = work / "replay.json"

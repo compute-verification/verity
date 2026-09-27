@@ -6,8 +6,8 @@ import FlockSoundness
 Run `lake env lean FlockSoundness/Check.lean`.
 
 The proved results must depend only on Lean's three standard axioms (`propext`,
-`Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.BCHKS25Thm46`) are hypotheses
-of the theorems that use them, never `axiom` declarations, so they cannot appear here.
+`Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.SHA512ExpectedTimeCR`) are
+hypotheses of the theorems that use them, never `axiom` declarations, so they cannot appear here.
 -/
 
 -- the interaction model and the repetition theorem
@@ -44,7 +44,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.prCoin_fromMsg_le
 #print axioms FlockSoundness.prCoin_eqList_le
 #print axioms FlockSoundness.prCoin_positions_miss_le
--- mutual correlated agreement at the folds, from the named assumption
+-- mutual correlated agreement up to the Johnson bound, from DKT26, and at the folds
+#print axioms FlockSoundness.mcaError_le_bchks25_of_lt
+#print axioms FlockSoundness.mcaError_le_bchks25
 #print axioms FlockSoundness.prCoin_mca_le
 #print axioms FlockSoundness.rowsAgreeOn_of_fold
 #print axioms FlockSoundness.rowsAgreeOn_of_foldAll
@@ -86,7 +88,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
 -- the executable's arithmetic: `Arith.Correct` from lane flock-verifier's level-3 theorems, so the
--- theorem for the executable has BCHKS25 Thm 4.6 as its only hypothesis
+-- theorem for the executable has no named assumption
 #print axioms FlockSoundness.execArith_correct
 #print axioms FlockSoundness.table_sound_exec
 #print axioms FlockSoundness.table_sound_exec_fast100
@@ -142,6 +144,15 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.orcSess_value_le
 #print axioms FlockSoundness.session_sound_of_table
 #print axioms FlockSoundness.session_knowledge_sound
+-- the expected-time extractor: accepted reruns, the accepted-only deviation, and the relative
+-- missing term
+#print axioms FlockSoundness.bad_pointwise_acc
+#print axioms FlockSoundness.session_sound_of_table_acc
+#print axioms FlockSoundness.bad_pointwise_of
+#print axioms FlockSoundness.Extract.expectN_prod_mul_sum
+#print axioms FlockSoundness.Extract.expectAcc_off_le
+#print axioms FlockSoundness.Extract.joint_acc_le
+#print axioms FlockSoundness.session_knowledge_sound_acc
 -- several tables in one batched session: each table's place in it, its knowledge bound in the
 -- product form, and the cover of its failure and link events
 #print axioms FlockSoundness.sessAfterB_gamesB
@@ -247,3 +258,36 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Law.stratified_escape_floor
 #print axioms FlockSoundness.Audit.audit_whole_stratum
 #print axioms FlockSoundness.Audit.extraction_audit_whole_stratum
+-- the batched audit with the expected-time extractor: reruns in which the session accepts, the
+-- relative knowledge bound, and the analysis whose cover absorbs it
+#print axioms FlockSoundness.joint_le_accB
+#print axioms FlockSoundness.one_le_fail_add_accB
+#print axioms FlockSoundness.Audit.Partition.analysisBE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_countE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawnE
+-- the link theorem: the extractor's waits, the link finder with its success and cost, and δ_link
+-- under expected-time collision resistance for the plurality value layer
+#print axioms FlockSoundness.Game.expect_bind
+#print axioms FlockSoundness.Game.expect_runsG
+#print axioms FlockSoundness.Extract.expectN_find
+#print axioms FlockSoundness.Extract.expectN_firsts
+#print axioms FlockSoundness.Extract.expectN_waitCost
+#print axioms FlockSoundness.Extract.expectAcc_le_waits
+#print axioms FlockSoundness.LinkFinder.expect_succ
+#print axioms FlockSoundness.LinkFinder.succ_ge
+#print axioms FlockSoundness.LinkFinder.expect_finderCost_le
+#print axioms FlockSoundness.LinkFinder.link_mass_le
+#print axioms FlockSoundness.Audit.Partition.outC_spec
+#print axioms FlockSoundness.Audit.Partition.expect_cT_le
+#print axioms FlockSoundness.Audit.Partition.trial_mass_le
+#print axioms FlockSoundness.Audit.Partition.ideal_mass_le
+#print axioms FlockSoundness.Audit.Partition.linkEv_le_psi
+#print axioms FlockSoundness.Audit.Partition.flock_batched_linkSoundE
+-- the compiled-layer audit with δ_link discharged: the link theorem composed into the count and drawn-unit bounds
+#print axioms FlockSoundness.Audit.Partition.linkBoundE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count_linked
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_linked
+#print axioms FlockSoundness.Audit.Partition.placeDecoder
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count_placed
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_placed
