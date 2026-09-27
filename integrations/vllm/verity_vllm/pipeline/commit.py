@@ -521,7 +521,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
             # raw bytes of this step's FA2 L0 row (and the whole layout) for offline byte-level diffs across pairs
             for m in com._layouts[step]:
                 if m.name.startswith("fa2.m1/L0/"):
-                    (out / f"dump_step{step}_pair{pair}_{m.name.replace('/', '_')}.bin").write_bytes(bytes(mv[m.dev_off:m.dev_off + m.nbytes]))
+                    (out / f"dump_step{step}_pair{pair}_{m.name.replace('/', '_')}.bin").write_bytes(bytes(mv(m.dev_off, m.dev_off + m.nbytes)))
             (out / f"dump_step{step}_pair{pair}_layout.json").write_text(json.dumps([[m.name, m.dtype, list(m.shape), m.nbytes, m.dev_off] for m in com._layouts[step]]))
     (out / f"tensor_digests_pair{pair}.json").write_text(json.dumps(cur) + "\n")
     if prev:
