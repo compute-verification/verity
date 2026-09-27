@@ -13,10 +13,10 @@ encoding with it must have the server's root, and `tests/engine/test_pous_codec.
     c1_v    = P_(tag,0,v)(W_v ^ H(tag, 0, v, c1_par(v)))
     c2_v    = P_(tag,1,v)(transpose(c1)_v ^ H(tag, 1, v, c2_par(v)))
 
-Feistel-10 is (L, R) -> (R, L ^ F_i(R)) for i = 1..10, computed in place on the two halves `A || B`: odd rounds `A ^= F_i(B)`, even
-rounds `B ^= F_i(A)`; ten rounds leave the output as `A || B`.  The inverse runs the rounds backwards.  Decode is two parallel
-passes per segment; encode is sequential in `v` within a segment and parallel across segments.  Every tensor is `uint8` on one
-CUDA device; every SHAKE256 call is one launch of `pous_native.shake256_rows` over all rows.
+Feistel-10 is (L, R) -> (R, L ^ F_i(R)) for i = 1..10, computed in place on the two halves `A || B` by one launch of
+`pous_native.feistel_rows` (one warp per row): odd rounds `A ^= F_i(B)`, even rounds `B ^= F_i(A)`, which leaves the output as
+`A || B`; the inverse runs the rounds backwards.  Decode is two parallel passes per segment; encode is sequential in `v` within a
+segment and parallel across segments.  Every tensor is `uint8` on one CUDA device.
 """
 from __future__ import annotations
 
@@ -35,7 +35,6 @@ PI_BYTES = M + primitives.CAPACITY_BITS // 8
 SALT_BYTES = SALT_BITS // 8
 TAG_BYTES = TAG_BITS // 8
 H_HEADER = primitives.HEADER
-ROUNDS = 10
 PI_DOMAIN = primitives.PI_DOMAIN
 P_DOMAIN = primitives.P_DOMAIN
 NAME = "verity_pous.primitives.reference/gpu-v1"
@@ -54,21 +53,9 @@ def _u8(values, device) -> torch.Tensor:
     return torch.tensor(list(values), dtype=torch.uint8, device=device)
 
 
-def _feistel(x: torch.Tensor, prefix_of_round, inverse: bool) -> None:
-    """In-place Feistel-10 on the rows of `x` (`[R, 2h]`); `prefix_of_round(i)` is the `[R or 1, p]` round-function prefix."""
-    ext = native.ext()
-    h = x.shape[1] // 2
-    a, b = x[:, :h], x[:, h:]
-    for i in (range(ROUNDS, 0, -1) if inverse else range(1, ROUNDS + 1)):
-        src, dst = (b, a) if i % 2 == 1 else (a, b)
-        ext.shake256_rows(prefix_of_round(i), src, dst, True)
-
-
 def pi(state: torch.Tensor) -> None:
     """`Pi` in place on `[R, M + 64]` states."""
-    dev = state.device
-    prefixes = {i: _u8([PI_DOMAIN, i], dev).view(1, 2).expand(state.shape[0], 2) for i in range(1, ROUNDS + 1)}
-    _feistel(state, lambda i: prefixes[i], inverse=False)
+    native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False)
 
 
 def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
@@ -84,16 +71,7 @@ def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
 
 def p_t(x: torch.Tensor, tags: torch.Tensor, layer: int, vs: torch.Tensor, inverse: bool = False) -> None:
     """`P_T` (or its inverse) in place on `[R, M]` labels, row `r` under tweak `(tags[r], layer, vs[r])`."""
-    tw = _tweaks(tags, layer, vs)
-    pre = torch.empty(x.shape[0], 2 + tw.shape[1], dtype=torch.uint8, device=x.device)
-    pre[:, 0] = P_DOMAIN
-    pre[:, 2:] = tw
-
-    def prefix(i: int) -> torch.Tensor:
-        pre[:, 1] = i
-        return pre
-
-    _feistel(x, prefix, inverse)
+    native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse)
 
 
 def keys(tags: torch.Tensor, layer: int, vs: torch.Tensor, labels: torch.Tensor, groups: torch.Tensor) -> torch.Tensor:
