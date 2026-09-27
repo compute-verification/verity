@@ -3,14 +3,10 @@
 The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
 **Input.**  The program's descriptor, `codec.canonical_json(codec.encode_program(program))` minus `annotations` (schema
-`verity-ir/descriptor/v1`), decoded by `codec.decode_program`: the root specialization and every definition it reaches -- a primitive
-by `{form, id, params, ret}`, a composite by its bindings and body (`params`, `ret_type`, `nodes` with `form` call / batch / scan /
-primitive, `fn`, `args` of typed reference sequences, `axes`, `out`, and `ret`).  Gates follow the canonical layout (`layout.Circuit`):
-a body's gates are its nodes' in order, node k at `body.offsets[k]`, a batch node's members contiguous (member m at offset
-`m * callee.gates`), a primitive node one gate per member, recursively; `layout.resolve` maps a reference (`("p", param, leaf)` or
-`("n", node, leaf)`, `refs.Affine` / `Strided` / `Concat` / `Explicit` sequences) to a gate id.
+`verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
+specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
-1. **Calls.**  The root body's nodes whose callee's family is not `Input`, in body order.  Each is cut as its Definition's activation
+1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.
 2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body

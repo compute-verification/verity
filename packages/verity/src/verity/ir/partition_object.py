@@ -27,6 +27,7 @@ from typing import Any, Iterable, Mapping
 from .codec import canonical_json, encode_program
 from .cut import WIRING, CallGraph, DefinitionCut, check_cut, derived_committed, evaluate_definition
 from .partition import CutVerdict
+from .program import is_input
 
 FORMAT = "verity/partition/v1"
 _KEYS = {"format", "program", "query"}
@@ -96,8 +97,9 @@ def _is_int(x: Any) -> bool:
 
 
 def calls(program: Any) -> list[tuple[int, Any]]:
-    """The Program's Calls: (index in the root body, the node's Definition) for every root body node that is not an Input."""
-    return [(k, n.fn) for k, n in enumerate(program.root.body.nodes) if getattr(n.fn, "family", None) != "Input"]
+    """The Program's Calls: (index in the root body, the node's Definition) for every root body node that is not an Input node
+    (`program.is_input`: the callee's id is `Input<w>_v1`)."""
+    return [(k, n.fn) for k, n in enumerate(program.root.body.nodes) if not is_input(n.fn)]
 
 
 class Partition:
