@@ -332,24 +332,30 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
 
-**The theorem** (to prove): single-rewind simulation of one batched session (§2). For every malicious verifier with
-auxiliary input, a Goldreich–Kahan simulator produces a view indistinguishable from the verifier's view of one batched
-session, from the tables' public statements alone. It makes one extraction run (an honest prover on a dummy witness),
-one rewind to just after the coin commitment, and runs in expected polynomial time.
+**The theorem** (to prove): Goldreich–Kahan simulation of one batched session (§2). For every malicious verifier with
+auxiliary input, a simulator produces a view indistinguishable from the verifier's view of one batched session, from the
+tables' public statements alone, and runs in expected polynomial time. The simulator:
+
+1. makes one extraction run, an honest prover on a dummy witness;
+2. estimates the verifier's completion probability `p̃` from fresh runs only, never counting the extraction run;
+3. rewinds only to just after the coin commitment, at most `t/p̃` times, where `t` grows with the security parameter;
+4. uses a fresh dummy opening in every rewind.
 
 - **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
-  notion and the first zero-knowledge lemma to prove. The simulations of a session's tables compose, because their
-  masks are independent.
+  notion and the first zero-knowledge lemma to prove. The lemma is statistical. Its only caveat is ChaCha20 standing in
+  for uniform prover randomness. The simulations of a session's tables compose, because their masks are independent.
 - **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
 - **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
   (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they come
-  from the operating system and ChaCha; their quality is trusted.
-- **Leaf hiding.** Halevi–Micali leaves are statistically hiding (`N·2^-256` for N leaves with a fresh key, §7) and
-  binding under collision resistance of their hash, SHA-512 in the adopted variant.
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production they are
+  ChaCha20 output under a seed from the operating system. Treating that output as uniform is the one caveat to the
+  lemma's statistical zero knowledge, and the seed's quality is trusted.
+- **Leaf hiding.** Halevi–Micali leaves are statistically hiding in the standard model, by the leftover hash lemma, with
+  no random oracle (`N·2^-256` for N leaves with a fresh key, §7). They are binding under collision resistance of their
+  hash, SHA-512 in the adopted variant.
 - **Binding of the verifier's coin commitment** (§2: a SHA-512 Merkle root over Halevi–Micali coin commitments), under
   SHA-512 collision resistance. Against quantum verifiers it needs a collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
@@ -388,7 +394,7 @@ The weights are committed once and every later proof opens that root. The analys
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
-   honest-verifier ZK lemma, then single-rewind simulation of one batched session.
+   honest-verifier ZK lemma, then Goldreich–Kahan simulation of one batched session.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
 
