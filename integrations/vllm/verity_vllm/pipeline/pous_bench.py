@@ -40,6 +40,7 @@ class Options:
     max_batched_tokens: int = option("--max-batched-tokens", type=int, default=16384, help="scheduler token budget per step")
     layers_per_decode: int = option("--layers-per-decode", type=int, default=1, help="transformer layers decoded together")
     thread_rows: int = option("--thread-rows", type=int, default=0, help="rows from which a Feistel launch runs a thread per row")
+    load_check: bool = option("--no-load-check", action="store_false", default=True, help="skip the load-time bit-exact check")
     codec_segments: str = option("--codec-segments", default="", help="codec-only decodes, segments:thread_rows, e.g. 11:0,11:1 (pous)")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
     run_id: str | None = option("--run-id", default=None, help="the research run id result.json names")
@@ -136,7 +137,7 @@ def main(a: Options) -> int:
         spec = out / "pous-bench.json"
         spec.write_text(json.dumps({"safetensors": pous_run.checkpoint_files(a.case), "build_dir": a.build_dir,
                                     "salt": os.urandom(24).hex(), "drop_fraction": 0.0, "layers_per_decode": a.layers_per_decode,
-                                    "thread_rows": a.thread_rows}))
+                                    "thread_rows": a.thread_rows, "load_check": a.load_check}))
     batches = [int(x) for x in a.decode.split(",")]
     t0 = time.perf_counter()
     engine = pous_run.build(a.case, spec, max_num_seqs=max(batches + [32]), engine_args={"max_num_batched_tokens": a.max_batched_tokens})

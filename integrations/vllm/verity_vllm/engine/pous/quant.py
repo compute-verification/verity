@@ -9,9 +9,10 @@ first use in a forward and released after its last; nothing decoded outlives the
 `UnquantizedLinearMethod.apply`'s, so the served bits are the plain model's.
 
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
-file), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
-commitment), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), and `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn
-through `verity.randomness` from `drop_source`, is zeroed after encoding, and the load-time check is skipped).
+files), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
+commitment), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), `load_check` (false skips the load-time check), and
+`drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn through `verity.randomness` from
+`drop_source`, is zeroed after encoding, and the load-time check is skipped).
 """
 from __future__ import annotations
 
@@ -125,7 +126,7 @@ class Store:
         """Module `prefix` computes with the concatenation (dim 0) of `names`; unless blocks were dropped, decoding them must
         reproduce the loaded parameter bit for bit."""
         self.consumers.setdefault(self.group_of(prefix), {})[prefix] = names
-        if self.dropped:
+        if self.dropped or self.spec.get("load_check") is False:
             return
         parts = self.decode(names)
         got = self._join(parts, names)
