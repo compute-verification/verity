@@ -11,7 +11,14 @@ prover with zero pads and a zero mask slot, i.e. M0's values in M1's format). Fo
 * ``constant``: the fraction of positions whose value is the same in every run, per kind.
 
 Positions holding one value in every real and simulated transcript are public structure (an F256 message's second
-coordinate after Ligerito's code switch is always 0) and are excluded and counted (``structural_constants``).
+coordinate after Ligerito's code switch is always 0) and are excluded and counted (``structural_constants``). So are
+positions where rep 1's value is rep 0's in every run (``shared_by_the_reps``): both reps open the one level-0 codeword, so
+a position both open under the fixed coins is one observation of the session, not two.
+
+Relations across fields and reps: the ``ZKREL`` lines hold, per session, two linear functionals of the public transcript that
+combine both reps' ``ybar``, their opened level-0 rows and their shared level-1 positions (``flock-circuit``'s
+``session_relations``: witness functionals, constant across prover seeds, if the reps shared level 0's extra lanes or their
+padding). Each is a class of one value per session, tested the same way (``rel_level0``, ``rel_level1``).
 
 Real and simulated must be indistinguishable (every ``p`` above ``ALPHA``); the control must be distinguished on the classes
 the masks cover (its ``xor`` test fails and its positions are constant), which shows the tests have power.
@@ -28,15 +35,20 @@ from scipy import stats
 CLASSES = ["exposed", "s_ab", "s_c", "inner_scalars", "inner_y", "inner_open_h", "inner_open_mu",
            "lig_exposed", "lig_tprime_ybar", "lig_rows0", "lig_deep"]
 MASKED = ["exposed", "s_ab", "s_c", "lig_exposed", "lig_tprime_ybar", "lig_rows0", "lig_deep"]
+RELATIONS = ["rel_level0", "rel_level1"]
 ALPHA = 1e-3
 
 
 def load(lines):
+    """Per-rep rows by kind (``real``, ``sim``, ``control``), and per-session relation rows under ``rel:<kind>``."""
     by = defaultdict(list)
     for line in lines:
         tag, _, body = line.partition("\t")
         if tag in ("ZKREAL", "ZKSIM", "ZKCONTROL"):
             by[tag[2:].lower()].append(json.loads(body))
+        elif tag == "ZKREL":
+            v = json.loads(body)
+            by["rel:" + v["kind"]].append(v)
     return by
 
 
@@ -81,30 +93,54 @@ def structural(a):
     return np.all(both == both[0], axis=0).all(axis=1)
 
 
+def shared_by_the_reps(a, reps):
+    """Positions whose rep-1 value equals rep 0's in every real and every simulated run."""
+    if reps != 2:
+        return np.zeros(a["real"].shape[1], dtype=bool)
+    same = [np.all(v[: len(v) // 2] == v[len(v) // 2:], axis=(0, 2)) for v in (a["real"], a["sim"])]
+    return same[0] & same[1]
+
+
+def test_class(rows, cls, reps, masked):
+    """The four tests on one class; ``rows``: kind -> rows."""
+    a = {k: values(rows[k], cls) for k in ("real", "sim", "control")}
+    fixed = structural(a)
+    shared = shared_by_the_reps(a, reps) & ~fixed
+    a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
+    tab = np.array([byte_hist(a["real"]), byte_hist(a["sim"])])
+    tab = tab[:, tab.sum(axis=0) > 0]
+    p_bytes = float(stats.chi2_contingency(tab)[1])
+    row = {"values_per_transcript": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
+           "bytes_real_vs_sim": p_bytes}
+    for k in ("real", "sim", "control"):
+        row[f"bits_{k}"] = bits_p(a[k])
+        row[f"xor_{k}"] = xor_p(a[k], reps)
+        row[f"constant_{k}"] = constant_frac(a[k], reps)
+    indist = min(p_bytes, row["bits_real"], row["bits_sim"], row["xor_real"], row["xor_sim"]) > ALPHA \
+        and row["constant_real"] == 0 and row["constant_sim"] == 0
+    row["real_indistinguishable_from_sim"] = bool(indist)
+    ok = indist
+    if masked:
+        row["control_distinguished"] = bool(row["xor_control"] < ALPHA or row["constant_control"] > 0.5)
+        ok &= row["control_distinguished"]
+    return row, ok
+
+
 def analyse(by):
     reps = len({r["rep"] for r in by["real"]})
     out = {"n": {k: len(v) for k, v in by.items()}, "alpha": ALPHA, "classes": {}}
     ok = True
     for cls in [c for c in CLASSES if all(c in r for r in by["real"][:1])]:
-        a = {k: values(by[k], cls) for k in ("real", "sim", "control")}
-        fixed = structural(a)
-        a = {k: v[:, ~fixed] for k, v in a.items()}
-        tab = np.array([byte_hist(a["real"]), byte_hist(a["sim"])])
-        tab = tab[:, tab.sum(axis=0) > 0]
-        p_bytes = float(stats.chi2_contingency(tab)[1])
-        row = {"values_per_transcript": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "bytes_real_vs_sim": p_bytes}
-        for k in ("real", "sim", "control"):
-            row[f"bits_{k}"] = bits_p(a[k])
-            row[f"xor_{k}"] = xor_p(a[k], reps)
-            row[f"constant_{k}"] = constant_frac(a[k], reps)
-        indist = min(p_bytes, row["bits_real"], row["bits_sim"], row["xor_real"], row["xor_sim"]) > ALPHA \
-            and row["constant_real"] == 0 and row["constant_sim"] == 0
-        row["real_indistinguishable_from_sim"] = bool(indist)
-        if cls in MASKED:
-            row["control_distinguished"] = bool(row["xor_control"] < ALPHA or row["constant_control"] > 0.5)
-            ok &= row["control_distinguished"]
-        ok &= indist
-        out["classes"][cls] = row
+        out["classes"][cls], o = test_class(by, cls, reps, cls in MASKED)
+        ok &= o
+    rel = {k: by["rel:" + k] for k in ("real", "sim", "control")}
+    if all(rel.values()):
+        for cls in RELATIONS:
+            out["classes"][cls], o = test_class(rel, cls, 1, True)
+            ok &= o
+    else:
+        out["relations"] = "no ZKREL lines"
+        ok = False
     out["pass"] = bool(ok)
     return out
 
