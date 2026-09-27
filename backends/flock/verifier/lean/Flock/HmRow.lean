@@ -516,25 +516,6 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
-/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
-query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
-`Q_template_instances` v0 define strata. -/
-def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
-  let (name, version) ← checkPartitionObject obj
-  let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
-    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
-  let ts ← ts
-  let d ← TemplateQuery.Desc.parse program
-  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
-    throw "partition: the verifier's program is not the one the partition object names"
-  let rs ← match TemplateQuery.evaluate d ts with
-    | .ok rs => pure rs
-    | .error e => throw s!"partition: {e}"
-  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
-  | .ok law => return (law, TemplateQuery.population rs)
-  | .error e => throw s!"stratified: {e}"
-
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -647,6 +628,25 @@ def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
            outputs := d.units.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
            tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
+
+/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
+query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
+`Q_template_instances` v0 define strata. -/
+def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (name, version) ← checkPartitionObject obj
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
+    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+  let ts ← ts
+  let d ← TemplateQuery.Desc.parse program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let rs ← match TemplateQuery.evaluate d ts with
+    | .ok rs => pure rs
+    | .error e => throw s!"partition: {e}"
+  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
+  | .ok law => return (law, TemplateQuery.population rs)
+  | .error e => throw s!"stratified: {e}"
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). -/
