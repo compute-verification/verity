@@ -94,7 +94,7 @@ def _xor3(a: list, b: list, c: list) -> list:
 
 #: A ripple carry is c ^ AND(a ^ c, b ^ c), a form one term longer per bit; committing it every CARRY_EVERY bits keeps every
 #: row's linear forms short (the rows' nonzeros, which a witness generator pays per compression) for a few thousand rows.
-CARRY_EVERY = 4
+CARRY_EVERY = 5
 
 
 def _add2(C: Circuit, a: list, b: list) -> list:

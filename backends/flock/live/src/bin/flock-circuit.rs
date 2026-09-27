@@ -5,9 +5,9 @@
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!
-//! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, row digests,
-//! outputs; no row) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the frame-v3
-//! roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
+//! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots, each row's `b || c`,
+//! outputs; no row, no salt) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
+//! frame-v3-sha512 roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
 //! points (the regions' claims), `Link(y = 0, 0)` (nothing is prover-supplied), Flock's coins.
 
 use std::{
@@ -30,7 +30,9 @@ use flock_live::{
     zk_hooks::{Hooks, NoMask, ProverSeed},
     *,
 };
-use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra, r1cs_hashes::blake3::Compression};
+use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
+#[cfg(feature = "gpu")]
+use flock_prover::r1cs_hashes::blake3::Compression;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -75,8 +77,8 @@ fn identity(c: &Composite) -> Value {
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
-                      "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
-                      "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "blake3-keyed/row/v2"},
+                      "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
+                      "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 
@@ -195,7 +197,8 @@ type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
 
 /// A (possibly dishonest) prover's witness sources.
 struct Wit {
-    comps: Arc<dyn Fn(usize) -> Vec<Compression> + Sync + Send>,
+    /// block `b`'s row slots' inputs (`Stmt::row_inputs`)
+    rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send>,
     inputs: Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>,
     mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send>,
     flip_z: Option<usize>,
@@ -211,31 +214,25 @@ type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
 #[derive(Clone)]
 enum WitData {
     Host(Witness),
+    #[cfg(feature = "gpu")]
     #[allow(dead_code)]
     Dev(Vec<Compression>, Vec<F128>),
     /// a cut template on the device: the units' inputs (leaf words; the late words come from the host tail between passes)
+    #[cfg(feature = "gpu")]
     #[allow(dead_code)]
     DevCut(Vec<Compression>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
 }
 
-fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
+/// A rep's host witness. The device witness (`gpu_circuit`'s compressions and units) has no sha512x3 or hm96 slots yet, so
+/// every rep's witness is built here and uploaded.
+fn witness(st: &Stmt, w: &Wit) -> (WitData, f64) {
     let t = Instant::now();
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
-        use rayon::prelude::*;
-        let ur = st.c.unit_range();
-        let comps: Vec<Compression> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.comps)(b)).collect();
-        let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
-        if !st.c.wires.is_empty() {
-            return (WitData::DevCut(comps, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
-        }
-        return (WitData::Dev(comps, inputs), t.elapsed().as_secs_f64());
-    }
-    let mut ins = st.converge(&*w.inputs, &w.nets);
+    let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
         let word = &mut ins[n][x][col / 128];
         if col % 128 < 64 { word.lo ^= 1 << (col % 128) } else { word.hi ^= 1 << (col % 128 - 64) }
     }
-    let (mut z, a, b, zl) = st.witness(&*w.comps, &ins, &*w.mask, &w.nets);
+    let (mut z, a, b, zl) = st.witness(&ins, &*w.mask, &w.nets);
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
@@ -244,6 +241,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
 }
 
 fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    #[allow(irrefutable_let_patterns)]
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("the CPU prover takes a host witness") };
     let tp = Instant::now();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
@@ -263,7 +261,9 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     let mut mid_fn;
     let src = match wt {
         WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
+        #[cfg(feature = "gpu")]
         WitData::Dev(c, i) => CircuitSrc::Device { comps: c, inputs: i },
+        #[cfg(feature = "gpu")]
         WitData::DevCut(c, i, ui) => {
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
             CircuitSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
@@ -290,10 +290,11 @@ struct Plan {
     message_flip: bool,
     input_flip: bool,
     unit_flip: bool,
+    /// row witness tampers (`RowTamper`)
     chain_forged: bool,
-    parent_forged: bool,
-    key_substituted: bool,
-    flags_forged: bool,
+    salt_forged: bool,
+    midstate_forged: bool,
+    pad_forged: bool,
     mask_random: bool,
     cut_flip: bool,
     tail_swapped: bool,
@@ -314,46 +315,17 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
     e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
-fn rechain(cs: &mut [Compression], at: usize, len: usize) {
-    let mut cv = cs[at].0;
-    for c in &mut cs[at..at + len] {
-        c.0 = cv;
-        cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
-    }
-}
-
 fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed) -> Wit {
     let mut rows = inst.rows.clone().expect("the prover's instance file has the rows");
     if plan.message_flip {
         rows[3] ^= 0x10;
     }
     let rows = Arc::new(rows);
-    let (s1, r1) = (st.clone(), rows.clone());
-    let plan1 = plan.clone();
-    let first_run_len = st.c.ports[match st.c.ranges.iter().find_map(|r| if let Role::Runs { p, .. } = r.role { Some(p) } else { None }) { Some(p) => p, None => 0 }].nb;
-    let comps: Arc<dyn Fn(usize) -> Vec<Compression> + Sync + Send> = Arc::new(move |b| {
-        let mut cs = s1.compressions(Some(&r1), b);
-        if b == 0 {
-            if plan1.key_substituted {
-                cs[0].0[0] ^= 1;
-            }
-            if plan1.flags_forged {
-                cs[0].4 ^= 1;
-                rechain(&mut cs, 0, first_run_len);
-            }
-            if plan1.chain_forged && first_run_len > 1 {
-                cs[1].0[0] ^= 1;
-                rechain(&mut cs, 1, first_run_len - 1);
-            }
-            if plan1.parent_forged
-                && let Some(r) = s1.c.ranges.iter().find(|r| matches!(r.role, Role::Parents { .. }))
-            {
-                let idx = s1.c.ranges.iter().filter(|x| x.kind == Kind::Comp).flat_map(|x| (0..x.count).map(|s| x.slot(s))).collect::<std::collections::BTreeSet<_>>()
-                    .into_iter().position(|col| col == r.slot(1)).unwrap();
-                cs[idx].1[0] ^= 1;
-            }
-        }
-        cs
+    let salts = Arc::new(inst.salts.clone().expect("the prover's instance file has the salts"));
+    let (s1, r1, sa1) = (st.clone(), rows.clone(), salts.clone());
+    let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged };
+    let rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send> = Arc::new(move |b| {
+        if zero { s1.row_inputs(None, None, b, tamper) } else { s1.row_inputs(Some(&r1), Some(&sa1), b, tamper) }
     });
     let (s2, r2) = (st.clone(), rows.clone());
     let input_flip = plan.input_flip;
@@ -378,7 +350,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let unit = st.c.unit();
     let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
-    Wit { comps, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
+    Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
           nets: Arc::new(nets) }
 }
 
@@ -400,10 +372,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
     let mut commit: Vec<F128> = Vec::new();
-    let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false, seed);
-    let (wt0, tw0) = witness(st, &w0, device);
-    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed), device) } else { (wt0.clone(), 0.0) };
+    let (wt0, tw0) = witness(st, &w0);
+    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed)) } else { (wt0.clone(), 0.0) };
     let witness_s = tw0 + tw1;
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
@@ -508,7 +479,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let c = &st.c;
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": "frame-v3/blake3-keyed",
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": SCHEME,
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": ands.1, "k_log": c.k_log, "nbl": st.nbl,
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
@@ -532,9 +503,9 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_input_differs_from_its_message_bits", false, true),
     ("unit_internal_bit_flipped", false, true),
     ("chaining_value_forged", false, true),
-    ("parent_message_forged", false, true),
-    ("key_substituted", false, true),
-    ("flags_forged", false, true),
+    ("row_salt_forged", false, true),
+    ("row_midstate_forged", false, true),
+    ("padding_block_forged", false, true),
     ("coins_before_y", false, false),
     ("reps_with_different_witness", false, false),
     ("reps_differ_prover_stops", false, false),
@@ -558,10 +529,9 @@ const CASES: &[(&str, bool, bool)] = &[
 ];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
-    let multi_chunk = st.c.ports.iter().any(|p| p.chunks > 1);
-    let multi_block = st.c.ports.iter().any(|p| p.nb > 1);
-    let cut = !st.c.wires.is_empty();
-    (name == "parent_message_forged" && !multi_chunk) || (name == "chaining_value_forged" && !multi_block)
+    let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
+    let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
+    (name == "chaining_value_forged" && !multi_block)
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
 }
 
@@ -575,9 +545,9 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "unit_input_differs_from_its_message_bits" => Plan { input_flip: true, ..h },
         "unit_internal_bit_flipped" => Plan { unit_flip: true, ..h },
         "chaining_value_forged" => Plan { chain_forged: true, ..h },
-        "parent_message_forged" => Plan { parent_forged: true, ..h },
-        "key_substituted" => Plan { key_substituted: true, ..h },
-        "flags_forged" => Plan { flags_forged: true, ..h },
+        "row_salt_forged" => Plan { salt_forged: true, ..h },
+        "row_midstate_forged" => Plan { midstate_forged: true, ..h },
+        "padding_block_forged" => Plan { pad_forged: true, ..h },
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, skip_level0_check: true, ..h },
         "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },
@@ -597,7 +567,7 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
     let mut v = Instances::load(&path, &st.c).unwrap();
     match what {
         "output" => v.outputs[5] ^= 1,
-        _ => v.digests[1][0] ^= 1,
+        _ => v.bcs[1][0] ^= 1,
     }
     let text = std::fs::read(&path).unwrap();
     let nl = text.iter().position(|&x| x == b'\n').unwrap();
@@ -607,7 +577,7 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
     let np = st.c.ports.len();
     for (p, port) in st.c.ports.iter().enumerate() {
         let dom = hexb(fv["domain_ids"][&port.name].as_str().unwrap()).unwrap();
-        let leaves: Vec<[u8; 32]> = (0..v.n).map(|i| fv3_leaf(&dom, i, b"blake3-keyed/row/v2", &v.digest(i, p, np))).collect();
+        let leaves: Vec<[u8; 64]> = (0..v.n).map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&v.bc(i, p, np)))).collect();
         roots[&port.name] = json!(hex(&fv3_root(&dom, leaves)));
     }
     let n_out: usize = st.c.out_words.iter().sum();

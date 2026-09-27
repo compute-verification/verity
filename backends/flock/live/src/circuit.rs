@@ -1,24 +1,25 @@
-//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its frame-v3 rows hashed in the circuit, and
-//! nothing public but the frame-v3 roots, the row digests they are built from, the declared outputs and the pinned layout.
-//! `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance files.
+//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its serving rows committed in the circuit, and
+//! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c`, the declared outputs and the pinned
+//! layout. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance files.
 //!
-//! A block holds whole instances (VUs) in aligned ranges of slots: BLAKE3 compressions (2^14 bits; per input port a range of
-//! chunk runs and, for a port of several chunks, a range of its parent-tree compressions, the root first), the template's
-//! units (2^unit_log bits) and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0 places each slot
-//! type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
-//! - every compression after a chunk's first read the previous compression's output value as its chaining value;
-//! - every parent compression's message the output values of its two children;
-//! - every unit's leaf input bits copies of the message bits they hash, and a zero leaf a copy of a forced-zero row;
-//! - every slot's constant a copy of the pinned column.
+//! A row is an `hm96-sha512/row/v1` leaf: `x = SHA-512(sha512_row_prefix || row)`, `b = x XOR M(key) y`, `c = SHA-512(salt_prefix
+//! || y)` for its 192-byte salt `y`; the frame leaf binds `hm96.SHA512.tree_leaf(key, b || c)`. A block holds whole instances
+//! (VUs) in aligned ranges of slots: `sha512x3` (three SHA-512 compressions, 2^18 bits: a row's blocks after its constant
+//! first block), `hm96` (one per input port: the padding compression, then `b || c` from the salt), the template's units
+//! (2^unit_log bits), the tail's slots, and a reserved mask slot of free cells. `A = I ⊗ A_0 + Δ` (and B), where A_0 places each
+//! slot type's circuit on its ranges and Δ, derived here from the pinned circuit alone, makes inside the block:
+//! - each row's first compression read the prefix's midstate and its hm96 slot the padding block (constants);
+//! - every later compression read the previous one's output, and the hm96 slot the last one's (the row's wires);
+//! - every unit's leaf input bits copies of the message bits that hash them, and a zero leaf a copy of a forced-zero row;
+//! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
 //! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
-//! every compression's counter, block length and flags; every chain start's chaining value (the x-row key); every row's
-//! digest (the output value of its root compression); every unit's returned-output words. So the chaining values, the chunk
-//! values and every word between slots stay private. A padding instance is the all-zero instance, whose digests (checked
-//! here: keyed BLAKE3 of zero rows) and outputs (forced by its circuit) are pinned.
+//! every row's `b || c` (its hm96 slot's output) and every unit's returned-output words. The rows, their salts, the chaining
+//! values and every word between slots stay private. A padding instance is the all-zero instance with zero salts, whose
+//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned.
 //!
-//! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3 roots against the
-//! public digests and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
+//! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3-sha512 roots against
+//! the public `b || c` and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
 //! public cut words or native words in META) is refused at parse; a template's tail is a slot type of the circuit or the
 //! template has no statement here.
 
@@ -31,22 +32,27 @@ use flock_core::{
     verifier::ExtraClaim,
 };
 use flock_field::F128;
-use flock_hash::blake3_compress;
 use flock_prover::r1cs_hashes::blake3 as b3;
 use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::{
-    chunk::{CHUNK_END, CHUNK_START, KEYED_HASH, PARENT, ROOT, comp, key_words, log2ceil},
-    ir_block::IrUnitNet,
-    lookup::LookupNet,
-};
+use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
 
 pub const TAG: &[u8] = b"verity/flock-circuit";
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
 pub const STATEMENT: &str = "verity/flock-circuit";
+pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
+pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
+pub const SHA_NET: &str = "sha512x3";
+pub const HM_NET: &str = "hm96";
+/// compressions per `sha512x3` slot
+pub const PER_SLOT: usize = 3;
+pub const SALT_BYTES: usize = 192;
+pub const BC_BYTES: usize = 128;
+const SHA512_ROW_TAG: &[u8] = b"verity/sha512-row/v1\0";
+const ROLE_X: u8 = 1;
 /// Free in-block coordinates per verifier point (`r[..PT_LOCAL]`); block coordinates follow.
 pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
@@ -71,7 +77,6 @@ pub fn hm96_sha512_default_key() -> [u8; 256] {
     k
 }
 const WORD: usize = 128;
-const SUB_LOG: usize = b3::K_LOG;
 const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
 
 pub fn hexb(s: &str) -> Result<Vec<u8>, String> {
@@ -86,19 +91,9 @@ fn us(v: &Value, k: &str) -> Result<usize, String> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
-    Comp,
     /// index into `Composite::nets`
     Net(usize),
     Mask,
-}
-
-#[derive(Clone, Debug)]
-pub enum Role {
-    /// chunk runs of input port `p`: run slot `q` holds `(vu, chunk)` or nothing (a dummy run)
-    Runs { p: usize, slots: Vec<Option<(usize, usize)>> },
-    /// port `p`'s parent-tree compressions: per VU `chunks` slots, heap order (root first), the last a dummy
-    Parents { p: usize },
-    None,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +102,8 @@ pub struct Range {
     pub slot_log: usize,
     pub pos0: usize,
     pub count: usize,
-    pub role: Role,
+    /// aligned to its slot only, spanning its count (no region reads it); else aligned to its power-of-two span
+    pub packed: bool,
 }
 
 impl Range {
@@ -123,17 +119,16 @@ impl Range {
 pub struct Port {
     pub name: String,
     pub words: usize,
-    pub chunks: usize,
-    pub nb: usize,
+    /// compressions after the constant first block (the padding block is the hm96 slot's)
+    pub comps: usize,
 }
 
-/// What a compression slot computes (block-uniform).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CompRole {
-    Run { g: usize, p: usize, c: usize, j: usize },
-    DummyRun { j: usize },
-    Parent { g: usize, p: usize, k: usize },
-    DummyParent,
+/// A row's constants (`sha512/row/v1`): its first block, the chaining value after it, the padding block's message words.
+#[derive(Clone, Debug)]
+pub struct RowConsts {
+    pub prefix: Vec<u8>,
+    pub midstate: [u64; 8],
+    pub pad: [u64; 16],
 }
 
 /// A copy of every bit of output port `src_port` of slot `(src_net, src_idx)` into input port `dst_port` of slot
@@ -158,8 +153,11 @@ pub struct Composite {
     pub unit_net: usize,
     pub leaves_in: Vec<Vec<i64>>,
     pub leaves_out: Vec<Vec<usize>>,
-    pub key: [u8; 32],
-    pub dummy_digests: Vec<[u8; 32]>,
+    pub rows: Vec<RowConsts>,
+    pub sha_net: usize,
+    pub hm_net: usize,
+    /// the all-zero instance's `b || c` per port
+    pub dummy_bc: Vec<[u8; BC_BYTES]>,
     pub dummy_outputs: Vec<u16>,
     pub leaf_scheme: Value,
     /// slots per VU of each circuit
@@ -181,6 +179,101 @@ fn table_of<'a>(t: &'a crate::ir_tail::Tables, name: &str) -> &'a [u32] {
 /// Every input (output) port of a circuit: its first column in the slot and its width, groups in order.
 pub fn port_cols(groups: &[crate::ir_block::Group]) -> Vec<(usize, usize)> {
     groups.iter().flat_map(|g| g.bits.iter().scan(g.col * WORD, |a, &w| { let c = *a; *a += w; Some((c, w)) }).collect::<Vec<_>>()).collect()
+}
+
+const SHA512_IV: [u64; 8] = [0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+                              0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179];
+
+const SHA512_K: [u64; 80] = [
+    0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
+    0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
+    0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
+    0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x9bdc06a725c71235, 0xc19bf174cf692694,
+    0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65,
+    0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5,
+    0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4,
+    0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70,
+    0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df,
+    0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b,
+    0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30,
+    0xd192e819d6ef5218, 0xd69906245565a910, 0xf40e35855771202a, 0x106aa07032bbd1b8,
+    0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8,
+    0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3,
+    0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x84c87814a1f0ab72, 0x8cc702081a6439ec,
+    0x90befffa23631e28, 0xa4506cebde82bde9, 0xbef9a3f7b2c67915, 0xc67178f2e372532b,
+    0xca273eceea26619c, 0xd186b8c721c0c207, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178,
+    0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b,
+    0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c,
+    0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
+];
+
+/// One SHA-512 compression of a 128-byte block into `cv` (FIPS 180-4 §6.4.2).
+pub fn compress(cv: &mut [u64; 8], block: &[u8]) {
+    let mut w: [u64; 80] = [0; 80];
+    for (t, x) in w.iter_mut().take(16).enumerate() {
+        *x = u64::from_be_bytes(block[8 * t..8 * t + 8].try_into().unwrap());
+    }
+    for t in 16..80 {
+        let s0 = w[t - 15].rotate_right(1) ^ w[t - 15].rotate_right(8) ^ (w[t - 15] >> 7);
+        let s1 = w[t - 2].rotate_right(19) ^ w[t - 2].rotate_right(61) ^ (w[t - 2] >> 6);
+        w[t] = w[t - 16].wrapping_add(s0).wrapping_add(w[t - 7]).wrapping_add(s1);
+    }
+    let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *cv;
+    for t in 0..80 {
+        let t1 = h.wrapping_add(e.rotate_right(14) ^ e.rotate_right(18) ^ e.rotate_right(41)).wrapping_add((e & f) ^ (!e & g))
+            .wrapping_add(SHA512_K[t]).wrapping_add(w[t]);
+        let t2 = (a.rotate_right(28) ^ a.rotate_right(34) ^ a.rotate_right(39)).wrapping_add((a & b) ^ (a & c) ^ (b & c));
+        (h, g, f, e, d, c, b, a) = (g, f, e, d.wrapping_add(t1), c, b, a, t1.wrapping_add(t2));
+    }
+    for (x, y) in cv.iter_mut().zip([a, b, c, d, e, f, g, h]) {
+        *x = x.wrapping_add(y);
+    }
+}
+
+/// `sha512/row/v1`'s first block for an x row of `words` u16 words (`verity.commitments.rowleaf.sha512_row_prefix`).
+pub fn row_prefix(words: usize) -> Vec<u8> {
+    let mut v = SHA512_ROW_TAG.to_vec();
+    v.extend([ROLE_X, 16]);
+    v.extend((words as u32).to_be_bytes());
+    v.resize(128, 0);
+    v
+}
+
+/// The padding block after `total` bytes (a multiple of 128): 0x80, zeros, the 128-bit bit length.
+pub fn pad_block(total: usize) -> [u8; 128] {
+    let mut b = [0u8; 128];
+    b[0] = 0x80;
+    b[112..].copy_from_slice(&(8 * total as u128).to_be_bytes());
+    b
+}
+
+fn words_be<const N: usize>(b: &[u8]) -> [u64; N] {
+    std::array::from_fn(|i| u64::from_be_bytes(b[8 * i..8 * i + 8].try_into().unwrap()))
+}
+
+/// Per VU: the `sha512x3` slots, and each port's compressions as `(slot, sub)` (three per slot, ports in order).
+pub fn row_slots(ports: &[Port]) -> (usize, Vec<Vec<(usize, usize)>>) {
+    let mut at = 0;
+    let mut where_ = Vec::new();
+    for p in ports {
+        where_.push((0..p.comps).map(|k| ((at + k) / PER_SLOT, (at + k) % PER_SLOT)).collect());
+        at += p.comps;
+    }
+    (at.div_ceil(PER_SLOT), where_)
+}
+
+/// Each row's chain (compression k's `cv` from compression k-1's `out`) and its hm96 slot's `cv` (from the last).
+fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
+    let (_, where_) = row_slots(ports);
+    let mut out = Vec::new();
+    for (p, w) in where_.iter().enumerate() {
+        for k in 1..w.len() {
+            out.push(Wire { dst: (sha, w[k].0, 2 * w[k].1), src: (sha, w[k - 1].0, w[k - 1].1) });
+        }
+        let last = w[w.len() - 1];
+        out.push(Wire { dst: (hm, p, 0), src: (sha, last.0, last.1) });
+    }
+    out
 }
 
 impl Composite {
@@ -238,17 +331,34 @@ impl Composite {
                 lookups_fast.push((nets.len() - 1, fast));
             }
         }
+        if meta["scheme"] != SCHEME || meta["row_schema"] != ROW_SCHEMA {
+            return Err(format!("META: rows are not {SCHEME} ({ROW_SCHEMA}) leaves"));
+        }
         let ports: Vec<Port> = meta["ports"].as_array().ok_or("META: ports")?.iter().map(|p| Port {
-            name: p[0].as_str().unwrap_or("").into(), words: p[1].as_u64().unwrap_or(0) as usize, chunks: p[2].as_u64().unwrap_or(0) as usize,
-            nb: p[3].as_u64().unwrap_or(0) as usize,
+            name: p[0].as_str().unwrap_or("").into(), words: p[1].as_u64().unwrap_or(0) as usize, comps: p[2].as_u64().unwrap_or(0) as usize,
         }).collect();
         for p in &ports {
-            let b = 2 * p.words;
-            let ok = p.nb.is_power_of_two() && p.chunks >= 1 && b % 64 == 0 && p.chunks == b.div_ceil(1024) && p.nb == b.min(1024) / 64
-                && (p.chunks == 1 || (b % 1024 == 0 && p.chunks.is_power_of_two()));
-            if !ok {
-                return Err(format!("port {}: not whole power-of-two chunk runs", p.name));
+            if p.words == 0 || (2 * p.words) % 128 != 0 || p.comps != 2 * p.words / 128 {
+                return Err(format!("port {}: not whole SHA-512 blocks", p.name));
             }
+        }
+        // each row's constants, recomputed here from the scheme (never taken from META)
+        let rows: Vec<RowConsts> = ports.iter().map(|p| {
+            let prefix = row_prefix(p.words);
+            let mut midstate = SHA512_IV;
+            compress(&mut midstate, &prefix);
+            RowConsts { prefix, midstate, pad: words_be(&pad_block(128 + 2 * p.words)) }
+        }).collect();
+        let listed = meta["rows"].as_array().ok_or("META: rows")?;
+        if listed.len() != ports.len() || listed.iter().zip(&rows).any(|(m, r)| {
+            m["prefix"].as_str() != Some(crate::hex(&r.prefix).as_str())
+                || m["midstate"] != json!(r.midstate.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>())
+                || m["pad"].as_str() != Some(crate::hex(&r.pad.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>()).as_str())
+        }) {
+            return Err("META: a row's constants are not sha512/row/v1's".into());
+        }
+        if meta["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
+            return Err("META: the rows' hm96 key is not hm96-sha512/v1's default key".into());
         }
         let g = us(&meta, "vus_per_block")?;
         let upv = us(&meta, "units_per_vu")?;
@@ -256,27 +366,18 @@ impl Composite {
         let mut ranges = Vec::new();
         for r in meta["ranges"].as_array().ok_or("META: ranges")? {
             let kind = match r["type"].as_str() {
-                Some("comp") => Kind::Comp,
                 Some("mask") => Kind::Mask,
                 Some("unit") => Kind::Net(nets.iter().position(|n| Some(n.0.as_str()) == r["net"].as_str()).ok_or("a range of an unknown circuit")?),
                 _ => return Err("a range of an unknown type".into()),
             };
-            let p = r["port"].as_u64().map(|x| x as usize);
-            let role = match (r["role"].as_str(), p) {
-                (Some("runs"), Some(p)) => Role::Runs { p, slots: r["slots"].as_array().ok_or("runs without slots")?.iter()
-                    .map(|x| x.as_array().map(|a| (a[0].as_u64().unwrap_or(0) as usize, a[1].as_u64().unwrap_or(0) as usize))).collect() },
-                (Some("parents"), Some(p)) => Role::Parents { p },
-                (None, None) => Role::None,
-                _ => return Err("a range of an unknown role".into()),
-            };
-            ranges.push(Range { kind, slot_log: us(r, "slot_log")?, pos0: us(r, "pos0")?, count: us(r, "count")?, role });
+            let packed = r["packed"].as_bool().unwrap_or(false);
+            ranges.push(Range { kind, slot_log: us(r, "slot_log")?, pos0: us(r, "pos0")?, count: us(r, "count")?, packed });
         }
         let ints = |v: &Value| -> Vec<Vec<i64>> { v.as_array().map(|a| a.iter().map(|u| u.as_array().map(|x| x.iter().filter_map(|y| y.as_i64()).collect()).unwrap_or_default()).collect()).unwrap_or_default() };
         let leaves_in = ints(&meta["leaves_in"]);
         let leaves_out: Vec<Vec<usize>> = ints(&meta["leaves_out"]).into_iter().map(|u| u.into_iter().map(|x| x as usize).collect()).collect();
-        let key: [u8; 32] = hexb(meta["row_key"].as_str().ok_or("META: row_key")?)?.try_into().map_err(|_| "row key length")?;
-        let dummy_digests = meta["dummy"]["digests"].as_array().ok_or("META: dummy digests")?.iter()
-            .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "digest length".to_string()))).collect::<Result<Vec<[u8; 32]>, String>>()?;
+        let dummy_bc = meta["dummy"]["bc"].as_array().ok_or("META: dummy bc")?.iter()
+            .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
         let out_words = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
         let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown circuit {nm}"));
@@ -287,15 +388,23 @@ impl Composite {
                 per_vu[net_of(k)?] = v.as_u64().unwrap_or(0) as usize;
             }
         }
+        let (sha_net, hm_net) = (net_of(SHA_NET)?, net_of(HM_NET)?);
         let mut wires = Vec::new();
         for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
             let n = |i: usize| w[i].as_str().ok_or("a wire's circuit".to_string()).and_then(net_of);
             let u = |i: usize| w[i].as_u64().map(|x| x as usize).ok_or("a wire's index".to_string());
             wires.push(Wire { dst: (n(0)?, u(1)?, u(2)?), src: (n(3)?, u(4)?, u(5)?) });
         }
+        // the rows' wires come first, exactly as the ports imply
+        let derived = row_wires(&ports, sha_net, hm_net);
+        if wires.len() < derived.len() || wires.iter().zip(&derived).any(|(a, b)| a.dst != b.dst || a.src != b.src)
+            || wires[derived.len()..].iter().any(|w| [sha_net, hm_net].contains(&w.dst.0) || [sha_net, hm_net].contains(&w.src.0))
+        {
+            return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
+        }
         let c = Composite {
             name, sha256, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
-            out_words, g, upv, unit_net, leaves_in, leaves_out, key, dummy_digests, dummy_outputs, per_vu, wires,
+            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
@@ -307,8 +416,11 @@ impl Composite {
     fn check(&self) -> Result<(), String> {
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
-            let span = r.count.next_power_of_two() << r.slot_log;
-            if r.start() % span != 0 || r.start() + span > 1 << self.k_log {
+            let (span, align) = if r.packed { (r.count << r.slot_log, 1 << r.slot_log) } else { (r.count.next_power_of_two() << r.slot_log, r.count.next_power_of_two() << r.slot_log) };
+            if r.packed && r.kind != Kind::Net(self.sha_net) {
+                return Err("a packed range that is not the compressions'".into());
+            }
+            if r.start() % align != 0 || r.start() + span > 1 << self.k_log {
                 return Err("a range is not aligned to its span or overruns the block".into());
             }
             if let Kind::Net(i) = r.kind
@@ -316,8 +428,8 @@ impl Composite {
             {
                 return Err("a unit range's slot size is not its circuit's".into());
             }
-            if (r.kind == Kind::Comp) != (r.slot_log == SUB_LOG && !matches!(r.role, Role::None)) || (r.kind == Kind::Mask && r.count != 1) {
-                return Err("a range's type, role and slot size disagree".into());
+            if r.kind == Kind::Mask && r.count != 1 {
+                return Err("not one mask slot".into());
             }
             spans.push((r.start(), r.start() + span));
         }
@@ -325,33 +437,17 @@ impl Composite {
         if spans.windows(2).any(|w| w[0].1 > w[1].0) {
             return Err("two ranges overlap".into());
         }
-        let mut runs = BTreeMap::new();
-        let mut parents = BTreeMap::new();
-        for r in &self.ranges {
-            match &r.role {
-                Role::Runs { p, slots } => {
-                    let port = self.ports.get(*p).ok_or("runs of an unknown port")?;
-                    if slots.len() * port.nb != r.count || !r.count.is_power_of_two() {
-                        return Err("a runs range's slot list is not its count".into());
-                    }
-                    for x in slots.iter().flatten() {
-                        if x.0 >= self.g || x.1 >= port.chunks || runs.insert((x.0, *p, x.1), ()).is_some() {
-                            return Err("a run outside the block's VUs or listed twice".into());
-                        }
-                    }
-                }
-                Role::Parents { p } => {
-                    let port = self.ports.get(*p).ok_or("parents of an unknown port")?;
-                    if port.chunks < 2 || r.count != self.g * port.chunks || parents.insert(*p, ()).is_some() {
-                        return Err("a parents range is not one per multi-chunk port".into());
-                    }
-                }
-                Role::None => {}
-            }
+        let (n_sha, _) = row_slots(&self.ports);
+        if self.per_vu[self.sha_net] != n_sha || self.per_vu[self.hm_net] != self.ports.len().next_power_of_two() {
+            return Err("the rows' slots per VU are not the ports' compressions (three per slot) and one hm96 slot per port".into());
         }
-        let want: usize = self.ports.iter().map(|p| p.chunks).sum::<usize>() * self.g;
-        if runs.len() != want || parents.len() != self.ports.iter().filter(|p| p.chunks > 1).count() {
-            return Err("the runs do not cover every chunk of every VU (or a multi-chunk port has no parent tree)".into());
+        let (sha, hm) = (&self.nets[self.sha_net].1, &self.nets[self.hm_net].1);
+        if port_cols(&sha.in_groups) != (0..2 * PER_SLOT).map(|i| (port_cols(&sha.in_groups)[i].0, if i % 2 == 0 { 512 } else { 1024 })).collect::<Vec<_>>()
+            || port_cols(&sha.out_groups).iter().map(|x| x.1).collect::<Vec<_>>() != vec![512; PER_SLOT]
+            || port_cols(&hm.in_groups).iter().map(|x| x.1).collect::<Vec<_>>() != vec![512, 1024, 8 * SALT_BYTES]
+            || port_cols(&hm.out_groups).iter().map(|x| x.1).collect::<Vec<_>>() != vec![8 * BC_BYTES]
+        {
+            return Err("the sha512x3 and hm96 circuits' ports are not (cv, msg) x 3 -> out x 3 and (cv, pad, y) -> bc".into());
         }
         let unit = &self.nets[self.unit_net].1;
         let ur: Vec<&Range> = self.ranges.iter().filter(|r| r.kind == Kind::Net(self.unit_net)).collect();
@@ -391,6 +487,9 @@ impl Composite {
             *wired.entry(w.dst).or_default() += 1;
         }
         for (n, (nm, net)) in self.nets.iter().enumerate() {
+            if n == self.sha_net || n == self.hm_net {
+                continue;
+            }
             let first = if n == self.unit_net { net.in_groups[0].bits.len() } else { 0 };
             for i in 0..self.per_vu[n] {
                 for p in first..port_cols(&net.in_groups).len() {
@@ -424,7 +523,7 @@ impl Composite {
         if unit.useful >= 1 << unit.unit_log {
             return Err("the unit fills its slot: no forced-zero row for a zero leaf".into());
         }
-        if self.dummy_digests.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
+        if self.dummy_bc.len() != self.ports.len() || self.dummy_outputs.len() != n_out {
             return Err("the pinned dummy values are not one per port and output leaf".into());
         }
         if self.leaf_scheme != leaf_scheme() {
@@ -454,88 +553,21 @@ impl Composite {
         self.ports.iter().map(|p| 2 * p.words).sum()
     }
 
-    /// The role of compression slot `s` of range `r`.
-    pub fn comp_role(&self, r: &Range, s: usize) -> CompRole {
-        match &r.role {
-            Role::Runs { p, slots } => {
-                let nb = self.ports[*p].nb;
-                match slots[s / nb] {
-                    Some((g, c)) => CompRole::Run { g, p: *p, c, j: s % nb },
-                    None => CompRole::DummyRun { j: s % nb },
-                }
-            }
-            Role::Parents { p } => {
-                let ch = self.ports[*p].chunks;
-                if s % ch == ch - 1 { CompRole::DummyParent } else { CompRole::Parent { g: s / ch, p: *p, k: s % ch } }
-            }
-            Role::None => unreachable!("not a comp range"),
-        }
-    }
-
-    /// Counter, block length and flags of a compression.
-    pub fn params(&self, role: CompRole) -> (u64, u32, u32) {
-        match role {
-            CompRole::Run { p, c, j, .. } => {
-                let port = &self.ports[p];
-                let end = j + 1 == port.nb;
-                (c as u64, 64, KEYED_HASH | if j == 0 { CHUNK_START } else { 0 } | if end { CHUNK_END | if port.chunks == 1 { ROOT } else { 0 } } else { 0 })
-            }
-            CompRole::DummyRun { j } => (0, 64, KEYED_HASH | if j == 0 { CHUNK_START } else { 0 }),
-            CompRole::Parent { k, .. } => (0, 64, PARENT | KEYED_HASH | if k == 0 { ROOT } else { 0 }),
-            CompRole::DummyParent => (0, 64, PARENT | KEYED_HASH),
-        }
-    }
-
-    /// Block-local column of compression slot `(range, s)` holding the last compression of VU `g`'s chunk `c` of port `p`.
-    fn chunk_end(&self, g: usize, p: usize, c: usize) -> usize {
-        for r in &self.ranges {
-            if let Role::Runs { p: rp, slots } = &r.role
-                && *rp == p
-                && let Some(q) = slots.iter().position(|x| *x == Some((g, c)))
-            {
-                return r.slot(q * self.ports[p].nb + self.ports[p].nb - 1);
-            }
-        }
-        unreachable!("every chunk has a run")
-    }
-
-    fn parents_range(&self, p: usize) -> &Range {
-        self.ranges.iter().find(|r| matches!(r.role, Role::Parents { p: q } if q == p)).unwrap()
-    }
-
-    /// Block-local column of VU `g`'s byte `byte` of port `p`: the message bit where it is hashed.
-    fn message_col(&self, g: usize, p: usize, byte: usize) -> usize {
-        let port = &self.ports[p];
-        let (c, rest) = (byte / 1024, byte % 1024);
-        let (j, off) = (rest / 64, rest % 64);
-        let end = self.chunk_end(g, p, c);
-        end - ((port.nb - 1 - j) << SUB_LOG) + b3::M_BASE + 8 * off
-    }
 }
 
 /// The pinned constant column: the first slot of the first range that has one.
 pub fn pin_of(c: &Composite) -> usize {
     let r = c.ranges.iter().find(|r| r.kind != Kind::Mask).unwrap();
     r.start() + match r.kind {
-        Kind::Comp => b3::Z_CONST_POS,
         Kind::Net(i) => c.nets[i].1.const_pos,
         Kind::Mask => unreachable!(),
     }
 }
 
-/// Δ (A and B), derived from the pinned circuit: chaining, parent messages, unit leaf wiring, constants.
+/// Δ (A and B), derived from the pinned circuit: every slot's constant, the rows' constants (midstate, padding block), the unit
+/// leaf wiring (each leaf bit a copy of its message bit), and every wire (the rows' chains first).
 pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
-    let cc = comp();
-    let (a0, b0) = (&cc.a_0.rows, &cc.b_0.rows);
-    let z = b3::Z_CONST_POS;
-    for r in (b3::CV_BASE..b3::CV_BASE + 256).chain(b3::M_BASE..b3::M_BASE + 512).chain(b3::T_LO_BASE..b3::FLAGS_BASE + 32) {
-        assert!(a0[r] == [r] && b0[r] == [z], "compression row {r} is not an input row");
-    }
     let (mut da, mut db) = (Vec::new(), Vec::new());
-    let a_only = |da: &mut Vec<(u32, u32)>, i: usize, src: usize| {
-        da.push((i as u32, i as u32));
-        da.push((i as u32, src as u32));
-    };
     let both = |da: &mut Vec<(u32, u32)>, db: &mut Vec<(u32, u32)>, i: usize, src: usize| {
         for d in [da, db] {
             d.push((i as u32, i as u32));
@@ -543,38 +575,32 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
         }
     };
     for r in &c.ranges {
+        let Kind::Net(i) = r.kind else { continue };
         for s in 0..r.count {
-            let base = r.slot(s);
-            let konst = match r.kind {
-                Kind::Comp => Some(base + z),
-                Kind::Net(i) => Some(base + c.nets[i].1.const_pos),
-                Kind::Mask => None,
-            };
-            if let Some(k) = konst
-                && k != pin
-            {
+            let k = r.slot(s) + c.nets[i].1.const_pos;
+            if k != pin {
                 both(&mut da, &mut db, k, pin);
             }
-            if r.kind != Kind::Comp {
-                continue;
+        }
+    }
+    let (_, where_) = row_slots(&c.ports);
+    let (sin, hin) = (port_cols(&c.nets[c.sha_net].1.in_groups), port_cols(&c.nets[c.hm_net].1.in_groups));
+    // bit `t` of row byte `byte` of VU `g`'s port `p`: a message bit of its compression (the block's bytes big-endian per word)
+    let msg_col = |g: usize, p: usize, byte: usize, t: usize| -> usize {
+        let (k, o) = (byte / 128, byte % 128);
+        let (slot, sub) = where_[p][k];
+        c.slot_col(c.sha_net, g, slot) + sin[2 * sub + 1].0 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
+    };
+    let zero = c.unit_range().slot(0) + c.unit().useful;
+    for g in 0..c.g {
+        for (p, w) in where_.iter().enumerate() {
+            let cv = c.slot_col(c.sha_net, g, w[0].0) + sin[2 * w[0].1].0;
+            for t in 0..512 {
+                both(&mut da, &mut db, cv + t, if (c.rows[p].midstate[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
             }
-            match c.comp_role(r, s) {
-                CompRole::Run { j, .. } | CompRole::DummyRun { j } if j > 0 => {
-                    for t in 0..256 {
-                        a_only(&mut da, base + b3::CV_BASE + t, base - (1 << SUB_LOG) + b3::OUT_LO_BASE + t);
-                    }
-                }
-                CompRole::Parent { g, p, k } => {
-                    let ch = c.ports[p].chunks;
-                    let pr = c.parents_range(p);
-                    for (side, h) in [2 * k + 1, 2 * k + 2].into_iter().enumerate() {
-                        let child = if h < ch - 1 { pr.slot(g * ch + h) } else { c.chunk_end(g, p, h - (ch - 1)) };
-                        for t in 0..256 {
-                            a_only(&mut da, base + b3::M_BASE + 256 * side + t, child + b3::OUT_LO_BASE + t);
-                        }
-                    }
-                }
-                _ => {}
+            let pad = c.slot_col(c.hm_net, g, p) + hin[1].0;
+            for t in 0..1024 {
+                both(&mut da, &mut db, pad + t, if (c.rows[p].pad[t / 64] >> (t % 64)) & 1 == 1 { pin } else { zero });
             }
         }
     }
@@ -595,7 +621,7 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
                 } else {
                     let leaf = leaf as usize;
                     let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
-                    c.message_col(g, p, 2 * (leaf - starts[p])) + t
+                    msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8)
                 };
                 both(&mut da, &mut db, base + leaf_cols[j] + t, src);
             }
@@ -615,14 +641,17 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 
 // --- the instance files ------------------------------------------------------------------------------------------------
 
-/// A `flock-circuit-inputs` file: the prover's has the rows, the verifier's (`rows: false`) only the public part.
+/// A `flock-circuit-inputs` file: the prover's has the rows and their salts, the verifier's (`rows: false`) only the public part.
 pub struct Instances {
     pub header: Value,
     pub n: usize,
     pub rows: Option<Vec<u8>>,
-    pub digests: Vec<[u8; 32]>,
+    /// every row's salt, instance-major, ports in order (the prover's file only)
+    pub salts: Option<Vec<u8>>,
+    /// every row's `b || c`, instance-major, ports in order
+    pub bcs: Vec<[u8; BC_BYTES]>,
     pub outputs: Vec<u16>,
-    /// sha256 of the header line and every public byte after the rows (digests, outputs): what Σ binds
+    /// sha256 of the header line and every public byte after the rows and salts (`b || c`, outputs): what Σ binds
     pub public_sha256: [u8; 32],
 }
 
@@ -642,23 +671,35 @@ impl Instances {
         let rb = c.row_bytes();
         let (n_out, np) = (c.out_words.iter().sum::<usize>(), c.ports.len());
         let body = &b[nl + 1..];
-        let rows_len = if has_rows { n * rb } else { 0 };
-        if body.len() != rows_len + 32 * n * np + 2 * n * n_out {
+        let (rows_len, salts_len) = if has_rows { (n * rb, n * np * SALT_BYTES) } else { (0, 0) };
+        if body.len() != rows_len + salts_len + BC_BYTES * n * np + 2 * n * n_out {
             return Err("instance file length".into());
         }
         let rows = has_rows.then(|| body[..rows_len].to_vec());
-        let pubs = &body[rows_len..];
-        let digests = pubs[..32 * n * np].chunks(32).map(|x| x.try_into().unwrap()).collect();
-        let outputs = pubs[32 * n * np..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let salts = has_rows.then(|| body[rows_len..rows_len + salts_len].to_vec());
+        let pubs = &body[rows_len + salts_len..];
+        let bcs = pubs[..BC_BYTES * n * np].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
+        let outputs = pubs[BC_BYTES * n * np..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let units = &header["units"];
+        let g = c.g;
+        let blocks: Vec<Value> = (0..n.div_ceil(g)).map(|b| json!([header["range"][0].as_u64().unwrap_or(0) as usize + b * g, g.min(n - b * g)])).collect();
+        if units["vus_per_block"] != json!(g) || units["units_per_vu"] != json!(c.upv) || units["vu_range"] != header["range"] || units["blocks"] != json!(blocks) {
+            return Err("header: the blocks' unit indices are not the range's VUs in order".into());
+        }
         header["rows"] = Value::Bool(false);
         let mut h = Sha256::new();
         h.update(serde_json::to_vec(&sorted(&header)).unwrap());
         h.update(pubs);
-        Ok(Instances { header, n, rows, digests, outputs, public_sha256: h.finalize().into() })
+        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha256: h.finalize().into() })
     }
 
-    pub fn digest(&self, i: usize, p: usize, np: usize) -> [u8; 32] {
-        self.digests[i * np + p]
+    pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
+        self.bcs[i * np + p]
+    }
+
+    pub fn salt(&self, i: usize, p: usize, np: usize) -> &[u8] {
+        let s = self.salts.as_ref().expect("the prover's instance file has the salts");
+        &s[(i * np + p) * SALT_BYTES..(i * np + p + 1) * SALT_BYTES]
     }
 }
 
@@ -670,8 +711,8 @@ fn sorted(v: &Value) -> Value {
     }
 }
 
-fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 32] {
-    let mut h = Sha256::new();
+fn fv3_hash(tag: &[u8], parts: &[&[u8]]) -> [u8; 64] {
+    let mut h = Sha512::new();
     h.update(FRAME);
     h.update((tag.len() as u32).to_be_bytes());
     h.update(tag);
@@ -688,12 +729,12 @@ fn uint(x: usize) -> Vec<u8> {
     b[z..].to_vec()
 }
 
-/// A frame-v3 leaf: position `i` of the domain, its schema and its payload.
-pub fn fv3_leaf(domain_id: &[u8], i: usize, schema: &[u8], payload: &[u8]) -> [u8; 32] {
+/// A frame-v3-sha512 leaf: position `i` of the domain, its schema and its payload.
+pub fn fv3_leaf(domain_id: &[u8], i: usize, schema: &[u8], payload: &[u8]) -> [u8; 64] {
     fv3_hash(b"leaf", &[domain_id, &uint(i), &uint(i), schema, payload])
 }
 
-pub fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
+pub fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 64]>) -> [u8; 64] {
     let n = leaves.len();
     let width = n.next_power_of_two();
     let mut level = leaves;
@@ -706,38 +747,60 @@ pub fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
     level[0]
 }
 
-/// The frame-v3 roots recomputed from the file's row digests and output words, against its header's; the pinned dummy digests
-/// against keyed BLAKE3 of zero rows (the commitment scheme's own function; the circuit is never evaluated here); the row key
-/// the x-row key.
+/// `hm96.SHA512.tree_leaf(key, b || c)` for the default key: SHA-512 of the leaf prefix block and `b || c`.
+pub fn row_tree_leaf(bc: &[u8; BC_BYTES]) -> [u8; 64] {
+    let k = flock_merkle::hm96::consts();
+    let mut h = Sha512::new();
+    h.update(k.leaf_prefix);
+    h.update(bc);
+    h.finalize().into()
+}
+
+/// The all-zero row's `b || c` under a zero salt: `b = x` (a zero salt's mask is zero), `c = SHA-512(salt_prefix || 0^192)`.
+pub fn zero_row_bc(words: usize) -> [u8; BC_BYTES] {
+    let mut h = Sha512::new();
+    h.update(row_prefix(words));
+    h.update(vec![0u8; 2 * words]);
+    let x = h.finalize();
+    let mut h = Sha512::new();
+    h.update(flock_merkle::hm96::consts().salt_prefix);
+    h.update([0u8; SALT_BYTES]);
+    let mut bc = [0u8; BC_BYTES];
+    bc[..64].copy_from_slice(&x);
+    bc[64..].copy_from_slice(&h.finalize());
+    bc
+}
+
+/// The frame-v3-sha512 roots recomputed from the file's `b || c` and output words, against its header's; the pinned dummy
+/// `b || c` against the zero row's (the commitment scheme's own functions; the circuit is never evaluated here).
 pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     let fv = &inst.header["frame_v3"];
     let get = |k: &str, p: &str| -> Result<Vec<u8>, String> { hexb(fv[k][p].as_str().ok_or(format!("frame_v3.{k}.{p} missing"))?) };
-    if hexb(fv["key"].as_str().unwrap_or(""))? != c.key || c.key != crate::chunk::row_key(b"x") {
-        return Err("the row key is not the x-row key (verity/blake3-leaf/v1/x)".into());
+    if fv["frame"] != "frame-v3-sha512" || fv["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
+        return Err("the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key".into());
     }
     let np = c.ports.len();
     for (p, port) in c.ports.iter().enumerate() {
         let dom = get("domain_ids", &port.name)?;
-        if fv["schemas"][&port.name] != "blake3-keyed/row/v2" {
-            return Err(format!("input port {}: schema is not blake3-keyed/row/v2", port.name));
+        if fv["schemas"][&port.name] != ROW_SCHEMA {
+            return Err(format!("input port {}: schema is not {ROW_SCHEMA}", port.name));
         }
-        let leaves = (0..inst.n).into_par_iter().map(|i| fv3_hash(b"leaf", &[&dom, &uint(i), &uint(i), b"blake3-keyed/row/v2", &inst.digest(i, p, np)])).collect();
+        let leaves = (0..inst.n).into_par_iter().map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&inst.bc(i, p, np)))).collect();
         if fv3_root(&dom, leaves).to_vec() != get("roots", &port.name)? {
-            return Err(format!("input port {}: the row digests do not hash to the header's frame-v3 root", port.name));
+            return Err(format!("input port {}: the rows' b || c do not hash to the header's frame-v3-sha512 root", port.name));
         }
-        if *blake3::keyed_hash(&c.key, &vec![0u8; 2 * port.words]).as_bytes() != c.dummy_digests[p] {
-            return Err(format!("the pinned dummy digest of port {} is not the zero row's", port.name));
+        if zero_row_bc(port.words) != c.dummy_bc[p] {
+            return Err(format!("the pinned dummy b || c of port {} is not the zero row's", port.name));
         }
     }
     let n_out: usize = c.out_words.iter().sum();
     let mut at = 0;
-    for (q, (name, w)) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)).enumerate() {
-        let _ = q;
+    for (name, w) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)) {
         let dom = get("domain_ids", name)?;
         let words: Vec<u16> = (0..inst.n).flat_map(|i| inst.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
-        let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_hash(b"leaf", &[&dom, &uint(r), &uint(r), b"u16", &v.to_be_bytes()])).collect();
+        let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_leaf(&dom, r, b"u16", &v.to_be_bytes())).collect();
         if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
-            return Err(format!("output port {name}: the output words do not hash to the header's frame-v3 root"));
+            return Err(format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root"));
         }
         at += w;
     }
@@ -748,12 +811,8 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Region {
-    /// counter, block length and flags of every compression of comp range `r`
-    Params(usize),
-    /// the chaining value of every chain start of comp range `r` (the key)
-    CvIn(usize),
-    /// the digest of port `p`: the output value of each VU's root compression in range `r`
-    Digest(usize, usize),
+    /// port `p`'s `b || c` of each VU (its hm96 slot's output)
+    Digest(usize),
     /// every unit slot's returned-output words
     Out,
 }
@@ -768,8 +827,8 @@ pub struct RegionShape {
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
-    /// per slot type: its log size and its circuit (the compression circuit's CSC fold is `comp()`'s)
-    pub types: Vec<(usize, Option<SparseMatrixCircuit<'static>>)>,
+    /// per slot type: its log size and its circuit
+    pub types: Vec<(usize, SparseMatrixCircuit<'static>)>,
     /// (type index, first position, count) per range
     pub ranges: Vec<(usize, usize, usize)>,
     pub da: Vec<(u32, u32)>,
@@ -786,10 +845,7 @@ impl LincheckCircuit for BlockCircuit {
         let lo = self.types.iter().map(|t| 1usize << t.0).min().unwrap();
         let c0 = eq[..lo].iter().position(|e| *e != F128::ZERO).expect("eq tensor vanishes on the first slot");
         let inv = eq[c0].inv();
-        let bases: Vec<Vec<F128>> = self.types.iter().map(|(sl, circ)| match circ {
-            Some(m) => m.fold_alpha_batched(alpha, &eq[..1 << sl]),
-            None => comp().csc_lincheck_circuit().fold_alpha_batched(alpha, &eq[..1 << sl]),
-        }).collect();
+        let bases: Vec<Vec<F128>> = self.types.iter().map(|(sl, m)| m.fold_alpha_batched(alpha, &eq[..1 << sl])).collect();
         let mut out = vec![F128::ZERO; 1 << self.k_log];
         for &(t, pos0, count) in &self.ranges {
             let sl = self.types[t].0;
@@ -815,6 +871,19 @@ impl LincheckCircuit for BlockCircuit {
     }
 }
 
+/// A dishonest prover's row witness (VU 0 of block 0): a compression's chaining value, the first chaining value (not the
+/// midstate), the padding block, or a salt, each followed consistently downstream.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RowTamper {
+    pub cv_flip: bool,
+    pub midstate_flip: bool,
+    pub pad_flip: bool,
+    pub salt_flip: bool,
+}
+
+/// Block `b`'s row slots' input words (`Stmt::row_inputs`), as a witness source hands them over.
+pub type RowIns<'a> = &'a (dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync);
+
 /// Everything a session needs, the same on both sides.
 pub struct Stmt {
     pub c: Composite,
@@ -828,9 +897,6 @@ pub struct Stmt {
     pub circuit: BlockCircuit,
     pub r1cs: BlockR1cs,
     pub digest: [u8; 32],
-    pub key: [u32; 8],
-    /// a dummy run's output value (`nb` zero blocks from the key), per port
-    pub dummy_run_cv: Vec<[u32; 8]>,
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
 }
@@ -859,24 +925,23 @@ impl Stmt {
         let m = k_log + nbl;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
-        let mut types: Vec<(usize, Option<SparseMatrixCircuit<'static>>)> = Vec::new();
+        let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
         let mut type_of: BTreeMap<String, usize> = BTreeMap::new();
         let mut ranges = Vec::new();
         for r in &c.ranges {
             let key = format!("{:?}", r.kind);
             let t = *type_of.entry(key).or_insert_with(|| {
                 let circ = match r.kind {
-                    Kind::Comp => None,
                     Kind::Net(i) => {
                         let net = &c.nets[i].1;
                         let k = 1usize << net.unit_log;
                         let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        Some(SparseMatrixCircuit::new(leak(pad(&net.a)), leak(pad(&net.b))))
+                        SparseMatrixCircuit::new(leak(pad(&net.a)), leak(pad(&net.b)))
                     }
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
-                        Some(SparseMatrixCircuit::new(leak(id.clone()), leak(id)))
+                        SparseMatrixCircuit::new(leak(id.clone()), leak(id))
                     }
                 };
                 types.push((r.slot_log, circ));
@@ -885,20 +950,9 @@ impl Stmt {
             ranges.push((t, r.pos0, r.count));
         }
         let regions = Self::regions(&c)?;
-        let key = key_words(&c.key);
-        let dummy_run_cv = c.ports.iter().map(|p| {
-            let mut cv = key;
-            for j in 0..p.nb {
-                let (ctr, bl, f) = c.params(CompRole::DummyRun { j });
-                cv = blake3_compress(&cv, &[0u32; 16], ctr, bl, f)[..8].try_into().unwrap();
-            }
-            cv
-        }).collect();
         let mut h = Sha256::new();
         h.update(TAG);
-        h.update(comp().statement_digest());
         h.update(c.sha256);
-        h.update(c.key);
         h.update(serde_json::to_vec(&sorted(&identity)).unwrap());
         for x in [n, blocks_real, nbl, m, k_log, pin, regions.len(), c.g] {
             h.update((x as u64).to_le_bytes());
@@ -927,7 +981,7 @@ impl Stmt {
             csc_cache: OnceLock::new(),
         };
         let circuit = BlockCircuit { k_log, pin, types, ranges, da, db };
-        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, key, dummy_run_cv, identity })
+        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, identity })
     }
 
     fn regions(c: &Composite) -> Result<Vec<RegionShape>, String> {
@@ -941,27 +995,11 @@ impl Stmt {
             Ok(RegionShape { region, free, mask, fixed: fixed as u32 })
         };
         let mut out = Vec::new();
-        for (ri, r) in c.ranges.iter().enumerate() {
-            let lr = r.count.trailing_zeros() as usize;
-            match &r.role {
-                Role::Runs { p, .. } => {
-                    let port = &c.ports[*p];
-                    let lnb = port.nb.trailing_zeros() as usize;
-                    out.push(mk(Region::Params(ri), [bits(0, 7), bits(SUB_LOG, lr)].concat(), r.start() + b3::T_LO_BASE)?);
-                    out.push(mk(Region::CvIn(ri), [bits(0, 8), bits(SUB_LOG + lnb, lr - lnb)].concat(), r.start() + b3::CV_BASE)?);
-                    if port.chunks == 1 {
-                        out.push(mk(Region::Digest(*p, ri), [bits(0, 8), bits(SUB_LOG + lnb, lr - lnb)].concat(),
-                                    r.start() + ((port.nb - 1) << SUB_LOG) + b3::OUT_LO_BASE)?);
-                    }
-                }
-                Role::Parents { p } => {
-                    let lc = c.ports[*p].chunks.trailing_zeros() as usize;
-                    out.push(mk(Region::Params(ri), [bits(0, 7), bits(SUB_LOG, lr)].concat(), r.start() + b3::T_LO_BASE)?);
-                    out.push(mk(Region::CvIn(ri), [bits(0, 8), bits(SUB_LOG, lr)].concat(), r.start() + b3::CV_BASE)?);
-                    out.push(mk(Region::Digest(*p, ri), [bits(0, 8), bits(SUB_LOG + lc, lr - lc)].concat(), r.start() + b3::OUT_LO_BASE)?);
-                }
-                Role::None => {}
-            }
+        let hr = c.range_of(c.hm_net);
+        let (hm, lp, lg) = (&c.nets[c.hm_net].1, c.per_vu[c.hm_net].trailing_zeros() as usize, c.g.trailing_zeros() as usize);
+        let bc0 = port_cols(&hm.out_groups)[0].0;
+        for p in 0..c.ports.len() {
+            out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
         let unit = c.unit();
         let ur = c.unit_range();
@@ -980,61 +1018,66 @@ impl Stmt {
         (i < self.n).then_some(i)
     }
 
-    /// 16 message words of block `j` of chunk `c` of port `p`'s row of instance `i` (zeros for a padding instance).
-    fn message(&self, rows: Option<&[u8]>, i: Option<usize>, p: usize, c: usize, j: usize) -> [u32; 16] {
-        let (Some(rows), Some(i)) = (rows, i) else { return [0; 16] };
-        let off: usize = self.c.ports[..p].iter().map(|q| 2 * q.words).sum();
-        let at = i * self.c.row_bytes() + off + 1024 * c + 64 * j;
-        std::array::from_fn(|w| u32::from_le_bytes(rows[at + 4 * w..at + 4 * w + 4].try_into().unwrap()))
-    }
-
-    /// Every compression of block `b` (cv, message, counter, block length, flags) in comp-range order.
-    pub fn compressions(&self, rows: Option<&[u8]>, b: usize) -> Vec<b3::Compression> {
+    /// Block `b`'s row slots' input words (`sha512x3` slots, then hm96 slots, each VU's in order), computed natively from the rows
+    /// and salts (zeros for a padding instance): each compression's chaining value and message block, each hm96 slot's last
+    /// chaining value, padding block and salt. `t` tampers VU 0 of block 0, the chain continuing from the tampered value.
+    pub fn row_inputs(&self, rows: Option<&[u8]>, salts: Option<&[u8]>, b: usize, t: RowTamper) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) {
         let c = &self.c;
-        let mut out: BTreeMap<usize, b3::Compression> = BTreeMap::new();
-        let mut cv_at: BTreeMap<usize, [u32; 8]> = BTreeMap::new();
-        let run = |role: CompRole, cv: [u32; 8], msg: [u32; 16]| -> (b3::Compression, [u32; 8]) {
-            let (ctr, bl, f) = c.params(role);
-            let o: [u32; 8] = blake3_compress(&cv, &msg, ctr, bl, f)[..8].try_into().unwrap();
-            ((cv, msg, ctr, bl, f), o)
+        let (sha, hm) = (&c.nets[c.sha_net].1, &c.nets[c.hm_net].1);
+        let (sin, hin) = (port_cols(&sha.in_groups), port_cols(&hm.in_groups));
+        let (n_sha, where_) = row_slots(&c.ports);
+        let (np, per_hm, rb) = (c.ports.len(), c.per_vu[c.hm_net], c.row_bytes());
+        let mut si = vec![vec![F128::ZERO; sha.in_words]; c.g * n_sha];
+        let mut hi = vec![vec![F128::ZERO; hm.in_words]; c.g * per_hm];
+        let put = |w: &mut [F128], col: usize, words: &[u64]| {
+            for (i, &x) in words.iter().enumerate() {
+                let at = col + 64 * i;
+                debug_assert_eq!(at % 64, 0);
+                if at % WORD == 0 { w[at / WORD].lo = x } else { w[at / WORD].hi = x }
+            }
         };
-        for r in c.ranges.iter().filter(|r| matches!(r.role, Role::Runs { .. })) {
-            let mut cv = self.key;
-            for s in 0..r.count {
-                let role = c.comp_role(r, s);
-                let (msg, j) = match role {
-                    CompRole::Run { g, p, c: ch, j } => (self.message(rows, self.inst_of(b, g), p, ch, j), j),
-                    CompRole::DummyRun { j } => ([0; 16], j),
-                    _ => unreachable!(),
-                };
-                if j == 0 {
-                    cv = self.key;
+        let chained = c.ports.iter().position(|p| p.comps > 1);
+        for g in 0..c.g {
+            let inst = self.inst_of(b, g);
+            let first = b == 0 && g == 0;
+            let mut off = 0;
+            for (p, port) in c.ports.iter().enumerate() {
+                let n = 2 * port.words;
+                let row: Vec<u8> = match (rows, inst) { (Some(r), Some(i)) => r[i * rb + off..i * rb + off + n].to_vec(), _ => vec![0; n] };
+                off += n;
+                let mut cv = c.rows[p].midstate;
+                if t.midstate_flip && first && p == 0 {
+                    cv[0] ^= 1;
                 }
-                let (x, o) = run(role, cv, msg);
-                out.insert(r.slot(s), x);
-                cv_at.insert(r.slot(s), o);
-                cv = o;
-            }
-        }
-        for r in c.ranges.iter().filter(|r| matches!(r.role, Role::Parents { .. })) {
-            let Role::Parents { p } = r.role else { unreachable!() };
-            let ch = c.ports[p].chunks;
-            for s in (0..r.count).rev() {
-                let role = c.comp_role(r, s);
-                let msg = match role {
-                    CompRole::Parent { g, k, .. } => {
-                        let kid = |h: usize| if h < ch - 1 { cv_at[&r.slot(g * ch + h)] } else { cv_at[&c.chunk_end(g, p, h - (ch - 1))] };
-                        let (l, rr) = (kid(2 * k + 1), kid(2 * k + 2));
-                        std::array::from_fn(|w| if w < 8 { l[w] } else { rr[w - 8] })
+                for k in 0..port.comps {
+                    if t.cv_flip && first && k == 1 && chained == Some(p) {
+                        cv[0] ^= 1;
                     }
-                    _ => [0; 16],
-                };
-                let (x, o) = run(role, self.key, msg);
-                out.insert(r.slot(s), x);
-                cv_at.insert(r.slot(s), o);
+                    let (slot, sub) = where_[p][k];
+                    let blk = &row[128 * k..128 * k + 128];
+                    let w = &mut si[g * n_sha + slot];
+                    put(w, sin[2 * sub].0, &cv);
+                    put(w, sin[2 * sub + 1].0, &words_be::<16>(blk));
+                    compress(&mut cv, blk);
+                }
+                let mut pad = c.rows[p].pad;
+                if t.pad_flip && first && p == 0 {
+                    pad[0] ^= 1;
+                }
+                let mut salt = [0u8; SALT_BYTES];
+                if let (Some(s), Some(i)) = (salts, inst) {
+                    salt.copy_from_slice(&s[(i * np + p) * SALT_BYTES..(i * np + p + 1) * SALT_BYTES]);
+                }
+                if t.salt_flip && first && p == 0 {
+                    salt[0] ^= 1;
+                }
+                let h = &mut hi[g * per_hm + p];
+                put(h, hin[0].0, &cv);
+                put(h, hin[1].0, &pad);
+                put(h, hin[2].0, &(0..SALT_BYTES / 8).map(|i| u64::from_le_bytes(salt[8 * i..8 * i + 8].try_into().unwrap())).collect::<Vec<_>>());
             }
         }
-        out.into_values().collect()
+        (si, hi)
     }
 
     /// Unit slot `k` of block `b`'s input words (its leaf ports, from the rows; zeros for a padding instance or a zero leaf).
@@ -1084,14 +1127,14 @@ impl Stmt {
     /// Every slot's input words, converged: the units' leaf words from `unit_inputs(b, k)`, then every wire copied from the
     /// slot that computes it, re-evaluating each slot type whose inputs changed until none do (the tail and the lookups
     /// between the units' two passes). `nets` overrides a circuit's evaluation (a tampered witness).
-    pub fn converge(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> Vec<Vec<Vec<F128>>> {
-        self.converge_with(unit_inputs, nets, None)
+    pub fn converge(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), row_ins: RowIns<'_>, nets: &BTreeMap<usize, &IrUnitNet>) -> Vec<Vec<Vec<F128>>> {
+        self.converge_with(unit_inputs, Some(row_ins), nets, None)
     }
 
     /// [`Stmt::converge`] with the units' output words given (`unit_outs`, the device's first pass): the units are never
     /// evaluated here, only the tail stages and the lookups.
-    pub fn converge_with(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>,
-                         unit_outs: Option<Vec<Vec<F128>>>) -> Vec<Vec<Vec<F128>>> {
+    pub fn converge_with(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), row_ins: Option<RowIns<'_>>,
+                         nets: &BTreeMap<usize, &IrUnitNet>, unit_outs: Option<Vec<Vec<F128>>>) -> Vec<Vec<Vec<F128>>> {
         let c = &self.c;
         let nb = self.blocks();
         let net_of = |n: usize| -> &IrUnitNet { nets.get(&n).copied().unwrap_or(&c.nets[n].1) };
@@ -1103,11 +1146,19 @@ impl Stmt {
                 vec![vec![F128::ZERO; net_of(n).in_words]; nb * count(n)]
             }
         }).collect();
-        if c.wires.is_empty() {
+        if let Some(f) = row_ins {
+            let rv: Vec<_> = (0..nb).into_par_iter().map(f).collect();
+            ins[c.sha_net] = rv.iter().flat_map(|x| x.0.iter().cloned()).collect();
+            ins[c.hm_net] = rv.into_iter().flat_map(|x| x.1).collect();
+        }
+        // the rows' wires hold by construction (row_inputs chains natively); the rest converge here
+        let row_net = |n: usize| n == c.sha_net || n == c.hm_net;
+        let wires: Vec<&Wire> = c.wires.iter().filter(|w| !row_net(w.dst.0)).collect();
+        if wires.is_empty() {
             return ins;
         }
         let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
-        let mut dirty = vec![true; c.nets.len()];
+        let mut dirty: Vec<bool> = (0..c.nets.len()).map(|n| !row_net(n)).collect();
         let fixed = unit_outs.is_some();
         if let Some(u) = unit_outs {
             outs[c.unit_net] = u;
@@ -1125,7 +1176,7 @@ impl Stmt {
                 }
             }
             let mut changed = false;
-            for w in &c.wires {
+            for w in &wires {
                 let (dn, sn) = (w.dst.0, w.src.0);
                 let (dcol, width) = port_cols(&net_of(dn).in_groups)[w.dst.2];
                 let scol = port_cols(&net_of(sn).out_groups)[w.src.2].0 - net_of(sn).out_cols[0] * WORD;
@@ -1155,26 +1206,14 @@ impl Stmt {
     /// `(z, a, b, z_lincheck)`: every block's compressions (`comps(b)`), every slot of every circuit from its input words `ins`
     /// (`converge`; a lookup by its fast witness), the mask slot from `mask`. `nets` overrides a circuit's evaluation.
     #[allow(clippy::type_complexity)]
-    pub fn witness(&self, comps: &(dyn Fn(usize) -> Vec<b3::Compression> + Sync), ins: &[Vec<Vec<F128>>],
-                   mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+    pub fn witness(&self, ins: &[Vec<Vec<F128>>], mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>)
+        -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
         let c = &self.c;
         let kl = c.k_log;
         let n = 1usize << (self.m - 7);
         let wpb = 1usize << (kl - 7);
         let (mut z, mut a, mut bb) = (vec![F128::ZERO; n], vec![F128::ZERO; n], vec![F128::ZERO; n]);
-        let comp_slots: Vec<usize> = c.ranges.iter().filter(|r| r.kind == Kind::Comp).flat_map(|r| (0..r.count).map(|s| r.slot(s))).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
-        let cw = 1usize << (SUB_LOG - 7);
         z.par_chunks_mut(wpb).zip(a.par_chunks_mut(wpb)).zip(bb.par_chunks_mut(wpb)).enumerate().for_each(|(blk, ((zb, ab), bbb))| {
-            let mut cs = comps(blk);
-            let nc = cs.len();
-            cs.resize(nc.next_power_of_two(), cs[0]);
-            let (cz, ca, cb) = b3::generate_witness_with_ab_packed(&cs, log2ceil(cs.len()));
-            for (q, &col) in comp_slots.iter().enumerate() {
-                let w = col / WORD;
-                zb[w..w + cw].copy_from_slice(&cz[q * cw..(q + 1) * cw]);
-                ab[w..w + cw].copy_from_slice(&ca[q * cw..(q + 1) * cw]);
-                bbb[w..w + cw].copy_from_slice(&cb[q * cw..(q + 1) * cw]);
-            }
             for r in c.ranges.iter().filter(|r| r.kind == Kind::Mask) {
                 let mw = mask(blk);
                 let w = r.start() / WORD;
@@ -1252,7 +1291,7 @@ impl Stmt {
             }
             o
         }).collect();
-        let ins = self.converge_with(unit_inputs, &BTreeMap::new(), Some(outs));
+        let ins = self.converge_with(unit_inputs, None, &BTreeMap::new(), Some(outs));
         let mut late = vec![0u32; groups * late_rows.len()];
         for (u, w) in ins[c.unit_net].iter().enumerate() {
             for (k, &r) in late_rows.iter().enumerate() {
@@ -1264,7 +1303,7 @@ impl Stmt {
         let wpb = 1usize << (c.k_log - 7);
         let mut host = Vec::new();
         for ni in 0..c.nets.len() {
-            if ni == c.unit_net {
+            if ni == c.unit_net || ni == c.sha_net || ni == c.hm_net {
                 continue;
             }
             let r = c.range_of(ni);
@@ -1279,29 +1318,8 @@ impl Stmt {
     fn region_bytes(&self, reg: &Region, inst: &Instances, b: usize) -> Vec<u8> {
         let c = &self.c;
         let np = c.ports.len();
-        let cv_bytes = |cv: &[u32; 8]| cv.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>();
         match reg {
-            Region::Params(ri) => {
-                let r = &c.ranges[*ri];
-                (0..r.count).flat_map(|s| {
-                    let (ctr, bl, f) = c.params(c.comp_role(r, s));
-                    [ctr.to_le_bytes().to_vec(), bl.to_le_bytes().to_vec(), f.to_le_bytes().to_vec()].concat()
-                }).collect()
-            }
-            Region::CvIn(ri) => {
-                let r = &c.ranges[*ri];
-                let starts = match &r.role { Role::Runs { slots, .. } => slots.len(), _ => r.count };
-                (0..starts).flat_map(|_| cv_bytes(&self.key)).collect()
-            }
-            Region::Digest(p, ri) => {
-                let r = &c.ranges[*ri];
-                let dig = |g: usize| -> Vec<u8> { match self.inst_of(b, g) { Some(i) => inst.digest(i, *p, np).to_vec(), None => c.dummy_digests[*p].to_vec() } };
-                match &r.role {
-                    Role::Runs { slots, .. } => slots.iter().flat_map(|x| match x { Some((g, _)) => dig(*g), None => cv_bytes(&self.dummy_run_cv[*p]) }).collect(),
-                    Role::Parents { .. } => (0..c.g).flat_map(dig).collect(),
-                    Role::None => unreachable!(),
-                }
-            }
+            Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
             Region::Out => {
                 let unit = c.unit();
                 let ur = c.unit_range();
@@ -1374,6 +1392,36 @@ impl Stmt {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn native_compression_is_sha512() {
+        let msg: Vec<u8> = (0..300u32).map(|i| (i * 7 + 3) as u8).collect();
+        let mut padded = msg.clone();
+        padded.push(0x80);
+        while padded.len() % 128 != 112 {
+            padded.push(0);
+        }
+        padded.extend((8 * msg.len() as u128).to_be_bytes());
+        let mut cv = SHA512_IV;
+        for blk in padded.chunks(128) {
+            compress(&mut cv, blk);
+        }
+        let want: Vec<u8> = Sha512::digest(&msg).to_vec();
+        assert_eq!(cv.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>(), want);
+        let mut p = row_prefix(64);
+        p.extend(vec![0u8; 128]);
+        p.extend(pad_block(256));
+        let mut cv = SHA512_IV;
+        for blk in p.chunks(128) {
+            compress(&mut cv, blk);
+        }
+        let mut h = Sha512::new();
+        h.update(row_prefix(64));
+        h.update([0u8; 128]);
+        assert_eq!(cv.iter().flat_map(|w| w.to_be_bytes()).collect::<Vec<u8>>(), h.finalize().to_vec());
+    }
+
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
         // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
