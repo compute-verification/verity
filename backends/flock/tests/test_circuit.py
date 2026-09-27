@@ -70,9 +70,9 @@ def test_leaf_scheme_reserves_what_hm96_needs():
     assert t["key_sha512"] == hashlib.sha512(hm96.SHA512.default_key).hexdigest(), "the key is the scheme's pinned constant"
 
 
-def test_attention_has_no_verifier_evaluated_form():
+def test_returned_outputs_need_a_cut_tail():
     class U:
-        cut, tail_rets = [0], [0]
+        cut, tail_rets = [], [0]
 
     class Low:
         units, name = U(), "attention"

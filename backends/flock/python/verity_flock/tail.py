@@ -351,6 +351,9 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
     public = {k for k, _ in getattr(U, "public", [])}
     read_by_units = sorted({k for src in U.in_src for kind, k in src if kind == "cut"} - produced - public)
     rets = [slot[g] for g in U.tail_rets]
+    # a cut word's width is its unit port's (attention's p is a bf16 operand: 16 bits)
+    width_in = {k: low.layout.in_bits[j] for src in U.in_src for j, (kind, k) in enumerate(src) if kind == "cut"}
+    width_out = {k: low.layout.out_bits[j] for src in U.out_src for j, (kind, k) in enumerate(src) if kind == "cut"}
     const: dict[int, int] = {}
     depth = {k: 0 for k in produced}
     op_stage: list = []
@@ -393,7 +396,7 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
             ctx = [take(("ctx", j, i), 32) for i in range(nctx)]
             val[out] = MUFU[prim][1](C, ctx, take(("lookup", j), VALUE_BITS))
         for k in sorted({a for op, t in zip(prog, op_stage) if t == si for a in op[2:] if a in produced and a not in val}):
-            val[k] = take(("cut", k), 32)
+            val[k] = take(("cut", k), width_out[k]) + [ZERO] * (32 - width_out[k])
         word = lambda a: val[a] if a in val else const_bits(const[a], 32)
         fresh = []
         for op, t in zip(prog, op_stage):
@@ -412,7 +415,7 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
         for j, prim, out, idx, ctx, table in fresh:
             outs += [(("ctx", j, i), w, 32) for i, w in enumerate(ctx)]
             outs.append((("index", j), idx, TABLE_BITS[table]))
-        outs += [(("cut", k), word(k), 32) for k in read_by_units if depth[k] == si]
+        outs += [(("cut", k), word(k)[:width_in[k]], width_in[k]) for k in read_by_units if depth[k] == si]
         if last:
             outs += [(("ret", i), word(r)[:16], 16) for i, r in enumerate(rets)]
         for j, (tag, w, width) in enumerate(outs):

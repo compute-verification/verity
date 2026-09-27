@@ -86,17 +86,23 @@ def class_digest(text: str) -> str:
     return hashlib.sha512((head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")) + "\n" + rest).encode()).hexdigest()
 
 
-def program_sha512(sub) -> str:
+def set_statics(input_set) -> dict:
+    """The instance statics of a set's instances (a statement covers one binding: attention's T)."""
+    sub = input_set.subcircuit
+    return dict(sub.instance_statics_of({p.name: input_set.port(p.name, 0, 1)[0] for p in sub.inputs}))
+
+
+def program_sha512(sub, statics: dict | None = None) -> str:
     """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
     statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
     from verity.ir.codec import canonical_json, encode_program
     from verity.ir.program import Program
 
     try:
-        desc = encode_program(Program(sub.definition()))
+        desc = encode_program(Program(sub.definition(**(statics or {}))))
     except (TypeError, ValueError, AttributeError):
         # a silicon reference no core Definition wraps: its digests as the program
-        return hashlib.sha512(json.dumps(sub.program_digests(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return hashlib.sha512(json.dumps(sub.program_digests([statics or {}]), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
 
 
@@ -243,7 +249,7 @@ def _row_wires(ports: list[Port]) -> list:
 
 
 def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
-            program: str | None = None) -> str:
+            program: str | None = None, statics: dict | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -255,9 +261,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     from . import tail as TL
 
     U = low.units
-    if U.tail_rets:
-        raise NotImplementedError(f"{low.name}: a tail that computes the outputs (tensor-core steps) is not in the circuit yet; "
-                                  f"the statement has no verifier-evaluated form")
+    if U.tail_rets and not U.cut:
+        raise NotImplementedError(f"{low.name}: returned outputs without a cut tail; the statement has no verifier-evaluated form")
     if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
         raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
     tail = TL.lower_tail(low, forged) if U.cut else None
@@ -277,13 +282,14 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     n_hm = _pow2(len(ports))
 
     def fits(G: int):
+        # a range no region reads is packed (the compressions, the lookups, and the units when the tail returns the outputs)
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
-                 ("unit", ul, G * U.n, {"net": "unit"})]
+                 ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets else {})})]
         for i, lay in enumerate(stages):
             items.append(("unit", _slot_log(lay.useful), G, {"net": f"stage{i}"}))
         for t, c in lookups.items():
             L = lk[t]
-            items.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}"}))
+            items.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}", "packed": True}))
         items.append(("mask", MASK_LOG, 1, {"net": "mask"}))
         return _ranges(items)
 
@@ -299,7 +305,12 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": 1 for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []
-    programs = sub.program_digests()
+    public = dict(getattr(U, "public", []))
+    # a public cut word (attention's query) is a row word: its unit input copies the row's message bits, zero above 16
+    leaf_cuts = [["unit", u, j, public[k]] for u, src in enumerate(U.in_src) for j, (kind, k) in enumerate(src) if kind == "cut" and k in public]
+    out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
+    out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
+    programs = sub.program_digests([statics or {}])
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
                         "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)], "lookups": lk}}
@@ -307,9 +318,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "out_ports": outs, "ranges": ranges, "rows": [_row_consts(p) for p in ports],
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
-            "dummy": _dummy(low, ports), "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
+            "dummy": _dummy(low, ports, sub), "leaf_scheme": LEAF_SCHEME, "out_net": out_net, "out_net_ports": out_net_ports, "leaf_cuts": leaf_cuts, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
-            "program_sha512": program or program_sha512(sub),
+            "program_sha512": program or program_sha512(sub, statics),
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
@@ -340,13 +351,16 @@ def _commit_strings(ports: list[Port], rows: dict, salts: dict) -> dict[str, lis
     return out
 
 
-def _dummy(low: IL.Lowering, ports: list[Port]) -> dict:
+def _dummy(low: IL.Lowering, ports: list[Port], sub=None) -> dict:
     """The all-zero instance's ``b || c`` (zero rows, zero salts; per port) and output words (every output leaf), as the padding
-    instances hold."""
+    instances hold (a tail that returns the outputs: the template's reference evaluation of the zero instance)."""
     n_in = sum(p.words for p in ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
     outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
+    if low.units.tail_rets:
+        ev = sub.evaluate({p.name: [np.zeros(w, dtype=np.uint16)] for p, w in zip(sub.inputs, [q.words for q in ports])})
+        outs = np.concatenate([np.asarray(ev[p.name][0], dtype=np.uint64) for p in sub.outputs])[None, :]
     bc = _commit_strings(ports, {p.name: np.zeros((1, p.words), np.uint16) for p in ports}, {p.name: [bytes(SALT_BYTES)] for p in ports})
     return {"bc": [bc[p.name][0].hex() for p in ports], "outputs": [int(x) for x in outs[0]]}
 
@@ -453,12 +467,13 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    text = compose(low, input_set.subcircuit, partition=partition, program=program)
+    statics = set_statics(input_set)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
-            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
+            (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
     write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices)
     return pub if public_only else inst
@@ -493,8 +508,9 @@ def main(argv=None) -> int:
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
     if a.class_only:
-        text = compose(low, s.subcircuit, partition=a.partition, program=a.program)
-        print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "class_sha512": class_digest(text), "program_sha512": program_sha512(s.subcircuit)}))
+        text = compose(low, s.subcircuit, partition=a.partition, program=a.program, statics=set_statics(s))
+        print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "class_sha512": class_digest(text),
+                          "program_sha512": program_sha512(s.subcircuit, set_statics(s))}))
         return 0
     idx = json.loads(Path(a.unit_indices).read_text()) if a.unit_indices else None
     for n in a.n:

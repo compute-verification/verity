@@ -165,6 +165,12 @@ pub struct Composite {
     pub rows: Vec<RowConsts>,
     pub sha_net: usize,
     pub hm_net: usize,
+    /// the circuit whose output group holds the returned outputs: the unit, or (a tail that returns them) the last stage
+    pub out_net: usize,
+    /// `out_net`'s output ports that are the output words (a stage), in output-leaf order
+    pub out_ports: Vec<usize>,
+    /// a unit input that is a row word (attention's public query): `(unit, input port, leaf)`; low 16 bits the message bits
+    pub leaf_cuts: Vec<(usize, usize, usize)>,
     /// the all-zero instance's `b || c` per port
     pub dummy_bc: Vec<[u8; BC_BYTES]>,
     pub dummy_outputs: Vec<u16>,
@@ -414,6 +420,14 @@ impl Composite {
             }
         }
         let (sha_net, hm_net) = (net_of(SHA_NET)?, net_of(HM_NET)?);
+        let out_net = net_of(meta["out_net"].as_str().unwrap_or("unit"))?;
+        let out_ports: Vec<usize> = meta["out_net_ports"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as usize).collect()).unwrap_or_default();
+        let leaf_cuts: Vec<(usize, usize, usize)> = meta["leaf_cuts"].as_array().map(|a| a.iter().map(|w| {
+            (w[1].as_u64().unwrap_or(u64::MAX) as usize, w[2].as_u64().unwrap_or(u64::MAX) as usize, w[3].as_u64().unwrap_or(u64::MAX) as usize)
+        }).collect()).unwrap_or_default();
+        if meta["leaf_cuts"].as_array().is_some_and(|a| a.iter().any(|w| w[0] != "unit")) {
+            return Err("META: a leaf cut into anything but a unit".into());
+        }
         let mut wires = Vec::new();
         for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
             let n = |i: usize| w[i].as_str().ok_or("a wire's circuit".to_string()).and_then(net_of);
@@ -429,7 +443,7 @@ impl Composite {
         }
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
-            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
@@ -442,8 +456,8 @@ impl Composite {
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
             let (span, align) = if r.packed { (r.count << r.slot_log, 1 << r.slot_log) } else { (r.count.next_power_of_two() << r.slot_log, r.count.next_power_of_two() << r.slot_log) };
-            if r.packed && r.kind != Kind::Net(self.sha_net) {
-                return Err("a packed range that is not the compressions'".into());
+            if r.packed && (r.kind == Kind::Net(self.hm_net) || r.kind == Kind::Net(self.out_net) || r.kind == Kind::Mask) {
+                return Err("a packed range that a region reads".into());
             }
             if r.start() % align != 0 || r.start() + span > 1 << self.k_log {
                 return Err("a range is not aligned to its span or overruns the block".into());
@@ -476,13 +490,25 @@ impl Composite {
         }
         let unit = &self.nets[self.unit_net].1;
         let ur: Vec<&Range> = self.ranges.iter().filter(|r| r.kind == Kind::Net(self.unit_net)).collect();
-        if ur.len() != 1 || ur[0].count != self.g * self.upv || !ur[0].count.is_power_of_two() {
+        if ur.len() != 1 || ur[0].count != self.g * self.upv || (self.out_net == self.unit_net && !ur[0].count.is_power_of_two()) {
             return Err("not one unit range of vus_per_block x units_per_vu (a power of two) units".into());
         }
+        let tail_out = self.out_net != self.unit_net;
         if unit.in_groups.is_empty() || unit.in_groups.len() > 2 || unit.out_groups.is_empty() || unit.out_groups.len() > 2
-            || unit.in_groups[0].bits.iter().any(|&b| b != 16) || unit.out_groups[0].bits.iter().any(|&b| b != 16)
+            || unit.in_groups[0].bits.iter().any(|&b| b != 16) || (!tail_out && unit.out_groups[0].bits.iter().any(|&b| b != 16))
         {
             return Err("the unit's ports are not a group of 16-bit leaf inputs (then cut inputs) and one of 16-bit returned outputs (then cut outputs)".into());
+        }
+        if tail_out {
+            let n_out: usize = self.out_words.iter().sum();
+            let net = &self.nets[self.out_net].1;
+            let oc = port_cols(&net.out_groups);
+            if !self.nets[self.out_net].0.starts_with("stage") || self.out_ports != (0..oc.len()).collect::<Vec<_>>() || oc.len() != n_out
+                || oc.iter().any(|x| x.1 != 16) || net.out_groups.len() != 1 || !(16 * n_out).is_power_of_two()
+                || self.leaves_out.iter().any(|l| !l.is_empty())
+            {
+                return Err("the returned outputs are not the last stage's only output group: one 16-bit port per output word".into());
+            }
         }
         for (i, r) in self.ranges.iter().enumerate() {
             if let Kind::Net(n) = r.kind
@@ -511,6 +537,14 @@ impl Composite {
             }
             *wired.entry(w.dst).or_default() += 1;
         }
+        for &(u, j, leaf) in &self.leaf_cuts {
+            let n_in: usize = self.ports.iter().map(|p| p.words).sum();
+            let pc = port_cols(&unit.in_groups);
+            if u >= self.upv || j < unit.in_groups[0].bits.len() || j >= pc.len() || pc[j].1 < 16 || leaf >= n_in {
+                return Err("a leaf cut outside the unit's cut inputs or the rows".into());
+            }
+            *wired.entry((self.unit_net, u, j)).or_default() += 1;
+        }
         for (n, (nm, net)) in self.nets.iter().enumerate() {
             if n == self.sha_net || n == self.hm_net {
                 continue;
@@ -529,10 +563,11 @@ impl Composite {
         if self.leaves_in.len() != self.upv || self.leaves_out.len() != self.upv {
             return Err("the leaf maps are not one per unit".into());
         }
-        let mut seen_out = vec![false; n_out];
+        // a tail that returns the outputs returns every one of them (the units return none)
+        let mut seen_out = vec![tail_out; n_out];
         for u in 0..self.upv {
             if self.leaves_in[u].len() != unit.in_groups[0].bits.len() || self.leaves_in[u].iter().any(|&x| x < -1 || x >= n_in as i64)
-                || self.leaves_out[u].len() != unit.out_groups[0].bits.len()
+                || (!tail_out && self.leaves_out[u].len() != unit.out_groups[0].bits.len())
             {
                 return Err(format!("unit {u}'s leaf maps are not its circuit's ports"));
             }
@@ -649,6 +684,16 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
                     msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8)
                 };
                 both(&mut da, &mut db, base + leaf_cols[j] + t, src);
+            }
+        }
+    }
+    let pc = port_cols(&unit.in_groups);
+    for g in 0..c.g {
+        for &(u, j, leaf) in &c.leaf_cuts {
+            let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
+            let dst = c.slot_col(c.unit_net, g, u) + pc[j].0;
+            for t in 0..pc[j].1 {
+                both(&mut da, &mut db, dst + t, if t < 16 { msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8) } else { zero });
             }
         }
     }
@@ -1095,6 +1140,14 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
+        if c.out_net != c.unit_net {
+            // the last stage's output group is the output words (one slot per VU)
+            let (net, r) = (&c.nets[c.out_net].1, c.range_of(c.out_net));
+            let nbits = 16 * c.out_words.iter().sum::<usize>();
+            out.push(mk(Region::Out, [bits(0, nbits.trailing_zeros() as usize), bits(r.slot_log, r.count.trailing_zeros() as usize)].concat(),
+                        r.start() + net.out_groups[0].col * WORD)?);
+            return Ok(out);
+        }
         let unit = c.unit();
         let ur = c.unit_range();
         let g0 = &unit.out_groups[0];
@@ -1414,6 +1467,11 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
+            Region::Out if c.out_net != c.unit_net => {
+                let n_out = c.out_words.iter().sum::<usize>();
+                (0..c.g).flat_map(|g| (0..n_out).flat_map(move |o| match self.inst_of(b, g) { Some(i) => inst.outputs[i * n_out + o], None => c.dummy_outputs[o] }.to_le_bytes()))
+                    .collect()
+            }
             Region::Out => {
                 let unit = c.unit();
                 let ur = c.unit_range();
