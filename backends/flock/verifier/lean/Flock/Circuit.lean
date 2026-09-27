@@ -210,14 +210,15 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     | .ok _ => throw "META: lookups is not an object"
     | .error _ => pure #[]
   for (name, spec) in lks do
-    let some (_, sha, size) := MUFU_TABLES.find? (·.1 == name) | throw "META: a lookup of a table the statement does not pin"
-    if (← J.str spec "sha256" ctx) != sha || (← J.str spec "table" ctx) != name || (← J.nat spec "out_bits" ctx) != 31 then
+    let some pinned := MUFU_TABLES.find? (·.name == name) | throw "META: a lookup of a table the statement does not pin"
+    let size := pinned.words
+    if (← J.str spec "sha256" ctx) != pinned.sha256 || (← J.str spec "table" ctx) != name || (← J.nat spec "out_bits" ctx) != 31 then
       throw s!"META: lookup {name} is not the pinned table"
     let n ← J.nat spec "in_bits" ctx
     let lo ← J.nat spec "lo_bits" ctx
     if 2 ^ n != size || !(2 ≤ lo && lo < n) then throw s!"META: lookup {name}'s index is not its table's"
     let some (_, words) := tables.find? (·.1 == name) | throw s!"the circuit has a lookup of {name}: its table is not given"
-    if words.size != 4 * size || hexOf (Sha256.hash words) != sha then throw s!"MUFU table {name}: not the pinned table"
+    if words.size != 4 * size || hexOf (Sha512.hash words) != pinned.sha512 then throw s!"MUFU table {name}: not the pinned table"
     nets := nets.push (s!"lookup:{name}", ← Lookup.build s!"lookup:{name}" words n lo 31)
   let ports ← (← J.arr mj "ports" ctx).mapM fun p => do
     let a ← J.asArr p s!"{ctx}: a port"

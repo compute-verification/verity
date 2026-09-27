@@ -57,24 +57,24 @@ def argOf (args : List String) (k : String) : Option String :=
 def readTables (args : List String) : IO (List (String × ByteArray)) := do
   let some dir := argOf args "--tables" | return []
   let mut out := []
-  for (name, _, _) in MUFU_TABLES do
-    let p : System.FilePath := dir ++ s!"/{name}.u32"
-    if ← p.pathExists then out := out ++ [(name, ← IO.FS.readBinFile p)]
+  for t in MUFU_TABLES do
+    let p : System.FilePath := dir ++ s!"/{t.name}.u32"
+    if ← p.pathExists then out := out ++ [(t.name, ← IO.FS.readBinFile p)]
   return out
 
-/-- `ARCHIVE/sha256/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
 def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
-  if hex.length != 64 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
-    return .error s!"archive: {hex} is not a SHA-256 digest"
-  let p : System.FilePath := archive ++ s!"/sha256/{hex}"
+  if hex.length != 128 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
+    return .error s!"archive: {hex} is not a SHA-512 digest"
+  let p : System.FilePath := archive ++ s!"/sha512/{hex}"
   if !(← p.pathExists) then return .error s!"archive: {hex} is not held"
   let b ← IO.FS.readBinFile p
-  if hexOf (Sha256.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
+  if hexOf (Sha512.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
   return .ok b
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
-named by `--circuit`, `--public`, `--comp` digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8); without it,
-the files at those paths. -/
+named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8);
+without it, the files at those paths. -/
 def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
   let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
     | return .error "--circuit, --comp and --public are required"
@@ -85,20 +85,20 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
     let c ← match ← get circuit with | .ok b => pure b | .error e => return .error s!"circuit: {e}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
     let cm ← match ← get comp with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
-    -- `Circuit.parse` hashes each table a lookup uses against the digest it is held under here (`MUFU_TABLES`)
+    -- `Circuit.parse` hashes each table a lookup uses against its pinned SHA-512, the key it is held under here
     let mut tables := []
-    for (name, sha, _) in MUFU_TABLES do
-      let p : System.FilePath := dir ++ s!"/sha256/{sha}"
-      if ← p.pathExists then tables := tables ++ [(name, ← IO.FS.readBinFile p)]
+    for t in MUFU_TABLES do
+      let p : System.FilePath := dir ++ s!"/sha512/{t.sha512}"
+      if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- `archive-put DIR FILE...`: store each file under `DIR/sha256/<its SHA-256>`, and print the digests. -/
+/-- `archive-put DIR FILE...`: store each file under `DIR/sha512/<its SHA-512>`, and print the digests. -/
 def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
-  IO.FS.createDirAll (dir ++ "/sha256")
+  IO.FS.createDirAll (dir ++ "/sha512")
   for path in paths do
     let b ← IO.FS.readBinFile path
-    let hex := hexOf (Sha256.hash b)
-    IO.FS.writeBinFile (dir ++ s!"/sha256/{hex}") b
+    let hex := hexOf (Sha512.hash b)
+    IO.FS.writeBinFile (dir ++ s!"/sha512/{hex}") b
     IO.println s!"{hex}  {path}"
   return 0
 
@@ -219,6 +219,49 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
+/-- `draw --population N (--k K | --p NUM/DEN) [--stream HEX]`: the unit draw (§7.3), from the operating system's randomness,
+or from the given bytes (a test). Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+def drawCmd (args : List String) : IO UInt32 := do
+  let some pop := (argOf args "--population").bind String.toNat? | IO.eprintln "draw: --population N"; return 2
+  let law ← match argOf args "--k", argOf args "--p" with
+    | some k, none => match k.toNat? with
+      | some k => if k ≤ pop then pure (Draw.Law.subset k) else IO.eprintln "draw: k > population"; return 2
+      | none => IO.eprintln "draw: --k K"; return 2
+    | none, some p => match p.splitOn "/" with
+      | [a, b] => match a.toNat?, b.toNat? with
+        | some a, some b => if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
+        | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+      | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+    | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
+  let d ← match argOf args "--stream" with
+    | none => Draw.drawOS law pop
+    | some hex =>
+      let src ← match unhex hex with | .ok b => pure b | .error e => IO.eprintln s!"draw: {e}"; return 2
+      let r := match law with
+        | .subset k => Draw.subset k pop src
+        | .bernoulli a b => Draw.bernoulli a b pop src
+      match r with
+      | some units => pure { law, population := pop, units : Draw.UnitDraw }
+      | none => IO.eprintln "draw: the stream ran out"; return 1
+  IO.println s!"DRAW {d.toJson.compress}"
+  return 0
+
+/-- `draw-test FILE`: U1–U3 (§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one
+`DRAWCHECK {"ok", "why"}` line per case. -/
+def drawTest (path : String) : IO UInt32 := do
+  let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
+  for c in cases do
+    let side := fun (k : String) => match c.getObjVal? k with
+      | .ok .null => none
+      | .ok v => some v
+      | .error _ => none
+    let n := (c.getObjValAs? Nat "instances").toOption.getD 0
+    let (ok, why) := match Draw.check (side "record") (side "statement") n with
+      | .ok () => (true, "")
+      | .error e => (false, e)
+    IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -226,6 +269,8 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
+  | "draw" :: rest => drawCmd rest
+  | ["draw-test", path] => drawTest path
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
