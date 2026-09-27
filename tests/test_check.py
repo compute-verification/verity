@@ -192,3 +192,20 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
                 else:
                     assert top in sys.stdlib_module_names or top == "__future__", f"{m}.py imports {n}"
     assert {"agree", "fuzz", "redigest", "transcript_check"} <= seen
+
+
+def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
+    """`flock-verify` is built from the Lean package alone: level3/ and soundness/ (Lake packages of their own) are no input,
+    unless the package's lakefile requires something, which keeps everything in."""
+    files = CHECK.tracked_files()
+    closure = CHECK.agreement_closure(files)
+    assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
+    assert "backends/flock/verifier/upstream.json" in closure
+    assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
+    assert [f for f in files if f.startswith("backends/flock/verifier/lean/soundness/")]
+    (tmp_path / "backends/flock/verifier/lean/soundness").mkdir(parents=True)
+    (tmp_path / "backends/flock/verifier/lean/lakefile.toml").write_text('[[require]]\nname = "x"\n')
+    (tmp_path / "backends/flock/verifier/lean/soundness/lakefile.toml").write_text("")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    fake = ["backends/flock/verifier/lean/lakefile.toml", "backends/flock/verifier/lean/soundness/lakefile.toml"]
+    assert CHECK.agreement_closure(fake) == fake
