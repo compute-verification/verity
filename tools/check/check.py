@@ -256,6 +256,12 @@ def tree_digest(root: Path = ROOT) -> str | None:
     return h.hexdigest()
 
 
+def _env_key(e: dict[str, str]) -> dict[str, str]:
+    """The environment as a key: without the shell's bookkeeping, and with this tree's path written `<tree>` (a machine keeps each
+    commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
+    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE}
+
+
 def pytest_key(argv: list[str], e: dict[str, str]) -> str | None:
     from importlib import metadata
 
@@ -264,7 +270,7 @@ def pytest_key(argv: list[str], e: dict[str, str]) -> str | None:
         return None
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
     doc = {"tree": tree, "argv": [a for a in argv[1:] if not a.isdigit() and a != "-n"],
-           "env": {k: v for k, v in sorted(e.items()) if k not in VOLATILE}, "python": sys.version, "platform": platform.platform(),
+           "env": _env_key(e), "python": sys.version, "platform": platform.platform(),
            "distributions": dists}
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
 
@@ -276,7 +282,7 @@ def agreement_key(e: dict[str, str]) -> str | None:
     files = tracked_files()
     if files is None:
         return None
-    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), {k: v for k, v in sorted(e.items()) if k not in VOLATILE}]).encode())
+    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), _env_key(e)]).encode())
     for f in files:
         if f.startswith("backends/flock/verifier/"):
             p = ROOT / f

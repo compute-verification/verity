@@ -6,9 +6,10 @@ was a file, a directory or absent), and the source file of every module it impor
 without opening its source).  Beside them the key holds the checker's own version (the
 digest of this package's sources), the interpreter, the platform, the installed distributions, the request, and the
 ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment.  A later run with the same key reuses the report only if every recorded file
-has the same sha256 and every recorded directory the same listing, so a hit means identical inputs.  Not seen: files a C
-extension reads with its own I/O (none here), and anything outside the repository, which the interpreter, platform and
-distribution list stand for.
+has the same sha256 and every recorded directory the same listing, so a hit means identical inputs.  The tree is git's
+(`visible`): what git does not have (bytecode, a build inside the tree, as a concurrent step makes) counts as absent, being
+derived from what it has.  Not seen: files a C extension reads with its own I/O (none here), and anything outside the
+repository, which the interpreter, platform and distribution list stand for.
 
 Entries are files ``<dir>/<version>/<sha256 of the entry>.json``; there is no expiry and no path or time shortcut.
 """
@@ -35,8 +36,38 @@ def _sha_file(p: Path) -> str:
     return h.hexdigest()
 
 
-def _listing(p: Path) -> str:
-    return hashlib.sha256("\0".join(sorted(os.listdir(p))).encode()).hexdigest()
+_VISIBLE: dict[Path, tuple[frozenset[str], frozenset[str]] | None] = {}
+
+
+def visible(root: Path) -> tuple[frozenset[str], frozenset[str]] | None:
+    """(files, directories) of the tree as git has it: tracked and untracked-unignored in a checkout; in a shipped tree (no
+    `.git`), the commit's tree from the machine's bare repository (`READY.json` names it).  None when neither is available."""
+    root = Path(root).resolve()
+    if root not in _VISIBLE:
+        import subprocess
+
+        if (root / ".git").exists():
+            argv = ["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"]
+        elif (root / "READY.json").exists() and (root.parent.parent / "git" / "verity.git").exists():
+            tree = json.loads((root / "READY.json").read_text())["tree"]
+            argv = ["git", "--git-dir", str(root.parent.parent / "git" / "verity.git"), "ls-tree", "-r", "-z", "--name-only", tree]
+        else:
+            argv = None
+        r = subprocess.run(argv, capture_output=True) if argv else None
+        if r is None or r.returncode:
+            _VISIBLE[root] = None
+        else:
+            files = frozenset(x.decode() for x in r.stdout.split(b"\0") if x)
+            dirs = frozenset({"."} | {str(Path(f).parents[i]) for f in files for i in range(len(Path(f).parents) - 1)})
+            _VISIBLE[root] = (files, dirs)
+    return _VISIBLE[root]
+
+
+def _listing(root: Path, rel: str) -> str:
+    names = sorted(os.listdir(root / rel))
+    if (v := visible(root)) is not None:                # what a build or a run adds inside the tree is not an input
+        names = [n for n in names if os.path.normpath(os.path.join(rel, n)) in v[0] | v[1]]
+    return hashlib.sha256("\0".join(names).encode()).hexdigest()
 
 
 def _rel(path: Any) -> str | None:
@@ -117,9 +148,13 @@ def _kind(p: Path) -> str | None:
 
 
 def _digests(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
-    files = {r: (_sha_file(root / r) if (root / r).is_file() else None) for r in got["files"]}
-    dirs = {r: (_listing(root / r) if (root / r).is_dir() else None) for r in got["dirs"]}
-    return {"files": files, "dirs": dirs, "probes": {r: _kind(root / r) for r in got.get("probes", [])}}
+    """Each recorded read as it is now.  With git's view of the tree (`visible`), a file or directory git does not have (bytecode,
+    a build inside the tree) counts as absent: derived from what git has, it is not an input of its own."""
+    v = visible(root)
+    seen = (lambda r: True) if v is None else (lambda r: r in v[0] or r in v[1])
+    files = {r: (_sha_file(root / r) if seen(r) and (root / r).is_file() else None) for r in got["files"]}
+    dirs = {r: (_listing(root, r) if seen(r) and (root / r).is_dir() else None) for r in got["dirs"]}
+    return {"files": files, "dirs": dirs, "probes": {r: (_kind(root / r) if seen(r) else None) for r in got.get("probes", [])}}
 
 
 def lookup(cache: Path, k: dict, root: Path) -> tuple[dict, str] | None:

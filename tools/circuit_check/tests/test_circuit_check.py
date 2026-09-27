@@ -304,3 +304,26 @@ def test_parallel_jobs_give_the_serial_report(tmp_path):
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
     strip = lambda rep: [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]  # noqa: E731
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
+
+
+def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
+    """A build or bytecode inside the tree (ignored by git) changes no recorded read; a new file git sees does."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("build/\n")
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt", "build/lib.so"], "dirs": ["."], "probes": ["build/lib.so", "b.txt"]}
+    CC._VISIBLE.clear()
+    before = CC._digests(tmp_path, got)
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "lib.so").write_bytes(b"built")
+    CC._VISIBLE.clear()
+    assert CC._digests(tmp_path, got) == before
+    (tmp_path / "b.txt").write_text("b")
+    CC._VISIBLE.clear()
+    after = CC._digests(tmp_path, got)
+    assert after["dirs"] != before["dirs"] and after["probes"]["b.txt"] == "file"
+    CC._VISIBLE.clear()

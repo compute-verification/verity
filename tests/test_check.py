@@ -139,6 +139,7 @@ def test_the_pytest_cache_key_is_the_tree_the_environment_and_the_arguments(tmp_
     assert CHECK.pytest_key(["py", "-m", "pytest", "-q", "-n", "2"], e) == k       # the worker count computes nothing
     assert CHECK.pytest_key(argv, {**e, "PWD": "/elsewhere"}) == k
     assert CHECK.pytest_key(argv, {**e, "VERITY_X": "1"}) != k and CHECK.pytest_key(argv + ["-k", "x"], e) != k
+    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
 
 
 def test_a_shipped_trees_files_are_its_commits(tmp_path):
