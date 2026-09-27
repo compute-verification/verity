@@ -581,18 +581,21 @@ it, so `ksFail` is "the unit is wrong", `SessionSound` gives `KnowledgeSound`, a
   `k₂`-subset misses one gate with `a = (nv − k₂)/nv` (`choose_ratio`, from `Nat.choose_mul_succ_eq`). That factor is
   exactly the Bernoulli(`num·k₂/(den·nv)`) factor at `a = 0` (`bernFactor_thin`).
 
-### 12.5 The Flock instantiation (to write)
+### 12.5 The Flock instantiation
 
-The audit theorems take the per-unit proof system through named hypotheses, so that the Flock theorems instantiate
-them.
+**Oracle layer, proved** (`Audit/Flock.lean`). `table_sound` is proved by bounding `value`, so the optimal prover's
+form `table_value_sound` comes out of it by a one-line split. `value_interleave_le` then projects a batched session onto
+any one table (`value_batch_le`): the other tables' coins are part of the prover's strategy, and their values are at most
+1. A drawn wrong unit's table has no committed satisfying witness by the lowering hypothesis (`LoweringSound`), so the
+session is `SessionSound` at `2^-195.4` (`flock_session_sound`). The plan's strategy-level projection turned out
+unnecessary: the audit's hypothesis is per strategy, and `prob ≤ value` closes the gap.
 
-- **Oracle layer.** `table_sound_exec` has the shape `∀ σ, Pr[accept ∧ ¬ Committed] ≤ tableError`, the shape of
-  `SessionSound` once two things are in place:
-  - a drawn wrong unit's statement has no committed satisfying witness (the lowering theorem, level 3);
-  - the batched session projects to that unit's table: the other tables' coins are the prover's private randomness, a
-    mixture of deterministic strategies.
+- **The plan** (`plan S tr : List FlockTable`) is the verifier's own derivation of the session's tables from the draw and
+  the transcript. Packing several units into one table is allowed: the lowering names, for each drawn wrong unit, some
+  table of the plan that no committed table satisfies.
+- **The lowering hypothesis** is level 3's lowering theorem, stated for the audit: at the oracle layer a unit's statement
+  carries its committed inputs and outputs, and it is satisfiable only if the unit's gates map one to the other.
 
-  The second is a strategy-level analogue of `Game.value_interleave_le`, to write.
-- **Compiled layer.** `KnowledgeSound` is `table_knowledge_sound_joint` (the knowledge-soundness review, §4a), averaged
-  over the prover's states with the first wrong drawn unit as target (§4b). `LinkSound` is the link theorem (§4d), and
-  `AnchorsSound` is `registered_weights`.
+**Compiled layer, to write.** `KnowledgeSound` is `table_knowledge_sound_joint` (the knowledge-soundness review, §4a),
+averaged over the prover's states with the first wrong drawn unit as target (§4b). `LinkSound` is the link theorem (§4d),
+and `AnchorsSound` is `registered_weights`.

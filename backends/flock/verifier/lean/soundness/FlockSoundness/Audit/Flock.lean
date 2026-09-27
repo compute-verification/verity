@@ -1,0 +1,149 @@
+import FlockSoundness.Audit.OneStage
+import FlockSoundness.Instance
+
+/-!
+# The Flock instantiation, at the oracle layer
+
+The verifier's session on a draw runs the tables its plan derives from the draw and the transcript,
+concurrently, and accepts when every table accepts (`flockSession`). The prover chooses the
+schedule, so every other table's coins are part of its strategy.
+
+* `value_batch_le`: every table accepting is at most as likely as any one table accepting
+  (`Game.value_interleave_le`, table by table);
+* `FlockTable.value_le`: one table, with the executable's arithmetic and the `fast100` numbers, is
+  accepted while its committed values do not satisfy its statement with probability at most
+  `2^-195.4` (`table_value_sound`, `execArith_correct`);
+* `flock_session_sound`: so the session is `SessionSound` at `2^-195.4`, given **the lowering**
+  (`LoweringSound`, named): a drawn wrong unit lies in a table whose statement no committed table
+  satisfies;
+* `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
+  `δ(K) = miss K + 2^-195.4`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-195.4`.
+
+The only other hypothesis is BCHKS25 Theorem 4.6 (`Assumptions.BCHKS25Thm46`). This is the only
+file of `Audit/` that imports the Flock theorems.
+-/
+
+namespace FlockSoundness.Audit
+
+open Game Model Accounting
+open scoped ENNReal
+
+/-! ## Tables run concurrently -/
+
+/-- A batched session: its interactions run concurrently, the prover choosing the schedule. -/
+def batch {α : Type} : List (Game α) → Game (List α)
+  | [] => .ret []
+  | g :: gs => (g.interleave (batch gs)).map fun x => x.1 :: x.2
+
+/-- **Projection to one table.** Every interaction of a batch satisfying `Q` is at most as likely,
+for an optimal prover, as any one of them satisfying `Q`. -/
+theorem value_batch_le {α : Type} (Q : α → Prop) :
+    ∀ (gs : List (Game α)) (g : Game α), g ∈ gs →
+      value (fun outs => ∀ o ∈ outs, Q o) (batch gs) ≤ value Q g
+  | [], _, h => absurd h List.not_mem_nil
+  | g' :: gs, g, h => by
+      rw [batch, value_map]
+      have e : (fun x : α × List α => ∀ o ∈ x.1 :: x.2, Q o) = fun x => Q x.1 ∧ ∀ o ∈ x.2, Q o := by
+        funext x
+        simp
+      rw [e]
+      refine (value_interleave_le Q (fun outs => ∀ o ∈ outs, Q o) g' (batch gs)).trans ?_
+      rcases List.mem_cons.1 h with rfl | h
+      · calc value Q g * value (fun outs => ∀ o ∈ outs, Q o) (batch gs) ≤ value Q g * 1 :=
+              mul_le_mul' le_rfl (value_le_one _ _)
+          _ = value Q g := mul_one _
+      · calc value Q g' * value (fun outs => ∀ o ∈ outs, Q o) (batch gs)
+            ≤ 1 * value Q g := mul_le_mul' (value_le_one _ _) (value_batch_le Q gs g h)
+          _ = value Q g := one_mul _
+
+/-! ## One Flock table -/
+
+/-- A table of the verifier's session: a statement with its `fast100` schedule and link-point
+layout, at a size the numbers cover (`22 ≤ m ≤ 35`, shapes in range). -/
+structure FlockTable where
+  S : Statement
+  sch : Schedule
+  hsch : fast100 S.m = some sch
+  hm1 : 22 ≤ S.m
+  hm2 : S.m ≤ 35
+  ptLocal : ℕ
+  mPts : ℕ
+  hshape : (S.shape mPts).InRange
+  hlay : S.LinkLayout ptLocal mPts
+
+namespace FlockTable
+
+/-- The table's session, with the executable's arithmetic. -/
+noncomputable def game (T : FlockTable) : Game (Bool × Oracle FlockLevel3.GF128) :=
+  table execArith T.S T.sch (by have := T.hm1; omega) T.ptLocal T.mPts
+
+/-- **One table, with the numbers**: accepted while its committed values do not satisfy its
+statement with probability at most `2^-195.4`, for an optimal prover. -/
+theorem value_le (hMCA : Assumptions.BCHKS25Thm46) (T : FlockTable) :
+    value (fun out => out.1 = true ∧ ¬ Committed execArith T.S T.sch out.2) T.game ≤
+      ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) := by
+  refine (table_value_sound hMCA execArith execArith_correct T.S T.sch T.hsch _ T.ptLocal T.mPts
+    T.hlay).trans (ENNReal.ofReal_le_ofReal ?_)
+  rcases le_or_gt T.S.m 33 with h | h
+  · exact (tableError_le_of_le_33 T.hm1 h T.hsch _ T.hshape).trans
+      (Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num))
+  · exact tableError_le_of_34_35 (by omega) T.hm2 T.hsch _ T.hshape
+
+end FlockTable
+
+/-! ## The session and the audit -/
+
+namespace Partition
+
+variable {C : Circuit} {n : ℕ} (P : Partition C n)
+
+/-- **The verifier's session on a draw**: the tables its plan derives from the draw and the
+transcript, run concurrently; it accepts when every table accepts. -/
+noncomputable def flockSession (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable)
+    (S : Finset (Fin n)) (tr : Fin C.N → Bool) : Game Bool :=
+  (batch ((plan S tr).map FlockTable.game)).map fun outs => decide (∀ o ∈ outs, o.1 = true)
+
+/-- **The lowering** (named hypothesis): a drawn unit that is wrong in the transcript lies in a
+table of the plan whose statement no committed table satisfies. At the oracle layer a unit's
+statement carries its committed inputs and outputs, so this is the lowering theorem's content: the
+statement is satisfiable only if the unit's gates map its committed inputs to its committed
+outputs. -/
+def LoweringSound (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) : Prop :=
+  ∀ S tr u, u ∈ S → u ∈ P.wrong tr → ∃ T ∈ plan S tr, ∀ C₀, ¬ Committed execArith T.S T.sch C₀
+
+/-- **Flock's batched session is `SessionSound` at `2^-195.4`**, given the lowering: the first
+wrong drawn unit's table bounds the whole session. -/
+theorem flock_session_sound (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan) :
+    P.SessionSound (flockSession plan) (ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ)))) := by
+  intro S tr u hu hw τ
+  obtain ⟨T, hT, hno⟩ := hlow S tr u hu hw
+  refine (prob_le_value _ _ τ).trans ?_
+  rw [flockSession, value_map]
+  refine (value_mono (q := fun outs => ∀ o ∈ outs, o.1 = true) (fun outs h => by simpa using h)
+    _).trans ?_
+  refine (value_batch_le _ _ T.game (List.mem_map.2 ⟨T, hT, rfl⟩)).trans ?_
+  exact (value_mono (fun out h => ⟨h, hno out.2⟩) _).trans (T.value_le hMCA)
+
+/-- **The Flock audit's count curve, at the oracle layer**: `δ(K) = miss K + 2^-195.4`. -/
+theorem flock_oracle_count (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
+    (L : Law n) (K : ℕ) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card) (audit L _ (flockSession plan)) σ ≤
+      L.miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
+  P.oracle_count (P.flock_session_sound hMCA plan hlow) K σ
+
+/-- **With the uniform `k`-subset**: `δ(K) = C(n − K, k)/C(n, k) + 2^-195.4`. -/
+theorem flock_oracle_count_subset (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
+    {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n)
+    (σ : Strategy (audit (Law.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card)
+        (audit (Law.subset n k hk) _ (flockSession plan)) σ ≤
+      ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) := by
+  have := P.flock_oracle_count hMCA plan hlow (Law.subset n k hk) K σ
+  rwa [Law.subset_miss hk hK] at this
+
+end Partition
+
+end FlockSoundness.Audit

@@ -81,6 +81,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and
 -- `link_sound`
 #print axioms FlockSoundness.rep_sound
+#print axioms FlockSoundness.table_value_sound
 #print axioms FlockSoundness.table_sound
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
@@ -149,3 +150,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.NotChains.naive_two_level_unsound
 #print axioms FlockSoundness.Audit.NotChains.late_interior_insecure
 #print axioms FlockSoundness.Audit.NotChains.effEscape_bernoulli
+-- the Flock instantiation at the oracle layer
+#print axioms FlockSoundness.Audit.value_batch_le
+#print axioms FlockSoundness.Audit.FlockTable.value_le
+#print axioms FlockSoundness.Audit.Partition.flock_session_sound
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_count
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_count_subset

@@ -48,3 +48,4 @@ import FlockSoundness.Audit.Circuit
 import FlockSoundness.Audit.OneStage
 import FlockSoundness.Audit.TwoStage
 import FlockSoundness.Audit.Examples
+import FlockSoundness.Audit.Flock

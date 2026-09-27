@@ -30,6 +30,8 @@ at most `tableError(fast100 m, shape)`:
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
   `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
+- **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
+  strategy. This form composes across the tables of a batched session (§9, `value_batch_le`).
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
@@ -95,6 +97,8 @@ link term per audit.
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
+| Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (§9) | (composition) | `Audit/*` | proved; per-unit terms named |
+| The Flock audit at the oracle layer: the batched session's projection to one table, `2^-195.4` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
@@ -313,7 +317,8 @@ to its committed inputs (`Partition.Correct`). Every bound holds for every prove
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
 | `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | the link theorem, to write (flock-soundness review of the extraction analysis, §4d) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); zero at the oracle layer (`RejectsBadInputs`) |
-| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | `table_sound_exec`, projected from the batched session to the first wrong drawn unit's table (to write) |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-195.4`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
 before the session's first coin, not bounds state by state.
@@ -380,4 +385,14 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
   the effective escape of any set of chains is its escape under the one-stage Bernoulli($p\,k_2/n_v$) draw,
   $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
 
-**Not yet:** the Flock instantiation of `SessionSound`, `KnowledgeSound` and `LinkSound` (DESIGN.md §12.5).
+**The Flock instantiation, oracle layer** (`Audit/Flock.lean`, the only audit file that imports Flock's theorems):
+
+- `value_batch_le`: in a batched session, whose tables run concurrently on a schedule the prover chooses, every table
+  accepting is at most as likely as any one table accepting (`Game.value_interleave_le`, table by table);
+- `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-195.4` for `22 ≤ m ≤ 35`;
+- `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-195.4`, given `LoweringSound`;
+- `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-195.4}$,
+  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-195.4}$ for the uniform $k$-subset. The hypotheses are BCHKS25 Theorem 4.6 and the
+  lowering.
+
+**Not yet:** the compiled instantiation, `KnowledgeSound` and `LinkSound` for Flock (DESIGN.md §12.5).
