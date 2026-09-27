@@ -137,3 +137,24 @@ def test_the_profile_is_over_replay_units():
         TOY.profile("u", n_r=512, n_v=4, delta=0.01, drawn={REPLAY: 3, CHECK: 6})
     with pytest.raises(ValueError):
         TOY.profile("u", n_r=512, n_v=0, delta=0.01)
+
+
+def test_a_mixed_class_is_profiled_at_its_largest_replay_unit():
+    """red-team-flock-3's C1 on #121: p = 1/2, k = 2, delta = 0.01, a class of 4-VU and 8-VU RUs.  An 8-VU RU escapes at
+    1 - 1/8, so an adaptive prover leaves 34 of them wrong and passes with probability (7/8)^34 >= 0.01; profiled at
+    n_v = 4 the class would admit only 16.  From its RUs the profile takes n_v = 8 and certifies 34.49."""
+    units = [ReplayUnit(i, "u", 4) for i in range(200)] + [ReplayUnit(200 + i, "u", 8) for i in range(200)]
+    units.append(ReplayUnit(1000, "other", 64))
+    assert (1 - Fraction(1, 2) * Fraction(2, 8)) ** 34 >= Fraction(1, 100)
+    a = TOY.profile("u", units, delta=0.01)
+    assert a.sizes == (400,) and a.draws[REPLAY].p == Fraction(1, 8)
+    assert a.worst_case(lambda m: m) >= 34 and round(a.worst_case(lambda m: m), 2) == 34.49
+    assert a == TOY.profile("u", units, n_r=400, n_v=8, delta=0.01)
+    assert TOY.profile("u", units, n_v=16, delta=0.01).draws[REPLAY].p == Fraction(1, 16)
+    for bad in (dict(n_v=4), dict(n_r=399)):
+        with pytest.raises(ValueError):
+            TOY.profile("u", units, delta=0.01, **bad)
+    with pytest.raises(ValueError):
+        TOY.profile("u", [ReplayUnit(0, "other", 4)], delta=0.01)
+    with pytest.raises(ValueError):
+        TOY.profile("u", delta=0.01)

@@ -37,7 +37,9 @@ An RU with `m` incorrect VUs out of `n_v` passes with probability `1 - p + p * C
 not the profile's law: the interiors are committed after the RU draw, so the prover chooses `m` after seeing which RUs
 were drawn, and `m = 1` is always enough to leave a skipped RU wrong. A wrong RU therefore escapes with probability
 at most `1 - p * k / n_v`, independently across RUs, and the profile is over the RUs with that rate
-(`docs/audit-protocols.md` §3.3, pitfall 6). `tests/test_law.py` checks the sampler against the per-RU formula and
+(`docs/audit-protocols.md` §3.3, pitfall 6). A larger RU escapes more often, so a class is profiled at its largest RU's
+`n_v` (`TwoStageLaw.profile` takes the class's RUs and uses their maximum). The rate also rests on the VU draw's beacon
+round being published after the interiors are registered (pitfall 4). `tests/test_law.py` checks the sampler against the per-RU formula and
 reproduces the attack the old two-level profile missed (§2.9's `TOY`: 64 skipped VUs pass with probability 0.01).
 
 ## Boundaries

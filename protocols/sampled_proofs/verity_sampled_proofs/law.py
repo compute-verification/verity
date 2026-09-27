@@ -63,17 +63,42 @@ class TwoStageLaw:
         except KeyError:
             raise KeyError(f"the law has no stage for replay-unit class {cls!r}") from None
 
-    def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, **facts: Any) -> IntegrityProfile:
-        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs.
+    def profile(self, cls: str, units: Iterable[ReplayUnit] | None = None, *, n_r: int | None = None,
+                n_v: int | None = None, delta: float, **facts: Any) -> IntegrityProfile:
+        """The profile an accepted transcript leaves over the RUs of class `cls`.
 
         It is over the RUs, the only level committed before the first draw.  The interiors are committed after the RU
         draw, so the prover picks how many VUs of a drawn RU are wrong after seeing it, and one is always enough; a
         count of wrong VUs per RU is not a claim this lifecycle supports (`docs/audit-protocols.md` §3.3, pitfall 6).
-        A wrong RU is caught only when it is selected and a wrong VU is among the `k` checked, so it escapes with
-        probability at most 1 - p * k / n_v, independently across RUs: one level `REPLAY` drawn
-        `Bernoulli(p * k / n_v)` (`k = n_v` when every VU is checked).  It counts wrong RUs; a consumer reading work
-        in VUs charges `n_v` per wrong RU.  `facts` are the exhaustively checked fields (`programs`, `prescribed`,
-        `linked`, `covered`) and `drawn` ({`REPLAY`: RUs selected})."""
+        A wrong RU of `n_v` VUs is caught only when it is selected and a wrong VU is among the `k` checked, so it escapes
+        with probability at most 1 - p * k / n_v, independently across RUs.  A larger RU escapes more often, so the
+        class's rate is its largest RU's: one level `REPLAY` drawn `Bernoulli(p * k / n_v)` with `n_v` the largest RU of
+        the class (`k = n_v` when every VU is checked).  It counts wrong RUs; a consumer reading work in VUs charges that
+        `n_v` per wrong RU.
+
+        Pass the class's RUs as `units` (RUs of other classes are ignored): `n_r` is their count and `n_v` their largest
+        VU count.  A caller's `n_r` must equal the count and its `n_v` can't be smaller than the largest; without
+        `units`, `n_r` and `n_v` (the largest RU's VU count) are required.
+
+        The rate rests on the VU draw's randomness being unknown to the prover when it commits the interiors: the VU
+        key comes from a beacon round published after the interiors are registered (`vu_key`, pitfall 4).  Nothing here
+        checks that; a VU key derived from a round the prover saw before committing voids the rate.
+
+        `facts` are the exhaustively checked fields (`programs`, `prescribed`, `linked`, `covered`) and `drawn`
+        ({`REPLAY`: RUs selected})."""
+        if units is not None:
+            mine = [u for u in _distinct(units) if u.cls == cls]
+            if not mine:
+                raise ValueError(f"no replay unit of class {cls!r}")
+            if n_r is not None and n_r != len(mine):
+                raise ValueError(f"n_r = {n_r}, but the class has {len(mine)} RUs")
+            largest = max(u.n_v for u in mine)
+            if n_v is not None and n_v < largest:
+                raise ValueError(f"n_v = {n_v} is smaller than the class's largest RU ({largest} VUs): the profile would "
+                                 "overstate detection")
+            n_r, n_v = len(mine), max(largest, n_v or 0)
+        if n_r is None or n_v is None:
+            raise ValueError("pass the class's RUs, or n_r and n_v (its largest RU's VU count)")
         if n_v < 1:
             raise ValueError("an RU holds at least one VU")
         stage = self.stage(cls)

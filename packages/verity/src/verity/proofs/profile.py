@@ -64,6 +64,12 @@ class IntegrityProfile:
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; undrawn levels only group.  `drawn` counts the members actually drawn at each level, all passed.
 
+    A profile of more than one level is valid only when its checked level is committed before the first draw
+    (one-stage, or two-stage with every intermediate committed up front).  When the checked level is committed after
+    a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
+    and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
+    committed first (`docs/audit-protocols.md` §2.9).
+
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
     strategy leaving m_i incorrect checked members in Bernoulli member i is accepted with probability
