@@ -7,6 +7,7 @@ import FlockSoundness.Game.Lock
 import FlockSoundness.Model.Compiled
 import FlockSoundness.CompiledLock
 import FlockSoundness.CompiledSound
+import FlockSoundness.CompiledTable
 import FlockSoundness.Accounting.Schedule
 import FlockSoundness.Accounting.Bound
 import FlockSoundness.Accounting.Fast100
@@ -42,6 +43,10 @@ import FlockSoundness.LigeritoPhases
 import FlockSoundness.LigeritoMid
 import FlockSoundness.LigeritoPhase
 import FlockSoundness.Instance
+import FlockSoundness.Game.Runs
+import FlockSoundness.CompiledAlign
+import FlockSoundness.Extract
+import FlockSoundness.Knowledge
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit

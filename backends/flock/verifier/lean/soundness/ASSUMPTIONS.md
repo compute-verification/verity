@@ -53,7 +53,7 @@ after its level-0 cap):
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
 
-### 1.3 Knowledge soundness (`table_knowledge_sound`, `registered_weights`, to write)
+### 1.3 Knowledge soundness (`table_knowledge_sound`, `table_knowledge_sound_joint`; `registered_weights` to write)
 
 It is needed for any claim about which data a proof used ("these proofs used the registered weights"), and for the
 recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
@@ -63,9 +63,25 @@ hiding, so every commit string opens to essentially every value, and plain sound
 unit used. The audit bound defines a wrong unit through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
-- **`table_knowledge_sound`.** An extractor that reruns any classical prover accepted with probability ε outputs a
-  satisfying witness or a SHA-512 collision, with probability at least `ε − κ`. Here `κ` is the compiled soundness error
-  plus extraction terms.
+- **The extractor** (`Knowledge.lean`) works in three steps:
+  - It reruns the prover after its level-0 cap `K` times.
+  - It fills each level-0 position with the first verifying opening it saw there, and zero elsewhere.
+  - It decodes the full table at the level-0 radius. There are at most `L₀` candidates (`closeMsgs_card_le`), and it
+    succeeds when one of them packs a satisfying witness.
+
+  Its cost is `K` reruns, `K·t` hash evaluations.
+- **`table_knowledge_sound`.** If `P*` is accepted with probability `ε > ε_c⁻`, extraction fails with probability at
+  most `(K·Adv₀ + N₀/(eK))/(ε − ε_c⁻)`.
+  - `ε_c⁻` (`epsCminus`) is the compiled error without its level-0 rewinding term: `tableError`, the reps' cap terms
+    and the self-clash probability.
+  - It rests on `table_sound_compiled_of_table`: for any level-0 table `T`,
+    `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`. The reps' cap terms do not
+    depend on `T` (`advRT_eq`).
+- **`table_knowledge_sound_joint`,** the form the audit consumes:
+  `Pr[a fresh run accepts ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))`, for every `ε`. At
+  `K = √(N₀/(e·Adv₀))` this is at most `2ε_c⁻ + t·2^-243.7` (m = 33).
+- **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link term `δ_link`
+  (DESIGN.md §3). The first two need the SHA-512 leaf layout in the model; `δ_link` probably dominates the audit bound.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
   statement links that root, or Halevi–Micali binding gives a SHA-512 collision. So
   `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
@@ -93,7 +109,7 @@ link term per audit.
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
-| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write**, after `table_sound_compiled` (DESIGN.md §3); required for sampled audits (§7) |
+| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems proved; `registered_weights` and `δ_link` **to write** (DESIGN.md §3); required for sampled audits (§7) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
@@ -287,9 +303,9 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
-   registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
-   term (DESIGN.md §3).
+1. **Knowledge soundness, the rest** (§1.3). The table theorems are proved. Remaining:
+   - the link term `δ_link` (DESIGN.md §3), which the sampled-audit composition needs;
+   - the canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout in the model.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special

@@ -104,6 +104,17 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.SelfClash.collision
 #print axioms FlockSoundness.op₀_conflict_collision
 #print axioms FlockSoundness.opR_conflict_collision
+-- knowledge soundness (§1.3): the reps' fork terms do not depend on the level-0 table (the locksteps
+-- for two tables are aligned), the compiled bound for any table, and the fill-and-decode extractor
+#print axioms FlockSoundness.Game.Lock.forkE_congr
+#print axioms FlockSoundness.aligned_lockTable
+#print axioms FlockSoundness.advRT_eq
+#print axioms FlockSoundness.table_sound_compiled_of_table
+#print axioms FlockSoundness.Extract.expect_off_firstTable_le'
+#print axioms FlockSoundness.Extract.tail_of_fixed
+#print axioms FlockSoundness.Extract.joint_of_fixed
+#print axioms FlockSoundness.table_knowledge_sound
+#print axioms FlockSoundness.table_knowledge_sound_joint
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
