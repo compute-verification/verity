@@ -4067,7 +4067,8 @@
     "forgeries_note": "14 selftest forgeries that run a session, expectations in each case.json; cross_session_replay_both_reps is now caught at R2 by the retained bytes (both verifiers)",
     "fuzz": {
      "tool": "fuzz.py art:82c73709/honest OUT --seed S --n N --upstream-checks link_sigma,retained_bytes"
-    }
+    },
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 62/62"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4108,7 +4109,8 @@
     },
     "lean_statement": "verity/flock-circuit",
     "forgeries": "art:d13d622c",
-    "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)"
+    "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)",
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4132,7 +4134,8 @@
      "art:1100e385/rope-head/records-cpu",
      "art:1100e385/rope-head/records-gpu"
     ],
-    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)"
+    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 32/32"
    },
    {
     "tags": "verity/flock-circuit (SHA-512 statement)",
@@ -4157,8 +4160,13 @@
      "art:1100e385/rmst128/records-cpu",
      "art:1100e385/rmst128/records-gpu"
     ],
-    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)"
+    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
+    "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38"
    }
+  ],
+  "recorded_runs": [
+   "r20260926-232948-22a9: sets 0-3, 217/217 (result art:ab9fa582)",
+   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)"
   ]
  }
 }
