@@ -8,7 +8,7 @@ the application's failure union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ir.partition.Level`): each level's members
 partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`) or only groups.  The
-names are the producer's labels (sampled proofs draws "replay" with `Bernoulli(p)` and "check" with `Subset(k)`); the
+names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn `Bernoulli(p * k / n_v)`); the
 profile carries draws, never roles.
 """
 
@@ -63,6 +63,12 @@ class IntegrityProfile:
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; undrawn levels only group.  `drawn` counts the members actually drawn at each level, all passed.
+
+    A profile of more than one level is valid only when its checked level is committed before the first draw
+    (one-stage, or two-stage with every intermediate committed up front).  When the checked level is committed after
+    a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
+    and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
+    committed first (`docs/audit-protocols.md` §2.9).
 
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
