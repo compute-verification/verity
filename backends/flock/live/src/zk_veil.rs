@@ -56,8 +56,6 @@ pub const INNER_LOG_INV_RATE: usize = 3;
 /// ChaCha20 streams of [`crate::zk_hooks::ProverRng`] (1-3 are M0's).
 pub const STREAM_PADS: u64 = 4;
 pub const STREAM_DOT_MASK: u64 = 5;
-/// Constraint rows per rep (see [`replay`]).
-pub const N_CONSTRAINTS: usize = 8;
 
 /// Where each pad sits, per rep. Exposed values first, in proof-field order: zerocheck `round1_ab[64]`, `round1_c[64]`, the
 /// multilinear rounds `(G(1), G(∞))`, `final_a`, `final_b`, `final_c`; lincheck rounds `(q(1), q(∞))`, `z_partial[64]`;
@@ -1033,7 +1031,7 @@ mod tests {
 
     #[test]
     fn layout_is_a_bijection_on_the_exposed_values() {
-        let lay = Layout::new(25, 22);
+        let lay = Layout::new(25, 22, 1, 6);
         let mut seen = vec![false; lay.len()];
         for i in lay.absorbed() {
             assert!(!std::mem::replace(&mut seen[i], true));
@@ -1046,7 +1044,7 @@ mod tests {
 
     #[test]
     fn triple_sacrifice_holds_and_catches_a_bad_product() {
-        let lay = Layout::new(20, 16);
+        let lay = Layout::new(20, 16, 0, 0);
         let mut rng = ProverRng::from_seed(ProverSeed::injected([3; 32]));
         let p = Pads::draw(&mut rng, &lay, 0);
         let eps = F128::new(0x1234, 0x5678);
@@ -1062,7 +1060,7 @@ mod tests {
 
     #[test]
     fn inner_proof_round_trips_and_rejects_a_false_constraint() {
-        let lay = Layout::new(20, 16);
+        let lay = Layout::new(20, 16, 0, 0);
         let mut rng = ProverRng::from_seed(ProverSeed::injected([5; 32]));
         let p = Pads::draw(&mut rng, &lay, 0);
         let code = Code::new(lay.len() + K_PAD);
