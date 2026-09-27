@@ -12,29 +12,104 @@
   "Bf16ToF32_v1": {
    "and": 0
   },
+  "BitAtx16_v1": {
+   "and": 43
+  },
+  "BitAtx64_v1": {
+   "and": 89
+  },
+  "BitNot_v1": {
+   "and": 0
+  },
+  "BitOr_v1": {
+   "and": 1
+  },
+  "DivFullRcp_v1": {
+   "and": 3987
+  },
+  "DivFullScaleA_v1": {
+   "and": 1538
+  },
   "F2fpBf16_v1": {
    "and": 77
+  },
+  "F32AddFtz_v1": {
+   "and": 944
   },
   "F32Add_v1": {
    "and": 854
   },
+  "F32Eq_v1": {
+   "and": 155
+  },
+  "F32FmaFtz_v1": {
+   "and": 4618
+  },
+  "F32FmaSubFtz_v1": {
+   "and": 4618
+  },
   "F32Fma_v1": {
    "and": 4498
+  },
+  "F32GtStrict_v1": {
+   "and": 191
+  },
+  "F32Max_v1": {
+   "and": 283
+  },
+  "F32MulFtz_v1": {
+   "and": 2528
   },
   "F32Mul_v1": {
    "and": 2438
   },
+  "F32SubFtz_v1": {
+   "and": 1071
+  },
   "F32ToBf16Rn_v1": {
    "and": 77
   },
+  "Fa2InvSum_v1": {
+   "and": 290
+  },
+  "GuardNegInfZero_v1": {
+   "and": 63
+  },
+  "GumbelNoiseLane_v1": {
+   "and": 109431
+  },
+  "GumbelStreamKey_v1": {
+   "and": 9758
+  },
   "HopperBF16WgmmaDot16_v1": {
    "and": 8233
+  },
+  "I32Add_v1": {
+   "and": 31
+  },
+  "MufuEx2Ftz_v1": {
+   "and": 686
+  },
+  "MufuRcpFtz_v1": {
+   "and": 197
+  },
+  "MufuSqrtFtz_v1": {
+   "and": 148
   },
   "RopeOutAdd_v1": {
    "and": 2998
   },
   "RopeOut_v1": {
    "and": 2998
+  },
+  "RsqrtApprox_v1": {
+   "and": 947
+  },
+  "SelectF32_v1": {
+   "and": 32
+  },
+  "SelectI32_v1": {
+   "and": 32
   },
   "SiluMulBf16_v1": {
    "and": 2699
