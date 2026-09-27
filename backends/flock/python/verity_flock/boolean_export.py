@@ -949,6 +949,7 @@ class Walker:
     def __init__(self, reg: Registry, store: DefStore, cache: dict):
         self.reg, self.store, self.cache = reg, store, cache
         self.defs: dict[str, dict] = {}
+        self.openings: set[str] = set()
 
     def tc_unit(self, pid: str) -> str:
         key = ("tc", pid)
@@ -1077,10 +1078,19 @@ class Walker:
         rec["in_bits"] = sum(_type_bits(prm[1]) for prm in d["body"]["params"])
         rec["out_bits"] = _type_bits(d["body"]["ret_type"])
         agg: dict = {}
+        opened = OPENED_IN.get(parse_id(did)[0])
+        if opened:
+            ps = d["body"]["params"]
+            opens = {"table": next(p[0] for p in ps if p[1][0] == "Array"), "index": next(p[0] for p in ps if p[1][0] == "Value"),
+                     "committed": "weights"}
         for n in nodes:
             fn, form = n["fn"], n["form"]
             count = n.get("n", 1) if form in ("batch", "scan") else 1
             if _const_value(fn) is not None:
+                continue
+            if opened and fn.startswith("Gather"):
+                self.openings.add(fn)
+                agg.setdefault(("open", fn), [{"commitment_opening": fn, "kind": "opening", "opens": opens, "reason": opened}, 0])[1] += count
                 continue
             if fn in self.store.ix and (self.store.get(fn) or {}).get("form") == "composite":
                 key = ("def", fn)
@@ -1110,20 +1120,26 @@ class Walker:
 
     def _total(self, rec):
         t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
+        opened = 0
         for c in rec["children"]:
             if "def" in c:
                 s = self.defs[c["def"]]
                 for k in t:
                     t[k] += s.get(k, 0) * c["count"]
+                opened += s.get("commitment_openings", 0) * c["count"]
                 if s["kind"] == "not-yet-lowered":
                     t["not_yet_lowered"] += c["count"]
             elif "ref" in c:
                 n = self.reg.nodes[c["ref"]]
                 for k in ("and", "xor", "not"):
                     t[k] += n[k] * c["count"]
+            elif "commitment_opening" in c:
+                opened += c["count"]
             else:
                 t["not_yet_lowered"] += c["count"]
         rec.update(t)
+        if opened:
+            rec["commitment_openings"] = opened
 
 
 # --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
@@ -1150,7 +1166,7 @@ class Commitments:
     def __init__(self, walker: "Walker"):
         self.walker = walker
         self.records: dict[str, dict] = {}
-        self.openings: set[str] = set()
+        self.openings = walker.openings
 
     def of(self, fn) -> str:
         from verity.ir.codec import _spec_id
@@ -1430,6 +1446,13 @@ SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2
 NOT_LOWERED: dict[str, str] = {}
 #: primitive families with no piece, and why (anything else: no piece yet)
 NO_PIECE: dict[str, str] = {}
+#: Definitions whose Gather primitives read a committed weight table at a computed index: checked by opening it, not as a circuit
+OPENED_IN = {
+    "MoeExpertRow_v1": "checked by opening the committed expert weight bank at the routed expert (a commitment opening, not a "
+                       "circuit), as the embedding's row gather: MoeExpertRow_v1 is the Embedding_v1 construction with the expert "
+                       "axis in the vocabulary's role; as a circuit it would be an E-way mux tree per weight element (1,008 ANDs at "
+                       "E = 64, 2,032 at E = 128)",
+}
 #: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
 OPENED = {
     "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
@@ -1603,7 +1626,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
             n = reg.nodes[c["ref"]]
             for k in ("and", "xor", "not"):
                 t[k] += n[k] * c["count"]
-        else:
+        elif "commitment_opening" not in c:
             t["not_yet_lowered"] += c["count"]
     return t
 
@@ -1820,7 +1843,7 @@ def main(argv=None) -> int:
                              "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
                              "differ": checks["differ"][:50]},
-             "not_yet_lowered": nyl, "commitment_openings": OPENED}
+             "not_yet_lowered": nyl, "commitment_openings": {**OPENED, **{f"{k} (its Gather primitives)": v for k, v in OPENED_IN.items()}}}
     (out / "index.json").write_text(json.dumps(index, indent=1))
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
