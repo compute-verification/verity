@@ -987,12 +987,13 @@ the partition, and the leaf positions derived from it.
 ### 16.8 Objects by content
 
 The verifier loads each statement's objects from its own archive, keyed by content, and never from the prover's session
-directory: `verify --archive DIR --circuit H --public H --comp H` reads `DIR/sha256/<H>` for each, and rejects an object
-that is not held or does not hash to its key. The lookup tables are those `MUFU_TABLES` pins, loaded by those digests.
-A digest is only a lookup key into what the verifier holds: the statement it verifies is the one those objects define,
-and the record must bind that statement (S1). `archive-put DIR FILE...` stores files under their digests. A session
-directory supplies only the record and the openings. Without `--archive`, the flags are paths (the development and
-agreement tools). `agree.py` drives the Lean verifier through an archive.
+directory: `verify --archive DIR --circuit H --public H --comp H` reads `DIR/sha512/<H>` for each (`H` a SHA-512), and
+rejects an object that is not held or does not hash to its key. The lookup tables are those `MUFU_TABLES` pins, held
+under their SHA-512; `Circuit.parse` checks each table a lookup uses against that SHA-512, and the META's `sha256` against
+the SHA-256 pin (#83's format). A digest is only a lookup key into what the verifier holds: the statement it verifies is
+the one those objects define, and the record must bind that statement (S1). `archive-put DIR FILE...` stores files under
+their SHA-512. A session directory supplies only the record and the openings. Without `--archive`, the flags are paths
+(the development and agreement tools). `agree.py` drives the Lean verifier through an archive.
 
 The same applies to the program and partition (§16.7) once the verifier holds the IR program, and to `flock-live serve`
 (PR #83).
