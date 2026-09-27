@@ -18,16 +18,19 @@ def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, mo
     assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
 
 
-def test_the_lean_step_is_required_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
+def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
+    """`lake build` and the unit-cut conformance are required; the upstream agreement runs when the run was sent its bundle."""
     (tmp_path / "verifier" / "lean").mkdir(parents=True)
     (tmp_path / "verifier" / "lean" / "lakefile.toml").write_text("")
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    monkeypatch.delenv("FLOCK_UPSTREAM", raising=False)
-    (build, lake, _), (agree, why, _) = CHECK.lean_steps(tmp_path)
-    assert (build, lake, agree) == ("lean-build", ["lake", "build"], "lean-agreement") and why.startswith("FLOCK_UPSTREAM is not set")
-    monkeypatch.setenv("FLOCK_UPSTREAM", "abc=/bin/up1,def=/bin/up2")
-    argv = CHECK.lean_steps(tmp_path)[1][1]
-    assert argv[1].endswith("verifier/ci.py") and argv[argv.index("--upstream") + 1] == "abc=/bin/up1" and argv.count("--upstream") == 2
+    (build, lake, _), (unit, cut, _), (agree, why, _) = CHECK.lean_steps(tmp_path)
+    assert (build, unit, agree) == ("lean-build", "lean-unit-cut", "lean-agreement") and lake[-1].endswith("lake build")
+    assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
+    assert why.startswith("skipped: no upstream bundle sent")
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / "ci-bundle.tar.gz").write_bytes(b"")
+    argv = CHECK.lean_steps(tmp_path)[2][1]
+    assert argv[:2] == ["bash", "-c"] and "ci-pod.sh" in argv[2] and "ci-bundle.tar.gz" in argv[2]
 
 
 def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):

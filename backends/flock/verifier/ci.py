@@ -1,0 +1,147 @@
+"""The CI agreement job (PROTOCOL.md §17.1): every replayable set of `vectors.json` through both verifiers.
+
+    python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--seed S]
+        [--fuzz N] [--sets I,J] [--out DIR]
+
+For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
+- fetches its inputs from the evidence store (`research data fetch`);
+- regenerates the proof mutants (`redigest.py`), the retained-bytes sessions (`redigest.py --retain`) and `N` fuzz cases
+  (`fuzz.py --seed S`) from its honest session;
+- adds the set's stored forgeries, if it has any;
+- runs `agree.py` on all of them.
+
+`--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as `research data fetch --to` lays them
+out), for a machine without store access. `--jobs` runs sets in parallel. Writes DIR/result.json (one entry per set) and
+exits 1 if any set has a disagreement or a missed expectation. With `--out` (a recorded run's directory), each set's
+agreement outputs are copied there and `result.json` is written in the `research/result/v0.1` envelope. Run it as a
+recorded job (`ci-pod.sh` on a CPU pod). Use a fixed seed per change and a rolling seed nightly.
+"""
+import argparse, hashlib, json, os, shutil, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+
+def fetch(art, store):
+    """`art:<id>[/path]` under store/<id>/ (fetched from the evidence store unless present); a file artifact is its one file."""
+    ref, _, path = art.partition("/")
+    d = store / ref.split(":", 1)[1]
+    if not d.exists():
+        subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], check=True, capture_output=True)
+    if path:
+        return d / path
+    files = list(d.iterdir())
+    return files[0] if len(files) == 1 and files[0].is_file() else d
+
+
+def py(*args):
+    subprocess.run([sys.executable, *map(str, args)], check=True, capture_output=True)
+
+
+def run_set(i, s, a, ups, store):
+    up = ups.get(s["pr83"])
+    if up is None:
+        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
+    w = a.work / f"set{i}"
+    st = s["statement"]
+    circuit, public, comp = fetch(st["circuit"], store), fetch(st["public"], store), fetch(st["comp"], store)
+    tables = fetch(st["tables"], store) if "tables" in st else None
+    checks = ",".join(s.get("upstream_checks", [])) or "none"
+    sessions, expects = [], []
+    if "sessions" in s:
+        vectors = fetch(s["sessions"][0]["dir"].rsplit("/", 1)[0], store)
+        honest = vectors / "honest"
+        py(HERE / "redigest.py", honest, w / "mutants")
+        py(HERE / "redigest.py", "--retain", honest, w / "retained", "--upstream-checks", checks)
+        py(HERE / "fuzz.py", honest, w / "fuzz", "--seed", a.seed, "--n", a.fuzz, "--upstream-checks", checks)
+        expect = w / "expect.json"
+        expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
+        expects = [w / "mutants" / "mutants.json", w / "fuzz" / "fuzz.json", w / "retained" / "retained.json", expect]
+        sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
+        sessions += sorted(str(p) for p in (w / "mutants").iterdir() if p.is_dir())
+        sessions += [str(w / "retained" / n) for n in ("retained", "retained-edited")]
+        if "retained_bytes" in checks.split(","):
+            sessions.append(str(w / "retained" / "retained-not-digest"))
+        sessions += sorted(str(p) for p in (w / "fuzz").iterdir() if p.is_dir())
+    if "forgeries" in s:
+        f = fetch(s["forgeries"], store)
+        sessions += sorted(str(p) for p in f.iterdir() if p.is_dir())
+    for k, rd in enumerate(s.get("selftest", [])):
+        d = w / "selftest" / str(k)
+        py(HERE / "selftest_records.py", fetch(rd, store), d)
+        sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
+    cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
+           "--circuit", circuit, "--comp", comp, "--public", public, *(x for e in expects for x in ("--expect", e)),
+           "--out", w / "agree", "--sessions", *sessions]
+    if tables:
+        cmd += ["--tables", tables]
+    p = subprocess.run(list(map(str, cmd)), capture_output=True, text=True)
+    r = json.loads((w / "agree" / "result.json").read_text())
+    r.update({"set": i, "pr83": s["pr83"], "lean_statement": s["lean_statement"], "detail": st.get("detail", "")})
+    return r, p.returncode != 0
+
+
+def sha256(p):
+    return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lean", required=True)
+    ap.add_argument("--upstream", action="append", default=[], metavar="COMMIT=BIN")
+    ap.add_argument("--work", required=True, type=Path)
+    ap.add_argument("--inputs", type=Path, default=None)
+    ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=20260926)
+    ap.add_argument("--fuzz", type=int, default=20)
+    ap.add_argument("--sets", default=None, help="comma-separated set indices (default: every set with an upstream binary)")
+    ap.add_argument("--out", type=Path, default=None, help="a recorded run's directory: outputs and result.json go there")
+    a = ap.parse_args()
+    ups = dict(u.split("=", 1) for u in a.upstream)
+    store = a.inputs or (a.work / "store")
+    sets = json.loads((HERE / "vectors.json").read_text())["replayable"]["sets"]
+    pick = [int(i) for i in a.sets.split(",")] if a.sets else list(range(len(sets)))
+    with ThreadPoolExecutor(max_workers=a.jobs) as ex:
+        done = list(ex.map(lambda i: run_set(i, sets[i], a, ups, store), pick))
+    results = [r for r, _ in done]
+    bad = any(b for _, b in done)
+    (a.work / "result.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
+    print(json.dumps(results))
+    if a.out:
+        out = a.out / "ci"
+        for r in results:
+            if "skipped" in r:
+                continue
+            w = a.work / f"set{r['set']}"
+            shutil.copytree(w / "agree", out / f"set{r['set']}", dirs_exist_ok=True)
+            for f in ("mutants/mutants.json", "fuzz/fuzz.json", "retained/retained.json", "expect.json"):
+                if (w / f).exists():
+                    shutil.copy(w / f, out / f"set{r['set']}" / Path(f).name)
+        (out / "sets.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
+        ran = [r for r in results if "skipped" not in r]
+        doc = {
+            "schema": "research/result/v0.1",
+            "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+            "kind": "verification-verdict/v1",
+            "workload_fingerprint": {"lean": sha256(a.lean), "upstream": {k: sha256(v) for k, v in ups.items()},
+                                     "vectors_json": sha256(HERE / "vectors.json"), "seed": a.seed, "fuzz": a.fuzz,
+                                     "bundle": os.environ.get("CI_BUNDLE_SHA256"),
+                                     "sets": [r["set"] for r in ran]},
+            "validation": {"status": "failed" if bad else "passed", "checker": "backends/flock/verifier/agree.py",
+                           "detail": "; ".join(f"set {r['set']} ({r['pr83']}): {r['agree']}/{r['sessions']} agree" for r in ran),
+                           "evidence": ["ci/sets.json"]},
+            "measurements": [{"name": "sessions", "value": sum(r["sessions"] for r in ran), "unit": "count"},
+                             {"name": "agree", "value": sum(r["agree"] for r in ran), "unit": "count"},
+                             {"name": "disagree", "value": sum(len(r["disagree"]) for r in ran), "unit": "count"}],
+            "measurement_files": ["ci/sets.json"],
+            "artifacts": ["ci/"],
+        }
+        tmp = a.out / "result.json.tmp"
+        tmp.write_text(json.dumps(doc, indent=1))
+        os.replace(tmp, a.out / "result.json")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

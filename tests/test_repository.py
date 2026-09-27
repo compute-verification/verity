@@ -25,6 +25,7 @@ ALLOWED_EXTRA = (
     "backends/direct/V2_AIR.md",
     "backends/direct/encode/V2_SHAPE.md",
     "backends/vole/ASSUMPTIONS.md",
+    "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,

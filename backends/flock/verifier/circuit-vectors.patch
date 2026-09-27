@@ -1,0 +1,333 @@
+--- a/backends/flock/live/src/bin/flock-circuit.rs
++++ b/backends/flock/live/src/bin/flock-circuit.rs
+@@ -885,6 +885,296 @@
+     }
+ }
+ 
++// --- test vectors for the Lean verifier (lane flock-verifier; backends/flock/verifier/circuit-vectors.patch) ----------------
++
++fn f128_hex_(v: &F128) -> String {
++    format!("{:016x}{:016x}", v.hi, v.lo)
++}
++
++fn f128_of_hex_(s: &str) -> F128 {
++    F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
++}
++
++/// A transport that answers like a verifier but checks nothing: it hands back fixed link points at `Commit` and fresh OS
++/// coins at every round, recording each round as the live server does. Only the vector generator uses it.
++struct Lax {
++    points: Vec<F128>,
++    streams: BTreeMap<String, Vec<RoundRec>>,
++    /// each round's bytes, for a statement whose coin server retains them
++    msgs: BTreeMap<String, Vec<Vec<u8>>>,
++    urandom: std::fs::File,
++}
++
++impl Transport for Lax {
++    fn call(&mut self, req: Req) -> Result<Resp, String> {
++        use std::io::Read;
++        Ok(match req {
++            Req::Hello(_) => Resp::Coins(vec![F128::ZERO; 4]),
++            Req::Commit { .. } => Resp::Coins(self.points.clone()),
++            Req::Link(_) | Req::Open { .. } | Req::Ping(_) | Req::Prime { .. } | Req::Proof { .. } => Resp::Ok,
++            Req::Round { stream, content, n } => {
++                let mut b = vec![0u8; 16 * n as usize];
++                self.urandom.read_exact(&mut b).unwrap();
++                let coins: Vec<F128> = b.chunks(16)
++                    .map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect();
++                self.streams.entry(stream.clone()).or_default().push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
++                self.msgs.entry(stream).or_default().push(content);
++                Resp::Coins(coins)
++            }
++            Req::Finish => Resp::Verdict(json!({"accepted": false, "why": "lax transport: no verifier"}).to_string()),
++        })
++    }
++}
++
++/// Upstream's offline verdict on a record (`Server::from_record` then `finish`): the agreement oracle.
++fn upstream_offline(st: &Arc<Stmt>, pubi: &Arc<Instances>, rec: &Value, proofs: &[Vec<u8>]) -> Value {
++    let m: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
++    let cfg = config(st, sigma(st, pubi));
++    match Server::from_record(cfg, Box::new(CircuitVerifier { st: st.clone(), inst: pubi.clone() }), rec, m) {
++        Ok(mut s) => {
++            let v = s.finish();
++            json!({"accepted": v["accepted"], "why": v["why"]})
++        }
++        Err(e) => json!({"accepted": false, "why": e}),
++    }
++}
++
++/// One rep verified alone by upstream's statement verifier against a record's stream: no session checks, no root binding.
++fn upstream_rep_alone(st: &Arc<Stmt>, pubi: &Arc<Instances>, streams: &BTreeMap<String, StreamRec>, rep: usize, proof: &[u8], pts: &[Vec<F128>]) -> Value {
++    let root = rep_stream(TABLE, rep);
++    let mut ch = ReplayChallenger::new(Arc::new(streams.clone()), &root, &domain(rep));
++    let ctx = LinkCtx { points: pts, y: &[F128::ZERO, F128::ZERO], publics: &[] };
++    let v = CircuitVerifier { st: st.clone(), inst: pubi.clone() };
++    match v.verify(TABLE, rep, proof, &mut ch, &ctx).and_then(|cap| ch.finish().map(|_| cap)) {
++        Ok(cap) => json!({"accepted": true, "root_sha256": hex(&sha256(&cap))}),
++        Err(e) => json!({"accepted": false, "why": e}),
++    }
++}
++
++fn rounds_json(rs: &[RoundRec], msgs: Option<&Vec<Vec<u8>>>) -> Value {
++    json!(rs.iter().enumerate().map(|(k, r)| {
++        let mut v = json!({"k": k, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
++            "coins": r.coins.iter().map(f128_hex_).collect::<Vec<_>>()});
++        if let Some(m) = msgs {
++            v["msg"] = json!(hex(&m[k]));
++        }
++        v
++    }).collect::<Vec<_>>())
++}
++
++/// `vectors --instances INST --pub PUB --circuit FILE --out DIR`: an honest session against the verifier's own server, and
++/// R-BREAK: rep 1 an honest proof of another witness (random mask cells, so another root) at the same link points and public
++/// data, spliced into the honest record. Writes each vector's record and proofs, and upstream's verdicts.
++fn vectors(st: &Arc<Stmt>, inst: &Arc<Instances>, pubi: &Arc<Instances>) {
++    let out = std::path::PathBuf::from(arg("--out", "vectors"));
++    let write = |dir: &str, rec: &Value, proofs: &[Vec<u8>], verdicts: &Value| {
++        let d = out.join(dir);
++        std::fs::create_dir_all(&d).unwrap();
++        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(rec).unwrap()).unwrap();
++        for (r, p) in proofs.iter().enumerate() {
++            std::fs::write(d.join(format!("{TABLE}.rep{r}.bin")), p).unwrap();
++        }
++        std::fs::write(d.join("upstream.json"), serde_json::to_string_pretty(verdicts).unwrap()).unwrap();
++        println!("VECTOR\t{}", json!({"vector": dir, "upstream": verdicts}));
++    };
++    let srv = Arc::new(Mutex::new(server(st, pubi)));
++    let (live, _) = session(st, inst, shared(InProc(srv.clone())), &Plan::default(), ProverSeed::from_os());
++    let (rec, proofs) = {
++        let s = srv.lock().unwrap();
++        (s.record_json(), (0..2).map(|r| s.proofs()[&(TABLE.to_string(), r)].clone()).collect::<Vec<_>>())
++    };
++    let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter()
++        .map(|p| p.as_array().unwrap().iter().map(|c| f128_of_hex_(c.as_str().unwrap())).collect()).collect();
++    let off = upstream_offline(st, pubi, &rec, &proofs);
++    write("honest", &rec, &proofs, &json!({"live": live["accepted"], "offline": off}));
++
++    let lax = Arc::new(Mutex::new(Lax { points: pts.concat(), streams: BTreeMap::new(), msgs: BTreeMap::new(),
++                                        urandom: std::fs::File::open("/dev/urandom").unwrap() }));
++    struct L(Arc<Mutex<Lax>>);
++    impl Transport for L {
++        fn call(&mut self, req: Req) -> Result<Resp, String> {
++            self.0.lock().unwrap().call(req)
++        }
++    }
++    let (_, proofs_b) = session(st, inst, shared(L(lax.clone())), &Plan { mask_random: true, ..Plan::default() }, ProverSeed::from_os());
++    let rounds_b1 = lax.lock().unwrap().streams[&rep_stream(TABLE, 1)].clone();
++    let msgs_b1 = lax.lock().unwrap().msgs[&rep_stream(TABLE, 1)].clone();
++    let retained = config(st, sigma(st, pubi)).retain_rounds;
++    let (cm_b, _): (Commitment, R1csProofLigerito) = bincode::deserialize(&proofs_b[1]).unwrap();
++    let cap_b = merkle_digest_bytes(&cm_b.cap).to_vec();
++    let mut forged = rec.clone();
++    for s in forged["streams"].as_array_mut().unwrap() {
++        if s["stream"] == rep_stream(TABLE, 1) {
++            s["rounds"] = rounds_json(&rounds_b1, retained.then_some(&msgs_b1));
++            s["root_sha256"] = json!(hex(&sha256(&cap_b)));
++        }
++    }
++    for p in forged["proof_sha256"].as_array_mut().unwrap() {
++        if p["stream"] == rep_stream(TABLE, 1) {
++            p["sha256"] = json!(hex(&sha256(&proofs_b[1])));
++            p["bytes"] = json!(proofs_b[1].len());
++        }
++    }
++    let forged_proofs = vec![proofs[0].clone(), proofs_b[1].clone()];
++    let mut streams: BTreeMap<String, StreamRec> = BTreeMap::new();
++    for rep in 0..2 {
++        let rs: Vec<RoundRec> = if rep == 0 {
++            rec["streams"].as_array().unwrap().iter().find(|s| s["stream"] == rep_stream(TABLE, 0)).unwrap()["rounds"].as_array().unwrap().iter()
++                .map(|r| RoundRec { sha: flock_live::circuit::hexb(r["msg_sha256"].as_str().unwrap()).unwrap().try_into().unwrap(),
++                                    len: r["msg_len"].as_u64().unwrap() as usize, n: r["n"].as_u64().unwrap() as u32,
++                                    coins: r["coins"].as_array().unwrap().iter().map(|c| f128_of_hex_(c.as_str().unwrap())).collect() }).collect()
++        } else {
++            rounds_b1.clone()
++        };
++        streams.insert(rep_stream(TABLE, rep), StreamRec { parent: String::new(), label: domain(rep), at: 0, rounds: rs, cap: None });
++    }
++    let verdicts = json!({
++        "offline": upstream_offline(st, pubi, &forged, &forged_proofs),
++        "rep0_alone": upstream_rep_alone(st, pubi, &streams, 0, &forged_proofs[0], &pts),
++        "rep1_alone": upstream_rep_alone(st, pubi, &streams, 1, &forged_proofs[1], &pts),
++        "root_b_sha256": rec["link"]["root_b_sha256"][TABLE],
++        "rep1_root_sha256": hex(&sha256(&cap_b)),
++    });
++    write("r-break", &forged, &forged_proofs, &verdicts);
++}
++
++/// The verifier's public file with one public word changed and its frame-v3 roots recomputed, written as a file: a
++/// self-consistent, false statement whose public hash is the file's own (so an offline verifier derives the same Σ).
++fn write_false_public(st: &Stmt, pub_path: &str, what: &str, out: &std::path::Path) {
++    let mut v = Instances::load(pub_path, &st.c).unwrap();
++    match what {
++        "output" => v.outputs[5] ^= 1,
++        _ => v.digests[1][0] ^= 1,
++    }
++    let text = std::fs::read(pub_path).unwrap();
++    let nl = text.iter().position(|&x| x == b'\n').unwrap();
++    let mut head: Value = serde_json::from_slice(&text[..nl]).unwrap();
++    let fv = head["frame_v3"].clone();
++    let np = st.c.ports.len();
++    for (p, port) in st.c.ports.iter().enumerate() {
++        let dom = hexb(fv["domain_ids"][&port.name].as_str().unwrap()).unwrap();
++        let leaves: Vec<[u8; 32]> = (0..v.n).map(|i| fv3_leaf(&dom, i, b"blake3-keyed/row/v2", &v.digest(i, p, np))).collect();
++        head["frame_v3"]["roots"][&port.name] = json!(hex(&fv3_root(&dom, leaves)));
++    }
++    let n_out: usize = st.c.out_words.iter().sum();
++    let mut at = 0;
++    for x in st.c.meta["out_ports"].as_array().unwrap() {
++        let (name, w) = (x[0].as_str().unwrap(), x[1].as_u64().unwrap() as usize);
++        let dom = hexb(fv["domain_ids"][name].as_str().unwrap()).unwrap();
++        let words: Vec<u16> = (0..v.n).flat_map(|i| v.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
++        let leaves = words.iter().enumerate().map(|(r, x)| fv3_leaf(&dom, r, b"u16", &x.to_be_bytes())).collect();
++        head["frame_v3"]["roots"][name] = json!(hex(&fv3_root(&dom, leaves)));
++        at += w;
++    }
++    let mut b = serde_json::to_vec(&head).unwrap();
++    b.push(b'\n');
++    for d in &v.digests {
++        b.extend_from_slice(d);
++    }
++    for o in &v.outputs {
++        b.extend_from_slice(&o.to_le_bytes());
++    }
++    std::fs::write(out, b).unwrap();
++}
++
++/// `forgeries --instances INST --pub PUB --circuit FILE [--forged FILE] [--tables DIR] [--only CASE] --out DIR`: every selftest forgery that
++/// runs a session, recorded by the verifier's own server as a replayable set: `session.json`, `circuit.rep0.bin`,
++/// `circuit.rep1.bin`, `case.json` (the expected verdict, the live and offline verdicts, which public file the verifier
++/// read), and `pub.bin` when it is not the stage's.
++fn forgeries(st: &Arc<Stmt>, inst: &Arc<Instances>, pubi: &Arc<Instances>) {
++    let out = std::path::PathBuf::from(arg("--out", "forgeries"));
++    const GENERIC: &[&str] = &["mask_cells_random", "output_claim_false", "digest_claim_false", "message_byte_differs_from_the_committed_row",
++        "unit_input_differs_from_its_message_bits", "unit_internal_bit_flipped", "chaining_value_forged", "parent_message_forged",
++        "key_substituted", "flags_forged", "coins_before_y", "fast_profile_proofs", "cross_session_replay_both_reps",
++        "prover_file_differs_from_verifier_file", "relabelled_circuit", "private_cut_word_tampered", "tail_swapped",
++        "tail_swapped_circuit_refused"];
++    let only = arg("--only", "");
++    for &(name, accept, _) in CASES {
++        if !GENERIC.contains(&name) || skipped(st, name) || (!only.is_empty() && only != name) {
++            continue;
++        }
++        let d = out.join(name);
++        std::fs::create_dir_all(&d).unwrap();
++        let mut plan = plan_of(name, false);
++        if name == "cross_session_replay_both_reps" {
++            let s0 = Arc::new(Mutex::new(server(st, pubi)));
++            plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan::default(), ProverSeed::from_os()).1);
++        }
++        let mut public = "stage";
++        let (pst, pinst, vinst): (Arc<Stmt>, Arc<Instances>, Arc<Instances>) = match name {
++            "output_claim_false" | "digest_claim_false" => {
++                let path = d.join("pub.bin");
++                write_false_public(st, &arg("--pub", ""), if name.starts_with("output") { "output" } else { "digest" }, &path);
++                let v = Arc::new(Instances::load(path.to_str().unwrap(), &st.c).unwrap());
++                let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
++                p.public_sha256 = v.public_sha256;
++                public = "pub.bin";
++                (st.clone(), Arc::new(p), v)
++            }
++            "prover_file_differs_from_verifier_file" => {
++                let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
++                p.public_sha256[0] ^= 1;
++                (st.clone(), Arc::new(p), pubi.clone())
++            }
++            "tail_swapped_circuit_refused" => {
++                let text = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).unwrap();
++                let c2 = Composite::parse(&text, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
++                (Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e))), inst.clone(), pubi.clone())
++            }
++            "relabelled_circuit" => {
++                let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
++                let c2 = Composite::parse(&relabel(&text), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
++                (Arc::new(Stmt::new(c2, st.n, st.identity.clone()).unwrap_or_else(|e| refuse(e))), inst.clone(), pubi.clone())
++            }
++            _ => (st.clone(), inst.clone(), pubi.clone()),
++        };
++        let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
++        // a prover the server refuses may panic mid-session; the server's record up to the refusal is still the forgery
++        let t = shared(InProc(s.clone()));
++        let v = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| session(&pst, &pinst, t, &plan, ProverSeed::from_os()).0))
++            .unwrap_or_else(|_| json!({"accepted": false, "why": "the prover stopped (the server refused the session)"}));
++        let (rec, proofs) = {
++            let s = s.lock().unwrap_or_else(|e| e.into_inner());
++            (s.record_json(), (0..2).map(|r| s.proofs().get(&(TABLE.to_string(), r)).cloned().unwrap_or_default()).collect::<Vec<_>>())
++        };
++        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
++        for (r, p) in proofs.iter().enumerate() {
++            std::fs::write(d.join(format!("{TABLE}.rep{r}.bin")), p).unwrap();
++        }
++        let off = upstream_offline(st, &vinst, &rec, &proofs);
++        let case = json!({"case": name, "expect": if accept {"accept"} else {"reject"}, "live": {"accepted": v["accepted"], "why": v["why"]},
++                          "offline": off, "public": public});
++        std::fs::write(d.join("case.json"), serde_json::to_string_pretty(&case).unwrap()).unwrap();
++        println!("FORGERY\t{case}");
++    }
++}
++
++/// `export-comp --out FILE`: the BLAKE3 compression circuit (`flock_prover`'s `build_block_r1cs(3)`, the compression slot type)
++/// as data for the Lean verifier, `flock-r1cs-rows/v1`: one JSON header line (shape, pin, the circuit digest and the layout
++/// offsets), then A's rows and B's rows, each row `le32 count` then `le32` columns. C is the identity (checked here).
++fn export_comp() {
++    use flock_prover::r1cs_hashes::blake3 as b3;
++    let c = flock_live::chunk::comp();
++    assert!(c.c0_is_identity());
++    let hdr = json!({"format": "flock-r1cs-rows/v1", "circuit": "blake3-compression/flock-b684b12", "m": c.m, "k_log": c.k_log, "k_skip": c.k_skip,
++        "useful_bits": c.useful_bits, "const_pin": c.const_pin, "layout": 0, "rows": c.a_0.num_rows, "cols": c.a_0.num_cols,
++        "digest": hex(&c.statement_digest()), "cv_base": b3::CV_BASE, "out_lo_base": b3::OUT_LO_BASE, "m_base": b3::M_BASE,
++        "t_lo_base": b3::T_LO_BASE, "t_hi_base": b3::T_HI_BASE, "blen_base": b3::BLEN_BASE, "flags_base": b3::FLAGS_BASE,
++        "nnz_a": c.a_0.rows.iter().map(|r| r.len()).sum::<usize>(), "nnz_b": c.b_0.rows.iter().map(|r| r.len()).sum::<usize>()});
++    let mut out = hdr.to_string().into_bytes();
++    out.push(b'\n');
++    for m in [&c.a_0, &c.b_0] {
++        for r in m.rows.iter() {
++            out.extend((r.len() as u32).to_le_bytes());
++            for &x in r {
++                out.extend((x as u32).to_le_bytes());
++            }
++        }
++    }
++    std::fs::write(arg("--out", "comp.rows"), &out).unwrap();
++    println!("EXPORT\t{hdr}");
++}
++
+ fn refuse(why: String) -> ! {
+     println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
+     std::process::exit(2);
+@@ -892,6 +1182,9 @@
+ 
+ fn main() {
+     let cmd = std::env::args().nth(1).unwrap_or_default();
++    if cmd == "export-comp" {
++        return export_comp();
++    }
+     if cmd == "replay-coins" {
+         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
+         match flock_live::replay_coin_seed(&rec) {
+@@ -947,6 +1240,23 @@
+                 println!("LIVE\t{v}");
+             }
+         }
++        "vectors" => {
++            let pubi = Arc::new(Instances::load(&arg("--pub", ""), &st.c).unwrap_or_else(|e| refuse(e)));
++            vectors(&st, &inst, &pubi)
++        }
++        "forgeries" => {
++            let pubi = Arc::new(Instances::load(&arg("--pub", ""), &st.c).unwrap_or_else(|e| refuse(e)));
++            forgeries(&st, &inst, &pubi)
++        }
++        "replay" => {
++            let a: Vec<String> = std::env::args().collect();
++            let dirs = &a[a.iter().position(|x| x == "--sessions").map(|i| i + 1).unwrap_or(a.len())..];
++            for d in dirs {
++                let rec: Value = serde_json::from_slice(&std::fs::read(format!("{d}/session.json")).unwrap()).unwrap();
++                let proofs: Vec<Vec<u8>> = (0..2).map(|r| std::fs::read(format!("{d}/{TABLE}.rep{r}.bin")).unwrap()).collect();
++                println!("UPSTREAM\t{}", json!({"session": d, "verdict": upstream_offline(&st, &inst, &rec, &proofs)}));
++            }
++        }
+         _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+     }
+ }
