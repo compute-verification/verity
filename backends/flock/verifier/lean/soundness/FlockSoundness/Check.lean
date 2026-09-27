@@ -258,3 +258,21 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE
 #print axioms FlockSoundness.Audit.Partition.flock_batched_countE
 #print axioms FlockSoundness.Audit.Partition.flock_batched_drawnE
+-- the link theorem: the extractor's waits, the link finder with its success and cost, and δ_link
+-- under expected-time collision resistance for the plurality value layer
+#print axioms FlockSoundness.Game.expect_bind
+#print axioms FlockSoundness.Game.expect_runsG
+#print axioms FlockSoundness.Extract.expectN_find
+#print axioms FlockSoundness.Extract.expectN_firsts
+#print axioms FlockSoundness.Extract.expectN_waitCost
+#print axioms FlockSoundness.Extract.expectAcc_le_waits
+#print axioms FlockSoundness.LinkFinder.expect_succ
+#print axioms FlockSoundness.LinkFinder.succ_ge
+#print axioms FlockSoundness.LinkFinder.expect_finderCost_le
+#print axioms FlockSoundness.LinkFinder.link_mass_le
+#print axioms FlockSoundness.Audit.Partition.outC_spec
+#print axioms FlockSoundness.Audit.Partition.expect_cT_le
+#print axioms FlockSoundness.Audit.Partition.trial_mass_le
+#print axioms FlockSoundness.Audit.Partition.ideal_mass_le
+#print axioms FlockSoundness.Audit.Partition.linkEv_le_psi
+#print axioms FlockSoundness.Audit.Partition.flock_batched_linkSoundE

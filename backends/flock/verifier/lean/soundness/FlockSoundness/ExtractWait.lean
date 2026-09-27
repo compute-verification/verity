@@ -153,6 +153,69 @@ theorem expectN_waitCost : ∀ R : ℕ, expectN g s R (waitCost acc) = geom (exp
         expect_const, expect_const_mul, expect_sub, expect_const, geom_succ]
       ring
 
+theorem expectAcc_sum {ι : Type} (t : Finset ι) (k : ℕ) (Ψ : ι → List α → ℝ) :
+    expectAcc g s acc k (fun bs => ∑ i ∈ t, Ψ i bs) = ∑ i ∈ t, expectAcc g s acc k (Ψ i) := by
+  unfold expectAcc
+  rw [show (fun bs : List α => (bs.map (ind acc)).prod * ∑ i ∈ t, Ψ i bs) =
+      fun bs => ∑ i ∈ t, (bs.map (ind acc)).prod * Ψ i bs from funext fun bs => Finset.mul_sum _ _ _,
+    expectN_sum, div_eq_mul_inv, Finset.sum_mul]
+  simp only [← div_eq_mul_inv]
+
+theorem expectAcc_zero (k : ℕ) : expectAcc g s acc k (fun _ => 0) = 0 := by
+  unfold expectAcc
+  simp only [mul_zero, expectN_const, zero_div]
+
+/-- **The waits against the ideal law**: when each of the `k` waits gives up after `R` runs, at
+most `k/(eR)` of `ε · expectAcc Ψ` is lost, for `0 ≤ Ψ ≤ 1`. -/
+theorem expectAcc_le_waits (k R : ℕ) (hR : 1 ≤ R) (Ψ : List α → ℝ) (h0 : ∀ bs, 0 ≤ Ψ bs)
+    (h1 : ∀ bs, Ψ bs ≤ 1) :
+    expect (ind acc) g s * expectAcc g s acc k Ψ ≤
+      expect (ind acc) g s * geom (expect (ind acc) g s) R ^ k *
+          expectN g s k (fun bs => (bs.map (ind acc)).prod * Ψ bs) +
+        k / (Real.exp 1 * R) := by
+  set ε := expect (ind acc) g s with hε
+  have hε0 : 0 ≤ ε := expect_nonneg (ind_nonneg acc) g s
+  have hε1 : ε ≤ 1 := expect_ind_le_one acc g s
+  have hk : 0 ≤ (k : ℝ) / (Real.exp 1 * R) := by positivity
+  rcases hε0.eq_or_lt with hz | hpos
+  · rw [← hz, zero_mul, zero_mul, zero_mul, zero_add]
+    exact hk
+  set A := expectAcc g s acc k Ψ with hA
+  have hA0 : 0 ≤ A := expectAcc_nonneg g s acc k h0
+  have hA1 : A ≤ 1 := by
+    have := expectAcc_mono g s acc k h1
+    rwa [expectAcc_const g s acc k 1 hpos] at this
+  have hN : expectN g s k (fun bs => (bs.map (ind acc)).prod * Ψ bs) = ε ^ k * A := by
+    rw [hA]
+    unfold expectAcc
+    rw [← hε]
+    field_simp
+  set a := ε * geom ε R with ha
+  have ha1 : a = 1 - (1 - ε) ^ R := mul_geom ε R
+  have ha0 : 0 ≤ a := by
+    rw [ha1]; have := pow_le_one₀ (by linarith : 0 ≤ 1 - ε) (by linarith : 1 - ε ≤ 1) (n := R)
+    linarith
+  have ha1' : a ≤ 1 := by rw [ha1]; have := pow_nonneg (by linarith : 0 ≤ 1 - ε) R; linarith
+  -- Bernoulli: 1 − a^k ≤ k(1 − a)
+  have hber : 1 - a ^ k ≤ k * (1 - a) := by
+    have := one_add_mul_le_pow (by linarith : (-2 : ℝ) ≤ a - 1) k
+    simp only [add_sub_cancel] at this
+    linarith
+  have hmiss : ε * (1 - ε) ^ R ≤ 1 / (Real.exp 1 * R) := mul_one_sub_pow_le ε hε0 hε1 R hR
+  have hgeom : ε * geom ε R ^ k * (ε ^ k * A) = ε * a ^ k * A := by
+    rw [ha, mul_pow]; ring
+  rw [hN, hgeom]
+  have h1a : 1 - a = (1 - ε) ^ R := by rw [ha1]; ring
+  have key : ε * A * (1 - a ^ k) ≤ k / (Real.exp 1 * R) := by
+    calc ε * A * (1 - a ^ k) ≤ ε * 1 * (k * (1 - a)) := by
+          apply mul_le_mul (mul_le_mul_of_nonneg_left hA1 hε0) hber
+          · have := pow_le_one₀ ha0 ha1' (n := k); linarith
+          · positivity
+      _ = k * (ε * (1 - ε) ^ R) := by rw [h1a]; ring
+      _ ≤ k * (1 / (Real.exp 1 * R)) := mul_le_mul_of_nonneg_left hmiss (Nat.cast_nonneg k)
+      _ = k / (Real.exp 1 * R) := by ring
+  nlinarith
+
 end Extract
 
 end FlockSoundness
