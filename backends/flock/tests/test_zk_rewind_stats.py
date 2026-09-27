@@ -82,3 +82,12 @@ def test_independent_rewinds_pass_and_reused_ones_are_told_apart():
 def test_rewinds_on_one_dummy_opening_fail():
     """red-team-m2-zk G1: rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
     assert not _gk(21, 2)["pass"]
+
+
+def test_the_family_verdict_adjusts_for_the_number_of_tests():
+    row = {k: 0.5 for k in zk_rewind_stats.FIELD_TESTS}
+    out = {"strategies": {"s": {"end_p": 0.5, "proofs": {"a": dict(row, bits_real=1e-4), "b": row}}}}
+    fam = zk_rewind_stats.family(out)
+    assert fam["tests"] == 11 and abs(fam["bonferroni_p"] - 11e-4) < 1e-12 and fam["pass"]
+    out["strategies"]["s"]["proofs"]["a"]["bits_real"] = 1e-6
+    assert not zk_rewind_stats.family(out)["pass"]
