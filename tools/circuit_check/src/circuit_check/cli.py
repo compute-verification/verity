@@ -48,10 +48,8 @@ def _work(i: int) -> tuple[int, dict, dict]:
     return i, _one(kind, label, fn), CC.reads()
 
 
-def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
-        reads: dict | None = None) -> dict:
-    """Every target's checks, in target order; ``jobs`` > 1 runs them in that many forked workers (each with its own memo, so a
-    worker may repeat a Definition another checked: the results are the same).  ``reads`` collects what the workers read."""
+def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None) -> list[tuple[str, str, Callable[[], dict]]]:
+    """The targets' checks in target order (deterministic: a worker rebuilds the same list and runs entries by index)."""
     TG.load_registries()
     memo: dict = {}
     pins = CK.load_pins()
@@ -72,6 +70,22 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             tasks.append(("template", s, tpl))
         else:
             tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo, pins=pins, as_call=as_call)))
+    return tasks
+
+
+def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, tracing: bool) -> None:
+    if tracing:
+        CC.trace(REPO)
+    _TASKS[:] = _tasks(specs, opts, everything, as_call)
+
+
+def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
+        reads: dict | None = None) -> dict:
+    """Every target's checks, in target order; ``jobs`` > 1 runs them in that many worker processes, each started from a fresh
+    forkserver (never a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked) and rebuilding the
+    task list with its own memo, so a worker may repeat a Definition another checked: the results are the same.  ``reads``
+    collects what the workers read."""
+    tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
 
     def done(i: int, r: dict) -> None:
@@ -83,9 +97,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if jobs > 1 and len(tasks) > 1:
         import multiprocessing as mp
 
-        _TASKS[:] = tasks
-        with mp.get_context("fork").Pool(min(jobs, len(tasks))) as pool:
-            for i, r, got in pool.imap_unordered(_work, range(len(tasks))):
+        init = (specs, opts, everything, as_call, reads is not None and CC.tracing())
+        with mp.get_context("forkserver").Pool(min(jobs, len(tasks)), initializer=_init, initargs=init) as pool:
+            for i, r, got in pool.imap_unordered(_work, range(len(tasks)), chunksize=1):
                 done(i, r)
                 if reads is not None:
                     for k2, v in got.items():

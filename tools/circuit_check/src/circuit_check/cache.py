@@ -114,6 +114,10 @@ def trace(root: Path) -> None:
         os.stat, os.lstat = _probing(os.stat), _probing(os.lstat)
 
 
+def tracing() -> bool:
+    return bool(_ROOT)
+
+
 def reads() -> dict[str, list[str]]:
     """The files and directories read so far, the imported modules' sources included."""
     files = set(_READS["files"])
@@ -188,4 +192,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["SCHEMA", "key", "lookup", "reads", "store", "trace", "version"]
+__all__ = ["SCHEMA", "key", "lookup", "reads", "store", "trace", "tracing", "version"]
