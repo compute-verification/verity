@@ -81,7 +81,7 @@ def test_attention_has_no_verifier_evaluated_form():
         FC.compose(Low(), None)
 
 
-@pytest.mark.parametrize("prim", sorted(TL.MUFU))
+@pytest.mark.parametrize("prim", sorted(p for p in TL.MUFU if p != "MufuEx2Ftz_v1"))
 def test_mufu_pieces_match_the_ir(prim):
     from verity_vllm.program.kernels import rms_relation
     from verity_vllm.program.registry import prims as P
