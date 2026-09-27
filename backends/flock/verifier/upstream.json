@@ -1,0 +1,29 @@
+{
+ "note": "What check's lean-agreement step runs against, stored once (upstream-build.sh from a ci-bundle.sh bundle) and pinned by hash. A new #83 version or replayable set in vectors.json: rebuild, `research data put`, re-pin.",
+ "upstream": {
+  "art": "art:fd494a071c4046acd4fecd03501e85f75d6c0b521f5b73310b5b8c568b80108a",
+  "sha256": "301bce3ea13aeaa944a93ddab0d79cf3cfaa86d9dc0ee99bb33b58bee838dc8d",
+  "flock": "b684b1258e4b1f202bec24afd660ace851b09e5e",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "host": "x86_64-unknown-linux-gnu",
+  "bundle_sha256": "e45725808c13286e174578e5da291867804121647f3ca36f6d1686157351243f",
+  "built_in": "r20260927-100321-0f1d",
+  "binaries": {
+   "19c7269a": "f903a8cd92266cfb024900c3ae9f519333dd75b478d97cface5b09a1e826a7c0",
+   "25519ba1": "58ff418bdede9e00e600ec6264c7f99fa7dbc3adb73843ff46d64189c9d0e6a1",
+   "631567f7": "22cab2e50fe23a268e6317365f0d121513d64cacd85139d76768501c4deb7446",
+   "9294e161": "447a591c26335bd5bd2ab4ade005de0cf82cc99b6fb9e6e380d0e58817a2e414",
+   "e51e2b86": "bc22e9b8dfd42fab801a638bd15e7de8621f1b62f8997f4a221754e14d3bd84f",
+   "eb90718f": "0a09e9840c419a2262b884ec5cfa565885b37dc316af7b4acc8cf10bbad34ee5",
+   "fd02e847": "a0b9b12b8bbbb6487f36b35685cbd32a2ed983961c1f0ef91fddc52143b6eaaa"
+  }
+ },
+ "inputs": {
+  "art": "art:a8c94db65fb53e6152e6c8317dfd1d78a4928adab801234c64e806ad4e3b6613",
+  "sha256": "60b47cecff4a6dfe6af285b560246ec9c0ae86a8b8bd4eb8714de049f913cce5"
+ },
+ "ci": {
+  "seed": 20260926,
+  "fuzz": 20
+ }
+}

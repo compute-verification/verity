@@ -586,10 +586,16 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
     d3.mkdir()
     (d3 / "control").mkdir()
     (d3 / "control" / "timeout_s").write_text("not json")
-    threading.Timer(0.4, lambda: (d3 / "control" / "timeout_s").write_text("30")).start()
-    r = go(d3, 1.0, ["sleep", "2.0"])
-    assert r.returncode == 0, r.stderr
-    assert "ignoring unparseable" in r.stderr
+    p = subprocess.Popen([sys.executable, "-m", "research.telemetry", "run", "--attempt-dir", str(d3), "--stage", "t", "--timeout", "3.0",
+                          "--no-sampler", "--no-classify", "--grace", "1", "--", "sleep", "4.0"], stderr=subprocess.PIPE, text=True,
+                         env={**os.environ, "PYTHONPATH": str(PKG_ROOT)}, cwd=str(tmp_path))
+    err = []
+    for line in p.stderr:                            # the new value only once the loop has read and ignored the bad one (not on a
+        err.append(line)                             # clock: a loaded machine can take longer than any fixed delay to start it)
+        if "ignoring unparseable" in line:
+            (d3 / "control" / "timeout_s").write_text("30")
+    assert p.wait() == 0, "".join(err)
+    assert any("ignoring unparseable" in line for line in err)
     recs = [json.loads(l) for l in (d3 / "events.jsonl").read_text().splitlines() if l.strip()]
     assert [x["new_timeout_s"] for x in recs if x.get("kind") == "mark" and x.get("name") == "timeout_changed"] == [30.0]
 
