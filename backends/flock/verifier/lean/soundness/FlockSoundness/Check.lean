@@ -250,3 +250,11 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_batched_count
 #print axioms FlockSoundness.Audit.Partition.flock_batched_drawn
+-- the batched audit with the expected-time extractor: reruns in which the session accepts, the
+-- relative knowledge bound, and the analysis whose cover absorbs it
+#print axioms FlockSoundness.joint_le_accB
+#print axioms FlockSoundness.one_le_fail_add_accB
+#print axioms FlockSoundness.Audit.Partition.analysisBE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_countE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawnE
