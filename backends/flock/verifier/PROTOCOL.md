@@ -965,8 +965,8 @@ included. Claims are listed region-major, then point 0 before point 1.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
-  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all. `flock-verify net-check`
-    parses one expanded circuit.
+  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all.
+    `flock-verify net-check` parses one expanded circuit.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
     - Rows: the `n` index bits in one input word; the low and high decoders, each minterm the AND of two half minterms,
