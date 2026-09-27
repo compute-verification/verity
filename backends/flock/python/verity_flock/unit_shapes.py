@@ -985,7 +985,7 @@ def assess(classes: list, S: tuple[int, int, int], cache: dict) -> dict:
             continue
         key = (id(u), S)
         if key not in cache:
-            cache[key] = pack(u.seq, R, Z, D) if u.seq else {"pieces": 1, "extra": 0, "oversize": 1,
+            cache[key] = pack_best(u.seq, R, Z, D) if u.seq else {"pieces": 1, "extra": 0, "oversize": 1,
                                                             "each": [{"rows": u.rows, "z": u.z, "d": u.d}]}
         p = cache[key]
         n += cnt * p["pieces"]
