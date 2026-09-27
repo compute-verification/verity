@@ -51,8 +51,9 @@ The audit says when it had to build without one; the `compile-time` check then s
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
 every run.
 
-`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain, must pass clean
-and fail once for each violation in `tests/fixtures/violations.json`. Among them:
+`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain (`--build`
+installs it first, so a machine without elan works), must pass clean and fail once for each violation in
+`tests/fixtures/violations.json`. Among them:
 
 - a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass every check but
   the replay and fail the replay;

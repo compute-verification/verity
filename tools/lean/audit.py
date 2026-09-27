@@ -43,7 +43,8 @@ axioms replaces it.  `--update` writes the records and `reads` from the build in
 changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
 weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
 handoff; `--update` records them, it does not approve them.  `--all` first runs the controls (`controls`): a
-fixture package built with each audited toolchain, which must pass clean and fail each check once a violation is added.
+fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
+check once a violation is added.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -583,14 +584,20 @@ def packages(root: Path) -> list[Path]:
     return sorted(found)
 
 
-def controls(toolchain: str, out: Path, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added."""
+def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
+    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`: the controls run before any package's
+    own setup does."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(FIXTURES / "control", work / "pkg")
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
+    if install:
+        rc, text = run(["bash", str(TOOL / "setup.sh"), str(pkg)], pkg, work / "setup.log")
+        if rc:
+            return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
         return [f"controls: the clean fixture does not build with {toolchain}:\n{text[-2000:]}"]
@@ -680,16 +687,19 @@ def main(argv: list[str]) -> int:
     TOOL = out / "tool"
     shutil.rmtree(TOOL, ignore_errors=True)
     shutil.copytree(HERE, TOOL, ignore=shutil.ignore_patterns("tests", "__pycache__"))
-    seals = {str(p): sha256(p) for d in (HERE, TOOL) for p in sorted(d.iterdir()) if p.is_file()}
     toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs if (p / "lean-toolchain").exists()})
     bins = [b for tc in toolchains for b in toolchain_bins(tc)]
+    seals = {str(p): sha256(p) for p in [*(p for d in (HERE, TOOL) for p in sorted(d.iterdir())), *bins] if p.is_file()}
     failed = []
     reports = []
     if a.all:
         for tc in toolchains:
-            if fs := controls(tc, out):
+            if fs := controls(tc, out, install=a.build):
                 failed.append(f"controls ({tc})")
                 print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
+        if moved := tampered(seals, bins):
+            failed.append("controls (tamper)")
+            print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
     for pkg in pkgs:
         rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh)
         rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
