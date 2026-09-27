@@ -37,11 +37,11 @@ import numpy as np
 from . import fp
 from . import ir_frame as IF
 from . import ir_lower as IL
-from .gf2 import NOT, ONE, OR, ZERO, Circuit, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
+from .gf2 import NOT, OR, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
 
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
-PIN = "bc18d1459f87c205977ee8c3739c19e5da93a036ae7dadbef62cba75d9e8aeaa"
+PIN = "c9aeca364cb08b68a174fa9811ff505306c6a8f9af7458689ff23e66409cc1b6"
 FORMAT = "flock-ir-sampling/v1"
 STATEMENT = "verity/flock-ir-sampling/v1"
 SCHEME = IF.SCHEME
@@ -56,7 +56,6 @@ PUBLIC_PORTS = ("in1", "in2", "in3", "in4", "in5")       # top_p, seed, pos, tem
 LOGITS, OUTPUT = "in0", "out.sampled_token_ids"
 PT_LOCAL = 16
 NEG_INF = 0xFF800000
-DEFAULT_NAN = 0xFFC00000
 ONE_F32 = 0x3F800000
 
 
@@ -77,45 +76,14 @@ def lane_ports(v: int) -> tuple[list[int], list[int]]:
 
 # --- pieces: the IR primitives with numpy's float32 semantics, NaN payloads included ------------------------------------------
 
-def _quiet(w):
-    return list(w[:22]) + [ONE] + list(w[23:])
-
-
-def _nan_word(C, A, B, a, b):
-    """numpy float32 on x86-64: b's NaN quieted when b is a NaN, else a's, else the default NaN of an invalid operation."""
-    return mux(C, B.nan, _quiet(b), mux(C, A.nan, _quiet(a), fp.f32_const(DEFAULT_NAN)))
-
-
 def f32_mul(C, a, b):
-    """``np.float32(a) * np.float32(b)``: RN, subnormals kept, NaN payloads as numpy picks them (``F32Mul_v1``)."""
-    A, B = fp.unpack(C, a), fp.unpack(C, b)
-    s = A.s ^ B.s
-    P = multiply(C, fp.trim_low(A.sig)[0], fp.trim_low(B.sig)[0])
-    E_b = add(C, A.e_eff, B.e_eff, width=10)
-    r = fp.round_f32(C, s, E_b, 126, P, s)
-    invalid = OR(C, C.AND(A.inf, B.zero), C.AND(A.zero, B.inf))
-    r = mux(C, OR(C, A.inf, B.inf), const_bits(fp.F32_INF, 31) + [s], r)
-    return mux(C, OR(C, OR(C, A.nan, B.nan), invalid), _nan_word(C, A, B, a, b), r)
+    """``np.float32(a) * np.float32(b)`` (``F32Mul_v1``), NaN payloads included."""
+    return fp.f32_mul(C, a, b, ir_nan=True)
 
 
 def f32_add(C, a, b):
-    """``np.float32(a) + np.float32(b)`` (NaN payloads as numpy picks them); IEEE zero signs."""
-    A, B = fp.unpack(C, a), fp.unpack(C, b)
-    _, a_lt_b = sub(C, a[:31], b[:31], 31)
-    sx, sy = mux(C, a_lt_b, [B.s, A.s], [A.s, B.s])
-    ex = mux(C, a_lt_b, B.e_eff, A.e_eff)
-    ey = mux(C, a_lt_b, A.e_eff, B.e_eff)
-    gx = mux(C, a_lt_b, B.sig, A.sig)
-    gy = mux(C, a_lt_b, A.sig, B.sig)
-    d, _ = sub(C, ex, ey, 8)
-    ys, st = fp.shr_sticky(C, [ZERO] * 3 + gy, d)
-    ys[0] = OR(C, ys[0], st)
-    sb = sx ^ sy
-    S = add(C, [ZERO] * 3 + gx + [ZERO], [v ^ sb for v in ys] + [sb], cin=sb, width=28)
-    r = fp.round_f32(C, sx, ex + [ZERO], -1, S, C.AND(A.s, B.s), underflow=False)
-    invalid = C.AND(C.AND(A.inf, B.inf), A.s ^ B.s)
-    r = mux(C, OR(C, A.inf, B.inf), const_bits(fp.F32_INF, 31) + [mux(C, A.inf, [A.s], [B.s])[0]], r)
-    return mux(C, OR(C, OR(C, A.nan, B.nan), invalid), _nan_word(C, A, B, a, b), r)
+    """``np.float32(a) + np.float32(b)`` (NaN payloads included); IEEE zero signs."""
+    return fp.f32_add(C, a, b, ir_nan=True)
 
 
 def ftz(C, w):
@@ -196,7 +164,7 @@ def lane_circuit(V: int) -> Circuit:
     """The lane unit: inputs ``in0`` (the bf16 logit) and ``in1 .. in9`` (``IN_PORTS[1:]``, 32 bits each; skip, noisy and kbit
     use bit 0), outputs ``out0 .. out3`` (``OUT_PORTS``)."""
     temp_lane, mask_step, select_step = _composites(V)
-    C = Circuit()
+    C = Circuit(cse=True)
     x = C.input("in0", 16)
     temp, rcp, skip, noisy, kbit, g, best, best_i, i = (C.input(f"in{j}", 32) for j in range(1, 10))
     call, w = _walk(C, temp_lane, [x, temp, rcp, skip[:1]], {})

@@ -40,9 +40,12 @@ def const(b):
 
 
 class Circuit:
-    def __init__(self):
+    """``cse``: an AND of two forms already ANDed (in either order) reuses that bit instead of committing a new one."""
+
+    def __init__(self, cse: bool = False):
         self.kind = []  # per committed bit: 'in' | 'and' | 'hint'
         self.data = []  # 'in': name; 'and': (a, b); 'hint': (fn, deps)
+        self.cse = {} if cse else None
         self.inputs = {}
         self.outputs = {}
         self.asserts = []  # (name, L) that must evaluate to 0
@@ -68,7 +71,13 @@ class Circuit:
             return a if b.c else ZERO
         if a.s == b.s:
             return a if a.c == b.c else ZERO  # x.x = x ; x.(x+1) = 0
-        return self._new("and", (a, b))
+        if self.cse is None:
+            return self._new("and", (a, b))
+        key = frozenset((a.key(), b.key()))
+        w = self.cse.get(key)
+        if w is None:
+            w = self.cse[key] = self._new("and", (a, b))
+        return w
 
     def assert_zero(self, name, a):
         if a.is_const():

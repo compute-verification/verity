@@ -23,13 +23,9 @@ REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
 
 
-def _isnan(w: int, bits: int = 32) -> bool:
-    e, m = (0xFF, 23) if bits == 32 else (0xFF, 7)
-    return (w >> m) & e == e and w & ((1 << m) - 1) != 0
-
-
 def f32_words(rng: random.Random, n: int) -> list[int]:
-    special = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000]
+    special = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
+               0x7FC00000, 0xFFC00000, 0x7FC00001, 0xFFC12345, 0x7F800001, 0xFF812345, 0x7FFFFFFF, 0xFFBFFFFF]   # quiet and signalling NaNs
     out = []
     for _ in range(n):
         r, s = rng.random(), rng.getrandbits(1) << 31
@@ -91,8 +87,8 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
             v[2] = near(rng, P.f32_mul_bits(v[0], v[1]))
         vecs.append(v)
     got = run_piece(piece, widths, out, vecs)
-    bad = [(v, g) for v, g in zip(vecs, got) if not (g == ref(*v) or (_isnan(g, out) and _isnan(ref(*v), out)))]
-    assert bad == []
+    bad = [(v, g) for v, g in zip(vecs, got) if g != ref(*v)]
+    assert bad == []                                  # exact bits: a NaN's sign and payload too
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])
@@ -605,7 +601,7 @@ def test_attention_units_are_tensor_core_steps():
     (T,) = {len(x) // 64 for x in s.port("k")}
     low = IL.lowering(sub.definition(T), f"attention-head/tc-step/t{T}", unit_fn=IL.tc_units)
     U = low.units
-    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9857)
+    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9473)
     assert sum(k == "zero" for u in U.in_src for k, _ in u) == 64 * 15
     assert low.leaves["out"] == [[]] * U.n and low.cut["outputs"] and len(low.cut["outputs"]) == 64
     fin = np.stack([np.concatenate([s.port("q")[i], s.port("k")[i], s.port("v")[i]]).astype(np.uint64) for i in range(s.n)])

@@ -766,18 +766,29 @@ def parse_id(did: str) -> tuple[str, dict]:
 
 
 class DefStore:
-    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id."""
+    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id, plus those a
+    graph carries inline (``definitions``: a graph not yet catalogued)."""
 
     def __init__(self, pg_dir: Path):
         self.dir = Path(pg_dir) / "definitions"
         self.ix = json.loads((self.dir / "index.json").read_text())["definitions"]
         self.shards: dict[str, dict] = {}
+        self.inline: dict[str, dict] = {}
         self.by_name: dict[str, list] = {}
         for did in self.ix:
             name, ps = parse_id(did)
             self.by_name.setdefault(name, []).append((did, ps))
 
+    def add_inline(self, defs: dict) -> None:
+        for did, d in defs.items():
+            if did not in self.ix and did not in self.inline:
+                self.inline[did] = d
+                name, ps = parse_id(did)
+                self.by_name.setdefault(name, []).append((did, ps))
+
     def get(self, did: str):
+        if did in self.inline:
+            return self.inline[did]
         e = self.ix.get(did)
         if e is None:
             return None
@@ -865,7 +876,7 @@ class Walker:
             groups, W, F = IL.TC_STEPS[pid]
 
             def build():
-                C = Circuit()
+                C = Circuit(cse=True)
                 b = [C.input(f"in{j}", 16) for j in range(16)]
                 a = [C.input(f"in{16 + j}", 16) for j in range(16)]
                 acc = C.input("in32", 32)
@@ -889,7 +900,7 @@ class Walker:
             ck = ("prim", pid, consts, tuple(widths))
             if ck not in self.cache:
                 def build():
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
@@ -995,6 +1006,7 @@ class Commitments:
     def __init__(self, walker: "Walker"):
         self.walker = walker
         self.records: dict[str, dict] = {}
+        self.openings: set[str] = set()
 
     def of(self, fn) -> str:
         from verity.ir.codec import _spec_id
@@ -1018,7 +1030,8 @@ class Commitments:
 
     def _boolean(self, gates: list[tuple[str, tuple]], pieces: dict) -> dict:
         """The gates' AND/XOR/NOT from their pieces (constant operands propagated), and each gate's index in ``pieces``
-        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``)."""
+        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``, ``{"commitment_opening": primitive}`` for the
+        embedding's gather)."""
         t = {"and": 0, "xor": 0, "not": 0}
         nyl: dict[str, int] = {}
         parts: list[int] = []
@@ -1027,7 +1040,9 @@ class Commitments:
             if sig not in memo:
                 memo[sig] = self.walker.prim(*sig)
             e = memo[sig]
-            if e is not None and "ref" in e:
+            if sig[0] in self.openings:
+                key = ("commitment_opening", sig[0])
+            elif e is not None and "ref" in e:
                 n = self.walker.reg.nodes[e["ref"]]
                 for k in t:
                     t[k] += n[k]
@@ -1074,17 +1089,18 @@ class Commitments:
         from verity.ir.cut import call_scope
         c, call = call_scope(fn)
         lo = call.offset
-        leaves = [(name, w) for name, t in fn.signature()[0] for w in t.leaf_widths()]
+        leaves = _leaf_lookup(fn.signature()[0])
         scopes: dict[str, int] = {}
         pieces: dict = {}
         sid: dict[int, int] = {}
         cval: dict[int, int | None] = {}
+        computing = set(G.keep.tolist())
 
         def const(o):
             if o in cval:
                 return cval[o]
             cval[o] = None
-            if not 0 <= o - lo < fn.gates:
+            if not 0 <= o - lo < fn.gates or o - lo in computing:
                 return None
             g = c.gate(o)
             ops = g.operands
@@ -1115,6 +1131,7 @@ class Commitments:
             if u in members:
                 members[u].append(i)
         order = sorted(range(len(first)), key=lambda j: (-int(count[j]), int(keys[j][0]), int(keys[j][2])))
+        ireads = np.array(G.input_reads, dtype=np.int64).reshape(-1, 2)
         rank = {j: n for n, j in enumerate(order)}
         units = []
         for j in order:
@@ -1132,7 +1149,7 @@ class Commitments:
                  "nodes": dict(Counter(G.prim_names[int(G.prim[i])] for i in gates).most_common()),
                  **{x: b[x] for x in ("and", "xor", "not", "not_yet_lowered")}}
             if ng <= UNIT_PARTS_LIMIT:
-                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, gates, info, leaves))
+                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads))
             units.append(e)
         marks: Counter = Counter()
         for i in np.flatnonzero(head >= 0).tolist():
@@ -1194,23 +1211,54 @@ def _empty(fid, gates) -> dict:
             "committed_interior_words": 0, "scopes": [], "pieces": [], "units": [], "committed": [], "structure": {}, "violations": []}
 
 
-def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
+def _leaf_lookup(params):
+    """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
+    parameter has over 10^8)."""
+    from verity.ir.types import Array, Record, Tuple
+
+    starts, names, types, o = [], [], [], 0
+    for name, t in params:
+        starts.append(o)
+        names.append(name)
+        types.append(t)
+        o += t.leaves
+
+    def leaf(k):
+        i = bisect.bisect_right(starts, k) - 1
+        t, k = types[i], k - starts[i]
+        while True:
+            if isinstance(t, Array):
+                t, k = t.elem, k % t.elem.leaves
+            elif isinstance(t, (Tuple, Record)):
+                for f in t.fields:
+                    f = f[1] if isinstance(t, Record) else f
+                    if k < f.leaves:
+                        t = f
+                        break
+                    k -= f.leaves
+            else:
+                return names[i], t.w
+
+    return leaf
+
+
+def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> dict:
     """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
     ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
     ``[unit class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
     ``outputs``: the parts whose value the cut commits (returned, or read by another unit)."""
+    import numpy as np
+
     at = {i: n for n, i in enumerate(gates)}
-    wiring, reads = [], []
-    for a, b in zip(G.src.tolist(), G.dst.tolist()):
-        if b in at:
-            if a in at:
-                wiring.append([at[a], at[b], int(G.width[a])])
-            else:
-                reads.append([rank[int(inv[owner[a]])], at[b], int(G.width[a])])
+    sel = np.flatnonzero(owner[G.dst] == u)
+    src, dst = G.src[sel], G.dst[sel]
+    inside = owner[src] == u
+    wiring = [[at[a], at[b], int(G.width[a])] for a, b in zip(src[inside].tolist(), dst[inside].tolist())]
+    reads = [[rank[int(inv[owner[a]])], at[b], int(G.width[a])] for a, b in zip(src[~inside].tolist(), dst[~inside].tolist())]
     inputs: dict[tuple, int] = {}
-    for inp, b in G.input_reads:
-        if b in at:
-            name, w = leaves[G.input_ids[inp]]
+    if len(ireads):
+        for inp, b in ireads[owner[ireads[:, 1]] == u].tolist():
+            name, w = leaves(G.input_ids[inp])
             inputs[(at[b], name)] = inputs.get((at[b], name), 0) + w
     reads += [[-1, d, w, name] for (d, name), w in inputs.items()]
     return {"part_nodes": [[s, k] for s, k, _g in info], "wiring": wiring, "reads": reads,
@@ -1223,9 +1271,13 @@ def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED = {
-    "Embedding_v1": "a row gather by token id (data movement from the committed table); no Boolean lowering yet",
-    "EmbeddingShard_v1": "a row gather by token id from a tensor-parallel shard of the table; no Boolean lowering yet",
     "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
+}
+#: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
+OPENED = {
+    "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
+    "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "
+                         "(a commitment opening, not a circuit)",
 }
 DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
 
@@ -1267,7 +1319,7 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
             ck = (pid, consts, widths)
             if ck not in cache:
                 def build(pid=pid, consts=consts, widths=widths):
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
@@ -1328,6 +1380,8 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
         return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
+    if tname in OPENED:
+        return dict(base, name=tname, kind="commitment-opening", reason=OPENED[tname], children=[])
     if tname in NOT_LOWERED:
         return dict(base, name=tname, kind="not-yet-lowered", reason=NOT_LOWERED[tname], children=[])
     if tname in ("AttentionHead", "AttentionSoftcap_v1"):
@@ -1396,6 +1450,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
 def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
                checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
+    walker.store.add_inline(p.get("definitions") or {})
     row = p["row"]
     nodes, used = [], []
     into: dict[str, list[dict]] = {}
@@ -1447,6 +1502,11 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
         return {}
     q = g.get("q_word_v1") or {}
     try:
+        if g["definition"] in OPENED:
+            from verity.ir.defs import PrimitiveDefinition
+
+            fn = specialization(g["definition"], g["statics"])
+            cm.openings.update(n.fn.id for n in fn.body.nodes if isinstance(n.fn, PrimitiveDefinition) and n.fn.id.startswith("Gather"))
         if g.get("varying") and len(g["varying"]) == 1 and g.get("varying_calls"):
             (a,) = g["varying"]
             vals = sorted(int(v) for v in g["varying_calls"])
@@ -1596,7 +1656,7 @@ def main(argv=None) -> int:
                              "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
                              "differ": checks["differ"][:50]},
-             "not_yet_lowered": nyl}
+             "not_yet_lowered": nyl, "commitment_openings": OPENED}
     (out / "index.json").write_text(json.dumps(index, indent=1))
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
