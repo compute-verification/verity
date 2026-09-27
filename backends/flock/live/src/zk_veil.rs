@@ -201,6 +201,8 @@ pub struct Pads {
     pub mu: Vec<F128>,
     pub pad_h: Vec<F128>,
     pub pad_mu: Vec<F128>,
+    /// the salt of `τ`'s commitment (M2)
+    pub tau_salt: Vec<u8>,
 }
 
 impl Pads {
@@ -214,7 +216,8 @@ impl Pads {
         let mu = rng.f128s(STREAM_DOT_MASK, base, s);
         let pad_h = rng.f128s(STREAM_PADS, base + (1 << 24), K_PAD);
         let pad_mu = rng.f128s(STREAM_DOT_MASK, base + (1 << 24), K_PAD);
-        Pads { h, mu, pad_h, pad_mu }
+        let tau_salt = rng.f128s(STREAM_PADS, base + (1 << 25), TAU_SALT_BYTES / 16).iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()).collect();
+        Pads { h, mu, pad_h, pad_mu, tau_salt }
     }
 }
 
@@ -883,11 +886,25 @@ pub struct InnerProof {
     pub root: Vec<u8>,
     pub rho: F128,
     pub sigma: F128,
+    /// M2: `τ` is sent as this commitment before `β` and opened (with `tau_salt`) only in the proof, after the last coin, so
+    /// no relation among the prover's messages can be tested before every coin is out (the single-rewind simulator's
+    /// extraction run relies on it)
+    pub tau_commit: Vec<u8>,
+    pub tau_salt: Vec<u8>,
     pub tau: F128,
     pub y: Vec<F128>,
     pub opened: Vec<(F128, F128)>,
     pub salts: Vec<flock_merkle::hm96::Salt>,
     pub paths: Vec<Vec<Hash>>,
+}
+
+pub const TAU_SALT_BYTES: usize = 192;
+const TAU_TAG: &[u8] = b"verity/flock-zk/tau/v1\0";
+
+/// `τ`'s commitment: the `hm96-sha512/v1` leaf of `SHA-512(TAU_TAG ‖ τ)` under `salt`.
+pub fn tau_commitment(tau: F128, salt: &[u8]) -> Vec<u8> {
+    let x = flock_hash::digest_from(&Sha512::digest([TAU_TAG, &f128_bytes(&[tau])].concat()));
+    flock_merkle::hm96::leaf(&x, salt).as_flattened().to_vec()
 }
 
 /// Batch the constraints with the verifier's coins: `(c, t)` with `⟨c, h⟩ = t`.
@@ -913,7 +930,9 @@ pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, mut
     let gammas = ch.sample_f128_vec(cons.len());
     let (c, _t) = batch(&cons, &gammas);
     let tau = c.iter().zip(&p.mu).fold(F128::ZERO, |a, (x, y)| a + *x * *y);
-    ch.observe_f128(tau);
+    let tau_salt = p.tau_salt.clone();
+    let tau_commit = tau_commitment(tau, &tau_salt);
+    ch.observe_bytes(&tau_commit);
     let beta = ch.sample_f128();
     if beta == F128::ZERO {
         return Err("PROVER-STOPPED: degenerate coin β = 0".into());
@@ -923,7 +942,7 @@ pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, mut
     ch.observe_f128_slice(&y);
     let qs = queries(ch, ic.code.n);
     Ok(InnerProof {
-        root: ic.root().to_vec(), rho, sigma, tau, y,
+        root: ic.root().to_vec(), rho, sigma, tau_commit, tau_salt, tau, y,
         opened: qs.iter().map(|&j| (ic.ch[j], ic.cm[j])).collect(),
         salts: qs.iter().map(|&j| flock_merkle::hm96::salt_of(&ic.salts[j * crate::zk_hooks::SALT_BYTES..])).collect(),
         paths: qs.iter().map(|&j| ic.path(j)).collect(),
@@ -933,7 +952,9 @@ pub fn prove_inner<Ch: Challenger>(ic: &InnerCommit, p: &Pads, lay: &Layout, mut
 /// The verifier's side of [`prove_inner`].
 pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec<(&'static str, Lin)>, ch: &mut Ch) -> Result<(), String> {
     let code = Code::new(lay.len() + K_PAD);
-    if pr.y.len() != code.msg || pr.opened.len() != Q || pr.salts.len() != Q || pr.paths.len() != Q || pr.root.len() != 64 {
+    if pr.y.len() != code.msg || pr.opened.len() != Q || pr.salts.len() != Q || pr.paths.len() != Q || pr.root.len() != 64
+        || pr.tau_commit.len() != 64 || pr.tau_salt.len() != TAU_SALT_BYTES
+    {
         return Err("zk inner: malformed proof".into());
     }
     ch.observe_label(LABEL_INNER);
@@ -942,13 +963,16 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, mut cons: Vec
     cons.extend(triple_constraints(lay, eps, pr.rho, pr.sigma));
     let gammas = ch.sample_f128_vec(cons.len());
     let (c, t) = batch(&cons, &gammas);
-    ch.observe_f128(pr.tau);
+    ch.observe_bytes(&pr.tau_commit);
     let beta = ch.sample_f128();
     if beta == F128::ZERO {
         return Err("zk inner: degenerate coin β = 0".into());
     }
     ch.observe_f128_slice(&pr.y);
     let qs = queries(ch, code.n);
+    if tau_commitment(pr.tau, &pr.tau_salt) != pr.tau_commit {
+        return Err("zk inner: τ does not open its commitment".into());
+    }
     let cy = c.iter().zip(&pr.y).fold(F128::ZERO, |a, (x, y)| a + *x * *y);
     if cy != t + beta * pr.tau {
         return Err("zk inner: the batched constraint fails (⟨c, Y⟩ ≠ t + β τ)".into());
@@ -1039,6 +1063,8 @@ pub fn simulate_inner<Ch: Challenger>(lay: &Layout, rng: &mut crate::zk_hooks::P
     let y = rng.f128s(STREAM_PADS, base + (1 << 20), code.msg);
     let cy = c.iter().zip(&y).fold(F128::ZERO, |a, (x, yy)| a + *x * *yy);
     let tau = (cy + t) * beta.inv();
+    let tau_salt: Vec<u8> = rng.f128s(STREAM_PADS, base + (1 << 22), TAU_SALT_BYTES / 16).iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()).collect();
+    let tau_commit = tau_commitment(tau, &tau_salt);
     let qs = queries(coins, code.n);
     let hs = rng.f128s(STREAM_PADS, base + (1 << 21), qs.len());
     let (mut ch, mut cm) = (vec![F128::ZERO; code.n], vec![F128::ZERO; code.n]);
@@ -1048,7 +1074,7 @@ pub fn simulate_inner<Ch: Challenger>(lay: &Layout, rng: &mut crate::zk_hooks::P
     }
     let ic = InnerCommit::from_columns(code, ch, cm, salts);
     Ok(InnerProof {
-        root: ic.root().to_vec(), rho, sigma, tau, y,
+        root: ic.root().to_vec(), rho, sigma, tau_commit, tau_salt, tau, y,
         opened: qs.iter().map(|&j| (ic.ch[j], ic.cm[j])).collect(),
         salts: qs.iter().map(|&j| flock_merkle::hm96::salt_of(&ic.salts[j * crate::zk_hooks::SALT_BYTES..])).collect(),
         paths: qs.iter().map(|&j| ic.path(j)).collect(),

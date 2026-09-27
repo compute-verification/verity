@@ -110,12 +110,14 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
 fn zk_identity(c: &Composite) -> Value {
-    json!({"zk": true, "stage": "m1-prototype (honest-verifier, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
+    json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
+           "verifier_coins": format!("committed before the prover's first message ({}, root in hello); every coin opened against it, or the prover stops",
+                                     flock_live::coin_tree::SCHEME),
            "pads": "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin",
            "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
                                       zkv::K_PAD, 1 << zkv::INNER_LOG_INV_RATE, zkv::Q),
            "product": "h_ab = h_a h_b committed; sacrificed against a committed triple (x, y, x y)",
-           "inner_proof": "one batched <c, h> = t by a masked dot product (tau = <c, mu>, Y = h + beta mu)",
+           "inner_proof": "one batched <c, h> = t by a masked dot product (tau = <c, mu> committed by an hm96 leaf, opened after the last coin; Y = h + beta mu)",
            "ring_switch": format!("non-region s_hat_v hidden by the mask slot's uniform words (2^{} bits per block); the prover refuses coins whose weights do not span",
                                   c.meta["mask_log"].as_u64().unwrap_or(14)),
            "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with 2 q_0 + 64 uniform coefficients (c = x); two padded uniform \
@@ -254,10 +256,32 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     .map_err(|e| e.chars().take(200).collect::<String>())
 }
 
+/// M2's committed coin schedule: the session's stream (the link points), then the table's two reps; 256 rounds of at most
+/// 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
+fn coin_spec() -> flock_live::coin_tree::Spec {
+    use flock_live::coin_tree::{SESSION, Spec};
+    Spec { streams: vec![SESSION.into(), rep_stream(TABLE, 0), rep_stream(TABLE, 1)], rounds_log: 8, block: 512 }
+}
+
+/// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
+#[cfg(feature = "seed-injection")]
+fn fix_verifier_coins(s: &mut Server, tape: [u8; 32]) {
+    if s.cfg.coin_tree.is_some() {
+        s.inject_coin_tape(tape);
+    } else {
+        s.inject_coin_seed(tape, [8; 32]);
+    }
+}
+
 fn config(st: &Stmt, inst: &Instances) -> SessionConfig {
     let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.flock_digest } }]);
     cfg.link = Some(LinkSpec { sigma: sigma(st, inst).to_vec(), m: st.m_pts, points: 2 });
-    cfg.coin_seed = true;
+    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed
+    if is_zk(st) {
+        cfg.coin_tree = Some(coin_spec());
+    } else {
+        cfg.coin_seed = true;
+    }
     cfg.retain_rounds = true;
     cfg.sha512_digests = true;
     cfg.unit_draw = inst.header.get("unit_draw").cloned();
@@ -495,7 +519,7 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1 proves on the CPU from a host witness") };
     let tp = Instant::now();
     let root = zk.ic.root();
-    let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![] };
+    let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![], tau_salt: vec![] };
     if zk.pad_mismatch {
         sent.h[zk.lay.ml(0, 0)] += F128::ONE;
     }
@@ -631,7 +655,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let lay = zk_layout(st);
     let one = |plan: &Plan| -> (Value, Vec<Vec<u8>>, Value) {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
-        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+        fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
         let (v, p) = session(st, inst, shared(InProc(s0.clone())), plan, ProverSeed::from_os());
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         (v, p, rec)
@@ -761,6 +785,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     Ph::Pads => "commitment: pads root (hm96-sha512 leaves)",
                     _ if *n == 8 => "public: pow nonce (live coins: always 0)",
                     Ph::LigPre | Ph::L0Post(_) | Ph::Lig1 => "commitment: ligerito caps (hm96-sha512 leaves)",
+                    Ph::Inner(_) if *n == 64 => "commitment: inner tau (an hm96-sha512 leaf, opened after the last coin)",
                     _ => "UNATTRIBUTED",
                 };
                 add(c, *n);
@@ -788,7 +813,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     Ph::Lig1 => add("masked: ligerito levels 1+ (functions of the uniform level-1 table)", n),
                     Ph::Inner(k) => {
                         *k += 1;
-                        add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner tau, Y (the dot-product mask)" }, n)
+                        add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner Y (the dot-product mask)" }, n)
                     }
                     _ => add("UNATTRIBUTED", n),
                 }
@@ -807,7 +832,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
 fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let run = |plan: &Plan| -> (Value, Vec<Vec<u8>>, Value) {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
-        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+        fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
         let (v, p) = session(st, inst, shared(InProc(s0.clone())), plan, ProverSeed::from_os());
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         (v, p, rec)
@@ -872,6 +897,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                      + lg.final_proof.opened_salts.len()));
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
+        add("masked (proof): inner tau (<c, mu>, mu uniform) and its commitment's salt", 16 + inner.tau_salt.len());
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
@@ -1017,6 +1043,8 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
     let log = Arc::new(Mutex::new(Vec::new()));
+    // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it
+    let t: SharedTransport = if is_zk(st) { shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec())) } else { t };
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
     // registration done: the verifier draws the units (or none), and the statement is the drawn units'
@@ -1164,7 +1192,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     };
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
-    let step0 = if v["accepted"] == true { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
+    // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used
+    let step0 = if v["accepted"] == true && !is_zk(st) { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
@@ -1227,7 +1256,7 @@ const CASES: &[(&str, bool, bool)] = &[
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
-const NOT_ZK: &[&str] = &["relabelled_circuit_refused_at_load", "verifier_evaluated_tail_refused", "leaf_salts_from_prover_seed_refused",
+const NOT_ZK: &[&str] = &["coin_seed_opening_forged", "coin_seed_record_replays", "relabelled_circuit_refused_at_load", "verifier_evaluated_tail_refused", "leaf_salts_from_prover_seed_refused",
                           "device_salts_match_host", "leaf_key_witness_refused", "tail_swapped_circuit_refused", "mask_cells_random",
                           "opened_salt_altered"];
 
@@ -1560,7 +1589,7 @@ fn with_tail(text: &str) -> (String, String) {
 fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let run = |pseed: [u8; 32]| {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
-        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+        fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected(pseed));
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]});
