@@ -80,9 +80,9 @@ class TwoStageLaw:
         VU count.  A caller's `n_r` must equal the count and its `n_v` can't be smaller than the largest; without
         `units`, `n_r` and `n_v` (the largest RU's VU count) are required.
 
-        The rate rests on the VU draw's randomness being unknown to the prover when it commits the interiors: the VU
-        key comes from a beacon round published after the interiors are registered (`vu_key`, pitfall 4).  Nothing here
-        checks that; a VU key derived from a round the prover saw before committing voids the rate.
+        The rate rests on the VU draw being unknown to the prover when it commits the interiors: the verifier draws
+        the VUs from its own randomness after the interiors are committed (pitfall 4; there is no beacon).  Nothing
+        here checks that; a VU draw the prover could predict before committing voids the rate.
 
         `facts` are the exhaustively checked fields (`programs`, `prescribed`, `linked`, `covered`) and `drawn`
         ({`REPLAY`: RUs selected})."""
