@@ -182,11 +182,11 @@ fn table_word(row: u64, expected_index: u64) -> Option<u64> {
 /// `(n, j)` with `ex2(x) = T[j] * 2^n`.  `None` for the words the C rule answers before
 /// touching the table (`e == 0xFF`, `e == 0`, `unb >= 30`).
 ///
-/// `mant >> (-unb)` in the C model is a variable 64-bit shift; both x86-64 and AArch64
-/// take the amount mod 64, and the exhaustive sm_89 verification (all 2^32 inputs, 0
-/// mismatches, attention-model.md §3.1) pinned exactly the compiled behaviour, so the
-/// mod-64 shift *is* the registered semantics (`derived_rows.mufu_ex2_ftz` replicates
-/// it, `wrapping_shr` here).
+/// `K = floor(|x| 2^23)` exactly: `mant < 2^24`, so every right shift of 24 or more is
+/// `0` and each `|x| < 2^-23` reads row 0 at `n = 0` (`ex2 = 1.0`, either sign).  The C
+/// model clamps the shift (a count >= 64 is undefined there), `checked_shr` here: the
+/// exhaustive sm_89 verification (all 2^32 inputs, 0 mismatches, attention-model.md §3.1)
+/// ran the model on the device, where the shift clamps.
 fn ex2_reduce(x: u64) -> Option<(i64, u64)> {
     let ax = x & 0x7FFF_FFFF;
     let e = (ax >> 23) as i64;
@@ -201,7 +201,7 @@ fn ex2_reduce(x: u64) -> Option<(i64, u64)> {
     let k: u64 = if unb >= 0 {
         mant << unb
     } else {
-        mant.wrapping_shr((-unb) as u32)
+        mant.checked_shr((-unb) as u32).unwrap_or(0)
     };
     let fixed: i64 = if x & SIGN == 0 {
         k as i64
@@ -381,9 +381,21 @@ mod tests {
         assert_eq!(ex2_reduce(f(-1.0)), Some((-1, 0)));
         // x = -0.5: K = 0x400000, fixed = -K - 1 -> n = -1, j = 2^23 - 1 - 0x400000
         assert_eq!(ex2_reduce(f(-0.5)), Some((-1, 0x3F_FFFF)));
-        // x = 2^-64: shift 64 mod 64 = 0 -> K = mant -> n = 1, j = 0 (the pinned compiled behaviour)
-        assert_eq!(ex2_reduce(f(2f32.powi(-64))), Some((1, 0)));
+        // x = +-2^-64 (a shift by 64) and every other |x| < 2^-23 (biased exponent 1..=103): K = 0 -> n = 0,
+        // j = 0, so ex2 = T[0] = 1.0 for either sign
+        assert_eq!(ex2_reduce(f(2f32.powi(-64))), Some((0, 0)));
         assert_eq!(ex2_reduce(f(2f32.powi(-63))), Some((0, 0)));
+        for e in 1u64..=103 {
+            for m in [0, 1, 0x40_0000, MANT] {
+                for s in [0, SIGN] {
+                    let x = s | e << 23 | m;
+                    assert_eq!(ex2_reduce(x), Some((0, 0)), "{x:#010x}");
+                    assert_eq!(mufu_ex2_tab(x, F32_ONE), Some(F32_ONE), "{x:#010x}");
+                }
+            }
+        }
+        assert_eq!(ex2_reduce(f(2f32.powi(-23))), Some((0, 1)));
+        assert_eq!(ex2_reduce(f(-(2f32.powi(-23)))), Some((-1, MANT - 1)));
         assert_eq!(ex2_reduce(0), None);
         assert_eq!(ex2_reduce(EXP), None);
         assert_eq!(ex2_reduce(f(2f32.powi(30))), None);

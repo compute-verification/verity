@@ -355,7 +355,7 @@ def test_snapshot_commits_the_notes_repo_except_files_over_the_cap(tmp_path):
     assert (snap["paths"], snap["skipped"]) == (2, ["lanes/a/evidence/big.log"])
     assert _git(root, "log", "--format=%s") == "snapshot 2026-09-23T21:00Z: 2 paths; 1 too big, not committed\n"
     assert sorted(_git(root, "ls-files").splitlines()) == ["lanes/a/20260923T1700Z-report-a.md", "lanes/a/evidence/odd [name]*.md"]
-    assert notes.snapshot(root, max_bytes=1000) == {"commit": None, "paths": 0, "skipped": ["lanes/a/evidence/big.log"]}
+    assert notes.snapshot(root, max_bytes=1000) == {"commit": None, "paths": 0, "skipped": ["lanes/a/evidence/big.log"], "refused": []}
     (root / "lanes" / "a" / "20260923T1700Z-report-a.md").unlink()
     (root / "lanes" / "a" / "evidence" / "big.log").unlink()
     assert notes.snapshot(root)["paths"] == 1 and _git(root, "ls-files").splitlines() == ["lanes/a/evidence/odd [name]*.md"]
@@ -1057,6 +1057,25 @@ def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(
     text = (root / "lanes" / "coordinator" / name).read_text()
     assert text.startswith("---\nlane: coordinator\nkind: handoff\nfrom: steward\ncreated: 2026-09-23T21:00Z\n---\n\n"
                            "# the laptop guardian killed 1 process(es) of tables-fix-2 (final) (per-proc cap 1.0GB): rerun\n")
+
+
+def test_snapshot_refuses_git_data_by_name_and_by_content(tmp_path):
+    """The notes repo is public: a git bundle, pack or index (14 bundles of the private repo were found there, 2026-09-27) is never
+    committed, whatever its name, and is reported as refused."""
+    root = tmp_path / "notes"
+    _git(tmp_path, "init", "-q", "-b", "main", str(root))
+    _git(root, "config", "user.email", "t@t")
+    _git(root, "config", "user.name", "t")
+    _touch(root / "lanes" / "a" / "20260927T1100Z-report-a.md", 5, "# a\n")
+    (root / "lanes" / "a" / "evidence").mkdir(parents=True)
+    (root / "lanes" / "a" / "evidence" / "main-abc.bundle").write_bytes(b"anything")
+    (root / "lanes" / "a" / "evidence" / "renamed.txt").write_bytes(b"# v2 git bundle\nabc refs/heads/main\n")
+    (root / "lanes" / "a" / "evidence" / "objects.dat").write_bytes(b"PACK\x00\x00\x00\x02")
+    snap = notes.snapshot(root, now=NOW)
+    assert snap["paths"] == 1 and sorted(snap["refused"]) == ["lanes/a/evidence/main-abc.bundle", "lanes/a/evidence/objects.dat",
+                                                              "lanes/a/evidence/renamed.txt"]
+    assert _git(root, "ls-files").splitlines() == ["lanes/a/20260927T1100Z-report-a.md"]
+    assert "3 git data refused" in _git(root, "log", "--format=%s")
 
 
 def test_snapshot_leaves_the_steward_state_out(tmp_path):
