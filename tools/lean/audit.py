@@ -446,9 +446,14 @@ def olean_files(lib: Path) -> list[Path]:
 
 
 def olean_digest(lib: Path) -> str:
+    from concurrent.futures import ThreadPoolExecutor
+
+    files = olean_files(lib)
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
+        hashes = list(ex.map(sha256, files))
     h = hashlib.sha256()
-    for p in olean_files(lib):
-        h.update(f"{p.relative_to(lib)}\0{sha256(p)}\n".encode())
+    for p, d in zip(files, hashes):
+        h.update(f"{p.relative_to(lib)}\0{d}\n".encode())
     return h.hexdigest()
 
 
