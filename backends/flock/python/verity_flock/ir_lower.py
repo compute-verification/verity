@@ -326,6 +326,9 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
 
 
 TC_PRIM = "AmpereBF16TcDot16_v1"
+#: the Ampere m16n8k16 bf16 step under both ids: the vLLM registry's _v1 and core's _v2 (verity.ml.prims) evaluate the one
+#: measured total function (tc_dot_total on AMPERE_BF16_M16N8K16), which fp.tc_dot16 computes on every encoding
+TC_PRIMS = ("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2")
 
 
 def tc_units(target) -> Units:
@@ -338,9 +341,11 @@ def tc_units(target) -> Units:
     gates = live_gates(call)
     by = {g.index: g for g in gates}
     arg_pos = {g: i for i, g in enumerate(args)}
-    tcs = [g for g in gates if g.prim.id == TC_PRIM]
+    tcs = [g for g in gates if g.prim.id in TC_PRIMS]
     if not tcs:
-        raise ValueError(f"{getattr(target, 'id', target)}: no {TC_PRIM} gate")
+        raise ValueError(f"{getattr(target, 'id', target)}: no {' or '.join(TC_PRIMS)} gate")
+    if len({g.prim.id for g in tcs}) > 1:
+        raise ValueError("tensor-core steps of two ids in one target")
 
     def zero_word(o):
         g = by.get(o)
@@ -375,7 +380,7 @@ def tc_units(target) -> Units:
         C.output("out0", fp.tc_dot16(C, acc, a, b))
         return C
 
-    return Units(target, [16] * 32 + [32], [32], ins, outs, (TC_PRIM,), [tcs[0]], [], [], K, tail,
+    return Units(target, [16] * 32 + [32], [32], ins, outs, (tcs[0].prim.id,), [tcs[0]], [], [], K, tail,
                  public=[(kpos[o], arg_pos[o]) for o in sorted(public_args, key=arg_pos.__getitem__)],
                  tail_rets=list(rets), builder=builder)
 

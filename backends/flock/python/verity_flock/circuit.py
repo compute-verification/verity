@@ -484,6 +484,8 @@ def lowering_for_set(input_set) -> IL.Lowering:
     from verity_numerical.bench import lowerings
 
     mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)
+    if hasattr(mod, "circuit_lowering"):
+        return mod.circuit_lowering(input_set.subcircuit)
     return mod.lowering_for_set(input_set) if hasattr(mod, "lowering_for_set") else mod.frame_lowering(input_set.subcircuit)
 
 

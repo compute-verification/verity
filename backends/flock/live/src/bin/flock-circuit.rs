@@ -589,8 +589,12 @@ const CASES: &[(&str, bool, bool)] = &[
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
     let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
+    // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap
+    let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
+        .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
     (name == "chaining_value_forged" && !multi_block)
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
+        || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -624,7 +628,10 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
     let path = arg("--instances", "");
     let mut v = Instances::load(&path, &st.c).unwrap();
     match what {
-        "output" => v.outputs[5] ^= 1,
+        "output" => {
+            let k = 5.min(v.outputs.len() - 1);
+            v.outputs[k] ^= 1
+        }
         _ => v.bcs[1][0] ^= 1,
     }
     let text = std::fs::read(&path).unwrap();

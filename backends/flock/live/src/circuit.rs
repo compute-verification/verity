@@ -1315,22 +1315,33 @@ impl Stmt {
         if wires.is_empty() {
             return ins;
         }
+        // slot by slot: a round re-evaluates only the slots whose inputs changed (a chain of units, GEMM's accumulator, costs one
+        // pass rather than one round of every slot per link)
         let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
-        let mut dirty: Vec<bool> = (0..c.nets.len()).map(|n| !row_net(n)).collect();
+        let mut dirty: Vec<Vec<bool>> = (0..c.nets.len()).map(|n| vec![!row_net(n); ins[n].len()]).collect();
         let fixed = unit_outs.is_some();
         if let Some(u) = unit_outs {
             outs[c.unit_net] = u;
-            dirty[c.unit_net] = false;
+            dirty[c.unit_net].iter_mut().for_each(|d| *d = false);
         }
-        for _round in 0..64 {
+        let cap = ins.iter().map(|x| x.len()).sum::<usize>() + 64;
+        for _round in 0..cap {
             for n in 0..c.nets.len() {
                 if fixed && n == c.unit_net {
-                    dirty[n] = false;
                     continue;
                 }
-                if dirty[n] {
-                    outs[n] = self.eval_outputs(n, net_of(n), &ins[n]);
-                    dirty[n] = false;
+                let todo: Vec<usize> = (0..ins[n].len()).filter(|&x| dirty[n][x]).collect();
+                if todo.is_empty() {
+                    continue;
+                }
+                let sub: Vec<Vec<F128>> = todo.iter().map(|&x| ins[n][x].clone()).collect();
+                let got = self.eval_outputs(n, net_of(n), &sub);
+                if outs[n].is_empty() {
+                    outs[n] = vec![Vec::new(); ins[n].len()];
+                }
+                for (&x, o) in todo.iter().zip(got) {
+                    outs[n][x] = o;
+                    dirty[n][x] = false;
                 }
             }
             let mut changed = false;
@@ -1348,7 +1359,7 @@ impl Stmt {
                             if bit(d, (dcol + t) % WORD) != v {
                                 flip_bit(d, (dcol + t) % WORD);
                                 changed = true;
-                                dirty[dn] = true;
+                                dirty[dn][xd] = true;
                             }
                         }
                     }

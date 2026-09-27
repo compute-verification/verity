@@ -374,8 +374,9 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
             for a in op[2:]:
                 if a not in const:
                     need[a] = max(need[a], t)
+    # the returned outputs leave from their own last stage, whose only outputs they are (the Out region is its output group)
     for r in rets:
-        need[r] = max(need[r], n_st - 1)
+        need[r] = n_st
     stages, lookups = [], []
     carried: list[int] = []
     pending: list = []
@@ -409,15 +410,13 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
                 fresh.append((len(lookups) - 1, prim, out, idx, ctx, table))
             else:
                 val[out] = OPS[prim](C, *[word(a) for a in args])
-        last = si == n_st - 1
+        last = si == n_st - 1 and not rets
         live = [] if last else sorted(sl for sl in val if need[sl] > si)
         outs = [(("pass", sl), val[sl], 32) for sl in live]
         for j, prim, out, idx, ctx, table in fresh:
             outs += [(("ctx", j, i), w, 32) for i, w in enumerate(ctx)]
             outs.append((("index", j), idx, TABLE_BITS[table]))
         outs += [(("cut", k), word(k)[:width_in[k]], width_in[k]) for k in read_by_units if depth[k] == si]
-        if last:
-            outs += [(("ret", i), word(r)[:16], 16) for i, r in enumerate(rets)]
         for j, (tag, w, width) in enumerate(outs):
             C.output(f"out{j}", list(w) + [ZERO] * (width - len(w)))
             st.outs.append(tag)
@@ -425,6 +424,19 @@ def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
         stages.append(st)
         carried = live
         pending = [(j, prim, out, len(ctx)) for j, prim, out, idx, ctx, table in fresh]
+    if rets:
+        C = Circuit()
+        st = Stage(C)
+        val = {}
+        for sl in carried:
+            val[sl] = C.input(f"in{len(st.ins)}", 32)
+            st.ins.append(("pass", sl))
+            st.in_widths.append(32)
+        for i, r in enumerate(rets):
+            C.output(f"out{i}", (val[r] if r in val else const_bits(const[r], 32))[:16])
+            st.outs.append(("ret", i))
+            st.out_widths.append(16)
+        stages.append(st)
     return Tail(stages, lookups, read_by_units, rets)
 
 
