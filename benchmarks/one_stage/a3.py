@@ -32,8 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ir.codec import canonical_json, program_digest  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.ir.codec import canonical_json  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity_one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
@@ -96,7 +95,7 @@ def main() -> int:
         header = a0.public_header(st["dir"], len(idx))
         defn = s.subcircuit.definition()
         members.append({"name": d.name, "dir": d, "idx": idx, "n": len(idx), "st": st, "header": header, "defn": defn,
-                        "program_ok": st["meta"]["program_digests"].get(defn.id) == program_digest(Program(defn)),
+                        "program_ok": a0.template_program_ok(st["meta"], defn),
                         "stage_s": round(time.time() - t, 1)})
     summary["members"] = [{"set": m["name"], "template": m["defn"].id, "n": m["n"], "stage_s": m["stage_s"],
                            "template_program_ok": m["program_ok"]} for m in members]

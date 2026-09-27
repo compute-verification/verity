@@ -74,6 +74,13 @@ def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
     return json.loads(p.stdout.strip().splitlines()[-1])["class_sha512"]
 
 
+def template_program_ok(meta: dict, defn) -> bool:
+    """META's one `program_digests` entry is this template's: keyed by its descriptor id (or its display id, as M0 keys it
+    through 68ae79f2), valued core's `program_digest` of its Program."""
+    pd = meta.get("program_digests", {})
+    return len(pd) == 1 and next(iter(pd)) in (P.template_id(defn), defn.id) and next(iter(pd.values())) == program_digest(Program(defn))
+
+
 def bindings(meta: dict, header: dict, rec: dict, cls: str) -> dict:
     """What the staged statement binds, against the registration: the partition, the program, the global unit indices of
     `Q_template_instance` (instance i is unit i), and one class per instance."""
@@ -254,9 +261,9 @@ def main() -> int:
         st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
     header = public_header(st["dir"], n)
     summary["stage_s"] = round(time.time() - t, 1)
-    head_digest = program_digest(Program(template))
-    summary["template_program"] = {"statement": st["meta"]["program_digests"], "verifier": {template.id: head_digest},
-                                   "ok": st["meta"]["program_digests"].get(template.id) == head_digest}
+    summary["template_program"] = {"statement": st["meta"]["program_digests"],
+                                   "verifier": {P.template_id(template): program_digest(Program(template))},
+                                   "ok": template_program_ok(st["meta"], template)}
 
     # 3. registration, before any draw; the verifier holds its own public file to it
     fv = header["frame_v3"]
