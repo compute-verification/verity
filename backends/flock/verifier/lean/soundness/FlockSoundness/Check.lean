@@ -244,3 +244,11 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 -- the rows Δ writes, by loop (HmRow.delta)
 #print axioms FlockSoundness.forIn_id_inv
 #print axioms FlockSoundness.delta_rows
+-- an instance's rows placed by the verifier's level-0 matrices (placedA, placedB), from the layout facts
+#print axioms FlockSoundness.rangesEntry_of_covers
+#print axioms FlockSoundness.sparseEntry_ofRows
+#print axioms FlockSoundness.Layout.delta_unit_comp
+#print axioms FlockSoundness.Layout.delta_unit_const
+#print axioms FlockSoundness.Layout.delta_pin
+#print axioms FlockSoundness.Layout.placement
+#print axioms FlockSoundness.Layout.unitPlace
