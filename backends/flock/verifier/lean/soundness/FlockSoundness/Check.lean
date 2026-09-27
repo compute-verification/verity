@@ -104,11 +104,11 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.SelfClash.collision
 #print axioms FlockSoundness.op₀_conflict_collision
 #print axioms FlockSoundness.opR_conflict_collision
--- groundwork for knowledge soundness (§1.3): the rewinding lemma summed over positions, and the
--- compiled bound for any level-0 table
-#print axioms FlockSoundness.Rewinding.expect_offsum_le
-#print axioms FlockSoundness.expect_off_table_le
-#print axioms FlockSoundness.bad_le_gen
+-- knowledge soundness (§1.3): the reps' fork terms do not depend on the level-0 table (the locksteps
+-- for two tables are aligned), the compiled bound for any table, and the fill-and-decode extractor
+#print axioms FlockSoundness.Game.Lock.forkE_congr
+#print axioms FlockSoundness.aligned_lockTable
+#print axioms FlockSoundness.advRT_eq
 #print axioms FlockSoundness.table_sound_compiled_of_table
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
@@ -171,3 +171,8 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_cone
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_sound
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_full_profile
+#print axioms FlockSoundness.Extract.expect_off_firstTable_le'
+#print axioms FlockSoundness.Extract.tail_of_fixed
+#print axioms FlockSoundness.Extract.joint_of_fixed
+#print axioms FlockSoundness.table_knowledge_sound
+#print axioms FlockSoundness.table_knowledge_sound_joint

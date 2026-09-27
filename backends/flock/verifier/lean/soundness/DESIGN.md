@@ -130,33 +130,52 @@ without the square root. It is a cross-check only. The number above does not res
 
 Soundness says the committed witness satisfies the statement. A claim about *which* data a proof used needs that witness
 computed, because hiding leaves open to essentially any row. So "these proofs used the registered weights" (§10) needs
-it, and so does the recursion track, whose outer proof must be a proof of knowledge. The long form, with the effort
-table, is `note:20260926T2330Z-finding-knowledge-soundness`.
+it, and so does the recursion track, whose outer proof must be a proof of knowledge. The analysis and its review are
+`note:20260927T0535Z-draft-knowledge-soundness-analysis` and `note:20260927T0600Z-review-knowledge-soundness`. The
+adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
 
-- **The extractor.** It reruns any classical prover `P*` from the start, about `(N₀/Q₀)·ln(1/(ζβ))/ε` times, where ε
-  is the probability that `P*` is accepted. That sees all but a fraction ζ of level 0's columns, except with
-  probability β. Level 0 is committed in the first message, so every run opens the same cap.
-  - Two runs that open one position differently give a SHA-512 collision.
-  - Otherwise the extractor list-decodes the observed columns, treating the rest as erasures, and outputs a witness that
-    satisfies the statement.
+- **The extractor.** Level 0 is committed in the first message, so every rerun after it opens under the same cap. The
+  extractor:
+  - reruns `P*` after its level-0 cap `K` times;
+  - fills each level-0 position with the first verifying opening it saw, and a fixed row elsewhere;
+  - decodes the full table at the level-0 radius `δ`, over at most `L₀` candidates (`closeMsgs`). The table theorem
+    decodes non-constructively; Guruswami–Sudan is needed only by reductions that run the extractor.
+- **Why it works.** For any level-0 table `T`, the compiled bound gives
+  `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`
+  (`table_sound_compiled_of_table`), with one `ε_c⁻` for every `T`. A fresh run opens a position off the extractor's
+  table in one of two ways, with these costs over the extractor's `K` runs:
+  - it conflicts with the extractor run that supplied the row: `K·Adv₀`, a union over the `K` fresh–extractor pairs,
+    each a two-run collision finder;
+  - it opens a position no extractor run opened: `Σ_p q_p(1 − q_p)^K ≤ N₀/(eK)`.
+
+  One Markov step gives `Pr[extraction fails] ≤ (K·Adv₀ + N₀/(eK))/(ε − ε_c⁻)` (`table_knowledge_sound`).
+- **The numbers** (m = 33).
+  - With `K = 2^21.6/(ε − ε_c⁻)`, failure is at most `1/4 + (t·2^-244.7/(ε − ε_c⁻))²`. The hash term is squared, so
+    `κ = ε_c⁻ + t·2^-243.7`.
+  - The product form the audit consumes needs no condition on `ε`:
+    `Pr[accepted ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))` (`table_knowledge_sound_joint`). At
+    `K = √(N₀/(e·Adv₀))` this is `2ε_c⁻ + t·2^-243.7`, which is `2^-159.8` at `t = 2^80` above `2ε_c⁻`.
+  - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
+    `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
+- **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
+  efficient extractor, as recursion needs, doubles `K` until a satisfying witness is found, which is a decidable stop.
+  An exponential tail comes from disjoint blocks: the unseen set is the intersection of the blocks' unseen sets, so `r`
+  blocks of `2N₀/(e(ε − ε_c⁻))` runs fail with probability at most `2^-r`.
+- **Canonical values.** The extractor should output the values behind the `hm96` commit strings, not "one satisfying
+  witness". Two satisfying candidates that differ behind a commit string are an `hm96` collision. This, and
+  `registered_weights`, need the SHA-512 leaf layout in the model.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
-- **The extraction is mostly straight-line,** since the extractor sees conflicts itself. The rewinding lemma bounds the
-  positions where it saw only off-plurality values.
-  - A first estimate of that term is `t·2^-227/ε`, so 2^-128 needs `t/ε ≤ 2^99`. This is to be sharpened.
-  - Generic interactive-BCS bounds give only about 2^-100 to 2^-111 with SHA-512.
-- **Effort:** about 1,250–2,000 lines of Lean, roughly half the development so far, plus 200–350 if recursion needs
-  witness-extended emulation. Decoding is the largest piece and is provable: CompPoly's Guruswami–Sudan decoder is
-  verified with no `sorry`, and ArkLib's Johnson bound covers the punctured interleaved code. Write and review the
-  analysis on paper first. It follows `table_sound_compiled`; `registered_weights` waits for the SHA-512 leaf layout,
-  and recursion for M1/M2.
-- **Sampled audits need it** (the lifetime-soundness desk study, §2 and §3). The audit bound defines a wrong unit
-  through the committed transcript: the plurality table lifted to the serving commitments, then the value the extractor
-  recovers most often behind each commit string. So each audit pays the table's knowledge error, plus a link term
-  `δ_link` (a rewinding whose collision finder runs the extractor). Bound `δ_link` together with
-  `table_knowledge_sound`. The first estimate above gives about `√(t·2^-227)` per audit, which is 2^-73.5 at `t = 2^80`.
-- **Risks:** the concrete knowledge error; a thin decoding margin at level 0 (`η = 1/50` leaves under 1% after
-  erasures, so coverage must be about 99%); bridging CompPoly, ArkLib and `Model`. It is classical only (§9).
+- **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
+  - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
+  - On paper (`note:20260927T0705Z-draft-link-term`, pending review): define `X`'s value layer the way the extractor
+    fills its table, from auxiliary extractions, and charge failed extractions to the joint form at the same `K`.
+    Knowledge plus link then cost about `2√(t·2^-220.5)` for audit B at m = 33, which is `2^-69.3` at `t = 2^80`
+    (the review's first estimate was `2^-65.3`).
+  - The square root is inherent to strict-time collision resistance here. It dominates the audit bound. An
+    expected-time assumption or the random-oracle column removes it.
+  - The lifetime numbers don't change until the review accepts it.
+- **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
