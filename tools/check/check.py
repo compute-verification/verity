@@ -320,14 +320,15 @@ def agreement_key(e: dict[str, str]) -> str | None:
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: backends/flock/verifier/, less the Lake packages nested in its Lean package
     (`level3/`, `soundness/`: proofs with a lakefile of their own), which `flock-verify` is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in)."""
+    package requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which
+    only `tools/lean/audit.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
     pre, lean = "backends/flock/verifier/", "backends/flock/verifier/lean/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
     if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
         nested = ()
-    return [f for f in files if f.startswith(pre) and not f.startswith(nested or ("\0",))]
+    return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
 
 
 def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -> dict:
