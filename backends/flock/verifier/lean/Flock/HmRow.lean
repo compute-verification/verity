@@ -516,6 +516,25 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
+/-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population: the
+query applied to the program, its units grouped by template descriptor id. Only `Q_template_instance` v0 and
+`Q_template_instances` v0 define strata. -/
+def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (name, version) ← checkPartitionObject obj
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
+    | throw s!"stratified: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
+  let ts ← ts
+  let d ← TemplateQuery.Desc.parse program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let rs ← match TemplateQuery.evaluate d ts with
+    | .ok rs => pure rs
+    | .error e => throw s!"partition: {e}"
+  match Draw.derive k (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) with
+  | .ok law => return (law, TemplateQuery.population rs)
+  | .error e => throw s!"stratified: {e}"
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -713,6 +732,12 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let pub ← match draw with
     | some d => HmRow.drawn c pop d
     | none => pure pop
+  -- a stratified draw's strata are the verifier's own, from its program and query, when it holds both
+  if let some d := draw then
+    if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLaw obj prog k
+      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmRow.checkPublic c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, partition, program with
