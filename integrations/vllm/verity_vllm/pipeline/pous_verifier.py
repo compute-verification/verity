@@ -112,8 +112,16 @@ def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
     return quantiles([r.roundtrip(OP_PING, 0) for _ in range(pings)])
 
 
-def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: int = audit.CHALLENGES) -> dict[str, Any]:
-    """Calibrate the round trip, fix the allowance, run `audits` audits (the first is the audit of record), recalibrate."""
+def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: int = audit.CHALLENGES, cpu: int | None = None) -> dict[str, Any]:
+    """Calibrate the round trip, fix the allowance, run `audits` audits (the first is the audit of record), recalibrate.
+
+    The verifier's own stalls count against the honest server, so the timed part runs with the garbage collector frozen and off,
+    on one core (`cpu`) when given."""
+    if cpu is not None:
+        os.sched_setaffinity(0, {cpu})
+    gc.collect()
+    gc.freeze()
+    gc.disable()
     r = LiveResponder(host, port, vk.params.block_bytes)
     try:
         rtt = calibrate(r, pings)

@@ -4,14 +4,14 @@ Loading is stock: `create_weights` makes plain parameters, so vLLM's loaders do 
 `process_weights_after_loading` the store reads `W` (the checkpoint's data section, `layout.py`), encodes it on the GPU under the
 verifier's salt (`codec.encode`) and keeps only `C`.  Each module then checks that decoding its checkpoint tensors from `C`
 reproduces the loaded parameter bit for bit, and drops the parameter.  At run time a module's `apply` (or `embedding`) asks the
-store for its weight, which is decoded from `C` for the whole transformer layer at its first use in a forward and released after
-its last; nothing decoded outlives the layer.  The GEMM is `UnquantizedLinearMethod.apply`'s, so the served bits are the plain
-model's.
+store for its weight, which is decoded from `C` for its group (`layers_per_decode` transformer layers, default one) at the group's
+first use in a forward and released after its last; nothing decoded outlives the group's use within the pass.  The GEMM is
+`UnquantizedLinearMethod.apply`'s, so the served bits are the plain model's.
 
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
-file), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint commitment), and `drop_fraction` / `drop_source` (the negative control: that
-fraction of `C`'s blocks, drawn through `verity.randomness` from `drop_source`, is zeroed after encoding, and the load-time check
-is skipped).
+file), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
+commitment), `layers_per_decode`, and `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn
+through `verity.randomness` from `drop_source`, is zeroed after encoding, and the load-time check is skipped).
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from verity_vllm.engine.pous import codec, layout, native
 
 DROP_DOMAIN = "verity/pous-vllm/negative-control-drop/v1"
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
-_LAYER = re.compile(r"^(.*\.layers\.\d+)\.")
+_LAYER = re.compile(r"^(.*\.layers\.)(\d+)\.")
 _STORE: list[Store] = []
 
 
@@ -81,7 +81,10 @@ class Store:
         self.c = codec.encode(w, tags)
         del w
         torch.cuda.synchronize()
+        torch.cuda.empty_cache()
         self.stats["encode_s"] = time.perf_counter() - t0
+        print(f"[pous] encoded {self.segments} segments in {self.stats['encode_s']:.1f} s, allocated "
+              f"{torch.cuda.memory_allocated() / 2**30:.2f} GiB reserved {torch.cuda.memory_reserved() / 2**30:.2f} GiB", flush=True)
         frac = float(self.spec.get("drop_fraction") or 0.0)
         if frac > 0:
             key = derive(bytes.fromhex(self.spec["drop_source"]), DROP_DOMAIN, {"salt": self.salt})
@@ -90,28 +93,36 @@ class Store:
             self.c.view(self.blocks, codec.M)[idx] = 0
 
     def decode(self, names: list[str]) -> dict[str, torch.Tensor]:
-        """The checkpoint tensors `names`, decoded from the segments that hold them."""
+        """The checkpoint tensors `names`, decoded from the segments that hold them (in one batch)."""
         t0 = time.perf_counter()
-        s0, s1 = self.checkpoint.segment_range(names)
-        tags = codec.segment_tags(self.salt, list(range(s0, s1)), self.device)
-        w = codec.decode(self.c[s0:s1], tags).view(-1)
-        base = s0 * codec.SEGMENT_BYTES
+        lay = self.checkpoint.layout
+        segs = sorted({s for n in names for s in lay.segments(n)})
+        w = codec.decode(self.c[torch.tensor(segs, device=self.device)], codec.segment_tags(self.salt, segs, self.device))
+        flat = w.view(len(segs), codec.SEGMENT_BYTES)
+        at = {s: i for i, s in enumerate(segs)}
         out = {}
         for n in names:
-            p = self.checkpoint.layout.placement(n)
-            out[n] = w[p.offset - base:p.offset + p.size - base].view(DTYPES[self.checkpoint.dtypes[n]]).view(self.checkpoint.shapes[n])
+            p, r = lay.placement(n), lay.segments(n)
+            start = p.offset - r.start * codec.SEGMENT_BYTES
+            raw = flat[at[r.start]:at[r.start] + len(r)].view(-1)[start:start + p.size]
+            out[n] = raw.view(DTYPES[self.checkpoint.dtypes[n]]).view(self.checkpoint.shapes[n])
         torch.cuda.synchronize()
         self.stats["decodes"] += 1
         self.stats["decode_s"] += time.perf_counter() - t0
-        self.stats["decoded_bytes"] += (s1 - s0) * codec.SEGMENT_BYTES
+        self.stats["decoded_bytes"] += len(segs) * codec.SEGMENT_BYTES
         return out
+
+    def group_of(self, prefix: str) -> str:
+        """The modules decoded together: `layers_per_decode` consecutive transformer layers, or the module alone."""
+        m = _LAYER.match(prefix)
+        if not m:
+            return prefix
+        return f"{m.group(1)}{int(m.group(2)) // int(self.spec.get('layers_per_decode') or 1)}"
 
     def register(self, prefix: str, names: list[str], loaded: torch.Tensor) -> None:
         """Module `prefix` computes with the concatenation (dim 0) of `names`; unless blocks were dropped, decoding them must
         reproduce the loaded parameter bit for bit."""
-        m = _LAYER.match(prefix)
-        group = m.group(1) if m else prefix
-        self.consumers.setdefault(group, {})[prefix] = names
+        self.consumers.setdefault(self.group_of(prefix), {})[prefix] = names
         if self.dropped:
             return
         parts = self.decode(names)
@@ -120,6 +131,10 @@ class Store:
         self.stats["checks"][prefix] = bool(same)
         for n in names:
             self.stats["digests"][n] = hashlib.sha256(parts[n].contiguous().view(torch.uint8).cpu().numpy().tobytes()).hexdigest()
+        del parts, got
+        torch.cuda.empty_cache()
+        print(f"[pous] {prefix} checked={same} allocated={torch.cuda.memory_allocated() / 2**30:.2f} GiB "
+              f"reserved={torch.cuda.memory_reserved() / 2**30:.2f} GiB", flush=True)
         if not same:
             raise RuntimeError(f"POUS: decoding {names} from C does not reproduce the loaded {prefix} weight")
 
@@ -128,9 +143,8 @@ class Store:
         return parts[names[0]] if len(names) == 1 else torch.cat([parts[n] for n in names], 0)
 
     def take(self, prefix: str) -> torch.Tensor:
-        """Module `prefix`'s weight for this use: the layer is decoded at its first use in a pass and dropped after its last."""
-        m = _LAYER.match(prefix)
-        group = m.group(1) if m else prefix
+        """Module `prefix`'s weight for this use: its group is decoded at its first use in a pass and dropped after its last."""
+        group = self.group_of(prefix)
         members = self.consumers[group]
         entry = self.cache.get(group)
         if entry is None or prefix in entry["taken"]:

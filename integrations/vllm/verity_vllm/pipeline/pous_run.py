@@ -141,7 +141,7 @@ def cmd_serve(a) -> None:
 
     out = Path(a.out)
     spec = {"safetensors": checkpoint_file(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
-            "drop_source": os.urandom(32).hex()}
+            "drop_source": os.urandom(32).hex(), "layers_per_decode": a.layers_per_decode}
     spec_path = out / f"pous-{a.tag}.json"
     _write(spec_path, spec)
     t0 = time.perf_counter()
@@ -181,7 +181,7 @@ def cmd_verify(a) -> None:
     doc: dict[str, Any] = {"server_root_matches_vk": setup.check_server_root(vk, bytes.fromhex(ready["root"])),
                            "blocks_differing": sum(served[32 * i:32 * i + 32] != leaf for i, leaf in enumerate(vk.leaves))}
     try:
-        doc.update(pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings))
+        doc.update(pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu))
     finally:
         (out / f"stop-{a.tag}").write_text("")
     _write(out / f"verify-{a.tag}.json", doc)
@@ -204,14 +204,16 @@ def _base(a) -> list[str]:
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
     common = [*_base(a), "--tag", tag]
-    srv = _sub(["serve", *common, "--max-tokens", str(a.max_tokens), *extra], out / f"serve-{tag}.log")
+    srv = _sub(["serve", *common, "--max-tokens", str(a.max_tokens), "--load-tokens", str(a.load_tokens),
+                "--layers-per-decode", str(a.layers_per_decode), *extra], out / f"serve-{tag}.log")
     t0 = time.time()
     while not (out / f"ready-{tag}.json").exists():
         if srv.poll() is not None or time.time() - t0 > a.timeout:
             srv.kill()
             return {"serve_rc": srv.returncode, "verify_rc": None, "serve": None, "verify": None}
         time.sleep(2)
-    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings)], out / f"verify-{tag}.log").wait()
+    pin = [] if a.verifier_cpu is None else ["--verifier-cpu", str(a.verifier_cpu)]
+    rc_v = _sub(["verify", *common, "--audits", str(a.audits), "--pings", str(a.pings), *pin], out / f"verify-{tag}.log").wait()
     rc_s = srv.wait(timeout=a.timeout)
     load = lambda p: _read(p) if p.exists() else None  # noqa: E731
     return {"serve_rc": rc_s, "verify_rc": rc_v, "serve": load(out / f"serve-{tag}.json"), "verify": load(out / f"verify-{tag}.json")}
@@ -299,6 +301,9 @@ class _Common:
     pings: int = option("--pings", type=int, default=2000, help="round-trip calibration pings before and after the audits")
     workers: int = option("--workers", type=int, default=64, help="processes of the verifier's reference encoding")
     timeout: float = option("--timeout", type=float, default=3600.0, help="seconds a server may take to become ready")
+    verifier_cpu: int | None = option("--verifier-cpu", type=int, default=None, help="pin the timed audit to this core")
+    layers_per_decode: int = option("--layers-per-decode", type=int, default=1,
+                                    help="transformer layers decoded together at their first use in a forward pass")
     result: str | None = option("--result", default=None, help="also write the research result.json here (e2e)")
 
 

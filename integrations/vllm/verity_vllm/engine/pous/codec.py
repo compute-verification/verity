@@ -7,9 +7,9 @@ encoding with it must have the server's root, and `tests/engine/test_pous_codec.
     tag_s   = salt (24 B) || u64(s)
     Pi      = Feistel-10 on M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : (M + 64) / 2]
     P_T     = Feistel-10 on M bytes,      F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : M / 2],  T = tag_s || u8(layer) || u16(v)
-    H       = sponge over Pi, rate M, capacity 64 B, IV 0: the header block "pous-p3-v1-H" || tag_s || u8(layer) || u16(v) || u8(npar)
-              zero-filled to M, then the parents newest first (c_{v-1} .. c_{v-npar}, npar = min(v, 12)), then one pad10*1 block;
-              key = S[0 : M]
+    H       = the reference's `KeyDerivation` (`key_mode`): the sponge over Pi, or the overwrite chain over Pi2 (Feistel-10 on
+              2M + 64 bytes), absorbing the header, the parents newest first (c_{v-1} .. c_{v-npar}, npar = min(v, 12)) and a
+              pad10*1 block
     c1_v    = P_(tag,0,v)(W_v ^ H(tag, 0, v, c1_par(v)))
     c2_v    = P_(tag,1,v)(transpose(c1)_v ^ H(tag, 1, v, c2_par(v)))
 
@@ -53,8 +53,8 @@ def _u8(values, device) -> torch.Tensor:
     return torch.tensor(list(values), dtype=torch.uint8, device=device)
 
 
-def pi(state: torch.Tensor) -> None:
-    """`Pi` in place on `[R, M + 64]` states."""
+def permute(state: torch.Tensor) -> None:
+    """The key derivation's permutation (`Pi` or `Pi2`, by the state's width) in place on `[R, width]` states."""
     native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False)
 
 
@@ -74,35 +74,66 @@ def p_t(x: torch.Tensor, tags: torch.Tensor, layer: int, vs: torch.Tensor, inver
     native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse)
 
 
+def key_mode(h) -> str:
+    """Which GPU twin computes the reference `KeyDerivation` `h`, read off its interface: its call schedule for `K` parents
+    (`h.steps`) and the width of its permutation (`h.pi.width`).  `sponge`: a header call, the parents newest first and a pad
+    call, each XORing its block into the rate of `Pi` (`m + 512` bits).  `overwrite`: the header in the chaining value, then
+    `(r, h) <- Pi2(B || h)` for the parents newest first and the pad, `Pi2` of `2m + 512` bits, the key the pad call's `r`."""
+    newest = [(u,) for u in reversed(range(K))]
+    steps = [tuple(x) for x in h.steps(range(K))]
+    width = getattr(getattr(h, "pi", None), "width", None)
+    if steps == [(), *newest, ()] and width == 8 * M + primitives.CAPACITY_BITS:
+        return "sponge"
+    if steps == [*newest, ()] and width == 16 * M + primitives.CAPACITY_BITS:
+        return "overwrite"
+    raise NotImplementedError(f"no GPU twin of the key derivation {type(h).__name__} (steps {steps[:2]}..., width {width})")
+
+
+MODE = key_mode(primitives.reference(OPERATING_POINT).h)
+
+
+def _header(tags: torch.Tensor, layer: int, vs: torch.Tensor, npar: torch.Tensor) -> torch.Tensor:
+    """`[R, 48]`: "pous-p3-v1-H" || tag || u8(layer) || u16(v) || u8(npar)."""
+    o = len(H_HEADER)
+    hdr = torch.empty(tags.shape[0], o + TAG_BYTES + 4, dtype=torch.uint8, device=tags.device)
+    hdr[:, :o] = _u8(H_HEADER, tags.device)
+    hdr[:, o:o + TAG_BYTES] = tags
+    hdr[:, o + TAG_BYTES] = layer
+    hdr[:, o + TAG_BYTES + 1] = (vs & 0xFF).to(torch.uint8)
+    hdr[:, o + TAG_BYTES + 2] = (vs >> 8).to(torch.uint8)
+    hdr[:, o + TAG_BYTES + 3] = npar.to(torch.uint8)
+    return hdr
+
+
 def keys(tags: torch.Tensor, layer: int, vs: torch.Tensor, labels: torch.Tensor, groups: torch.Tensor) -> torch.Tensor:
     """`H(tags[r], layer, vs[r], parents)` for every row: `[R, M]`, the parents of row `r` being `labels[groups[r], vs[r] - j]`,
-    `j = 1 .. min(vs[r], K)` (`labels` is `[G, N, M]`)."""
+    `j = 1 .. min(vs[r], K)` (`labels` is `[G, N, M]`), in `MODE`."""
     r = tags.shape[0]
-    dev = tags.device
     npar = torch.clamp(vs, max=K)
-    state = torch.zeros(r, PI_BYTES, dtype=torch.uint8, device=dev)
-    state[:, :len(H_HEADER)] = _u8(H_HEADER, dev)
-    o = len(H_HEADER)
-    state[:, o:o + TAG_BYTES] = tags
-    state[:, o + TAG_BYTES] = layer
-    state[:, o + TAG_BYTES + 1] = (vs & 0xFF).to(torch.uint8)
-    state[:, o + TAG_BYTES + 2] = (vs >> 8).to(torch.uint8)
-    state[:, o + TAG_BYTES + 3] = npar.to(torch.uint8)
-    pi(state)
+    hdr = _header(tags, layer, vs, npar)
+    sponge = MODE == "sponge"
+    state = torch.zeros(r, PI_BYTES if sponge else M + PI_BYTES, dtype=torch.uint8, device=tags.device)
+    if sponge:
+        state[:, :hdr.shape[1]] = hdr
+        permute(state)
+    else:
+        state[:, M:M + hdr.shape[1]] = hdr
     for j in range(1, K + 2):
-        par = (npar >= j).nonzero().flatten()
-        pad = (npar == j - 1).nonzero().flatten()
-        if len(par):
-            sub = state[par]
-            sub[:, :M] ^= labels[groups[par], vs[par] - j]
-            pi(sub)
-            state[par] = sub
-        if len(pad):
-            sub = state[pad]
-            sub[:, 0] ^= 0x01
-            sub[:, M - 1] ^= 0x80
-            pi(sub)
-            state[pad] = sub
+        for rows, pad in (((npar >= j).nonzero().flatten(), False), ((npar == j - 1).nonzero().flatten(), True)):
+            if not len(rows):
+                continue
+            sub = state[rows]
+            if pad:
+                block = torch.zeros(len(rows), M, dtype=torch.uint8, device=tags.device)
+                block[:, 0], block[:, M - 1] = 0x01, 0x80
+            else:
+                block = labels[groups[rows], vs[rows] - j]
+            if sponge:
+                sub[:, :M] ^= block
+            else:
+                sub[:, :M] = block
+            permute(sub)
+            state[rows] = sub
     return state[:, :M].contiguous()
 
 

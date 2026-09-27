@@ -65,7 +65,7 @@ def test_shake256_rows_match_hashlib(ext):
 
 
 @needs_cuda
-def test_pi_p_and_keys_match_the_reference(ext):
+def test_permutations_and_keys_match_the_reference(ext):
     from verity_vllm.engine.pous import codec
 
     prims = reference(P)
@@ -75,9 +75,10 @@ def test_pi_p_and_keys_match_the_reference(ext):
     labels = torch.randint(0, 256, (2, P.n, M), dtype=torch.uint8, generator=g).cuda()
     host = [[bytes(r) for r in seg.tolist()] for seg in labels.cpu()]
 
-    state = torch.randint(0, 256, (2, codec.PI_BYTES), dtype=torch.uint8, generator=g).cuda()
-    want = [to_bytes(prims.h.pi.forward(from_bytes(r, P.m + 512)), P.m + 512) for r in _rows(state)]
-    codec.pi(state)
+    width = prims.h.pi.width
+    state = torch.randint(0, 256, (2, width // 8), dtype=torch.uint8, generator=g).cuda()
+    want = [to_bytes(prims.h.pi.forward(from_bytes(r, width)), width) for r in _rows(state)]
+    ext.feistel_rows(state, state.new_empty((2, 0)), codec.PI_DOMAIN, False)
     assert _rows(state) == want
 
     vs = torch.tensor([0, 1, 12, 13, 219], device="cuda")
