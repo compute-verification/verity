@@ -230,3 +230,24 @@ def test_qword_evaluator_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _format_vectors():
+    try:
+        import verity
+    except ImportError:
+        return None
+    ir = Path(verity.__file__).resolve().parents[2] / "tests" / "ir"
+    need = [ir / "format_vectors.json", ir / "partition_vectors.json", ir / "test_format_spec.py"]
+    return ir if all(p.exists() for p in need) else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
+                    reason="no Lean toolchain or no program format vectors (PR #120)")
+def test_qword_over_programs_agrees_with_the_reference(tmp_path):
+    ir = _format_vectors()
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
+                        "--format", str(ir / "format_vectors.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr

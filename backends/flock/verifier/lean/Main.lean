@@ -432,6 +432,65 @@ def evaluateCmd (paths : List String) : IO UInt32 := do
     IO.println s!"EVALUATE {line.compress}"
   return (if all then 0 else 1)
 
+/-- A Call's graph as core's `CallGraph` exports it (`test_format_spec._graph` and `partition_vectors.json`'s fields). -/
+def graphJson (gr : Extract.Graph) : Lean.Json :=
+  let g := gr.g
+  let pairs := fun (xs : Array (Nat × Nat)) => Lean.Json.arr (xs.map fun (a, b) => Lean.toJson #[a, b])
+  Lean.Json.mkObj [("total", Lean.toJson g.total), ("structure", Lean.toJson g.free), ("n", Lean.toJson g.n),
+    ("keep", Lean.toJson gr.keep), ("width", Lean.toJson g.width), ("prim", Lean.toJson gr.prim),
+    ("external", Lean.toJson (gr.external.map fun b => if b then 1 else 0)), ("input_ids", Lean.toJson gr.inputIds),
+    ("src", Lean.toJson (g.reads.map (·.1))), ("dst", Lean.toJson (g.reads.map (·.2))), ("input_reads", pairs g.inputReads),
+    ("outputs", Lean.toJson g.outputs), ("returned_inputs", Lean.toJson g.returnedInputs), ("recomputed", pairs g.recomputed)]
+
+private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
+
+/-- `qword-program DESCRIPTOR [X] [--digests]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
+the program's SHA-512, the population and per Call its units. In full: per Call its owners, derived committed set and graph,
+and every unit's `locate`. With `--digests`: per Definition a Call names, its units and the SHA-512 of its owners, and of
+its graph for a flat cut. One `QWORDPROGRAM` line. -/
+def qwordProgramCmd (args : List String) : IO UInt32 := do
+  let path := args.headD ""
+  let X := ((args.drop 1).find? (·.all Char.isDigit)).bind String.toNat? |>.getD 16
+  let digests := args.contains "--digests"
+  let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
+  let res : V Lean.Json := do
+    let P ← Program.decode bytes
+    let calls ← Extract.evaluate P X
+    let units : Qword.Units := ⟨calls.map fun (k, _, c) => (k, c)⟩
+    let base := [("program_sha512", Lean.Json.str (hexOf P.sha512)), ("population", Lean.toJson units.population),
+      ("calls", Lean.Json.arr (calls.map fun (k, d, c) => Lean.Json.arr #[Lean.toJson k, Lean.Json.str (P.defs[d]!).key,
+        Lean.toJson c.units]))]
+    if digests then
+      let mut defs : Array (String × Lean.Json) := #[]
+      for (_, d, c) in calls do
+        let key := (P.defs[d]!).key
+        if defs.any (·.1 == key) then continue
+        let mut o := [("units", Lean.toJson c.units), ("owner_sha512", Lean.Json.str (← sha512Of (Lean.toJson c.owner)))]
+        if let .flat .. := c then
+          if !(P.defs[d]!).prim then o := o ++ [("graph_sha512", Lean.Json.str (← sha512Of (graphJson (← Extract.graph P d))))]
+        defs := defs.push (key, Lean.Json.mkObj o)
+      return Lean.Json.mkObj (base ++ [("definitions", Lean.Json.mkObj defs.toList)])
+    let mut detail := #[]
+    for (k, d, c) in calls do
+      let own := c.owner
+      let mut o := [("call", Lean.toJson k), ("definition", Lean.Json.str (P.defs[d]!).key), ("units", Lean.toJson c.units),
+        ("owner", Lean.toJson own)]
+      if !(P.defs[d]!).prim then
+        let gr ← Extract.graph P d
+        o := o ++ [("graph", graphJson gr),
+          ("committed", Lean.toJson (if own.size == gr.g.n then Partition.derivedCommitted gr.g own else #[]))]
+      detail := detail.push (Lean.Json.mkObj o)
+    let loc := (Array.range units.population).map fun i => match units.locate i with
+      | some (p, k, u, path) => Lean.Json.arr #[Lean.toJson i, Lean.toJson #[p, k, u],
+          Lean.Json.arr (path.toArray.map fun (a, b, c) => Lean.toJson #[a, b, c])]
+      | none => Lean.Json.null
+    return Lean.Json.mkObj (base ++ [("detail", Lean.Json.arr detail), ("locate", Lean.Json.arr loc)])
+  let line := match res with
+    | .ok r => r.setObjVal! "ok" (Lean.Json.bool true)
+    | .error e => Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+  IO.println s!"QWORDPROGRAM {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -440,6 +499,7 @@ def main (args : List String) : IO UInt32 := do
   | "unit-cut" :: paths => unitCutCmd paths
   | "cut-check" :: paths => cutCheckCmd paths
   | "evaluate" :: paths => evaluateCmd paths
+  | "qword-program" :: rest => qwordProgramCmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "draw" :: rest => drawCmd rest

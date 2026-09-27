@@ -1044,9 +1044,30 @@ graphs (7000 agree).
   unit to its Call, its unit within the Call's cut, and its path `(node, member, unit)` through separable cuts.
 
 `qword_agree.py` checks these against core's objects on random graphs, Definition trees and Programs (3500 agree), and on
-#111's pinned vector (owners, units, committed sets, population, `locate`). Still ahead: decoding the verifier's own copy of
-the program and extracting each Call's graph from it (cross-call-check's format, and recompute detection on exact interned
-ids), then the claimed units' membership and the leaf positions.
+#111's pinned vector (owners, units, committed sets, population, `locate`).
+
+**Over the verifier's own copy of the program** (`Flock.Program`, `Flock.Extract`, `flock-verify qword-program`):
+- **Decoding.** The program is decoded from its `verity-ir/descriptor/v1` bytes by #120's rules: the canonical JSON domain,
+  types, reference sequences and aliases, the decoder's refusals, the layout and scope resolution.
+  - Primitives are taken as the descriptor declares them, since the verifier evaluates none. An `Input<w>_v1` must declare
+    no parameters and `Value<w>`.
+- **Each Call's graph** is built as core's `CallGraph` builds it:
+  - operands resolved in layout order, a gate reading itself or a later gate refused;
+  - wide gates (more than 4096 operands) external, listing only their operands inside the Call;
+  - constants, wiring, and values computed from constants alone as structure;
+  - recompute tokens exact: an input by its identity, a structure value by its key, a computing value by its first gate,
+    a wide gate by itself;
+  - reads through structure, and the returned values.
+- **Evaluation.** Separable bodies and the memo by Definition feed the cut above.
+- **`qword_program_agree.py`** checks all of it against core's `decode_program` and `partition_object.evaluate`:
+  - #111's pinned vector, every field of every Call's graph, owners, units and committed set, and `locate`;
+  - #120's format vectors: the wide-gate graph, the forward reference `Q_word` refuses, and all 31 decoder refusals
+    refused;
+  - a real #101 descriptor (the Llama-3.2-1B step Build, `art:a4ea1a18`): all 167 Calls' units, and every Definition's
+    owners and flat graph by SHA-512, in 14.5 s.
+
+Still ahead: the `Q_word` finding in a verdict (the claimed units' membership), the width rule on each Call's cut, and the
+leaf positions.
 
 ### 16.8 Objects by content
 
