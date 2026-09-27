@@ -297,14 +297,16 @@ The verifier (`verify_zk_with` on a coin tape) accepts every simulated proof. Th
 refuses.
 
 **Statistics** (`zkstat --zk --n 64`, then `tests/zk_stats.py`). Real and simulated transcripts are compared per class:
-exposed values, masked `s_hat_v`, the inner proof, level 0's exposed values, `T'` and `ybar`, level-0 rows, and levels 1+.
-Each class gets byte-histogram, bit-balance and cross-run-XOR tests. Positions constant in every real and simulated
-transcript are public structure: F256 messages after the code switch are base-valued (5 such positions in the
-levels-1+ sample). The control (all prover randomness zero) must be distinguished.
+exposed values, masked `s_hat_v`, the inner proof, level 0's exposed values, `T'` and `ybar`, level-0 rows, and levels 1+,
+and per session the two cross-rep relations of §7 (`rel_level0`, `rel_level1`). Each class gets byte-histogram,
+bit-balance and cross-run-XOR tests. Positions constant in every real and simulated transcript are public structure:
+F256 messages after the code switch are base-valued (5 such positions in the levels-1+ sample). A level-0 position both
+reps open holds one row, so its second copy is excluded (one row of the sample under these coins). The control (all
+prover randomness zero) must be distinguished.
 
-Results for RoPE at `m = 25`, 128 transcripts per kind:
-- real and simulated agree on all 11 classes; the smallest of the 55 p-values is 0.013;
-- the control is distinguished on all 7 masked classes (p ≈ 0, every position constant);
+Results for RoPE at `m = 25`, 64 sessions (128 transcripts) per kind:
+- real and simulated agree on all 13 classes; the smallest of the 65 p-values is 0.009;
+- the control is distinguished on all 9 masked classes, both relations included (p ≈ 0, every position constant);
 - all 128 simulated proofs are accepted.
 
 Evidence: `lanes/flock-zk/evidence/`.
@@ -326,8 +328,8 @@ the statistics' relation classes.
 
   | | M0 prove | M1 prove | upstream under M1 | proof per rep |
   |---|---|---|---|---|
-  | RoPE `m = 25` | 0.25–0.29 s | 0.31–0.32 s (+12–24%) | 0.25–0.27 s | 560 → 759 KB |
-  | RoPE `m = 27` | 0.38 s | 0.46 s (+20%) | 0.39–0.40 s | 618 → 817 KB |
+  | RoPE `m = 25` (4 and 16 instances) | 0.24–0.27 s | 0.31–0.33 s (+21–32%) | 0.26–0.27 s | 560 → 865 KB |
+  | RoPE `m = 27` (64 instances) | 0.36–0.37 s | 0.46 s (+24–27%) | 0.39–0.40 s | 618 → 843 KB |
 
   - The prover's own replay takes its lincheck's folded `comb` (`LincheckProof::comb_partial`, never serialized). The
     remaining fixed part is 0.026 s of replay and 0.02 s for the pads commitment.
