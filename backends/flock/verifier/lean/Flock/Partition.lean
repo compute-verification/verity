@@ -93,4 +93,107 @@ def validate (c : Cut) : List String := Id.run do
     com.toList.any (fun g => !boundary.contains g || !(g < n))]
   return (codes.zip problem).filterMap fun (k, b) => if b then some k else none
 
+/-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`, PR #111) -/
+
+/-- A Call's computing graph (`verity.ir.cut.CallGraph`): its computing gates' declared widths, the reads between them, the
+returned gates, the Call's parameters (`inputs` of them) and the gates that read them, the parameters returned as they are,
+the total and structure gate counts, and the pairs of gates that compute one value. -/
+structure CallGraph where
+  n : Nat
+  reads : Array (Nat × Nat)
+  width : Array Nat
+  outputs : Array Nat
+  inputs : Nat
+  inputReads : Array (Nat × Nat)
+  returnedInputs : Array Nat
+  total : Nat
+  free : Nat
+  recomputed : Array (Nat × Nat)
+  deriving Inhabited
+
+/-- The width rule on `(ob, og)` (`Q_word_v1{X, W, EXTRAS}`): at most `X + E` bits out of a unit, or exactly one value of at
+most `W + E` bits. -/
+def fits (ob og X W E : Nat) : Bool := ob ≤ X + E || (og == 1 && ob ≤ W + E)
+
+/-- `(ob, og)` per computing unit `0 … max owner`: the summed declared bits and the number of its boundary gates, those another
+unit reads or the Call returns. -/
+def boundaryWidths (g : CallGraph) (owner : Array Nat) : Array Nat × Array Nat := Id.run do
+  let U := owner.foldl (fun m u => max m (u + 1)) 0
+  let mut boundary := Array.replicate g.n false
+  for (p, q) in g.reads do
+    if owner[p]! != owner[q]! then boundary := boundary.set! p true
+  for o in g.outputs do boundary := boundary.set! o true
+  let mut ob := Array.replicate U 0
+  let mut og := Array.replicate U 0
+  for x in [0:g.n] do
+    if boundary[x]! then
+      let u := owner[x]!
+      ob := ob.set! u (ob[u]! + g.width[x]!)
+      og := og.set! u (og[u]! + 1)
+  return (ob, og)
+
+/-- The gates the cut commits, ascending: a value is committed exactly when a unit other than its producer's reads it, or the
+Call returns it. -/
+def derivedCommitted (g : CallGraph) (owner : Array Nat) : Array Nat :=
+  let s : Std.HashSet Nat := (g.reads.filter (fun (p, q) => owner[p]! != owner[q]!)).foldl (fun s (p, _) => s.insert p)
+    (Std.HashSet.ofArray g.outputs)
+  s.toArray.qsort (· < ·)
+
+/-- `check_cut`: the invariant on the Call's cut (its parameters standing for the input unit), then, unless `limits` is none,
+the width rule. The failing codes, and the too-wide units as `(unit, ob, og)`. -/
+def checkCut (g : CallGraph) (owner : Array Nat) (committed : Option (Array Nat)) (limits : Option (Nat × Nat × Nat)) :
+    List String × Array (Nat × Nat × Nat) :=
+  if owner.size != g.n then (["owner-length"], #[]) else
+  let k := g.inputs
+  let com := (committed.getD (derivedCommitted g owner)).foldl (fun (s : Std.HashSet Nat) x => s.insert x) {}
+  let cut : Cut := {
+    totalGates := g.total + k, structureGates := g.free,
+    owner := owner.map Owner.unit ++ Array.replicate k Owner.input,
+    reads := g.reads ++ g.inputReads.map fun (i, q) => (g.n + i, q),
+    outputs := g.outputs ++ g.returnedInputs.map (g.n + ·),
+    committed := com.toArray.qsort (· < ·) ++ (Array.range k).map (g.n + ·),
+    inputGates := (Array.range k).map (g.n + ·),
+    recomputed := g.recomputed }
+  let codes := validate cut
+  match limits with
+  | none => (codes, #[])
+  | some (X, W, E) =>
+    let (ob, og) := boundaryWidths g owner
+    let wide := (Array.range ob.size).filterMap fun u => if fits ob[u]! og[u]! X W E then none else some (u, ob[u]!, og[u]!)
+    if wide.isEmpty then (codes, wide) else (codes ++ ["unit-too-wide"], wide)
+
+private def natsOf (j : Json) (k : String) : V (Array Nat) := do
+  (← arrOf j k).mapM (natOf · k)
+
+/-- A `check_cut` case: `{"graph": {n, src, dst, width, outputs, inputs, input_reads, returned_inputs, total, free,
+recomputed}, "owner", "committed" (or null), "limits" ([X, W, E], or null)}`. -/
+def checkCutOfJson (j : Json) : V (CallGraph × Array Nat × Option (Array Nat) × Option (Nat × Nat × Nat)) := do
+  let .ok gj := j.getObjVal? "graph" | throw "cut: graph missing"
+  let nat := fun (o : Json) (k : String) => do
+    let .ok v := o.getObjVal? k | throw s!"cut: {k} missing"
+    natOf v k
+  let n ← nat gj "n"
+  let src ← natsOf gj "src"
+  let dst ← natsOf gj "dst"
+  if src.size != dst.size then throw "cut: src and dst differ in length"
+  let g : CallGraph := {
+    n, reads := src.zip dst, width := ← natsOf gj "width", outputs := ← natsOf gj "outputs", inputs := ← nat gj "inputs",
+    inputReads := ← (← arrOf gj "input_reads").mapM (pairOf · "an input read"),
+    returnedInputs := ← natsOf gj "returned_inputs", total := ← nat gj "total", free := ← nat gj "free",
+    recomputed := ← (← arrOf gj "recomputed").mapM (pairOf · "a recomputed pair") }
+  if g.width.size != n || g.reads.any (fun (p, q) => p ≥ n || q ≥ n) || g.outputs.any (· ≥ n)
+      || g.inputReads.any (fun (i, q) => i ≥ g.inputs || q ≥ n) || g.returnedInputs.any (· ≥ g.inputs) then
+    throw "cut: a graph index outside the Call"
+  let owner ← natsOf j "owner"
+  let committed ← match j.getObjVal? "committed" with
+    | .ok Json.null | .error _ => pure none
+    | .ok _ => pure (some (← natsOf j "committed"))
+  let limits ← match j.getObjVal? "limits" with
+    | .ok Json.null | .error _ => pure none
+    | .ok v => do
+      let .ok a := v.getArr? | throw "cut: limits is not [X, W, E]"
+      if a.size != 3 then throw "cut: limits is not [X, W, E]"
+      pure (some (← natOf a[0]! "X", ← natOf a[1]! "W", ← natOf a[2]! "E"))
+  return (g, owner, committed, limits)
+
 end Flock.Partition

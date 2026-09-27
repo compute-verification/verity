@@ -1015,8 +1015,19 @@ gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_
 
 With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
 circuit is malformed. `unit_cut_agree.py` checks the codes against the reference on random cuts (5000 agree, every code
-exercised). Still ahead, once the verifier holds the IR program (§16.8): the width rule, the claimed units' membership in
-the partition, and the leaf positions derived from it.
+exercised).
+
+**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`,
+PR #111). The graph is the Call's computing gates: declared widths `w`, the reads between them, the returned gates, the
+Call's parameters and the gates that read them, the parameters returned as they are, the total and structure counts, and
+the recomputed pairs. The cut is a unit per computing gate (`owner-length` if not one per gate). The invariant runs with
+the parameters as the input unit and, unless served values are given, the committed set derived from the cut: a value is
+committed exactly when another unit reads it or the Call returns it. Then the width rule (`Q_word_v1{X, W, EXTRAS}`,
+today `(16, 32, 0)`): for each unit `u`, with `ob` the summed `w` of its boundary gates (another unit reads them, or the
+Call returns them) and `og` their number, `u` passes when `ob ≤ X + EXTRAS`, or `og = 1` and `ob ≤ W + EXTRAS`; else
+`unit-too-wide`, with `(u, ob, og)`. `cut_check_agree.py` checks codes and too-wide units against the reference on random
+graphs (7000 agree). Still ahead: the graph derived from the verifier's own copy of the program (cross-call-check's format),
+the partition query evaluated on it (P = Q(C), #111), the claimed units' membership, and the leaf positions.
 
 ### 16.8 Objects by content
 

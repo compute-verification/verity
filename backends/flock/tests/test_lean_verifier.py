@@ -194,4 +194,17 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+def _has_check_cut():
+    try:
+        from verity.ir.cut import check_cut  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ir.cut (PR #111)")
+def test_check_cut_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr

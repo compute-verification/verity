@@ -368,6 +368,24 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
       | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
+/-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
+`CUTCHECK` line per file. -/
+def cutCheckCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let res := match Lean.Json.parse (← IO.FS.readFile path) with
+      | .error e => Except.error s!"not JSON: {e}"
+      | .ok j => Partition.checkCutOfJson j
+    let line := match res with
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+      | .ok (g, owner, committed, limits) =>
+        let (cs, wide) := Partition.checkCut g owner committed limits
+        Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
+          ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str)),
+          ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))]
+    all := all && (line.getObjValAs? Bool "ok").toOption.getD false
+    IO.println s!"CUTCHECK {line.compress}"
+  return (if all then 0 else 1)
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -375,6 +393,7 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
+  | "cut-check" :: paths => cutCheckCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "draw" :: rest => drawCmd rest
