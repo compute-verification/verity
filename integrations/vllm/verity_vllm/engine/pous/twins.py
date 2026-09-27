@@ -9,17 +9,12 @@ from verity_pous.scheme import P3
 
 from verity_vllm.engine.pous import codec, dense
 
-DENSE_GEOMETRY = (dense_ref.SECURE_FIRST if dense_ref.SECURE_FIRST.block_bytes == 65_536
-                  else dense_ref.DenseParams(512, 65_536 * 8))
-"""The dense secure-first point at `L = 65,536` B (the Lean certificate's width), until `dense.SECURE_FIRST` carries it."""
-
-
 def reference(name: str) -> tuple[Codec, Geometry]:
     """The reference codec called `name` and the geometry it is served at."""
     if name == P3.name:
         return P3, OPERATING_POINT
     if name == dense_ref.DENSE.name:
-        return dense_ref.DENSE, DENSE_GEOMETRY
+        return dense_ref.DENSE, dense_ref.SECURE_FIRST
     raise NotImplementedError(f"no reference codec {name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r})")
 
 
