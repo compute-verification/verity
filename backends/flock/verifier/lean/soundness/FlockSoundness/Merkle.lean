@@ -7,7 +7,7 @@ import Mathlib.Logic.Function.Basic
 A level's commitment is a Merkle cap: the nodes at depth `c` of a binary tree over the columns.
 Leaf `q` is `H(encode(column q))`; a node is `H(left ‖ right)`; an opening of position `pos` is the
 column and the `d − c` siblings from the leaf up to the cap entry `pos >> (d − c)`. The hash is
-one function on byte strings (SHA-512 in the target, `ASSUMPTIONS.md` §4), so every collision
+one function on byte strings (SHA-512 in the target, `assumptions/cryptography-and-coins.md`), so every collision
 below is a pair of distinct byte strings with the same hash.
 
 **Binding** (`opening_binding`): two openings of one position that both verify against the same

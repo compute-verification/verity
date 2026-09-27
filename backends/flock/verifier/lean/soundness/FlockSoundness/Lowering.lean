@@ -19,7 +19,7 @@ which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' 
 computed columns read exactly its rows' columns, and its constant's rows read the pin). Then the
 transcript decoded from that block makes `u` correct, and carries `true` on the constant
 (`UnitPlace.decode_one`). What each template's rows compute, its gates in the program's Boolean
-circuit, is a separate named hypothesis (ASSUMPTIONS.md §1.5, L1).
+circuit, is a separate named hypothesis (L1, `assumptions/l1-template-rows.md`).
 
 `UnitPlace` bundles a drawn unit's place in a table: its rows, its instance, its block and its
 columns. `UnitPlace.correct` is the compiled lowering for that unit.

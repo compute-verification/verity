@@ -28,6 +28,9 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
+#: The Flock soundness package's named hypotheses: its ``ASSUMPTIONS.md`` indexes them, and each one's justification is
+#: its own file here, so that no one document outgrows its cap.
+SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
 #: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
 #: live under ``reports/`` or ``results/``.
@@ -83,7 +86,8 @@ def _is_pinned(path: str) -> bool:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
-                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA]
+                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
+                 and not p.startswith(SOUNDNESS_ASSUMPTIONS)]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
