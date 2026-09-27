@@ -1499,6 +1499,26 @@ impl Stmt {
         }).reduce(|| vec![F128::ZERO; 128], |a, b| a.iter().zip(&b).map(|(x, y)| *x + *y).collect())
     }
 
+    /// Sets every public region's bits of the packed witness `z` to the public data (as [`Self::region_s_hat_v`] reads them): a
+    /// dummy witness whose region claims are the public ones (M2's extraction run).
+    pub fn write_regions(&self, z: &mut [F128], inst: &Instances) {
+        let kl = self.c.k_log;
+        for reg in &self.regions {
+            let fixed = (reg.fixed & reg.mask) as usize;
+            for b in 0..self.blocks() {
+                let bytes = self.region_bytes(&reg.region, inst, b);
+                for a in 0..(1usize << reg.free.len()) {
+                    let i = reg.free.iter().enumerate().fold(fixed, |i, (t, &j)| i | (((a >> t) & 1) << j)) | (b << kl);
+                    let (w, bit) = (&mut z[i >> 7], i & 127);
+                    let on = (bytes[a / 8] >> (a % 8)) & 1 == 1;
+                    let m = 1u64 << (bit % 64);
+                    let half = if bit < 64 { &mut w.lo } else { &mut w.hi };
+                    *half = if on { *half | m } else { *half & !m };
+                }
+            }
+        }
+    }
+
     /// Words per block the device witness needs for the unit slots: every unit's input words, block-major.
     pub fn region_bytes_len(&self, reg: &RegionShape) -> usize {
         (1usize << reg.free.len()) / 8

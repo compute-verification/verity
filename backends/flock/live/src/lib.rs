@@ -2015,3 +2015,54 @@ impl Challenger for ReplayChallenger {
         c
     }
 }
+
+/// A challenger that frames exactly as [`LiveChallenger`] and [`ReplayChallenger`] do, answers each squeeze from a known coin
+/// schedule, and keeps each round's content: the rounds a live prover would send for a transcript whose coins are known in
+/// advance (M2's simulator, after its extraction run). A request whose size differs from the schedule's round is recorded in
+/// `mismatch` and answered with zeros.
+pub struct RecordingChallenger {
+    pending: Vec<u8>,
+    schedule: Vec<Vec<F128>>,
+    /// every round's content and coin count, in order
+    pub rounds: Vec<(Vec<u8>, usize)>,
+    pub mismatch: Option<String>,
+}
+
+impl RecordingChallenger {
+    pub fn new(domain: &[u8], schedule: Vec<Vec<F128>>) -> Self {
+        Self { pending: frame_domain(domain), schedule, rounds: Vec::new(), mismatch: None }
+    }
+
+    fn squeeze(&mut self, kind: u8, n: usize) -> Vec<F128> {
+        push_header(&mut self.pending, OP_SQUEEZE, kind, n as u64);
+        if n == 0 {
+            return Vec::new();
+        }
+        let k = self.rounds.len();
+        self.rounds.push((std::mem::take(&mut self.pending), n));
+        match self.schedule.get(k) {
+            Some(c) if c.len() == n => c.clone(),
+            other => {
+                self.mismatch.get_or_insert(format!("round {k}: {n} coins requested, the schedule has {:?}", other.map(|c| c.len())));
+                vec![F128::default(); n]
+            }
+        }
+    }
+}
+
+impl Challenger for RecordingChallenger {
+    framed_challenger!();
+
+    fn grind_pow(&mut self, _bits: u32) -> u64 {
+        unreachable!("the recording challenger replays a verifier")
+    }
+
+    fn verify_pow(&mut self, nonce: u64, _bits: u32) -> bool {
+        self.observe_bytes(&nonce.to_le_bytes());
+        true
+    }
+
+    fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
+        unreachable!("the single-table path does not fork")
+    }
+}

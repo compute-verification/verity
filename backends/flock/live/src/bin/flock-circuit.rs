@@ -390,6 +390,8 @@ struct Wit {
     cut_flip: Option<(usize, usize, usize)>,
     /// evaluate these circuits instead of the pinned ones (a swapped tail)
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
+    /// write these public regions into the witness (a dummy witness whose region claims are the public ones)
+    regions: Option<Arc<Instances>>,
 }
 
 type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
@@ -434,7 +436,10 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
-    let zl = if w.flip_z.is_some() { flock_core::lincheck::pack_z_lincheck_from_packed(&z, st.m, st.c.k_log) } else { zl };
+    if let Some(inst) = &w.regions {
+        st.write_regions(&mut z, inst);
+    }
+    let zl = if w.flip_z.is_some() || w.regions.is_some() { flock_core::lincheck::pack_z_lincheck_from_packed(&z, st.m, st.c.k_log) } else { zl };
     (WitData::Host((z, a, b, zl)), t.elapsed().as_secs_f64())
 }
 
@@ -631,6 +636,15 @@ fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128
     Ok((commitment, proof, inner))
 }
 
+/// One rep's proof's checked fields ([`checked_fields`] and [`ligerito_fields`]).
+fn proof_fields(lay: &Layout, kind: &str, run: usize, rep: usize, pr: &R1csProofLigerito, inner: &InnerProof) -> Value {
+    let e = zkv::exposed_values(&pr.zerocheck, &pr.lincheck, lay);
+    let rs = &pr.pcs_open.ring_switches;
+    let mut row = checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], inner);
+    ligerito_fields(&mut row, &pr.pcs_open.ligerito, lay);
+    row
+}
+
 /// A rep stream's coins from a session record (every squeeze, in order), and the link points.
 fn record_coins(rec: &Value, stream: &str) -> Vec<F128> {
     let s = rec["streams"].as_array().unwrap().iter().find(|s| s["stream"] == stream).unwrap_or_else(|| panic!("no stream {stream}"));
@@ -660,13 +674,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         (v, p, rec)
     };
-    let fields = |kind: &str, run: usize, rep: usize, pr: &R1csProofLigerito, inner: &InnerProof| -> Value {
-        let e = zkv::exposed_values(&pr.zerocheck, &pr.lincheck, &lay);
-        let rs = &pr.pcs_open.ring_switches;
-        let mut row = checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], inner);
-        ligerito_fields(&mut row, &pr.pcs_open.ligerito, &lay);
-        row
-    };
+    let fields = |kind: &str, run: usize, rep: usize, pr: &R1csProofLigerito, inner: &InnerProof| proof_fields(&lay, kind, run, rep, pr, inner);
     let mut tape: Option<(Vec<Vec<F128>>, Vec<Vec<F128>>)> = None;
     let mut dummies: Vec<Vec<Vec<u8>>> = Vec::new();
     for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() }),
@@ -914,6 +922,351 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     println!("ZKAUDIT\t{out}");
 }
 
+/// M2's malicious verifiers V*: the honest coin server with its coins committed from a random tape, and a strategy that sees
+/// every prover message. Rewinding V* is a fresh instance on the same tape, replayed to the same point. `Abort` and
+/// `AdaptiveCoins` act at the first round whose message, hashed with the tape, falls below [`TRIGGER`]: the first stops
+/// there; the second answers a coin it picks from that message, under the committed coin's opening. `CoinAt(k)` does the
+/// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`.
+#[cfg(feature = "seed-injection")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Strategy {
+    Honest,
+    Abort,
+    AdaptiveCoins,
+    CoinAt(usize),
+    ZeroBeta(usize),
+}
+
+#[cfg(feature = "seed-injection")]
+/// The adaptive strategies' trigger per round, of 65536: `(1 − q)^R ≈ 1/2` over a RoPE session's 200 rounds.
+const TRIGGER: u16 = 229;
+
+#[cfg(feature = "seed-injection")]
+struct VStar {
+    s: Server,
+    strategy: Strategy,
+    tape: [u8; 32],
+    rounds: BTreeMap<String, usize>,
+    stopped: bool,
+    /// V*'s view: every request it received, with its answer
+    view: Arc<Mutex<Vec<(Req, Resp)>>>,
+}
+
+#[cfg(feature = "seed-injection")]
+impl VStar {
+    fn new(st: &Arc<Stmt>, inst: &Arc<Instances>, strategy: Strategy, tape: [u8; 32]) -> Self {
+        let mut s = server(st, inst);
+        s.inject_coin_tape(tape);
+        if let Strategy::ZeroBeta(k) = strategy {
+            let rep0 = rep_stream(TABLE, 0);
+            s.inject_coin_edit(Box::new(move |stream, round, b| {
+                if stream == rep0 && round == k {
+                    b[0] = F128::ZERO;
+                }
+            }));
+        }
+        VStar { s, strategy, tape, rounds: BTreeMap::new(), stopped: false, view: Arc::new(Mutex::new(Vec::new())) }
+    }
+
+    fn hash(&self, what: &[u8], stream: &str, k: usize, content: &[u8]) -> [u8; 64] {
+        let mut h = Sha512::new();
+        for p in [&self.tape[..], what, stream.as_bytes(), &(k as u64).to_le_bytes(), content] {
+            h.update(p);
+        }
+        h.finalize().into()
+    }
+
+    fn answer(&mut self, req: Req) -> Resp {
+        if self.stopped {
+            return Resp::Refused("V* stopped".into());
+        }
+        let round = if let Req::Round { stream, content, .. } = &req { Some((stream.clone(), content.clone())) } else { None };
+        let Some((stream, content)) = round else { return self.s.handle(req) };
+        let k = self.rounds.get(&stream).copied().unwrap_or(0);
+        self.rounds.insert(stream.clone(), k + 1);
+        let fire = match self.strategy {
+            Strategy::Abort | Strategy::AdaptiveCoins => u16::from_le_bytes(self.hash(b"trigger", &stream, k, &content)[..2].try_into().unwrap()) < TRIGGER,
+            Strategy::CoinAt(r) => stream == rep_stream(TABLE, 0) && k == r,
+            _ => false,
+        };
+        if fire && self.strategy == Strategy::Abort {
+            self.stopped = true;
+            return Resp::Refused(format!("V* aborts at {stream} round {k}"));
+        }
+        let pick = fire.then(|| self.hash(b"coin", &stream, k, &content));
+        match (self.s.handle(req), pick) {
+            (Resp::Coins(mut w), Some(h)) => {
+                w[0] = F128::new(u64::from_le_bytes(h[..8].try_into().unwrap()), u64::from_le_bytes(h[8..16].try_into().unwrap()));
+                Resp::Coins(w)
+            }
+            (r, _) => r,
+        }
+    }
+}
+
+#[cfg(feature = "seed-injection")]
+impl Transport for VStar {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let req = Req::decode(&req.encode())?;
+        let resp = self.answer(req.clone());
+        self.view.lock().unwrap_or_else(PoisonError::into_inner).push((req, resp.clone()));
+        Resp::decode(&resp.encode())
+    }
+}
+
+#[cfg(feature = "seed-injection")]
+type View = Vec<(Req, Resp)>;
+
+#[cfg(feature = "seed-injection")]
+fn complete(view: &View) -> bool {
+    view.iter().any(|(r, _)| matches!(r, Req::Proof { .. }))
+}
+
+#[cfg(feature = "seed-injection")]
+/// Per rep, its rounds' coins as V* opened them in a view, each opening checked against V*'s commitment as the prover checks
+/// it; and the link points.
+fn extracted(st: &Stmt, view: &View) -> Result<(Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>), String> {
+    use flock_live::coin_tree::check;
+    let spec = coin_spec();
+    let (mut root, mut points, mut reps): (Option<[u8; 64]>, Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>) = (None, Vec::new(), vec![Vec::new(), Vec::new()]);
+    for (req, resp) in view {
+        let Resp::Coins(w) = resp else { continue };
+        match req {
+            Req::Hello(_) => root = Some(f128_bytes(w).try_into().map_err(|_| "V*'s commitment is not 64 bytes")?),
+            Req::Commit { .. } => {
+                let n = w.len().checked_sub(spec.opening_words(0)).ok_or("a short link-point opening")?;
+                points = check(&spec, root.as_ref().ok_or("coins before the commitment")?, 0, 0, n, w)?.chunks(st.m_pts).map(|p| p.to_vec()).collect();
+            }
+            Req::Round { stream, n, .. } => {
+                let rep = (0..2).find(|&r| *stream == rep_stream(TABLE, r)).ok_or(format!("a round of {stream}"))?;
+                let si = spec.stream_index(stream).ok_or(format!("{stream} is outside the schedule"))?;
+                let k = reps[rep].len();
+                reps[rep].push(check(&spec, root.as_ref().ok_or("coins before the commitment")?, si, k, *n as usize, w)?);
+            }
+            _ => {}
+        }
+    }
+    Ok((points, reps))
+}
+
+#[cfg(feature = "seed-injection")]
+enum Rewound {
+    Complete,
+    /// V* stopped the simulation (refused, or answered a coin its commitment does not open)
+    Aborted,
+}
+
+#[cfg(feature = "seed-injection")]
+/// One rewind of the Goldreich–Kahan simulator: a fresh V* on its tape, from the start of the session to its end, against a
+/// scripted prover whose messages are SHVZK simulations from the extracted coins (`simulate_full` per rep, its rounds recorded
+/// by replaying the verifier on it). The session's messages up to the coin commitment are the extraction run's (so V* is back
+/// just after step 0); every coin V* answers is checked against its commitment and must be the extracted one (else the
+/// commitment's binding failed: an error).
+#[allow(clippy::too_many_arguments)]
+fn rewind(st: &Stmt, inst: &Instances, v: impl Transport + 'static, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>], dummy: &[Vec<u8>],
+          rng: &mut flock_live::zk_hooks::ProverRng, index: u64) -> Result<Rewound, String> {
+    let mut sims = Vec::new();
+    for rep in 0..2 {
+        let (c, pr, inner) = simulate_full(st, inst, &coins[rep].concat(), points, &dummy[rep], rng, 2 * index + rep as u64)?;
+        let mut rec = flock_live::RecordingChallenger::new(&domain(rep), coins[rep].clone());
+        verify_zk_with(st, inst, &c, &pr, &inner, points, &mut rec).map_err(|e| format!("rep {rep}'s simulation is rejected on the extracted coins: {e}"))?;
+        if let Some(e) = rec.mismatch.or_else(|| (rec.rounds.len() != coins[rep].len()).then(|| format!("{} rounds, extracted {}", rec.rounds.len(), coins[rep].len()))) {
+            return Err(format!("rep {rep}'s simulation does not follow the extracted schedule: {e}"));
+        }
+        sims.push((bincode::serialize(&(&c, &pr, &inner)).unwrap(), merkle_digest_bytes(&c.cap).to_vec(), rec.rounds));
+    }
+    let t: SharedTransport = shared(flock_live::coin_tree::Checked::new(v, coin_spec()));
+    macro_rules! expect {
+        ($req:expr, $ok:pat) => {
+            match call(&t, $req)? {
+                $ok => {}
+                _ => return Ok(Rewound::Aborted),
+            }
+        };
+    }
+    expect!(Req::Register, Resp::Draw(_));
+    expect!(Req::Hello(config(st, inst).hello()), Resp::Coins(_));
+    for rep in 0..2 {
+        expect!(Req::Open { stream: rep_stream(TABLE, rep), parent: String::new(), label: domain(rep), at: 0 }, Resp::Ok);
+        if rep == 0 {
+            match call(&t, Req::Commit { root_f: sigma(st, inst).to_vec(), roots: vec![(TABLE.into(), sims[0].1.clone())], publics: vec![] })? {
+                Resp::Coins(c) if c.chunks(st.m_pts).eq(points.iter().map(|p| p.as_slice())) => {}
+                Resp::Coins(_) => return Err("binding: V* opened other link points than in the extraction run".into()),
+                _ => return Ok(Rewound::Aborted),
+            }
+            expect!(Req::Link(f128_bytes(&[F128::ZERO, F128::ZERO])), Resp::Ok);
+        }
+        for (k, (content, n)) in sims[rep].2.iter().enumerate() {
+            match call(&t, Req::Round { stream: rep_stream(TABLE, rep), content: content.clone(), n: *n as u32 })? {
+                Resp::Coins(c) if c == coins[rep][k] => {}
+                Resp::Coins(_) => return Err(format!("binding: V* opened other coins at rep {rep} round {k} than in the extraction run")),
+                _ => return Ok(Rewound::Aborted),
+            }
+        }
+    }
+    for (rep, s) in sims.iter().enumerate() {
+        call(&t, Req::Proof { table: TABLE.into(), rep: rep as u32, bytes: s.0.clone() })?;
+    }
+    call(&t, Req::Finish)?;
+    Ok(Rewound::Complete)
+}
+
+/// The Goldreich–Kahan simulator (soundness ASSUMPTIONS.md §6): V*'s view of one session from the public statement alone.
+/// 1. Extraction: the honest prover on a dummy witness (zero, the public regions written in) against V*. Every message before
+///    the proofs is masked, committed or public, so this run is distributed as a real one until the proofs, which follow the
+///    last coin. If it does not reach the proofs (V* aborted or cheated, or the prover refused a degenerate coin), its view
+///    is the output.
+/// 2. Estimation: more such runs until `t` of them reach the proofs; `p̃ = t / runs`.
+/// 3. Rewind to just after the coin commitment and simulate from the extracted coins, at most `4 t / p̃` times, until V* does
+///    not stop the simulation; the output is that view. Failing that, or if V* opens another coin than it did in step 1 (a
+///    binding failure), the simulator fails.
+#[cfg(feature = "seed-injection")]
+fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, make: &dyn Fn() -> VStar, t: usize) -> (View, Value) {
+    let dummy_run = || -> (View, Vec<Vec<u8>>) {
+        let v = make();
+        let view = v.view.clone();
+        let (_, proofs) = session(st, inst, shared(v), &Plan { zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
+        let log = view.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        (log, proofs)
+    };
+    let (view, dummy) = dummy_run();
+    if !complete(&view) {
+        return (view, json!({"extraction_complete": false}));
+    }
+    let (points, coins) = match extracted(st, &view) {
+        Ok(x) => x,
+        Err(e) => return (Vec::new(), json!({"extraction_complete": true, "fail": format!("extraction: {e}")})),
+    };
+    let (mut ok, mut runs) = (1usize, 1usize);
+    while ok < t && runs < 64 * t {
+        runs += 1;
+        ok += complete(&dummy_run().0) as usize;
+    }
+    let bound = (4 * t * runs).div_ceil(ok);
+    let mut rng = flock_live::zk_hooks::ProverRng::from_os();
+    for attempt in 0..bound {
+        let v = make();
+        let view = v.view.clone();
+        let stats = |fail: Option<String>| json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": ok, "rewinds": attempt + 1,
+                                                  "fail": fail});
+        match rewind(st, inst, v, &points, &coins, &dummy, &mut rng, attempt as u64) {
+            Ok(Rewound::Complete) => return (view.lock().unwrap_or_else(PoisonError::into_inner).clone(), stats(None)),
+            Ok(Rewound::Aborted) => continue,
+            Err(e) => return (Vec::new(), stats(Some(e))),
+        }
+    }
+    (Vec::new(), json!({"extraction_complete": true, "estimation_runs": runs, "estimation_complete": ok, "rewinds": bound,
+                        "fail": format!("no rewind reached the proofs in {bound} (p̃ = {ok}/{runs})")}))
+}
+
+#[cfg(feature = "seed-injection")]
+/// Masked values of rep 0's first rounds kept per view (`online`: present whatever the end, once the view reaches them).
+const ONLINE: usize = 256;
+
+#[cfg(feature = "seed-injection")]
+/// A view's summary: how it ended (`complete`, or who stopped it after which round), the rounds V* received per stream, its
+/// verdict, rep 0's first [`ONLINE`] masked values, and each proof it received (for [`proof_fields`]).
+fn view_summary(kind: &str, strategy: &str, run: usize, view: &View) -> (Value, Vec<(usize, Vec<u8>)>) {
+    let mut rounds: BTreeMap<String, usize> = BTreeMap::new();
+    let (mut who, mut at, mut online, mut proofs, mut verdict) = ("none", Value::Null, Vec::new(), Vec::new(), Value::Null);
+    for (req, resp) in view {
+        match req {
+            Req::Round { stream, content, .. } => {
+                let k = rounds.entry(stream.clone()).or_default();
+                if *stream == rep_stream(TABLE, 0) && online.len() < ONLINE {
+                    online.extend(parse_items(content).unwrap_or_default().into_iter().flat_map(|it| if let Item::Obs(v) = it { v } else { vec![] }));
+                }
+                who = if matches!(resp, Resp::Refused(_)) { "verifier" } else { "prover" };
+                at = json!([stream, *k]);
+                *k += 1;
+            }
+            Req::Proof { rep, bytes, .. } => {
+                proofs.push((*rep as usize, bytes.clone()));
+                who = "complete";
+            }
+            Req::Finish => {
+                if let Resp::Verdict(v) = resp {
+                    verdict = serde_json::from_str(v).unwrap_or(Value::Null);
+                }
+            }
+            _ => {}
+        }
+    }
+    let online = (online.len() >= ONLINE).then(|| f128s_hex(&online[..ONLINE]));
+    (json!({"kind": kind, "strategy": strategy, "run": run, "end": who, "last_round": at, "rounds": rounds, "accepted": verdict["accepted"],
+            "online": online}), proofs)
+}
+
+#[cfg(feature = "seed-injection")]
+/// Rep 0's β round: the one whose message is the τ commitment alone (a verifier knows the protocol's shape).
+fn beta_round(view: &View) -> Option<usize> {
+    let rep0 = rep_stream(TABLE, 0);
+    view.iter().filter_map(|(r, _)| match r { Req::Round { stream, content, .. } if *stream == rep0 => Some(content), _ => None })
+        .enumerate()
+        .filter(|(_, c)| matches!(parse_items(c).as_deref(), Ok([Item::Bytes(64), Item::Framing(_), Item::Framing(16)])))
+        .map(|(k, _)| k)
+        .last()
+}
+
+/// `zkrewind --zk --n N`: per verifier strategy (`--strategies`, default all), N real sessions and N Goldreich–Kahan
+/// simulations against V* on one tape, each view printed as `ZKVIEW` (its summary) and `ZKVIEWP` (each received proof's
+/// checked fields) for `backends/flock/tests/zk_rewind_stats.py`, and each strategy's simulator statistics as `ZKREWIND`.
+#[cfg(feature = "seed-injection")]
+fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    let n: usize = arg("--n", "16").parse().unwrap();
+    let t: usize = arg("--gk-t", "2").parse().unwrap();
+    let tape = [7u8; 32];
+    let lay = zk_layout(st);
+    let real = |make: &dyn Fn() -> VStar| -> View {
+        let v = make();
+        let view = v.view.clone();
+        session(st, inst, shared(v), &Plan::default(), ProverSeed::from_os());
+        let log = view.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        log
+    };
+    let emit = |kind: &str, name: &str, run: usize, view: &View| {
+        let (s, proofs) = view_summary(kind, name, run, view);
+        println!("ZKVIEW\t{s}");
+        for (rep, b) in proofs {
+            if let Ok((_, pr, inner)) = bincode::deserialize::<(Commitment, R1csProofLigerito, InnerProof)>(&b) {
+                let mut row = proof_fields(&lay, kind, run, rep, &pr, &inner);
+                row["strategy"] = json!(name);
+                println!("ZKVIEWP\t{row}");
+            }
+        }
+    };
+    for name in arg("--strategies", "honest,abort,adaptive-coins,zero-beta").split(',') {
+        let strategy = match name {
+            "honest" => Strategy::Honest,
+            "abort" => Strategy::Abort,
+            "adaptive-coins" => Strategy::AdaptiveCoins,
+            "zero-beta" => Strategy::ZeroBeta(beta_round(&real(&|| VStar::new(st, inst, Strategy::Honest, tape))).expect("rep 0's beta round")),
+            x => refuse(format!("unknown strategy {x}")),
+        };
+        let make = || VStar::new(st, inst, strategy, tape);
+        let ts = Instant::now();
+        for run in 0..n {
+            emit("real", name, run, &real(&make));
+        }
+        let t_real = ts.elapsed().as_secs_f64();
+        let mut stats = Vec::new();
+        for run in 0..n {
+            let (view, s) = gk_simulate(st, inst, &make, t);
+            if s["fail"].is_null() {
+                emit("sim", name, run, &view);
+            }
+            stats.push(s);
+        }
+        println!("ZKREWIND\t{}", json!({"strategy": name, "n": n, "gk_t": t, "real_s": t_real, "sim_s": ts.elapsed().as_secs_f64() - t_real,
+                                         "sims": stats}));
+    }
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn zkrewind(_: &Arc<Stmt>, _: &Arc<Instances>) {
+    refuse("zkrewind needs the test harness's seed-injection feature".into());
+}
+
 #[cfg(not(feature = "seed-injection"))]
 fn zkaudit(_: &Arc<Stmt>, _: &Arc<Instances>) {
     refuse("zkaudit needs the test harness's seed-injection feature".into());
@@ -978,7 +1331,7 @@ struct Plan {
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
     zk_l0_tamper: u8,
-    /// prove the all-zero witness (M1's simulator runs the opening on a dummy witness)
+    /// prove a dummy witness: all zero but the public regions (M2's extraction run; M1's simulator takes its opening)
     zero_witness: bool,
 }
 
@@ -1027,7 +1380,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
     Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
-          nets: Arc::new(nets) }
+          nets: Arc::new(nets), regions: (zero && plan.zero_witness).then(|| inst.clone()) }
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -1253,6 +1606,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_level0_blinded_claim_forged", false, true),
     ("zk_level0_ybar_forged", false, true),
     ("zk_level0_extra_lane_sum_forged", false, true),
+    ("zk_verifier_coin_off_its_commitment", false, false),
+    ("zk_verifier_commits_beta_zero", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -1351,6 +1706,27 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
+    }
+    #[cfg(feature = "seed-injection")]
+    if name == "zk_verifier_coin_off_its_commitment" || name == "zk_verifier_commits_beta_zero" {
+        // M2: V* answers rep 0's round 3 with a coin of its choosing under the committed coin's opening, or commits to β = 0;
+        // the prover stops at that coin, before it sends anything that depends on it
+        let (strategy, want) = if name.ends_with("beta_zero") {
+            let v = VStar::new(st, inst, Strategy::Honest, [7; 32]);
+            let view = v.view.clone();
+            session(st, inst, shared(v), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+            let k = beta_round(&view.lock().unwrap_or_else(PoisonError::into_inner)).expect("rep 0's beta round");
+            (Strategy::ZeroBeta(k), "degenerate coin β = 0")
+        } else {
+            (Strategy::CoinAt(3), "do not open its step-0 commitment")
+        };
+        let v = VStar::new(st, inst, strategy, [7; 32]);
+        let view = v.view.clone();
+        let (r, _) = session(st, inst, shared(v), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+        let (s, _) = view_summary("real", name, 0, &view.lock().unwrap_or_else(PoisonError::into_inner));
+        let stopped = r["prover_stopped"].as_str().is_some_and(|x| x.contains(want));
+        return json!({"case": name, "gpu": gpu, "expect": "the prover stops at the coin", "accepted": r["accepted"], "pass": stopped && r["accepted"] != true,
+                      "prover_stopped": r["prover_stopped"], "last_round": s["last_round"], "end": s["end"]});
     }
     if name == "coin_seed_record_replays" {
         // step 0 replayed from the verifier's record alone; the same record with two rounds' coin-request indices swapped is refused
@@ -1748,6 +2124,7 @@ fn main() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
+        "zkrewind" => zkrewind(&st, &inst),
         "serve" => serve_loop(move || server(&st, &inst)),
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
