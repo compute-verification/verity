@@ -68,6 +68,26 @@ struct CircuitParams {
     u_cut_rows: *const u32,
     mid_cb: Option<MidCb>,
     mid_ctx: *mut c_void,
+    /// hm96-sha512 Merkle leaves (the SHA-512 build): the salts of each tree the device builds, in build order, and the
+    /// scheme's constants (salt prefix ‖ leaf prefix, 256 bytes; the key's byte tables, 192 × 256 × 8 u64). Null: unsalted.
+    hm96_cb: Option<Hm96Cb>,
+    hm96_ctx: *mut c_void,
+    hm96_prefixes: *const u8,
+    hm96_tables: *const u64,
+}
+
+type Hm96Cb = unsafe extern "C" fn(*mut c_void, i32, i64, *mut u8) -> i32;
+
+/// Tree `tree`'s salts (`n` leaves × 192 bytes) from the proof's salt context (`flock_merkle::hm96`).
+#[cfg(feature = "sha512")]
+unsafe extern "C" fn hm96_cb(_ctx: *mut c_void, _tree: i32, n: i64, out: *mut u8) -> i32 {
+    match std::panic::catch_unwind(|| flock_merkle::hm96::next_tree_salts(n as usize)) {
+        Ok(s) => {
+            unsafe { std::ptr::copy_nonoverlapping(s.as_ptr(), out, s.len()) };
+            0
+        }
+        Err(_) => -1,
+    }
 }
 
 type MidCb = unsafe extern "C" fn(*mut c_void, *const u32, i64, *mut u32, *mut i64, *mut *const i64, *mut *const i32, *mut *const u64) -> i32;
@@ -372,7 +392,22 @@ pub fn prove_circuit(
         u_cut_rows: t.sched.cut_rows.as_ptr(),
         mid_cb: mctx.is_some().then_some(mid_cb as MidCb),
         mid_ctx: mctx.as_mut().map_or(null_mut(), |m| m as *mut MidCtx<'_> as *mut c_void),
+        hm96_cb: None,
+        hm96_ctx: null_mut(),
+        hm96_prefixes: std::ptr::null(),
+        hm96_tables: std::ptr::null(),
     };
+    #[cfg(feature = "sha512")]
+    let hm96_prefixes: Vec<u8> = {
+        let c = flock_merkle::hm96::consts();
+        p.hm96_cb = Some(hm96_cb as Hm96Cb);
+        p.hm96_tables = c.tables.as_ptr() as *const u64;
+        [c.salt_prefix, c.leaf_prefix].concat()
+    };
+    #[cfg(feature = "sha512")]
+    {
+        p.hm96_prefixes = hm96_prefixes.as_ptr();
+    }
     for (i, l) in t.logs.iter().enumerate() {
         p.type_log[i] = *l;
         if let Some(((ac, ar), (bc, br))) = &t.csc[i] {

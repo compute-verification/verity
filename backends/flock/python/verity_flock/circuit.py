@@ -41,17 +41,16 @@ STATEMENT = "verity/flock-circuit"
 SCHEME = "frame-v3/blake3-keyed"
 INST_FORMAT = "flock-circuit-inputs"
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
-#: identity and swappable. ``flock-leaf/sha512-unsalted`` is the SHA-512 Merkle leaf, the digest of the opened column, until
-#: ``target`` lands: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over that digest, leaf =
-#: ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt. Salts straight from the OS generator, one per
-#: leaf, never expanded from a seed (statistical hiding given uniform salts); the level-0 salts are shared by both reps (one
-#: root). Key: the scheme's ``default_key``, one constant of the statement for every tree, pinned by its SHA-512. Never a
-#: witness: a prover choosing the key after commitment solves for one that opens a leaf to any value.
-LEAF_SCHEME = {"id": "flock-leaf/sha512-unsalted", "salt_bytes": 0,
-               "target": {"scheme": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes_per_leaf": 192,
-                          "salt_source": "os generator, one draw per leaf", "key": "default_key, a statement constant for every tree",
-                          "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
-                                        "a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22"}}
+#: identity and swappable: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the
+#: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
+#: Salts straight from the OS generator, one per leaf, never expanded from a seed (statistical hiding given uniform salts); the
+#: level-0 salts are shared by both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
+#: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
+#: any value.
+LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes": 192,
+               "salt_source": "os generator, one draw per leaf", "key": "default_key, a statement constant for every tree",
+               "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
+                             "a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22"}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14

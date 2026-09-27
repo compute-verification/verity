@@ -3,6 +3,11 @@
 //   (big-endian) byte order; the flat layout of merkle.cuh: leaves, then each level above, root last (2n-1 nodes).
 #pragma once
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <map>
+#include <vector>
 
 __constant__ uint64_t SHA512_K[80] = {
     0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull, 0x3956c25bf348b538ull,
@@ -157,6 +162,108 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
     s512_out(st, tree + (write_start + j) * 64);
 }
 
+// ---- hm96-sha512/v1 leaves (verity.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
+//   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
+//   leaf = SHA-512(leaf_prefix || b || c). The host hands the salts of each tree (in build order) and the key's byte tables;
+//   the salts stay on the host for the openings.
+
+typedef int (*Hm96SaltCb)(void* ctx, int tree, long long n, uint8_t* out);
+
+struct Hm96Ctx {
+    Hm96SaltCb cb = nullptr;
+    void* ctx = nullptr;
+    int trees = 0;
+    uint64_t* d_tables = nullptr;   // [192][256][8]: per salt byte and value, the XOR of its set bits' columns
+    uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
+    std::map<const uint8_t*, std::vector<uint8_t>> salts;   // device tree -> its leaves' salts
+};
+static Hm96Ctx g_hm96;
+
+__global__ void hm96_midstates(const uint8_t* prefixes, uint64_t* mid) {
+    for (int k = 0; k < 2; k++) {
+        uint64_t st[8], w[16];
+        s512_iv(st);
+        const uint32_t* p = (const uint32_t*)(prefixes + 128 * k);
+        for (int j = 0; j < 16; j++) w[j] = s512_be(p[2 * j], p[2 * j + 1]);
+        s512_compress(st, w);
+        for (int j = 0; j < 8; j++) mid[8 * k + j] = st[j];
+    }
+}
+
+__global__ void hm96_finish_leaves(uint8_t* tree, const uint8_t* __restrict__ salts, const uint64_t* __restrict__ tables,
+                                   long long n, const uint64_t* __restrict__ mid) {
+    long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    const uint8_t* y = salts + i * 192;
+    uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    for (int p = 0; p < 192; p++) {
+        const uint64_t* e = tables + ((size_t)p * 256 + y[p]) * 8;
+#pragma unroll
+        for (int k = 0; k < 8; k++) m[k] ^= e[k];
+    }
+    const uint64_t* x = (const uint64_t*)(tree + i * 64);   // the digest's bytes as little-endian words, as the mask's limbs
+    uint64_t b[8];
+#pragma unroll
+    for (int k = 0; k < 8; k++) b[k] = x[k] ^ m[k];
+    uint64_t st[8], w[16];
+#pragma unroll
+    for (int j = 0; j < 8; j++) st[j] = mid[j];
+    const uint32_t* yw = (const uint32_t*)y;
+#pragma unroll
+    for (int j = 0; j < 16; j++) w[j] = s512_be(yw[2 * j], yw[2 * j + 1]);
+    s512_compress(st, w);
+#pragma unroll
+    for (int j = 0; j < 8; j++) w[j] = s512_be(yw[32 + 2 * j], yw[32 + 2 * j + 1]);
+    w[8] = 0x8000000000000000ull;
+#pragma unroll
+    for (int j = 9; j < 15; j++) w[j] = 0;
+    w[15] = (128 + 192) * 8;
+    s512_compress(st, w);                                   // st = c's words
+    uint64_t lt[8];
+#pragma unroll
+    for (int j = 0; j < 8; j++) lt[j] = mid[8 + j];
+#pragma unroll
+    for (int k = 0; k < 8; k++) { w[k] = s512_bswap(b[k]); w[8 + k] = st[k]; }
+    s512_compress(lt, w);
+    s512_pad_block(lt, 256);
+    s512_out(lt, tree + i * 64);
+}
+
+// The salts of `d_tree`'s leaves at `q` (192 bytes each, in order); empty when the build is unsalted.
+inline std::vector<uint8_t> hm96_opened_salts(const uint8_t* d_tree, const std::vector<size_t>& q) {
+    std::vector<uint8_t> out;
+    if (!g_hm96.cb) return out;
+    auto it = g_hm96.salts.find(d_tree);
+    if (it == g_hm96.salts.end()) { fprintf(stderr, "hm96: an opening of a tree built without salts\n"); abort(); }
+    out.resize(q.size() * 192);
+    for (size_t k = 0; k < q.size(); k++) memcpy(out.data() + 192 * k, it->second.data() + 192 * q[k], 192);
+    return out;
+}
+
+// One proof's hm96 context (a null callback leaves the build unsalted).
+struct Hm96Guard {
+    Hm96Guard(Hm96SaltCb cb, void* ctx, const uint8_t* prefixes, const uint64_t* tables) {
+        if (!cb) return;
+        g_hm96.cb = cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.salts.clear();
+        size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
+        cudaMalloc(&g_hm96.d_tables, tb);
+        cudaMemcpy(g_hm96.d_tables, tables, tb, cudaMemcpyHostToDevice);
+        uint8_t* d_pre = nullptr;
+        cudaMalloc(&d_pre, 256);
+        cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
+        cudaMalloc(&g_hm96.d_mid, 16 * sizeof(uint64_t));
+        hm96_midstates<<<1, 1>>>(d_pre, g_hm96.d_mid);
+        cudaDeviceSynchronize();
+        cudaFree(d_pre);
+    }
+    ~Hm96Guard() {
+        if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
+        if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
+        g_hm96.cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr;
+        g_hm96.trees = 0; g_hm96.salts.clear();
+    }
+};
+
 inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long num_leaves, int leaf_size, int tpb = 256) {
     if (leaf_size % 128 == 0 && ((uintptr_t)d_data & 15) == 0) {
         int wpb = tpb >> 5;
@@ -167,6 +274,19 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
     } else {
         long long blocks = (num_leaves + tpb - 1) / tpb;
         sha512_merkle_leaves_bytes<<<(unsigned)blocks, tpb>>>(d_data, d_tree, num_leaves, leaf_size);
+    }
+    if (g_hm96.cb) {
+        std::vector<uint8_t> host((size_t)num_leaves * 192);
+        if (g_hm96.cb(g_hm96.ctx, g_hm96.trees++, num_leaves, host.data()) != 0) {
+            fprintf(stderr, "hm96: the host gave no salts for tree %d\n", g_hm96.trees - 1);
+            abort();
+        }
+        uint8_t* d_salts = nullptr;
+        cudaMalloc(&d_salts, host.size());
+        cudaMemcpy(d_salts, host.data(), host.size(), cudaMemcpyHostToDevice);
+        hm96_finish_leaves<<<(unsigned)((num_leaves + tpb - 1) / tpb), tpb>>>(d_tree, d_salts, g_hm96.d_tables, num_leaves, g_hm96.d_mid);
+        cudaFree(d_salts);
+        g_hm96.salts[d_tree] = std::move(host);
     }
     long long read_start = 0, read_len = num_leaves;
     while (read_len > 1) {

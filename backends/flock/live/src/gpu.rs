@@ -291,6 +291,16 @@ impl Reader<'_> {
         self.o += std::mem::size_of::<flock_hash::Digest>();
         h
     }
+    /// An opening's hm96-sha512 salts (a u64 count, then 192 bytes each): the circuit statement's SHA-512 build writes them.
+    #[cfg(feature = "sha512")]
+    fn salts(&mut self) -> Vec<flock_merkle::hm96::Salt> {
+        let n = self.u64() as usize;
+        let s = (0..n).map(|i| flock_merkle::hm96::salt_of(&self.b[self.o + 192 * i..])).collect();
+        self.o += 192 * n;
+        s
+    }
+    #[cfg(not(feature = "sha512"))]
+    fn salts(&mut self) {}
     fn hashes(&mut self) -> Vec<flock_hash::Digest> {
         let n = self.u64() as usize;
         (0..n).map(|_| self.hash()).collect()
@@ -808,7 +818,8 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
     let n_rcaps = r.u64() as usize;
     let recursive_caps: Vec<Vec<flock_hash::Digest>> = (0..n_rcaps).map(|_| r.hashes()).collect();
     let n_opens = r.u64() as usize;
-    let mut opens: Vec<(Vec<Vec<F128>>, Vec<flock_hash::Digest>)> = (0..n_opens).map(|_| (r.rows(), r.hashes())).collect();
+    #[allow(clippy::let_unit_value)]
+    let mut opens: Vec<_> = (0..n_opens).map(|_| (r.rows(), r.hashes(), r.salts())).collect();
     let yr = r.f128s();
     let n_sc = r.u64() as usize;
     let sumcheck_transcript_f256: Vec<SumcheckMessage256> = (0..n_sc).map(|_| SumcheckMessage256 { u_0: r.f256(), u_2: r.f256() }).collect();
@@ -817,10 +828,17 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
     let claim_batch_grinding_nonces = r.u64s();
     let consistency_batch_grinding_nonces = r.u64s();
     assert_eq!(r.o, bytes.len(), "trailing bytes in the FFI stream");
-    let (initial_rows, initial_mp) = opens.remove(0);
-    let (final_rows, final_mp) = opens.pop().expect("final open");
-    let recursive_proofs: Vec<RecursiveProof> =
-        opens.into_iter().map(|(rows, mp)| RecursiveProof { opened_rows: rows, merkle_proof: mp }).collect();
+    let (initial_rows, initial_mp, _initial_salts) = opens.remove(0);
+    let (final_rows, final_mp, _final_salts) = opens.pop().expect("final open");
+    let recursive_proofs: Vec<RecursiveProof> = opens
+        .into_iter()
+        .map(|(rows, mp, _salts)| RecursiveProof {
+            opened_rows: rows,
+            merkle_proof: mp,
+            #[cfg(feature = "sha512")]
+            opened_salts: _salts,
+        })
+        .collect();
     let proof = R1csProofLigerito {
         zerocheck: ZerocheckProof { round1_ab, round1_c, multilinear_rounds, final_a_eval, final_b_eval, final_c_eval, grinding_nonces: zc_nonces },
         lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces },
@@ -829,10 +847,21 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
             batching_nonces,
             ligerito: LigeritoProof {
                 initial_cap: cap.clone(),
-                initial_proof: RecursiveProof { opened_rows: initial_rows, merkle_proof: initial_mp },
+                initial_proof: RecursiveProof {
+                    opened_rows: initial_rows,
+                    merkle_proof: initial_mp,
+                    #[cfg(feature = "sha512")]
+                    opened_salts: _initial_salts,
+                },
                 recursive_caps,
                 recursive_proofs,
-                final_proof: FinalProof { yr, opened_rows: final_rows, merkle_proof: final_mp },
+                final_proof: FinalProof {
+                    yr,
+                    opened_rows: final_rows,
+                    merkle_proof: final_mp,
+                    #[cfg(feature = "sha512")]
+                    opened_salts: _final_salts,
+                },
                 sumcheck_transcript: Vec::new(),
                 sumcheck_transcript_f256,
                 grinding_nonces,

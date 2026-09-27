@@ -54,9 +54,10 @@ fn domain(rep: usize) -> Vec<u8> {
     format!("flock-circuit/fast100x2/rep{rep}").into_bytes()
 }
 
-/// The Merkle hash of every Ligerito level: SHA-512 in a production build (feature `sha512`, verity's Flock patch).
+/// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
+/// verity's Flock patch).
 #[cfg(feature = "sha512")]
-const MERKLE: HashKind = HashKind::Sha512;
+const MERKLE: HashKind = HashKind::Hm96Sha512;
 #[cfg(not(feature = "sha512"))]
 const MERKLE: HashKind = HashKind::Sha256;
 
@@ -69,7 +70,7 @@ fn identity(c: &Composite) -> Value {
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
-           "hashes": {"merkle": format!("{} (leaves and nodes, every Ligerito level)", MERKLE.as_str()),
+           "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
                       "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha256",
@@ -294,6 +295,8 @@ struct Plan {
     tail_swapped: bool,
     rep1_other_witness: bool,
     fast: bool,
+    /// send each rep's proof with one byte of its first opened hm96 salt flipped
+    salt_flip: bool,
     substitute: Option<Vec<Vec<u8>>>,
 }
 
@@ -406,6 +409,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             Resp::Coins(c) if c.len() == 4 => commit = c,
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
+        let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
+        // hm96-sha512 leaf salts: the level-0 tree's once (both reps bind one root), every later tree's fresh per rep
+        #[cfg(feature = "sha512")]
+        let tape = Arc::new(Mutex::new(flock_live::zk_hooks::SaltTape::for_seed(&seed)));
+        #[cfg(feature = "sha512")]
+        let level0 = Arc::new(tape.lock().unwrap_or_else(PoisonError::into_inner).draw(params(st.m, lig).n_leaves()));
         for rep in 0..2 {
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
@@ -429,10 +438,17 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             };
             let tp = Instant::now();
             let wt = if rep == 0 { &wt0 } else { &wt1 };
-            let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-            let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
+            #[cfg(feature = "sha512")]
+            {
+                let tape = tape.clone();
+                flock_merkle::hm96::begin(level0.clone(), Box::new(move |n| tape.lock().unwrap_or_else(PoisonError::into_inner).draw(n)));
+            }
+            let proved = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu { prove_gpu(st, wt, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, wt, lig, &mut hook, &mut lch) }
-            })).map_err(panic_msg)?;
+            }));
+            #[cfg(feature = "sha512")]
+            flock_merkle::hm96::end();
+            let (p, bk) = proved.map_err(panic_msg)?;
             prove_s.push(tp.elapsed().as_secs_f64());
             buckets.push(bk);
             proofs.push(p);
@@ -448,7 +464,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         };
         return (json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "prover_stopped": e.chars().take(200).collect::<String>()}), proofs);
     }
-    let sent = plan.substitute.clone().unwrap_or_else(|| proofs.clone());
+    let mut sent = plan.substitute.clone().unwrap_or_else(|| proofs.clone());
+    if plan.salt_flip {
+        sent = sent.iter().map(|p| flip_salt(p)).collect();
+    }
     for (rep, p) in sent.iter().enumerate() {
         call(&t, Req::Proof { table: TABLE.into(), rep: rep as u32, bytes: p.clone() }).unwrap();
     }
@@ -504,6 +523,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("tail_swapped", false, true),
     ("tail_swapped_circuit_refused", false, false),
     ("coin_seed_opening_forged", false, false),
+    ("opened_salt_altered", false, true),
     ("coin_seed_record_replays", true, false),
     ("record_replays_offline", true, false),
     ("prover_is_deterministic", true, false),
@@ -533,6 +553,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "coins_before_y" => Plan { no_y: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { fast: true, ..h },
+        "opened_salt_altered" => Plan { salt_flip: true, ..h },
         _ => h,
     }
 }
@@ -679,7 +700,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         };
         let why: Vec<Option<String>> = edits.into_iter().map(|(k, v)| {
             let (mut m, mut l) = (meta.clone(), lines.clone());
-            m["leaf_scheme"]["target"][k] = v;
+            m["leaf_scheme"][k] = v;
             l[1] = format!("META {}", serde_json::to_string(&m).unwrap());
             Composite::parse(&l.join("\n"), Some(&arg("--tables", "tables"))).err()
         }).collect();
@@ -730,6 +751,20 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
            "witness_s": v["witness_s"]})
 }
 
+/// The proof with one byte of its level-0 opening's first salt flipped (the SHA-512 build's hm96 leaves; unchanged otherwise).
+fn flip_salt(p: &[u8]) -> Vec<u8> {
+    #[cfg(feature = "sha512")]
+    {
+        let (c, mut pr): (Commitment, R1csProofLigerito) = bincode::deserialize(p).unwrap();
+        if let Some(s) = pr.pcs_open.ligerito.initial_proof.opened_salts.first_mut() {
+            s[0][0] ^= 1;
+        }
+        return bincode::serialize(&(c, pr)).unwrap();
+    }
+    #[allow(unreachable_code)]
+    p.to_vec()
+}
+
 /// `--record-dir DIR`: the case's session as the verifier recorded it (`DIR/<case>.json`: the expectation, the prover's result,
 /// the server record) and the proofs the prover produced (`DIR/<case>.rep<r>.proof`), for replaying verifiers' vectors.
 fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
@@ -765,8 +800,8 @@ fn with_tail(text: &str) -> (String, String) {
 
 /// The prover as a function of (statement, witness, prover seed, verifier coins): two sessions with the same injected prover seed
 /// and the same injected verifier seed give byte-identical proofs (both reps) and transcripts (every round's message and coins,
-/// the link exchange); a third, with another prover seed, is recorded (identical in M0, whose proofs use no prover randomness;
-/// M1's masks make it differ). Needs the test harness's `seed-injection` feature.
+/// the link exchange); a third, with another prover seed, is recorded (it differs: the hm96 leaf salts are prover randomness).
+/// Needs the test harness's `seed-injection` feature.
 #[cfg(feature = "seed-injection")]
 fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let run = |pseed: [u8; 32]| {
@@ -780,7 +815,7 @@ fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let (a, b, c) = (run([1; 32]), run([1; 32]), run([2; 32]));
     let same = a.1 == b.1 && a.2 == b.2;
     json!({"case": "prover_is_deterministic", "expect": "equal seeds and coins give byte-identical proofs and transcripts", "gpu": gpu,
-           "accepted": a.0 && b.0, "proofs_equal": a.1 == b.1, "transcripts_equal": a.2 == b.2, "other_seed_equal_in_m0": a.1 == c.1 && a.2 == c.2,
+           "accepted": a.0 && b.0, "proofs_equal": a.1 == b.1, "transcripts_equal": a.2 == b.2, "other_seed_equal": a.1 == c.1 && a.2 == c.2,
            "transcript_sha256": hex(&a.2), "pass": a.0 && b.0 && c.0 && same})
 }
 

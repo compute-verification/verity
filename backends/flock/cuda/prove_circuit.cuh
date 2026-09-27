@@ -41,6 +41,13 @@ typedef struct {
     int (*mid_cb)(void* ctx, const uint32_t* cut, long long groups, uint32_t* late, long long* n_host, const long long** host_at,
                   const int** host_words, const uint64_t** host_zab);
     void* mid_ctx;
+    // hm96-sha512 Merkle leaves (the SHA-512 build, cuda_sha512_patch.py): hm96_cb fills tree k's salts (n leaves x 192 bytes,
+    // trees in build order); the scheme's constants are the salt prefix || leaf prefix (256 bytes) and the key's byte tables
+    // (192 x 256 x 8 u64). hm96_cb null: unsalted leaves.
+    int (*hm96_cb)(void* ctx, int tree, long long n, uint8_t* out);
+    void* hm96_ctx;
+    const uint8_t* hm96_prefixes;
+    const uint64_t* hm96_tables;
 } FlockCircuitParams;
 
 __global__ void fc_comp_scatter(const F128* __restrict__ src, long long n_comp, int per_block, const uint32_t* __restrict__ slot,

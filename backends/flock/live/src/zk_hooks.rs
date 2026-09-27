@@ -11,10 +11,10 @@
 //! `set_word_pos`), so a device kernel can expand the same words later. It never reads the transcript, and the only constructor
 //! outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a production build.
 //!
-//! The Merkle leaf salts of `hm96-sha256/v1` are NOT drawn from it: each salt is 128 bytes straight from `getrandom`, so the
-//! leaves hide statistically given uniform salts rather than under ChaCha20 (hm96 PROTOCOL.md section 3). They will be a second
-//! explicit input beside the seed, injectable the same way, so the prover stays a function of its inputs. The hm96 key is not
-//! prover randomness at all: it is the statement's constant (`circuit::leaf_scheme`). M0's leaf is unsalted.
+//! The Merkle leaf salts of `hm96-sha512/v1` are NOT drawn from it: [`SaltTape`] gives each leaf 192 bytes straight from
+//! `getrandom`, so the leaves hide statistically given uniform salts (hm96 PROTOCOL.md section 3). With an injected seed (a test
+//! harness only) the tape is a ChaCha20 stream of that seed instead, so a test proof is reproducible. The hm96 key is not prover
+//! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
@@ -27,25 +27,66 @@ use rand_chacha::{
 };
 use serde_json::{Value, json};
 
-/// ChaCha20 stream numbers, one per purpose.
+/// ChaCha20 stream numbers, one per purpose (`STREAM_SALT` only for an injected seed's salt tape).
 pub const STREAM_MASK: u64 = 1;
 pub const STREAM_PAD: u64 = 2;
+pub const STREAM_SALT: u64 = 3;
+/// Bytes per `hm96-sha512/v1` leaf salt.
+pub const SALT_BYTES: usize = 192;
 
 /// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
 /// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
 #[derive(Clone, Copy)]
-pub struct ProverSeed([u8; 32]);
+pub struct ProverSeed {
+    seed: [u8; 32],
+    injected: bool,
+}
 
 impl ProverSeed {
     pub fn from_os() -> Self {
         let mut seed = [0u8; 32];
         getrandom::fill(&mut seed).expect("the OS random generator failed: refusing to prove without prover randomness");
-        ProverSeed(seed)
+        ProverSeed { seed, injected: false }
     }
 
     #[cfg(any(test, feature = "seed-injection"))]
     pub fn injected(seed: [u8; 32]) -> Self {
-        ProverSeed(seed)
+        ProverSeed { seed, injected: true }
+    }
+}
+
+/// The salts of one session's `hm96-sha512/v1` Merkle leaves, 192 bytes per leaf, in draw order (the level-0 tree once, then
+/// every later tree of each repetition). From an OS seed every draw is fresh `getrandom` output, independent of the seed; from an
+/// injected seed (test harness only) draw k is bytes `[2^40 k, ...)` of the seed's ChaCha20 stream `STREAM_SALT`.
+pub struct SaltTape {
+    stream: Option<ChaCha20Rng>,
+    draws: u64,
+}
+
+impl SaltTape {
+    pub fn for_seed(seed: &ProverSeed) -> Self {
+        let stream = seed.injected.then(|| {
+            let mut r = ChaCha20Rng::from_seed(seed.seed);
+            r.set_stream(STREAM_SALT);
+            r
+        });
+        SaltTape { stream, draws: 0 }
+    }
+
+    pub fn draw(&mut self, leaves: usize) -> Vec<u8> {
+        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+        let mut b = vec![0u8; leaves * SALT_BYTES];
+        match &mut self.stream {
+            None => b.par_chunks_mut(1 << 20).for_each(|c| {
+                getrandom::fill(c).expect("the OS random generator failed: refusing to commit without leaf salts")
+            }),
+            Some(r) => {
+                r.set_word_pos((self.draws as u128) << 38);
+                r.fill_bytes(&mut b);
+            }
+        }
+        self.draws += 1;
+        b
     }
 }
 
@@ -55,7 +96,7 @@ pub struct ProverRng {
 
 impl ProverRng {
     pub fn from_seed(seed: ProverSeed) -> Self {
-        ProverRng { rng: ChaCha20Rng::from_seed(seed.0) }
+        ProverRng { rng: ChaCha20Rng::from_seed(seed.seed) }
     }
 
     /// A fresh proof's randomness from the OS, never from the transcript.

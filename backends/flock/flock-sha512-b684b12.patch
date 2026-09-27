@@ -12,34 +12,51 @@ index 590a6bf..818ab49 100644
  }
  
 diff --git a/crates/flock-core/src/genus95_curve_code/rng.rs b/crates/flock-core/src/genus95_curve_code/rng.rs
-index f594dd8..621c009 100644
+index f594dd8..018cf4b 100644
 --- a/crates/flock-core/src/genus95_curve_code/rng.rs
 +++ b/crates/flock-core/src/genus95_curve_code/rng.rs
 @@ -128,6 +128,7 @@ impl FsRng {
          match kind {
              HashKind::Sha256 => FsRng::Sha256(Sha256Rng::new(seed)),
              HashKind::Blake3 => FsRng::Blake3(Blake3Rng::new(seed)),
-+            HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
++            HashKind::Sha512 | HashKind::Hm96Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
          }
      }
  }
 diff --git a/crates/flock-core/src/genus95_curve_code/sampling.rs b/crates/flock-core/src/genus95_curve_code/sampling.rs
-index ce547fd..a8ffd56 100644
+index ce547fd..38c2f80 100644
 --- a/crates/flock-core/src/genus95_curve_code/sampling.rs
 +++ b/crates/flock-core/src/genus95_curve_code/sampling.rs
 @@ -50,6 +50,7 @@ fn nonce_seed(seed: &[u8; 32], nonce: u32, kind: HashKind) -> [u8; 32] {
              h.update(nonce.to_le_bytes());
              nonce_seed.copy_from_slice(&h.finalize());
          }
-+        HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
++        HashKind::Sha512 | HashKind::Hm96Sha512 => panic!("no SHA-512 Fiat-Shamir sampler"),
          HashKind::Blake3 => {
              let mut h = Hasher::new();
              h.update(seed);
 diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
-index 60314c3..b229c59 100644
+index 60314c3..2dce928 100644
 --- a/crates/flock-core/src/pcs/ligerito.rs
 +++ b/crates/flock-core/src/pcs/ligerito.rs
-@@ -2203,13 +2203,13 @@ impl LigeritoProof {
+@@ -2144,6 +2144,8 @@ pub struct RecursiveProof {
+     /// `depth − cap_depth` siblings each, concatenated in sample order. A
+     /// duplicate query repeats its path. Verified against the level's cap.
+     pub merkle_proof: Vec<Hash>,
++    /// `hm96-sha512` trees: each opened row's 192-byte salt, in sample order (empty for unsalted leaves).
++    pub opened_salts: Vec<flock_merkle::hm96::Salt>,
+ }
+ 
+ #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+@@ -2153,6 +2155,7 @@ pub struct FinalProof {
+     /// Same flat per-query capped-path convention as [`RecursiveProof`].
+     pub opened_rows: Vec<Vec<F128>>,
+     pub merkle_proof: Vec<Hash>,
++    pub opened_salts: Vec<flock_merkle::hm96::Salt>,
+ }
+ 
+ #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+@@ -2203,13 +2206,13 @@ impl LigeritoProof {
      pub fn size_bytes(&self) -> usize {
          const ELEM: usize = size_of::<F128>();
          let level_bytes = |p: &RecursiveProof| -> usize {
@@ -56,7 +73,7 @@ index 60314c3..b229c59 100644
              .sum::<usize>();
          total += level_bytes(&self.initial_proof);
          for p in &self.recursive_proofs {
-@@ -2222,7 +2222,7 @@ impl LigeritoProof {
+@@ -2222,7 +2225,7 @@ impl LigeritoProof {
                  .iter()
                  .map(|r| r.len() * ELEM)
                  .sum::<usize>()
@@ -65,7 +82,7 @@ index 60314c3..b229c59 100644
          total += self.sumcheck_transcript.len() * 2 * ELEM;
          total += self.sumcheck_transcript_f256.len() * 4 * ELEM;
          total += self.ood_values.len() * ELEM;
-@@ -2255,7 +2255,7 @@ impl LigeritoProof {
+@@ -2255,7 +2258,7 @@ impl LigeritoProof {
              .iter()
              .map(|r| r.len() * ELEM)
              .sum();
@@ -74,7 +91,7 @@ index 60314c3..b229c59 100644
          eprintln!(
              "  L0 (initial): opened={} ({}q × {}lanes × {}B)  merkle={}",
              kb(init_opened),
-@@ -2271,7 +2271,7 @@ impl LigeritoProof {
+@@ -2271,7 +2274,7 @@ impl LigeritoProof {
          let mut total_merkle = init_merkle;
          for (i, rp) in self.recursive_proofs.iter().enumerate() {
              let opened: usize = rp.opened_rows.iter().map(|r| r.len() * ELEM).sum();
@@ -83,7 +100,7 @@ index 60314c3..b229c59 100644
              eprintln!(
                  "  L{} (recursive): opened={} ({}q × {}lanes × {}B)  merkle={}",
                  i + 1,
-@@ -2290,7 +2290,7 @@ impl LigeritoProof {
+@@ -2290,7 +2293,7 @@ impl LigeritoProof {
              .iter()
              .map(|r| r.len() * ELEM)
              .sum();
@@ -92,7 +109,7 @@ index 60314c3..b229c59 100644
          let yr_b = self.final_proof.yr.len() * ELEM;
          eprintln!(
              "  L{} (final):  opened={} ({}q × {}lanes × {}B)  merkle={}  yr={} ({}×{}B)",
-@@ -4895,7 +4895,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -4895,7 +4898,7 @@ fn recursive_prover_inner<Ch: Challenger>(
          .expect("stratified schedules invalid (prover entry)");
      let c_0 = cap_depth_of(0);
      let initial_cap: Vec<Hash> = wtns_0.cap(c_0).to_vec();
@@ -101,7 +118,7 @@ index 60314c3..b229c59 100644
  
      // ---- Partial-eval at z[0..initial_k] and commit f¹ (wtns_1) ----
      let v_challenges_0 = eval_point[..initial_k].to_vec();
-@@ -4918,7 +4918,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -4918,7 +4921,7 @@ fn recursive_prover_inner<Ch: Challenger>(
      let t_l1 = t.elapsed();
      t_commits += t_l1;
      tlog!("  [ligerito]   L1 commit: {:.2?}", t_l1);
@@ -110,7 +127,23 @@ index 60314c3..b229c59 100644
  
      // ---- Queries + open wtns_0 ----
      let num_queries_0 = udr_queries(log_inv_rate_0);
-@@ -5058,7 +5058,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -4931,6 +4934,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+     let initial_proof = RecursiveProof {
+         opened_rows: opened_rows_0.clone(),
+         merkle_proof: merkle_proof_0,
++        opened_salts: flock_merkle::hm96::opened_salts(&wtns_0.tree, &queries_0),
+     };
+ 
+     // ---- Induce basis from wtns_0 opens ----
+@@ -5021,6 +5025,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+                     yr,
+                     opened_rows: opened_rows_last,
+                     merkle_proof: merkle_proof_last,
++                    opened_salts: flock_merkle::hm96::opened_salts(&wtns_prev.tree, &queries_last),
+                 },
+                 sumcheck_transcript: sc_prover.transcript().to_vec(),
+                 sumcheck_transcript_f256: Vec::new(),
+@@ -5058,7 +5063,7 @@ fn recursive_prover_inner<Ch: Challenger>(
          t_commits += t_li;
          tlog!("  [ligerito]   L{} commit: {:.2?}", i + 2, t_li);
          let cap_next = wtns_next.cap(cap_depth_of(i + 2)).to_vec();
@@ -119,7 +152,59 @@ index 60314c3..b229c59 100644
          recursive_caps.push(cap_next);
  
          // Open wtns_prev. wtns_prev = wtns_{i+1} uses log_inv_rates[i+1].
-@@ -5201,12 +5201,12 @@ pub fn recursive_verifier<Ch: Challenger>(
+@@ -5081,6 +5086,7 @@ fn recursive_prover_inner<Ch: Challenger>(
+         recursive_proofs.push(RecursiveProof {
+             opened_rows: opened_rows_i.clone(),
+             merkle_proof: merkle_proof_i,
++            opened_salts: flock_merkle::hm96::opened_salts(&wtns_prev.tree, &queries_i),
+         });
+ 
+         // Induce fresh basis from these opens.
+@@ -5123,17 +5129,27 @@ fn verify_level_opens(
+     opened_rows: &[Vec<F128>],
+     expected_num_interleaved: usize,
+     paths: &[Hash],
++    salts: &[flock_merkle::hm96::Salt],
+     kind: HashKind,
+     sched: &LevelSchedule,
+ ) -> bool {
+     if queries.len() != opened_rows.len() {
+         return false;
+     }
++    // hm96-sha512: one salt per opened row, the leaf recomputed from the row's SHA-512 digest and its salt; no salt otherwise
++    let salted = kind == HashKind::Hm96Sha512;
++    if salts.len() != if salted { queries.len() } else { 0 } {
++        return false;
++    }
+     let d = block_len.trailing_zeros() as usize;
+-    let leaf_of = |row: &Vec<F128>| {
++    let leaf_of = |k: usize, row: &Vec<F128>| {
+         let bytes: &[u8] =
+             unsafe { from_raw_parts(row.as_ptr() as *const u8, row.len() * size_of::<F128>()) };
+-        hash_leaf(bytes, kind)
++        if salted {
++            flock_merkle::hm96::leaf(&hash_leaf(bytes, HashKind::Sha512), salts[k].as_flattened())
++        } else {
++            hash_leaf(bytes, kind)
++        }
+     };
+     let s = sched;
+ 
+@@ -5156,11 +5172,11 @@ fn verify_level_opens(
+     }
+     let path_len = d - c1;
+     let mut off = 0usize;
+-    for (&q, row) in queries.iter().zip(opened_rows) {
++    for (k, (&q, row)) in queries.iter().zip(opened_rows).enumerate() {
+         if row.len() != expected_num_interleaved {
+             return false;
+         }
+-        let leaf = leaf_of(row);
++        let leaf = leaf_of(k, row);
+         if !verify_merkle_proof_capped(cap, block_len, &leaf, q, &paths[off..][..path_len], kind) {
+             return false;
+         }
+@@ -5201,12 +5217,12 @@ pub fn recursive_verifier<Ch: Challenger>(
      challenger.observe_f128_slice(eval_point);
  
      // ---- Roots ----
@@ -134,7 +219,23 @@ index 60314c3..b229c59 100644
  
      // ---- Open wtns_0 + α₀ ----
      let log_inv_rate_0 = config.log_inv_rates[0];
-@@ -5396,7 +5396,7 @@ pub fn recursive_verifier<Ch: Challenger>(
+@@ -5225,6 +5241,7 @@ pub fn recursive_verifier<Ch: Challenger>(
+         &proof.initial_proof.opened_rows,
+         num_interleaved_0,
+         &proof.initial_proof.merkle_proof,
++        &proof.initial_proof.opened_salts,
+         config.merkle_hash,
+         strat(0),
+     ) {
+@@ -5338,6 +5355,7 @@ pub fn recursive_verifier<Ch: Challenger>(
+                 &proof.final_proof.opened_rows,
+                 prev_num_interleaved,
+                 &proof.final_proof.merkle_proof,
++                &proof.final_proof.opened_salts,
+                 config.merkle_hash,
+                 strat(i + 1),
+             ) {
+@@ -5396,7 +5414,7 @@ pub fn recursive_verifier<Ch: Challenger>(
          }
          let cap_next: &[Hash] = &proof.recursive_caps[next_root_idx];
          next_root_idx += 1;
@@ -143,8 +244,16 @@ index 60314c3..b229c59 100644
  
          let prev_block_len = 1usize << (prev_log_msg_cols + prev_log_inv_rate);
          let prev_num_interleaved = 1usize << prev_log_num_interleaved;
+@@ -5416,6 +5434,7 @@ pub fn recursive_verifier<Ch: Challenger>(
+             &rp.opened_rows,
+             prev_num_interleaved,
+             &rp.merkle_proof,
++            &rp.opened_salts,
+             config.merkle_hash,
+             strat(i + 1),
+         ) {
 diff --git a/crates/flock-core/src/pcs/ligerito/extension.rs b/crates/flock-core/src/pcs/ligerito/extension.rs
-index cd4a118..0bc5cf9 100644
+index cd4a118..195c44a 100644
 --- a/crates/flock-core/src/pcs/ligerito/extension.rs
 +++ b/crates/flock-core/src/pcs/ligerito/extension.rs
 @@ -2116,7 +2116,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
@@ -165,7 +274,23 @@ index cd4a118..0bc5cf9 100644
      if trace {
          t_commits += _t.elapsed();
      }
-@@ -2667,7 +2667,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2485,6 +2485,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     let initial_proof = RecursiveProof {
+         opened_rows: opened_rows_0.clone(),
+         merkle_proof: merkle_paths_for(l0_tree, block_len_0, &queries_0, strat(0)),
++        opened_salts: flock_merkle::hm96::opened_salts(l0_tree, &queries_0),
+     };
+     if trace {
+         t_opens += _t.elapsed();
+@@ -2651,6 +2652,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+                         &queries,
+                         strat(level),
+                     ),
++                    opened_salts: flock_merkle::hm96::opened_salts(&previous.tree, &queries),
+                 },
+                 sumcheck_transcript: Vec::new(),
+                 sumcheck_transcript_f256: sumcheck.transcript().to_vec(),
+@@ -2667,7 +2669,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
          let _t = Instant::now();
          let next = commit_split(sumcheck.f(), next_level, current_split_dim);
          let cap = next.cap(cap_depth(next_level)).to_vec();
@@ -174,7 +299,15 @@ index cd4a118..0bc5cf9 100644
          recursive_caps.push(cap);
          if trace {
              t_commits += _t.elapsed();
-@@ -2884,7 +2884,7 @@ where
+@@ -2717,6 +2719,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+                 &queries,
+                 strat(level),
+             ),
++            opened_salts: flock_merkle::hm96::opened_salts(&previous.tree, &queries),
+         });
+         if trace {
+             t_opens += _t.elapsed();
+@@ -2884,7 +2887,7 @@ where
  
      challenger.observe_label(b"flock-ligerito-basis-f256-split-v0");
      challenger.observe_f128(target);
@@ -183,7 +316,7 @@ index cd4a118..0bc5cf9 100644
      let log_cols_0 = log_n - initial_k;
      let block_len_0 = 1usize << (log_cols_0 + config.log_inv_rates[0]);
      let strat = |level: usize| &config.stratified[level];
-@@ -2953,7 +2953,7 @@ where
+@@ -2953,7 +2956,7 @@ where
      let Some(cap_1) = proof.recursive_caps.first() else {
          return false;
      };
@@ -192,7 +325,23 @@ index cd4a118..0bc5cf9 100644
      for _ in 0..ood_count(1) {
          let point = challenger.sample_f128_vec(current_split_dim);
          let Some(&y) = proof.ood_values.get(ood_index) else {
-@@ -3226,7 +3226,7 @@ where
+@@ -3018,6 +3021,7 @@ where
+         &proof.initial_proof.opened_rows,
+         l0_num_lanes,
+         &proof.initial_proof.merkle_proof,
++        &proof.initial_proof.opened_salts,
+         config.merkle_hash,
+         strat(0),
+     ) {
+@@ -3128,6 +3132,7 @@ where
+                 &proof.final_proof.opened_rows,
+                 1usize << previous_log_lanes,
+                 &proof.final_proof.merkle_proof,
++                &proof.final_proof.opened_salts,
+                 config.merkle_hash,
+                 strat(level),
+             ) {
+@@ -3226,7 +3231,7 @@ where
              return false;
          };
          cap_index += 1;
@@ -201,6 +350,14 @@ index cd4a118..0bc5cf9 100644
          for _ in 0..ood_count(level + 1) {
              let point = challenger.sample_f128_vec(current_split_dim);
              let Some(&y) = proof.ood_values.get(ood_index) else {
+@@ -3297,6 +3302,7 @@ where
+             &opening.opened_rows,
+             1usize << previous_log_lanes,
+             &opening.merkle_proof,
++            &opening.opened_salts,
+             config.merkle_hash,
+             strat(level),
+         ) {
 diff --git a/crates/flock-core/src/proof.rs b/crates/flock-core/src/proof.rs
 index 3719295..ce1394d 100644
 --- a/crates/flock-core/src/proof.rs
@@ -235,7 +392,7 @@ index 1f37cba..b579555 100644
  
  /// A per-slot destination view into the padded union witness buffers: the
 diff --git a/crates/flock-hash/src/lib.rs b/crates/flock-hash/src/lib.rs
-index 6705e80..6be76f1 100644
+index 6705e80..a2da681 100644
 --- a/crates/flock-hash/src/lib.rs
 +++ b/crates/flock-hash/src/lib.rs
 @@ -7,7 +7,23 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -263,41 +420,45 @@ index 6705e80..6be76f1 100644
  
  /// A supported hash function.
  #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-@@ -16,6 +32,7 @@ pub enum HashKind {
+@@ -16,6 +32,9 @@ pub enum HashKind {
      Sha256,
      #[default]
      Blake3,
 +    Sha512,
++    /// SHA-512 nodes over `hm96-sha512/v1` leaves (verity.commitments.hm96): each leaf hides its column under a salt.
++    Hm96Sha512,
  }
  
  impl HashKind {
-@@ -25,6 +42,7 @@ impl HashKind {
+@@ -25,6 +44,8 @@ impl HashKind {
          match self {
              HashKind::Sha256 => "sha256",
              HashKind::Blake3 => "blake3",
 +            HashKind::Sha512 => "sha512",
++            HashKind::Hm96Sha512 => "hm96-sha512",
          }
      }
  
-@@ -36,6 +54,7 @@ impl HashKind {
+@@ -36,6 +57,8 @@ impl HashKind {
          match s.trim().to_ascii_lowercase().as_str() {
              "sha256" | "sha-256" => Ok(HashKind::Sha256),
              "blake3" => Ok(HashKind::Blake3),
 +            "sha512" | "sha-512" => Ok(HashKind::Sha512),
++            "hm96-sha512" => Ok(HashKind::Hm96Sha512),
              other => Err(format!(
                  "unknown hash {other:?}: expected \"sha256\" or \"blake3\""
              )),
-@@ -131,7 +150,7 @@ mod tests {
+@@ -131,7 +154,7 @@ mod tests {
      use crate::HashKind;
  
      /// Every variant, for tests that sweep both.
 -    pub(crate) const ALL: [HashKind; 2] = [HashKind::Sha256, HashKind::Blake3];
-+    pub(crate) const ALL: [HashKind; 3] = [HashKind::Sha256, HashKind::Blake3, HashKind::Sha512];
++    pub(crate) const ALL: [HashKind; 4] = [HashKind::Sha256, HashKind::Blake3, HashKind::Sha512, HashKind::Hm96Sha512];
  
      #[test]
      fn parses_and_round_trips() {
 diff --git a/crates/flock-merkle/src/hashing.rs b/crates/flock-merkle/src/hashing.rs
-index 7f40cbf..cccf29f 100644
+index 7f40cbf..c6c4fc0 100644
 --- a/crates/flock-merkle/src/hashing.rs
 +++ b/crates/flock-merkle/src/hashing.rs
 @@ -17,7 +17,7 @@ use rayon::prelude::{
@@ -351,7 +512,7 @@ index 7f40cbf..cccf29f 100644
          match kind {
              HashKind::Sha256 => sha256_blocks(len),
              HashKind::Blake3 => blake3_blocks(len),
-+            HashKind::Sha512 => (len as u64 + 17).div_ceil(128),
++            HashKind::Sha512 | HashKind::Hm96Sha512 => (len as u64 + 17).div_ceil(128),
          }
      }
  
@@ -396,7 +557,7 @@ index 7f40cbf..cccf29f 100644
 -            h.finalize().into()
 -        }
 -        HashKind::Blake3 => blake3_parent_chaining_value(left, right),
-+        HashKind::Sha512 => sha512_pair(left, right),
++        HashKind::Sha512 | HashKind::Hm96Sha512 => sha512_pair(left, right),
 +        k => narrow(k),
      }
  }
@@ -459,13 +620,13 @@ index 7f40cbf..cccf29f 100644
 -            }
 -        }
 -        HashKind::Blake3 => {
-+        HashKind::Sha512 => {
-             for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
+-            for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
 -                *o = blake3_leaf_chaining_value(leaf);
 -            }
 -        }
 -        HashKind::Sha256 => {
--            for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
++        HashKind::Sha512 => {
+             for (o, leaf) in out.iter_mut().zip(data.chunks(leaf_size)) {
 -                *o = Sha256::digest(leaf).into();
 +                *o = sha512_leaf(leaf);
              }
@@ -499,7 +660,7 @@ index 7f40cbf..cccf29f 100644
  }
  
  /// Finish a Merkle tree whose leaf level `tree[..num_leaves]` — and, when
-@@ -537,38 +529,8 @@ fn hash_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash], kind: HashKind)
+@@ -537,106 +529,34 @@ fn hash_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash], kind: HashKind)
          LEAF_COMPRESSIONS.fetch_add(out.len() as u64 * blocks(kind, leaf_size), Relaxed);
      }
      match kind {
@@ -540,7 +701,12 @@ index 7f40cbf..cccf29f 100644
      }
  }
  
-@@ -576,67 +538,20 @@ fn hash_leaves(data: &[u8], leaf_size: usize, out: &mut [Hash], kind: HashKind)
++/// SHA-512 column digests of equal leaves (the inner digests of `hm96-sha512/v1` leaves).
++pub(crate) fn hash_leaves_sha512(data: &[u8], leaf_size: usize, out: &mut [Hash]) {
++    hash_leaves(data, leaf_size, out, HashKind::Sha512);
++}
++
+ /// Nodes per rayon task in the batched BLAKE3 paths: enough to amortize task
  /// dispatch over many `hash_many` calls, small enough to stay cache-resident.
  const BLAKE3_GROUP: usize = 1024;
  
@@ -605,7 +771,7 @@ index 7f40cbf..cccf29f 100644
 -                    .zip(read_bytes.par_chunks(256))
 -                    .for_each(|(outs, children)| hash_quad(outs, children));
 -            }
-+    if kind != HashKind::Sha512 {
++    if kind != HashKind::Sha512 && kind != HashKind::Hm96Sha512 {
 +        narrow(kind);
 +    }
 +    if write.len() <= SERIAL_LEVEL_NODES {
@@ -617,7 +783,7 @@ index 7f40cbf..cccf29f 100644
      }
  }
  
-@@ -660,6 +575,26 @@ impl MerkleHash for Sha256MerkleHash {
+@@ -660,6 +580,26 @@ impl MerkleHash for Sha256MerkleHash {
      }
  }
  
@@ -644,8 +810,209 @@ index 7f40cbf..cccf29f 100644
  impl MerkleHash for Blake3MerkleHash {
      #[inline]
      fn hash_leaf(data: &[u8]) -> Hash {
+diff --git a/crates/flock-merkle/src/hm96.rs b/crates/flock-merkle/src/hm96.rs
+new file mode 100644
+index 0000000..d61bb03
+--- /dev/null
++++ b/crates/flock-merkle/src/hm96.rs
+@@ -0,0 +1,195 @@
++//! `hm96-sha512/v1` leaves for the proof's own Merkle trees (verity.commitments.hm96, PROTOCOL.md section 7; verity's patch).
++//!
++//! A leaf hides its column: x = SHA-512(column bytes), y = a 192-byte salt, c = SHA-512(salt_prefix || y),
++//! b = x XOR M(key) y over GF(2) (M the 512 x 1536 Hankel matrix of the key), leaf = SHA-512(leaf_prefix(key) || b || c).
++//! Nodes are SHA-512(left || right). An opening is the column and its salt. The key is the scheme's pinned default key, a
++//! constant of every statement that uses this hash (never chosen by a prover).
++//!
++//! Salts are an explicit input of a proof: [`begin`] installs one proof's salt context (the level-0 salts, which both
++//! repetitions share because they bind one root, and a source for every later tree's), [`tree`] consumes it tree by tree,
++//! and [`opened_salts`] returns the salts of a tree's opened positions.
++
++use std::collections::HashMap;
++use std::sync::{Arc, Mutex, OnceLock};
++
++use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
++use sha2::{Digest, Sha512};
++
++use crate::hashing::{Hash, hash_leaves_sha512};
++
++pub const SALT_BYTES: usize = 192;
++pub const KEY_BYTES: usize = 256;
++/// One leaf's salt as the proof carries it (192 bytes; six halves keep serde's array support).
++pub type Salt = [[u8; 32]; 6];
++
++const SALT_TAG: &[u8] = b"verity/hm96-sha512/salt/v1\0";
++const LEAF_TAG: &[u8] = b"verity/hm96-sha512/leaf/v1\0";
++const KEY_LABEL: &[u8] = b"verity/hm96-sha512/key/v1\0";
++
++/// `SHA-512(KEY_LABEL || u32be(i))` for i = 0..3, bit 2047 cleared.
++pub fn default_key() -> [u8; KEY_BYTES] {
++    let mut k = [0u8; KEY_BYTES];
++    for (i, c) in k.chunks_mut(64).enumerate() {
++        let mut h = Sha512::new();
++        h.update(KEY_LABEL);
++        h.update((i as u32).to_be_bytes());
++        c.copy_from_slice(&h.finalize());
++    }
++    k[KEY_BYTES - 1] &= 0x7f;
++    k
++}
++
++pub struct Consts {
++    pub salt_prefix: [u8; 128],
++    pub leaf_prefix: [u8; 128],
++    /// per salt byte position p and value v (index 256 p + v): the XOR of the columns 8p + s over the set bits s of v, as the
++    /// mask's eight little-endian 64-bit limbs
++    pub tables: Vec<[u64; 8]>,
++}
++
++fn key_bit(key: &[u8], t: usize) -> u64 {
++    ((key[t >> 3] >> (t & 7)) & 1) as u64
++}
++
++pub fn consts() -> &'static Consts {
++    static C: OnceLock<Consts> = OnceLock::new();
++    C.get_or_init(|| {
++        let key = default_key();
++        let mut salt_prefix = [0u8; 128];
++        salt_prefix[..SALT_TAG.len()].copy_from_slice(SALT_TAG);
++        let mut leaf_prefix = [0u8; 128];
++        leaf_prefix[..LEAF_TAG.len()].copy_from_slice(LEAF_TAG);
++        leaf_prefix[LEAF_TAG.len()..LEAF_TAG.len() + 64].copy_from_slice(&Sha512::digest(key));
++        let cols: Vec<[u64; 8]> = (0..8 * SALT_BYTES)
++            .map(|j| {
++                let mut c = [0u64; 8];
++                for i in 0..512 {
++                    c[i >> 6] |= key_bit(&key, i + j) << (i & 63);
++                }
++                c
++            })
++            .collect();
++        let mut tables = vec![[0u64; 8]; 256 * SALT_BYTES];
++        for p in 0..SALT_BYTES {
++            for v in 1..256usize {
++                let prev = tables[256 * p + (v & (v - 1))];
++                let col = cols[8 * p + v.trailing_zeros() as usize];
++                let t = &mut tables[256 * p + v];
++                for k in 0..8 {
++                    t[k] = prev[k] ^ col[k];
++                }
++            }
++        }
++        Consts { salt_prefix, leaf_prefix, tables }
++    })
++}
++
++/// `M(key) y` as 64 bytes (bit i is byte i >> 3, bit i & 7).
++pub fn mask(salt: &[u8]) -> [u8; 64] {
++    let t = &consts().tables;
++    let mut acc = [0u64; 8];
++    for (p, &v) in salt[..SALT_BYTES].iter().enumerate() {
++        let e = &t[256 * p + v as usize];
++        for k in 0..8 {
++            acc[k] ^= e[k];
++        }
++    }
++    let mut out = [0u8; 64];
++    for k in 0..8 {
++        out[8 * k..8 * k + 8].copy_from_slice(&acc[k].to_le_bytes());
++    }
++    out
++}
++
++/// The tree leaf of the column digest `x` under `salt`.
++pub fn leaf(x: &Hash, salt: &[u8]) -> Hash {
++    let c = consts();
++    let m = mask(salt);
++    let mut b = [0u8; 64];
++    for (i, (xb, mb)) in x.as_flattened().iter().zip(m).enumerate() {
++        b[i] = xb ^ mb;
++    }
++    let mut hc = Sha512::new();
++    hc.update(c.salt_prefix);
++    hc.update(&salt[..SALT_BYTES]);
++    let cd = hc.finalize();
++    let mut h = Sha512::new();
++    h.update(c.leaf_prefix);
++    h.update(b);
++    h.update(cd);
++    flock_hash::digest_from(&h.finalize())
++}
++
++pub fn salt_of(b: &[u8]) -> Salt {
++    let mut s: Salt = [[0u8; 32]; 6];
++    s.as_flattened_mut().copy_from_slice(&b[..SALT_BYTES]);
++    s
++}
++
++/// One proof's salts (see the module docs).
++pub struct SaltContext {
++    level0: Arc<Vec<u8>>,
++    draw: Box<dyn FnMut(usize) -> Vec<u8> + Send>,
++    trees: usize,
++    by_root: HashMap<Hash, Arc<Vec<u8>>>,
++}
++
++static CTX: Mutex<Option<SaltContext>> = Mutex::new(None);
++
++fn ctx() -> std::sync::MutexGuard<'static, Option<SaltContext>> {
++    CTX.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
++}
++
++/// Install one proof's salt context: `level0` (192 bytes per level-0 leaf) for its first tree, `draw(n)` (192 n bytes) for each
++/// later tree.
++pub fn begin(level0: Arc<Vec<u8>>, draw: Box<dyn FnMut(usize) -> Vec<u8> + Send>) {
++    *ctx() = Some(SaltContext { level0, draw, trees: 0, by_root: HashMap::new() });
++}
++
++/// Remove the proof's salt context (its salts are dropped).
++pub fn end() {
++    *ctx() = None;
++}
++
++/// The next tree's salts from the context (a device prover's trees take theirs here, in build order).
++pub fn next_tree_salts(n: usize) -> Arc<Vec<u8>> {
++    let mut g = ctx();
++    let c = g.as_mut().expect("hm96-sha512 tree without a salt context (flock_merkle::hm96::begin)");
++    let s = if c.trees == 0 {
++        assert_eq!(c.level0.len(), n * SALT_BYTES, "hm96-sha512: the level-0 salts do not match the first tree's leaves");
++        c.level0.clone()
++    } else {
++        let s = (c.draw)(n);
++        assert_eq!(s.len(), n * SALT_BYTES, "hm96-sha512: a salt draw of the wrong size");
++        Arc::new(s)
++    };
++    c.trees += 1;
++    s
++}
++
++/// The tree over `num_leaves` equal leaves of `data`: salted leaves from the context, SHA-512 nodes; flat layout as
++/// `merkle_tree` (leaves, then each level, root last).
++pub fn tree(data: &[u8], num_leaves: usize) -> Vec<Hash> {
++    let salts = next_tree_salts(num_leaves);
++    tree_with_salts(data, num_leaves, salts)
++}
++
++/// [`tree`] with its salts given (a test's, or a verifier's reference).
++pub fn tree_with_salts(data: &[u8], num_leaves: usize, salts: Arc<Vec<u8>>) -> Vec<Hash> {
++    let leaf_size = data.len() / num_leaves;
++    let mut t: Vec<Hash> = vec![Hash::default(); 2 * num_leaves - 1];
++    hash_leaves_sha512(data, leaf_size, &mut t[..num_leaves]);
++    t[..num_leaves].par_iter_mut().enumerate().for_each(|(i, x)| *x = leaf(x, &salts[i * SALT_BYTES..(i + 1) * SALT_BYTES]));
++    let t = crate::hashing::merkle_tree_from_prehashed_level(t, num_leaves, flock_hash::HashKind::Sha512, 0);
++    if let Some(c) = ctx().as_mut() {
++        c.by_root.insert(*t.last().unwrap(), salts);
++    }
++    t
++}
++
++/// The salts of `tree`'s leaves at `queries`, in order (empty when the tree was not built salted in this context).
++pub fn opened_salts(tree: &[Hash], queries: &[usize]) -> Vec<Salt> {
++    let g = ctx();
++    let Some(s) = g.as_ref().and_then(|c| c.by_root.get(tree.last().unwrap())) else { return Vec::new() };
++    queries.iter().map(|&q| salt_of(&s[q * SALT_BYTES..])).collect()
++}
 diff --git a/crates/flock-merkle/src/lib.rs b/crates/flock-merkle/src/lib.rs
-index 5cb3f05..2df6c78 100644
+index 5cb3f05..7d907a4 100644
 --- a/crates/flock-merkle/src/lib.rs
 +++ b/crates/flock-merkle/src/lib.rs
 @@ -10,7 +10,7 @@ use rayon::current_num_threads;
@@ -657,45 +1024,56 @@ index 5cb3f05..2df6c78 100644
      hash_pair, hash_parents_serial, merkle_tree_from_prehashed_level,
  };
  #[cfg(test)]
-@@ -29,6 +29,7 @@ pub fn merkle_root(data: &[u8], num_leaves: usize, kind: HashKind) -> Hash {
+@@ -19,6 +19,7 @@ use crate::hashing::{
+     blake3_leaf_size_is_batchable, blake3_parent_chaining_value,
+ };
+ mod hashing;
++pub mod hm96;
+ 
+ /// Compute the Merkle root of `data` split into `num_leaves` equal-sized leaves.
+ ///
+@@ -29,6 +30,8 @@ pub fn merkle_root(data: &[u8], num_leaves: usize, kind: HashKind) -> Hash {
      match kind {
          HashKind::Sha256 => merkle_root_with::<Sha256MerkleHash>(data, num_leaves),
          HashKind::Blake3 => merkle_root_with::<Blake3MerkleHash>(data, num_leaves),
 +        HashKind::Sha512 => merkle_root_with::<Sha512MerkleHash>(data, num_leaves),
++        HashKind::Hm96Sha512 => panic!("hm96-sha512 trees are built by hm96::tree (salted leaves)"),
      }
  }
  
-@@ -62,6 +63,7 @@ pub fn merkle_tree(data: &[u8], num_leaves: usize, kind: HashKind) -> Vec<Hash>
+@@ -62,6 +65,8 @@ pub fn merkle_tree(data: &[u8], num_leaves: usize, kind: HashKind) -> Vec<Hash>
      match kind {
          HashKind::Sha256 => merkle_tree_with::<Sha256MerkleHash>(data, num_leaves),
          HashKind::Blake3 => merkle_tree_with::<Blake3MerkleHash>(data, num_leaves),
 +        HashKind::Sha512 => merkle_tree_with::<Sha512MerkleHash>(data, num_leaves),
++        HashKind::Hm96Sha512 => hm96::tree(data, num_leaves),
      }
  }
  
-@@ -129,6 +131,7 @@ pub fn merkle_tree_sequential(data: &[u8], num_leaves: usize, kind: HashKind) ->
+@@ -129,6 +134,8 @@ pub fn merkle_tree_sequential(data: &[u8], num_leaves: usize, kind: HashKind) ->
      match kind {
          HashKind::Sha256 => merkle_tree_sequential_with::<Sha256MerkleHash>(data, num_leaves),
          HashKind::Blake3 => merkle_tree_sequential_with::<Blake3MerkleHash>(data, num_leaves),
 +        HashKind::Sha512 => merkle_tree_sequential_with::<Sha512MerkleHash>(data, num_leaves),
++        HashKind::Hm96Sha512 => panic!("hm96-sha512 trees are built by hm96::tree (salted leaves)"),
      }
  }
  
-@@ -252,6 +255,9 @@ pub fn verify_merkle_proof_capped(
+@@ -252,6 +259,9 @@ pub fn verify_merkle_proof_capped(
          HashKind::Blake3 => verify_merkle_proof_capped_with::<Blake3MerkleHash>(
              cap, num_leaves, leaf_hash, index, path,
          ),
-+        HashKind::Sha512 => verify_merkle_proof_capped_with::<Sha512MerkleHash>(
++        HashKind::Sha512 | HashKind::Hm96Sha512 => verify_merkle_proof_capped_with::<Sha512MerkleHash>(
 +            cap, num_leaves, leaf_hash, index, path,
 +        ),
      }
  }
  
-@@ -307,6 +313,9 @@ pub fn verify_merkle_proof(
+@@ -307,6 +317,9 @@ pub fn verify_merkle_proof(
          HashKind::Blake3 => {
              verify_merkle_proof_with::<Blake3MerkleHash>(root, leaf_hash, index, proof)
          }
-+        HashKind::Sha512 => {
++        HashKind::Sha512 | HashKind::Hm96Sha512 => {
 +            verify_merkle_proof_with::<Sha512MerkleHash>(root, leaf_hash, index, proof)
 +        }
      }
@@ -871,14 +1249,14 @@ index 1da2c13..a564c48 100644
  ) -> ChainMaterials {
      let MergedChain {
 diff --git a/crates/flock-transcript/src/challenger.rs b/crates/flock-transcript/src/challenger.rs
-index 0b80c6c..22c006d 100644
+index 0b80c6c..cc3b104 100644
 --- a/crates/flock-transcript/src/challenger.rs
 +++ b/crates/flock-transcript/src/challenger.rs
 @@ -618,6 +618,7 @@ impl FsChallenger {
              state: match kind {
                  HashKind::Sha256 => FsState::Sha256(Sha256::new()),
                  HashKind::Blake3 => FsState::Blake3(Box::new(Hasher::new())),
-+                HashKind::Sha512 => panic!("no SHA-512 Fiat-Shamir transcript (SHA-512 is a Merkle hash in this build)"),
++                HashKind::Sha512 | HashKind::Hm96Sha512 => panic!("no SHA-512 Fiat-Shamir transcript (SHA-512 is a Merkle hash in this build)"),
              },
              #[cfg(feature = "hash-count")]
              n_absorbed: 0,
@@ -886,7 +1264,7 @@ index 0b80c6c..22c006d 100644
              let h: [u8; 32] = Sha256::digest(pre).into();
              has_leading_zero_bits(&h, bits)
          }
-+        HashKind::Sha512 => panic!("no SHA-512 proof of work"),
++        HashKind::Sha512 | HashKind::Hm96Sha512 => panic!("no SHA-512 proof of work"),
          HashKind::Blake3 => {
              let h = hash(&blake3_pow_preimage(state_digest, nonce));
              has_leading_zero_bits(h.as_bytes(), bits)
@@ -894,7 +1272,7 @@ index 0b80c6c..22c006d 100644
          HashKind::Blake3 => blake3_pow_scan(state_digest, start, len, bits),
          HashKind::Sha256 => (start..start.saturating_add(len))
              .find(|&n| pow_has_leading_zero_bits(state_digest, n, bits, kind)),
-+        HashKind::Sha512 => panic!("no SHA-512 proof of work"),
++        HashKind::Sha512 | HashKind::Hm96Sha512 => panic!("no SHA-512 proof of work"),
      }
  }
  

@@ -52,11 +52,10 @@ pub const PT_LOCAL: usize = 24;
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
-    let id = if cfg!(feature = "sha512") { "flock-leaf/sha512-unsalted" } else { "flock-leaf/sha256-unsalted" };
-    json!({"id": id, "salt_bytes": 0,
-           "target": {"scheme": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes_per_leaf": 192,
-                      "salt_source": "os generator, one draw per leaf", "key": "default_key, a statement constant for every tree",
-                      "key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key()))}})
+    let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
+    json!({"id": id, "inner": "sha512 column digest", "salt_bytes": salt, "salt_source": "os generator, one draw per leaf",
+           "key": "default_key, a statement constant for every tree",
+           "key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key()))})
 }
 
 /// `hm96-sha512/v1`'s pinned key: `SHA-512("verity/hm96-sha512/key/v1\0" || u32be(i))` for i = 0..3, bit 2047 cleared.
@@ -1378,7 +1377,35 @@ mod tests {
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
         // hashlib.sha512(verity.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
-        assert_eq!(super::leaf_scheme()["target"]["key_sha512"],
+        assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
+    }
+
+    /// flock_merkle::hm96 (verity's Flock patch) against core's verity.commitments.hm96 vectors_sha512.json: the key, both
+    /// prefixes, the default-key masks and the leaves over given inner digests.
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn hm96_leaves_match_core_vectors() {
+        use flock_merkle::hm96;
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../..");
+        let Ok(text) = std::fs::read_to_string(repo.join("packages/verity/src/verity/commitments/hm96/vectors_sha512.json")) else {
+            return;
+        };
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let hx = |s: &serde_json::Value| super::hexb(s.as_str().unwrap()).unwrap();
+        assert_eq!(hm96::default_key().to_vec(), hx(&v["default_key"]));
+        assert_eq!(hm96::consts().salt_prefix.to_vec(), hx(&v["salt_prefix"]));
+        assert_eq!(hm96::consts().leaf_prefix.to_vec(), hx(&v["leaf_prefix_default_key"]));
+        let mut n = 0;
+        for m in v["masks"].as_array().unwrap().iter().filter(|m| m["key"] == "default") {
+            assert_eq!(hm96::mask(&hx(&m["salt"])).to_vec(), hx(&m["mask"]), "{}", m["salt_case"]);
+            n += 1;
+        }
+        for l in v["leaves"].as_array().unwrap() {
+            let x = flock_hash::digest_from(&hx(&l["inner_digest"]));
+            assert_eq!(hm96::leaf(&x, &hx(&l["salt"])).as_flattened().to_vec(), hx(&l["leaf"]));
+            n += 1;
+        }
+        assert!(n >= 8, "{n} vectors");
     }
 }

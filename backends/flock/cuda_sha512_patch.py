@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SHA-512 Merkle trees on the device for verity/flock-circuit: install backends/flock/cuda/sha512.cuh into a Flock b684b12
+"""SHA-512 Merkle trees with hm96-sha512/v1 leaves on the device for verity/flock-circuit: install backends/flock/cuda/sha512.cuh into a Flock b684b12
 checkout and widen every Merkle node from 32 to 64 bytes (FLOCK_HB): the tree kernels, the node gathers and cap copies, the
 proof writer, and the tree allocations and cap observations of the chunk and circuit provers and the Ligerito levels.
 
@@ -51,14 +51,29 @@ edit("prove_ffi.cu", [
     ("(size_t)(2 * l0_bl - 1) * 32)", "(size_t)(2 * l0_bl - 1) * FLOCK_HB)"),
     ("l0_cap.size() * 32", "l0_cap.size() * FLOCK_HB"),
 ])
+SALTS = ("        W.hashes(lo.path);\n",
+         "        W.hashes(lo.path);\n"
+         "        if (g_hm96.cb) { W.u64(lo.salts.size() / 192); W.buf.insert(W.buf.end(), lo.salts.begin(), lo.salts.end()); }\n")
 for f in ("prove_chunk.cuh", "prove_circuit.cuh"):
     edit(f, [
         ("(size_t)(2 * l0_bl - 1) * 32)", "(size_t)(2 * l0_bl - 1) * FLOCK_HB)"),
         ("l0_cap.size() * 32", "l0_cap.size() * FLOCK_HB", 2),
+        SALTS,
     ])
+edit("prove_circuit.cuh", [
+    ("uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n",
+     "uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n"
+     "    Hm96Guard hm96_guard(N->hm96_cb, N->hm96_ctx, N->hm96_prefixes, N->hm96_tables);\n"),
+])
 edit("ligerito_f256.cuh", [
     ("out.initial_cap.size() * 32", "out.initial_cap.size() * FLOCK_HB"),
     ("(size_t)(2 * bl - 1) * 32)", "(size_t)(2 * bl - 1) * FLOCK_HB)"),
     ("cap.data(), cap.size() * 32", "cap.data(), cap.size() * FLOCK_HB"),
+    ("    std::vector<MHash> path;   // capped per-query siblings, sample order\n",
+     "    std::vector<MHash> path;   // capped per-query siblings, sample order\n"
+     "    std::vector<uint8_t> salts;   // hm96-sha512: each opened row's 192-byte salt, in sample order\n"),
+    ("                                               caps[open_level]);\n",
+     "                                               caps[open_level]);\n"
+     "        open.salts = hm96_opened_salts(d_prev_tree, q_out);\n"),
 ])
 print("cuda_sha512_patch: SHA-512 Merkle nodes (64 bytes) installed")
