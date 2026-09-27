@@ -16,17 +16,30 @@ XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(
                            register=False)
 PAIR = bind(CompositeDefinition("OneStageTestPair", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                 lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
+SCHEME = "frame-v3-sha512/hm96-sha512"
+LAW = {"law": "subset", "k": 2}
 ROOTS = {"x": "ab" * 64, "out": "cd" * 64}
-LEAVES = {"x": 6, "out": 6}
-DOMAINS = {"x": "01" * 64, "out": "02" * 64}
-SERVED = {"kind": "served", "row": 101}
+SERVED = {"kind": "served", "row": 101, "run": "r-test"}
 
 
-def _registration(n: int = 6, source=SERVED):
+def _ports(prog, q, n: int) -> dict:
+    part = P.partition(prog, q)
+    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-test")}
+            for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", 2 * n))}
+
+
+def _registration(n: int = 6, window=SERVED):
     prog = P.population_program(PAIR, n)
     q = P.template_instance_query(PAIR.id)
-    return prog, q, R.record("frame-v3-sha512/hm96-sha512", ROOTS, LEAVES, DOMAINS, prog, q, source,
-                             registered_utc="2026-09-27T05:40:00Z")
+    ports = _ports(prog, q, n)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    return prog, q, R.record(prog, q, LAW, SCHEME, roots, window, leaf_layer="ee" * 64)
+
+
+def _check(rec, prog, q, **kw):
+    n = P.units(prog, q)
+    args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
+    return R.check(rec, prog, q, **args)
 
 
 def test_the_query_makes_each_instance_one_unit():
@@ -55,36 +68,64 @@ def test_partition_digest_is_the_named_query_over_the_program():
     assert P.digest(obj) != P.digest(P.partition(P.population_program(PAIR, 7), q))
 
 
-def test_registration_is_checked_by_content():
+def test_registration_v1_passes_r1_to_r6():
     prog, q, rec = _registration(6)
-    assert R.check(rec, prog, q).ok
-    assert R.digest(rec) == R.digest(dict(rec)) and len(R.digest(rec)) == 128
-    for key, value, code in (("population", 7, "population"), ("partition_digest", "0" * 128, "partition-digest"),
-                             ("leaves", {"x": 6}, "leaves"), ("domains", {"x": "01" * 64}, "domains"), ("format", "x", "format"),
-                             ("commitment", {"scheme": "s", "source": {"kind": "guess"}}, "commitment")):
-        assert code in R.check({**rec, key: value}, prog, q).codes
-    assert "partition" in R.check(rec, P.population_program(PAIR, 5), q).codes
-    assert "keys" in R.check({**rec, "extra": 1}, prog, q).codes
+    assert rec["format"] == "verity/registration/v1" and rec["protocol"] == "verity/sampled-proofs/one-stage/v1"
+    assert rec["partition"] == P.digest(P.partition(prog, q)) and rec["query"] == R.query_digest(q) and rec["population"] == 6
+    assert _check(rec, prog, q).ok
+    assert len(R.digest(rec)) == 128 and R.digest(rec) == R.digest(dict(rec))
+
+
+def test_registration_refusals():
+    prog, q, rec = _registration(6)
+    cases = [({"format": "verity/registration/v0"}, "R1-protocol"), ({"law": {"law": "subset", "k": 3}}, "R1-law"),
+             ({"window": {"kind": "guess"}}, "window"), ({"program": "0" * 128}, "R2-program"),
+             ({"query": "0" * 128}, "R2-query"), ({"partition": "0" * 128}, "R2-partition"), ({"population": 7}, "R2-population"),
+             ({"scheme": "frame-v3/blake3"}, "R3-scheme"), ({"roots": rec["roots"][:1]}, "R3-ports"),
+             ({"roots": [dict(rec["roots"][0], leaves=5), rec["roots"][1]]}, "R3-leaves"),
+             ({"roots": [dict(rec["roots"][0], domain="00" * 64), rec["roots"][1]]}, "R3-domain"),
+             ({"leaf_layer": "ff" * 64}, "R4-leaf-layer"), ({"anchors": ["weights"]}, "R5-anchors"),
+             ({"previous": "11" * 64}, "R6-previous")]
+    for change, code in cases:
+        assert code in _check({**rec, **change}, prog, q).codes, code
+    assert "R2-partition" in _check(rec, P.population_program(PAIR, 5), q).codes
+    assert "keys" in _check({**rec, "extra": 1}, prog, q).codes
+    assert _check({**rec, "previous": R.digest(rec)}, prog, q, log=[rec]).codes == ("R6-window",)
+
+
+def test_served_domains_bind_program_partition_port_schema_leaves_and_run():
+    base = ("a" * 128, "b" * 128, "x", "hm96-sha512/row/v1", 6, "r1")
+    d = R.served_domain(*base)
+    assert len(d) == 128
+    for i, other in ((0, "c" * 128), (1, "c" * 128), (2, "cs"), (3, "u16"), (4, 7), (5, "r2")):
+        assert R.served_domain(*base[:i], other, *base[i + 1:]) != d
+
+
+def test_receipt_names_the_record():
+    _, _, rec = _registration(6)
+    r = R.receipt(rec, "verifier-test", received="2026-09-27T06:00:00Z")
+    assert r == {"format": "verity/registration-receipt/v1", "registration": R.digest(rec), "verifier": "verifier-test",
+                 "received": "2026-09-27T06:00:00Z"}
 
 
 def test_registration_holds_the_public_file():
     _, _, rec = _registration(6)
-    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", ROOTS, DOMAINS, 6).ok
-    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", {**ROOTS, "x": "ef" * 64}, DOMAINS, 6).codes == ("roots",)
-    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", ROOTS, {**DOMAINS, "out": "03" * 64}, 6).codes == ("domains",)
-    assert R.matches_public(rec, "frame-v3/blake3", ROOTS, DOMAINS, 5).codes == ("scheme", "population")
+    doms = {r["port"]: r["domain"] for r in rec["roots"]}
+    assert R.matches_public(rec, SCHEME, ROOTS, doms, 6).ok
+    assert R.matches_public(rec, SCHEME, {**ROOTS, "x": "ef" * 64}, doms, 6).codes == ("roots",)
+    assert R.matches_public(rec, SCHEME, ROOTS, {**doms, "out": "03" * 64}, 6).codes == ("domains",)
+    assert R.matches_public(rec, "frame-v3/blake3", ROOTS, doms, 5).codes == ("scheme", "population")
 
 
-def test_the_source_says_served_or_stand_in():
-    _, _, rec = _registration(6, source={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})
-    assert rec["commitment"]["source"]["kind"] == "stand-in"
-    prog, q, served = _registration(6)
-    assert served["commitment"]["source"]["kind"] == "served" and R.check(served, prog, q).ok
+def test_the_window_says_served_or_stand_in():
+    prog, q, rec = _registration(6, window={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})
+    assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
 
 
 def test_draw_checks():
     _, _, rec = _registration(6)
     law = D.parse_law("subset:2")
+    assert law == LAW
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_draw(good, rec, law).ok
     assert D.check_draw({**good, "units": [4, 1]}, rec, law).codes == ("units-order",)
@@ -110,7 +151,7 @@ def test_profile_counts_wrong_units():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     p = audit.profile(rec, d, 0.25)
-    assert p.sizes == (6,) and p.drawn == {"unit": 2} and p.levels[0].query == rec["partition_digest"]
+    assert p.sizes == (6,) and p.drawn == {"unit": 2} and p.levels[0].query == rec["partition"]
     assert p.accept(1) == Fraction(comb(5, 2), comb(6, 2)) and p.accept(5) == 0
     assert 0 < audit.wrong_units_bound(p) < 6
 
@@ -119,11 +160,18 @@ def test_audit_record_needs_every_check_and_verdict():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     law = D.parse_law("subset:2")
-    ok = audit.audit_record(rec, d, law, [1, 4], 2, {"circuit_sha512": "c8"}, {"m0": {"accepted": True}}, 0.25)
+    rcpt = R.receipt(rec, "verifier-test")
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    ok = audit.audit_record(rec, rcpt, d, law, [1, 4], 2, {"circuit_sha512": "c8"}, {"lean": lean}, 0.25, sessions=["aa" * 64])
     assert ok["accepted"] and ok["complete"] and ok["profile"]["levels"][0]["draw"] == {"subset": 2}
     assert ok["proved_units"] == [1, 4] and ok["law"] == law and ok["wrong_units"]["of"] == 6
-    part = audit.audit_record(rec, d, law, [1, 4], 2, {}, {"m0": {"accepted": True}, "lean": {"accepted": None}}, 0.25)
-    assert part["accepted"] and not part["complete"]
-    for verdicts, proved in (({"m0": {"accepted": False}}, [1, 4]), ({"m0": {"accepted": True}}, [1, 5]), ({}, [1, 4])):
-        r = audit.audit_record(rec, d, law, proved, 2, {}, verdicts, 0.25)
-        assert not r["accepted"] and r["profile"] is None
+    ip = ok["integrity_profile"]
+    assert ip["format"] == "verity/integrity-profile/v1" and ip["drawn"] == [1, 4] and ip["registration"] == R.digest(rec)
+    assert ip["partition"] == rec["partition"] and ip["evidence"]["verdict"] == "dd" * 64 and ip["evidence"]["sessions"] == ["aa" * 64]
+    part = audit.audit_record(rec, rcpt, d, law, [1, 4], 2, {}, {"m0": {"accepted": True}, "lean": {"accepted": None}}, 0.25)
+    assert part["accepted"] and not part["complete"] and part["integrity_profile"]["evidence"]["verdict"] is None
+    bad_receipt = dict(rcpt, registration="00" * 64)
+    for r_, verdicts, proved in ((rcpt, {"m0": {"accepted": False}}, [1, 4]), (rcpt, {"m0": {"accepted": True}}, [1, 5]),
+                                 (rcpt, {}, [1, 4]), (bad_receipt, {"m0": {"accepted": True}}, [1, 4])):
+        r = audit.audit_record(rec, r_, d, law, proved, 2, {}, verdicts, 0.25)
+        assert not r["accepted"] and r["profile"] is None and r["integrity_profile"] is None

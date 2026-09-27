@@ -23,12 +23,17 @@ import sys
 import time
 from pathlib import Path
 
+from verity.commitments.identity import identity_digest
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 from verity.ir.codec import program_digest
 from verity.ir.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity_one_stage import audit, draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
+SCHEME = "frame-v3-sha512/hm96-sha512"
+STAND_IN_BINDING = "verity/flock-ir-frame/binding/v1"   # M0's set-bound frame domains (verity_flock.ir_frame.BINDING_TAG)
 LEAN_VERIFY_NOT_RUN = ("flock-verify parses M0's previous statement formats; the eb90718f format (hm96-sha512 rows in the "
                        "circuit, SHA-512 statement and record) is the Lean verifier lane's follow-up to #113")
 
@@ -76,8 +81,8 @@ def bindings(meta: dict, header: dict, rec: dict, cls: str) -> dict:
     n = rec["population"]
     got = {"partition": meta.get("partition"), "program": meta.get("program_sha512"),
            "indices": header["units"]["indices"] == list(range(n)), "classes": header["units"].get("classes") == [cls] * n}
-    ok = {"partition": got["partition"] == {"rule": P.FORMAT, "digest": rec["partition_digest"]},
-          "program": got["program"] == rec["partition"]["program"], "indices": got["indices"], "classes": got["classes"]}
+    ok = {"partition": got["partition"] == {"rule": P.FORMAT, "digest": rec["partition"]},
+          "program": got["program"] == rec["program"], "indices": got["indices"], "classes": got["classes"]}
     return {"ok": all(ok.values()), "each": ok, "class_sha512": cls}
 
 
@@ -86,15 +91,32 @@ def public_header(stage_dir: Path, n: int) -> dict:
         return json.loads(f.readline())
 
 
-def leaves(meta: dict, n: int) -> dict[str, int]:
-    out = {name: n for name, *_ in meta["ports"]}
-    out.update({name: n * words for name, words in meta["out_ports"]})
+def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
+    """Each port the layout derives: its schema and leaf count."""
+    out = {name: ("hm96-sha512/row/v1", n) for name, *_ in meta["ports"]}
+    out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
     return out
+
+
+def stand_in_ports(s: InputSet, meta: dict, n: int) -> dict[str, dict]:
+    """The verifier's own derivation of the stand-in's domains: M0's frame domains bound to the set, the range, the port
+    and its schema."""
+    out = {}
+    for p, (schema, count) in ports(meta, n).items():
+        b = identity_digest(STAND_IN_BINDING, {"set": s.name, "content_digest": s.content_digest, "lo": 0, "hi": n, "port": p,
+                                               "schema": schema})
+        out[p] = {"leaves": count, "domain": CommitmentDomain(bytes.fromhex(b), -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
+    return out
+
+
+def registered_roots(header: dict, want: dict[str, dict]) -> list[dict]:
+    fv = header["frame_v3"]
+    return [{"port": p, "root": fv["roots"][p], "leaves": want[p]["leaves"], "domain": fv["domain_ids"][p]} for p in want]
 
 
 def stand_in(set_dir: str) -> dict:
     prov = json.loads((Path(set_dir) / "manifest.json").read_text()).get("provenance", {})
-    return {"kind": "stand-in", "of": "vllm-v1 commitment of a served run", "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
+    return {"kind": "stand-in", "of": "vllm-v1 commitment of a served run", "input_set": Path(set_dir).name, "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
             "run_root": prov.get("run_root"), "model": prov.get("model"), "program_digests": prov.get("program_digests"),
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
@@ -141,7 +163,7 @@ def proved_units(header: dict, live: dict) -> list[int]:
     return [pop[u] for u in (live.get("unit_draw") or {}).get("units", [])]
 
 
-def audit_session(rec: dict, program, query, header: dict, law: dict, record, live, lean: str, out: Path, delta: float) -> dict:
+def audit_session(rec: dict, receipt: dict, header: dict, law: dict, record, live, lean: str, out: Path, delta: float) -> dict:
     """Every check on one session, then the audit record."""
     draw = (record or {}).get("unit_draw")
     verifier = (record or {}).get("verdict") or {}
@@ -156,12 +178,13 @@ def audit_session(rec: dict, program, query, header: dict, law: dict, record, li
                         "why": verifier.get("why"), "tool": "flock-circuit serve (M0, PR #83 eb90718f)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
                             "tool": "flock-verify draw-test (PR #113 9d0d53df)"},
-        "lean-verify": {"accepted": None, "why": LEAN_VERIFY_NOT_RUN, "tool": "flock-verify verify --archive"},
+        "lean-verify": {"accepted": None, "of_record": True, "why": LEAN_VERIFY_NOT_RUN, "tool": "flock-verify verify --archive"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
-    return audit.audit_record(rec, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1), statement,
-                              verdicts, delta)
+    sessions = [sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))]
+    return audit.audit_record(rec, receipt, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1),
+                              statement, verdicts, delta, sessions=sessions)
 
 
 def main() -> int:
@@ -204,14 +227,18 @@ def main() -> int:
 
     # 3. registration, before any draw; the verifier holds its own public file to it
     fv = header["frame_v3"]
-    rec = R.record(header["scheme"], fv["roots"], leaves(st["meta"], n), fv["domain_ids"], program, query, stand_in(a.set))
+    want = stand_in_ports(s, st["meta"], n)
+    leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
+    rec = R.record(program, query, law, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": R.check(rec, program, query).to_json(),
+    checks = {"registration": R.check(rec, program, query, law, SCHEME, want, leaf_layer=leaf_layer).to_json(),
               "public": R.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
+    receipt = R.receipt(rec, "one-stage-e2e verifier (a0.py)")
+    (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
         checks["bindings"] = bindings(st["meta"], header, rec, unit_class(a.set, a.m0_pythonpath, out))
     summary["registration_digest"] = R.digest(rec)
-    summary["partition_digest"] = rec["partition_digest"]
+    summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
         summary["checks"] = checks
@@ -223,25 +250,32 @@ def main() -> int:
     t = time.time()
     record, live = session(a.bin, st, n, law_text, a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
-    result = audit_session(rec, program, query, header, law, record, live, a.lean, out / "session", a.delta)
+    result = audit_session(rec, receipt, header, law, record, live, a.lean, out / "session", a.delta)
     result["checks_before_draw"] = checks
     result["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "tp_s", "proof_bytes", "k_log", "units")}
     result["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
-    summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "proved_units", "wrong_units", "checks")}
+    summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "proved_units", "wrong_units", "checks", "integrity_profile")}
     summary["audit"]["verdicts"] = {k: v.get("accepted") for k, v in result.get("verdicts", {}).items()}
     summary["timing"] = result["timing"]
 
     # negatives: each must be refused
     neg: dict[str, dict] = {}
-    other = dict(rec, roots={**rec["roots"], next(iter(rec["roots"])): "00" * 64})
+    first = rec["roots"][0]["port"]
+    other = dict(rec, roots=[dict(rec["roots"][0], root="00" * 64), *rec["roots"][1:]])
     v = R.matches_public(other, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"])
     neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], next(iter(rec["roots"])): "00" * 64},
-                         header["instances"])
+    v = R.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], first: "00" * 64}, header["instances"])
     neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, P.population_program(template, n - 1), query)
+    v = R.check(rec, P.population_program(template, n - 1), query, law, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
+                leaf_layer=leaf_layer)
+    neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(rec, program, query, D.parse_law(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
     if a.bind:
         other_part = P.digest(P.partition(P.population_program(template, n - 1), query))
         b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
@@ -273,11 +307,14 @@ def main() -> int:
     tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
     theader = public_header(tst["dir"], tn)
-    tfv = theader["frame_v3"]
-    trec = R.record(theader["scheme"], tfv["roots"], leaves(tst["meta"], tn), tfv["domain_ids"], tprog, query,
-                    {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"})
+    tlaw = D.parse_law("subset:2")
+    twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
+    trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
+                    {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},
+                    leaf_layer=sha512_file(tst["dir"] / f"pub-{tn}.bin"))
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
-    tres = audit_session(trec, tprog, query, theader, D.parse_law("subset:2"), trecord, tlive, a.lean, out / "session-tampered", a.delta)
+    tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), theader, tlaw, trecord, tlive, a.lean,
+                         out / "session-tampered", a.delta)
     neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None,
                                 "verifier": ((trecord or {}).get("verdict") or {}).get("why"),
                                 "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
