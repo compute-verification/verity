@@ -1112,6 +1112,16 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1: exactly
   `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
+- **Tail outputs, packed ranges and leaf cuts (from PR #83 `15260468`, GEMM).** META may name `out_net`, the circuit whose
+  output group holds the returned outputs (default `unit`), with `out_net_ports`, and `leaf_cuts`, `[unit, u, port, leaf]`.
+  - When a tail stage returns the outputs: the unit range need not be a power of two and the units return none; that stage's
+    only output group is one 16-bit port per output word (`16 · words` a power of two); and the `Out` region is that group,
+    free bits `[0, log2(16 · words))` and the stage range's slot bits, valued at each VU's output words (u16 LE).
+  - Any range may be packed except those a region reads (`hm96`, `out_net`, the mask).
+  - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
+    the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
+    wires.
+  - Set 13 (GEMM k1024, recorded on a CPU pod) agrees 27 of 27.
 - **The template queries** (`Flock.TemplateQuery`; core's `TemplatePartition`, #131): `Q_template_instance` v0 (`{template}`, a
   string) and `Q_template_instances` v0 (`{templates}`, a non-empty list of distinct strings). With the verifier's own copy of
   the program (`--program`, its `verity-ir/descriptor/v1` bytes, by path or archive digest), whose SHA-512 over the canonical

@@ -4253,6 +4253,24 @@
     ],
     "selftest_note": "honest and unit_draw_session, both accepted with units derived",
     "agreement": "2/2 (local, 2026-09-27T07:45Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (GEMM: packed unit range, out_net, leaf_cuts)",
+    "pr83": "25519ba1",
+    "generator": "flock-circuit selftest --record-dir on a CPU pod (r20260927-073025-b0ff: PR #83 25519ba1 with circuit-vectors-25519ba1.patch, --features sha512,seed-injection), converted by selftest_records.py; extra/: draw altered, draw dropped, salt altered",
+    "statement": {
+     "circuit": "art:3104c2f9/gemm-k1024/stage/circuit.txt",
+     "public": "art:3104c2f9/gemm-k1024/stage/pub-4.bin",
+     "circuit_sha512": "d504d7390ef20157c669262e85274d9742b4b070fb0f091ad54e07a4f95571358efd6f110123af0c94b2fccaa37317b65232148c8b3e8343a7025db7c29f1f8c",
+     "detail": "gemm-coordinate/k1024/sm80-mma-bf16 (synthetic, seed 20260927), 4 instances: 64 tensor-core k-step units per VU (packed), x as 1024 leaf cuts, the tail's stage1 returning the output (out_net); k_log 23, m 26"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:3104c2f9/gemm-k1024/records-cpu"
+    ],
+    "forgeries": "art:3104c2f9/gemm-k1024/extra",
+    "selftest_note": "every selftest case that runs a session and the draw cases (unit_draw_session, unit_draw_from_file, unit_draw_ignored_refused); m = 26: replay on a machine with more than 15 GB",
+    "agreement": "r20260927-074433-43a6 (on the pod): 27/27"
    }
   ],
   "recorded_runs": [
@@ -4260,7 +4278,8 @@
    "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)",
    "r20260927-060508-66c0: set 8 (eb90718f), 25/25 (result art:294b6cf1)",
    "r20260927-064449-6059: sets 8 and 9 (eb90718f), 50/50",
-   "r20260927-070106-614e: set 10 (e51e2b86), 21/21"
+   "r20260927-070106-614e: set 10 (e51e2b86), 21/21",
+   "r20260927-074433-43a6: GEMM at PR #83 25519ba1 (set 13), 27/27, on a CPU pod"
   ]
  }
 }
