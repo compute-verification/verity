@@ -56,17 +56,19 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN):
 
 
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
-    """`lake build` and the unit-cut conformance are required; the agreement runs when the run has the pinned upstream build and
-    inputs (found by hash, whatever their names), and is skipped by name otherwise."""
+    """`lake build`, the unit-cut conformance and the audit of every Lean package are required; the agreement runs when the run
+    has the pinned upstream build and inputs (found by hash, whatever their names), and is skipped by name otherwise."""
     out, sent = _pinned(tmp_path, monkeypatch)
-    (build, lake, _), (unit, cut, _), (agree, argv, _) = CHECK.lean_steps(out)
-    assert (build, unit, agree) == ("lean-build", "lean-unit-cut", "lean-agreement") and lake[-1].endswith("lake build")
+    (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out)
+    assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
+    assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
+    assert lean_audit[1].endswith("tools/lean/audit.py") and {"--all", "--build"} <= set(lean_audit)
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
-    assert CHECK.lean_steps(out)[2][1] == "only upstream of the pinned upstream build and inputs was sent"
+    assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
     (sent / "a.tar.gz").unlink()
-    assert CHECK.lean_steps(out)[2][1].startswith("skipped: the pinned upstream build was not sent")
+    assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
 def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):

@@ -70,6 +70,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   enforces it. Developer notes in its `README.md`.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
+- `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code. The first is `backends/sp1`; its `README.md` is
   the how-to (build, identity, Python API, tests, recorded pod runs).
@@ -94,14 +95,31 @@ small binding in `circuit_check.targets`, which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, and the Lean
-verifier's build with its upstream cross-check once PR #85 is on `main`, at once on a multi-core CPU pod, with caches that hit
-only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into
+There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, the Lean
+verifier's build with its upstream cross-check, and the Lean audit (`tools/lean/audit.py`), at once on a multi-core CPU
+pod, with caches that hit only on identical inputs. `--record` runs it through `research run` as an Attempt of the checked-out clean commit. Merge into
 `main` only through `research merge <branch>`, which refuses without a passing `check` of that exact commit in the evidence
 store, or when `main` has moved past it; `research merge --train A B C --on POD --project verity` lands several at once on
 one `check` of the merged tree. A change under `backends/flock/` also needs `check`'s agreement with upstream's verifier
 (`lean-agreement`, on the build pinned in `backends/flock/verifier/upstream.json`): record it with
 `uv run python tools/check/check.py --record --on POD`, which sends that build when the commit touches `backends/flock/`.
+
+## Lean
+
+- The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
+  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib). New Lean goes into the
+  package whose dependencies it needs, in a subdirectory and namespace of its own. All packages share one toolchain and
+  one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
+- Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
+  `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
+  `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
+  is replayed through the kernel.
+- A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
+  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
+  No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
+  `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
+  handoff names them.
+- How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
 
