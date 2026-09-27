@@ -151,8 +151,11 @@ def test_transient_storage_is_released() -> None:
     assert retained == 32 * n_sub + 40
     # What may remain: the subtree roots (32 B + Python object overhead each), the tile table (static context, a few
     # hundred bytes per tile) and tracemalloc's own bookkeeping.  The committed stream (4 * N bytes), the leaves, the
-    # tree levels and the fixture must not be resident.
-    assert grown < 400 * n_sub + 400 * len(L.tiles) + 16 * 1024, (grown, n_sub, L.n_words * 4, fx_words)
+    # tree levels and the fixture must not be resident.  tracemalloc counts every allocation in the process during the
+    # window, so first-use imports and caches of whatever else shares the pytest worker land here too (about 2 KB over a
+    # 16 KiB allowance under xdist): the fixed allowance is 32 KiB, and the check below against the committed stream's
+    # size is what catches a retained stream, leaves or levels.
+    assert grown < 400 * n_sub + 400 * len(L.tiles) + 32 * 1024, (grown, n_sub, L.n_words * 4, fx_words)
     assert grown < L.n_words * 4 // 8
     assert len(R) == 32
 
