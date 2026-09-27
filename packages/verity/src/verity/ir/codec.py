@@ -105,6 +105,12 @@ def _spec_id(fn: FunctionDefinition) -> str:
     return fn.base_id + "{" + ",".join(parts) + "}"
 
 
+def descriptor_id(fn: FunctionDefinition) -> str:
+    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): the readable `fn.id` differs for string, float,
+    function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
+    return _spec_id(fn)
+
+
 def _flat_parts(r: Refs) -> list[Refs]:
     """The leaf parts of a (possibly nested) `Concat`, in order; a non-concat is its own single part."""
     if not isinstance(r, Concat):
