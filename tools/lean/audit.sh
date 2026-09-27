@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 # Independent build and axiom audit of Lean packages.
 #   bash tools/lean/audit.sh PKG_DIR[:CHECK_FILE] ...
-# For each package: `setup.sh`, `lake build`, then `lake env lean CHECK_FILE` (default: the package's CheckAxioms.lean). Passes
-# only when every build succeeds, no `.lean` file declares an `axiom`, and every `#print axioms` line in the check files reports
-# nothing beyond propext, Classical.choice and Quot.sound (no sorryAx). Hypotheses such as BCHKS25 never show in `#print axioms`.
+# For each package: `setup.sh`, `lake build`, then `lake env lean CHECK_FILE` (default: the package's CheckAxioms.lean), then
+# `replay.sh` (every built module re-checked by the kernel). Passes only when every build succeeds, no `.lean` file declares an
+# `axiom`, every `#print axioms` line in the check files reports nothing beyond propext, Classical.choice and Quot.sound (no
+# sorryAx), and every module replays. Hypotheses such as BCHKS25 never show in `#print axioms`. `#print axioms` alone does not see
+# a declaration added with `debug.skipKernelTC`, so the replay is required, and negative-control/ (a false theorem added with the
+# kernel skipped) must fail it first, at each audited toolchain.
 set -uo pipefail
 root=$(pwd)
 out=${RESEARCH_RUN_DIR:-/tmp}/lean-audit
 mkdir -p "$out"
 export PATH="$HOME/.elan/bin:$PATH"
 fail=0
+controlled=" "
+negative_control() {   # TOOLCHAIN_FILE: the replay must reject negative-control/ at this toolchain
+  local tc; tc=$(tr -d '[:space:]' < "$1")
+  case "$controlled" in *" $tc "*) return 0;; esac
+  local d; d=$(mktemp -d)
+  cp -r "$root/tools/lean/negative-control/." "$d/" && echo "$tc" > "$d/lean-toolchain"
+  bash "$root/tools/lean/setup.sh" "$d" > "$out/negative-control.setup.log" 2>&1 \
+    && (cd "$d" && lake build > "$out/negative-control.build.log" 2>&1) \
+    || { echo "AUDIT negative control: FAIL, it did not build at $tc (see negative-control.build.log)"; return 1; }
+  if bash "$root/tools/lean/replay.sh" "$d" > "$out/negative-control.replay.log" 2>&1; then
+    echo "AUDIT negative control: FAIL, the kernel replay accepted a skipKernelTC declaration at $tc"; return 1
+  fi
+  echo "AUDIT negative control: the kernel replay rejects a skipKernelTC declaration at $tc"
+  controlled="$controlled$tc "
+}
 for spec in "$@"; do
   pkg=${spec%%:*}; chk=${spec#*:}; [ "$chk" = "$spec" ] && chk=CheckAxioms.lean
   tag=$(echo "$pkg" | tr '/' '_')
@@ -31,6 +49,12 @@ for spec in "$@"; do
           | grep -v -x -E 'propext|Classical.choice|Quot.sound' | sort -u)
   [ -z "$extra" ] || { echo "AUDIT $pkg: FAIL, extra axioms: $extra"; fail=1; }
   echo "AUDIT $pkg: $want theorems audited"
+  negative_control lean-toolchain || fail=1
+  if bash "$root/tools/lean/replay.sh" . > "$out/$tag.replay.log" 2>&1; then
+    echo "AUDIT $pkg: $(tail -n 1 "$out/$tag.replay.log" | sed 's/^replay.sh: //')"
+  else
+    echo "AUDIT $pkg: FAIL, $(tail -n 1 "$out/$tag.replay.log")"; fail=1
+  fi
   cd "$root"
 done
 [ "$fail" = 0 ] && echo "AUDIT: PASS" || echo "AUDIT: FAIL"
