@@ -258,7 +258,7 @@ def trace(build) -> tuple[Circuit, _Call]:
 
 # --- analysis: counts, structural ids, gate lists ----------------------------------------------------------------------
 
-#: M0's lookup slot (``live/src/lookup.rs``): low decoder bits per index width; the high decoder takes the rest
+#: M0's lookup slot (``live/src/lookup.rs``): low decoder bits per index width of its MUFU tables; the high decoder takes the rest
 LOOKUP_LO = {24: 14, 23: 13}
 _SLOTS: dict[str, dict] = {}
 
@@ -267,22 +267,30 @@ def _decode_ands(k: int) -> int:
     return 0 if k == 1 else (1 << k) + _decode_ands(k // 2) + _decode_ands(k - k // 2)
 
 
+def _lo_bits(n: int, bits: int) -> int:
+    """M0's split for the MUFU tables' widths; for another table the split with the fewest ANDs."""
+    return LOOKUP_LO.get(n) or min(range(1, n), key=lambda lo: _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)))
+
+
 def lookup_slot(table: str) -> dict:
-    """The gates of M0's lookup slot for a pinned MUFU table: one-hot decoders of the index's low and high bits (each minterm the
+    """The gates of M0's lookup slot for a pinned table: one-hot decoders of the index's low and high bits (each minterm the
     AND of two half minterms), per value bit j and high minterm h an AND of h with the XOR of the low minterms whose table word
     has bit j set, each value bit the XOR of its products; a NOT per index bit (the complemented literal)."""
     if table not in _SLOTS:
         import numpy as np
 
-        n, bits = TP.TABLE_BITS[table], TP.VALUE_BITS
-        lo = LOOKUP_LO[n]
+        n, bits = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
+        lo = _lo_bits(n, bits)
         words = np.asarray(gf2.table(table), dtype=np.uint32).reshape(1 << (n - lo), 1 << lo)
         xor = bits * ((1 << (n - lo)) - 1)
-        for j in range(bits):
-            c = ((words >> j) & 1).sum(axis=1, dtype=np.int64)
-            xor += int(np.maximum(c - 1, 0).sum())
+        step = max(1, (1 << 22) >> lo)
+        for r in range(0, words.shape[0], step):
+            w = words[r:r + step]
+            for j in range(bits):
+                c = ((w >> j) & 1).sum(axis=1, dtype=np.int64)
+                xor += int(np.maximum(c - 1, 0).sum())
         _SLOTS[table] = {"and": _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)), "xor": xor, "not": n,
-                         "table": table, "table_sha256": IL.TABLES[table], "index_bits": n, "value_bits": bits,
+                         "table": table, "table_sha256": TP.table_sha256(table), "index_bits": n, "value_bits": bits,
                          "built_by": "backends/flock/live/src/lookup.rs (M0, verity PR #83): LookupNet over the pinned table"}
     return _SLOTS[table]
 
@@ -1752,6 +1760,9 @@ def main(argv=None) -> int:
     for pg in a.program_graph:
         t0 = time.time()
         doc = export_row(Path(pg), out, reg, tpl_cache, cache, walker, cm, checks)
+        for name in [n for n, w in gf2._TABLE_WORDS.items() if len(w) > 1 << 24]:
+            del gf2._TABLE_WORDS[name]          # gemma's 2^27-word tanh tables: 512 MB each, reloaded on demand
+        gc.collect()
         f = out / (doc["row_key"] + ".boolean.json")
         f.write_text(json.dumps(doc, separators=(",", ":")))
         rows.append({"row": doc["row"], "row_key": doc["row_key"], "file": f.name, "bytes": f.stat().st_size, "nodes": len(doc["nodes"]),
