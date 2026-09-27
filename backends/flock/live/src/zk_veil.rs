@@ -1121,6 +1121,139 @@ mod tests {
         }
     }
 
+    /// Level 0 and level 1 of a two-rep session at toy size, exactly: for fixed coins the view (every row either rep opens,
+    /// each rep's `ybar`, the pair's masked sums `e'` and, conservatively, all of `y_1'`) is F128-linear in the witness lanes
+    /// and the prover's randomness (every lane's padding, the extra lanes, `e`'s pads), so it is independent of the witness
+    /// exactly when the witness's images lie in the span of the randomness's. Built from the protocol's own `lane_codeword`,
+    /// `pad_codeword`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
+    mod exact {
+        use flock_core::pcs::ligerito::zk::{self as z0, EXTRA_LANES, Level0Zk};
+        use flock_field::{F128, F256};
+
+        use crate::zk_hooks::{ProverRng, ProverSeed};
+
+        const LOG_MSG: usize = 4;
+        const L: usize = 1 << LOG_MSG;
+        const W: usize = 4;
+
+        struct Coins {
+            eq: [Vec<F256>; 2],
+            rho: [[F256; 2]; 2],
+            b: [Vec<F256>; 2],
+            q: [Vec<usize>; 2],
+        }
+
+        fn coins(q: [Vec<usize>; 2]) -> Coins {
+            let mut rng = ProverRng::from_seed(ProverSeed::injected([21; 32]));
+            let mut f256 = |i: u64, n: usize| -> Vec<F256> { rng.f128s(1, i << 20, 2 * n).chunks(2).map(|c| F256::new(c[0], c[1])).collect() };
+            let eq = [0, 1].map(|r| {
+                let c = f256(r, 2);
+                (0..W).map(|l| (0..2).fold(F256::ONE, |a, i| a * if (l >> i) & 1 == 1 { c[i] } else { F256::ONE + c[i] })).collect()
+            });
+            let rho = [0, 1].map(|r| {
+                let v = f256(10 + r, 2);
+                assert!(z0::rho_independent([v[0], v[1]]));
+                [v[0], v[1]]
+            });
+            Coins { eq, rho, b: [f256(20, L), f256(21, L)], q }
+        }
+
+        fn enc(v: &[F128]) -> Vec<F128> {
+            z0::lane_codeword(&[], Some(v), LOG_MSG, 1)
+        }
+
+        /// `x`: the witness lanes (`W·L`), then every lane's padding (`(W + 4)·t_pad`), the extra lanes (`4·L`), `e`'s pads (8).
+        fn vars(t_pad: usize) -> (usize, usize) {
+            (W * L, (W + EXTRA_LANES) * t_pad + EXTRA_LANES * L + 8)
+        }
+
+        /// The session's view, and whether the verifier's row check holds at every rep's queries. `pair`: each rep's pair.
+        fn view(x: &[F128], t_pad: usize, pair: [usize; 2], c: &Coins) -> (Vec<F128>, bool) {
+            let p: Vec<&[F128]> = x[..W * L].chunks(L).collect();
+            let at = W * L;
+            let mu: Vec<Vec<F128>> = x[at..at + (W + EXTRA_LANES) * t_pad].chunks(t_pad).map(|m| m.to_vec()).collect();
+            let at = at + (W + EXTRA_LANES) * t_pad;
+            let r: Vec<Vec<F128>> = x[at..at + EXTRA_LANES * L].chunks(L).map(|m| m.to_vec()).collect();
+            let h = &x[at + EXTRA_LANES * L..];
+            let cw: Vec<Vec<F128>> = (0..W + EXTRA_LANES).map(|l| if l < W {
+                enc(p[l]).iter().zip(z0::lane_codeword(&mu[l], None, LOG_MSG, 1)).map(|(a, b)| *a + b).collect()
+            } else {
+                z0::lane_codeword(&mu[l], Some(&r[l - W]), LOG_MSG, 1)
+            }).collect();
+            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: std::array::from_fn(|j| r[j].clone()), pads: mu.clone(), tamper: 0 };
+            let mut positions: Vec<usize> = c.q.concat();
+            positions.sort();
+            positions.dedup();
+            let mut v: Vec<F128> = positions.iter().flat_map(|&q| cw.iter().map(move |l| l[q])).collect();
+            let mut ok = true;
+            for rep in 0..2 {
+                let zr = Level0Zk { rep: pair[rep], ..z.clone() };
+                let [a, b] = z0::rep_lanes(pair[rep]);
+                let (eq, rho) = (&c.eq[rep], c.rho[rep]);
+                let y1: Vec<F256> = (0..L).map(|i| (0..W).fold(rho[0] * r[a][i] + rho[1] * r[b][i], |acc, l| acc + eq[l] * p[l][i])).collect();
+                let ybar = z0::ybar(&zr, W, eq, rho);
+                let padcw = z0::pad_codeword(&ybar, LOG_MSG, 1);
+                let [e0, e1] = [enc(&y1.iter().map(|y| y.c0).collect::<Vec<_>>()), enc(&y1.iter().map(|y| y.c1).collect::<Vec<_>>())];
+                for &q in &c.q[rep] {
+                    let row: Vec<F128> = cw.iter().map(|l| l[q]).collect();
+                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[q], &[F128::ONE], W, pair[rep], rho, &padcw), |acc, l| acc + eq[l] * row[l]);
+                    ok &= lhs == F256::new(e0[q], e1[q]);
+                }
+                let e = [a, b].map(|j| (0..L).fold(F256::ZERO, |acc, i| acc + c.b[rep][i] * r[j][i]));
+                v.extend(y1.iter().chain(&ybar).flat_map(|y| y.coordinates()));
+                v.extend(e.iter().flat_map(|y| y.coordinates()).zip(&h[4 * rep..4 * rep + 4]).map(|(a, b)| a + *b));
+            }
+            (v, ok)
+        }
+
+        fn rank(mut m: Vec<Vec<F128>>) -> usize {
+            let cols = m.first().map_or(0, |r| r.len());
+            let mut r = 0;
+            for col in 0..cols {
+                let Some(p) = (r..m.len()).find(|&i| m[i][col] != F128::ZERO) else { continue };
+                m.swap(r, p);
+                let iv = m[r][col].inv();
+                let pivot: Vec<F128> = m[r].iter().map(|x| *x * iv).collect();
+                for row in m.iter_mut() {
+                    let f = row[col];
+                    if f != F128::ZERO {
+                        row.iter_mut().zip(&pivot).for_each(|(x, y)| *x += f * *y);
+                    }
+                }
+                m[r] = pivot;
+                r += 1;
+            }
+            r
+        }
+
+        /// The dimension of the witness's images outside the randomness's span (0: the view hides the witness).
+        fn leak(t_pad: usize, pair: [usize; 2], c: &Coins) -> usize {
+            let (nw, nr) = vars(t_pad);
+            let image = |i: usize| {
+                let mut x = vec![F128::ZERO; nw + nr];
+                x[i] = F128::ONE;
+                view(&x, t_pad, pair, c).0
+            };
+            let rand: Vec<Vec<F128>> = (nw..nw + nr).map(image).collect();
+            let all: Vec<Vec<F128>> = rand.iter().cloned().chain((0..nw).map(image)).collect();
+            rank(all) - rank(rand)
+        }
+
+        #[test]
+        fn a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not() {
+            // 3 queries per rep, 5 distinct positions: t_pad = 2 * 3 covers them
+            let c = coins([vec![1, 7, 20], vec![3, 7, 30]]);
+            let mut rng = ProverRng::from_seed(ProverSeed::injected([22; 32]));
+            let (nw, nr) = vars(6);
+            let (_, ok) = view(&rng.f128s(2, 0, nw + nr), 6, [0, 1], &c);
+            assert!(ok, "the verifier's row check fails on the model");
+            assert_eq!(leak(6, [0, 1], &c), 0, "a pair per rep leaks");
+            assert!(leak(6, [0, 0], &c) > 0, "a shared pair should leak (red-team-m1-zk F1)");
+            // padding below the distinct opened positions leaks too
+            assert!(leak(4, [0, 1], &c) > 0, "t_pad below the opened positions should leak");
+        }
+    }
+
     #[test]
     fn rank_of_random_points_is_full() {
         let mut rng = ProverRng::from_seed(ProverSeed::injected([8; 32]));

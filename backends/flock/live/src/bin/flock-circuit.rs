@@ -96,7 +96,8 @@ fn zk_t_pad(m: usize) -> usize {
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
-/// the two uniform lanes, from the prover's ChaCha20 streams 6 and 7. `zero`: M1's control (all zero).
+/// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7; for rep 0 (a rep's copy sets `rep`).
+/// `zero`: M1's control (all zero).
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
@@ -104,8 +105,8 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
     let draw = |rng: &mut flock_live::zk_hooks::ProverRng, stream: u64, i: usize, n: usize| {
         if zero { vec![F128::ZERO; n] } else { rng.f128s(stream, (i as u64) << 32, n) }
     };
-    Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, extra: [draw(rng, 6, 0, l), draw(rng, 6, 1, l)],
-               pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
+    Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
+               extra: std::array::from_fn(|i| draw(rng, 6, i, l)), pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
 }
 
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
@@ -163,9 +164,9 @@ impl StatementVerifier for CircuitVerifier {
         domain(rep)
     }
 
-    fn verify(&self, _t: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify(&self, _t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         if is_zk(&self.st) {
-            return self.verify_zk(proof, ch, link);
+            return self.verify_zk(rep, proof, ch, link);
         }
         let st = &self.st;
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
@@ -187,22 +188,24 @@ impl StatementVerifier for CircuitVerifier {
 impl CircuitVerifier {
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
-    fn verify_zk(&self, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify_zk(&self, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        verify_zk_with(&self.st, &self.inst, &commitment, &proof, &inner, link.points, ch)?;
+        verify_zk_with(&self.st, &self.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
 
 /// Everything M1's verifier checks before the inner proof, on any challenger (the session's replay, or a simulator's coin
 /// tape): the replayed zerocheck and lincheck, upstream's opening with the masked claims' ring-switch checks and level 0's lane
-/// phase turned into constraints. Returns the constraints the inner proof must prove.
+/// phase turned into constraints, level 0's rows checked against rep `rep`'s pair of extra lanes. Returns the constraints the
+/// inner proof must prove, and level 0's record.
+#[allow(clippy::too_many_arguments)]
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                 root: &[u8; 64], points: &[Vec<F128>], ch: &mut Ch)
-    -> Result<Vec<(&'static str, zkv::Lin)>, String> {
+                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
+    -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
     let pcs = params(st.m, LigeritoProfile::Fast100);
     if commitment.params != pcs {
         return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
@@ -230,7 +233,8 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
     let cfg = flock_core::pcs::ligerito::zk::verifier_config(pcs.ligerito_verifier_config()?, zk_queries0(st.m)?);
     let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
-                                                                   pcs.opening_grinding(), Some(zk_t_pad(st.m)), ch)
+                                                                   pcs.opening_grinding(),
+                                                                   Some(flock_core::pcs::ligerito::zk::Level0Params { t_pad: zk_t_pad(st.m), rep }), ch)
         .map_err(|e| format!("opening: {e:?}"))?
         .ok_or("zk: the opening has no level-0 record")?;
     let lg = &proof.pcs_open.ligerito;
@@ -239,15 +243,16 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     cons.push(("ring switch ab", con_ab));
     cons.push(("ring switch c", con_c));
     cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
-    Ok(cons)
+    Ok((cons, rec))
 }
 
 /// M1's verifier on any challenger: [`zk_constraints`], then the inner proof.
+#[allow(clippy::too_many_arguments)]
 fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                  inner: &InnerProof, points: &[Vec<F128>], ch: &mut Ch) -> Result<(), String> {
+                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, ch: &mut Ch) -> Result<(), String> {
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-        let cons = zk_constraints(st, inst, commitment, proof, &root, points, ch)?;
+        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
         zkv::verify_inner(inner, &zk_layout(st), cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
@@ -469,7 +474,7 @@ struct ZkRep {
     pad_mismatch: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
-    /// Ligerito level 0's hiding (one per session: both reps open the one level-0 codeword)
+    /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
     level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
 }
 
@@ -579,8 +584,9 @@ fn ligerito_fields(v: &mut Value, lg: &flock_core::pcs::ligerito::LigeritoProof,
 /// claims' `s_hat_v`, the region claims' `s_hat_v` from the public data, the opening as the honest prover makes it on a dummy
 /// (all-zero) witness with fresh masks (`dummy`: such a proof against the same coins) with level 0's exposed values drawn
 /// uniformly, and the inner proof simulated for the constraints the verifier derives from all of that (on the same coins).
+#[allow(clippy::too_many_arguments)]
 fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128>], dummy: &[u8], rng: &mut flock_live::zk_hooks::ProverRng,
-                 index: u64) -> Result<(Commitment, R1csProofLigerito, InnerProof), String> {
+                 rep: usize, index: u64) -> Result<(Commitment, R1csProofLigerito, InnerProof), String> {
     let lay = zk_layout(st);
     let (commitment, dpr, _): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(dummy).map_err(|e| format!("dummy: {e}"))?;
     let base = 3u64 << 50 | index << 36;
@@ -600,7 +606,7 @@ fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128
     let proof = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: flock_core::pcs::BatchOpeningProofLigerito {
         ring_switches, batching_nonces: dpr.pcs_open.batching_nonces.clone(), ligerito: lg } };
     let mut tape = zkv::Tape::new(coins);
-    let cons = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, &mut tape)?;
+    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, &mut tape)?;
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
     let inner = zkv::simulate_inner(&lay, rng, index, cons, salts, &mut tape)?;
@@ -622,9 +628,109 @@ fn record_points(rec: &Value) -> Vec<Vec<F128>> {
     rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| f128_from_record(h.as_str().unwrap())).collect()).collect()
 }
 
+/// `eq(r, l)` for every lane `l` (bit `i` of `l` against `r_i`), over F256.
+fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
+    use flock_field::F256;
+    (0..1usize << r.len()).map(|l| r.iter().enumerate().fold(F256::ONE, |a, (i, &ri)| a * if (l >> i) & 1 == 1 { ri } else { F256::ONE + ri })).collect()
+}
+
+/// Two linear functionals of one session's public transcript that span fields and both reps (red-team-m1-zk F1's), each a
+/// function of the witness alone if level 0's extra lanes or their padding were shared by the reps:
+/// - level 0: `D(q) = N·pc^0(q) + pc^1(q) + Σ_l u_l row_q[l]` at every level-0 position either rep opened, where `pc^r` is
+///   rep r's `Enc(c·ybar ‖ ybar)`, `W^r` the F128 matrix of `(a, b) ↦ ρ^r_0 a + ρ^r_1 b`, `N = W^1 (W^0)^-1` and
+///   `u_l = N eq^0_l + eq^1_l`; projected onto the annihilator of the mask slot's level-0 columns;
+/// - level 1: `N·v^0_j(q) + v^1_j(q)` at every level-1 position both reps opened, for each lane pair `j` (both coordinates
+///   of `y_1'[x]`, `x ≡ j`) that holds no mask column.
+///
+/// With a pair of extra lanes per rep, both carry the pairs' uniform padding and lanes. `coins`: each rep's stream; `pairs`:
+/// each rep's pair of extra lanes (`[0, 1]`; `[0, 0]` reads a session whose reps share rep 0's pair).
+fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
+    -> Result<[Vec<F128>; 2], String> {
+    use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
+    use flock_field::F256;
+    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config()?;
+    let (log_msg, lanes) = (lc.initial_log_msg_cols, 1usize << lc.initial_k);
+    type M2 = [[F128; 2]; 2];
+    let wmat = |rho: [F256; 2]| -> M2 { [[rho[0].c0, rho[1].c0], [rho[0].c1, rho[1].c1]] };
+    let mul = |a: M2, b: M2| -> M2 {
+        [[a[0][0] * b[0][0] + a[0][1] * b[1][0], a[0][0] * b[0][1] + a[0][1] * b[1][1]],
+         [a[1][0] * b[0][0] + a[1][1] * b[1][0], a[1][0] * b[0][1] + a[1][1] * b[1][1]]]
+    };
+    let inv = |a: M2| -> M2 {
+        let d = (a[0][0] * a[1][1] + a[0][1] * a[1][0]).inv();
+        [[a[1][1] * d, a[0][1] * d], [a[1][0] * d, a[0][0] * d]]
+    };
+    let app = |n: M2, v: F256| F256::new(n[0][0] * v.c0 + n[0][1] * v.c1, n[1][0] * v.c0 + n[1][1] * v.c1);
+    let mut reps = Vec::new();
+    for (rep, p) in proofs.iter().enumerate() {
+        let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).map_err(|e| format!("decode: {e}"))?;
+        let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "pads root")?;
+        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], &mut zkv::Tape::new(&coins[rep]))?;
+        reps.push((rec, pr.pcs_open.ligerito));
+    }
+    let n = mul(wmat(reps[1].0.rho), inv(wmat(reps[0].0.rho)));
+    let eqs: Vec<Vec<F256>> = reps.iter().map(|(r, _)| eq256(&r.challenges)).collect();
+    let u: Vec<F256> = (0..lanes).map(|l| app(n, eqs[0][l]) + eqs[1][l]).collect();
+    let pc: Vec<Vec<F256>> = reps.iter().map(|(_, lg)| pad_codeword(&lg.zk_level0.as_ref().expect("a --zk proof").ybar, log_msg, 1)).collect();
+    let mut rows: BTreeMap<usize, &Vec<F128>> = BTreeMap::new();
+    for (rec, lg) in &reps {
+        for (k, &q) in rec.queries0.iter().enumerate() {
+            rows.insert(q, &lg.initial_proof.opened_rows[k]);
+        }
+    }
+    let d: Vec<(usize, F256)> = rows.iter().map(|(&q, row)| (q, (0..lanes).fold(app(n, pc[0][q]) + pc[1][q], |a, l| a + u[l] * row[l]))).collect();
+    // the annihilator of the mask columns' codewords at the opened positions (word w is lane w mod lanes, column w / lanes)
+    let mut mc: Vec<usize> = mask_words(st).iter().map(|w| w / lanes).collect();
+    mc.sort();
+    mc.dedup();
+    let mut m: Vec<Vec<F128>> = mc.iter().map(|&col| {
+        let mut e = vec![F128::ZERO; 1 << log_msg];
+        e[col] = F128::ONE;
+        let cw = lane_codeword(&[], Some(&e), log_msg, 1);
+        d.iter().map(|(q, _)| cw[*q]).collect()
+    }).collect();
+    let mut piv = Vec::new();
+    for col in 0..d.len() {
+        let r = piv.len();
+        let Some(p) = (r..m.len()).find(|&i| m[i][col] != F128::ZERO) else { continue };
+        m.swap(r, p);
+        let iv = m[r][col].inv();
+        m[r].iter_mut().for_each(|x| *x = *x * iv);
+        let pr = m[r].clone();
+        for (i, row) in m.iter_mut().enumerate() {
+            if i != r && row[col] != F128::ZERO {
+                let f = row[col];
+                row.iter_mut().zip(&pr).for_each(|(x, y)| *x += f * *y);
+            }
+        }
+        piv.push(col);
+    }
+    let level0: Vec<F128> = (0..d.len()).filter(|j| !piv.contains(j)).flat_map(|free| {
+        let t = d.iter().enumerate().fold(d[free].1, |a, (j, (_, x))| match piv.iter().position(|&p| p == j) {
+            Some(i) if m[i][free] != F128::ZERO => a + *x * m[i][free],
+            _ => a,
+        });
+        t.coordinates()
+    }).collect();
+    let q1: Vec<&Vec<usize>> = reps.iter().map(|(r, _)| &r.queries1).collect();
+    let mut common: Vec<usize> = q1[0].iter().filter(|q| q1[1].contains(q)).copied().collect();
+    common.sort();
+    common.dedup();
+    let level1: Vec<F128> = common.iter().flat_map(|q| {
+        let k = [0, 1].map(|r| q1[r].iter().position(|x| x == q).unwrap());
+        let (r0, r1) = (&reps[0].1.recursive_proofs[0].opened_rows[k[0]], &reps[1].1.recursive_proofs[0].opened_rows[k[1]]);
+        let pairs = r0.len() / 2;
+        (0..pairs).filter(|j| !mc.iter().any(|c| c % pairs == *j))
+            .flat_map(|j| (app(n, F256::new(r0[2 * j], r0[2 * j + 1])) + F256::new(r1[2 * j], r1[2 * j + 1])).coordinates())
+            .collect::<Vec<_>>()
+    }).collect();
+    Ok([level0, level1])
+}
+
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
 /// coins, and N control sessions (zero pads, zero mask slot: M0's values in M1's format), each rep's checked fields printed as
-/// `ZKREAL`, `ZKSIM`, `ZKCTRL` lines for `backends/flock/tests/zk_stats.py`. Needs the `seed-injection` harness.
+/// `ZKREAL`, `ZKSIM`, `ZKCONTROL` lines, and each session's cross-rep functionals ([`session_relations`]) as `ZKREL` lines, for
+/// `backends/flock/tests/zk_stats.py`. Needs the `seed-injection` harness.
 #[cfg(feature = "seed-injection")]
 fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "32").parse().unwrap();
@@ -642,6 +748,10 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         let mut row = checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], inner);
         ligerito_fields(&mut row, &pr.pcs_open.ligerito, &lay);
         row
+    };
+    let relations = |kind: &str, run: usize, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>]| {
+        let [l0, l1] = session_relations(st, inst, proofs, coins, points, [0, 1]).unwrap_or_else(|e| refuse(e));
+        println!("ZKREL\t{}", json!({"kind": kind, "run": run, "rep": 0, "rel_level0": f128s_hex(&l0), "rel_level1": f128s_hex(&l1)}));
     };
     let mut tape: Option<(Vec<Vec<F128>>, Vec<Vec<F128>>)> = None;
     let mut dummies: Vec<Vec<Vec<u8>>> = Vec::new();
@@ -663,25 +773,30 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
                 if run == 0 {
                     let (coins, points) = tape.as_ref().unwrap();
-                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, &mut zkv::Tape::new(&coins[rep]));
+                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut zkv::Tape::new(&coins[rep]));
                     assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
                 }
                 println!("ZK{}\t{}", kind.to_uppercase(), fields(kind, run, rep, &pr, &inner));
             }
+            let (coins, points) = tape.as_ref().unwrap();
+            relations(kind, run, &proofs, coins, points);
         }
     }
     let (coins, points) = tape.unwrap();
     let mut rng = flock_live::zk_hooks::ProverRng::from_os();
     let mut accepted = 0;
     for (run, dummy) in dummies.iter().enumerate() {
+        let mut sims = Vec::new();
         for rep in 0..2 {
-            let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
+            let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, rep, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
             // the simulated proof must be accepted by the verifier on the same coins
-            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, &mut zkv::Tape::new(&coins[rep]));
+            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, &mut zkv::Tape::new(&coins[rep]));
             assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
             accepted += 1;
             println!("ZKSIM\t{}", fields("sim", run, rep, &pr, &inner));
+            sims.push(bincode::serialize(&(&c, &pr, &inner)).unwrap());
         }
+        relations("sim", run, &sims, &coins, &points);
     }
     eprintln!("ZKSTAT\t{}", json!({"sessions_per_kind": n, "simulated_proofs_accepted": accepted}));
 }
@@ -952,6 +1067,8 @@ struct Plan {
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
     zk_l0_tamper: u8,
+    /// both reps fold, sum and pad rep 0's pair of extra lanes (red-team-m1-zk F1's shared lanes; the verifier rejects rep 1)
+    zk_shared_pair: bool,
     /// prove the all-zero witness (M1's simulator runs the opening on a dummy witness)
     zero_witness: bool,
 }
@@ -1076,7 +1193,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
                 let ic = zkv::InnerCommit::new(&pads, sb);
                 ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
-                        level0: zk_level0.clone().unwrap() }
+                        level0: Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: if plan.zk_shared_pair { 0 } else { rep },
+                                                                                   ..(**zk_level0.as_ref().unwrap()).clone() }) }
             });
             let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
@@ -1224,6 +1342,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_level0_blinded_claim_forged", false, true),
     ("zk_level0_ybar_forged", false, true),
     ("zk_level0_extra_lane_sum_forged", false, true),
+    ("zk_session_relations_vary_with_the_seed", true, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -1322,6 +1441,37 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
+    }
+    #[cfg(feature = "seed-injection")]
+    if name == "zk_session_relations_vary_with_the_seed" {
+        // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
+        // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
+        // verifier rejects); with a pair per rep they differ in every word
+        let rel = |shared_pair: bool| -> Result<[Vec<F128>; 2], String> {
+            let s0 = Arc::new(Mutex::new(server(st, inst)));
+            s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+            let plan = Plan { gpu, zk_shared_pair: shared_pair, ..Plan::default() };
+            let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &plan, ProverSeed::from_os());
+            if v["accepted"] != !shared_pair {
+                return Err(format!("the session's verdict: {}", v["why"]));
+            }
+            let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+            let coins: Vec<Vec<F128>> = (0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect();
+            session_relations(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
+        };
+        let equal = |shared_pair: bool| -> Result<(Vec<usize>, Vec<usize>), String> {
+            let (a, b) = (rel(shared_pair)?, rel(shared_pair)?);
+            Ok(((0..2).map(|k| a[k].iter().zip(&b[k]).filter(|(x, y)| x == y).count()).collect(), a.iter().map(|x| x.len()).collect()))
+        };
+        return match (equal(false), equal(true)) {
+            (Ok((eq, len)), Ok((eq_shared, len_shared))) => {
+                let pass = (0..2).all(|k| len[k] > 0 && eq[k] == 0 && eq_shared[k] == len_shared[k]);
+                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair",
+                       "pass": pass, "f256_values": [len[0] / 2, len[1] / 2], "f128_words_equal": eq, "shared_pair_words_equal": eq_shared,
+                       "shared_pair_words": len_shared})
+            }
+            (Err(e), _) | (_, Err(e)) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
+        };
     }
     if name == "coin_seed_record_replays" {
         // step 0 replayed from the verifier's record alone; the same record with two rounds' coin-request indices swapped is refused
