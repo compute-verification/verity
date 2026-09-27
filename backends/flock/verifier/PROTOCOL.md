@@ -1106,7 +1106,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     population's tables, every refs and every output word.
   A file without `shared_rows` is read exactly as before, and the earlier statement names refuse a file that has it (their
   upstream builds reject its length). `@967b8d06` is also the identity text of `68ae79f2`: `round_digest`, `statement_digest`
-  and `sigma` read `sha512`.
+  and `sigma` read `sha512`. Set 14 (a shared-row RoPE file whose six instances repeat three rows) agrees 23 of 23 with
+  upstream on M0's selftest records, `row_ref_claim_false` included; set 15 (the same instances per instance) agrees 22 of 22.
+  The `967b8d06` vectors patch writes each false statement as the verifier's file (`<case>.pub.bin`) under its real public
+  digest, so replaying those negatives reaches the proof's openings rather than the session parameters.
 - **Digests.** The circuit pin is `SHA-512(circuit file)`. The statement digest is `SHA-512(TAG ‖ circuit SHA-512 ‖
   canon(identity) ‖ le64[n, blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ le64|Δ_A| ‖ Δ_A (le32, le32) ‖ le64|Δ_B| ‖
   Δ_B)`; Flock's 32-byte statement slot (round 0's R1CS digest) is its first 32 bytes. `Σ = SHA-512("verity/flock-circuit/sigma"
