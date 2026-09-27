@@ -114,7 +114,32 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Extract.tail_of_fixed
 #print axioms FlockSoundness.Extract.joint_of_fixed
 #print axioms FlockSoundness.table_knowledge_sound
+#print axioms FlockSoundness.table_knowledge_sound_joint_tight
 #print axioms FlockSoundness.table_knowledge_sound_joint
+-- a table inside a batched session: one position's lockstep in a batch, the oracle session bounded
+-- by the table, and the compiled bound and knowledge soundness for the table in the session
+#print axioms FlockSoundness.Game.value_batch_getD_le
+#print axioms FlockSoundness.Game.Lock.Aligned.batchLock
+#print axioms FlockSoundness.orcSess_value_le
+#print axioms FlockSoundness.session_sound_of_table
+#print axioms FlockSoundness.session_knowledge_sound
+-- several tables in one batched session: each table's place in it, its knowledge bound in the
+-- product form, and the cover of its failure and link events
+#print axioms FlockSoundness.sessAfterB_gamesB
+#print axioms FlockSoundness.joint_le_B
+#print axioms FlockSoundness.joint_le_B'
+#print axioms FlockSoundness.one_le_fail_add_B
+#print axioms FlockSoundness.one_le_fail_add_B'
+-- the compiled lowering: the audit's circuit is the rows the verifier parses; a satisfied table makes
+-- every placed unit correct, for every template; a program's circuit makes every unit its rows
+#print axioms FlockSoundness.Audit.Partition.IsRowsUnit.correct
+#print axioms FlockSoundness.rowsSat_of_satisfies
+#print axioms FlockSoundness.lowering_sound
+#print axioms FlockSoundness.Placement.one_eq
+#print axioms FlockSoundness.UnitPlace.correct
+#print axioms FlockSoundness.UnitPlace.decode_one
+#print axioms FlockSoundness.Prog.topo
+#print axioms FlockSoundness.Prog.isRowsUnit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

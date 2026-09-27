@@ -47,6 +47,10 @@ import FlockSoundness.Game.Runs
 import FlockSoundness.CompiledAlign
 import FlockSoundness.Extract
 import FlockSoundness.Knowledge
+import FlockSoundness.Game.Batch
+import FlockSoundness.Session
+import FlockSoundness.SessionBatch
+import FlockSoundness.Lowering
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
