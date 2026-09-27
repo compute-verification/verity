@@ -21,7 +21,7 @@ from verity.randomness import derive
 
 from .codec import Codec, Geometry, encode_segments, split
 from .params import SALT_BITS
-from .scheme import P3, Encoding
+from .scheme import Encoding
 from .verifier import VerifierKey, tree
 
 COMMIT_TAG = "verity-pous/w-commitment/v1"
@@ -48,13 +48,13 @@ def draw_salt(source: bytes, commitment: bytes) -> bytes:
 
 
 def verifier_key(params: Geometry, prims, w: bytes | Sequence[bytes], commitment: bytes, salt: bytes,
-                 encoded: Iterable[Sequence[bytes]] | None = None, codec: Codec = P3) -> VerifierKey:
+                 encoded: Iterable[Sequence[bytes]] | None = None, codec: Codec | None = None) -> VerifierKey:
     """`vk` from the verifier's own encoding of the committed `W`: whole, or a sequence of its segments (read twice,
     for the commitment and to encode).  Pass `encoded`, the verifier's own per-segment `encode_segment` results (for
     example from a process pool), to skip encoding here."""
     if commit(params, w) != commitment:
         raise ValueError("W does not match the server's commitment")
-    segments = encoded if encoded is not None else encode_segments(codec, params, prims, w, salt)
+    segments = encoded if encoded is not None else encode_segments(codec or params.codec, params, prims, w, salt)
     return VerifierKey.from_segments(params, salt, segments)
 
 

@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 from .codec import Codec, Geometry
 from .primitives import Primitives
-from .scheme import P3
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,9 +97,11 @@ class Layout:
 
 
 def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes],
-                  codec: Codec = P3) -> bytes:
-    """Tensor `name` from the blocks of the segments it overlaps; `block(i)` returns block `i` of `C`."""
+                  codec: Codec | None = None) -> bytes:
+    """Tensor `name` from the blocks of the segments it overlaps; `block(i)` returns block `i` of `C`.  The codec
+    defaults to the layout's parameters' own."""
     params, p = layout.params, layout.placement(name)
+    codec = codec or params.codec
     segs, n = layout.segments(name), params.blocks_per_segment
     data = b"".join(codec.decode_segment(params, prims, salt, s, [block(s * n + v) for v in range(n)]) for s in segs)
     start = p.offset - segs.start * params.segment_bytes if p.size else 0

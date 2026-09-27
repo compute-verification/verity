@@ -1,8 +1,9 @@
 """The codec seam: what setup, layout, the verifier and the audit need from a scheme.
 
 A codec encodes and decodes one segment of `W` at a time, on bytes, so the whole of `W` never becomes one integer.
-`scheme.P3` is the two-layer scheme; a dense single-layer scheme (POUS `docs/scheme-choice-e2e.md`) is a second codec
-with the same two functions.  Everything else reads the geometry (`Geometry`) and the codec, never P3's structure.
+`dense.DENSE` is the secure-first scheme (Lean's `chainDense`) and `scheme.P3` the two-layer research scheme.
+Everything else reads the geometry (`Geometry`) and the codec, never a scheme's structure; the parameters name their
+own codec (`params.codec`), which is the default wherever a codec is taken.
 """
 
 from __future__ import annotations
@@ -35,6 +36,11 @@ class Geometry(Protocol):
 
     @property
     def w_bytes(self) -> int: ...
+
+    @property
+    def codec(self) -> Codec:
+        """The scheme these parameters belong to: the default wherever a codec is taken."""
+        ...
 
     def with_segments(self, segments: int) -> Any: ...
 

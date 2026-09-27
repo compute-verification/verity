@@ -86,6 +86,13 @@ class Params:
     def with_segments(self, segments: int) -> Params:
         return Params(self.n, self.wc, self.k, segments)
 
+    @property
+    def codec(self):
+        """P3's two-layer codec (`scheme.P3`)."""
+        from .scheme import P3
+
+        return P3
+
     def manifest(self) -> dict[str, int]:
         return {"n": self.n, "wc": self.wc, "k": self.k, "segments": self.segments}
 

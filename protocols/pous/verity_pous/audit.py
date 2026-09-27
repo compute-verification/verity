@@ -41,7 +41,8 @@ CALL_NS = 242_000
 (`docs/p3-instantiation.md` §3)."""
 
 CHALLENGES = 132
-"""`k` for 1% at §2c's point (`γ = 0.0183`)."""
+"""P3's `k` for 1% at §2c's point (`γ = 0.0183`); parameters with a `challenges` attribute (the dense scheme's 106)
+override it."""
 
 CERTIFIED_ROUNDS = 28
 """The most oracle rounds per answer the band certificate covers when a level costs 3 calls (an edge from the oldest
@@ -49,6 +50,10 @@ parent: `Π₂(c_{v-12})`, `Π₂(pad)`, `P`): `⌊(D − 1)/3⌋ + 1 ≤ 10` (`
 
 WORK = 1 << 14
 """`Q`: queries per answer (§2c)."""
+
+
+def _challenges(vk: VerifierKey) -> int:
+    return getattr(vk.params, "challenges", CHALLENGES)
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
@@ -116,12 +121,15 @@ def deadline_rounds(deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_
     return (deadline_ns + rtt_allowance_ns) // call_ns
 
 
-def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key, k: int = CHALLENGES,
-             deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS, call_ns: int = CALL_NS,
+def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key, k: int | None = None,
+             deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS, call_ns: int | None = None,
              rounds: int | None = None, work: int = WORK,
              on_answer: Callable[[Answer], None] | None = None) -> AuditResult:
     """The audit in the oracle model: rounds are the clock, `rounds` per answer if given, else
-    `deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns)`."""
+    `deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns)`.  `k` and `call_ns` default to the parameters' own
+    (`challenges`, `call_ns`), else P3's."""
+    k = _challenges(vk) if k is None else k
+    call_ns = getattr(vk.params, "call_ns", CALL_NS) if call_ns is None else call_ns
     budget = deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns) if rounds is None else rounds
     m, mb = vk.params.m, vk.params.block_bytes
     answers = []
@@ -145,12 +153,12 @@ class TimedVerifier:
     more than `k`, is refused.
     """
 
-    def __init__(self, vk: VerifierKey, key: Key, k: int = CHALLENGES, deadline_ns: int = DEADLINE_NS,
+    def __init__(self, vk: VerifierKey, key: Key, k: int | None = None, deadline_ns: int = DEADLINE_NS,
                  rtt_allowance_ns: int = RTT_ALLOWANCE_NS, clock: Callable[[], int] = time.perf_counter_ns,
                  on_answer: Callable[[Answer], None] | None = None, root_only: bool = False) -> None:
         if deadline_ns < 0 or rtt_allowance_ns < 0:
             raise ValueError("deadlines and allowances are nonnegative")
-        self.vk, self.key, self.k, self.root_only = vk, key, k, root_only
+        self.vk, self.key, self.k, self.root_only = vk, key, _challenges(vk) if k is None else k, root_only
         self.deadline_ns, self.rtt_allowance_ns = deadline_ns, rtt_allowance_ns
         self.clock, self.on_answer = clock, on_answer
         self.answers: list[Answer] = []

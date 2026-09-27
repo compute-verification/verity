@@ -150,12 +150,12 @@ def header(tag: int, layer: int, node: int, npar: int) -> bytes:
 
 
 def pad_block(m: int) -> int:
-    """pad10*1 as a whole block of `m` bits: 0x01, zeros, 0x80."""
-    return 1 | (0x80 << (m - 8))
+    """pad10*1 as a whole block of `m` bits, its first and last bit set (Lean `padBlk`): bytes 0x01, zeros, 0x80."""
+    return 1 | (1 << (m - 1))
 
 
 @dataclass(slots=True)
-class _OverwriteStepper:
+class OverwriteStepper:
     m: int
     h: int
     order: list[int]
@@ -195,8 +195,8 @@ class OverwriteChain:
         """`h_0`: the header, zero-filled to `m + 64` B."""
         return int.from_bytes(header(tag, layer, node, npar), "little")
 
-    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> _OverwriteStepper:
-        return _OverwriteStepper(self.params.m, self.initial(tag, layer, node, len(parents)),
+    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> OverwriteStepper:
+        return OverwriteStepper(self.params.m, self.initial(tag, layer, node, len(parents)),
                                  sorted(parents, reverse=True))
 
     def steps(self, parents: Sequence[int]) -> list[tuple[int, ...]]:
