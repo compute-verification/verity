@@ -336,7 +336,7 @@ pub fn prove_circuit(
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.c.k_log, st.pin, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, ch);
     let t = types(st);
     let unit = st.c.unit();
     let n_claims = 2 + 2 * st.regions.len();

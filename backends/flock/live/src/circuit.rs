@@ -35,7 +35,7 @@ use flock_field::F128;
 use flock_prover::r1cs_hashes::blake3 as b3;
 use rayon::prelude::*;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha512};
 
 use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
 
@@ -139,9 +139,11 @@ pub struct Wire {
     pub src: (usize, usize, usize),
 }
 
+#[derive(Clone)]
 pub struct Composite {
     pub name: String,
-    pub sha256: [u8; 32],
+    /// SHA-512 of the circuit file: the pin
+    pub sha512: [u8; 64],
     pub meta: Value,
     pub nets: Vec<(String, IrUnitNet)>,
     pub ranges: Vec<Range>,
@@ -279,7 +281,7 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
 impl Composite {
     /// `tables`: the directory of the pinned MUFU tables (`verity_flock.ir_lower.write_tables`), when the circuit has lookups.
     pub fn parse(text: &str, tables: Option<&str>) -> Result<Self, String> {
-        let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
+        let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
         let head = lines.next().ok_or("empty circuit")?.trim_end();
         let name = head.strip_prefix("flock-circuit ").ok_or("not a flock-circuit circuit")?.to_string();
@@ -403,7 +405,7 @@ impl Composite {
             return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
         }
         let c = Composite {
-            name, sha256, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
+            name, sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
             out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
@@ -651,8 +653,16 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order
     pub bcs: Vec<[u8; BC_BYTES]>,
     pub outputs: Vec<u16>,
-    /// sha256 of the header line and every public byte after the rows and salts (`b || c`, outputs): what Σ binds
-    pub public_sha256: [u8; 32],
+    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, outputs): what Σ binds
+    pub public_sha512: [u8; 64],
+    /// the registered population's `b || c` and outputs (a drawn statement: the frame-v3 roots are over them); `None`: the
+    /// statement's own
+    pub population: Option<(usize, Vec<[u8; BC_BYTES]>, Vec<u16>)>,
+}
+
+/// The header's `units`: the instances' global unit indices (the partition's order: ascending), and per block its units.
+fn units_entry(c: &Composite, indices: &[usize]) -> Value {
+    json!({"vus_per_block": c.g, "units_per_vu": c.upv, "indices": indices, "blocks": indices.chunks(c.g).map(|b| b.to_vec()).collect::<Vec<_>>()})
 }
 
 impl Instances {
@@ -663,7 +673,7 @@ impl Instances {
         if header["format"] != INST_FORMAT || header["statement"] != STATEMENT {
             return Err("not a flock-circuit-inputs file".into());
         }
-        if header["circuit_sha256"].as_str() != Some(crate::hex(&c.sha256).as_str()) {
+        if header["circuit_sha512"].as_str() != Some(crate::hex(&c.sha512).as_str()) {
             return Err("the instance file was staged for another circuit".into());
         }
         let n = header["instances"].as_u64().ok_or("header: instances")? as usize;
@@ -680,17 +690,54 @@ impl Instances {
         let pubs = &body[rows_len + salts_len..];
         let bcs = pubs[..BC_BYTES * n * np].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
         let outputs = pubs[BC_BYTES * n * np..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
-        let units = &header["units"];
-        let g = c.g;
-        let blocks: Vec<Value> = (0..n.div_ceil(g)).map(|b| json!([header["range"][0].as_u64().unwrap_or(0) as usize + b * g, g.min(n - b * g)])).collect();
-        if units["vus_per_block"] != json!(g) || units["units_per_vu"] != json!(c.upv) || units["vu_range"] != header["range"] || units["blocks"] != json!(blocks) {
-            return Err("header: the blocks' unit indices are not the range's VUs in order".into());
+        let indices: Vec<usize> = header["units"]["indices"].as_array().ok_or("header: units.indices")?.iter()
+            .map(|x| x.as_u64().map(|v| v as usize).ok_or("header: a unit index")).collect::<Result<_, _>>()?;
+        if indices.len() != n || indices.windows(2).any(|w| w[0] >= w[1]) || header["units"] != units_entry(c, &indices) {
+            return Err("header: the instances' unit indices are not ascending, one per instance, blocks of vus_per_block".into());
+        }
+        if header.get("unit_draw").is_some() {
+            return Err("header: a staged file is a registered population; a draw is made in the session".into());
         }
         header["rows"] = Value::Bool(false);
-        let mut h = Sha256::new();
-        h.update(serde_json::to_vec(&sorted(&header)).unwrap());
+        let public_sha512 = Self::public_digest(&header, pubs);
+        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None })
+    }
+
+    fn public_digest(header: &Value, pubs: &[u8]) -> [u8; 64] {
+        let mut h = Sha512::new();
+        h.update(serde_json::to_vec(&sorted(header)).unwrap());
         h.update(pubs);
-        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha256: h.finalize().into() })
+        h.finalize().into()
+    }
+
+    /// The statement of the drawn units (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
+    /// population's `units[i]`; its header is the population's with the draw, `instances = K` and the drawn units' indices; its
+    /// public digest covers that header and the population's public bytes (the frame-v3 roots stay the population's).
+    pub fn drawn(&self, c: &Composite, draw: &Value) -> Result<Instances, String> {
+        let units = crate::unit_draw::check(draw)?;
+        if draw["population"].as_u64() != Some(self.n as u64) || self.population.is_some() {
+            return Err("U: the draw's population is not this registered population".into());
+        }
+        let np = c.ports.len();
+        let (rb, n_out) = (c.row_bytes(), c.out_words.iter().sum::<usize>());
+        let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
+        let mut header = self.header.clone();
+        header["unit_draw"] = draw.clone();
+        header["instances"] = json!(units.len());
+        header["population"] = json!(self.n);
+        header["units"] = units_entry(c, &indices);
+        let mut pubs: Vec<u8> = self.bcs.iter().flatten().copied().collect();
+        pubs.extend(self.outputs.iter().flat_map(|w| w.to_le_bytes()));
+        let public_sha512 = Self::public_digest(&header, &pubs);
+        Ok(Instances {
+            header, n: units.len(),
+            rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
+            salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
+            bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
+            outputs: units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect(),
+            public_sha512,
+            population: Some((self.n, self.bcs.clone(), self.outputs.clone())),
+        })
     }
 
     pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
@@ -791,12 +838,20 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         return Err("the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key".into());
     }
     let np = c.ports.len();
+    // the frame-v3 roots are over the registered population (a drawn statement's instances are some of its units)
+    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
+    if let Some(d) = inst.header.get("unit_draw") {
+        let units = crate::unit_draw::check(d)?;
+        if inst.header["instances"].as_u64() != Some(units.len() as u64) || inst.n != units.len() {
+            return Err("U3: the statement's instances are not the drawn units".into());
+        }
+    }
     for (p, port) in c.ports.iter().enumerate() {
         let dom = get("domain_ids", &port.name)?;
         if fv["schemas"][&port.name] != ROW_SCHEMA {
             return Err(format!("input port {}: schema is not {ROW_SCHEMA}", port.name));
         }
-        let leaves = (0..inst.n).into_par_iter().map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&inst.bc(i, p, np)))).collect();
+        let leaves = (0..n).into_par_iter().map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[i * np + p]))).collect();
         if fv3_root(&dom, leaves).to_vec() != get("roots", &port.name)? {
             return Err(format!("input port {}: the rows' b || c do not hash to the header's frame-v3-sha512 root", port.name));
         }
@@ -808,7 +863,7 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     let mut at = 0;
     for (name, w) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)) {
         let dom = get("domain_ids", name)?;
-        let words: Vec<u16> = (0..inst.n).flat_map(|i| inst.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
+        let words: Vec<u16> = (0..n).flat_map(|i| outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
         let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_leaf(&dom, r, b"u16", &v.to_be_bytes())).collect();
         if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
             return Err(format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root"));
@@ -907,7 +962,10 @@ pub struct Stmt {
     pub regions: Vec<RegionShape>,
     pub circuit: BlockCircuit,
     pub r1cs: BlockR1cs,
-    pub digest: [u8; 32],
+    /// SHA-512 over the statement (bound through Σ)
+    pub digest: [u8; 64],
+    /// its first 32 bytes, for Flock's own 32-byte statement slot (the R1CS digest its transcript absorbs)
+    pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
 }
@@ -961,9 +1019,9 @@ impl Stmt {
             ranges.push((t, r.pos0, r.count));
         }
         let regions = Self::regions(&c)?;
-        let mut h = Sha256::new();
+        let mut h = Sha512::new();
         h.update(TAG);
-        h.update(c.sha256);
+        h.update(c.sha512);
         h.update(serde_json::to_vec(&sorted(&identity)).unwrap());
         for x in [n, blocks_real, nbl, m, k_log, pin, regions.len(), c.g] {
             h.update((x as u64).to_le_bytes());
@@ -975,7 +1033,8 @@ impl Stmt {
                 h.update(cc.to_le_bytes());
             }
         }
-        let digest: [u8; 32] = h.finalize().into();
+        let digest: [u8; 64] = h.finalize().into();
+        let flock_digest: [u8; 32] = digest[..32].try_into().unwrap();
         let kk = 1usize << k_log;
         let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
         let r1cs = BlockR1cs {
@@ -988,11 +1047,11 @@ impl Stmt {
             c_0: SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() },
             layout: WitnessLayout::RowMajor,
             const_pin: Some(pin),
-            digest_cache: OnceLock::from(digest),
+            digest_cache: OnceLock::from(flock_digest),
             csc_cache: OnceLock::new(),
         };
         let circuit = BlockCircuit { k_log, pin, types, ranges, da, db };
-        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, identity })
+        Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity })
     }
 
     fn regions(c: &Composite) -> Result<Vec<RegionShape>, String> {

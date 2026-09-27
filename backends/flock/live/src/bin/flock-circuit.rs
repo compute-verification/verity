@@ -34,7 +34,7 @@ use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_ext
 #[cfg(feature = "gpu")]
 use flock_live::gpu_circuit::HostSlot;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha512};
 
 const TABLE: &str = "circuit";
 const SIGMA_TAG: &[u8] = b"verity/flock-circuit/sigma";
@@ -82,12 +82,13 @@ fn identity(c: &Composite) -> Value {
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
 }
 
-fn sigma(st: &Stmt, inst: &Instances) -> [u8; 32] {
-    let mut h = Sha256::new();
+/// Σ = SHA-512(SIGMA_TAG ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
+fn sigma(st: &Stmt, inst: &Instances) -> [u8; 64] {
+    let mut h = Sha512::new();
     h.update(SIGMA_TAG);
-    h.update(st.c.sha256);
+    h.update(st.c.sha512);
     h.update(st.digest);
-    h.update(inst.public_sha256);
+    h.update(inst.public_sha512);
     h.finalize().into()
 }
 
@@ -119,12 +120,22 @@ impl StatementVerifier for CircuitVerifier {
     }
 }
 
-fn config(st: &Stmt, sigma: [u8; 32]) -> SessionConfig {
-    let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
-    cfg.link = Some(LinkSpec { sigma, m: st.m_pts, points: 2 });
+fn config(st: &Stmt, inst: &Instances) -> SessionConfig {
+    let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.flock_digest } }]);
+    cfg.link = Some(LinkSpec { sigma: sigma(st, inst).to_vec(), m: st.m_pts, points: 2 });
     cfg.coin_seed = true;
     cfg.retain_rounds = true;
+    cfg.sha512_digests = true;
+    cfg.unit_draw = inst.header.get("unit_draw").cloned();
     cfg
+}
+
+/// The drawn units' statement over a registered population (both sides derive it from the population file and the draw).
+fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+    let di = inst.drawn(&st.c, draw)?;
+    check_public(&st.c, &di)?;
+    let ds = Stmt::new(st.c.clone(), di.n, st.identity.clone())?;
+    Ok((Arc::new(ds), Arc::new(di)))
 }
 
 /// A shared transport used as a plain one (so it can be wrapped).
@@ -190,7 +201,22 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
 }
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
-    Server::new(config(st, sigma(st, inst)), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }))
+    let s = Server::new(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }));
+    let law = arg("--draw", "");
+    if law.is_empty() {
+        return s;
+    }
+    with_draw(s, st, inst, flock_live::unit_draw::Law::parse(&law).unwrap_or_else(|e| refuse(e)))
+}
+
+/// A server that draws `law` over the registered population at `Register` and serves the drawn units' statement.
+fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law) -> Server {
+    s.cfg.draw_law = Some((law, inst.n as u64));
+    let (st, inst) = (st.clone(), inst.clone());
+    s.with_draw(Box::new(move |draw: &Value| {
+        let (ds, di) = drawn(&st, &inst, draw)?;
+        Ok((config(&ds, &di), Box::new(CircuitVerifier { st: ds, inst: di }) as Box<dyn StatementVerifier>))
+    }))
 }
 
 type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
@@ -313,6 +339,8 @@ struct Plan {
     rep1_other_witness: bool,
     /// the cheating path: send rep 1 even when its level-0 root is not rep 0's (the verifier's R1 refuses it)
     skip_level0_check: bool,
+    /// prove the registered population's statement whatever units the verifier drew
+    ignore_draw: bool,
     fast: bool,
     /// send each rep's proof with one byte of its first opened hm96 salt flipped
     salt_flip: bool,
@@ -381,8 +409,21 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let log = Arc::new(Mutex::new(Vec::new()));
     let t: SharedTransport = shared(Logged { inner: SharedCall(t), coins: log.clone() });
     let t0 = Instant::now();
+    // registration done: the verifier draws the units (or none), and the statement is the drawn units'
+    let drawn_st = match call(&t, Req::Register) {
+        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => None,
+        Ok(Resp::Draw(d)) => {
+            let draw: Value = serde_json::from_str(&d).unwrap_or(Value::Null);
+            match drawn(st, inst, &draw) {
+                Ok(x) => Some(x),
+                Err(e) => return (json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new()),
+            }
+        }
+        other => return (json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new()),
+    };
+    let (st, inst) = match &drawn_st { Some((a, b)) => (a, b), None => (st, inst) };
     let sig = sigma(st, inst);
-    let hello = config(st, sig).hello();
+    let hello = config(st, inst).hello();
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false, seed);
@@ -498,7 +539,8 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
-               "circuit_sha256": hex(&c.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
+               "circuit_sha512": hex(&c.sha512), "statement_digest": hex(&st.digest), "public_sha512": hex(&inst.public_sha512),
+               "unit_draw": inst.header.get("unit_draw"),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
                "step0_checked": step0.is_ok() && v["accepted"] == true}),
         proofs,
@@ -538,6 +580,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("opened_salt_altered", false, true),
     ("coin_seed_record_replays", true, false),
     ("record_replays_offline", true, false),
+    ("unit_draw_session", true, false),
+    ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
 ];
 
@@ -605,10 +649,10 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
     }
     v.header["frame_v3"]["roots"] = roots;
     check_public(&st.c, &v).expect("the false statement is self-consistent");
-    let mut h = Sha256::new();
-    h.update(v.public_sha256);
+    let mut h = Sha512::new();
+    h.update(v.public_sha512);
     h.update(what.as_bytes());
-    v.public_sha256 = h.finalize().into();
+    v.public_sha512 = h.finalize().into();
     v
 }
 
@@ -618,7 +662,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
         let other = relabel(&text);
         let c2 = Composite::parse(&other, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e));
-        let refused_pin = hex(&c2.sha256) != hex(&st.c.sha256);
+        let refused_pin = hex(&c2.sha512) != hex(&st.c.sha512);
         let refused_file = Instances::load(&arg("--instances", ""), &c2).is_err();
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
                       "pin_differs": refused_pin, "file_refused": refused_file});
@@ -649,7 +693,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let replay = |p: [&Vec<u8>; 2]| -> Result<Value, String> {
             let map = p.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
             let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
-            Ok(Server::from_record(config(st, sigma(st, inst)), v, &rec, map)?.finish())
+            Ok(Server::from_record(config(st, inst), v, &rec, map)?.finish())
         };
         let (honest, swapped) = (replay([&proofs[0], &proofs[1]]), replay([&proofs[1], &proofs[0]]));
         let accepted = |r: &Result<Value, String>| matches!(r, Ok(x) if x["accepted"] == true);
@@ -659,13 +703,13 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         bad["streams"][0]["rounds"][0]["msg"] = json!(format!("{}{}", if m.starts_with('0') { "1" } else { "0" }, m.get(1..).unwrap_or("")));
         let v2: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
         let map = proofs.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
-        let altered = Server::from_record(config(st, sigma(st, inst)), v2, &bad, map.clone()).err();
+        let altered = Server::from_record(config(st, inst), v2, &bad, map.clone()).err();
         // the same record with its link.sigma flipped: refused (Σ is the verifier's own)
         let mut bad_sigma = rec.clone();
         let sg = bad_sigma["link"]["sigma"].as_str().unwrap_or("").to_string();
         bad_sigma["link"]["sigma"] = json!(format!("{}{}", if sg.starts_with('0') { "1" } else { "0" }, sg.get(1..).unwrap_or("")));
         let v3: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
-        let sigma_refused = Server::from_record(config(st, sigma(st, inst)), v3, &bad_sigma, map).err();
+        let sigma_refused = Server::from_record(config(st, inst), v3, &bad_sigma, map).err();
         return json!({"case": name, "expect": "the honest record replays offline; swapped proofs, altered round bytes and another Σ do not",
                       "accepted": v["accepted"], "altered_bytes_refused": altered, "sigma_refused": sigma_refused,
                       "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some()
@@ -686,7 +730,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let c = &v["coin_seed"]["commitment"];
         let honest_ok = v["step0_checked"] == true;
         let commit: Vec<F128> = flock_live::circuit::hexb(c.as_str().unwrap_or("")).map(|b| b.chunks(16).map(|x| F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..].try_into().unwrap()))).collect()).unwrap_or_default();
-        let hello = config(st, sigma(st, inst)).hello();
+        let hello = config(st, inst).hello();
         let r = check_coin_seed(&commit, &hello, &verdict, &[]);
         return json!({"case": name, "expect": "the prover refuses a revealed seed that does not open the step-0 commitment", "honest_checked": honest_ok,
                       "pass": honest_ok && r.is_err(), "why": r.err()});
@@ -698,6 +742,37 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let r2 = Composite::parse(&meta_tail, Some(&arg("--tables", "tables"))).err();
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
+    }
+    if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
+        // the verifier draws one unit of the registered population after Register; the prover proves the drawn statement
+        // (or, ignoring the draw, the population's, whose Σ is not the verifier's)
+        let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 })));
+        let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
+        let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
+        let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        let acc = v["accepted"] == true;
+        let draw = rec["unit_draw"].clone();
+        // offline: the record rebuilt under the drawn statement (U1), and refused under the population's
+        let replay = if acc {
+            let (ds, di) = drawn(st, inst, &draw).unwrap();
+            let map: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
+            let ok = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &rec, map.clone())
+                .map(|mut x| x.finish()).map(|v| v["accepted"] == true);
+            // under the population's statement Σ differs (the draw is under Σ); with the record's draw altered, U1
+            let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }), &rec, map.clone()).err();
+            let mut bad = rec.clone();
+            bad["unit_draw"]["units"] = json!([(draw["units"][0].as_u64().unwrap_or(0) + 1) % inst.n as u64]);
+            let u1 = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &bad, map).err();
+            json!({"drawn_accepted": ok, "population_refused": pop, "altered_draw_refused": u1})
+        } else { Value::Null };
+        let pass = if name == "unit_draw_session" {
+            acc && draw["units"].as_array().is_some_and(|u| u.len() == 1) && replay["drawn_accepted"] == json!({"Ok": true})
+                && replay["population_refused"].as_str().is_some_and(|w| w.contains("R7"))
+                && replay["altered_draw_refused"].as_str().is_some_and(|w| w.contains("U1"))
+        } else {
+            !acc && v["why"].as_str().is_some_and(|w| w.contains("R7"))
+        };
+        return json!({"case": name, "gpu": gpu, "accepted": acc, "pass": pass, "unit_draw": draw, "why": v["why"], "replay": replay});
     }
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
@@ -741,12 +816,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         "output_claim_false" | "digest_claim_false" => {
             let v = Arc::new(false_statement(st, if name.starts_with("output") { "output" } else { "digest" }));
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
-            p.public_sha256 = v.public_sha256;
+            p.public_sha512 = v.public_sha512;
             (st.clone(), Arc::new(p), v)
         }
         "prover_file_differs_from_verifier_file" => {
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
-            p.public_sha256[0] ^= 1;
+            p.public_sha512[0] ^= 1;
             (st.clone(), Arc::new(p), inst.clone())
         }
         "tail_swapped_circuit_refused" => {
@@ -763,7 +838,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
+    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -835,8 +910,8 @@ fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
         s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected(pseed));
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-        let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha256"]});
-        (v["accepted"] == true, proofs, Sha256::digest(t.to_string().as_bytes()).to_vec())
+        let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]});
+        (v["accepted"] == true, proofs, Sha512::digest(t.to_string().as_bytes()).to_vec())
     };
     let (a, b, c) = (run([1; 32]), run([1; 32]), run([2; 32]));
     let same = a.1 == b.1 && a.2 == b.2;
@@ -894,7 +969,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         println!("NEG\t{v}");
     }
     println!("SELFTEST\t{}", json!({"statement": STATEMENT, "unit": st.c.name, "subcircuit": inst.header["subcircuit"], "instances": st.n,
-        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha256": hex(&st.c.sha256), "all_pass": all}));
+        "vus_per_block": st.c.g, "k_log": st.c.k_log, "m": st.m, "gpu": gpu, "circuit_sha512": hex(&st.c.sha512), "all_pass": all}));
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -965,10 +1040,10 @@ fn main() {
     let c = load_composite(&arg("--circuit", "circuit.txt"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
-        refuse("serve needs --pin (the pinned circuit's sha256)".into());
+        refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
     }
-    if !pin.is_empty() && hex(&c.sha256) != pin {
-        refuse(format!("the circuit's sha256 {} is not the pinned circuit {pin}", hex(&c.sha256)));
+    if !pin.is_empty() && hex(&c.sha512) != pin {
+        refuse(format!("the circuit's SHA-512 {} is not the pinned circuit {pin}", hex(&c.sha512)));
     }
     let inst = Arc::new(Instances::load(&arg("--instances", "inst.bin"), &c).unwrap_or_else(|e| refuse(e)));
     if cmd == "serve" && inst.rows.is_some() {

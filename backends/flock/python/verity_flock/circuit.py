@@ -71,6 +71,12 @@ PARTITION_RULE = "flock-circuit/unit-cover/v0"
 SALT_BYTES, BC_BYTES = 192, 128
 
 
+def partition_digest(obj: dict) -> str:
+    """``SHA-512(rule || 0 || canon(object))``, 64 bytes, the shape of ``verity/partition/v1``'s digest; the rule is
+    :data:`PARTITION_RULE` until core's ``verity/partition/v1`` object replaces the unit cover."""
+    return hashlib.sha512(PARTITION_RULE.encode() + b"\0" + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def _pow2(x: int) -> int:
     return 1 << max(0, (x - 1).bit_length())
 
@@ -266,7 +272,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
             "dummy": _dummy(low, ports), "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": sub.program_digests(),
-            "partition": {"rule": PARTITION_RULE, "digest": hashlib.sha256(json.dumps(cover, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}}
+            "partition": {"rule": PARTITION_RULE, "digest": partition_digest(cover)}}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
     texts = [("unit", _expanded(low.layout, low.name)),
              (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
@@ -307,7 +313,8 @@ def _dummy(low: IL.Lowering, ports: list[Port]) -> dict:
 
 
 def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+    """The circuit's pin: SHA-512 of the file (every identity and binding digest of the statement is SHA-512)."""
+    return hashlib.sha512(text.encode()).hexdigest()
 
 
 # --- instance files -----------------------------------------------------------------------------------------------------------
@@ -377,10 +384,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     salts = stage_salts(input_set, lo, hi, ports, salt_key)
     fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
     G = meta["vus_per_block"]
-    units = {"vu_range": [lo, hi], "vus_per_block": G, "units_per_vu": meta["units_per_vu"],
-             "blocks": [[lo + b * G, min(G, n - b * G)] for b in range(-(-n // G))]}
+    indices = list(range(lo, hi))
+    units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": indices,
+             "blocks": [indices[b:b + G] for b in range(0, n, G)]}
     head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
-            "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha256": digest(text),
+            "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
             "units": units, "frame_v3": fv, "rows": True}
     public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
     public += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()

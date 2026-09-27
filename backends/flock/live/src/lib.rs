@@ -54,7 +54,7 @@ use std::{
 use flock_field::F128;
 use flock_transcript::challenger::Challenger;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 
 pub const OP_DOMAIN: u8 = 0x01;
 pub const OP_LABEL: u8 = 0x02;
@@ -101,6 +101,129 @@ pub fn frame_domain(domain: &[u8]) -> Vec<u8> {
 
 pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
+}
+
+/// The unit draw (the Lean verifier's PROTOCOL.md §7.3): the verifier draws the units to prove in the clear from its OS
+/// randomness, after registration and before the statement is fixed, with `verity.randomness`'s exact samplers read straight
+/// from OS bytes (no derivation). The draw is the object `{"law": "subset", "population": N, "k": K, "units": [...]}` or
+/// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}`, units ascending.
+pub mod unit_draw {
+    use serde_json::{Value, json};
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Law {
+        Subset { k: u64 },
+        Bernoulli { num: u64, den: u64 },
+    }
+
+    impl Law {
+        /// `subset:K` or `bernoulli:NUM/DEN`.
+        pub fn parse(s: &str) -> Result<Law, String> {
+            let bad = || format!("a draw law is subset:K or bernoulli:NUM/DEN, not {s:?}");
+            match s.split_once(':') {
+                Some(("subset", k)) => Ok(Law::Subset { k: k.parse().map_err(|_| bad())? }),
+                Some(("bernoulli", p)) => {
+                    let (a, b) = p.split_once('/').ok_or_else(bad)?;
+                    Ok(Law::Bernoulli { num: a.parse().map_err(|_| bad())?, den: b.parse().map_err(|_| bad())? })
+                }
+                _ => Err(bad()),
+            }
+        }
+    }
+
+    fn os_bytes(n: usize) -> Vec<u8> {
+        let mut b = vec![0u8; n];
+        getrandom::fill(&mut b).expect("the OS random generator failed: refusing to draw units without it");
+        b
+    }
+
+    /// `uniform(n)`: big-endian words of `w = ceil((bitlen(n) + 64) / 8)` OS bytes, the first `x < 2^(8w) - 2^(8w) mod n`,
+    /// reduced mod `n`.
+    pub fn uniform(n: u64) -> u64 {
+        assert!(n > 0 && n < 1 << 56, "uniform: 0 < n < 2^56");
+        let w = (64 - n.leading_zeros() + 64).div_ceil(8) as usize;
+        let m = 1u128 << (8 * w);
+        let lim = m - m % n as u128;
+        loop {
+            let x = os_bytes(w).iter().fold(0u128, |a, &y| (a << 8) | y as u128);
+            if x < lim {
+                return (x % n as u128) as u64;
+            }
+        }
+    }
+
+    /// The draw over `[0, population)`.
+    pub fn draw(law: Law, population: u64) -> Result<Value, String> {
+        let units: Vec<u64> = match law {
+            Law::Subset { k } => {
+                if k > population {
+                    return Err(format!("subset: k = {k} > population {population}"));
+                }
+                // the partial Fisher-Yates of verity.randomness's Key.subset
+                let mut swapped: std::collections::BTreeMap<u64, u64> = std::collections::BTreeMap::new();
+                let at = |m: &std::collections::BTreeMap<u64, u64>, i: u64| *m.get(&i).unwrap_or(&i);
+                let mut out = Vec::new();
+                for i in 0..k {
+                    let j = i + uniform(population - i);
+                    let (vi, vj) = (at(&swapped, i), at(&swapped, j));
+                    swapped.insert(i, vj);
+                    swapped.insert(j, vi);
+                    out.push(vj);
+                }
+                out.sort_unstable();
+                out
+            }
+            Law::Bernoulli { num, den } => {
+                if den == 0 || num > den {
+                    return Err(format!("bernoulli: p = {num}/{den} is not a probability"));
+                }
+                (0..population).filter(|_| uniform(den) < num).collect()
+            }
+        };
+        let v = match law {
+            Law::Subset { k } => json!({"law": "subset", "population": population, "k": k, "units": units}),
+            Law::Bernoulli { num, den } => json!({"law": "bernoulli", "population": population, "p": format!("{num}/{den}"), "units": units}),
+        };
+        check(&v)?;
+        Ok(v)
+    }
+
+    /// U2: exactly the law's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
+    /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1. Returns the units.
+    pub fn check(v: &Value) -> Result<Vec<usize>, String> {
+        let o = v.as_object().ok_or("U2: the draw is not an object")?;
+        let n = v["population"].as_u64().ok_or("U2: population")?;
+        let units: Vec<u64> = v["units"].as_array().ok_or("U2: units")?.iter().map(|u| u.as_u64().ok_or("U2: a unit"))
+            .collect::<Result<_, _>>()?;
+        if units.windows(2).any(|w| w[0] >= w[1]) || units.iter().any(|&u| u >= n) {
+            return Err("U2: units are not ascending, distinct and inside the population".into());
+        }
+        let keys: Vec<&str> = o.keys().map(|k| k.as_str()).collect();
+        match v["law"].as_str() {
+            Some("subset") => {
+                let k = v["k"].as_u64().ok_or("U2: k")?;
+                if keys != ["k", "law", "population", "units"] || k > n || units.len() as u64 != k {
+                    return Err("U2: not a subset draw of k <= N units".into());
+                }
+            }
+            Some("bernoulli") => {
+                let (a, b) = v["p"].as_str().and_then(|p| p.split_once('/')).ok_or("U2: p")?;
+                let (num, den): (u64, u64) = (a.parse().map_err(|_| "U2: p")?, b.parse().map_err(|_| "U2: p")?);
+                if keys != ["law", "p", "population", "units"] || den == 0 || num > den || (num == 0 && !units.is_empty())
+                    || (num == den && units.len() as u64 != n)
+                {
+                    return Err("U2: not a Bernoulli draw".into());
+                }
+            }
+            _ => return Err("U2: an unknown law".into()),
+        }
+        Ok(units.into_iter().map(|u| u as usize).collect())
+    }
+}
+
+/// Whether `d` is `b`'s digest under the hash its length names (SHA-512 for 64 bytes, else SHA-256).
+fn same_digest(d: &[u8], b: &[u8]) -> bool {
+    if d.len() == 64 { Sha512::digest(b)[..] == d[..] } else { Sha256::digest(b)[..] == d[..] }
 }
 
 /// The bytes of Flock Merkle digests, whatever width the linked Flock commits with (32, or 64 under verity's SHA-512 patch).
@@ -208,6 +331,8 @@ pub enum Req {
     Ping(Vec<u8>),
     /// A live prime round: the prime transcript's state (32 bytes) and the number of BabyBear^6 challenges wanted.
     Prime { state: Vec<u8>, n: u32 },
+    /// Registration done: the verifier draws the units to prove (`unit_draw`), before `Hello` fixes the statement.
+    Register,
 }
 
 #[derive(Clone, Debug)]
@@ -218,6 +343,8 @@ pub enum Resp {
     Verdict(String),
     /// A prime round's coins: 6 n words, each uniform below [`BABYBEAR_P`].
     Words(Vec<u32>),
+    /// The unit draw (canonical JSON; `null` when the session draws none).
+    Draw(String),
 }
 
 pub const BABYBEAR_P: u32 = 2013265921;
@@ -308,6 +435,7 @@ impl Req {
                 put_bytes(&mut w, state);
                 put_u32(&mut w, *n);
             }
+            Req::Register => w.push(10),
         }
         w
     }
@@ -338,6 +466,7 @@ impl Req {
                 Req::Commit { root_f, roots, publics }
             }
             8 => Req::Prime { state: c.bytes()?, n: c.u32()? },
+            10 => Req::Register,
             t => return Err(format!("unknown request tag {t}")),
         })
     }
@@ -370,6 +499,10 @@ impl Resp {
                     put_u32(&mut w, *x);
                 }
             }
+            Resp::Draw(s) => {
+                w.push(6);
+                put_bytes(&mut w, s.as_bytes());
+            }
         }
         w
     }
@@ -394,6 +527,7 @@ impl Resp {
                 let n = c.u32()? as usize;
                 Resp::Words((0..n).map(|_| c.u32()).collect::<Result<_, _>>()?)
             }
+            6 => Resp::Draw(c.string()?),
             t => return Err(format!("unknown response tag {t}")),
         })
     }
@@ -703,7 +837,7 @@ pub const LABEL_CIRCUIT: &[u8] = b"flock-circuit-stmt-v2";
 #[derive(Clone, Debug)]
 pub struct LinkSpec {
     /// Σ, the link statement digest (scheme, Λ, N, m, the two sub-proof statements): recorded, and sent in `Hello`.
-    pub sigma: [u8; 32],
+    pub sigma: Vec<u8>,
     /// Coordinates per link point (the linked position space is `{0,1}^m`).
     pub m: usize,
     /// Independent GF(2^128) points (2: the Schwartz–Zippel term squares).
@@ -734,11 +868,29 @@ pub struct SessionConfig {
     /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
     pub retain_rounds: bool,
+    /// The hash of every digest the record binds (root_F, root_B, publics, link, rounds, proofs, stream roots): SHA-256, or
+    /// SHA-512 for a statement that asks (Daniel's rule: SHA-512 on every binding path; named in `Hello`).
+    pub sha512_digests: bool,
+    /// The draw this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
+    pub unit_draw: Option<Value>,
+    /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
+    pub draw_law: Option<(unit_draw::Law, u64)>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
-        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false, retain_rounds: false }
+        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None }
+    }
+
+    /// The record's digest of `b`.
+    pub fn dg(&self, b: &[u8]) -> Vec<u8> {
+        if self.sha512_digests { Sha512::digest(b).to_vec() } else { Sha256::digest(b).to_vec() }
+    }
+
+    /// The record's digest keys' suffix (`root_f_sha256` or `root_f_sha512`, ...).
+    pub fn dk(&self) -> &'static str {
+        if self.sha512_digests { "sha512" } else { "sha256" }
     }
 
     /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
@@ -771,6 +923,9 @@ impl SessionConfig {
         if self.retain_rounds {
             h["rounds"] = json!("bytes retained");
         }
+        if self.sha512_digests {
+            h["digests"] = json!("sha512");
+        }
         h.to_string()
     }
 }
@@ -785,7 +940,7 @@ pub struct PrimeRound {
 
 #[derive(Clone, Debug)]
 pub struct RoundRec {
-    pub sha: [u8; 32],
+    pub sha: Vec<u8>,
     pub len: usize,
     pub n: u32,
     pub coins: Vec<F128>,
@@ -829,6 +984,9 @@ struct CommitRec {
     publics_digest: BTreeMap<String, Option<[u8; 32]>>,
 }
 
+/// The drawn units' statement: from the draw, the session configuration (carrying the draw) and the verifier.
+pub type DrawHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
+
 pub struct Server {
     pub cfg: SessionConfig,
     verifier: Box<dyn StatementVerifier>,
@@ -855,6 +1013,8 @@ pub struct Server {
     round_g: BTreeMap<(String, usize), u64>,
     /// with `retain_rounds`: (stream, round) -> the round's bytes as received
     round_msg: BTreeMap<(String, usize), Vec<u8>>,
+    /// Rebuilds the statement for the drawn units (`SessionConfig::draw_law`): its configuration (with `unit_draw`) and verifier.
+    on_draw: Option<DrawHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
     t0: std::time::Instant,
@@ -879,6 +1039,12 @@ impl Server {
         Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
     }
 
+    /// A server that draws units at `Register` (its configuration's `draw_law`) and takes the drawn statement from `hook`.
+    pub fn with_draw(mut self, hook: DrawHook) -> Self {
+        self.on_draw = Some(hook);
+        self
+    }
+
     pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
         cfg.check()?;
         Ok(Self {
@@ -901,6 +1067,7 @@ impl Server {
             points_g: None,
             round_g: BTreeMap::new(),
             round_msg: BTreeMap::new(),
+            on_draw: None,
             seed_inject: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
@@ -1038,6 +1205,26 @@ impl Server {
             return Resp::Refused("session finished: the verdict is issued".into());
         }
         match req {
+            Req::Register => {
+                if self.hello.is_some() || self.cfg.unit_draw.is_some() {
+                    return self.refuse("U: the units are drawn once, after registration and before Hello".into());
+                }
+                let Some((law, population)) = self.cfg.draw_law else { return Resp::Draw("null".into()) };
+                let draw = match unit_draw::draw(law, population) {
+                    Ok(d) => d,
+                    Err(e) => return self.refuse(format!("U: {e}")),
+                };
+                let Some(hook) = self.on_draw.as_mut() else { return self.refuse("U: a draw law without the drawn statement".into()) };
+                match hook(&draw) {
+                    Ok((cfg, verifier)) if cfg.unit_draw.as_ref() == Some(&draw) => {
+                        self.cfg = cfg;
+                        self.verifier = verifier;
+                        Resp::Draw(draw.to_string())
+                    }
+                    Ok(_) => self.refuse("U: the drawn statement does not carry the draw".into()),
+                    Err(e) => self.refuse(format!("U: the drawn statement: {e}")),
+                }
+            }
             Req::Hello(h) => {
                 let want = self.cfg.hello();
                 if h != want {
@@ -1204,7 +1391,7 @@ impl Server {
                 if let Some(g) = self.last_g {
                     self.round_g.insert((stream.clone(), at), g);
                 }
-                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
+                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: self.cfg.dg(&content), len: content.len(), n, coins: coins.clone() });
                 if self.cfg.retain_rounds {
                     self.round_msg.insert((stream, at), content);
                 }
@@ -1321,32 +1508,32 @@ impl Server {
 
     /// The session record (R8): what the verifier saw and issued, and its verdict.
     pub fn record_json(&self) -> Value {
+        let (dk, dg) = (self.cfg.dk(), |b: &[u8]| hex(&self.cfg.dg(b)));
         let streams: Vec<Value> = self
             .streams
             .iter()
             .map(|(name, s)| {
-                json!({
+                let mut sv = json!({
                     "stream": name, "parent": s.parent, "label": String::from_utf8_lossy(&s.label), "at": s.at,
-                    "root_sha256": s.cap.as_ref().map(|c| hex(&sha256(c))),
                     "rounds": s.rounds.iter().enumerate().map(|(k, r)| {
                         let mut v = json!({
-                            "k": k, "g": self.round_g.get(&(name.clone(), k)), "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
+                            "k": k, "g": self.round_g.get(&(name.clone(), k)), "n": r.n, "msg_len": r.len,
                             "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
                         });
+                        v[format!("msg_{dk}")] = json!(hex(&r.sha));
                         if let Some(m) = self.round_msg.get(&(name.clone(), k)) {
                             v["msg"] = json!(hex(m));
                         }
                         v
                     }).collect::<Vec<_>>(),
-                })
+                });
+                sv[format!("root_{dk}")] = json!(s.cap.as_ref().map(|c| dg(c)));
+                sv
             })
             .collect();
-        let link = self.commit.as_ref().map(|c| json!({
+        let link = self.commit.as_ref().map(|c| { let mut v = json!({
             "mode": "exchange",
             "sigma": self.cfg.link.as_ref().map(|l| hex(&l.sigma)),
-            "root_f_sha256": hex(&sha256(&c.root_f)),
-            "root_b_sha256": c.roots.iter().map(|(t, r)| (t.clone(), json!(hex(&sha256(r))))).collect::<serde_json::Map<_, _>>(),
-            "publics_sha256": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(&sha256(p))))).collect::<serde_json::Map<_, _>>(),
             "points": self.points.iter().map(|p| p.iter().map(f128_hex).collect::<Vec<_>>()).collect::<Vec<_>>(),
             "points_g": self.points_g,
             "y": self.y.iter().map(f128_hex).collect::<Vec<_>>(),
@@ -1354,7 +1541,12 @@ impl Server {
             "root_f": hex(&c.root_f),
             "root_b": c.roots.iter().map(|(t, r)| (t.clone(), json!(hex(r)))).collect::<serde_json::Map<_, _>>(),
             "publics": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(p)))).collect::<serde_json::Map<_, _>>(),
-        }));
+        });
+            v[format!("root_f_{dk}")] = json!(dg(&c.root_f));
+            v[format!("root_b_{dk}")] = json!(c.roots.iter().map(|(t, r)| (t.clone(), json!(dg(r)))).collect::<serde_json::Map<_, _>>());
+            v[format!("publics_{dk}")] = json!(c.publics.iter().map(|(t, p)| (t.clone(), json!(dg(p)))).collect::<serde_json::Map<_, _>>());
+            v
+        });
         let prime = self.cfg.prime_live.then(|| json!({
             "mode": PRIME_MODE, "before_commit": self.prime_before_commit,
             "rounds": self.prime.iter().map(|r| json!({"state": hex(&r.state), "n": r.n, "words": r.words})).collect::<Vec<_>>(),
@@ -1366,19 +1558,19 @@ impl Server {
                 for r in c.roots.values() { b.extend_from_slice(r); }
                 for p in self.points.iter().flatten() { push_f128(&mut b, *p); }
                 b.extend_from_slice(l);
-                Some(hex(&sha256(&b)))
+                Some(dg(&b))
             }
-            (None, Some(l)) if self.cfg.link.is_none() => Some(hex(&sha256(l))),
+            (None, Some(l)) if self.cfg.link.is_none() => Some(dg(l)),
             _ => None,
         };
-        json!({
+        let mut rec = json!({
             "kind": "flock-live-session/v1",
-            "hello": self.hello, "link_sha256": link_sha, "link": link,
+            "hello": self.hello, "link": link,
             "link_mode": if self.cfg.link.is_some() { "exchange" } else { "stub" },
             "config": {"profile": self.cfg.profile, "reps": self.cfg.reps, "flavor": self.cfg.flavor,
                        "require_link": self.cfg.require_link, "prime_live": self.cfg.prime_live,
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},
-            "proof_sha256": self.proofs.iter().map(|((t, r), b)| json!({"stream": rep_stream(t, *r), "sha256": hex(&sha256(b)), "bytes": b.len()})).collect::<Vec<_>>(),
+            "unit_draw": self.cfg.unit_draw,
             "aborted": self.aborted, "verdict": self.verdict, "streams": streams, "prime": prime,
             "coin_seed": self.seed.as_ref().map(|(seed, nonce, c, _, k)| {
                 let mut v = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "context": {"hello": self.hello}, "commitment": hex(c),
@@ -1390,7 +1582,14 @@ impl Server {
                 }
                 v
             }),
-        })
+        });
+        rec[format!("link_{dk}")] = json!(link_sha);
+        rec[format!("proof_{dk}")] = json!(self.proofs.iter().map(|((t, r), b)| {
+            let mut v = json!({"stream": rep_stream(t, *r), "bytes": b.len()});
+            v[dk] = json!(dg(b));
+            v
+        }).collect::<Vec<_>>());
+        rec
     }
 
     /// G2: the finished session `rec` (a [`Server::record_json`]) rebuilt under the verifier's own configuration and
@@ -1458,6 +1657,13 @@ impl Server {
             }
             None
         };
+        // U1: the record keeps a draw exactly when the statement carries one, and they are equal; U2: it is well formed
+        if rec["unit_draw"] != s.cfg.unit_draw.clone().unwrap_or(Value::Null) {
+            return Err(bad("U1: the record's unit draw is not the statement's"));
+        }
+        if let Some(d) = &s.cfg.unit_draw {
+            unit_draw::check(d).map_err(|e| bad(&e))?;
+        }
         let l = &rec["link"];
         if s.cfg.link.is_some() {
             if rec["link_mode"] != "exchange" || l["mode"] != "exchange" {
@@ -1470,21 +1676,23 @@ impl Server {
             let names: Vec<String> = s.cfg.tables.iter().map(|t| t.name.clone()).collect();
             let mut roots = Vec::new();
             let mut publics = Vec::new();
+            let (dk, dg) = (s.cfg.dk(), |b: &[u8]| hex(&s.cfg.dg(b)));
             for n in &names {
                 let rb = hx(&l["root_b"][n], "root_b")?;
-                if l["root_b_sha256"][n].as_str() != Some(hex(&sha256(&rb)).as_str()) {
-                    return Err(bad(&format!("{n}: root_b differs from root_b_sha256")));
+                if l[format!("root_b_{dk}")][n].as_str() != Some(dg(&rb).as_str()) {
+                    return Err(bad(&format!("{n}: root_b differs from root_b_{dk}")));
                 }
                 roots.push((n.clone(), rb));
                 // a statement that commits no public words has no entry for the table (the server records none)
-                let p = if l["publics"][n].is_null() && l["publics_sha256"][n].is_null() { Vec::new() } else { hx(&l["publics"][n], "publics")? };
-                if !(p.is_empty() && l["publics_sha256"][n].is_null()) && l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
-                    return Err(bad(&format!("{n}: publics differ from publics_sha256")));
+                let pk = &l[format!("publics_{dk}")][n];
+                let p = if l["publics"][n].is_null() && pk.is_null() { Vec::new() } else { hx(&l["publics"][n], "publics")? };
+                if !(p.is_empty() && pk.is_null()) && pk.as_str() != Some(dg(&p).as_str()) {
+                    return Err(bad(&format!("{n}: publics differ from publics_{dk}")));
                 }
                 publics.push((n.clone(), p));
             }
-            if l["root_f_sha256"].as_str() != Some(hex(&sha256(&root_f)).as_str()) {
-                return Err(bad("root_f differs from root_f_sha256"));
+            if l[format!("root_f_{dk}")].as_str() != Some(dg(&root_f).as_str()) {
+                return Err(bad(&format!("root_f differs from root_f_{dk}")));
             }
             // the prime rounds before Commit were issued before it; the rest after y
             let tail = before.map(|b| s.prime.split_off(b)).unwrap_or_default();
@@ -1523,10 +1731,11 @@ impl Server {
                 if r["k"].as_u64() != Some(k as u64) {
                     return Err(bad(&format!("{name}: rounds out of order")));
                 }
-                let sha = hx(&r["msg_sha256"], "msg_sha256")?;
+                let dk = s.cfg.dk();
+                let sha = hx(&r[format!("msg_{dk}")], "the round digest")?;
                 let coins = f128s(&r["coins"], "coins")?;
                 let n = r["n"].as_u64().ok_or_else(|| bad("round n"))? as u32;
-                if sha.len() != 32 || coins.len() != n as usize {
+                if sha.len() != s.cfg.dg(b"").len() || coins.len() != n as usize {
                     return Err(bad(&format!("{name} round {k}: malformed")));
                 }
                 if let Some(g) = r["g"].as_u64() {
@@ -1534,12 +1743,12 @@ impl Server {
                 }
                 if s.cfg.retain_rounds {
                     let m = hx(&r["msg"], "a retained round's bytes")?;
-                    if sha256(&m)[..] != sha[..] || Some(m.len() as u64) != r["msg_len"].as_u64() {
-                        return Err(bad(&format!("{name} round {k}: the retained bytes are not the round's msg_sha256 / msg_len")));
+                    if s.cfg.dg(&m)[..] != sha[..] || Some(m.len() as u64) != r["msg_len"].as_u64() {
+                        return Err(bad(&format!("{name} round {k}: the retained bytes are not the round's msg_{dk} / msg_len")));
                     }
                     s.round_msg.insert((name.to_string(), sr.rounds.len()), m);
                 }
-                sr.rounds.push(RoundRec { sha: sha.try_into().unwrap(), len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
+                sr.rounds.push(RoundRec { sha, len: r["msg_len"].as_u64().unwrap_or(0) as usize, n, coins });
             }
             if sr.parent.is_empty() {
                 let Some((table, rep)) = s.root_of(&name) else { return Err(bad(&format!("unknown root stream {name}"))) };
@@ -1548,25 +1757,26 @@ impl Server {
                 }
                 // every rep binds the one committed root_B (the live server refused any other before its first coin)
                 let rb = s.commit.as_ref().and_then(|c| c.roots.get(&table.name)).cloned().ok_or_else(|| bad("no root_B"))?;
-                if st["root_sha256"].as_str() != Some(hex(&sha256(&rb)).as_str()) {
+                if st[format!("root_{}", s.cfg.dk())].as_str() != Some(hex(&s.cfg.dg(&rb)).as_str()) {
                     return Err(bad(&format!("R1/L1: {name} bound a root other than the committed root_B")));
                 }
                 sr.cap = Some(rb);
             }
             s.streams.insert(name, sr);
         }
-        for p in rec["proof_sha256"].as_array().ok_or_else(|| bad("proof_sha256"))? {
+        let dk = s.cfg.dk();
+        for p in rec[format!("proof_{dk}")].as_array().ok_or_else(|| bad("the proofs' digests"))? {
             let (t, r) = p["stream"].as_str().and_then(|x| x.rsplit_once("/rep")).ok_or_else(|| bad("proof stream"))?;
             let rep: usize = r.parse().map_err(|_| bad("proof rep"))?;
             let b = proofs.get(&(t.to_string(), rep)).ok_or_else(|| bad(&format!("no proof file for {t}/rep{rep}")))?;
-            if p["sha256"].as_str() != Some(hex(&sha256(b)).as_str()) {
+            if p[dk].as_str() != Some(hex(&s.cfg.dg(b)).as_str()) {
                 return Err(bad(&format!("the proof for {t}/rep{rep} is not the one the verifier received")));
             }
         }
         s.proofs = proofs;
         let got = s.record_json();
-        if got["link_sha256"] != rec["link_sha256"] {
-            return Err(bad("link_sha256 differs from the exchange it covers"));
+        if got[format!("link_{dk}")] != rec[format!("link_{dk}")] {
+            return Err(bad(&format!("link_{dk} differs from the exchange it covers")));
         }
         Ok(s)
     }
@@ -1638,7 +1848,7 @@ impl ReplayChallenger {
                     st.failures.push(format!("R2: {} round {k}: {n} coins requested, {} issued", self.stream, r.n));
                 } else if kept == Some(false) {
                     st.failures.push(format!("R2: {} round {k}: the proof's messages differ from the bytes the verifier kept before the coin", self.stream));
-                } else if kept.is_none() && r.sha != sha256(&content) {
+                } else if kept.is_none() && !same_digest(&r.sha, &content) {
                     st.failures.push(format!(
                         "R2: {} round {k}: the proof's messages differ from those committed before the coin",
                         self.stream

@@ -45,7 +45,7 @@ for tarf in $I/*.tar; do
   fi
   if [ "$MODE" = bench ]; then
     python3 -m verity_flock.circuit --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
-    PIN=$(sha256sum $D/stage/circuit.txt | cut -d' ' -f1)
+    PIN=$(sha512sum $D/stage/circuit.txt | cut -d' ' -f1)
     for n in ${POINTS:-64}; do
       $B serve --listen 127.0.0.1:7501 --out $D/sessions-$n --instances $D/stage/pub-$n.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --pin $PIN --operator loopback > $D/serve-$n.log 2>&1 &
       SP=$!

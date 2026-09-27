@@ -68,7 +68,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "circuit_sha256", "public_sha256", "open_rtt_ms", "identity"):
+        for k in ("roots", "sigma", "dense_m", "k_log", "statement", "statement_digest", "prover", "circuit_sha512", "public_sha512", "unit_draw", "open_rtt_ms", "identity"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["instances"] = sum(r.get("instances") or 0 for r in runs)
         b = {"t.witness": 0.0, "t.encoding_commitment": 0.0, "t.arithmetic": 0.0}
@@ -303,7 +303,7 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     net = out / "circuit.txt"
     net.write_text(FC.compose(low, input_set.subcircuit))
-    pin = hashlib.sha256(net.read_bytes()).hexdigest()
+    pin = hashlib.sha512(net.read_bytes()).hexdigest()
     a.tables = []
     if low.units.cut:
         from . import ir_lower

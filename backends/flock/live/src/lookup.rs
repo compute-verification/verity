@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 
 use crate::ir_block::{Group, IrUnitNet};
 
+#[derive(Clone)]
 pub struct LookupNet {
     pub n: usize,
     pub unit_log: usize,

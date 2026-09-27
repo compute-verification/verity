@@ -44,9 +44,10 @@ def test_rope_composes_private_by_default(tmp_path):
     hp, hv = (json.loads(b.split(b"\n", 1)[0]) for b in (prover, verifier))
     assert hp["rows"] and not hv["rows"], "the verifier's file holds no row"
     assert prover.split(b"\n", 1)[1].endswith(verifier.split(b"\n", 1)[1]), "the public part is the same bytes"
-    assert hp["circuit_sha256"] == FC.digest(text)
-    assert hp["units"]["blocks"] == [[b * meta["vus_per_block"], min(meta["vus_per_block"], 4 - b * meta["vus_per_block"])]
-                                     for b in range(-(-4 // meta["vus_per_block"]))]
+    assert hp["circuit_sha512"] == FC.digest(text) and len(FC.digest(text)) == 128
+    G = meta["vus_per_block"]
+    assert hp["units"]["indices"] == [0, 1, 2, 3] and hp["units"]["blocks"] == [[0, 1, 2, 3][b:b + G] for b in range(0, 4, G)]
+    assert len(meta["partition"]["digest"]) == 128, "a 64-byte SHA-512 partition digest"
     # a row's public b || c is hm96-sha512 of its private row and salt
     from verity.commitments import hm96
     from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
