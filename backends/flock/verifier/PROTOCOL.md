@@ -1335,6 +1335,17 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
     `ofLimbs_bijective`, `lo_balanced`.
 - **1d, the fold, first lemmas** (`Fold.lean`): `slot_factor`, so a slot's in-block tensor is its local tensor times
   `eq(ρ_hi, q)`, which is the reason `Stmt.fold` folds each slot type once; and `foldT_get`, so the sparse fold is `Xᵀe`.
+- **A lookup slot's rows compute `table[index]`** (`LookupRows.lean`, `build_computes`, over any field of characteristic
+  2, for every table and index):
+  - `build` encodes rows `RA`, `RB` into its net (`Sparse.ofRows`). A witness satisfying every row, with the product rows'
+    B side the table's as `Lookup.foldB` folds it (`tableB`), and the constant 1, has:
+    - index bits that are bits (`z = z·z`);
+    - output bit `j < bits` equal to bit `j` of the table word the index bits name.
+  - The decoders are one-hot (`decode_spec`), each product row picks one table bit, and each output row sums them.
+  - `build_spec` walks `build`'s loops.
+  - The one hypothesis on the net is `useful ≤ KONST`, which every table meets: the pinned tables' slots have about 50,000
+    rows, and `KONST` is 2^48 − 1.
+  - `net.a.row r = RA[r]` is `Sparse.ofRows`'s round trip (`ofRows_row`, in the soundness package, #177).
 - Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
   `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
