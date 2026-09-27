@@ -4,7 +4,7 @@
 # verifier's tree (PR #113) at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
-#      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128)
+#      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean draw)
 #      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256;
 #              UNBIND=1: run the session on re-headered copies for M0's unbound statement, m0.tar then eb90718f,
 #              m0b.tar the bound tree e51e2b86 for the verifier's checks of serving's files)
@@ -56,7 +56,8 @@ if [ "${RUN:-a0}" = a2 ]; then
     2>&1 | tee $O/a2.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a3 ]; then
   $W/py/bin/python benchmarks/one_stage/a3.py --sets $W/set --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a3.log | cut -c1-4000
+    --lean $W/bin/flock-verify --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} ${DRAW_FILE:+--draw-file} \
+    2>&1 | tee $O/a3.log | cut -c1-4000
 else
   $W/py/bin/python benchmarks/one_stage/a0.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
     --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} 2>&1 | tee $O/a0.log | cut -c1-4000

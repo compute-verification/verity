@@ -11,10 +11,11 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One draw, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` over the whole population fixes how many
-  units fall in each template (a multivariate hypergeometric split); each template's live server then draws a uniform
-  subset of that size. Conditioned on the counts, a uniform k-subset of the union is uniform within each template, so the
-  union of the served draws is exactly `Subset(k)` over the union. The per-template sessions are one table each (M0 has no
+* **One draw, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population.
+  With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
+  draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
+  a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
+  k-subset of the union is uniform within each template). The per-template sessions are one table each (M0 has no
   multi-table statement yet).
 * **Stand-in.** The values are #101's served values, committed afresh; every record says so.
 """
@@ -36,7 +37,7 @@ from verity.ir.program import Program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity_one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
-ORDER = ("rmstriton", "rope", "rmsfused", "silu")
+ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
 
 def layer_indices(set_dir: Path, layer: int) -> list[int]:
@@ -74,6 +75,7 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=128)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7521)
+    ap.add_argument("--draw-file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -151,8 +153,14 @@ def main() -> int:
         if k_t == 0:
             continue
         sdir = out / f"session-{m['name']}"
+        sdir.mkdir(parents=True, exist_ok=True)
+        dfile = None
+        if a.draw_file:
+            dfile = sdir / "draw.json"
+            local = sorted(u - m["base"] for u in split["units"] if m["base"] <= u < m["base"] + m["n"])
+            dfile.write_text(json.dumps({"law": "subset", "population": m["n"], "k": k_t, "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir)
+        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile)
         m["session_s"] = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = D.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": k_t})
@@ -174,7 +182,9 @@ def main() -> int:
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
     result = audit.audit_record(rec, receipt, union, law, sorted(proved), instances, statement, verdicts, a.delta, sessions=sessions)
     result["split"] = {"counts": counts, "lean_draw_sha512": hashlib.sha512(canonical_json(split)).hexdigest(),
-                       "rule": "counts from the verifier's Lean draw over the union; positions from each template's live draw"}
+                       "served_is_lean_draw": sorted(union_units) == sorted(split["units"]),
+                       "rule": ("each template served its share of the verifier's Lean draw (--draw-file)" if a.draw_file else
+                                "counts from the verifier's Lean draw over the union; positions from each template's live draw")}
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
 
