@@ -4,15 +4,17 @@
     uv run python tools/check/check.py --record     the same through `research run --tool check`: published as an Attempt of the
                                                     commit checked out (a clean tree), the record `research merge` reads
     research run --on MACHINE --project verity --source . --cwd source --tool check -- python tools/check/check.py
-                                                    the same on a machine (a CPU pod: the steps take about 25 minutes on one core)
+                                                    the same on a machine (a CPU pod: about 40 minutes on one core)
 
 Steps, in order; `check` stops at the first that fails:
 
     pytest          every test under the root `pyproject.toml` testpaths, except the `circuit_suite` ones (the next step runs them)
     circuit-check   `circuit-check --all`: every registered Definition and template (`tools/circuit_check`), its report beside
                     the run's result
-    lean            the Lean verifier's build and its agreement with upstream's Rust verifier (`lean_steps`): skipped until PR #85
-                    puts `backends/flock/verifier/lean` on the tree, required from then on
+    lean-build      `lake build` of the Lean verifier (PR #85, `backends/flock/verifier/lean`), then
+    lean-unit-cut   its partition check against `verity.ir.partition` on random cuts (`unit_cut_agree.py`), then
+    lean-agreement  its agreement with upstream's Rust verifier (`ci-pod.sh`) when the run is sent the input bundle
+                    (`--send ci-bundle.tar.gz`); skipped by name without one (`lean_steps`)
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status and seconds.
 """
@@ -31,18 +33,31 @@ ROOT = Path(__file__).resolve().parents[2]
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
 
 
+#: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
+ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
+        'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
+        'export PATH="$HOME/.elan/bin:$PATH"; ')
+
+
 def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
-    """The Lean step: nothing until PR #85 is on the tree (a skip, named); then `lake build` and the agreement job over its
-    replayable sets, with upstream's verifier builds from ``FLOCK_UPSTREAM`` (``PR83_COMMIT=BIN[,...]``, as `ci.py --upstream`).
-    A missing toolchain or ``FLOCK_UPSTREAM`` fails the step: once the verifier is on the tree, `check` requires it."""
+    """The Lean steps: nothing until PR #85 is on the tree (a skip, named); then `lake build`, the Lean partition check's
+    conformance with `verity.ir.partition` (`unit_cut_agree.py`), and the agreement job against upstream's Rust verifier
+    (`ci-pod.sh`) when the run was sent its input bundle (`--send ci-bundle.tar.gz`, made by `ci-bundle.sh` on a machine with
+    store credentials); without one that step is skipped by name, and the cross-check stays the recorded `flock_agreement` job."""
     lean = FLOCK_VERIFIER / "lean"
     if not (lean / "lakefile.toml").exists():
         return [("lean", "skipped: PR #85 (backends/flock/verifier) is not on this tree", ROOT)]
-    upstream = [u for u in os.environ.get("FLOCK_UPSTREAM", "").split(",") if u]
-    agree = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(lean / ".lake" / "build" / "bin" / "flock-verify"),
-             *[x for u in upstream for x in ("--upstream", u)], "--work", str(out / "flock-agreement")]
-    return [("lean-build", ["lake", "build"], lean),
-            ("lean-agreement", agree if upstream else "FLOCK_UPSTREAM is not set: the agreement job needs upstream's verifier builds", ROOT)]
+    verify = lean / ".lake" / "build" / "bin" / "flock-verify"
+    bundles = sorted((out / "inputs").glob("ci-bundle*.tar.gz"))
+    agreement: list[str] | str = "skipped: no upstream bundle sent with this run (--send ci-bundle.tar.gz); the cross-check is `flock_agreement`"
+    if bundles:
+        work = out / "flock-agreement"
+        agreement = ["bash", "-c", f'mkdir -p "{work}/inputs" && ln -sf "{bundles[0]}" "{work}/inputs/" && '
+                     f'RESEARCH_RUN_DIR="{work}" bash "{FLOCK_VERIFIER / "ci-pod.sh"}"']
+    return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
+            ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
+                               "--out", str(out / "lean-unit-cut")], ROOT),
+            ("lean-agreement", agreement, ROOT)]
 
 
 def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
