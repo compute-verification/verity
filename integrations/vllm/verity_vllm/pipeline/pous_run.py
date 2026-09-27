@@ -46,26 +46,26 @@ def _read(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def checkpoint_file(case: str) -> str:
+def checkpoint_files(case: str) -> list[str]:
+    """The pinned checkpoint's `.safetensors` files, in name order (the shard order)."""
     from verity_vllm import config
     from verity_vllm.engine import engine_profile as prof
 
     cp = prof.checkpoint_for(case, config.CHECKPOINTS)
-    [name] = list(cp["safetensors_sha256"])
-    return str(Path(cp["local_path"]) / name)
+    return [str(Path(cp["local_path"]) / name) for name in sorted(cp["safetensors_sha256"])]
 
 
-def build(case: str, pous_spec: Path | None):
+def build(case: str, pous_spec: Path | None, max_num_seqs: int = 8, engine_args: dict[str, Any] | None = None):
     from verity_vllm import config
     from verity_vllm.engine import vllm_adapter as va
 
-    args: dict[str, Any] = {"gpu_memory_utilization": GPU_MEMORY_UTILIZATION}
+    args: dict[str, Any] = {"gpu_memory_utilization": GPU_MEMORY_UTILIZATION, **(engine_args or {})}
     if pous_spec is not None:
         from verity_vllm.engine.pous import quant, worker  # noqa: F401  (registers quantization="pous")
 
         args.update(quantization="pous", worker_extension_cls=worker.EXTENSION,
                     hf_overrides={"quantization_config_file": str(pous_spec)})
-    return va.build_engine(config.CHECKPOINTS, max_num_seqs=8, case=case, engine_args=args)
+    return va.build_engine(config.CHECKPOINTS, max_num_seqs=max_num_seqs, case=case, engine_args=args)
 
 
 def generate(engine, max_tokens: int) -> list[dict[str, Any]]:
@@ -87,9 +87,9 @@ def cmd_commit(a) -> None:
 
     from verity_vllm.engine.pous import layout
 
-    ck = layout.read(checkpoint_file(a.case))
+    ck = layout.read(checkpoint_files(a.case))
     commitment = setup.commit(ck.params, ck.read_w())
-    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "params": ck.params.manifest(), "checkpoint": ck.path})
+    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "params": ck.params.manifest(), "checkpoint": [x.path for x in ck.sections]})
 
 
 def cmd_vk(a) -> None:
@@ -102,7 +102,7 @@ def cmd_vk(a) -> None:
     out = Path(a.out)
     commitment = bytes.fromhex(_read(out / "commit.json")["commitment"])
     salt = setup.draw_salt(os.urandom(32), commitment)
-    ck = layout.read(checkpoint_file(a.case))
+    ck = layout.read(checkpoint_files(a.case))
     w = ck.read_w()
     if setup.commit(ck.params, w) != commitment:
         raise SystemExit("W does not match the server's commitment")
@@ -147,7 +147,7 @@ def cmd_serve(a) -> None:
     if reserved:
         os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - reserved)
     out = Path(a.out)
-    spec = {"safetensors": checkpoint_file(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
+    spec = {"safetensors": checkpoint_files(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
             "drop_source": os.urandom(32).hex(), "layers_per_decode": a.layers_per_decode}
     spec_path = out / f"pous-{a.tag}.json"
     _write(spec_path, spec)

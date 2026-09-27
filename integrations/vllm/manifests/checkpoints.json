@@ -1,6 +1,14 @@
 {
  "appended": [
   {
+   "at": "2026-09-27T19:19:00Z",
+   "by": "pous-vllm",
+   "note": "new entry only (role QWEN3B); frozen entries unchanged (POUS throughput benchmark)",
+   "repos": [
+    "Qwen/Qwen2.5-3B"
+   ]
+  },
+  {
    "at": "2026-09-17T13:54:11Z",
    "by": "gen",
    "note": "new entry only (role PYTHIA160M); frozen entries unchanged (generalization sweep)",
@@ -1807,6 +1815,69 @@
     "model-00014-of-00016.safetensors": "66d3294e9976b5f01d117a0a0bed768f128a8898eb6937e224d051de2961d363",
     "model-00015-of-00016.safetensors": "2fe000da4fc7399ff6303bb0daec8c415a5d850f5ea53863392758c77fc37664",
     "model-00016-of-00016.safetensors": "0c979e314faf06e94a5e1841abd285d4e26e763c79c1abe7710d543192d9da48"
+   }
+  },
+  {
+   "config_sha256": "27467e2fc311a7656c09a43ae9c3d408211e1f212bbddbc93c8596a06423826f",
+   "downloaded": true,
+   "files": {
+    "config.json": {
+     "digest_source": "downloaded",
+     "sha256": "27467e2fc311a7656c09a43ae9c3d408211e1f212bbddbc93c8596a06423826f",
+     "size": 683
+    },
+    "generation_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "8c970692323e3ea0e9b8b0a4dca79388d31226e41f83c9fd6014804280ebf6e8",
+     "size": 138
+    },
+    "merges.txt": {
+     "digest_source": "downloaded",
+     "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+     "size": 1671839
+    },
+    "model-00001-of-00002.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "f9558df91d3b89b4826e4db37439edb52f1d62a4fd602685013e7ca6b9f60f8f",
+     "size": 3968658944
+    },
+    "model-00002-of-00002.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "51410930d5cf19a998fdb17ef0c46e4d9ace72c97a975a3331395a8a500f5edb",
+     "size": 2203268048
+    },
+    "model.safetensors.index.json": {
+     "digest_source": "downloaded",
+     "sha256": "bc8aaa0c87d4335177e01c765f1de0db81661c67c1a72fbfb0d521b09f5ddc56",
+     "size": 35581
+    },
+    "tokenizer.json": {
+     "digest_source": "downloaded",
+     "sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+     "size": 7031645
+    },
+    "tokenizer_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "c91efca15ceff6e9ee9424db58a6f59cd41294e550a86cbd07e3c1fb500b34f9",
+     "size": 7228
+    },
+    "vocab.json": {
+     "digest_source": "downloaded",
+     "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+     "size": 2776833
+    }
+   },
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
+   "note": "POUS throughput benchmark (verity-vllm pous bench): Qwen2.5-3B bf16 on one L40S",
+   "repo": "Qwen/Qwen2.5-3B",
+   "resolved_at": "2026-09-27T19:19:00Z",
+   "resolved_by": "pous-vllm",
+   "revision": "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
+   "role": "QWEN3B",
+   "safetensors_sha256": {
+    "model-00001-of-00002.safetensors": "f9558df91d3b89b4826e4db37439edb52f1d62a4fd602685013e7ca6b9f60f8f",
+    "model-00002-of-00002.safetensors": "51410930d5cf19a998fdb17ef0c46e4d9ace72c97a975a3331395a8a500f5edb"
    }
   }
  ],

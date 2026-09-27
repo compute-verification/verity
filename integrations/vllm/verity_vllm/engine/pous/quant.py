@@ -10,7 +10,7 @@ first use in a forward and released after its last; nothing decoded outlives the
 
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
 file), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
-commitment), `layers_per_decode`, and `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn
+commitment), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), and `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn
 through `verity.randomness` from `drop_source`, is zeroed after encoding, and the load-time check is skipped).
 """
 from __future__ import annotations
@@ -58,6 +58,7 @@ class Store:
         self.spec = spec
         self.checkpoint = layout.read(spec["safetensors"])
         self.gpu_encode, self.gpu_decode = codec.twin(codec.REFERENCE)
+        codec.THREAD_ROWS[0] = int(spec.get("thread_rows") or 0)
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.c: torch.Tensor | None = None

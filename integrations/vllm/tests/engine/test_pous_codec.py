@@ -45,6 +45,13 @@ def test_layout_is_the_reference_layout_of_the_data_section(tmp_path):
     assert [(p.name, p.offset, p.size) for p in ck.layout.tensors] == [("a", 0, 256), ("b", 256, 512)]
     assert ck.read_w() == ck.layout.pack({"a": body[:256], "b": body[256:]})
     assert ck.segment_range(["a", "b"]) == (0, 1) and ck.shapes["a"] == (2, 64)
+    raw2 = json.dumps({"c": {"dtype": "BF16", "shape": [8], "data_offsets": [0, 16]}}).encode()
+    second = tmp_path / "m2.safetensors"
+    second.write_bytes(struct.pack("<Q", len(raw2)) + raw2 + bytes(range(16)))
+    two = layout.read([path, second])
+    assert two.layout.placement("c").offset == 768 and two.read_w()[:784] == body + bytes(range(16))
+    with pytest.raises(ValueError, match="two checkpoint files"):
+        layout.read([path, path])
     path.write_bytes(struct.pack("<Q", len(raw)) + raw + body + b"x")
     with pytest.raises(ValueError, match="trailing"):
         layout.read(path)

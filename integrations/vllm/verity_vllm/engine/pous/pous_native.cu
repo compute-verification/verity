@@ -158,6 +158,111 @@ __global__ void feistel_kernel(uint8_t* x, int64_t x_stride, int64_t half, const
   }
 }
 
+// ---- one thread per row (throughput): a whole Keccak state in one thread's registers ------------------------------------
+__device__ __forceinline__ uint64_t rotl64(uint64_t x, int n) { return (x << n) | (x >> (64 - n)); }
+
+__device__ __forceinline__ void keccak_f_thread(uint64_t st[25]) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint64_t bc[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      uint64_t t = bc[(i + 4) % 5] ^ rotl64(bc[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) st[j + i] ^= t;
+    }
+    uint64_t t = st[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      int j = piln[i];
+      uint64_t b0 = st[j];
+      st[j] = rotl64(t, rotc[i]);
+      t = b0;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      uint64_t b[5];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) b[i] = st[j + i];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) st[j + i] ^= (~b[(i + 1) % 5]) & b[(i + 2) % 5];
+    }
+    st[0] ^= KECCAK_RC[r];
+  }
+}
+
+// dst[0:olen] ^= SHAKE256(pre[0:plen] || body[0:blen])[0:olen], computed by the calling thread alone.
+__device__ void shake_thread_xor(const uint8_t* pre, int plen, const uint8_t* body, int64_t blen, uint8_t* dst, int64_t olen) {
+  const int64_t len = plen + blen;
+  const int64_t nblk = len / RATE + 1;
+  uint64_t st[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) st[i] = 0;
+  for (int64_t b = 0; b < nblk; ++b) {
+    const int64_t base = b * RATE;
+    if (base >= plen && base + RATE <= len) {
+      const uint8_t* p = body + (base - plen);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) word |= (uint64_t)p[w * 8 + k] << (8 * k);
+        st[w] ^= word;
+      }
+    } else {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          const int64_t pos = base + w * 8 + k;
+          uint8_t byte = 0;
+          if (pos < plen) byte = pre[pos];
+          else if (pos < len) byte = body[pos - plen];
+          if (pos == len) byte ^= 0x1F;
+          if (b == nblk - 1 && w == RATE_WORDS - 1 && k == 7) byte ^= 0x80;
+          word |= (uint64_t)byte << (8 * k);
+        }
+        st[w] ^= word;
+      }
+    }
+    keccak_f_thread(st);
+  }
+  for (int64_t o = 0; o < olen; o += RATE) {
+    if (o > 0) keccak_f_thread(st);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+#pragma unroll
+      for (int k = 0; k < 8; ++k) {
+        const int64_t i = o + w * 8 + k;
+        if (i < olen) dst[i] ^= (uint8_t)(st[w] >> (8 * k));
+      }
+    }
+  }
+}
+
+// feistel_kernel with one thread per row: many rows at once, where the warp kernel is bound by its shuffles.
+__global__ void feistel_thread_kernel(uint8_t* x, int64_t x_stride, int64_t half, const uint8_t* tweak, int tlen,
+                                      int64_t tweak_stride, int domain, int inverse, int64_t rows) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  uint8_t pre[MAX_TWEAK + 2];
+  pre[0] = (uint8_t)domain;
+  for (int j = 0; j < tlen; ++j) pre[2 + j] = tweak[n * tweak_stride + j];
+  uint8_t* a = x + n * x_stride;
+  uint8_t* b = a + half;
+  for (int step = 0; step < 10; ++step) {
+    const int i = inverse ? 10 - step : step + 1;
+    pre[1] = (uint8_t)i;
+    if (i % 2) shake_thread_xor(pre, 2 + tlen, b, half, a, half);
+    else shake_thread_xor(pre, 2 + tlen, a, half, b, half);
+  }
+}
+
 static void check_rows(const torch::Tensor& t, const char* name, int64_t rows) {
   TORCH_CHECK(t.is_cuda() && t.scalar_type() == torch::kUInt8 && t.dim() == 2, name, " must be a 2-D uint8 CUDA tensor");
   TORCH_CHECK(t.size(0) == rows || (t.size(0) == 1 && t.stride(0) == 0) || t.size(1) == 0, name, " has the wrong row count");
@@ -182,8 +287,9 @@ void shake256_rows(torch::Tensor prefix, torch::Tensor body, torch::Tensor out, 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-// Feistel-10 in place on the rows of x ([R, 2h]) with round functions SHAKE256(domain || u8(i) || tweak[r] || .).
-void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse) {
+// Feistel-10 in place on the rows of x ([R, 2h]) with round functions SHAKE256(domain || u8(i) || tweak[r] || .): one warp
+// per row below `thread_rows` rows (latency), one thread per row from there (throughput).
+void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse, int64_t thread_rows) {
   const int64_t rows = x.size(0);
   check_rows(x, "x", rows);
   check_rows(tweak, "tweak", rows);
@@ -192,6 +298,14 @@ void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inv
   if (rows == 0) return;
   const c10::cuda::CUDAGuard guard(x.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
+  if (thread_rows > 0 && rows >= thread_rows) {
+    const int threads = 128;
+    feistel_thread_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, tweak.size(1) ? tweak.data_ptr<uint8_t>() : nullptr,
+        (int)tweak.size(1), tweak.size(0) == 1 ? 0 : tweak.stride(0), (int)domain, inverse ? 1 : 0, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
   feistel_kernel<<<grid_of(rows), 32 * WARPS_PER_BLOCK, 0, stream>>>(
       x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, tweak.size(1) ? tweak.data_ptr<uint8_t>() : nullptr, (int)tweak.size(1),
       tweak.size(0) == 1 ? 0 : tweak.stride(0), (int)domain, inverse ? 1 : 0, rows);
@@ -356,7 +470,8 @@ class Responder {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
-  m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak");
+  m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
+        pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0);
   pybind11::class_<Responder>(m, "Responder")
       .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int, int>())
       .def("start", &Responder::start)

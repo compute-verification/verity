@@ -58,9 +58,13 @@ def _u8(values, device) -> torch.Tensor:
     return torch.tensor(list(values), dtype=torch.uint8, device=device)
 
 
+THREAD_ROWS = [0]
+"""From this many rows a Feistel launch runs one thread per row (throughput) instead of one warp (latency); 0 keeps the warp."""
+
+
 def permute(state: torch.Tensor) -> None:
     """The key derivation's permutation (`Pi` or `Pi2`, by the state's width) in place on `[R, width]` states."""
-    native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False)
+    native.ext().feistel_rows(state, state.new_empty((state.shape[0], 0)), PI_DOMAIN, False, THREAD_ROWS[0])
 
 
 def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
@@ -76,7 +80,7 @@ def _tweaks(tags: torch.Tensor, layer: int, vs: torch.Tensor) -> torch.Tensor:
 
 def p_t(x: torch.Tensor, tags: torch.Tensor, layer: int, vs: torch.Tensor, inverse: bool = False) -> None:
     """`P_T` (or its inverse) in place on `[R, M]` labels, row `r` under tweak `(tags[r], layer, vs[r])`."""
-    native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse)
+    native.ext().feistel_rows(x, _tweaks(tags, layer, vs), P_DOMAIN, inverse, THREAD_ROWS[0])
 
 
 def key_mode(prims) -> str:
