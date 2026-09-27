@@ -982,6 +982,14 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     assert not any(r in i for i in ent["claims"] for r in retired)
 
 
+def test_an_expected_time_collision_resistance_hash_cites_ecr_beside_cr() -> None:
+    cfg = dataclasses.replace(V.FLOCK_CONFIG, hashes=(
+        V.Hash("SHA-512", V._INTERNAL, V._CR + " (Merkle caps)"),
+        V.Hash("SHA-512", V._INTERNAL, "expected-time collision resistance (audit value layer; CDGSY24 Thm 2)")))
+    ids = [a["id"] for a in V.claims_of(cfg)[0]["assumptions"]]
+    assert ids[:2] == ["cr/sha-512", "ecr/sha-512"]
+
+
 def test_entities_backends_are_backend_families_by_interaction_mode_with_their_claims_in_full() -> None:
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
