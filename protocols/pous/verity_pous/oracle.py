@@ -6,8 +6,9 @@ their answers in order, and `return` is Lean's `.ret`.  `run` answers the querie
 measured, not claimed.  Local computation between rounds is free.  `parallel` runs programs in lockstep.
 
 The queries are the public interface of the primitives: the tweakable permutation `P_t` and `P_t⁻¹` on labels, and
-whatever the key derivation `H` exposes, `Π` and `Π⁻¹` for the wide sponge (`primitives.WideSponge`) or one monolithic
-`H` query for a random oracle on key queries (`primitives.RandomOracleKey`, Lean's `p3Model'`).
+whatever the key derivation `H` exposes: `Π₂` and `Π₂⁻¹` for the overwrite chain (`primitives.OverwriteChain`), `Π` and
+`Π⁻¹` for the broken sponge modes, or one monolithic `H` query for a random oracle on key queries
+(`primitives.RandomOracleKey`, Lean's `p3Model'`).
 """
 
 from __future__ import annotations
@@ -71,7 +72,7 @@ class PinvQuery:
 
 @dataclass(frozen=True, slots=True)
 class PiQuery:
-    """`Π x`, the sponge's permutation."""
+    """`Π x`: a query to the key derivation's permutation (`Π₂` for the overwrite chain)."""
 
     x: int
 

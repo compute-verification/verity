@@ -48,15 +48,15 @@ def test_deterministic_and_salted():
 
 
 def test_decode_depth_and_work():
-    """Decode is two passes, each one key per label (`j + 2` calls of Π) beside one `P⁻¹` round."""
+    """Decode is two passes, each one key per label (`j + 1` calls of Π₂) beside one `P⁻¹` round."""
     params = Params(8, 64, 3)
     prims = reference(params)
     enc = encode(params, prims, _w(params, 2), b"\x03" * 24)
     salt = from_bytes(enc.salt, 192)
     _, cost = run(decode_prog(params, prims.h, salt, enc.blocks), prims)
-    per_pass = 2 + 3
+    per_pass = 1 + 3
     assert cost.depth == 2 * per_pass
-    keys = sum(2 + len(params.parents(v)) for v in range(8))
+    keys = sum(1 + len(params.parents(v)) for v in range(8))
     assert cost.kinds == {"PiQuery": 2 * keys, "PinvQuery": 16}
     _, cost = run(encode_prog(params, prims.h, from_bytes(_w(params, 2), params.w_bits), salt), prims)
     assert cost.kinds["PQuery"] == 16 and cost.kinds["PiQuery"] == 2 * keys
@@ -107,9 +107,9 @@ def test_vectors():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="about 30 s: set VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="about a minute: set VERITY_POUS_SLOW=1")
 def test_operating_point_segment():
-    """One whole 64 KB-label segment: its pinned digest and a bit-exact decode (about 30 s)."""
+    """One whole 64 KB-label segment: its pinned digest and a bit-exact decode (about a minute)."""
     import json
     from pathlib import Path
 

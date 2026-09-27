@@ -1,4 +1,4 @@
-"""Known-answer vectors for `F`, `Π`, `P_T`, `H` and whole segments (`fixtures/vectors.json`).
+"""Known-answer vectors for `F`, `Π₂`, `P_T`, `H` and whole segments (`fixtures/vectors.json`).
 
 `python tests/pous_vectors.py` rewrites the file, including the 64 KB-label segment (about 30 s); the tests recompute
 everything but that segment by default and compare.
@@ -42,17 +42,17 @@ def _primitive_vectors(params: Params, prims, name: str) -> dict:
     t = Tweak(_int("tag", 32), 1, min(params.n - 1, 12))
     x = _int("p-input", mb)
     y = prims.p.forward(t, x)
-    s = _int("pi-input", mb + 64)
+    s = _int("pi2-input", 2 * mb + 64)
     parents = {u: _int(f"parent/{u}", mb) for u in params.parents(t.node)}
     key, _ = run(key_program(prims.h, key_query(params, t.tag, 1, t.node, parents)), prims)
-    return {f"{name}/tweak": t.to_bytes().hex(), f"{name}/p": _digest(y, mb), f"{name}/pi": _digest(prims.h.pi.forward(s), mb + 64),
-            f"{name}/h": _digest(key, mb)}
+    return {f"{name}/tweak": t.to_bytes().hex(), f"{name}/p": _digest(y, mb),
+            f"{name}/pi2": _digest(prims.h.pi2.forward(s), 2 * mb + 64), f"{name}/h": _digest(key, mb)}
 
 
 def vectors(operating_point_segment: bool = True) -> dict:
     op = reference(OPERATING_POINT)
-    half = (OPERATING_POINT.m // 8 + 64) // 2
-    out = {"F/pi/round1": hashlib.sha256(op.h.pi.core.f(1, b"", _bytes("f-input", half))).hexdigest(),
+    half = (2 * OPERATING_POINT.m // 8 + 64) // 2
+    out = {"F/pi2/round1": hashlib.sha256(op.h.pi2.core.f(1, b"", _bytes("f-input", half))).hexdigest(),
            "F/p/round1": hashlib.sha256(op.p.core.f(1, Tweak(0, 0, 0).to_bytes(),
                                                     _bytes("f-input", OPERATING_POINT.m // 16))).hexdigest()}
     out.update(_primitive_vectors(OPERATING_POINT, op, "64kb"))

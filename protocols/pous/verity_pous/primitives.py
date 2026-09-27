@@ -5,29 +5,36 @@ Integers and byte strings are little-endian; a label of `m` bits is `m / 8` byte
 **Default backend (`reference`).**
 
 ~~~text
-Feistel10  = (L, R) -> (R, L xor F_i(R)) for i = 1..10;  inverse (L, R) -> (R xor F_i(L), L) for i = 10..1
-             (L is the first half of the bytes, R the second)
-Pi         = Feistel10 on m + 64 B,  F_i(x)    = SHAKE256(0x48 || u8(i) || x)[0 : half]
-P_T        = Feistel10 on m,         F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : half]
-             T = tag_s || u8(layer) || u16(v)                                              35 B
-H(tag_s, layer, v, parents) = sponge over Pi, rate m, capacity 64 B, IV = 0:
-    B_0 = "pous-p3-v1-H" || tag_s || u8(layer) || u16(v) || u8(npar), zero-filled to m
-    then the parents newest first, then one pad10*1 block (0x01, zeros, 0x80)
-    per block S <- Pi(S xor (B || 0^64 B));  key = S[0 : m]
+Feistel10 = (L, R) -> (R, L xor F_i(R)) for i = 1..10;  inverse (L, R) -> (R xor F_i(L), L) for i = 10..1
+            (L is the first half of the bytes, R the second)
+Pi2       = Feistel10 on 2m + 64 B,  F_i(x)    = SHAKE256(0x48 || u8(i) || x)[0 : half]
+P_T       = Feistel10 on m,          F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : half]
+            T = tag_s || u8(layer) || u16(v)                                                35 B
+H(tag_s, layer, v, parents), the overwrite chain:
+  h_0 = "pous-p3-v1-H" || tag_s || u8(layer) || u16(v) || u8(npar), zero-filled to m + 64 B    (no call)
+  for B in (parents newest first, then B_pad = 0x01 || 0..0 || 0x80):  (r, h) <- Pi2(B || h)
+      r = the first m B, dropped; h = the last m + 64 B, chained
+  key = r of the B_pad call
 ~~~
 
-Every intermediate state of `H` and every key is at least a label wide, so nothing narrower than a label finishes a
-key (the narrow-state break of SHAKE, SHA-256 and BLAKE3 used directly as `H`).  A node with `j` parents costs `j + 2`
-calls of `Π`; the header call reads no parent.
+A node with `j` parents costs `j + 1` calls of `Π₂`.  A chaining value `h_j` finishes its own row's key but reveals no
+parent, since walking back needs the dropped `r_j`; anything that reveals a parent and also finishes the row is a whole
+call state of `2m + 512` bits, more than the two labels it yields.
 
-**Heuristic backend (`heuristic_arx`)**, fast on GPUs and not analysed: `Π` is a wide ARX butterfly, and `P_T` is the
-5-round iterated Even–Mansour cipher `k ⊕ π₅(k ⊕ … π₁(x ⊕ k))` over five butterflies, `k = SHAKE256(0x4B || T)[0 : m]`.
+**Broken modes, kept to replay their attacks** (`tests/test_pous_two_for_one.py`): `XorSponge`, the sponge of the
+15:50Z instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
+`Π⁻¹` recovers an absorbed parent (`lean/submissions/sponge-dense`, `dense_two_labels_from_one_state`); and
+`MiyaguchiPreneel` (`s_j = Π(x_j) ⊕ x_j`, `x_j = s_{j−1} ⊕ (B_j ‖ 0)`), whose pre-image `x_j` is a checkpoint that is
+also a masked parent.  Neither is a default anywhere.
+
+**Heuristic backend (`heuristic_arx`)**, fast on GPUs and not analysed: the overwrite chain over an ARX `Π₂`, and `P_T`
+the 5-round iterated Even–Mansour cipher `k ⊕ π₅(k ⊕ … π₁(x ⊕ k))` over five butterflies, `k = SHAKE256(0x4B || T)[0 : m]`.
 A butterfly stage `s` pairs word `i` with `j = i + 2^b`, `b = s mod ⌈log₂ N⌉`, for every `i` with bit `b` clear and
 `j < N`, and maps `(a, c)` to `a' = rotl((a + c) mod 2^32, ra_s) ⊕ k_{s,i}`, `c' = rotl(c, rc_s) ⊕ a'`, so both words
 are rotated (the §2c butterfly never rotated word 0: `docs/efficient-crypto`, tc-mixer).  It runs twice the stages
 bit-level diffusion needs (`butterfly_stages`), with rotations and constants from SHA-256 in counter mode over its name.
 
-**Ideal backend (`ideal`)**: the same sponge over a lazily sampled ideal `Π`, and an ideal tweakable `P`.
+**Ideal backend (`ideal`)**: the overwrite chain over a lazily sampled ideal `Π₂`, and an ideal tweakable `P`.
 `RandomOracleKey` is a monolithic `H` (Lean's `p3Model'`), for tests against the Lean model.
 """
 
@@ -135,59 +142,123 @@ class Primitives:
     p: TweakablePermutation
 
 
+def header(tag: int, layer: int, node: int, npar: int) -> bytes:
+    """`"pous-p3-v1-H" || tag_s || u8(layer) || u16(v) || u8(npar)`, 48 B."""
+    if not 0 <= npar < 256:
+        raise ValueError("at most 255 parents")
+    return HEADER + tag.to_bytes(32, "little") + bytes([layer]) + node.to_bytes(2, "little") + bytes([npar])
+
+
+def pad_block(m: int) -> int:
+    """pad10*1 as a whole block of `m` bits: 0x01, zeros, 0x80."""
+    return 1 | (0x80 << (m - 8))
+
+
 @dataclass(slots=True)
-class _SpongeStepper:
-    blocks: list[tuple[int, int | None]]
+class _OverwriteStepper:
     m: int
+    h: int
+    order: list[int]
     i: int = 0
-    state: int = 0
+    r: int = 0
     done: bool = False
     key: int | None = None
 
+    def block(self, labels: Mapping[int, int]) -> int:
+        return labels[self.order[self.i]] if self.i < len(self.order) else pad_block(self.m)
+
     def query(self, labels: Mapping[int, int]) -> Query:
-        constant, parent = self.blocks[self.i]
-        return PiQuery(self.state ^ (constant if parent is None else labels[parent]))
+        return PiQuery(self.block(labels) | (self.h << self.m))
 
     def feed(self, answer: int) -> None:
-        self.state = answer
+        self.r, self.h = answer & mask(self.m), answer >> self.m
         self.i += 1
-        if self.i == len(self.blocks):
-            self.done, self.key = True, answer & mask(self.m)
+        if self.i == len(self.order) + 1:
+            self.done, self.key = True, self.r
 
 
 @dataclass(frozen=True, slots=True)
-class WideSponge:
-    """`H`: the sponge of `docs/p3-instantiation.md` §1 over `pi`, a permutation of `m + 512` bits."""
+class OverwriteChain:
+    """`H`: the overwrite chain of `docs/p3-instantiation.md` §1 over `pi2`, a permutation of `2m + 512` bits."""
+
+    params: Params
+    pi2: Permutation
+    name: str = "pous-p3-v1-H/overwrite"
+
+    def __post_init__(self) -> None:
+        if self.pi2.width != 2 * self.params.m + CAPACITY_BITS:
+            raise ValueError(f"the overwrite chain needs a permutation of 2m + {CAPACITY_BITS} bits")
+        if self.params.m % 8:
+            raise ValueError("labels must be whole bytes")
+
+    def initial(self, tag: int, layer: int, node: int, npar: int) -> int:
+        """`h_0`: the header, zero-filled to `m + 64` B."""
+        return int.from_bytes(header(tag, layer, node, npar), "little")
+
+    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> _OverwriteStepper:
+        return _OverwriteStepper(self.params.m, self.initial(tag, layer, node, len(parents)),
+                                 sorted(parents, reverse=True))
+
+    def steps(self, parents: Sequence[int]) -> list[tuple[int, ...]]:
+        return [(u,) for u in sorted(parents, reverse=True)] + [()]
+
+    def answer(self, q: Query) -> int:
+        if isinstance(q, PiQuery):
+            return self.pi2.forward(q.x)
+        if isinstance(q, PiInvQuery):
+            return self.pi2.inverse(q.y)
+        raise TypeError(f"the overwrite chain answers Π₂ and Π₂⁻¹ queries, not {type(q).__name__}")
+
+
+@dataclass(slots=True)
+class _RateStepper:
+    """The broken rate-`m` modes: a header block, the parents newest first, the pad; `x` is the last pre-image."""
+
+    blocks: list[tuple[int, int | None]]
+    m: int
+    feed_forward: bool
+    i: int = 0
+    state: int = 0
+    x: int = 0
+    done: bool = False
+    key: int | None = None
+
+    def block(self, labels: Mapping[int, int]) -> int:
+        constant, parent = self.blocks[self.i]
+        return constant if parent is None else labels[parent]
+
+    def query(self, labels: Mapping[int, int]) -> Query:
+        self.x = self.state ^ self.block(labels)
+        return PiQuery(self.x)
+
+    def feed(self, answer: int) -> None:
+        self.state = answer ^ self.x if self.feed_forward else answer
+        self.i += 1
+        if self.i == len(self.blocks):
+            self.done, self.key = True, self.state & mask(self.m)
+
+
+@dataclass(frozen=True, slots=True)
+class XorSponge:
+    """**Broken.** The 15:50Z sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero IV, blocks the
+    header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state regenerates two
+    labels through `Π⁻¹`."""
 
     params: Params
     pi: Permutation
-    name: str = "pous-p3-v1-H"
+    name: str = "pous-p3-v1-H/xor-sponge-broken"
+    feed_forward = False
 
     def __post_init__(self) -> None:
         if self.pi.width != self.params.m + CAPACITY_BITS:
             raise ValueError(f"the sponge needs a permutation of m + {CAPACITY_BITS} bits")
-        if self.params.m % 8 or self.params.m // 8 < len(self.header(0, 0, 0, 0)):
+        if self.params.m % 8 or self.params.m // 8 < len(HEADER) + 36:
             raise ValueError("the sponge's rate must be whole bytes and hold its 48-byte header")
 
-    @staticmethod
-    def header(tag: int, layer: int, node: int, npar: int) -> bytes:
-        return (HEADER + tag.to_bytes(32, "little") + bytes([layer]) + node.to_bytes(2, "little")
-                + bytes([npar]))
-
-    def header_block(self, tag: int, layer: int, node: int, npar: int) -> int:
-        return int.from_bytes(self.header(tag, layer, node, npar), "little")
-
-    def pad_block(self) -> int:
-        """pad10*1 as a whole block: 0x01, zeros, 0x80."""
-        return 1 | (0x80 << (self.params.m - 8))
-
-    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> _SpongeStepper:
-        if len(parents) > 255:
-            raise ValueError("at most 255 parents")
-        newest_first = sorted(parents, reverse=True)
-        blocks = ([(self.header_block(tag, layer, node, len(parents)), None)] + [(0, u) for u in newest_first]
-                  + [(self.pad_block(), None)])
-        return _SpongeStepper(blocks, self.params.m)
+    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> _RateStepper:
+        blocks = ([(int.from_bytes(header(tag, layer, node, len(parents)), "little"), None)]
+                  + [(0, u) for u in sorted(parents, reverse=True)] + [(pad_block(self.params.m), None)])
+        return _RateStepper(blocks, self.params.m, self.feed_forward)
 
     def steps(self, parents: Sequence[int]) -> list[tuple[int, ...]]:
         return [()] + [(u,) for u in sorted(parents, reverse=True)] + [()]
@@ -197,7 +268,16 @@ class WideSponge:
             return self.pi.forward(q.x)
         if isinstance(q, PiInvQuery):
             return self.pi.inverse(q.y)
-        raise TypeError(f"the wide sponge answers Π and Π⁻¹ queries, not {type(q).__name__}")
+        raise TypeError(f"the sponge answers Π and Π⁻¹ queries, not {type(q).__name__}")
+
+
+@dataclass(frozen=True, slots=True)
+class MiyaguchiPreneel(XorSponge):
+    """**Broken on band rows.** As `XorSponge`, but `s_j = Π(x_j) ⊕ x_j`: the pre-image `x_j` is a checkpoint and a
+    masked parent."""
+
+    name: str = "pous-p3-v1-H/miyaguchi-preneel-broken"
+    feed_forward = True
 
 
 @dataclass(slots=True)
@@ -275,7 +355,7 @@ def _check_width(width: int, x: int) -> None:
 
 @dataclass(frozen=True, slots=True)
 class FeistelPi:
-    """`Π`: Feistel10 on `width` bits, untweaked, domain byte 0x48."""
+    """`Π₂` (or the broken modes' `Π`): Feistel10 on `width` bits, untweaked, domain byte 0x48."""
 
     width: int
     name: str = "feistel10-shake256-pi/v1"
@@ -318,8 +398,8 @@ class FeistelP:
 
 
 def reference(params: Params) -> Primitives:
-    """The default backend: the wide sponge over Feistel-SHAKE256 `Π`, and the tweakable Feistel-SHAKE256 `P_T`."""
-    return Primitives(WideSponge(params, FeistelPi(params.m + CAPACITY_BITS)), FeistelP(params.m))
+    """The default backend: the overwrite chain over Feistel-SHAKE256 `Π₂`, and the tweakable Feistel-SHAKE256 `P_T`."""
+    return Primitives(OverwriteChain(params, FeistelPi(2 * params.m + CAPACITY_BITS)), FeistelP(params.m))
 
 
 def _expand(label: bytes, n: int) -> bytes:
@@ -531,8 +611,9 @@ class EvenMansourArx:
 
 
 def heuristic_arx(params: Params) -> Primitives:
-    """The heuristic fast option (GPU-friendly, not analysed): the sponge over an ARX `Π`, Even–Mansour ARX `P_T`."""
-    return Primitives(WideSponge(params, ArxButterfly(params.m + CAPACITY_BITS, "arx-pi/heuristic-v2")),
+    """The heuristic fast option (GPU-friendly, not analysed): the overwrite chain over an ARX `Π₂`, Even–Mansour ARX
+    `P_T`."""
+    return Primitives(OverwriteChain(params, ArxButterfly(2 * params.m + CAPACITY_BITS, "arx-pi2/heuristic-v2")),
                       EvenMansourArx(params.m))
 
 
@@ -600,6 +681,6 @@ class IdealTweakablePermutation:
 
 
 def ideal(params: Params, seed: bytes) -> Primitives:
-    """The ideal-permutation model: the wide sponge over an ideal `Π`, and an ideal tweakable `P`."""
-    return Primitives(WideSponge(params, IdealPermutation(params.m + CAPACITY_BITS, seed)),
+    """The two-permutation model: the overwrite chain over an ideal `Π₂`, and an ideal tweakable `P`."""
+    return Primitives(OverwriteChain(params, IdealPermutation(2 * params.m + CAPACITY_BITS, seed, "pi2")),
                       IdealTweakablePermutation(params.m, seed))

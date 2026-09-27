@@ -1,7 +1,7 @@
 """The narrow-state attack (`docs/p3-cryptanalysis.md` "Narrow-state H", ported from the cryptanalyst's
 `narrow_state.py`): store each key's internal hash state instead of the key, then rebuild all of `C` from `W` and those
-states alone.  Against SHAKE-256 as `H` it compresses `C`; against the wide sponge every state that finishes a key is
-wider than a label, so it cannot, and the narrow part of the state (the capacity) finishes no key.
+states alone.  Against SHAKE-256 as `H` it compresses `C`; against the overwrite chain every state that finishes a key
+is wider than a label, so it cannot, and its narrow part (the last 512 bits) finishes no key.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ import random
 from verity_pous.labels import salt_value, tag, transpose, w_labels
 from verity_pous.oracle import PiQuery, Tweak, run
 from verity_pous.params import Params
-from verity_pous.primitives import CAPACITY_BITS, FeistelP, Primitives, RandomOracleKey, key_query, reference
+from verity_pous.primitives import (CAPACITY_BITS, FeistelP, Primitives, RandomOracleKey, key_query, pad_block,
+                                    reference)
 from verity_pous.scheme import encode_prog
 
 PARAMS = Params(16, 256, 12)
@@ -104,25 +105,24 @@ def test_narrow_state_compresses_a_shake_h():
 
 
 def _pre_pad_state(prims: Primitives, q) -> int:
-    """The wide sponge's state after the header and every parent: only the pad block is left to absorb."""
+    """The overwrite chain's value after every parent: only the pad call is left."""
     st = prims.h.stepper(q.tag, q.layer, q.node, [u for u, _ in q.parents])
     labels = dict(q.parents)
-    while st.i < len(st.blocks) - 1:
+    while st.i < len(st.order):
         st.feed(prims.h.answer(st.query(labels)))
-    return st.state
+    return st.h
 
 
-def test_narrow_state_fails_against_the_wide_sponge():
+def test_narrow_state_fails_against_the_overwrite_chain():
     prims = reference(PARAMS)
     w, t, c1, c2 = _world(prims)
     queries = [[key_query(PARAMS, t, layer, v, c1 if layer == 0 else c2) for v in range(PARAMS.n)] for layer in (0, 1)]
     states = [[_pre_pad_state(prims, q) for q in layer] for layer in queries]
-    pad = prims.h.pad_block()
-    finish = lambda s: prims.h.answer(PiQuery(s ^ pad)) & ((1 << PARAMS.m) - 1)  # noqa: E731
+    pad = pad_block(PARAMS.m)
+    finish = lambda h: prims.h.answer(PiQuery(pad | (h << PARAMS.m))) & ((1 << PARAMS.m) - 1)  # noqa: E731
     keys = tuple([finish(s) for s in layer] for layer in states)
-    assert rebuild(prims, w, t, keys) == c2, "the full states do finish every key..."
+    assert rebuild(prims, w, t, keys) == c2, "the chaining values do finish every key..."
     assert 2 * PARAMS.n * (PARAMS.m + CAPACITY_BITS) > PARAMS.n * PARAMS.m, "...but they are larger than C"
-    capacity = [[s >> PARAMS.m << PARAMS.m for s in layer] for layer in states]
-    keys = tuple([finish(s) for s in layer] for layer in capacity)
-    rebuilt = rebuild(prims, w, t, keys)
-    assert not set(rebuilt) & set(c2), "the 512-bit capacity alone finishes no key"
+    narrow = [[s >> PARAMS.m << PARAMS.m for s in layer] for layer in states]
+    keys = tuple([finish(s) for s in layer] for layer in narrow)
+    assert not set(rebuild(prims, w, t, keys)) & set(c2), "the last 512 bits alone finish no key"

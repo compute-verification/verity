@@ -37,14 +37,15 @@ RTT_ALLOWANCE_NS = 0
 """The default network round-trip allowance added to Δ: none, until the verifier's RTT is measured."""
 
 CALL_NS = 242_000
-"""The adversary's fastest wide call: the Feistel-SHAKE256 floor at 64 KB, 242 µs (`docs/p3-instantiation.md` §3)."""
+"""The adversary's fastest oracle call: `P_T`'s Feistel-SHAKE256 floor at 64 KB, 242 µs; a `Π₂` call is at least 480 µs
+(`docs/p3-instantiation.md` §3)."""
 
 CHALLENGES = 132
 """`k` for 1% at §2c's point (`γ = 0.0183`)."""
 
 CERTIFIED_ROUNDS = 28
 """The most oracle rounds per answer the band certificate covers when a level costs 3 calls (an edge from the oldest
-parent: `Π(c_{v-12})`, `Π(pad)`, `P`): `⌊(D − 1)/3⌋ + 1 ≤ 10` (`docs/p3-instantiation.md` §1, `band_twoWay_220_12`)."""
+parent: `Π₂(c_{v-12})`, `Π₂(pad)`, `P`): `⌊(D − 1)/3⌋ + 1 ≤ 10` (`docs/p3-instantiation.md` §1, `band_twoWay_220_12`)."""
 
 WORK = 1 << 14
 """`Q`: queries per answer (§2c)."""

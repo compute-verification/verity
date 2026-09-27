@@ -8,8 +8,8 @@ counts.
 `schedule` computes, for a holding, the fewest oracle rounds after which each value is known, over every way to get it:
 
 * a key `H(t, layer, v, parents)`: at the round its derivation's last query can be answered, each query waiting for
-  the parent it reads (`primitives.key_rounds`: `1 + j` rounds for the wide sponge's `j` newest-first absorptions after
-  its parent-free first call, 1 for a monolithic oracle);
+  the parent it reads (`primitives.key_rounds`: `j + 1` rounds for the overwrite chain's `j` newest-first absorptions
+  and its pad call, 1 for a monolithic oracle);
 * a lower label: held; forward, `P_(t,0,w)(W_w ⊕ key)`, one round after its key; or promoted, locally, once all `n` of
   its columns are held or revealed;
 * a column `(w, u)`: held; from lower `w`; or revealed by the reverse of top `u`, `P_(t,1,u)⁻¹(c²_u) ⊕ key`, one round
