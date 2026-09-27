@@ -221,6 +221,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),
         ("AllGather_v1", lambda: b1_tp2.all_gather(4, 8)),
         ("QuantLinearFp8_v1", lambda: bind(fp8.QuantLinearFp8, K=256, N=2, BIAS=True)),
+        ("ScaledMmFp8BlockSharedScale_v1", lambda: bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=256, G=128)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),

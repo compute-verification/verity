@@ -690,6 +690,12 @@ class Lowering:
     layout: Layout
 
     @property
+    def domain(self) -> str:
+        """The operand domain the statement covers (vocab ``domain``): ``total`` when the unit asserts nothing, so every input
+        encoding is proven to give the IR's own output, else ``finite-only``."""
+        return "finite-only" if self.circuit.asserts else "total"
+
+    @property
     def cut(self) -> dict | None:
         """The cut structure, ``None`` without a cut: ``words`` (the cut word count), ``tail`` (:func:`tail_program`, its
         constants included) and, per instance-local unit, ``in`` / ``out`` its cut ports as ``[column, cut word]`` (input

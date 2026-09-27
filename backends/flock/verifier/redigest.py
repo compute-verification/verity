@@ -25,7 +25,7 @@ import transcript_check as tc  # noqa: E402
 
 def layout(b):
     """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field."""
-    r, off = tc.R(b, tc.digest_width(b)), {}
+    r, off, sb = tc.R(b, tc.digest_width(b)), {}, tc.salt_bytes(b)
 
     def at(key, n):
         off.setdefault(key, []).append(r.i)
@@ -57,6 +57,8 @@ def layout(b):
     def level(name):
         vec(lambda: vec(lambda: f(f"{name}.rows")))
         vec(lambda: h(f"{name}.sib"))
+        if sb:
+            vec(lambda: at(f"{name}.salt", sb))
 
     level("lig.l0")
     for i in range(r.u64()):
