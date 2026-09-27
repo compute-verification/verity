@@ -319,7 +319,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 | a16z stage | What it asks | Here | Follows, or deliberately differs |
 |---|---|---|---|
-| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, modulo A1 (our level 4a); proving A1 is level 4b, not plannable at the Johnson bound (a unique-decoding profile would be, since ArkLib proves those gaps). |
+| **1a** PIOP soundness | A machine-checked soundness proof of the polynomial IOP | `table_sound` at the oracle layer: the PIOP with Ligerito as an interactive oracle commitment, information-theoretic, per table, against any prover. | Follows, with no named assumption: A1, mutual correlated agreement up to the Johnson bound, is proved from DKT26, which ArkLib proves (#907; ASSUMPTIONS.md §3). |
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (ASSUMPTIONS.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the coin server keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; a Fiat–Shamir variant is future work (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit (level 3, another lane). | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
@@ -329,8 +329,8 @@ We follow the staging and vocabulary, and differ where the setting does.
 
 **Levels.** Our formal-verification levels (the Lean verifier study) map onto the stages as follows:
 
-- level 4a is Stage 1a–1c (interactive) modulo A1;
-- level 4b completes Stage 1 by proving A1;
+- level 4a is Stage 1a–1c (interactive);
+- level 4b, which completes Stage 1 by proving A1, is done (Sep 27, from DKT26 in ArkLib);
 - level 3 is Stage 2, plus the lowering theorem of 1d;
 - levels 1–2 are the implementation that Stage 2 is about.
 
@@ -339,14 +339,14 @@ target 2^-128, and state the number the way the stages suggest:
 
 1. **The statistical part, per table:** `−log2` of the proven error against any prover at the oracle layer. That is
    195.5 bits for m ≤ 33 and 195.4 bits for m = 34, 35.
-   - Only proven results are used: A1 is a published theorem, not a conjectured proximity gap.
+   - Only machine-checked results are used: A1 is proved in Lean, not a conjectured proximity gap.
    - No bits are credited to grinding (proof of work).
    - A session with several tables adds their errors.
 2. **The cryptographic part, with its model named:** collision resistance of SHA-512, as
    `Σ_ℓ √(N_ℓ·Q_ℓ·Adv_ℓ) + Adv_×` for explicit collision finders. That is at most `t·2^{17.3−256}` under the generic
    bound (§2), for classical provers.
 3. **Each assumption, at the stage that uses it:**
-   - 1a: A1;
+   - 1a: none, since A1 is proved;
    - 1b: SHA-512 collision resistance;
    - 1c (interactive): uniform coins, and nothing for the rounds, whose bytes the server keeps;
    - Stage 2: the compiler's correctness, mitigated by tests.

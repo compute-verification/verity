@@ -29,7 +29,7 @@ at most `tableError(fast100 m, shape)`:
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
-  `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
+  `Arith.Correct` from `execArith_correct`, so they have no named assumption.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (§9, `value_batch_le`).
 - **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
@@ -239,28 +239,17 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 
 ## 3. Named assumptions (taken without proof)
 
-There are two. Each is a `Prop` (`Assumptions.BCHKS25Thm46`, `Assumptions.SHA512ExpectedTimeCR`), and the theorems
-that use one take it as a hypothesis (`hMCA`; `hCR` in the link theorem). §1.5 names one more, L1, about
-the lowering. The development declares no `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can
-never make Lean prove something false.
+There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem takes as a hypothesis (`hCR`).
+§1.5 names one more, L1, about the lowering. The development declares no `axiom`. So a mis-stated assumption can make a
+theorem vacuous, but it can never make Lean prove something false.
 
-**A1. Reed–Solomon mutual correlated agreement up to the Johnson bound** (BCHKS25, ePrint 2025/2055, Theorem 4.6).
-
-- **Statement.** Take a Reed–Solomon code with `k` coefficients on `n` points, reduced rate `ρ = (k − 1)/n`, and radius
-  `0 < δ < 1 − √ρ`. The prover fixes any two words `u₀, u₁`. Over a uniform field element `γ`, consider the event that
-  `u₀ + γ·u₁` agrees with a codeword on at least `(1 − δ)·n` positions on which `u₀, u₁` are not both codewords. Its
-  probability is at most `a / |F|`, where:
-  - `m = max(⌈√ρ/(1 − √ρ − δ)⌉, 3)`;
-  - `a = (2(m + ½)^5 + 3(m + ½)·δ·ρ)/(3ρ^{3/2})·n + (m + ½)/√ρ`.
-- **It is literally ArkLib's pinned statement.** ArkLib states it as `CodingTheory.rs_mcaError_le_in_johnson_range` and
-  admits it. `FlockSoundnessTest/AssumptionIsArkLibs.lean` proves our `Prop` from ArkLib's by `exact`.
-- **Where Flock uses it.** Every Ligerito folding challenge (spec §13.3), with the field GF(2^256) and the level's code
-  embedded from GF(2^128). The paper's Lemma 9 turns it into "folding preserves the list", paying a row union of
-  `2^(k−i)` at round `i`. Lemma 9 is to be proved from A1, not assumed.
-- **One difference from the paper.** Flock's paper (Theorem 8) and its accounting use the multiplicity `⌈√ρ/(2η)⌉`.
-  BCHKS25's proof supports it, but the paper does not state it. We use the printed one. This costs nothing visible:
-  the term is below 2^-170, against 2^-97.8 for the query terms.
-- **Status upstream.** Unproved in ArkLib, and not plannable (the design doc, level 4b).
+**A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved** (Sep 27). BCHKS25 (ePrint
+2025/2055) Theorem 4.6 as printed, which ArkLib admits, is `mcaError_le_bchks25` (`JohnsonMCA.lean`) on `Fin n`
+domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), proved in ArkLib at our pin
+(`ReedSolomon.mcaError_affineLine_johnson_le`, #907). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
+`(8/3)·n·t'³/ρ`, where `t' = max(⌈√ρ/(2η)⌉, 3) + ½ ≤ m + ½` for BCHKS25's `m = max(⌈√ρ/η⌉, 3)`, so below BCHKS25's
+numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3, `prCoin_mca_le`). The accounting keeps `a`, so no number
+changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a term below 2^-170.
 
 **A2. Expected-time collision resistance of SHA-512** (CDGSY24, ePrint 2024/1434, Theorem 2), for the audit's value
 layer (Daniel, Sep 27).
@@ -312,8 +301,8 @@ layer (Daniel, Sep 27).
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
-- **Table 1** cites `computational-soundness` under `cr/sha-512`, `live-verifier` and `rs-proximity-johnson` (A1).
-  An audit's integrity profile would add A2, a new claim in `verity.claims` once a render cites it.
+- **Table 1** cites `computational-soundness` under `cr/sha-512` and `live-verifier`; A1's proof took
+  `rs-proximity-johnson` off. An audit's integrity profile would add A2, a new claim once a render cites it.
 
 ## 5. Trusted components
 
@@ -525,7 +514,7 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 - `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
   partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-195.4}$, given the fine partition's lowering.
 
-The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
+The hypotheses are the lowerings.
 
 **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`; DESIGN.md
 §12):
@@ -542,8 +531,8 @@ The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
   `session_knowledge_sound`), averaged over the draw (`ksAvgB`);
 - `flock_compiled_knowledgeSound`: the same for one table on its own (`sessionC`), from
   `table_knowledge_sound_joint_tight`: $\mathbb E_\omega[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega)
-  + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Both
-  have BCHKS25 Theorem 4.6 as their only named assumption;
+  + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Neither
+  has a named assumption;
 - `flock_batched_count`, `flock_batched_drawn` (and `flock_compiled_count`, `flock_compiled_drawn`):
   $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$, and drawn units up to
   $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
