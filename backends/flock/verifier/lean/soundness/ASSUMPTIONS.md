@@ -76,8 +76,8 @@ link term per audit.
     `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`. The reps' cap terms do not
     depend on `T` (`advRT_eq`).
 - **`table_knowledge_sound_joint`,** the form the audit consumes:
-  `Pr[a fresh run accepts ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))`, for every `ε`. At
-  `K = √(N₀/(e·Adv₀))` this is at most `2ε_c⁻ + t·2^-243.7` (m = 33).
+  `Pr[a fresh run accepts ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)`, for every `ε`. At
+  `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
 - **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link term `δ_link`
   (DESIGN.md §3). The first two need the SHA-512 leaf layout in the model; `δ_link` probably dominates the audit bound.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the

@@ -156,7 +156,7 @@ theorem table_knowledge_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) 
 open Classical in
 /-- **Knowledge soundness of one table, the audit's form.** The probability that a fresh run
 accepts while the extraction from `K ≥ 1` independent reruns after the level-0 cap fails is at
-most `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`, with no condition on `ε`. -/
+most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with no condition on `ε`. -/
 theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -169,8 +169,8 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
             ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
               (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
           (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts) σ) ≤
-      2 * epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
-        2 * (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
+      epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
+        (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
           2 ^ l₀.logLen / (Real.exp 1 * Kr)) := by
   revert σ
   show ∀ σ : Strategy (Game.send (Cap D)
@@ -226,7 +226,6 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
     (fun bs => Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
       (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
     (fun bs => expect_nonneg (ind_nonneg _) _ _) ε _
-    (expect_nonneg (ind_nonneg _) _ _)
     (epsCminus_nonneg A H E S m k0 l₀ l₁ rest ext _ hm ptLocal mPts σ)
     (fun bs hbs => uncommitted_costs hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
       hbs) Kr

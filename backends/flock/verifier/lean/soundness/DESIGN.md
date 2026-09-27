@@ -153,8 +153,9 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   - With `K = 2^21.6/(ε − ε_c⁻)`, failure is at most `1/4 + (t·2^-244.7/(ε − ε_c⁻))²`. The hash term is squared, so
     `κ = ε_c⁻ + t·2^-243.7`.
   - The product form the audit consumes needs no condition on `ε`:
-    `Pr[accepted ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))` (`table_knowledge_sound_joint`). At
-    `K = √(N₀/(e·Adv₀))` this is `2ε_c⁻ + t·2^-243.7`, which is `2^-163.7` at `t = 2^80` above `2ε_c⁻`.
+    `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint`). Rerun list by rerun
+    list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
+    `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
   - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
     `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
 - **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
@@ -178,25 +179,25 @@ under the two alternatives. $N_s$ is the leaves under the serving roots, $N_0 = 
 
 | Assumption | Knowledge + link | A | B | C | D |
 |---|---|---|---|---|---|
-| **Strict-time collision resistance** (Table 1 today) | $2\sqrt{t\cdot 8N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-225.3}}$ | $2\sqrt{t\cdot2^{-220.5}}$ | $2\sqrt{t\cdot2^{-217.5}}$ | $2\sqrt{t\cdot2^{-214.7}}$ |
-| **(i) Expected-time collision resistance** | $t\cdot N_s\,(8N_0/e)/2^{256.5}$ | $t\cdot2^{-215.2}$ | $t\cdot2^{-205.6}$ | $t\cdot2^{-199.6}$ | $t\cdot2^{-193.9}$ |
+| **Strict-time collision resistance** (Table 1 today) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
+| **(i) Expected-time collision resistance** | $t\cdot N_s\,(4N_0/e)/2^{256.5}$ | $t\cdot2^{-216.2}$ | $t\cdot2^{-206.6}$ | $t\cdot2^{-200.6}$ | $t\cdot2^{-194.9}$ |
 | **(ii) Random oracle** (tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
 
-The first two rows are the terms beyond $2\varepsilon_c^-$ and $\delta_{\rm tree}$, which (i) doubles (below).
+The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which (i) doubles (below).
 
 The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
 
 | Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
 |---|---|---|---|---|
-| Strict-time | −77.3 | −69.3 | −59.3 | −54.3 |
-| (i) Expected-time | −141.6 | −125.6 | −105.6 | −95.6 |
+| Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
+| (i) Expected-time | −142.6 | −126.6 | −106.6 | −96.6 |
 | (ii) Random oracle | −383 | −351 | −311 | −291 |
 | $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
 
-At $t=2^{80}$ the audits read −71.7, −69.3, −67.8 and −66.4 under strict time, and −135.2, −125.6, −119.6 and −113.9
+At $t=2^{80}$ the audits read −72.2, −69.8, −68.3 and −66.8 under strict time, and −136.2, −126.6, −120.6 and −114.9
 under (i).
 
-- **Strict time.** Balancing the knowledge term's $2N_0/(eK)$ against the link finder's cost, which grows linearly
+- **Strict time.** Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows linearly
   with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at $t=2^{80}$,
   audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's protocol (CDGSY24).
 - **(i) Expected-time collision resistance.**
@@ -210,14 +211,14 @@ under (i).
     have accepted, about $cN_0/(e\varepsilon)$ runs at acceptance probability $\varepsilon$.
     - An extraction then costs about $(1+cN_0/e)\,t$ in expectation, whatever $\varepsilon$, and needs no estimate
       of it.
-    - The joint form's missing term becomes about $2\varepsilon/c$.
+    - The joint form's missing term becomes about $\varepsilon/c$.
   - **The link finder** samples auxiliary extractions until one recovers the position it needs. That is at most $N_s$
     extractions in expectation, so about $N_s(cN_0/e)\,t$ evaluations.
   - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
-    $\Pr[\text{accept}]\,(1-2/c)\le\delta_{\rm tree}+2\varepsilon_c^-+N_s(cN_0/e)\,t/2^{256.5}$, plus a conflict term
+    $\Pr[\text{accept}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+N_s(cN_0/e)\,t/2^{256.5}$, plus a conflict term
     of order $t\cdot2^{-244}$. The square root goes.
-  - **The constant.** $c=4$ minimizes the total, giving the table's $t\cdot N_s(8N_0/e)/2^{256.5}$. It doubles the
-    other terms, to $2\delta_{\rm tree}+4\varepsilon_c^-$, one bit on terms 24 bits below the link term.
+  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the table's $t\cdot N_s(4N_0/e)/2^{256.5}$. It doubles the
+    other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 23 bits below the link term.
   - **The status.** It is a new assumption, not in Table 1, and this analysis is on paper, not in Lean.
 - **(ii) The random-oracle column** (lifetime doc §7). The extractor reads the commit strings, the `hm96` openings and
   the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one global
