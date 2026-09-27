@@ -185,16 +185,23 @@ class SingleRow(Row):
         self.tl("admission", "end", ("rc", 0), ("advisory", "true"))
 
     # ------------------------------------------------------------------------------------------------ manifest
+    def norm_tap(self) -> bool:
+        """The row runs the norm-scale tap (NORM_TAP=1): opt-in, never the record."""
+        return self.ck_.norm_tap == "1"
+
     def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs) -> 0 | 3 | 1."""
+        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs; under NORM_TAP=1 the
+        norm-scale policy too) -> 0 | 3 | 1."""
         wd = ""
+        policy = ["--norm-scales"] if self.norm_tap() else []
         self.tl(f"{stage}.required_manifest", "start", ("engine", "v2-query"))
         if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
             wd = R.workload_digest(self.d)
             cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
-                           *(["--workload-digest", wd] if wd else []), "--out", f"{self.d}/manifest.json")
+                           *(["--workload-digest", wd] if wd else []), *policy, "--out", f"{self.d}/manifest.json")
         else:
-            cmd = self.cli("manifest", "build", "--program", f"{self.d}/build_request", "--workload", self.wl, "--out", f"{self.d}/manifest.json")
+            cmd = self.cli("manifest", "build", "--program", f"{self.d}/build_request", "--workload", self.wl, *policy,
+                           "--out", f"{self.d}/manifest.json")
         log = f"{self.d}/manifest.log"
         with open(log, "w") as f:
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
@@ -519,6 +526,8 @@ class SingleRow(Row):
             cmd += ["--required-classes", ck.required_classes]
         if ck.vu_export != "0":
             cmd += ["--vu-export-dir", self.vu_export_dir()]
+        if self.norm_tap():
+            cmd += ["--norm-tap-so", self.env.norm_tap_so]
         return cmd
 
     def vu_export_dir(self) -> str:
@@ -540,7 +549,12 @@ class SingleRow(Row):
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
             eng = R.manifest_engine(f"{d}/manifest.json")
-            if eng == "v2-query":
+            if eng == "v2-query" and self.norm_tap() and not R.manifest_norm_scales(f"{d}/manifest.json"):
+                prev = f"{d}/manifest.no-norm-scales-{_stamp()}.json"
+                os.replace(f"{d}/manifest.json", prev)
+                self.log(f"manifest.json beside the Build was built without the norm-scale policy and this Commit runs NORM_TAP=1: moved aside "
+                         f"({os.path.basename(prev)}), rebuilding the manifest under the policy")
+            elif eng == "v2-query":
                 man = f"{d}/manifest.json"
                 self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
             else:
@@ -622,6 +636,8 @@ class SingleRow(Row):
             cmd += ["--fixture", self.wl, "--programs-root", d, *(["--workload-digest", wd] if wd else [])]
         else:
             cmd += ["--program", f"{d}/build_request", "--workload", self.wl]
+        if self.norm_tap():
+            cmd.append("--norm-scales")
         self.tl("validate.manifest_verify", "start")
         with open(f"{d}/manifest_verify.log", "w") as f:
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
@@ -640,6 +656,8 @@ class SingleRow(Row):
         self.tl("stage.commit", "start")
         if not os.path.isfile(self.hidden_so):
             self.commit_stop(12, f"hidden .so missing: {self.hidden_so}")
+        if self.norm_tap() and not os.path.isfile(self.env.norm_tap_so):
+            self.commit_stop(12, f"NORM_TAP=1 and the norm tap .so is missing: {self.env.norm_tap_so} (ops/pod_norm_tap.sh)")
         self.tl("commit.prepare", "start")
         cmd = self.commit_cmd()
         pd_req = f"{d}/build_request"

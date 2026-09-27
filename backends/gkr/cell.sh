@@ -4,16 +4,18 @@
 # same datacenter.  Runs from the shipped tree (research run --source . --cwd source); KEY=VALUE arguments become the environment.
 #
 #   ROLE=verifier  REL=<rel>+blake3 [SET=<set tarball under inputs/>] [POINTS="1024 2048 4096"] [RUNS=5] [PORT=7200]
-#                  [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
+#                  [ECHO_PORT=7201] [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
 #       flock b684b12 + both Flock patches + this tree's live crate (release) and the flock-link selftest at 8 VUs of the set's K;
-#       then, size by size in POINTS order (capped at the set), the verifier's own statement of that size (leaf digests and prime
+#       then an echo on ECHO_PORT for the prover's RTT probe, and size by size in POINTS order (capped at the set), the verifier's own
+#       statement of that size (leaf digests and prime
 #       commitment from the set: tools/cell.py statement --verifier-side) and one `flock-link cell-serve` on PORT serving RUNS
 #       sessions (it serves the prime coins too).  A size that ends short of RUNS sessions ends the run (the prover stopped).
-#   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:sshport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
-#                  [LOOPBACK=1] [OPERATOR=<lane>]
+#   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:echoport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
+#                  [LOOPBACK=1] [RTT_WAIT=1800] [OPERATOR=<lane>]
 #       pod_bootstrap.sh, flock-link and verity-gkr-verify built from this tree, their tests; with GATE=1 the correctness gate at
 #       the first size (loopback verifier: honest accepted and admitted by tools/cell_gate.py except non_producer, a stale prime
-#       state and a Fiat-Shamir prime prover refused, the statement claimed as another relation refused); the RTT probe; then per
+#       state and a Fiat-Shamir prime prover refused, the statement claimed as another relation refused); the RTT probe (it waits
+#       up to RTT_WAIT s for the verifier's echo); then per
 #       size in POINTS (capped at the set): the statement (the serving commit timed), one warm-up session against a verifier on
 #       127.0.0.1 (the loopback probe), RUNS timed sessions against VERIFIER; the sweep stops when two doublings add < 2 % or a size
 #       fails.  result.json = the plateau (tools/cell.py finish), outputs.json = the other sizes.
@@ -23,9 +25,10 @@ REPO=$(pwd); RD=${RESEARCH_RUN_DIR:?}; W=/workspace; O=$RD/out; mkdir -p $O $W/b
 command -v python3 >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 >/dev/null; }
 ROLE=${ROLE:-prover}; REL=${REL:?}; RUNS=${RUNS:-5}
 say() { echo "##### $(date -u +%H:%M:%SZ) $*"; }
-Q=-1; PER=100000
+# the cgroup's CPU quota, rounded up: v2 cpu.max, else v1 cfs_quota_us / cfs_period_us (US-NC-1 L40S pods: 13.6 cores of 128)
+Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000)
 if [ -r /sys/fs/cgroup/cpu.max ]; then read -r Q PER < /sys/fs/cgroup/cpu.max; [ "$Q" = max ] && Q=-1; fi
-NT=$(( Q > 0 ? Q / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1; export RAYON_NUM_THREADS=$NT
+NT=$(( Q > 0 ? (Q + PER - 1) / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1; export RAYON_NUM_THREADS=$NT
 export PYTHONPATH="$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/tools/research/src:$REPO:$REPO/backends/gkr"
 export PATH="$HOME/.cargo/bin:$PATH"
 F=$W/flock-link/flock; B=$W/bin/flock-link-live; VB=$W/bin/verity-gkr-verify-live
@@ -70,6 +73,20 @@ if [ "$ROLE" = verifier ]; then
   $B selftest --vus 8 --k $K > $O/selftest-8.txt 2>&1
   echo "flock-link selftest (8 VUs, K=$K): $(grep -c '"pass":true' $O/selftest-8.txt) passed, $(grep -c '"pass":false' $O/selftest-8.txt) failed; $(grep SELFTEST $O/selftest-8.txt | cut -c1-200)"
   [ -n "$SET_DIR" ] || { echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; }
+  # an echo on ECHO_PORT for the prover's open-connection RTT probe (a TCP connect over RunPod's global network costs ~4x a round
+  # trip).  It starts once setup is done: the prover's probe waits for it, so its sessions (a 60 s connect retry) find the verifier up
+  python3 -c "
+import socket, threading
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('0.0.0.0', ${ECHO_PORT:-7201})); s.listen(16)
+def echo(c):
+    c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    with c:
+        while (d := c.recv(256)):
+            c.sendall(d)
+while True:
+    c, _ = s.accept(); threading.Thread(target=echo, args=(c,), daemon=True).start()
+" > $O/echo.log 2>&1 &
+  ECHO_PID=$!
   first=1
   for n in $SIZES; do
     # each size's statement just before serving it: the prover builds the same statement and runs a warm-up before its first
@@ -98,6 +115,7 @@ files += [str(p.relative_to(rd)) for p in sorted((rd / "out").rglob("*")) if p.i
      "meta": {"label": "A-route-a live verifier: every session's record, the Flock proofs kept beside it, the statements it served"}}]}))
 print(f"outputs.json: {len(files)} files")
 EOF
+  kill $ECHO_PID 2>/dev/null
   rm -rf $RD/set
   exit 0
 fi
@@ -166,12 +184,56 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 
 say "RTT probe to $RTT_TARGET"
-RTT=$($PY -c "import socket,time,statistics as S;h,p='$RTT_TARGET'.rsplit(':',1);t=[]
-for _ in range(20):
-    a=time.perf_counter();c=socket.create_connection((h,int(p)),timeout=5);t.append((time.perf_counter()-a)*1e3);c.close();time.sleep(0.05)
-print(round(S.median(t),3))") || { echo "RTT probe failed"; exit 3; }
-echo "RTT $RTT ms" | tee $O/rtt.txt
-RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod's sshd ($RTT_TARGET), measured in this run before the sweep"
+# RTT_TARGET: the verifier's echo (ECHO_PORT) gives the round trip on one open connection, the way the session's rounds travel; else
+# (e.g. its sshd) the median of 20 TCP connects, a failed one retried (a first connect over global networking can time out).  The
+# echo is up once the verifier's setup is done, so a refused or timed-out connect is retried for RTT_WAIT s (default 1800)
+read -r RTT RTT_KIND < <($PY -c "
+import socket, statistics as S, sys, time
+h, p = '$RTT_TARGET'.rsplit(':', 1); p = int(p); MAGIC = b'verity-rtt-probe\\n'
+def open_rtt():
+    c = socket.create_connection((h, p), timeout=5); c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1); c.settimeout(3)
+    with c:
+        c.sendall(MAGIC); got = b''
+        while len(got) < len(MAGIC) and (d := c.recv(len(MAGIC) - len(got))):
+            got += d
+        if got != MAGIC:
+            return None
+        t = []
+        for _ in range(50):
+            a = time.perf_counter(); c.sendall(b'p' * 8); r = b''
+            while len(r) < 8:
+                r += c.recv(8 - len(r))
+            t.append((time.perf_counter() - a) * 1e3)
+        return t
+t = None; end = time.monotonic() + ${RTT_WAIT:-1800}
+while True:
+    try:
+        t = open_rtt()
+        break
+    except OSError:
+        if time.monotonic() > end:
+            break
+        time.sleep(2)
+if t:
+    print(round(S.median(t), 3), 'open'); sys.exit()
+t = []
+for _ in range(40):
+    try:
+        a = time.perf_counter(); c = socket.create_connection((h, p), timeout=5); t.append((time.perf_counter() - a) * 1e3); c.close()
+    except OSError:
+        pass
+    time.sleep(0.05)
+    if len(t) == 20:
+        break
+print(round(S.median(t), 3), 'connect') if len(t) == 20 else sys.exit('only %d of 40 connects' % len(t))
+")
+[ -n "${RTT:-}" ] || { echo "RTT probe failed"; exit 3; }
+if [ "$RTT_KIND" = open ]; then
+  RTT_METHOD="median of 50 ping-pongs of 8 bytes on one open TCP connection (TCP_NODELAY) from the prover pod to the verifier pod's echo ($RTT_TARGET), measured in this run before the sweep"
+else
+  RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod ($RTT_TARGET), measured in this run before the sweep"
+fi
+echo "RTT $RTT ms ($RTT_KIND)" | tee $O/rtt.txt
 i=0; TPS=()
 for n in $SIZES; do
   P=$O/points/p$i-$n; mkdir -p $P; C=$W/cell/k$K-c$n

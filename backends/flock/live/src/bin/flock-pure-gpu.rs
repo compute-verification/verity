@@ -446,8 +446,8 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     };
     let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc, mid }) };
     let flip_z = match (plan.tail_tamper, st.lay.tail()) {
-        (Some(3), Some(n)) => Some((n << st.lay.k_log()) + 700 + ((st.lay.unit_pos0() + 15) << UNIT_LOG)),
-        _ => plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG)),
+        (Some(3), Some(n)) => Some((n << st.lay.k_log()) + 700 + ((st.lay.unit_pos0(st.ul) + 15) << st.ul)),
+        _ => plan.unit_flip.then_some(700 + ((st.lay.unit_pos0(st.ul) + 5) << st.ul)),
     };
     let wit = Wit { comps: comps.clone(), inputs, flip_z };
     let wit1 = Wit { comps: comps.clone(), inputs: make_inputs(plan.rep1_other_witness), flip_z };
@@ -740,6 +740,7 @@ fn main() {
         std::process::exit(2);
     }
     let st = Arc::new(PureStmt::new(net, inst.vus, lay));
+    st.prepare(&inst);
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),

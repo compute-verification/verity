@@ -5,7 +5,8 @@ The unit's rows do not depend on D; its ``flock-ir-unit/v2`` netlist, whose LEAV
 words, is pinned per D by :data:`PINS`."""
 TEMPLATE = "rope-head"
 UNIT = "rope-head/neox-bf16/pair"
-PINS = {64: "933c4ef86ac194b79381bf952c9968af7d634201c81f4604b0a1ac7e4e09f553"}
+PINS = {64: "933c4ef86ac194b79381bf952c9968af7d634201c81f4604b0a1ac7e4e09f553",
+        128: "4dfae6d2311c31fc7cd2ebe0caa0f9f4ee13c1b5788683349cfd2fc9c9e1675d"}
 
 
 def definition(subcircuit):

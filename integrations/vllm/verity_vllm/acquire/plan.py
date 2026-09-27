@@ -50,7 +50,7 @@ ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "modu
                    "fa2_hidden_m1_stream": "hidden_tap", "fa3_hidden_m1_stream": "hidden_tap",
                    "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
                    "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
-                   "weights": "registered_input"}
+                   "weights": "registered_input", "norm_scales": "norm_tap"}
 MODULE_ROUTES = ("module_output", "module_input")                        # the routes whose sites are module boundaries (confirm_modules)
 HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}   # hidden_tap route -> the kernel tap
 MOE_FAMILY = "moe_block_stream"
@@ -322,6 +322,14 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             legal.append(Site("native_tap", module, v.output_member, "n/a", "a rank-local collective operand: the TP partial source at the module's collective"))
         else:
             refuse("native_tap", module, v.output_member, "the owning module is not a module of the runtime tree")
+        return legal, refused
+
+    if route == "norm_tap":
+        if rt.has_module(module):
+            legal.append(Site("native_tap", module, v.output_member, "n/a", "the scale of the module's norm: the norm-scale source inside the module "
+                              "(a tapped kernel, or the rsqrt of an ATen-chain norm)"))
+        else:
+            refuse("native_tap", module, v.output_member, "the norm module is not a module of the runtime tree")
         return legal, refused
 
     if route in ("runner_return", "runner_state", "launch_proxy"):

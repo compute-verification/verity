@@ -150,3 +150,38 @@ def test_catalog_deduplicates_specializations_across_rows(tmp_path):
     assert all(d["digest"] in shards for o in ops for d in o["definitions"] if d["id"])
     again = json.loads((tmp_path / "graphs" / "rowA.program.json").read_text())
     assert "definitions" not in again and again["definitions_index"]
+
+
+def test_edges_carry_the_words_each_read_takes(tmp_path):
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    gid = {x["id"]: x for x in g["groups"]}
+    runs = sum(hi - lo for r in inst["rows"] for grp in r["args"] for k, _a, lo, hi in grp if k == "n")
+    assert sum(e["words"] for e in g["edges"]) == runs
+    down = next(e for e in g["edges"] if gid[e["from"]]["definition"] == "SiluMul_v1" and gid[e["to"]]["module"].endswith("down_proj"))
+    assert down["words_per_read"] == I and down["ports"] == [{"param": "x", "port": "out", "words": down["words"]}]
+    assert down["bits"] == 16 * down["words"]
+    qkv = [e for e in g["edges"] if gid[e["from"]]["module"].endswith("qkv_proj")]
+    assert qkv and all(e["words_per_read"] < gid[e["from"]]["statics"]["N"] for e in qkv)     # each reader takes a slice of q | k | v
+
+
+def test_param_inputs_name_the_parameter_each_prescribed_input_feeds(tmp_path):
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    assert any(k == "p" for r in inst["rows"] for grp in r["args"] for k, *_ in grp)
+    down = next(x for x in g["groups"] if x["module"].endswith("down_proj"))
+    assert list(down["param_inputs"]) == ["w"] and all(k.startswith("weights:") for k in down["param_inputs"]["w"])
+    assert set(down["param_inputs"]["w"]) == set(down["prescribed_reads"])
+    assert all(x["param_inputs"] is not None for x in g["groups"])
+
+
+def test_word_rules_per_group_and_row(tmp_path):
+    inst, _w = _program(attn=True)
+    g = PG.with_word_rules(PG.program_graph([_write(inst, tmp_path / "instances.json.gz")]))
+    q = g["q_word_v1"]
+    assert q["query"] == "Q_word_v1{X=16,W=32,R=no-recompute}" and q["units"] == sum(x["q_word_v1"]["units"] for x in g["groups"] if "units" in x["q_word_v1"])
+    gemm = next(x for x in g["groups"] if x["definition"] == "Gemm_v1")
+    assert gemm["q_word_v1"]["units"] == gemm["calls"] * gemm["statics"]["N"] and gemm["q_word_v1"]["committed_interior_words"] == 0
+    attn = next(x for x in g["groups"] if x["definition"] == "Attention_v3")
+    assert attn["q_word_v1"]["committed_interior_words"] > 0
+    assert attn["varying_calls"] is None or sum(attn["varying_calls"].values()) == attn["calls"]

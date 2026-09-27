@@ -52,9 +52,9 @@ def _ranks(count: int, ranks: Iterable[int]) -> tuple[int, ...]:
     return ordered
 
 
-def _node_of(domain_id: bytes) -> Node:
+def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
-        return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right)
+        return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 
     return node
 
@@ -107,7 +107,7 @@ def multiproof(tree: MerkleTree, ranks: Iterable[int]) -> list[bytes]:
         return proof[-1]
 
     known = {rank: levels[0][rank] for rank in ordered}
-    _fold(domain.count, known, sibling, _node_of(domain.domain_id))
+    _fold(domain.count, known, sibling, _node_of(domain.domain_id, domain.hash))
     return proof
 
 
@@ -149,8 +149,9 @@ def verify_multiproof(
     domain_id: bytes,
     leaves: Mapping[int, bytes],
     proof: Sequence[bytes],
+    hash: str = "sha256",
 ) -> bool:
-    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof``.
+    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (``hash`` the domain's frame hash).
 
     False when a rank lies outside the tree, when ``leaves`` is empty (nothing
     is authenticated) or when the proof is not consumed exactly.
@@ -168,7 +169,7 @@ def verify_multiproof(
         return proof[cursor - 1]
 
     try:
-        reconstructed = _fold(count, leaves, sibling, _node_of(domain_id))
+        reconstructed = _fold(count, leaves, sibling, _node_of(domain_id, hash))
     except IndexError:
         return False
     return cursor == len(proof) and reconstructed == root

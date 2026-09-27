@@ -2,6 +2,7 @@
 subcircuit, content-addressed and re-evaluate under their relation; a VU that does not replay bit-exactly is never exported."""
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import numpy as np
@@ -202,3 +203,71 @@ def test_the_store_holds_the_units_and_a_query_cuts_the_sets(attn_world, tmp_pat
                          limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=1000))
     assert sum(x["n"] for x in full) > sum(x["n"] for x in only)          # the checkpoint fallback cuts any row
     assert VX.verify(tmp_path)["ok"]
+
+
+def _e4m3(rng, shape):
+    b = rng.integers(0, 256, size=shape, dtype=np.int64)
+    b[(b & 0x7F) == 0x7F] &= ~0x08                                          # no NaN codes
+    return b.astype(np.uint8)
+
+
+def _store_one(tmp_path, fam, st, ops, out, refs, limits):
+    """One evaluation stored as `vu_store` stores it (a unit of one evaluation), then the default extraction into `<tmp>/sets`."""
+    key, blobs = VX.selection_key(ROOT), {}
+    ev = VS._evaluation((key, ("row", "r0", 0, 0)), fam, st, ops, out, refs, blobs, limits)
+    root = tmp_path / "store"
+    (root / "values").mkdir(parents=True)
+    (root / "programs" / "p").mkdir(parents=True)
+    for h, (dt, b) in blobs.items():
+        (root / "values" / f"{h}.{dt}").write_bytes(b)
+    unit = {"vu": 0, "request": "r0", "i": 0, "engine_step": 0, "op_path": "model.layers.0.mlp", "row": 0, "phase": "decode", "family": fam,
+            "evaluations": [ev]}
+    (root / "programs" / "p" / "units.jsonl").write_text(json.dumps(unit) + "\n")
+    (root / "run.json").write_text(json.dumps({"schema": VS.STORE_SCHEMA, "provenance": {"run_root": ROOT.hex()}, "limits": dataclasses.asdict(limits)}))
+    sets, _ = VS.extract(root, tmp_path / "sets")
+    return root, ev, sets
+
+
+def test_an_fp8_block_coordinate_is_the_row_word(tmp_path):
+    rng = np.random.default_rng(7)
+    K, N, G = 256, 256, 128
+    f32 = lambda a: np.asarray(a, dtype=np.float32).view(np.uint32)       # noqa: E731
+    xq, w, sx, ws = _e4m3(rng, K), _e4m3(rng, (N, K)), f32(rng.uniform(1e-3, 0.1, K // G)), f32(rng.uniform(1e-3, 0.1, (N // G, K // G)))
+    st, ops = {"K": K, "N": N, "G": G}, [xq, sx, w.reshape(-1), ws.reshape(-1)]
+    out = EV.evaluate("ScaledMmFp8Block_v1", st, [[xq], [sx], [], []], [None, None, ops[2], ops[3]])
+    insts = VX.decompose("ScaledMmFp8Block_v1", st, ops, out, lambda n, k: list(range(0, n, n // k)), VX.Limits(gemm_coords_per_row=8))
+    assert len(insts) == 8 and {i.set_name for i in insts} == {f"gemm-coordinate-fp8-block{G}-hopper-e4m3-k{K}"}
+    for i in insts:
+        n = i.sub["n"]
+        assert np.array_equal(i.ports["w"], w[n]) and np.array_equal(i.ports["sw"], ws[n // G]) and int(i.ports["y"][0]) == int(out["0"][n])
+    with pytest.raises(VX.DecompositionMismatch):
+        VX.decompose("ScaledMmFp8Block_v1", st, ops, {"0": out["0"] ^ 1}, lambda n, k: [0], VX.Limits())
+    lim = VX.Limits(gemm_coords_per_row=5)
+    _root, ev, sets = _store_one(tmp_path, "ScaledMmFp8Block_v1", st, ops, out, [None, None, {"field": "w", "range": [0, N * K]},
+                                                                                   {"field": "ws", "range": [0, ws.size]}], lim)
+    wa = ev["args"][2]
+    assert wa["weight"]["dtype"] == "u8" and wa["weight"]["shape"] == [N, K] and len(wa["sample"]["rows"]) == 5 and "sample" not in ev["args"][3]
+    assert [(s["set"], s["n"]) for s in sets] == [(f"gemm-coordinate-fp8-block{G}-hopper-e4m3-k{K}", 5)] and VX.verify(tmp_path)["ok"]
+    full, _ = VS.extract(tmp_path / "store", tmp_path / "ckpt", weights=lambda f, lo, hi: ops[2] if f == "w" else None)
+    assert full[0]["content_digest"] == sets[0]["content_digest"]                # the checkpoint's e4m3 rows cut the same coordinates
+
+
+def test_moe_expert_coordinates_are_the_row_words(tmp_path):
+    rng = np.random.default_rng(11)
+    E, K, N = 3, 32, 5
+    x, slab, e = _bf16(rng, K), _bf16(rng, E * N * K), np.asarray([1], dtype=np.uint32)
+    g = np.asarray([0.375], dtype=np.float32).view(np.uint32)
+    st, pick, lim = {"E": E, "K": K, "N": N}, (lambda n, k: list(range(min(n, k)))), VX.Limits(gemm_coords_per_row=N)
+    up = EV.evaluate("MoeExpertGemm_v1", st, [[x], [e], []], [None, None, slab])
+    down = EV.evaluate("MoeExpertGemmW_v1", st, [[x], [e], [g], []], [None, None, None, slab])
+    a = VX.decompose("MoeExpertGemm_v1", st, [x, e, slab], up, pick, lim)
+    b = VX.decompose("MoeExpertGemmW_v1", st, [x, e, g, slab], down, pick, lim)
+    W = slab.reshape(E, N, K)[1]
+    assert [i.sub["n"] for i in a] == [i.sub["n"] for i in b] == list(range(N))
+    assert all(np.array_equal(i.ports["w"], W[i.sub["n"]]) and i.sub["expert"] == 1 for i in a + b)
+    assert [int(i.ports["y"][0]) for i in a] == up["up"].tolist() and [int(i.ports["y"][0]) for i in b] == down["down"].tolist()
+    assert {i.set_name for i in b} == {f"moe-expert-routed-gemm-coordinate-ampere-bf16-k{K}"} and set(b[0].ports) == {"x", "w", "g", "y"}
+    root, ev, sets = _store_one(tmp_path, "MoeExpertGemmW_v1", st, [x, e, g, slab], down, [None, None, None, {"field": "w2", "range": [0, slab.size]}],
+                                VX.Limits(gemm_coords_per_row=3))
+    assert ev["args"][3]["weight"]["expert"] == 1 and ev["args"][3]["weight"]["shape"] == [N, K] and len(ev["args"][3]["sample"]["rows"]) == 3
+    assert VS.verify_store(root)["ok"] and [s["n"] for s in sets] == [3] and VX.verify(tmp_path)["ok"]

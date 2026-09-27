@@ -28,14 +28,17 @@ import json
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import numpy as np
+
+from verity.ir.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, spec_statics
+from verity_vllm.query import word as word_query
+from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8
@@ -55,6 +58,16 @@ def _parent(path: str, known: set[str]) -> str:
     return ""
 
 
+def _param_inputs(c: Counter | None) -> dict[str, dict[str, int]] | None:
+    """Per consumer parameter, the words it reads from each prescribed input (None when no instance rows were read)."""
+    if c is None:
+        return None
+    out: dict[str, dict[str, int]] = {}
+    for (param, name), w in sorted(c.items()):
+        out.setdefault(param, {})[name] = w
+    return out
+
+
 class _Acc:
     """The graph over one or more request Programs of one row."""
 
@@ -62,11 +75,16 @@ class _Acc:
         self.modules: dict[str, dict[str, Any]] = {}
         self.groups: dict[tuple[str, str], dict[str, Any]] = {}
         self.edges: Counter = Counter()
+        self.edge_words: Counter = Counter()
+        self.edge_bits: Counter = Counter()
+        self.edge_ports: dict[tuple, Counter] = {}
+        self.param_names: dict[str, list[str]] = {}
         self.param_reads: Counter = Counter()
+        self.param_inputs: dict[tuple[str, str], Counter] = {}
         self.programs: list[dict[str, Any]] = []
         self.call_keys: list[list[tuple[str, str]]] = []
 
-    def add(self, P: ProgramView, digest: str | None, label: str) -> None:
+    def add(self, P: ProgramView, digest: str | None, label: str, path: str | None = None) -> None:
         cols = P.columns
         if cols is None:
             raise ValueError("program_graph reads the columnar body (from_instances)")
@@ -151,8 +169,80 @@ class _Acc:
             g, iid, pi = code >> 40, -((code >> 16) & ((1 << 24) - 1)), code & 0xFFFF
             inp = P.input(int(iid))
             self.param_reads[(gkeys[g], f"{inp.name}:{cols.port_names[pi]}" if cols.port_names[pi] != "out" else inp.name)] += int(cnt)
+        if path is not None:
+            self._words(path, cols, call_group, gkeys, P.params)
         self.call_keys.append([gkeys[g] for g in call_group.tolist()])
         self.programs.append({"label": label, "program_digest": digest, "calls": n, "modules": len(set(mods))})
+
+    def _params_of(self, spec: str) -> list[str]:
+        names = self.param_names.get(spec)
+        if names is None:
+            try:
+                names = [n for n, _t in _specialization(spec_base(spec), spec_statics(spec)).signature()[0]]
+            except (KeyError, TypeError, ValueError, AttributeError):
+                names = []
+            self.param_names[spec] = names
+        return names
+
+    def _words(self, path: str, cols: Any, call_group: np.ndarray, gkeys: list[tuple[str, str]], inputs: Sequence[Any]) -> None:
+        """Per group edge, the leaves the consumers' operand runs name in the producers' outputs (words), their declared bits, and
+        per (consumer parameter, producer port) the words landing there: the instance rows' runs `("n", producer, lo, hi)`; per
+        (consumer parameter, prescribed input) the words it reads there: the runs `("p", input, lo, hi)`."""
+        tables, spec_idx, forms, form_idx = cols.port_tables, cols.spec_idx, cols.forms, cols.form_idx
+        cg = call_group.tolist()
+        words, bits, ports = self.edge_words, self.edge_bits, self.edge_ports
+        for r in iter_instance_rows(path):
+            gc = gkeys[cg[int(r["i"])]]
+            pin = self.param_inputs.setdefault(gc, Counter())
+            names = None
+            for j, operand in enumerate(r.get("args") or ()):
+                acc: dict[tuple, list[int]] = {}                      # (producer group, port) -> [words, bits] over this operand's runs
+                for run in operand:
+                    if run[0] == "p":
+                        if names is None:
+                            names = self._params_of(r["spec"])
+                        param, pv, lo, hi = names[j] if j < len(names) else str(j), inputs[run[1]], run[2], run[3]
+                        for p in pv.port_table:
+                            if len(pv.port_table) == 1 or p.lo < hi and lo < p.hi:
+                                w = hi - lo if len(pv.port_table) == 1 else min(hi, p.hi) - max(lo, p.lo)
+                                pin[(param, f"{pv.name}:{p.name}" if p.name != "out" else pv.name)] += w
+                        continue
+                    if run[0] != "n":
+                        continue
+                    idx = run[1]
+                    table = tables[spec_idx[idx]]
+                    if len(table) == 1 and (table[0].lo <= run[2] and run[3] <= table[0].hi or forms[form_idx[idx]] == "batch"):
+                        p = table[0]
+                        a = acc.setdefault((cg[idx], p.name), [0, 0])
+                        a[0] += run[3] - run[2]
+                        a[1] += (run[3] - run[2]) * (p.width or 0)
+                        continue
+                    lo, hi = run[2], run[3]
+                    hits = [(p, max(lo, p.lo), min(hi, p.hi)) for p in table if p.lo < hi and lo < p.hi]
+                    if not hits and forms[form_idx[idx]] == "batch":
+                        hits = [(table[0], lo, hi)]
+                    for p, x, y in hits:
+                        a = acc.setdefault((cg[idx], p.name), [0, 0])
+                        a[0] += y - x
+                        a[1] += (y - x) * (p.width or 0)
+                if not acc:
+                    continue
+                if names is None:
+                    names = self._params_of(r["spec"])
+                param = names[j] if j < len(names) else str(j)
+                for (gp, port), (w, b) in acc.items():
+                    key = (gkeys[gp], gc)
+                    words[key] += w
+                    bits[key] += b
+                    ports.setdefault(key, Counter())[(param, port)] += w
+
+    def _edge(self, gid: dict, a: tuple, b: tuple, reads: int) -> dict[str, Any]:
+        e: dict[str, Any] = {"from": gid[a], "to": gid[b], "reads": reads}
+        if (a, b) in self.edge_words:
+            w = self.edge_words[(a, b)]
+            e.update(words=w, bits=self.edge_bits[(a, b)], words_per_read=round(w / reads, 3) if reads else None,
+                     ports=[{"param": pa, "port": po, "words": n} for (pa, po), n in sorted(self.edge_ports[(a, b)].items())])
+        return e
 
     def graph(self, units: dict[tuple[str, str], int] | None = None, exported: dict[tuple[str, str], int] | None = None) -> dict[str, Any]:
         bodies = set(self.modules)
@@ -186,11 +276,17 @@ class _Acc:
             t, p, _m = template_of(spec0)
             if g["varying"]:
                 p = {a: v for a, v in p.items() if a not in g["varying"]}
+            varying_calls: dict[str, int] = {}
+            for sp, k in g["specs"].items():
+                st = spec_statics(sp)
+                vk = ",".join(str(st.get(a)) for a in g["varying"])
+                varying_calls[vk] = varying_calls.get(vk, 0) + k
             out_groups.append({"id": gid[key], "module": g["module"], "definition": g["family"], "statics": g["statics"],
-                               "varying": g["varying"], "specs": len(g["specs"]), "spec": spec0 if len(g["specs"]) == 1 else None,
+                               "varying": g["varying"], "varying_calls": varying_calls if g["varying"] else None, "specs": len(g["specs"]), "spec": spec0 if len(g["specs"]) == 1 else None,
                                "calls": g["calls"], "template": t, "template_params": p, "instances": g["instances"],
                                "units_in_run": (units or {}).get(key), "exported_vus": (exported or {}).get(key),
-                               "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key}})
+                               "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key},
+                               "param_inputs": _param_inputs(self.param_inputs.get(key))})
         # structural hashes: a body's groups in order, reads by group index inside the body, outside reads by count
         body_hash: dict[str, str] = {}
         for m, keys in groups_of.items():
@@ -221,12 +317,18 @@ class _Acc:
             if a[0] != b[0]:
                 mod_edges[(a[0], b[0])] += c
         return {"schema": SCHEMA, "programs": self.programs, "modules": out_modules, "groups": out_groups,
-                "edges": [{"from": gid[a], "to": gid[b], "reads": c} for (a, b), c in sorted(self.edges.items(), key=lambda e: (gid[e[0][0]], gid[e[0][1]]))],
+                "edges": [self._edge(gid, a, b, c) for (a, b), c in sorted(self.edges.items(), key=lambda e: (gid[e[0][0]], gid[e[0][1]]))],
                 "module_edges": [{"from": a, "to": b, "reads": c} for (a, b), c in sorted(mod_edges.items())],
                 "rules": {"module_of": "Correspondence.module_of (the recorded owning module; Q_module_body_v1's unit)",
                           "parent": "the nearest enclosing module: a child's path extends its parent's by '.' (torch named_modules nesting)",
                           "order": "Program order of the first Call in the module's subtree", "group": f"Definition, a static with > {VARYING_MAX} "
                           "values in one (module, family) kept as a range", "edge": "Values read: one per (consumer Call, producer Call, port)",
+                          "edge_words": "words: the leaves the consumers' operand runs name in the producers' outputs, summed over the edge's Calls "
+                          "(a leaf named by two operands counts twice); bits: the same leaves at their declared widths; words_per_read = words / reads; "
+                          "ports: words per (consumer parameter, producer port)",
+                          "param_inputs": "per group, per consumer parameter, the words it reads from each prescribed input (weights:<tensor>, "
+                          "prompt, seed, ...), summed over the group's Calls; null when no instance rows were read",
+                          "varying_calls": "a varying group's Calls per value of its varying statics",
                           "body_hash": "sha256 over the body's groups in order: family, constant statics, varying static names, Call count, "
                           "reads inside the body by group index, reads from outside (count), prescribed-input reads (count)",
                           "subtree_hash": "sha256 of [body_hash, children's subtree hashes in order]"}}
@@ -302,7 +404,7 @@ def program_graph(instance_paths: Iterable[str | Path], *, row: dict[str, Any] |
     acc = _Acc()
     for p in instance_paths:
         hdr = _read_instance_header(str(p))
-        acc.add(from_instances(str(p)), hdr.get("digest"), Path(p).parent.name)
+        acc.add(from_instances(str(p)), hdr.get("digest"), Path(p).parent.name, str(p))
     prefix = wrapper_prefix(strata, acc) if strata else ""
     units = units_from_strata(strata, acc, prefix) if strata else None
     exported = exported_from_vus(vus_jsonl, acc, prefix, request_programs) if vus_jsonl else None
@@ -341,26 +443,7 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return runs
 
 
-def _specialization(fam: str, statics: dict[str, Any]):
-    """The registered Definition a group names, bound to its statics (a primitive as it is)."""
-    from verity.ir.codec import lookup_primitive
-    from verity_vllm.query.program_view import _registry
-    reg, _errors = _registry()
-    d = reg.defs.get(fam)
-    if d is None:
-        return lookup_primitive(reg, fam)
-
-    def fn_value(v: Any) -> Any:
-        """A function-valued static (`DOT`, rendered `{"fn": id}` or as the bare id) -> the registered Definition it names."""
-        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v.startswith('{"fn"') else v)
-        if not isinstance(fid, str):
-            return v
-        try:
-            return lookup_primitive(reg, fid)
-        except KeyError:
-            return reg.defs[fid] if fid in reg.defs else v
-
-    return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
+_specialization = word_query.specialization
 
 
 def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
@@ -436,6 +519,128 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
     return g
 
 
+#: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
+#: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
+#: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count on #101) -- else at WORD_SAMPLES values; the rest
+#: are interpolated
+WORD_EXACT = 320
+WORD_SAMPLES = 12
+
+
+def _word_values(vals: list[int], block: int | None = None) -> list[int]:
+    if len(vals) <= WORD_EXACT:
+        return vals
+    if block:
+        return sorted(set(vals[:4]) | {vals[-1]} | {v for v in vals if v % block in (block - 1, 0, 1, 2, 3)})
+    return sorted({vals[round(i * (len(vals) - 1) / (WORD_SAMPLES - 1))] for i in range(WORD_SAMPLES)})
+
+
+def _interp(xs: list[int], ys: list[float], x: int) -> float:
+    k = int(np.searchsorted(xs, x))
+    if k < len(xs) and xs[k] == x:
+        return ys[k]
+    k = min(max(k, 1), len(xs) - 1)
+    x0, x1 = xs[k - 1], xs[k]
+    return ys[k - 1] + (ys[k] - ys[k - 1]) * (x - x0) / (x1 - x0)
+
+
+def _class_words(rule: dict[str, Any]) -> dict[tuple[str, str], tuple[float, float]]:
+    """A rule's committed interior values by (activation family, primitive): (words, bits) per Call."""
+    out: dict[tuple[str, str], list[float]] = {}
+    for i in rule["committed_interior"]:
+        k = ((i["scope"] or "").split("{")[0], i["head"] or "")
+        w = out.setdefault(k, [0.0, 0.0])
+        w[0] += i["words"]
+        w[1] += i.get("bits", 32 * i["words"])
+    return {k: (v[0], v[1]) for k, v in out.items()}
+
+
+_WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gates", "redundant_gates")
+
+
+def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
+    interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
+    primitives of one unit -- and the violations) and the row's totals, with `taps`: every committed interior value class of the row by
+    (activation family, primitive), its words and bytes, where serving commits it today (`word_query.committed_today`) or the kernel a
+    new tap goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
+    rest interpolated (`interpolated`); its classes are its largest value's.  `substitute`: {Definition family: registered Definition}
+    to partition in a group's place (the same function, e.g. the MoE router stated round by round); off the record path."""
+    memo: dict = {}
+    tot = Counter()
+    by_template: dict[str, Counter] = {}
+    viol: Counter = Counter()
+    taps: dict[tuple[str, str], list[float]] = {}
+    sub = substitute or {}
+
+    def spec(x: dict[str, Any], st: dict[str, Any]):
+        d = sub.get(x["definition"])
+        return bind(d, **st) if d is not None else _specialization(x["definition"], st)
+
+    for x in g["groups"]:
+        if x.get("varying") and len(x["varying"]) == 1 and x.get("varying_calls"):
+            (a,) = x["varying"]
+            calls = {int(v): k for v, k in x["varying_calls"].items()}
+            vals = sorted(calls)
+            bn = x["statics"].get("BN") if a == "T" else None
+            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo) for v in pts}
+            per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}
+            total = {f: int(round(sum(_interp(pts, per[f], v) * calls[v] for v in vals))) for f in per}
+            cw = {v: _class_words(rules[v]) for v in pts}
+            for k in {k for v in pts for k in cw[v]}:
+                for j in (0, 1):
+                    ys = [cw[v].get(k, (0.0, 0.0))[j] for v in pts]
+                    taps.setdefault(k, [0.0, 0.0])[j] += sum(_interp(pts, ys, v) * calls[v] for v in vals)
+            rep, lo = rules[pts[-1]], rules[pts[0]]
+            entry = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
+                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
+                     if len(pts) < len(vals) else False,
+                     "partitioned_at": len(pts)}
+        else:
+            try:
+                rep = word_query.unit_rule(spec(x, x["statics"]), X, W, extras, memo=memo)
+            except (KeyError, TypeError, ValueError, AttributeError) as e:
+                x["q_word_v1"] = {"unresolved": f"{type(e).__name__}: {e}"[:300]}
+                continue
+            total = {f: rep.get(f, 0) * x["calls"] for f in _WORD_FIELDS}
+            entry = {"per_call": {f: rep.get(f, 0) for f in _WORD_FIELDS}, "interpolated": False}
+            for k, (w, bits) in _class_words(rep).items():
+                t = taps.setdefault(k, [0.0, 0.0])
+                t[0] += w * x["calls"]
+                t[1] += bits * x["calls"]
+        entry.update(definition=rep["definition"] if x["definition"] in sub else None,
+                     units=total["units_per_call"], gates=total["gates"], free_gates=total["free_gates"], redundant_gates=total["redundant_gates"],
+                     committed_interior_words=total["committed_interior_words"], by_kind=rep["by_kind"], classes=rep["classes"][:8],
+                     committed_interior=rep["committed_interior"][:8], violations=rep["violations"])
+        if entry["definition"] is None:
+            del entry["definition"]
+        x["q_word_v1"] = entry
+        for f in ("units", "gates", "free_gates", "redundant_gates", "committed_interior_words"):
+            tot[f] += entry[f]
+            by_template.setdefault(x.get("template") or x["definition"], Counter())[f] += entry[f]
+        for v in rep["violations"]:
+            viol[v["class"]] += x["calls"]
+        if log:
+            log(f"  {x['id']} {x['definition']}: {entry['units']} units, {entry['committed_interior_words']} committed interior words")
+    tap_rows = []
+    for (fam, head), (w, bits) in sorted(taps.items(), key=lambda kv: -kv[1][0]):
+        today = word_query.committed_today(fam, head)
+        tap_rows.append({"activation": fam, "value": head, "words": int(round(w)), "bytes": int(round(bits / 8)), "committed_today": today,
+                         "new_tap_in": None if today else word_query.tap_kernel(fam)})
+    g["q_word_v1"] = {"query": word_query.query_id(X, W, extras), **dict(tot), "units_per_gate": round(tot["units"] / tot["gates"], 4) if tot["gates"] else None,
+                      "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
+                      "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
+    g.setdefault("rules", {})["q_word_v1"] = (
+        "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "committed once at serving (the Call's inputs are committed; constants and wiring are structure, never committed); outputs of <= X "
+        "bits or one value of <= W bits; per group: per_call and row totals (units, gates, free gates, redundant gates: a value computed "
+        "twice inside its own unit, committed interior words), classes (kind, head primitive @ activation, "
+        "gates per unit, out bits, count per Call, the primitives of one unit), committed interior values; per row: taps, every committed "
+        "interior value class with where serving commits it today or the kernel a new tap goes in")
+    return g
+
+
 def definition_digest(d: dict[str, Any]) -> str:
     """sha256 of a definition's canonical JSON (`verity.ir.codec.canonical_json`), fold hints excluded."""
     from verity.ir.codec import canonical_json
@@ -508,6 +713,7 @@ class Options:
     vus: str | None = option("--vus", default=None, help="a VU export's vus.jsonl for the exported VUs")
     store: str | None = option("--store", default=None, help="the VU export's store (<export>/store): request -> Program, to place sampler VUs")
     row: str | None = option("--row", default=None, help="JSON object: the row block (row number, serving config, run)")
+    word: str | None = option("--word", default=None, help="add each group's Q_word_v1{X,W} unit rule (\"16/32[+extras]\")")
 
 
 def main(a: Options) -> int:
@@ -517,6 +723,8 @@ def main(a: Options) -> int:
         strata = (rec.get("sampled_replay") or (rec.get("replay_partition") or {})).get("strata")
     g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus,
                       request_programs=request_programs_of(a.store) if a.store else None)
+    if a.word:
+        g = with_word_rules(g, *word_query.parse(a.word))
     Path(a.out).write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
     return 0
 

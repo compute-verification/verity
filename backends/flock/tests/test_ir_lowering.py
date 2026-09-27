@@ -394,6 +394,43 @@ def test_rmsnorm_captured_slices_and_pins(template):
     assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[(int(p["N"]), float(p["EPS"]))]
 
 
+#: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S): the same units read off the
+#: IR, so RoPE and SiLU·mul keep the granted rows and only their leaf maps (the LEAVES line) differ; the RMSNorm warps widen.
+WORKLOAD = [("rope-head", {"D": 128}), ("silu-mul", {"I": 9728}), ("silu-mul", {"I": 14336})]
+WORKLOAD_RMS = [("rmsnorm-fused-cuda", {"N": 4096, "EPS": 1e-05}), ("rmsnorm-triton", {"N": 4096, "EPS": 1e-05}),
+                ("rmsnorm-triton", {"N": 128, "EPS": 1e-06})]
+
+
+@pytest.mark.parametrize("template,params", WORKLOAD)
+def test_workload_pins_keep_the_granted_rows(template, params):
+    mod = REG.module(template)
+    (param,) = params.values()
+    low, granted = mod.lowering(TM.subcircuit(template, **params)), mod.lowering(TM.subcircuit(template, **LOWERED[template]))
+    assert low.sha256 == mod.PINS[param]
+    if template == "silu-mul":
+        assert mod.frame_lowering(TM.subcircuit(template, **params)).sha256 == mod.FRAME_PINS[param]
+    rows = lambda t: [line for line in t.splitlines() if not line.startswith("LEAVES ")]  # noqa: E731
+    assert rows(low.text) == rows(granted.text) and low.sha256 != granted.sha256
+
+
+@SLOW
+@pytest.mark.parametrize("template,params", WORKLOAD_RMS)
+def test_workload_rmsnorm_pins(template, params):
+    mod = REG.module(template)
+    assert mod.lowering(TM.subcircuit(template, **params)).sha256 == mod.PINS[(params["N"], params["EPS"])]
+
+
+def test_rmsnorm_warp_widths():
+    """Identical warp units exist when every warp holds the same columns: Triton N a multiple of 1024 (8 per lane per chunk) or a
+    power of two under 1024 (N/128 per lane); fused CUDA when min(N, 1024) threads divide N. N = 2560 is neither."""
+    tr, fu = REG.module("rmsnorm-triton"), REG.module("rmsnorm-fused-cuda")
+    assert [tr.width(n) for n in (96, 128, 256, 512, 1024, 2048, 2560, 4096)] == [None, 32, 64, 128, 256, 256, None, 256]
+    assert (fu.width(4096), fu.width(2560)) == (256, None)
+    assert REG.supports(TM.subcircuit("rmsnorm-triton", N=128, EPS=1e-06), "frame-v3/blake3-keyed") is None
+    for template in ("rmsnorm-triton", "rmsnorm-fused-cuda"):
+        assert "not N = 2560" in REG.supports(TM.subcircuit(template, N=2560, EPS=1e-06), "frame-v3/blake3-keyed")
+
+
 def test_units_refuse_components_of_different_shapes():
     from verity.ir.defs import CompositeDefinition, bind
     from verity.ir.refs import array_of

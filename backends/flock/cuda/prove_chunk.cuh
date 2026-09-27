@@ -125,7 +125,7 @@ __global__ void pure_comp_scatter(const F128* __restrict__ src, long long n_comp
 
 // One thread per unit: evaluate the lowered rows (inputs, then rows in order; the constant is 1), then write z and the
 // honest a = A z, b = B z of its 2^unit_log bits. Rows past `useful` are zero.
-#define PURE_UW 256
+#define PURE_UW 512   // 2^14 bits: a unit of up to 2^14 rows (pure_block::UNIT_LOG_MAX)
 __global__ void pure_unit_witness(const uint64_t* __restrict__ inputs, long long n_units, int units, int unit_log, int unit_pos0,
                                   int k_log, const uint32_t* __restrict__ a_off, const uint32_t* __restrict__ a_col,
                                   const uint32_t* __restrict__ b_off, const uint32_t* __restrict__ b_col, int useful, int cpos, int n_in,
@@ -724,7 +724,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     CKI(phase(1));
 
     // ================= link: Commit(root_B) -> points -> y (before any coin) =
-    const int max_extra = 16;
+    // two claims per public region (flock_live::pure_block::MAX_EXTRA_CLAIMS; ChunkTail with the epilogue has 9 regions)
+    const int max_extra = 64;
     std::vector<uint64_t> x_raw((size_t)max_extra * (m - 6) * 2);
     int n_extra = 0;
     if (C->link_cb) {

@@ -8,7 +8,8 @@
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
 are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
-builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `compare` classifies every identity difference (`compare.summarize`).
+builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `--norm-scales` (opt-in, never the record) adds the norm-scale
+policy (`query.norm_scales`).  `compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import compose_global, merge_ranks, request_manifest
+from verity_vllm.query import norm_scales as NS
+from verity_vllm.query import word as word_query
 
 __all__ = ["build", "build_global", "build_global_ranks", "main"]
 
@@ -35,8 +38,30 @@ def _load_json(p: str) -> Any:
         return json.load(f)
 
 
+@dataclass(frozen=True)
+class _Committed:
+    """The committed values of one request Program under the query of record, as `word.check_query` reads them."""
+    required: Any
+    literals: frozenset[int]
+    program_path: Any
+
+
+def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict: bool = True, acquired: dict[str, int] | None = None,
+               log=None) -> dict[str, Any]:
+    """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values and the interior words a tap
+    acquires (`acquired`, `word.check_calls`); `strict` raises `word.QueryRuleViolation` naming every violation.  The manifest is not
+    touched."""
+    from verity_vllm.query.module_body import literal_calls
+    X, W, extras = word_query.parse(word)
+    r = word_query.check_query(P, _Committed(required, literal_calls(P), corr.module_of), X, W, extras, strict=strict, acquired=acquired)
+    if log:
+        log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
+            + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else ""))
+    return r
+
+
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
-          profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
+          profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, log=None) -> dict[str, Any]:
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))
@@ -44,7 +69,9 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     art = _load_json(art_p) if os.path.exists(art_p) else None
     corr = Correspondence.of(P, program_dir, implementation_paths=Correspondence.implementation_paths_of(res))   # the record when the Build carries it, else v1 annotations
     r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
-                         profile=profile, return_slots=return_slots)
+                         profile=profile, return_slots=return_slots, norm_scales=NS.POLICY if norm_scales else None)
+    if word:
+        word_check(P, corr, r.required, word, acquired=dict(NS.TAP_WORDS) if norm_scales else None, log=log)
     if log:
         pop = r.manifest["populations"]
         log(f"  {os.path.basename(program_dir)}: {len(P.calls)} calls -> {pop['identities']} identities ({pop['steps']} steps, {pop['units']} units, "
@@ -77,7 +104,8 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
 
 
 def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
-                 profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
+                 profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
+                 log=None) -> dict[str, Any]:
     declared = [dict(r, index=int(r.get("index", i))) for i, r in enumerate(fixture["requests"])]
     if len({r["index"] for r in declared}) != len(declared):
         raise ValueError("workload declaration: duplicate request index")
@@ -90,21 +118,24 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
         rid = r["request_id"]
         d = dirs[str(r["workload_request_id"])]
         wl = {"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}}
-        parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, log=log)
+        parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, word=word,
+                           norm_scales=norm_scales, log=log)
         if len(parts[rid]["steps"]) != int(r["max_tokens"]):
             raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
     return compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
 
 
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
-                       profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
+                       profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
+                       log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
     wds = list(workload_digests or [None] * len(roots))
     if len(ranks) != len(roots) or len(wds) != len(roots):
         raise ValueError(f"build-global: {len(roots)} --programs-root, {len(ranks)} --rank, {len(wds)} --workload-digest: give one per rank")
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
-    parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, log=log)
+    parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, word=word,
+                          norm_scales=norm_scales, log=log)
              for root, r, wd in zip(roots, ranks, wds)]
     return merge_ranks(parts) if world > 1 else parts[0]
 
@@ -163,6 +194,10 @@ def _write(man: dict[str, Any], out: str) -> None:
         json.dump(man, f, separators=(",", ":"))
 
 
+NORM_SCALES_HELP = ("opt-in, never the record: the norm-scale policy (verity_vllm.query.norm_scales) -- one norm_scales identity per norm "
+                    "Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
+
+
 @dataclass(frozen=True, kw_only=True)
 class BuildOptions:
     program: str = option("--program")
@@ -172,6 +207,9 @@ class BuildOptions:
     rank: int = option("--rank", type=int, default=0)
     ranks: int = option("--ranks", type=int, default=1)
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
+    word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
+                                    help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
+    norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
 
@@ -188,6 +226,9 @@ class BuildGlobalOptions:
                                     help="the TP rank of the --programs-root at the same position (default 0)")
     ranks: int = option("--ranks", type=int, default=1)
     no_return_slots: bool = option("--no-return-slots", default=False, action="store_true")
+    word_check: str | None = option("--word-check", env="VERITY_WORD_CHECK", default=None,
+                                    help="check Q_word_v1{X,W} (\"16/32[+extras]\") over the Program; fail the Build naming every violation")
+    norm_scales: bool = option("--norm-scales", default=False, action="store_true", help=NORM_SCALES_HELP)
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 
@@ -228,14 +269,15 @@ def main(a: Any) -> int:
         return 0 if (r.get("identical") or not r.get("applicable")) else 1
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
-        man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots, log=log)
+        man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,
+                    word=a.word_check, norm_scales=a.norm_scales, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
         return 0
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
-                                 profile=a.profile, return_slots=not a.no_return_slots, log=log)
+                                 profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],

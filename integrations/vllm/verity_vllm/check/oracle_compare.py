@@ -493,8 +493,8 @@ def _family_of(entry: dict) -> str:
     if entry.get("kind") == "registered-input" or ident.get("op_path") == "weights":
         return "weights"
     name = str(entry.get("name") or ident.get("op_path") or "")
-    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES):
-        return "hidden_stream"
+    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES) or ident.get("output_member") == "norm_scale":
+        return "hidden_stream"                                     # ... and a norm's tapped scale (query.norm_scales.MEMBER): no Match value
     if ident.get("output_member") == "sampled_token_ids":
         return "sampled_token_ids"
     if ident.get("output_member") == "in":

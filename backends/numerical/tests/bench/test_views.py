@@ -245,10 +245,23 @@ def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStor
     other = committed(store, t_total=0.9, labels=[("proof_class", "COMPLETE_ZK_BACKEND", REDTEAM, "2026-09-25T01:00:00Z")])
     cell = line(V.build(store))["cells"]["B-Ligero"]
     assert cell.artifact == a and cell.provisional is None and other
-    # a later downgrade of the same statement caps every result of it (D), and stands
-    committed(store, t_total=2.0, labels=[("proof_class", "COMPLETE_HVZK_BACKEND", "red-team-2", "2026-09-25T02:00:00Z")])
+    # a later downgrade of another result of the statement caps that result only (D); the cleared cell stands
+    low = committed(store, t_total=0.2, labels=[("proof_class", "COMPLETE_HVZK_BACKEND", "red-team-2", "2026-09-25T02:00:00Z")])
     views = V.build(store)
-    assert line(views)["cells"]["B-Ligero"] is None and codes(views, a) == ["D"]
+    assert line(views)["cells"]["B-Ligero"].artifact == a and codes(views, low) == ["D"]
+
+
+def test_a_diagnostic_verdict_on_one_run_does_not_cap_the_other_runs_of_its_statement(store: LocalStore) -> None:
+    """flock-l40s-101, 2026-09-26: red-team-flock held one co-resident run of a statement at a diagnostic class; the other runs,
+    each with its own grant or none, keep the class the statement's grant gives them."""
+
+    granted = committed(store, t_total=0.5, labels=[("proof_class", "COMPLETE_ZK_BACKEND", REDTEAM, "2026-09-25T01:00:00Z")])
+    plain = committed(store, t_total=0.4)
+    co_resident = committed(store, t_total=0.1, labels=[("proof_class", "NON_ZK_PROOF_DIAGNOSTIC", "red-team-2", "2026-09-25T05:00:00Z")])
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell.artifact == plain and cell.provisional is None               # cleared by the statement's grant, not capped
+    assert codes(views, co_resident) == ["D"] and granted not in {r["artifact"] for r in views.rejected}
 
 
 POSEIDON2_ROW = "frame-v3/poseidon2-row"
@@ -1479,3 +1492,28 @@ def test_a_row_whose_work_model_needs_a_per_input_variable_rejects_its_cells_ins
     sub = next(s for s in census.SUBCIRCUITS if s.startswith("attention-head/"))
     with pytest.raises(KeyError):
         V.memory_native(BF16_HOPPER, sub)
+
+
+def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalStore) -> None:
+    """Daniel, 2026-09-26: circuits are total by default; a finite-only statement is an explicit, named choice, shown per result
+    (the ``domain`` label, else the fingerprint's ``domain``) and per Table 1 backend."""
+    a = committed(store, t_total=0.4)
+    fp_domain = V.build(store).domain_of[a]
+    b = committed(store, t_total=0.5, labels=[("domain", "total", "red-team-2", "2026-09-26T18:00:00Z")])
+    views = V.build(store)
+    assert views.domain_of[b] == "total" and views.domain_of[a] == fp_domain
+    site = V.render_entities(views, rendered_at="2026-09-26T18:00:00Z", commit="abc")
+    res = {r["artifact"]: r for r in site["results"]}
+    assert res[a]["domain"] == fp_domain
+    backend = next(x for x in site["backends"] if x["id"] == res[a]["backend"])
+    assert fp_domain in backend["domains"]
+
+
+def test_table1_flags_the_frozen_backend_families_not_actively_developed(store: LocalStore) -> None:
+    """Daniel, 2026-09-26: A-GKR, B-Ligero and SP1 stay in the tables, flagged not actively developed; Flock is the active family."""
+    committed(store, t_total=0.4)
+    site = V.render_entities(V.build(store), rendered_at="2026-09-26T19:30:00Z", commit="abc")
+    fam = {f["id"]: f["development"] for f in site["backend_families"]}
+    assert fam[V._fam("A-GKR")] == fam[V._fam("B-Ligero")] == fam[V._fam("SP1")] == V.NOT_ACTIVE and fam[V._fam("Flock")] == "active"
+    for b in site["backends"]:
+        assert b["development"] == (V.NOT_ACTIVE if b["backend_family"] in {V._fam(x) for x in V.FROZEN} else "active")

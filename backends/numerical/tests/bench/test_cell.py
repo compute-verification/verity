@@ -45,7 +45,8 @@ def test_plan_wraps_the_flock_cell_script():
         assert argv[:4] == ["research", "run", "--on", j["pod"]] and "--custody-r2" in argv and argv[argv.index("--cwd") + 1] == "source"
         cmd = argv[argv.index("--") + 1:]
         assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
-        cmd = cmd[5:]
+        assert cmd[5] == ""                                  # a 10.x address, not a .runpod.internal name: no RTT target
+        cmd = cmd[6:]
         assert cmd == j["command"] and cmd[:2] == ["bash", "backends/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
         assert f"POINTS={C.DEFAULT_POINTS}" in cmd
     assert "ROLE=verifier" in v["command"]
@@ -281,6 +282,25 @@ def test_register_refuses_a_result_off_protocol(tmp_path):
     p, v = _real_runs(tmp_path, lambda d: d["protocol"].update(runs=2))
     res = C.register(_cell(), str(p), str(v), tmp_path / "work", dry_run=True)
     assert res["refused"] and any("runs 2" in x for x in res["problems"])
+
+
+def test_register_refuses_a_result_without_run_files(tmp_path, monkeypatch):
+    """agkr-real-k's L40S K=8192 cell (13:02Z) was put the moment its run ended, before the machine published the attempt:
+    no run_files ref, so the views reject it (no proof files)."""
+    p, v = _real_runs(tmp_path)
+    monkeypatch.setattr(C, "run_files", lambda run_id, wait_s=0.0: None)
+    res = C.register(_cell(), str(p), str(v), tmp_path / "work")
+    assert res["refused"] and "rc" not in res and any("no run files" in x for x in res["problems"])
+    assert not any(a.startswith("run_files=") for a in res["put"])
+
+
+def test_run_files_waits_for_the_attempt(monkeypatch):
+    shows = iter([(0, {"outputs": {"run_files": None}}), (1, {}), (0, {"outputs": {"run_files": "art:f"}})])
+    monkeypatch.setattr(C.subprocess, "run", lambda *a, **k: (lambda rc, d: type("R", (), {"returncode": rc, "stdout": json.dumps(d)}))(*next(shows)))
+    monkeypatch.setattr(C.time, "sleep", lambda s: None)
+    assert C.run_files("r1", wait_s=60) == "art:f"
+    monkeypatch.setattr(C.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "{}"}))
+    assert C.run_files("r1") is None
 
 
 def test_cli(tmp_path, capsys):

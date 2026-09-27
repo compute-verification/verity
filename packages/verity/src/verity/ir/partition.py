@@ -1068,6 +1068,73 @@ def members_per_parent(program: "Program", coarse, fine, limits: Limits = Limits
 # ---------------------------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class CutVerdict:
+    """`validate_unit_cut`'s verdict: `ok`, the failing `codes` and, per code, the count and at most 64 offending gate ids (or
+    (producer, consumer) gate pairs for a read)."""
+    ok: bool
+    codes: tuple[str, ...]
+    detail: dict
+
+    def to_json(self) -> dict:
+        return {"ok": self.ok, "codes": list(self.codes), "detail": self.detail}
+
+
+#: the unit holding every input gate (weights, request inputs, randomness): it certifies them by checking each input commitment root
+#: against its external anchor (the declared model's weights root, the client's request commitment, the randomness source), always,
+#: never sampled
+INPUT_UNIT = "input"
+
+
+def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads: Any, outputs: Any, committed: Any,
+                      input_gates: Any = (), recomputed: Any = ()) -> CutVerdict:
+    """The partition invariant on one circuit: every gate, input gates included, is certified by exactly one unit.  Input gates form
+    the input unit (`INPUT_UNIT`); every computed gate is computed in exactly one computing unit, whose proof being valid implies the
+    gate is the correct function of the committed values the unit reads.
+
+    `owner[g]` is the unit of gate `g`: `INPUT_UNIT` for an input gate, a computing unit index >= 0 otherwise.  Constants and wiring are
+    circuit structure -- hardwired into each unit's statement, never committed, not gates: `structure_gates` of the circuit's
+    `total_gates` (input gates included) are such.  `reads` are (producer, consumer) pairs of gates, `outputs` the returned gates,
+    `committed` the gates whose values are committed once and reused by every reader (the input gates' values under their roots),
+    `recomputed` the (gate, earlier gate) pairs that compute the same function of the same values (a second computation of one value).
+    A value computed again in the unit that already computes it crosses no boundary: it is a redundant gate of that unit's statement
+    (`detail["redundant_gates"]`), not a recompute.
+
+    * every input gate is in the input unit                                          -> "input-outside-input-unit"  (gate ids)
+    * every computed gate is computed in exactly one computing unit                  -> "gate-not-certified-once"   (gate ids)
+    * every value is computed in exactly one unit (no recompute)                     -> "gate-recomputed"          ((gate, earlier))
+    * the units' gates and the structure sum to the circuit                          -> "gate-count"
+    * a cross-unit read goes only through a committed value                           -> "read-uncommitted"          ((producer, consumer))
+    * a returned value is committed                                                   -> "output-uncommitted"        (gate ids)
+    * a committed value is one a unit certifies and another unit reads, or returned   -> "committed-unread"          (gate ids)
+    """
+    owner = list(owner)
+    ins = set(input_gates)
+    c = set(committed)
+    n = len(owner)
+    outside = sorted(g for g in ins if not 0 <= g < n or owner[g] != INPUT_UNIT)
+    uncertified = [g for g, u in enumerate(owner) if g not in ins and not (isinstance(u, int) and u >= 0)]
+    crossing = sorted((p, q) for p, q in reads if owner[p] != owner[q])
+    outs = set(outputs)
+    boundary = {p for p, _q in crossing} | outs
+    certified = sum(1 for g, u in enumerate(owner) if g not in ins and isinstance(u, int) and u >= 0)
+    again = [(int(a), int(b)) for a, b in recomputed]
+    across = sorted((a, b) for a, b in again if not (0 <= a < n and 0 <= b < n) or owner[a] != owner[b])
+    problems = {"input-outside-input-unit": outside, "gate-not-certified-once": uncertified,
+                "gate-recomputed": across,
+                "gate-count": [] if certified + len(ins) + int(structure_gates) == int(total_gates) else [certified],
+                "read-uncommitted": [(p, q) for p, q in crossing if p not in c], "output-uncommitted": sorted(outs - c),
+                "committed-unread": sorted(g for g in c if g not in boundary or not 0 <= g < n)}
+    detail: dict = {"input_gates": len(ins), "computed_gates": n - len(ins), "certified": certified, "structure_gates": int(structure_gates),
+                    "total_gates": int(total_gates), "committed": len(c), "cross_unit_reads": len(crossing),
+                    "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0}),
+                    "redundant_gates": len(again) - len(across)}
+    codes = tuple(k for k, v in problems.items() if v)
+    for k in codes:
+        detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:_MAX_LISTED]]}
+    return CutVerdict(not codes, codes, detail)
+
+
 def vu_status(partition: PartitionVerdict, width: WidthVerdict, readiness: ReadinessReport) -> str:
     if partition.status in ("overlap", "outside", "gap") or width.status == "violation":
         return "fail"
@@ -1098,5 +1165,5 @@ def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdi
 
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition",
+           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "validate_unit_cut",
            "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]
