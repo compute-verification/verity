@@ -41,3 +41,12 @@ import FlockLevel3
 #print axioms FlockLevel3.foldT_get
 #print axioms FlockLevel3.subsetTab_get
 #print axioms FlockLevel3.foldB_get
+#print axioms FlockLevel3.placeSlot_get
+#print axioms FlockLevel3.placeRange_get
+#print axioms FlockLevel3.foldRanges_get
+#print axioms FlockLevel3.addDelta_get
+#print axioms FlockLevel3.fold_get
+#print axioms FlockLevel3.baseOf_get
+#print axioms FlockLevel3.slot_term
+#print axioms FlockLevel3.mask_term
+#print axioms FlockLevel3.sparseT_scale
