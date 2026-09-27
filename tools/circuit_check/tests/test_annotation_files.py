@@ -16,6 +16,7 @@ import pytest
 from circuit_check import targets as T
 from verity.ir import annotations as A
 from verity.ir import codec
+from verity.ir import partition_object as PO
 from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ir.program import Program
 
