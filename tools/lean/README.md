@@ -24,8 +24,18 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   option, `addDeclWithoutChecking` or `addDeclCore`;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
 - the pinned theorems say what their records say (below);
-- the kernel accepts every declaration again (`Replay.lean`): a declaration that skipped the kernel shows no axiom, and
-  only the replay catches it.
+- the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
+  that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
+  checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
+  No `#print axioms` output is parsed anywhere. A replay killed by a signal (out of memory) is reported as a kill, not
+  as a verdict;
+- nothing changes this directory or the toolchain's `lean`, `lake` and `leanchecker` while the audit runs: a build runs
+  arbitrary code, so the Lean files run from a copy taken before the first build, and everything is sealed and checked
+  after each package.
+
+`--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
+through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
+every run.
 
 `--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain, must pass clean
 and fail once for each violation in `tests/fixtures/violations.json`. One of them adds a false theorem through
