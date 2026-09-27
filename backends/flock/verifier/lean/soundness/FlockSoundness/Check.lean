@@ -110,6 +110,11 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.aligned_lockTable
 #print axioms FlockSoundness.advRT_eq
 #print axioms FlockSoundness.table_sound_compiled_of_table
+#print axioms FlockSoundness.Extract.expect_off_firstTable_le'
+#print axioms FlockSoundness.Extract.tail_of_fixed
+#print axioms FlockSoundness.Extract.joint_of_fixed
+#print axioms FlockSoundness.table_knowledge_sound
+#print axioms FlockSoundness.table_knowledge_sound_joint
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map
@@ -171,8 +176,15 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_cone
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_sound
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_full_profile
-#print axioms FlockSoundness.Extract.expect_off_firstTable_le'
-#print axioms FlockSoundness.Extract.tail_of_fixed
-#print axioms FlockSoundness.Extract.joint_of_fixed
-#print axioms FlockSoundness.table_knowledge_sound
-#print axioms FlockSoundness.table_knowledge_sound_joint
+-- the audit with a randomized extractor, and the compiled Flock audit: ε_ks from table_knowledge_sound_joint
+#print axioms FlockSoundness.Audit.extraction_audit_le
+#print axioms FlockSoundness.Audit.extraction_audit_count
+#print axioms FlockSoundness.Audit.extraction_audit_drawn
+#print axioms FlockSoundness.Audit.Analysis.toExtraction
+#print axioms FlockSoundness.Audit.Analysis.KnowledgeSound.toExtraction
+#print axioms FlockSoundness.Audit.Analysis.LinkSound.toExtraction
+#print axioms FlockSoundness.Audit.FlockTableC.ksJoint_le
+#print axioms FlockSoundness.Audit.Partition.analysisC
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_count
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
