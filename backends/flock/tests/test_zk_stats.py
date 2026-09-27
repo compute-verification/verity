@@ -121,3 +121,22 @@ def test_randomness_reused_across_reps_fails_outside_the_level0_rows():
     assert not res["pass"]
     assert res["classes"]["exposed"]["reused_across_reps"] == 3
     assert not res["classes"]["exposed"]["real_indistinguishable_from_sim"]
+
+
+def test_an_inner_column_opened_twice_counts_once():
+    """The inner proof's queries repeat: a column at a position already opened by the same rep is one observation."""
+    q = list(range(100, 100 + SIZES["inner_open_mu"]))
+    q[7] = q[2]
+    lines = []
+    for line in _dump(24):
+        tag, _, body = line.partition("\t")
+        if tag in ("ZKREAL", "ZKSIM", "ZKCONTROL"):
+            v = json.loads(body)
+            v["inner_open_q"] = q
+            for cls in zk_stats.INNER_OPENED:
+                v[cls][7] = v[cls][2]
+            line = tag + "\t" + json.dumps(v)
+        lines.append(line)
+    res = zk_stats.analyse(zk_stats.load(lines))
+    assert res["pass"], json.dumps(res["classes"]["inner_open_mu"], indent=1)
+    assert all(res["classes"][c]["repeated_positions"] == 1 for c in zk_stats.INNER_OPENED)

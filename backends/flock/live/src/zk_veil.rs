@@ -906,7 +906,12 @@ pub fn batch(cons: &[(&'static str, Lin)], gammas: &[F128]) -> (Vec<F128>, F128)
 }
 
 fn queries<Ch: Challenger>(ch: &mut Ch, n: usize) -> Vec<usize> {
-    ch.sample_f128_vec(Q).iter().map(|x| (x.lo as usize) & (n - 1)).collect()
+    query_positions(&ch.sample_f128_vec(Q), n)
+}
+
+/// The inner proof's opened columns for its query coins (drawn with replacement, so a position may repeat).
+pub fn query_positions(words: &[F128], n: usize) -> Vec<usize> {
+    words.iter().map(|x| (x.lo as usize) & (n - 1)).collect()
 }
 
 /// The prover's inner proof, on the rep's challenger after the opening. `cons` are the algebraic phase's and the ring
