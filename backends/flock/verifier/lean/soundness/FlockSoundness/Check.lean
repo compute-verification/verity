@@ -103,3 +103,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.SelfClash.collision
 #print axioms FlockSoundness.op₀_conflict_collision
 #print axioms FlockSoundness.opR_conflict_collision
+-- groundwork for knowledge soundness (§1.3): the rewinding lemma summed over positions, and the
+-- compiled bound for any level-0 table
+#print axioms FlockSoundness.Rewinding.expect_offsum_le
+#print axioms FlockSoundness.expect_off_table_le
+#print axioms FlockSoundness.bad_le_gen
+#print axioms FlockSoundness.table_sound_compiled_of_table

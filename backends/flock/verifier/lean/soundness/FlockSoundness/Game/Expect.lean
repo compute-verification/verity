@@ -14,7 +14,8 @@ position off the plurality table is at most `√(N · Q · Pr₂[two runs open a
 The proof is `Rewinding`'s counting argument with weights: at each position, a run opening it to
 `v` conflicts with every run opening it to anything else, which by plurality is at least the
 off-plurality mass `b_p`, so the conflict mass at `p` is at least `b_p²`; and Cauchy–Schwarz over
-positions.
+positions. That bounds the sum `Σ_p b_p`, the expected number of positions a run opens off the
+plurality (`expect_offsum_le`); `expect_bad_le` adds the union bound.
 -/
 
 namespace FlockSoundness
@@ -159,10 +160,11 @@ theorem ind_isSome_eq_sum [Fintype V] (p : P) (a : α) :
     simp
 
 open Classical in
-/-- **The rewinding lemma for any run distribution.** -/
-theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
+/-- **The rewinding lemma, summed over positions**: the expected number of positions a run opens
+off the plurality is at most `√(N · Q · Pr₂[conflict])`. -/
+theorem expect_offsum_le (g : Game α) (s : Strategy g) (vstar : P → V)
     (hv : IsPluralityE op g s vstar) (Q : ℕ) (hQ : ∀ a, #(univ.filter fun p => (op a p).isSome) ≤ Q) :
-    expect (ind fun a => ∃ p, Off op vstar a p) g s ≤
+    ∑ p, expect (ind fun a => Off op vstar a p) g s ≤
       Real.sqrt (Fintype.card P * Q *
         expect₂ (fun a a' => ind (fun x : α × α => ∃ p, ConflictAt op x p) (a, a')) g s) := by
   set π : P → V → ℝ := fun p v => expect (ind fun a => op a p = some v) g s
@@ -230,20 +232,6 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
       _ = ∑ v, π p v * b p := by rw [ho, Finset.sum_mul]
       _ ≤ ∑ v, π p v * (o p - π p v) := Finset.sum_le_sum fun v _ => h1 v
       _ = c p := (hc p).symm
-  -- the union bound over positions
-  have hunion : expect (ind fun a => ∃ p, Off op vstar a p) g s ≤ ∑ p, b p := by
-    rw [← expect_sum]
-    refine expect_mono (fun a => ?_) g s
-    by_cases h : ∃ p, Off op vstar a p
-    · obtain ⟨p, hp⟩ := h
-      calc ind (fun a => ∃ p, Off op vstar a p) a = 1 := by
-            simp only [ind]; exact if_pos ⟨p, hp⟩
-        _ = ind (fun a => Off op vstar a p) a := by simp only [ind]; exact (if_pos hp).symm
-        _ ≤ ∑ p, ind (fun a => Off op vstar a p) a :=
-            Finset.single_le_sum (f := fun p => ind (fun a => Off op vstar a p) a)
-              (fun p _ => ind_nonneg _ _) (mem_univ p)
-    · rw [show ind (fun a => ∃ p, Off op vstar a p) a = 0 by simp [ind, h]]
-      exact Finset.sum_nonneg fun p _ => ind_nonneg _ _
   -- each conflicting pair counted at no more than `Q` positions
   have hQc : ∑ p, c p ≤ Q * expect₂ (fun a a' =>
       ind (fun x : α × α => ∃ p, ConflictAt op x p) (a, a')) g s := by
@@ -268,7 +256,7 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
   have hcs : (∑ p, b p) ^ 2 ≤ Fintype.card P * ∑ p, b p ^ 2 := by
     have := sq_sum_le_card_mul_sum_sq (s := (univ : Finset P)) (f := b)
     simpa using this
-  refine hunion.trans (Real.le_sqrt_of_sq_le ?_)
+  refine Real.le_sqrt_of_sq_le ?_
   calc (∑ p, b p) ^ 2 ≤ Fintype.card P * ∑ p, b p ^ 2 := hcs
     _ ≤ Fintype.card P * ∑ p, c p :=
         mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun p _ => hcb p) (Nat.cast_nonneg _)
@@ -276,6 +264,27 @@ theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
           ind (fun x : α × α => ∃ p, ConflictAt op x p) (a, a')) g s) :=
         mul_le_mul_of_nonneg_left hQc (Nat.cast_nonneg _)
     _ = _ := by ring
+
+open Classical in
+/-- **The rewinding lemma for any run distribution.** -/
+theorem expect_bad_le (g : Game α) (s : Strategy g) (vstar : P → V)
+    (hv : IsPluralityE op g s vstar) (Q : ℕ) (hQ : ∀ a, #(univ.filter fun p => (op a p).isSome) ≤ Q) :
+    expect (ind fun a => ∃ p, Off op vstar a p) g s ≤
+      Real.sqrt (Fintype.card P * Q *
+        expect₂ (fun a a' => ind (fun x : α × α => ∃ p, ConflictAt op x p) (a, a')) g s) := by
+  refine le_trans ?_ (expect_offsum_le op g s vstar hv Q hQ)
+  rw [← expect_sum]
+  refine expect_mono (fun a => ?_) g s
+  by_cases h : ∃ p, Off op vstar a p
+  · obtain ⟨p, hp⟩ := h
+    calc ind (fun a => ∃ p, Off op vstar a p) a = 1 := by
+          simp only [ind]; exact if_pos ⟨p, hp⟩
+      _ = ind (fun a => Off op vstar a p) a := by simp only [ind]; exact (if_pos hp).symm
+      _ ≤ ∑ p, ind (fun a => Off op vstar a p) a :=
+          Finset.single_le_sum (f := fun p => ind (fun a => Off op vstar a p) a)
+            (fun p _ => ind_nonneg _ _) (mem_univ p)
+  · rw [show ind (fun a => ∃ p, Off op vstar a p) a = 0 by simp [ind, h]]
+    exact Finset.sum_nonneg fun p _ => ind_nonneg _ _
 
 end Rewinding
 

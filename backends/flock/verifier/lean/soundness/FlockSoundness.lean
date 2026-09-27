@@ -7,6 +7,7 @@ import FlockSoundness.Game.Lock
 import FlockSoundness.Model.Compiled
 import FlockSoundness.CompiledLock
 import FlockSoundness.CompiledSound
+import FlockSoundness.CompiledTable
 import FlockSoundness.Accounting.Schedule
 import FlockSoundness.Accounting.Bound
 import FlockSoundness.Accounting.Fast100
