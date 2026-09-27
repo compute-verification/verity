@@ -232,6 +232,8 @@ def _patch():
     for k, f in list(IL.PIECES.items()):
         IL.PIECES[k] = _wrap(k, f)
     IL.PIECES.wrap = _wrap
+    for k, (f, ins, out) in list(TW.OPS.items()):
+        TW.OPS[k] = (wrapped.get(id(f), f), ins, out)
     L.__xor__, L.inv, Circuit._new = _xor, _inv, _new
     _PATCHED = True
 
