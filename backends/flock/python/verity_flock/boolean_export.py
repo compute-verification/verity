@@ -1119,6 +1119,7 @@ class Commitments:
             if u in members:
                 members[u].append(i)
         order = sorted(range(len(first)), key=lambda j: (-int(count[j]), int(keys[j][0]), int(keys[j][2])))
+        ireads = np.array(G.input_reads, dtype=np.int64).reshape(-1, 2)
         rank = {j: n for n, j in enumerate(order)}
         units = []
         for j in order:
@@ -1136,7 +1137,7 @@ class Commitments:
                  "nodes": dict(Counter(G.prim_names[int(G.prim[i])] for i in gates).most_common()),
                  **{x: b[x] for x in ("and", "xor", "not", "not_yet_lowered")}}
             if ng <= UNIT_PARTS_LIMIT:
-                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, gates, info, leaves))
+                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads))
             units.append(e)
         marks: Counter = Counter()
         for i in np.flatnonzero(head >= 0).tolist():
@@ -1198,22 +1199,22 @@ def _empty(fid, gates) -> dict:
             "committed_interior_words": 0, "scopes": [], "pieces": [], "units": [], "committed": [], "structure": {}, "violations": []}
 
 
-def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
+def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> dict:
     """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
     ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
     ``[unit class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
     ``outputs``: the parts whose value the cut commits (returned, or read by another unit)."""
+    import numpy as np
+
     at = {i: n for n, i in enumerate(gates)}
-    wiring, reads = [], []
-    for a, b in zip(G.src.tolist(), G.dst.tolist()):
-        if b in at:
-            if a in at:
-                wiring.append([at[a], at[b], int(G.width[a])])
-            else:
-                reads.append([rank[int(inv[owner[a]])], at[b], int(G.width[a])])
+    sel = np.flatnonzero(owner[G.dst] == u)
+    src, dst = G.src[sel], G.dst[sel]
+    inside = owner[src] == u
+    wiring = [[at[a], at[b], int(G.width[a])] for a, b in zip(src[inside].tolist(), dst[inside].tolist())]
+    reads = [[rank[int(inv[owner[a]])], at[b], int(G.width[a])] for a, b in zip(src[~inside].tolist(), dst[~inside].tolist())]
     inputs: dict[tuple, int] = {}
-    for inp, b in G.input_reads:
-        if b in at:
+    if len(ireads):
+        for inp, b in ireads[owner[ireads[:, 1]] == u].tolist():
             name, w = leaves[G.input_ids[inp]]
             inputs[(at[b], name)] = inputs.get((at[b], name), 0) + w
     reads += [[-1, d, w, name] for (d, name), w in inputs.items()]
