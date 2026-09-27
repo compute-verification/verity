@@ -236,4 +236,4 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "GLIBC_2.39' not found" in CHECK.agreement_preflight({"upstream": {}}, [ok, bad])
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
-    assert "may use 16 GB; the agreement needs 32" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+    assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])

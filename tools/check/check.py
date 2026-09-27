@@ -65,7 +65,12 @@ def cores() -> int:
         if q != "max":
             n = min(n, max(1, int(q) // int(p)))
     except (OSError, ValueError):
-        pass
+        try:                                           # cgroup v1
+            q = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
+            if q > 0:
+                n = min(n, max(1, q // int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())))
+        except (OSError, ValueError):
+            pass
     return n
 
 
@@ -126,14 +131,15 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
 
 
 def memory_gb() -> int:
-    """The memory this process may use: the cgroup limit when there is one (a pod's /proc/meminfo is the host's), else
-    MemAvailable."""
-    try:
-        m = Path("/sys/fs/cgroup/memory.max").read_text().strip()
-        if m != "max":
-            return int(m) >> 30
-    except (OSError, ValueError):
-        pass
+    """The memory this process may use: the cgroup limit when there is one, v2 or v1 (a pod's /proc/meminfo is the host's),
+    else MemAvailable."""
+    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):     # cgroup v2, then v1
+        try:
+            m = Path(f).read_text().strip()
+            if m != "max" and int(m) < 1 << 60:        # v1 writes "no limit" as a number near 2^63
+                return int(m) >> 30
+        except (OSError, ValueError):
+            pass
     for line in open("/proc/meminfo"):
         if line.startswith("MemAvailable:"):
             return int(line.split()[1]) >> 20
@@ -148,7 +154,7 @@ def session_jobs() -> int:
 
 
 #: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
-AGREEMENT_MIN_GB = 32
+AGREEMENT_MIN_GB = 24
 
 
 def _version(v: str) -> tuple[int, ...]:
