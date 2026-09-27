@@ -168,9 +168,13 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
-  - The review's first estimate is `2√(t·2^-212.5)` for audit B at m = 33: `2^-65.3` at `t = 2^80`. It probably
-    dominates the audit bound.
-  - It is to be bounded on paper before the lifetime numbers change.
+  - On paper (`note:20260927T0705Z-draft-link-term`, pending review): define `X`'s value layer the way the extractor
+    fills its table, from auxiliary extractions, and charge failed extractions to the joint form at the same `K`.
+    Knowledge plus link then cost about `2√(t·2^-220.5)` for audit B at m = 33, which is `2^-69.3` at `t = 2^80`
+    (the review's first estimate was `2^-65.3`).
+  - The square root is inherent to strict-time collision resistance here. It dominates the audit bound. An
+    expected-time assumption or the random-oracle column removes it.
+  - The lifetime numbers don't change until the review accepts it.
 - **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
