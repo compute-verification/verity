@@ -13,7 +13,7 @@ from verity_pous.oracle import Tweak
 from verity_pous.oracle import run as run_prog
 from verity_pous.params import OPERATING_POINT
 from verity_pous.primitives import key_program, key_query, reference
-from verity_pous.scheme import encode_segment
+from verity_pous.scheme import P3
 
 from verity_vllm.engine.pous import layout
 
@@ -136,16 +136,29 @@ def test_xor_sponge_keys_match_the_reference(ext, monkeypatch):
 
 
 @needs_cuda
-def test_segment_encode_matches_the_reference_and_decodes(ext):
+def test_segment_encode_and_decode_match_the_reference_codec(ext):
+    """The GPU twin of `codec.REFERENCE` against its byte-level `encode_segment` / `decode_segment` on segment 5."""
     from verity_vllm.engine.pous import codec
 
-    prims = reference(P)
+    ref = codec.REFERENCE
+    encode, decode = codec.twin(ref)
+    params, prims = P.with_segments(6), reference(P)
     g = torch.Generator().manual_seed(3)
     w = torch.randint(0, 256, (1, P.n, M), dtype=torch.uint8, generator=g)
     salt = bytes(range(7, 7 + codec.SALT_BYTES))
     tags = codec.segment_tags(salt, [5], "cuda")
-    c = codec.encode(w.cuda(), tags)
-    (_, c2), _ = run_prog(encode_segment(P, prims.h, tag(salt_value(salt), 5), [from_bytes(r, P.m) for r in _rows(w[0])]), prims)
-    assert _rows(c[0]) == [to_bytes(x, P.m) for x in c2]
-    assert torch.equal(codec.decode(c, tags).cpu(), w)
+    c = encode(w.cuda(), tags)
+    blocks = ref.encode_segment(params, prims, salt, 5, w[0].numpy().tobytes())
+    assert _rows(c[0]) == blocks
+    assert decode(c, tags).cpu().numpy().tobytes() == ref.decode_segment(params, prims, salt, 5, blocks) == w[0].numpy().tobytes()
     assert torch.equal(codec.transpose(codec.transpose(c)), c)
+
+
+def test_the_gpu_twin_is_chosen_by_reference_codec():
+    from verity_pous.codec import Codec
+
+    from verity_vllm.engine.pous import codec
+
+    assert codec.REFERENCE is P3 and codec.twin(P3) == (codec.encode, codec.decode)
+    with pytest.raises(NotImplementedError):
+        codec.twin(Codec("dense/v1", P3.encode_segment, P3.decode_segment))

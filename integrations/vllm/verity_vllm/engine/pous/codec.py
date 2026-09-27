@@ -4,6 +4,9 @@ The operating point is `verity_pous.params.OPERATING_POINT`: a segment is `N` = 
 of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `verity_pous` is the oracle: the verifier's own
 encoding with it must have the server's root, and `tests/engine/test_pous_codec.py` checks each piece against it.
 
+`twin(codec)` is the GPU `(encode, decode)` of a reference `verity_pous.codec.Codec`; `REFERENCE` is the one served.  Only
+`scheme.P3` has a twin today; any other codec (a dense single-layer one) fails closed until its twin is added here.
+
     tag_s   = salt (24 B) || u64(s)
     Pi, Pi2 = Feistel-10 on M + 64 or 2M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : width / 2]
     P_T     = Feistel-10 on M bytes,      F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : M / 2],  T = tag_s || u8(layer) || u16(v)
@@ -22,7 +25,9 @@ from __future__ import annotations
 
 import torch
 from verity_pous import primitives
+from verity_pous.codec import Codec
 from verity_pous.params import OPERATING_POINT, SALT_BITS, TAG_BITS
+from verity_pous.scheme import P3
 
 from verity_vllm.engine.pous import native
 
@@ -182,3 +187,16 @@ def encode(w: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
             out[:, v] = x
         top = out
     return top
+
+
+REFERENCE: Codec = P3
+"""The reference codec the server encodes with and the verifier checks against."""
+
+_TWINS = {P3.name: (encode, decode)}
+
+
+def twin(codec: Codec):
+    """The GPU `(encode, decode)` of the reference codec `codec`, on `[G, N, M]` segments and `[G, 32]` tags."""
+    if codec.name not in _TWINS:
+        raise NotImplementedError(f"no GPU twin of the codec {codec.name!r} (have {sorted(_TWINS)})")
+    return _TWINS[codec.name]

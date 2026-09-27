@@ -1,5 +1,5 @@
 """`W` for POUS: the data section of the checkpoint's one `.safetensors` file, as the reference `verity_pous.layout.Layout`
-of its tensors back to back (so `W` is the data section, zero-padded to whole segments).
+of its tensors at their header ranges (`Layout.of_ranges`), so `W` is the data section, zero-padded to whole segments.
 
 The verifier derives `W` from the checkpoint of record alone, and so does the server; the header gives every tensor's dtype and
 shape, the reference layout its byte range and segments.  Stdlib and `verity_pous` only.
@@ -53,11 +53,13 @@ def read(path: str | Path, base: Params = OPERATING_POINT) -> Checkpoint:
         size = f.tell()
     header.pop("__metadata__", None)
     entries = sorted((int(t["data_offsets"][0]), int(t["data_offsets"][1]), name) for name, t in header.items())
-    layout = Layout.of(base, [(name, b - a) for a, b, name in entries])
-    for (a, b, name), p in zip(entries, layout.tensors):
-        if (p.offset, p.offset + p.size) != (a, b):
+    at = 0
+    for a, b, name in entries:
+        if a != at:
             raise ValueError(f"{path}: data section is not contiguous at {name}")
-    data_bytes = entries[-1][1] if entries else 0
+        at = b
+    layout = Layout.of_ranges(base, [(name, a, b - a) for a, b, name in entries])
+    data_bytes = at
     if 8 + hlen + data_bytes != size:
         raise ValueError(f"{path}: {size - 8 - hlen - data_bytes} trailing bytes after the last tensor")
     return Checkpoint(path, 8 + hlen, data_bytes, {n: t["dtype"] for n, t in header.items()},

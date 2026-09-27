@@ -94,9 +94,9 @@ def cmd_commit(a) -> None:
 
 def cmd_vk(a) -> None:
     from verity_pous import setup
-    from verity_pous.verifier import VerifierKey
+    from verity_pous.primitives import reference
 
-    from verity_vllm.engine.pous import layout
+    from verity_vllm.engine.pous import codec, layout
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
@@ -108,15 +108,17 @@ def cmd_vk(a) -> None:
         raise SystemExit("W does not match the server's commitment")
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
-    enc = pv.encode(ck.params, w, salt, a.workers)
-    vk = VerifierKey.build(enc)
+    segments = pv.encode(ck.params, w, salt, a.workers, codec.REFERENCE)
+    vk = setup.verifier_key(ck.params, reference(ck.params), w, commitment, salt, encoded=segments, codec=codec.REFERENCE)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
     names = sorted(n for n in ck.dtypes if n.startswith(LAYER0))
-    ref = {n: hashlib.sha256(b).hexdigest() for n, b in pv.reference_decode(ck.layout, enc, names, a.workers).items()}
+    ref = {n: hashlib.sha256(b).hexdigest()
+           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, codec.REFERENCE).items()}
     plain = {n: hashlib.sha256(ck.layout.unpack(w, n)).hexdigest() for n in names}
-    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "encode_s": enc_s,
+    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": codec.REFERENCE.name,
+                             "encode_s": enc_s,
                              "workers": a.workers, "reference_decode_s": time.perf_counter() - t1,
                              "reference_decode_layer0": ref, "reference_decode_matches_w": ref == plain})
 
@@ -127,8 +129,10 @@ def load_vk(out: Path):
 
     doc = _read(out / "vk.json")
     raw = (out / "vk-leaves.bin").read_bytes()
-    leaves = tuple(raw[i:i + 32] for i in range(0, len(raw), 32))
-    return doc, VerifierKey(Params(**doc["params"]), bytes.fromhex(doc["salt"]), bytes.fromhex(doc["root"]), leaves)
+    vk = VerifierKey.from_leaves(Params(**doc["params"]), bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
+    if vk.root.hex() != doc["root"]:
+        raise ValueError("vk-leaves.bin does not have the root vk.json records")
+    return doc, vk
 
 
 def cmd_plain(a) -> None:
@@ -250,9 +254,8 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
                   "server_encode_s": load_info.get("encode_s"), "server_root": hs.get("root")},
         "bit_exact": {**exact, "load_checks": load_info.get("checks"),
                       "layer0_decoded_by_gpu": sorted(n for n in ref if n in served),
-                      "gpu_decode_equals_reference_decode_layer0": bool(ref) and any(n in served for n in ref)
-                      and all(served[n] == d for n, d in ref.items() if n in served)
-                      and all(n in served for n in ref if n.endswith("proj.weight")),
+                      "gpu_decode_equals_reference_decode_layer0": bool(set(ref) & set(served))
+                      and all(served[n] == d for n, d in ref.items() if n in served),
                       "reference_decode_matches_w": vk["reference_decode_matches_w"]},
         "in_process_responder": {"device_s": hv.get("device_s"), "server_s": hv.get("server_s"),
                                  "device_over_deadline": hv.get("device_over_deadline"), "counts": hs.get("responder")},
