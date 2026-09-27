@@ -32,6 +32,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
+pub mod glue;
 pub mod pure_block;
 pub mod vllm_block;
 pub mod zk_hooks;
