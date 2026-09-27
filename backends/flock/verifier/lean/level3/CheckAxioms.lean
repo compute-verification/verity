@@ -20,3 +20,6 @@ import FlockLevel3
 #print axioms FlockLevel3.Q_irreducible
 #print axioms FlockLevel3.eqTable_size
 #print axioms FlockLevel3.eqTable_get
+#print axioms FlockLevel3.embed
+#print axioms FlockLevel3.ofLimbs
+#print axioms FlockLevel3.u_root
