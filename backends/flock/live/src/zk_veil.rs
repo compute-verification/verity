@@ -1279,6 +1279,32 @@ mod tests {
             rank(all) - rank(rand)
         }
 
+        /// Coins and query sets a malicious verifier could choose (red-team-m1-zk's variant): with a pair per rep nothing
+        /// leaks, and the shared-pair control leaks wherever the reps' coins differ.
+        #[test]
+        fn adversarial_coins_and_queries_leak_nothing() {
+            let unit = |i: usize| -> Vec<F256> { (0..W).map(|l| if l == i { F256::ONE } else { F256::ZERO }).collect() };
+            for (name, q, same, boolean, shared_leaks) in [
+                ("identical queries", [vec![1, 7, 20], vec![1, 7, 20]], false, false, true),
+                ("disjoint, t_pad = distinct", [vec![1, 2, 3], vec![4, 5, 6]], false, false, true),
+                ("identical coins in both reps", [vec![1, 7, 20], vec![3, 7, 30]], true, false, false),
+                ("identical coins and queries", [vec![2, 9, 17], vec![2, 9, 17]], true, false, false),
+                ("boolean lane challenges", [vec![1, 7, 20], vec![3, 7, 30]], false, true, true),
+            ] {
+                let mut c = coins(q);
+                if same {
+                    c.eq[1] = c.eq[0].clone();
+                    c.rho[1] = c.rho[0];
+                    c.b[1] = c.b[0].clone();
+                }
+                if boolean {
+                    c.eq = [unit(0), unit(3)];
+                }
+                assert_eq!(leak(6, [0, 1], &c), 0, "{name}: a pair per rep leaks");
+                assert_eq!(leak(6, [0, 0], &c) > 0, shared_leaks, "{name}: the shared-pair control");
+            }
+        }
+
         #[test]
         fn a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not() {
             // 3 queries per rep, 5 distinct positions: t_pad = 2 * 3 covers them
