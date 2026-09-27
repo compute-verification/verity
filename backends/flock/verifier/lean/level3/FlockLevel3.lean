@@ -8,3 +8,4 @@ import FlockLevel3.Seam
 import FlockLevel3.ArithFacts
 import FlockLevel3.Pinned
 import FlockLevel3.Nodes
+import FlockLevel3.NovelBasis
