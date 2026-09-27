@@ -112,7 +112,7 @@ link term per audit.
   - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
 - **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link theorem (`δ_link`,
   DESIGN.md §3). The first two need the SHA-512 leaf layout in the model, as does the link theorem's binding
-  hypothesis. Under A2 (§3) `δ_link` is `t·N_s(8N₀/e)/2^256.5` per audit, which dominates the audit's hash term.
+  hypothesis. Under A2 (§3) `δ_link` is `t·N_s(8N₀/e)/2^256` per audit, which dominates the audit's hash term.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
   statement links that root, or Halevi–Micali binding gives a SHA-512 collision. So
   `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
@@ -259,17 +259,19 @@ never make Lean prove something false.
   the term is below 2^-170, against 2^-97.8 for the query terms.
 - **Status upstream.** Unproved in ArkLib, and not plannable (the design doc, level 4b).
 
-**A2. Expected-time collision resistance of SHA-512** (CDGSY24, ePrint 2024/1434, Theorem 2), for the audit's value
-layer (Daniel, Sep 27).
+**A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
+audit's value layer (Daniel, Sep 27; constant corrected the same day).
 
 - **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
-  most `T/2^256.5`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
+  most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
   record the pair output and the evaluations made, `t` for each run of the prover.
-- **Why it is plausible.** It is SHA-512's generic bound, since `min(1, q²/2^513) ≤ q/2^256.5`. It is linear in `T`
+- **Why it is plausible.** A random oracle meets it with 0.33 bits to spare: its sharp bound is `T/E[τ_N]`, and
+  hashing until the first collision costs `E[τ_N] ≈ √(π/2)·2^256 = 2^256.33` (DESIGN.md §3). The earlier `T/2^256.5`
+  came from the fixed-budget bound `min(1, q²/2^513) ≤ q/2^256.5`, which that attack beats. It is linear in `T`
   because a finder can gamble.
 - **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
   stated for all finders: the link theorem takes it for the finder it builds from the prover.
-- **Where it is used.** Only the link term, `t·N_s(8N₀/e)/2^256.5` per audit (audit B `t·2^-205.6`, `2^-125.6` at
+- **Where it is used.** Only the link term, `t·N_s(8N₀/e)/2^256` per audit (audit B `t·2^-205.1`, `2^-125.1` at
   `t = 2^80`). The strict-time `2√(t·2^-221.5)` and the random oracle's `t²/2^511` are comparisons (DESIGN.md §3).
   The compiled theorem, `δ_tree` and the knowledge term's conflicts keep strict-time `cr/sha-512` (§4).
 
@@ -390,7 +392,7 @@ The weights are committed once and every later proof opens that root. The analys
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
-  - Under A2 that term is `t·N_s(8N₀/e)/2^256.5` (audit B: 2^-125.6 at `t = 2^80`; strict time 2^-69.8), and it
+  - Under A2 that term is `t·N_s(8N₀/e)/2^256` (audit B: 2^-125.1 at `t = 2^80`; strict time 2^-69.8), and it
     dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^66` to `2^87`, with `N` counting audits.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
