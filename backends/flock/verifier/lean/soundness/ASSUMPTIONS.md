@@ -23,7 +23,8 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
   about the program's Boolean circuit only through L1.
-  - **The evidence for it, and the path to discharge it:** `assumptions/l1-template-rows.md`.
+  - **Proved for RoPE** (`rope-head/neox-bf16/pair`): `Rope.rope_sound`, for the pinned file's rows.
+  - **The evidence for it, the proof for RoPE, and the path for the rest:** `assumptions/l1-template-rows.md`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved (`README.md` §1.6).
 
