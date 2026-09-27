@@ -10,18 +10,18 @@ Code:
 - `../flock-zk-b684b12.patch`: Ligerito level 0's hiding in upstream Flock (`pcs::ligerito::zk`, `commit::commit_zk`, the F256
   split prover and verifier).
 
-**Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a repetition sends is masked, committed
-or public, and the audit (`zkaudit`) attributes every byte. The target notion per repetition is VEIL's: special
-honest-verifier zero knowledge, meaning one simulator for every fixed coin sequence (DESIGN.md §11). Malicious-verifier
-zero knowledge comes from M2's coin commitment and single rewind (§9). The proof class stays `NON_ZK_PROOF` until three
-things are done: the red team reviews this document, the Lean proof covers it, and level 0's query count is recomputed
-for its padded code (§8).
+**Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
+public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
+knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
+computational under the assumptions of §7. Malicious-verifier zero knowledge comes from M2's coin commitment and single
+rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives
+each rep its own pair. The proof class stays `NON_ZK_PROOF` until the red team re-reviews and the Lean proof covers it.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
 coordinates `(c0, c1)`. An F128's bytes are `lo` then `hi`, each little-endian. `v'` is a sent (masked) value, `v` the
 value upstream's prover computed, `h` a pad, and `v' = v + h`. `m` is the dense variable count and `k_log` the block size
 (RoPE: `m = 25..27`, `k_log = 22`). Ligerito at `m = 25`: `initial_k = 6` (64 lanes), `L = 2^12` rows per lane, rates
-`1/2, 1/4, 1/8, 1/16`, queries `218, 106, 71, 53`, OOD samples `1, 2, 2, 2`.
+`1/2, 1/4, 1/8, 1/16`, queries `277, 106, 71, 53` (level 0's count is §7's, above Fast100's 218), OOD samples `1, 2, 2, 2`.
 
 ## 1. Order of one repetition
 
@@ -29,7 +29,7 @@ Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. 
 M0 and upstream Flock.
 
 ~~~text
-bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (66-lane level-0 tree)
+bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (68-lane level-0 tree)
 zerocheck           label flock-zerocheck-v0
   M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
@@ -47,7 +47,7 @@ Ligerito level 0    label flock-ligerito-basis-f256-split-v0 · scalar target ·
                     per OOD sample: squeeze z (log_n) · scalar y' · bytes nonce · squeeze β
                     msg_0' (u_0 slice 2, u_2 slice 2)
                     per j < initial_k: squeeze r_j (F256) · msg_{j+1}' for j+1 < initial_k
-  M1                slice e_0' (2) · slice e_1' (2) · squeeze ρ_0, ρ_1 (F256)
+  M1                slice e_0' (2) · slice e_1' (2) (rep r's pair) · squeeze ρ_0, ρ_1 (F256)
   M1                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
   M1                slice T' (2) · slice ybar (2 t_pad)
                     code-switch message · cap_1 · ... levels 1+, unchanged ...
@@ -79,7 +79,7 @@ RoPE at `m = 25`: 298. `Layout` in `zk_veil.rs` is normative.
 | `zp + i`, `zp = fc + 1 + 2(k_log−6)` | `z_partial[i]` | 64 |
 | `lg_ood(i) = zp + 64 + i` | Ligerito level 0's OOD value `i` | 1 |
 | `lg_msg(j, t) = zp + 64 + n_ood0 + 4j + t` | lane round `j`'s message, `t`: `u_0.c0, u_0.c1, u_2.c0, u_2.c1` | 24 |
-| `lg_e(i, c)` (next four) | extra lane `i`'s sum, coordinate `c` | 4 |
+| `lg_e(i, c)` (next four) | the rep's extra lane `i`'s sum (lane `64 + 2r + i`), coordinate `c` | 4 |
 | `hab` (next) | `h_ab = h_fa · h_fb` | 1 |
 | `tx, ty, tw = hab + {1,2,3}` | the sacrificed triple `x, y, w = x · y` | 3 |
 
@@ -92,15 +92,20 @@ the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and 
 `base = rep << 32`:
 
 ~~~text
-h      = f128s(4, base, s)            then h[hab] := h[fa]·h[fb],  h[tw] := h[tx]·h[ty]
-mu     = f128s(5, base, s)            the dot-product mask
-pad_h  = f128s(4, base + 2^24, 192)   the pads codeword's padding
-pad_mu = f128s(5, base + 2^24, 192)
-mask slot, block b: f128s(1, b · 2^(mask_log−7), 2^(mask_log−7))      (M0's hook, uniform in --zk)
-Ligerito level 0 (once per session, both reps):
-  extra lane i < 2:       f128s(6, i << 32, L)
-  lane l's padding:       f128s(7, l << 32, t_pad)       l < 64 + 2,  t_pad = 2·queries_0 + 64 (500 at m = 25)
+per rep r:
+  h      = f128s(4, base, s)            then h[hab] := h[fa]·h[fb],  h[tw] := h[tx]·h[ty]
+  mu     = f128s(5, base, s)            the dot-product mask
+  pad_h  = f128s(4, base + 2^24, 192)   the pads codeword's padding
+  pad_mu = f128s(5, base + 2^24, 192)
+per session (both reps):
+  mask slot, block b: f128s(1, b · 2^(mask_log−7), 2^(mask_log−7))    (M0's hook, uniform in --zk)
+  Ligerito level 0 (one codeword, both reps open it):
+    extra lane i < 4:     f128s(6, i << 32, L)            rep r folds lanes 2r, 2r+1 only
+    lane l's padding:     f128s(7, l << 32, t_pad)        l < 64 + 4,  t_pad = 2·queries_0 (554 at m = 25)
 ~~~
+
+The level-0 padding of the 64 witness lanes is shared by the reps, as is the codeword; each pair of extra lanes and its
+padding belongs to one rep (§7).
 
 Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
 
@@ -162,7 +167,7 @@ exactly when `(eq(p_1, x), .., eq(p_k, x))` over the mask words span `GF(2)^{128
 opening's label, before any `s_hat_v` leaves (`mask_rank_ok`, 2–4 ms), and stops otherwise. RoPE: rank 512 needed, from
 1024 words. Region claims' `s_hat_v` are functions of public region data (`Stmt::region_s_hat_v`).
 
-## 7. Ligerito level 0 (VEIL Figs. 8–9)
+## 7. Ligerito level 0 (VEIL Figs. 8–9), and zero knowledge for the session
 
 Without this, Ligerito sends witness functionals in the clear. At `m = 25` the audit finds per session:
 
@@ -178,33 +183,95 @@ What is changed:
    - *The binary-field point:* in the additive NTT's novel basis `X_L = Ŵ_n`, which is 0 on the first half of the
      codeword's positions and 1 on the other half, which I checked on upstream's NTT. So VEIL's high-coefficient
      padding alone would leave half the opened positions unmasked.
-   - `X_L + c` vanishes nowhere, so any `t_pad` distinct positions of a lane are uniform.
+   - `X_L + c` vanishes nowhere, and `X_0..X_{t_pad−1}` span the polynomials of degree `< t_pad`, so any `t_pad` distinct
+     positions of a lane are uniform.
    - The committed word still determines `P_l` (its first `L` coefficients minus `c` times the next `t_pad`).
-2. **Two uniform lanes** (`zk::EXTRA_LANES`), padded the same way. The leaf holds 66 F128 values (`commit::commit_zk`:
-   one tree over the same positions, so the same hm96 level-0 salts and C1's shared root).
-3. **After the lane rounds** (challenges `r̄`), in this order:
-   - P sends `e_i = ⟨b(r̄, ·), R_i⟩` (exposed, padded). They precede the coins that combine them, as in VEIL step 1;
+2. **Four uniform lanes** (`zk::EXTRA_LANES`), padded the same way, **a pair per repetition**: rep `r` owns lanes
+   `64 + 2r, 64 + 2r + 1` (`zk::rep_lanes`), `R^r = (R_{2r}, R_{2r+1})`. The leaf holds 68 F128 values
+   (`commit::commit_zk`: one tree over the same positions, so the same hm96 level-0 salts and C1's shared root).
+3. **After the lane rounds** of rep `r` (challenges `r̄^r`), in this order:
+   - P sends `e^r_i = ⟨b(r̄^r, ·), R^r_i⟩` (exposed, padded). They precede the coins that combine them, as in VEIL step 1;
      otherwise a prover could choose `e` to fit any claim.
-   - V draws `ρ_0, ρ_1 ∈ F256`. P refuses them unless they are independent over F128.
-   - The fold becomes `y_1' = y_1 + ρ_0 R_0 + ρ_1 R_1`, which is uniform on F256^L.
-   - P sends `T' = ⟨b(r̄, ·), y_1'⟩` and `ybar = Σ_l eq(r̄, l) pad_l + ρ_0 pad_{R0} + ρ_1 pad_{R1}` (`t_pad` F256 values).
-   - The code switch and level 1 commit `y_1'`. The verifier's running claim restarts at `T'`.
-4. **The level-0 row check**:
+   - V draws `ρ^r_0, ρ^r_1 ∈ F256`. P refuses them unless they are independent over F128, so `W^r : (a, b) ↦ ρ^r_0 a + ρ^r_1 b`
+     is invertible on F128².
+   - The fold becomes `y_1'^r = y_1^r + W^r R^r`, uniform on F256^L.
+   - P sends `T'^r = ⟨b(r̄^r, ·), y_1'^r⟩` and `ybar^r = Σ_l eq(r̄^r, l) pad_l + W^r pad_{R^r}` (`t_pad` F256 values,
+     `zk::ybar`).
+   - The code switch and level 1 commit `y_1'^r`. The verifier's running claim restarts at `T'^r`.
+4. **The level-0 row check** at rep `r`'s queries (the verifier is told `r`: `zk::Level0Params`):
 
    ~~~text
-   ⟨row_q[..64], eq(r̄)⟩ + ρ_0 row_q[64] + ρ_1 row_q[65] + Enc(c·ybar ‖ ybar)(q) = Enc(y_1')(q)
+   ⟨row_q[..64], eq(r̄^r)⟩ + ρ^r_0 row_q[64 + 2r] + ρ^r_1 row_q[64 + 2r + 1] + Enc(c·ybar^r ‖ ybar^r)(q) = Enc(y_1'^r)(q)
    ~~~
 
-   It is folded into the induced basis's enforced sum. The induced basis itself is unchanged.
-5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e`. The prover's lane chain becomes
+   It is folded into the induced basis's enforced sum (`zk::enforced_extra`). The induced basis itself is unchanged. The
+   identity holds at every position, as an identity of codewords.
+5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e^r`. The prover's lane chain becomes
    the two lane-phase rows (§4).
+6. **Level 0's query count and padding.** The padded code is `RS[2L, L + t_pad]`, of rate `ρ' = (L + t_pad)/2L`, and the
+   verifier's query bound is at that rate: `q_0 log₂(1/(√ρ' + 1/50))` bits per run (`zk_veil::level0_bits`, the soundness
+   lane's accounting). `t_pad = 2 q_0` covers every distinct level-0 position the session opens; nothing else evaluates the
+   padded lanes (the OOD value, the lane messages and `e` are masked by the algebraic pads, `ybar^r` by rep `r`'s own pair).
 
-Why this is zero knowledge, as in VEIL Lemma 4.7:
-- `y_1'` and `ybar` are uniform, through `R`, `pad_R` and the F128-independence of `ρ`.
-- The P-lane entries at the opened positions are uniform, through per-lane padding with `t_pad ≥` all level-0 positions
-  of both reps. The R-lane entries are then determined by the row check.
-- Every later message (the code switch, levels 1–3, their OOD values, the final vector) is a function of `y_1'` and public
-  data.
+   | m | L | q_0 | t_pad | bits per run | the least q_0 |
+   |---|---|---|---|---|---|
+   | 25 | 2^12 | 277 | 554 | 102.7 | 268 |
+   | 26 | 2^13 | 242 | 484 | 101.5 | 239 |
+   | 27 | 2^14 | 229 | 458 | 100.9 | 227 |
+   | 28–31 | 2^17–2^18 | 219 | 438 | ≥ 100 | 219 |
+   | ≥ 32 | ≥ 2^19 | 218 | 436 | ≥ 100 | 218 |
+
+   At `m = 25..27` the counts are the ones the soundness lane and the red team agreed (computed with 64 more padding
+   symbols); elsewhere the least count. `--zk` refuses `m ≤ 24`, where no count reaches 100 bits at rate 1/2, and any
+   count below 100 bits (`zk_queries0`).
+
+**Zero knowledge for the session.** Fix every coin of the session (both reps' streams and the link points). The view is:
+the pads roots, caps and paths (hm96 commitments); per rep, the masked algebraic values, `s_hat_v` of the masked and the
+region claims, the level-0 OOD value, lane messages and `e^r` (all padded), `T'^r`, `ybar^r`, the rows at rep `r`'s
+level-0 queries, levels 1+, and the inner proof. The prover's randomness is spent as follows, each part once:
+
+| view | uniform through | scope |
+|---|---|---|
+| masked algebraic and level-0 exposed values | the pads `h` (a bijection, §2) | per rep |
+| `s_hat_v` of the 4 masked claims | the mask slot, jointly over all 4 claim points (the rank check, §6) | session |
+| region `s_hat_v` | public data | |
+| the 64 witness lanes' entries at every opened level-0 position of either rep | their padding `μ_l`, `t_pad ≥` those positions | session |
+| `y_1'^r`, hence every level-1+ message and row of rep `r` | `R^r` through `W^r` | per rep |
+| `ybar^r` | `pad_{R^r}` through `W^r` | per rep |
+| rep `r`'s pair entries at any opened position | none: fixed by the row-check identity from the three rows above | |
+| the inner proof (`ρ, σ, τ, Y`, ≤ 168 of 192 padded columns) | its triple, `μ`, `pad_h`, `pad_μ` (VEIL Lemma 4.3) | per rep |
+| unopened leaves, caps, paths | hm96 salts (fresh tree ids; level 0's one tree) | per tree |
+
+The other pair's entries in rep `r`'s rows are fixed the same way, by the other rep's identity. So for every witness the
+session's view is uniform subject to the public identities, which is how the simulator samples it (§8). Nothing is
+spent twice. A pair shared by the two reps would be: `(y_1'^0, ybar^0)` and `(y_1'^1, ybar^1)` would both draw on one
+`(R, pad_R)`, and `N·(·)^0 + (·)^1` with `N = W^1 (W^0)^-1` eliminates it. That was red-team-m1-zk's finding, a witness
+functional at every level-0 position either rep opens and at the level-1 positions both open. With `k` extra lanes
+shared by both reps, joint uniformity needs the `4 × k` matrix `[W^0; W^1]` to have rank 4, so a pair per rep (4 lanes)
+is the minimum.
+
+**Checked:**
+- `zk_veil` test `exact::a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not`: at toy size (4 witness lanes of 16
+  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword`, `ybar` and
+  `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
+  exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
+  per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
+  check holds on the model.
+- selftest `zk_session_relations_vary_with_the_seed` (RoPE `m = 25`, one coin seed): the finding's two functionals
+  (`session_relations`: 521 F256 values at level 0, 42 at level 1) differ in every word between two prover seeds. A
+  prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal.
+- The statistics (§8) test both functionals as classes of one value per session.
+
+**Assumptions.** The argument above is exact for uniform prover randomness. In the implementation:
+- **ChaCha20 is a PRG.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20 output under the
+  session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`), so the simulation is computationally indistinguishable,
+  with ChaCha20's distinguishing advantage as the gap. The seed's quality is trusted.
+- **hm96-sha512 leaves hide.** Caps, paths and unopened leaves are hm96-sha512 outputs over 192-byte salts: hiding in
+  the random-oracle model (soundness ASSUMPTIONS.md §6, §7), binding under SHA-512 collision resistance.
+- So the notion is computational special honest-verifier zero knowledge for one session.
+- **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
+  `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), and mask-slot weights of rank `< 128·(claim points)` (§6).
+  The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable; RoPE has 1024.
 
 Negatives, each rejected on both reps (RoPE CPU selftest):
 - another extra lane folded than the committed one;
@@ -214,8 +281,9 @@ Negatives, each rejected on both reps (RoPE CPU selftest):
 
 ## 8. The simulator, evidence, and what M1 still needs
 
-**The simulator** (`simulate_full`, per rep, fixed coins). Its input is the public statement, the verifier's coins for the
-rep's stream (every squeeze, in order) and the two link points. It builds:
+**The simulator** (`simulate_full`, per rep, fixed coins; both reps from one dummy session, so the session's structure is
+the dummy's with the dummy's randomness). Its input is the public statement, the verifier's coins for the rep's stream
+(every squeeze, in order) and the two link points. It builds:
 
 1. uniform exposed values and uniform masked-claim `s_hat_v`;
 2. the region claims' `s_hat_v` from public data;
@@ -229,42 +297,46 @@ The verifier (`verify_zk_with` on a coin tape) accepts every simulated proof. Th
 refuses.
 
 **Statistics** (`zkstat --zk --n 64`, then `tests/zk_stats.py`). Real and simulated transcripts are compared per class:
-exposed values, masked `s_hat_v`, the inner proof, level 0's exposed values, `T'` and `ybar`, level-0 rows, and levels 1+.
-Each class gets byte-histogram, bit-balance and cross-run-XOR tests. Positions constant in every real and simulated
-transcript are public structure: F256 messages after the code switch are base-valued (5 such positions in the
-levels-1+ sample). The control (all prover randomness zero) must be distinguished.
+exposed values, masked `s_hat_v`, the inner proof, level 0's exposed values, `T'` and `ybar`, level-0 rows, and levels 1+,
+and per session the two cross-rep relations of §7 (`rel_level0`, `rel_level1`). Each class gets byte-histogram,
+bit-balance and cross-run-XOR tests. Positions constant in every real and simulated transcript are public structure:
+F256 messages after the code switch are base-valued (5 such positions in the levels-1+ sample). A level-0 position both
+reps open holds one row, so its second copy is excluded (one row of the sample under these coins). The control (all
+prover randomness zero) must be distinguished.
 
-Results for RoPE at `m = 25`, 128 transcripts per kind:
-- real and simulated agree on all 11 classes; the smallest of the 55 p-values is 0.013;
-- the control is distinguished on all 7 masked classes (p ≈ 0, every position constant);
+Results for RoPE at `m = 25`, 64 sessions (128 transcripts) per kind:
+- real and simulated agree on all 13 classes; the smallest of the 65 p-values is 0.009;
+- the control is distinguished on all 9 masked classes, both relations included (p ≈ 0, every position constant);
 - all 128 simulated proofs are accepted.
 
 Evidence: `lanes/flock-zk/evidence/`.
 
-**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data, is attributed:
+**The audit** (`zkaudit --zk`). Every byte the verifier keeps, and the proofs' opened data (with `final_c'`, the opening's
+batching nonces and the commitment's parameters), is attributed to a class:
 - masked values differ from the control's;
 - region `s_hat_v` equal their public recomputation;
 - every Ligerito value differs from the control's;
-- nothing is unattributed or in the clear (`complete: true`).
+- nothing is unattributed or in the clear (`attributed: true`).
+
+This is attribution, not hiding: that a mask is applied, not that it hides. Hiding is §7's argument, its exact check and
+the statistics' relation classes.
 
 **What M1 still needs:**
-- **Level 0's query count.** Level 0's code now has message length `L + t_pad` in `2L` positions, so its relative
-  distance drops from `1/2` to `1/2 − t_pad/2L` (0.439 at `m = 25`). Its 218 queries are Fast100's for rate 1/2 and must
-  be recomputed (the soundness lane). At production sizes (`2^18`-row lanes) the drop is below `2^-9`.
-- **A red-team review** of §4–§7.
+- **The red team's re-review** of §4–§7 after its first review (F1: the reps' shared extra lanes, fixed in §7; F2: level
+  0's query count, §7 item 6; F5: the prover's own lincheck fold is an argument of `replay`, never read from a proof).
 - **Cost.** Measured on a 4-core VM, per rep, from loopback sessions (median of three timed runs):
 
   | | M0 prove | M1 prove | upstream under M1 | proof per rep |
   |---|---|---|---|---|
-  | RoPE `m = 25` | 0.25–0.29 s | 0.31–0.32 s (+12–24%) | 0.25–0.27 s | 560 → 759 KB |
-  | RoPE `m = 27` | 0.38 s | 0.46 s (+20%) | 0.39–0.40 s | 618 → 817 KB |
+  | RoPE `m = 25` (4 and 16 instances) | 0.24–0.27 s | 0.31–0.33 s (+21–32%) | 0.26–0.27 s | 560 → 865 KB |
+  | RoPE `m = 27` (64 instances) | 0.36–0.37 s | 0.46 s (+24–27%) | 0.39–0.40 s | 618 → 843 KB |
 
   - The prover's own replay takes its lincheck's folded `comb` (`LincheckProof::comb_partial`, never serialized). The
     remaining fixed part is 0.026 s of replay and 0.02 s for the pads commitment.
-  - Upstream's share (+7% at `m = 27`) is mostly level 0's padding codewords, one full NTT per lane (66 × 2L). One
-    interleaved NTT of the padded input from layer 0 would cost about `66/64` of upstream's encoding.
+  - Upstream's share (+7% at `m = 27`) is mostly level 0's padding codewords, one full NTT per lane (68 × 2L). One
+    interleaved NTT of the padded input from layer 0 would cost about `68/64` of upstream's encoding.
   - The proof grows by the inner proof, mostly its 168 paths (130 KB per rep), which could share a cap, plus `ybar`
-    (16 KB) and the two extra lanes' entries.
+    (18 KB), the four extra lanes' entries, and level 0's 277 queries in place of 218.
 
 ## 9. What M2 still needs
 
@@ -274,7 +346,9 @@ Evidence: `lanes/flock-zk/evidence/`.
   `derive()` streams, which needs a PRF assumption). The prover's refusals (`β = 0`, mask rank, `ρ_0, ρ_1` dependent)
   stay functions of committed coins.
 - **The single-rewind simulator** (Goldreich–Kahan). The simulator runs the honest prover on a dummy witness until the
-  final openings reveal the committed coins. It then rewinds once to just after the coin commitment and runs §8's
+  final openings reveal the committed coins. The dummy witness must carry the public region words (`b ‖ c` and the
+  declared outputs), every private word zero and the mask slot uniform: its region claims' `s_hat_v` are sent in the clear
+  before any coin opens, and a verifier compares them with the public data. It then rewinds once to just after the coin commitment and runs §8's
   per-table simulator on those coins, for every table, with independent masks. Every message before the last coin is
   masked, as §7 now makes Ligerito's too. So the dummy run is indistinguishable from a real one until the openings, as
   §11.1 requires.

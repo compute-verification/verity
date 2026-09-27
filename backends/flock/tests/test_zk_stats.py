@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("scipy")
+
 sys.path.insert(0, os.path.dirname(__file__))
 import zk_stats  # noqa: E402
 
@@ -32,7 +33,18 @@ def _row(kind, run, rep, rng, fixed=None):
     return row
 
 
-def _dump(n, leak=False):
+REL_SIZES = {"rel_level0": 40, "rel_level1": 12}
+
+
+def _rel(kind, run, rng, fixed=False):
+    row = {"kind": kind, "run": run, "rep": 0}
+    for cls, n in REL_SIZES.items():
+        row[cls] = [bytes([i % 5] * 16).hex() for i in range(n)] if fixed else \
+            [rng.integers(0, 256, 16, dtype=np.uint8).tobytes().hex() for _ in range(n)]
+    return row
+
+
+def _dump(n, leak=False, relation_leak=False):
     rng = np.random.default_rng(7)
     const = {cls: [bytes([i % 7] * 16).hex() for i in range(SIZES[cls])] for cls in zk_stats.MASKED}
     lines = []
@@ -41,6 +53,9 @@ def _dump(n, leak=False):
             lines.append("ZKREAL\t" + json.dumps(_row("real", run, rep, rng, const if leak else None)))
             lines.append("ZKSIM\t" + json.dumps(_row("sim", run, rep, rng)))
             lines.append("ZKCONTROL\t" + json.dumps(_row("control", run, rep, rng, const)))
+        lines.append("ZKREL\t" + json.dumps(_rel("real", run, rng, fixed=relation_leak)))
+        lines.append("ZKREL\t" + json.dumps(_rel("sim", run, rng)))
+        lines.append("ZKREL\t" + json.dumps(_rel("control", run, rng, fixed=True)))
     return lines
 
 
@@ -55,3 +70,34 @@ def test_a_witness_dependent_real_transcript_fails():
     res = zk_stats.analyse(zk_stats.load(_dump(24, leak=True)))
     assert not res["pass"]
     assert not res["classes"]["exposed"]["real_indistinguishable_from_sim"]
+
+
+def test_a_relation_across_fields_and_reps_fails_though_every_field_passes():
+    """red-team-m1-zk F1's shape: every field uniform, a cross-rep functional of them the same in every session."""
+    res = zk_stats.analyse(zk_stats.load(_dump(24, relation_leak=True)))
+    assert not res["pass"]
+    assert all(res["classes"][c]["real_indistinguishable_from_sim"] for c in zk_stats.CLASSES)
+    assert not res["classes"]["rel_level0"]["real_indistinguishable_from_sim"]
+
+
+def test_a_dump_without_relations_fails():
+    lines = [x for x in _dump(24) if not x.startswith("ZKREL")]
+    assert not zk_stats.analyse(zk_stats.load(lines))["pass"]
+
+
+def test_a_position_both_reps_open_counts_once():
+    """Both reps open the one level-0 codeword: a position both open holds the same row in both, which is one observation."""
+    lines = []
+    for line in _dump(24):
+        tag, _, body = line.partition("\t")
+        if tag in ("ZKREAL", "ZKSIM"):
+            v = json.loads(body)
+            if v["rep"] == 1:
+                twin = next(json.loads(x.partition("\t")[2]) for x in lines if x.startswith(tag + "\t")
+                            and json.loads(x.partition("\t")[2])["run"] == v["run"] and json.loads(x.partition("\t")[2])["rep"] == 0)
+                v["lig_rows0"][:5] = twin["lig_rows0"][:5]
+            line = tag + "\t" + json.dumps(v)
+        lines.append(line)
+    res = zk_stats.analyse(zk_stats.load(lines))
+    assert res["pass"], json.dumps(res["classes"]["lig_rows0"], indent=1)
+    assert res["classes"]["lig_rows0"]["shared_by_the_reps"] == 5

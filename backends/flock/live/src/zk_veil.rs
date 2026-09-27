@@ -57,22 +57,25 @@ pub const INNER_LOG_INV_RATE: usize = 3;
 pub const STREAM_PADS: u64 = 4;
 pub const STREAM_DOT_MASK: u64 = 5;
 
-/// Ligerito level 0's padding per lane for `q0` queries: both reps' openings of the one root, plus 64 for the OOD value, the
-/// lane-round messages and the extra lanes' sums (any that many positions of a lane are uniform).
+/// Ligerito level 0's padding per lane for `q0` queries per rep: every distinct level-0 position the session opens (both
+/// reps' queries), so those positions of a lane are uniform. Nothing else evaluates the padded lanes: the OOD value, the
+/// lane-round messages and each pair's sums are masked by the algebraic pads, and each rep's `ybar` by its own pair's padding.
 pub fn level0_t_pad(q0: usize) -> usize {
-    2 * q0 + 64
+    2 * q0
 }
 
-/// Level 0's query count under its padding. With `l` message words per lane the code is `RS[2l, l + t_pad]`, of rate
-/// `ρ' = (l + t_pad) / 2l`, and Fast100's rule holds at every level: `Q log₂(1/(√ρ' + η)) ≥ 100`, `η = 1/50` (the Johnson
-/// slack of the soundness lane's `Accounting/Bound.lean`). The least such `Q ≥ q_min`; `None` when the padding outgrows the
+/// Level 0's query bits per run: with `l` message words per lane the code is `RS[2l, l + t_pad]`, of rate
+/// `ρ' = (l + t_pad) / 2l`, and `q` queries give `q log₂(1/(√ρ' + η))`, `η = 1/50` (the Johnson slack of the soundness lane's
+/// `Accounting/Bound.lean`).
+pub fn level0_bits(l: usize, q: usize) -> f64 {
+    let rate = (l + level0_t_pad(q)) as f64 / (2 * l) as f64;
+    -(q as f64) * (rate.sqrt() + 0.02).log2()
+}
+
+/// The least `q ≥ q_min` with Fast100's 100 bits per run at level 0 ([`level0_bits`]); `None` when the padding outgrows the
 /// lane first.
 pub fn level0_queries(l: usize, q_min: usize) -> Option<usize> {
-    let bits = |q: usize| {
-        let rate = (l + level0_t_pad(q)) as f64 / (2 * l) as f64;
-        -(q as f64) * (rate.sqrt() + 0.02).log2()
-    };
-    (q_min..).take_while(|&q| level0_t_pad(q) <= l).find(|&q| bits(q) >= 100.0)
+    (q_min..).take_while(|&q| level0_t_pad(q) <= l).find(|&q| level0_bits(l, q) >= 100.0)
 }
 
 /// Where each pad sits, per rep. Exposed values first, in proof-field order: zerocheck `round1_ab[64]`, `round1_c[64]`, the
@@ -476,6 +479,7 @@ pub fn from_exposed(v: &[F128], lay: &Layout) -> (ZerocheckProof, LincheckProof)
 pub fn mask_proof(zc: &ZerocheckProof, lc: &LincheckProof, lay: &Layout, h: &[F128]) -> (ZerocheckProof, LincheckProof) {
     let mut z = zc.clone();
     let mut l = lc.clone();
+    l.comb_partial = Vec::new();
     assert!(z.grinding_nonces.is_empty() && l.grinding_nonces.is_empty() && l.matrix_evals.is_empty());
     for i in 0..SKIP {
         z.round1_ab[i] += h[lay.r1ab(i)];
@@ -607,9 +611,12 @@ pub struct Replayed {
 
 /// Re-run upstream's zerocheck and lincheck verifiers (`zerocheck::verify_with_grinding`, `lincheck::verify_with_grinding`,
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
-/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads.
+/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
+/// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
+/// and folds its own (a proof's field is never read).
+#[allow(clippy::too_many_arguments)]
 pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &LincheckProof, circuit: &dyn LincheckCircuit, lay: &Layout,
-                              root: &[u8; 64], ch: &mut Ch) -> Result<Replayed, String> {
+                              root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
     let s = lay.len();
     let m = r1cs.m;
     if !r1cs.c0_is_identity() || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
@@ -673,8 +680,10 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
     // ---- lincheck
     ch.observe_label(b"flock-lincheck-v0");
     let alpha = ch.sample_f128();
-    // the prover's own replay takes its lincheck's folded comb (`comb_partial`, never serialized); a verifier folds its own
-    let own = lc.comb_partial.len() == SKIP;
+    if own_comb.is_some_and(|c| c.len() != SKIP) {
+        return Err("zk: the prover's folded comb has the wrong length".into());
+    }
+    let own = own_comb.is_some();
     let mut comb_vec = if own {
         Vec::new()
     } else {
@@ -708,8 +717,8 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
         }
         r_rounds.push(rr);
     }
-    if own {
-        comb_vec = lc.comb_partial.clone();
+    if let Some(c) = own_comb {
+        comb_vec = c.to_vec();
     }
     ch.observe_f128_slice(&lc.z_partial);
     let zp: Vec<Lin> = (0..SKIP).map(|i| Lin::masked(lc.z_partial[i], lay.zp(i), s)).collect();
@@ -1140,10 +1149,148 @@ mod tests {
     }
 
     #[test]
-    fn level0_queries_are_the_soundness_lanes_counts() {
-        for (l, q) in [(1 << 12, Some(277)), (1 << 13, Some(242)), (1 << 14, Some(229)), (1 << 17, Some(219)), (1 << 18, Some(219)),
+    fn level0_query_counts() {
+        // the least counts at t_pad = 2q (the red team's table), and none where the padding outgrows the lane at rate 1/2
+        for (l, q) in [(1 << 12, Some(268)), (1 << 13, Some(239)), (1 << 14, Some(227)), (1 << 17, Some(219)), (1 << 18, Some(219)),
                        (1 << 19, Some(218)), (1 << 9, None), (1 << 10, None), (1 << 11, None)] {
             assert_eq!(level0_queries(l, 218), q, "l = {l}");
+        }
+        // the agreed counts at RoPE's sizes keep 100 bits per run
+        for (l, q) in [(1 << 12, 277), (1 << 13, 242), (1 << 14, 229)] {
+            assert!(level0_bits(l, q) >= 100.0 && level0_bits(l, q - 10) < 100.0, "l = {l}");
+        }
+    }
+
+    /// Level 0 and level 1 of a two-rep session at toy size, exactly: for fixed coins the view (every row either rep opens,
+    /// each rep's `ybar`, the pair's masked sums `e'` and, conservatively, all of `y_1'`) is F128-linear in the witness lanes
+    /// and the prover's randomness (every lane's padding, the extra lanes, `e`'s pads), so it is independent of the witness
+    /// exactly when the witness's images lie in the span of the randomness's. Built from the protocol's own `lane_codeword`,
+    /// `pad_codeword`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
+    mod exact {
+        use flock_core::pcs::ligerito::zk::{self as z0, EXTRA_LANES, Level0Zk};
+        use flock_field::{F128, F256};
+
+        use crate::zk_hooks::{ProverRng, ProverSeed};
+
+        const LOG_MSG: usize = 4;
+        const L: usize = 1 << LOG_MSG;
+        const W: usize = 4;
+
+        struct Coins {
+            eq: [Vec<F256>; 2],
+            rho: [[F256; 2]; 2],
+            b: [Vec<F256>; 2],
+            q: [Vec<usize>; 2],
+        }
+
+        fn coins(q: [Vec<usize>; 2]) -> Coins {
+            let mut rng = ProverRng::from_seed(ProverSeed::injected([21; 32]));
+            let mut f256 = |i: u64, n: usize| -> Vec<F256> { rng.f128s(1, i << 20, 2 * n).chunks(2).map(|c| F256::new(c[0], c[1])).collect() };
+            let eq = [0, 1].map(|r| {
+                let c = f256(r, 2);
+                (0..W).map(|l| (0..2).fold(F256::ONE, |a, i| a * if (l >> i) & 1 == 1 { c[i] } else { F256::ONE + c[i] })).collect()
+            });
+            let rho = [0, 1].map(|r| {
+                let v = f256(10 + r, 2);
+                assert!(z0::rho_independent([v[0], v[1]]));
+                [v[0], v[1]]
+            });
+            Coins { eq, rho, b: [f256(20, L), f256(21, L)], q }
+        }
+
+        fn enc(v: &[F128]) -> Vec<F128> {
+            z0::lane_codeword(&[], Some(v), LOG_MSG, 1)
+        }
+
+        /// `x`: the witness lanes (`W·L`), then every lane's padding (`(W + 4)·t_pad`), the extra lanes (`4·L`), `e`'s pads (8).
+        fn vars(t_pad: usize) -> (usize, usize) {
+            (W * L, (W + EXTRA_LANES) * t_pad + EXTRA_LANES * L + 8)
+        }
+
+        /// The session's view, and whether the verifier's row check holds at every rep's queries. `pair`: each rep's pair.
+        fn view(x: &[F128], t_pad: usize, pair: [usize; 2], c: &Coins) -> (Vec<F128>, bool) {
+            let p: Vec<&[F128]> = x[..W * L].chunks(L).collect();
+            let at = W * L;
+            let mu: Vec<Vec<F128>> = x[at..at + (W + EXTRA_LANES) * t_pad].chunks(t_pad).map(|m| m.to_vec()).collect();
+            let at = at + (W + EXTRA_LANES) * t_pad;
+            let r: Vec<Vec<F128>> = x[at..at + EXTRA_LANES * L].chunks(L).map(|m| m.to_vec()).collect();
+            let h = &x[at + EXTRA_LANES * L..];
+            let cw: Vec<Vec<F128>> = (0..W + EXTRA_LANES).map(|l| if l < W {
+                enc(p[l]).iter().zip(z0::lane_codeword(&mu[l], None, LOG_MSG, 1)).map(|(a, b)| *a + b).collect()
+            } else {
+                z0::lane_codeword(&mu[l], Some(&r[l - W]), LOG_MSG, 1)
+            }).collect();
+            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: std::array::from_fn(|j| r[j].clone()), pads: mu.clone(), tamper: 0 };
+            let mut positions: Vec<usize> = c.q.concat();
+            positions.sort();
+            positions.dedup();
+            let mut v: Vec<F128> = positions.iter().flat_map(|&q| cw.iter().map(move |l| l[q])).collect();
+            let mut ok = true;
+            for rep in 0..2 {
+                let zr = Level0Zk { rep: pair[rep], ..z.clone() };
+                let [a, b] = z0::rep_lanes(pair[rep]);
+                let (eq, rho) = (&c.eq[rep], c.rho[rep]);
+                let y1: Vec<F256> = (0..L).map(|i| (0..W).fold(rho[0] * r[a][i] + rho[1] * r[b][i], |acc, l| acc + eq[l] * p[l][i])).collect();
+                let ybar = z0::ybar(&zr, W, eq, rho);
+                let padcw = z0::pad_codeword(&ybar, LOG_MSG, 1);
+                let [e0, e1] = [enc(&y1.iter().map(|y| y.c0).collect::<Vec<_>>()), enc(&y1.iter().map(|y| y.c1).collect::<Vec<_>>())];
+                for &q in &c.q[rep] {
+                    let row: Vec<F128> = cw.iter().map(|l| l[q]).collect();
+                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[q], &[F128::ONE], W, pair[rep], rho, &padcw), |acc, l| acc + eq[l] * row[l]);
+                    ok &= lhs == F256::new(e0[q], e1[q]);
+                }
+                let e = [a, b].map(|j| (0..L).fold(F256::ZERO, |acc, i| acc + c.b[rep][i] * r[j][i]));
+                v.extend(y1.iter().chain(&ybar).flat_map(|y| y.coordinates()));
+                v.extend(e.iter().flat_map(|y| y.coordinates()).zip(&h[4 * rep..4 * rep + 4]).map(|(a, b)| a + *b));
+            }
+            (v, ok)
+        }
+
+        fn rank(mut m: Vec<Vec<F128>>) -> usize {
+            let cols = m.first().map_or(0, |r| r.len());
+            let mut r = 0;
+            for col in 0..cols {
+                let Some(p) = (r..m.len()).find(|&i| m[i][col] != F128::ZERO) else { continue };
+                m.swap(r, p);
+                let iv = m[r][col].inv();
+                let pivot: Vec<F128> = m[r].iter().map(|x| *x * iv).collect();
+                for row in m.iter_mut() {
+                    let f = row[col];
+                    if f != F128::ZERO {
+                        row.iter_mut().zip(&pivot).for_each(|(x, y)| *x += f * *y);
+                    }
+                }
+                m[r] = pivot;
+                r += 1;
+            }
+            r
+        }
+
+        /// The dimension of the witness's images outside the randomness's span (0: the view hides the witness).
+        fn leak(t_pad: usize, pair: [usize; 2], c: &Coins) -> usize {
+            let (nw, nr) = vars(t_pad);
+            let image = |i: usize| {
+                let mut x = vec![F128::ZERO; nw + nr];
+                x[i] = F128::ONE;
+                view(&x, t_pad, pair, c).0
+            };
+            let rand: Vec<Vec<F128>> = (nw..nw + nr).map(image).collect();
+            let all: Vec<Vec<F128>> = rand.iter().cloned().chain((0..nw).map(image)).collect();
+            rank(all) - rank(rand)
+        }
+
+        #[test]
+        fn a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not() {
+            // 3 queries per rep, 5 distinct positions: t_pad = 2 * 3 covers them
+            let c = coins([vec![1, 7, 20], vec![3, 7, 30]]);
+            let mut rng = ProverRng::from_seed(ProverSeed::injected([22; 32]));
+            let (nw, nr) = vars(6);
+            let (_, ok) = view(&rng.f128s(2, 0, nw + nr), 6, [0, 1], &c);
+            assert!(ok, "the verifier's row check fails on the model");
+            assert_eq!(leak(6, [0, 1], &c), 0, "a pair per rep leaks");
+            assert!(leak(6, [0, 0], &c) > 0, "a shared pair should leak (red-team-m1-zk F1)");
+            // padding below the distinct opened positions leaks too
+            assert!(leak(4, [0, 1], &c) > 0, "t_pad below the opened positions should leak");
         }
     }
 
