@@ -747,11 +747,22 @@ pub fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 64]>) -> [u8; 64] {
     level[0]
 }
 
+/// hm96-sha512/v1's salt prefix and the default key's leaf prefix (both one block).
+#[cfg(feature = "sha512")]
+fn hm96_prefixes() -> (Vec<u8>, Vec<u8>) {
+    let k = flock_merkle::hm96::consts();
+    (k.salt_prefix.to_vec(), k.leaf_prefix.to_vec())
+}
+
+#[cfg(not(feature = "sha512"))]
+fn hm96_prefixes() -> (Vec<u8>, Vec<u8>) {
+    panic!("verity/flock-circuit's rows are hm96-sha512 leaves: build with the sha512 feature")
+}
+
 /// `hm96.SHA512.tree_leaf(key, b || c)` for the default key: SHA-512 of the leaf prefix block and `b || c`.
 pub fn row_tree_leaf(bc: &[u8; BC_BYTES]) -> [u8; 64] {
-    let k = flock_merkle::hm96::consts();
     let mut h = Sha512::new();
-    h.update(k.leaf_prefix);
+    h.update(hm96_prefixes().1);
     h.update(bc);
     h.finalize().into()
 }
@@ -763,7 +774,7 @@ pub fn zero_row_bc(words: usize) -> [u8; BC_BYTES] {
     h.update(vec![0u8; 2 * words]);
     let x = h.finalize();
     let mut h = Sha512::new();
-    h.update(flock_merkle::hm96::consts().salt_prefix);
+    h.update(hm96_prefixes().0);
     h.update([0u8; SALT_BYTES]);
     let mut bc = [0u8; BC_BYTES];
     bc[..64].copy_from_slice(&x);
