@@ -29,6 +29,7 @@ def _pinned(tmp_path, monkeypatch, binary=b"bin"):
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
+    (v / "vectors.json").write_text('{"replayable": {"sets": [{"pr83": "abc"}]}}')
 
     def tgz(path, files):
         with tarfile.open(path, "w:gz") as t:
@@ -117,16 +118,75 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
 
 
 def test_the_pytest_cache_key_is_the_tree_the_environment_and_the_arguments(tmp_path, monkeypatch):
+    import subprocess
+
+    assert CHECK.tree_digest(tmp_path) is None                                     # no git, no shipped tree: nothing is cached
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("__pycache__/\n.lake/\n")
     (tmp_path / "a.txt").write_text("a")
     d = CHECK.tree_digest(tmp_path)
-    (tmp_path / "__pycache__").mkdir()
-    (tmp_path / "__pycache__" / "x.pyc").write_bytes(b"x")
-    assert CHECK.tree_digest(tmp_path) == d                                        # bytecode is not the tree
+    for built in ("__pycache__/x.pyc", ".lake/build/bin/flock-verify"):         # bytecode and builds are not the tree
+        (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / built).write_bytes(b"x")
+    assert CHECK.tree_digest(tmp_path) == d
     (tmp_path / "a.txt").write_text("b")
     assert CHECK.tree_digest(tmp_path) != d
+    (tmp_path / "new.txt").write_text("n")                                         # an untracked file the tests could read
+    assert CHECK.tree_digest(tmp_path) not in (d, None)
     argv = ["py", "-m", "pytest", "-q", "-n", "8"]
     e = CHECK.env()
     k = CHECK.pytest_key(argv, e)
     assert CHECK.pytest_key(["py", "-m", "pytest", "-q", "-n", "2"], e) == k       # the worker count computes nothing
     assert CHECK.pytest_key(argv, {**e, "PWD": "/elsewhere"}) == k
     assert CHECK.pytest_key(argv, {**e, "VERITY_X": "1"}) != k and CHECK.pytest_key(argv + ["-k", "x"], e) != k
+
+
+def test_a_shipped_trees_files_are_its_commits(tmp_path):
+    """On a machine the tree is a `git archive` beside the bare repository it was pushed to: its files are the commit's tree,
+    not what a step built inside it since."""
+    import json
+    import subprocess
+
+    work, bare = tmp_path / "work", tmp_path / "root" / "git" / "verity.git"
+    subprocess.run(["git", "init", "-q", str(work)], check=True)
+    (work / "a.txt").write_text("a")
+    g = ["git", "-C", str(work), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*g, "add", "a.txt"], check=True)
+    subprocess.run([*g, "commit", "-q", "-m", "a"], check=True)
+    subprocess.run(["git", "clone", "-q", "--bare", str(work), str(bare)], check=True)
+    sha = subprocess.run([*g, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    tree = subprocess.run([*g, "rev-parse", "HEAD^{tree}"], capture_output=True, text=True, check=True).stdout.strip()
+    shipped = tmp_path / "root" / "src" / sha
+    shipped.mkdir(parents=True)
+    (shipped / "a.txt").write_text("a")
+    (shipped / "READY.json").write_text(json.dumps({"tree": tree}))
+    (shipped / "built.bin").write_bytes(b"x")
+    assert CHECK.tracked_files(shipped) == ["a.txt"]
+    d = CHECK.tree_digest(shipped)
+    (shipped / "a.txt").write_text("changed after shipping")
+    assert CHECK.tree_digest(shipped) != d
+
+
+def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
+    """`agreement_key` covers backends/flock/verifier/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
+    it runs would be an input the key misses, so one fails here until the key covers it."""
+    import ast
+    import re
+    import sys
+
+    here = ROOT / "backends" / "flock" / "verifier"
+    todo, seen = ["ci"] + re.findall(r'HERE / "([a-z_]+)\.py"', (here / "ci.py").read_text()), set()
+    while todo:
+        m = todo.pop()
+        if m in seen:
+            continue
+        seen.add(m)
+        for node in ast.walk(ast.parse((here / f"{m}.py").read_text())):
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module] if isinstance(node, ast.ImportFrom) and node.module else []
+            for n in names:
+                top = n.split(".")[0]
+                if (here / f"{top}.py").exists():
+                    todo.append(top)
+                else:
+                    assert top in sys.stdlib_module_names or top == "__future__", f"{m}.py imports {n}"
+    assert {"agree", "fuzz", "redigest", "transcript_check"} <= seen

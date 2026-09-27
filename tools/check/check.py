@@ -24,6 +24,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     so what they read cannot be traced: the whole tree is the input)
     circuit-check   `circuit-check --cache`: a report is reused when every file, directory listing and existence probe the
                     recorded run made is unchanged, with the checker's own version (`circuit_check.cache`)
+    lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
+                    tracked files, which pin the upstream build and inputs, the interpreter, the environment)
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it.
@@ -143,8 +145,9 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
     ci = pin.get("ci", {})
+    sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
-            *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, cores() // 4)),
+            *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
     return subprocess.run(argv, cwd=ROOT).returncode
 
@@ -224,26 +227,61 @@ def env() -> dict[str, str]:
     return out
 
 
-def tree_digest(root: Path = ROOT) -> str:
-    """sha256 over every file under ``root`` (path and content), outside `.git`, `.venv` and bytecode: the tree the tests read."""
+def tracked_files(root: Path = ROOT) -> list[str] | None:
+    """The tree's files as git has them: tracked and untracked-unignored in a checkout; in a shipped tree (no `.git`), the
+    commit's tree as the machine's bare repository holds it (`READY.json` names it), never what steps have built in it since.
+    None when neither is available."""
+    if (root / ".git").exists():
+        argv = ["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"]
+    else:
+        ready, bare = root / "READY.json", root.parent.parent / "git" / "verity.git"
+        if not (ready.exists() and bare.exists()):
+            return None
+        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", json.loads(ready.read_text())["tree"]]
+    r = subprocess.run(argv, capture_output=True)
+    return sorted(p.decode() for p in r.stdout.split(b"\0") if p) if r.returncode == 0 else None
+
+
+def tree_digest(root: Path = ROOT) -> str | None:
+    """sha256 over the tree's files (`tracked_files`: path and current content, a deleted one marked): what the tests read.
+    None when the tree's files cannot be listed (then nothing is cached)."""
+    files = tracked_files(root)
+    if files is None:
+        return None
     h = hashlib.sha256()
-    for d, dirs, files in os.walk(root):
-        dirs[:] = sorted(x for x in dirs if x not in (".git", ".venv", "__pycache__"))
-        for f in sorted(files):
-            p = Path(d) / f
-            if p.is_file() and not p.is_symlink():
-                h.update(p.relative_to(root).as_posix().encode() + b"\0" + hashlib.sha256(p.read_bytes()).digest())
+    for f in files:
+        p = root / f
+        h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() and not p.is_symlink() else
+                                        (os.readlink(p).encode() if p.is_symlink() else b"-")) + b"\0")
     return h.hexdigest()
 
 
-def pytest_key(argv: list[str], e: dict[str, str]) -> str:
+def pytest_key(argv: list[str], e: dict[str, str]) -> str | None:
     from importlib import metadata
 
+    tree = tree_digest()
+    if tree is None:
+        return None
     dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
-    doc = {"tree": tree_digest(), "argv": [a for a in argv[1:] if not a.isdigit() and a != "-n"],
+    doc = {"tree": tree, "argv": [a for a in argv[1:] if not a.isdigit() and a != "-n"],
            "env": {k: v for k, v in sorted(e.items()) if k not in VOLATILE}, "python": sys.version, "platform": platform.platform(),
            "distributions": dists}
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+def agreement_key(e: dict[str, str]) -> str | None:
+    """What the agreement job reads: the tracked files under backends/flock/verifier/ (the Lean sources and toolchain pin, `ci.py`
+    and the scripts it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
+    the inputs and the job's settings), the interpreter and the platform.  None when the tree's files cannot be listed."""
+    files = tracked_files()
+    if files is None:
+        return None
+    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), {k: v for k, v in sorted(e.items()) if k not in VOLATILE}]).encode())
+    for f in files:
+        if f.startswith("backends/flock/verifier/"):
+            p = ROOT / f
+            h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
+    return h.hexdigest()
 
 
 def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -> dict:
@@ -254,9 +292,9 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
     e = env()
     t0 = time.monotonic()
     hit = None
-    if cache and name == "pytest":
-        key = pytest_key(argv, e)
-        entry = cache_dir() / "pytest" / f"{key}.json"
+    key = (pytest_key(argv, e) if name == "pytest" else agreement_key(e) if name == "lean-agreement" else None) if cache else None
+    if key:
+        entry = cache_dir() / name / f"{key}.json"
         if entry.exists():
             hit = key
     if hit:
@@ -266,7 +304,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
         with open(log, "wb") as f:
             rc = subprocess.run(argv, cwd=cwd, env=e, stdout=f, stderr=subprocess.STDOUT).returncode
         rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
-        if rc == 0 and cache and name == "pytest":
+        if rc == 0 and key:
             entry.parent.mkdir(parents=True, exist_ok=True)
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
