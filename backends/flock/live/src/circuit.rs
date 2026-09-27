@@ -49,6 +49,10 @@ pub const SHA_NET: &str = "sha512x3";
 pub const HM_NET: &str = "hm96";
 /// compressions per `sha512x3` slot
 pub const PER_SLOT: usize = 3;
+/// META's bindings (what the statement binds about the circuit): a class leaves them out.
+pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
+pub const PARTITION_V1: &str = "verity/partition/v1";
+pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
 pub const BC_BYTES: usize = 128;
 const SHA512_ROW_TAG: &[u8] = b"verity/sha512-row/v1\0";
@@ -144,6 +148,9 @@ pub struct Composite {
     pub name: String,
     /// SHA-512 of the circuit file: the pin
     pub sha512: [u8; 64],
+    /// the class of every instance it proves: SHA-512 of the file without META's bindings (`BINDING_KEYS`), which a
+    /// partition names
+    pub class_sha512: [u8; 64],
     pub meta: Value,
     pub nets: Vec<(String, IrUnitNet)>,
     pub ranges: Vec<Range>,
@@ -290,6 +297,22 @@ impl Composite {
         if meta["format"] != FORMAT || meta["statement"] != STATEMENT {
             return Err("META: not verity/flock-circuit".into());
         }
+        let class_sha512: [u8; 64] = {
+            let mut m = meta.clone();
+            for k in BINDING_KEYS {
+                m.as_object_mut().ok_or("META is not an object")?.remove(k);
+            }
+            let rest = text.splitn(3, '\n').nth(2).unwrap_or("");
+            Sha512::digest(format!("{head}\nMETA {}\n{rest}", serde_json::to_string(&sorted(&m)).unwrap()).as_bytes()).into()
+        };
+        let is_sha512 = |v: &Value| v.as_str().is_some_and(|x| x.len() == 128 && x.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)));
+        if !is_sha512(&meta["program_sha512"]) {
+            return Err("META: program_sha512 (the Program the partition is over) is not a SHA-512 digest".into());
+        }
+        let prule = meta["partition"]["rule"].as_str().unwrap_or("");
+        if ![PARTITION_V1, PARTITION_PROVISIONAL].contains(&prule) || !is_sha512(&meta["partition"]["digest"]) {
+            return Err(format!("META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"));
+        }
         let mut nets = Vec::new();
         let mut lookups_fast: Vec<(usize, LookupNet)> = Vec::new();
         while let Some(l) = lines.next() {
@@ -405,7 +428,7 @@ impl Composite {
             return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
         }
         let c = Composite {
-            name, sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
+            name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
             out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
@@ -662,7 +685,8 @@ pub struct Instances {
 
 /// The header's `units`: the instances' global unit indices (the partition's order: ascending), and per block its units.
 fn units_entry(c: &Composite, indices: &[usize]) -> Value {
-    json!({"vus_per_block": c.g, "units_per_vu": c.upv, "indices": indices, "blocks": indices.chunks(c.g).map(|b| b.to_vec()).collect::<Vec<_>>()})
+    json!({"vus_per_block": c.g, "units_per_vu": c.upv, "indices": indices, "blocks": indices.chunks(c.g).map(|b| b.to_vec()).collect::<Vec<_>>(),
+           "classes": vec![crate::hex(&c.class_sha512); indices.len()]})
 }
 
 impl Instances {

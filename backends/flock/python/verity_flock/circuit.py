@@ -72,6 +72,34 @@ PARTITION_RULE = "flock-circuit/unit-cover/v0"
 SALT_BYTES, BC_BYTES = 192, 128
 
 
+PARTITION_V1 = "verity/partition/v1"
+#: META's bindings: what the statement binds about the circuit, not the circuit. A unit's class (:func:`class_digest`) leaves
+#: them out, so a partition can name the class its digest is bound beside.
+BINDING_KEYS = ("partition", "program_sha512", "program_digests")
+
+
+def class_digest(text: str) -> str:
+    """The class of every instance the circuit proves: SHA-512 of the circuit file with META's :data:`BINDING_KEYS` removed
+    (META re-serialized compact with sorted keys)."""
+    head, meta_line, rest = text.split("\n", 2)
+    meta = {k: v for k, v in json.loads(meta_line[5:]).items() if k not in BINDING_KEYS}
+    return hashlib.sha512((head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")) + "\n" + rest).encode()).hexdigest()
+
+
+def program_sha512(sub) -> str:
+    """SHA-512 over the canonical descriptor core's ``program_digest`` hashes (the subcircuit's Definition at its default
+    statics); a caller that builds the partition over another Program passes that Program's SHA-512 instead."""
+    from verity.ir.codec import canonical_json, encode_program
+    from verity.ir.program import Program
+
+    try:
+        desc = encode_program(Program(sub.definition()))
+    except (TypeError, ValueError, AttributeError):
+        # a silicon reference no core Definition wraps: its digests as the program
+        return hashlib.sha512(json.dumps(sub.program_digests(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
+
+
 def partition_digest(obj: dict) -> str:
     """``SHA-512(rule || 0 || canon({program, query, version, params}))``, 64 bytes: ``verity/partition/v1``'s shape under the
     provisional :data:`PARTITION_RULE`."""
@@ -213,9 +241,15 @@ def _row_wires(ports: list[Port]) -> list:
     return wires
 
 
-def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False) -> str:
+def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: bool = False, partition: str | None = None,
+            program: str | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
-    (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports)."""
+    (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
+    ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
+    partition names, else :func:`program_sha512` of the subcircuit."""
+    for name, v in (("partition", partition), ("program", program)):
+        if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
+            raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
     from . import sha512_circuit as S
     from . import tail as TL
 
@@ -274,7 +308,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
             "dummy": _dummy(low, ports), "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
-            "partition": {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)}}
+            "program_sha512": program or program_sha512(sub),
+            "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
+                          {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
     texts = [("unit", _expanded(low.layout, low.name)),
              (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
@@ -370,7 +406,7 @@ def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | Non
             for p in ports}
 
 
-def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None) -> dict:
+def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
     every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
@@ -386,9 +422,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     salts = stage_salts(input_set, lo, hi, ports, salt_key)
     fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
     G = meta["vus_per_block"]
-    indices = list(range(lo, hi))
+    indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
+    if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:
+        raise ValueError("unit indices: one global index per instance, ascending")
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": indices,
-             "blocks": [indices[b:b + G] for b in range(0, n, G)]}
+             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
     head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
             "units": units, "frame_v3": fv, "rows": True}
@@ -405,7 +443,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     return head
 
 
-def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None) -> Path:
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
+          indices: list | None = None, partition: str | None = None, program: str | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts; returns the prover's path, or (``public_only``: a verifier staging its own public file,
     which needs the prover's ``salt_key``) writes and returns only ``pub-<n>.bin``."""
@@ -413,14 +452,14 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    text = compose(low, input_set.subcircuit)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices)
     return pub if public_only else inst
 
 
@@ -433,22 +472,34 @@ def lowering_for_set(input_set) -> IL.Lowering:
 
 
 def main(argv=None) -> int:
-    """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR``: the composite circuit, then for each N the
-    prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N)); prints the circuit's sha256 (the pin)."""
+    """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR [--partition H --program H --unit-indices FILE]``:
+    the composite circuit, then for each N the prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N),
+    their global unit indices from FILE's JSON list, else [0, N)); prints the pin and the class. ``--class-only``: compose and
+    print only (the class a partition names)."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--input-set", required=True)
-    ap.add_argument("--n", type=int, nargs="+", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--n", type=int, nargs="+", default=[])
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--partition", default=None, help="the verity/partition/v1 digest (SHA-512 hex) the statement binds")
+    ap.add_argument("--program", default=None, help="the SHA-512 of the Program the partition is over")
+    ap.add_argument("--unit-indices", default=None, help="a JSON list: the global unit index of each staged instance, ascending")
+    ap.add_argument("--class-only", action="store_true")
     a = ap.parse_args(argv)
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
+    if a.class_only:
+        text = compose(low, s.subcircuit, partition=a.partition, program=a.program)
+        print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "class_sha512": class_digest(text), "program_sha512": program_sha512(s.subcircuit)}))
+        return 0
+    idx = json.loads(Path(a.unit_indices).read_text()) if a.unit_indices else None
     for n in a.n:
-        stage(low, s, 0, n, a.out)
-    print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest((Path(a.out) / "circuit.txt").read_text()), "n": a.n}))
+        stage(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program)
+    text = (Path(a.out) / "circuit.txt").read_text()
+    print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0
 
 
