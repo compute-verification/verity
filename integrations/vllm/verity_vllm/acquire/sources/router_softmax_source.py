@@ -9,7 +9,9 @@ whose threads also store the row's max, exponentials, reciprocal sum and probabi
 and the scale) into a float32 [rows, words] buffer.  Everywhere else the installed op runs.  The tapped op computes exactly the installed
 op's outputs and every word equals the ordered router's committed value in the IR (`properties.router_tap_exactness`).  The patch goes
 through `engine.hooks` and `uninstall` undoes it.  A launch inside a manifest layer whose geometry is not the manifest's, or that carries a
-correction bias or a padding mask (neither is in the IR router), runs the installed op and is a collector error.
+correction bias (not in the IR router), runs the installed op and is a collector error.  vLLM's padding mask (`is_padding`, under
+VLLM_MOE_SKIP_PADDING) is passed through: it changes a padding row's ids, never the softmax, and a padded launch has more rows than the
+manifest's router Calls, which the committer's identity check refuses.
 """
 from __future__ import annotations
 
@@ -114,15 +116,15 @@ class RouterSoftmaxSource:
                 return orig(topk_weights, topk_indices, token_expert_indices, gating_output, renormalize, bias, is_padding)
             g = me.layers[layer]
             E, K = int(gating_output.shape[-1]), int(topk_weights.shape[-1])
-            if (E, K, bool(renormalize)) != (g["experts"], g["topk"], g["renormalize"]) or bias is not None or is_padding is not None:
+            if (E, K, bool(renormalize)) != (g["experts"], g["topk"], g["renormalize"]) or bias is not None:
                 me.error(f"router softmax: layer {layer} launched topk_softmax with E={E} TOPK={K} renormalize={bool(renormalize)} "
-                         f"bias={bias is not None} is_padding={is_padding is not None}; the manifest's router is E={g['experts']} "
-                         f"TOPK={g['topk']} renormalize={g['renormalize']} without bias or padding")
+                         f"bias={bias is not None}; the manifest's router is E={g['experts']} TOPK={g['topk']} renormalize={g['renormalize']} "
+                         "without bias")
                 return orig(topk_weights, topk_indices, token_expert_indices, gating_output, renormalize, bias, is_padding)
             t0 = time.perf_counter()
             rows = gating_output.numel() // E
             tap = torch.empty(rows, int(g["width"]), dtype=torch.float32, device=gating_output.device)
-            me.ns.topk_softmax_tap(topk_weights, topk_indices, token_expert_indices, gating_output, bool(renormalize), None, None, tap)
+            me.ns.topk_softmax_tap(topk_weights, topk_indices, token_expert_indices, gating_output, bool(renormalize), None, is_padding, tap)
             me._held.append(tap)
             me.c._acquire(f"moe/L{layer}/{RS.MEMBER}", tap, job)
             n = int(tap.numel()) * 4
