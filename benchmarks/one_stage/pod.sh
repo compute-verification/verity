@@ -57,11 +57,7 @@ if [ "${RUN:-a0}" = a4 ]; then
     ${LAYOUT_FILE:+--layout-file $SERVED/$LAYOUT_FILE} --m0-pythonpath $CHECK_M0 --bin $W/bin/flock-circuit --lean $W/bin/flock-verify \
     --out $O/a4 --k ${K:-1024} ${DELTA:+--delta $DELTA} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a4.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a2 ]; then
-  mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
-=======
-if [ "${RUN:-a0}" = a2 ]; then
   rm -rf $W/served && mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
->>>>>>> 608e7130
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))
   BOUND=$M0PATH
   if [ -n "${UNBIND:-}" ]; then
