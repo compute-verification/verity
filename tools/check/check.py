@@ -54,10 +54,11 @@ def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
 
 
 def env() -> dict[str, str]:
-    """The steps' environment: PYTHONPATH keeps only entries inside this tree, so every package tested is the tree's own (on a
-    machine, `research run` puts its shipped tool snapshot first); a git identity when none is set."""
-    out = dict(os.environ)
-    keep = [p for p in out.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    """The steps' environment, as a plain shell's: none of what the recording run gives its workload (`RESEARCH_*`, the
+    machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them), PYTHONPATH entries inside this
+    tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set."""
+    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k != "PYTHONPYCACHEPREFIX"}
+    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
     if keep:
         out["PYTHONPATH"] = os.pathsep.join(keep)
     else:

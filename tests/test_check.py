@@ -47,4 +47,7 @@ def test_the_steps_see_the_trees_packages_only(monkeypatch):
     monkeypatch.setenv("PYTHONPATH", f"/opt/research-tool:{ROOT / 'tools/research/src'}:/elsewhere")
     assert CHECK.env()["PYTHONPATH"] == str(ROOT / "tools/research/src")
     monkeypatch.setenv("PYTHONPATH", "/opt/research-tool")
-    assert "PYTHONPATH" not in CHECK.env()
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "abc")
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/workspace/research/cache/pycache")
+    env = CHECK.env()
+    assert "PYTHONPATH" not in env and "RESEARCH_SOURCE_SHA" not in env and "PYTHONPYCACHEPREFIX" not in env
