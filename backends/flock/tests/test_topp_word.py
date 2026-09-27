@@ -100,3 +100,35 @@ def test_the_count_is_the_evaluated_circuit():
     one = TW.count(160, splits=8)
     assert all(k[0][0] != "pipeline S = 16" for k in one) and any(k[0][0] == "pipeline S = 8" for k in one)
     assert not TW.count(160, splits=3) or all(k[0][0] in ("p >= 1", "split count") for k in TW.count(160, splits=3))
+
+
+def test_each_lane_follows_its_own_half_where_the_halves_disagree(monkeypatch):
+    """``topp_split``'s own divergent rows (verity PR #169, ``test_topp_split_halves``): ordinary logits, the step kernels'
+    partials constructed so that each half's own scalars decide ``nomask``, in both orders. The circuit, given the same partials
+    for its step kernels, is ``sampling.topp_keep`` bit for bit."""
+    from verity_vllm.program.registry import sampling as SM
+    from verity_vllm.program.registry import topp_split as TS
+
+    V, S, P = 3000, 16, f32(0.5)
+    rows = {35: [False, True], 50: [False, True], 17: [True, False], 47: [True, False]}
+
+    def narrowing():
+        parts = np.zeros((TW.R, S, TW.F, 3), f32)
+        parts[..., 0], parts[..., 1], parts[..., 2] = f32(1.0 / S), f32(1e-12), f32(1.0)
+        return parts
+
+    def step(x, stats, parts, p, ROUND, S_, F_, R_, BLOCK, cfg):
+        parts[...] = narrowing()
+
+    def parts_of(E, r, S_):
+        n = TW.F * S_
+        return [E.const([int(f32(1.0 / S_).view(np.uint32))] * n), E.const([int(f32(1e-12).view(np.uint32))] * n), E.const([1] * n, TW.CW)]
+
+    x = np.array([(-np.random.default_rng(seed).random(V) * f32(2.5e-5)).astype(f32) for seed in rows])
+    monkeypatch.setattr(TS, "step_kernel", step)
+    keep, _E = TW.evaluate(x.view(np.uint32), np.full(len(x), P).view(np.uint32), np.full(len(x), S, np.uint64), parts_of)
+    for i, stopped in enumerate(rows.values()):
+        assert TS.topp_split_row(x[i], float(P), S)[3]["stopped"] == stopped
+        ref = SM.topp_keep(x[i], float(P), S)
+        assert ref.any() and not ref.all()
+        assert (keep[i] == ref).all(), i

@@ -20,9 +20,8 @@ keep bits:
 * a padded lane of the step kernel (logit -inf) is above no pivot: its probability is +0 or NaN and every pivot is >= +0 or
   NaN (``lo >= 1e-30`` or NaN, times an ``exp``), so it adds the constants 0 and +inf to the block sums and minima.
 
-Where the reference raises (S >= 2 and warp half 1 stops early or finds no mask while half 0 does not: ``mask_kernel`` reads
-half 1's missing ``Z`` / ``pivot_logit``), "keep all" follows half 0 as the reference's check does, and each lane compares with
-its own half's pivot logit, ties and quota, computed from that half's chain.
+Where the two warp halves disagree on stopping, every lane follows its own half, as ``sampling.topp_keep`` states it: a lane of a
+stopped half is kept and left out of the tie count.
 """
 from __future__ import annotations
 
@@ -622,14 +621,17 @@ def combine(E, part, st, piv, p, Zh, S, r):
     return out
 
 
-def mask_kernel(E, x, pr, st, parts, Zh, M, S, bounds, h1, keep_all):
-    """The mask kernel's keep bit per lane: above the half's pivot logit, and among the ties at ``dup`` only the first ``numkeep``
-    of the row (counted from the slices before, within the lane's [MASK_BLOCK] block of its slice)."""
+def mask_kernel(E, x, pr, st, parts, Zh, M, S, bounds, h1, stop):
+    """The mask kernel's keep bit per lane, each lane following its own warp half (``sampling.topp_keep``): kept when its half
+    stops (``stop``: p >= 1, the half's early return or its ``nomask``); else above its half's pivot logit, and among the ties at
+    ``dup`` only the first ``numkeep`` of the row, counting the ties of lanes whose half goes on (from the slices before, within
+    the lane's [MASK_BLOCK] block of its slice). Whether ties are resolved at all is the first going-on half's call."""
     V = len(x)
     L = -(-V // S)
     P = R * F
     plog = E.op("add", E.op("add", E.op("log", st["pivot"]), E.op("log", Zh)), M)
-    ties = E.op("ilt", st["numkeep"][[0]], st["numdup"][[0]])
+    tie_h = E.op("ilt", st["numkeep"], st["numdup"])
+    ties = E.op("selb", stop[[0]], tie_h[[1]], tie_h[[0]])
     fin_any = reduce(E, "or", st["fin"], [P, P])
     foh = E.op("selb", fin_any[np.repeat(np.arange(2), P)], st["fin"], st["best_fin"])
     minl = cat([pt[1] for pt in parts])
@@ -644,16 +646,17 @@ def mask_kernel(E, x, pr, st, parts, Zh, M, S, bounds, h1, keep_all):
         pre.append(E.op("iadd", pre[-1], dupc[[s - 1, S + s - 1]]))
     pre = cat(pre)
     kc = E.op("gt", x, plog[h1])
-    dm = E.op("eq", pr, st["dup"][h1])
+    dm = E.op("and", E.op("eq", pr, st["dup"][h1]), E.op("not", stop[h1]))
     c = scan(E, E.op("b2i", dm), [n for b in _blocks(bounds, MASK_BLOCK) for _, n in b])
     cum = E.op("iadd", c, pre[(np.arange(V) // L) * 2 + h1])
     kd = E.op("and", dm, E.op("ile", cum, st["numkeep"][h1]))
     kt = E.op("and", kc, E.op("or", E.op("not", dm), kd))
-    return E.op("or", E.op("selb", ties, kt, kc), keep_all)
+    return E.op("or", E.op("selb", ties, kt, kc), stop[h1])
 
 
-def pipeline(E, x, p, S, p1):
-    """The keep bits of ``topp_split.topp_keep_row(x, p, S)`` (all ones where ``p1``)."""
+def pipeline(E, x, p, S, p1, parts_of=None):
+    """The keep bits of ``topp_split.topp_keep_row(x, p, S)`` (all ones where ``p1``). ``parts_of(E, r, S)``, when given, stands in
+    for round r's step kernel (a test's constructed partials, as ``topp_split``'s own test substitutes them)."""
     V = len(x)
     spt = _ts().spt_for(V, S)
     L = -(-V // S)
@@ -675,17 +678,20 @@ def pipeline(E, x, p, S, p1):
             piv = ladder(E, st["lo"], st["hi"])
         with E.at("step kernel"):
             stop = E.op("or", E.op("or", early[[0]], early[[1]]), E.op("or", st["done"][[0]], st["done"][[1]]))
-            pm, pl, pn = step_kernel(E, pr, piv, h2, blk, S)
-            part = [E.op("sel", stop, 0, pm), E.op("sel", stop, 0, pl), E.op("seli", stop, 0, pn)]
+            if parts_of is None:
+                pm, pl, pn = step_kernel(E, pr, piv, h2, blk, S)
+                part = [E.op("sel", stop, 0, pm), E.op("sel", stop, 0, pl), E.op("seli", stop, 0, pn)]
+            else:
+                part = parts_of(E, r, S)
         parts.append(part)
         with E.at("combine"):
             st = combine(E, part, st, piv, p, Zh, S, r)
     with E.at("mask kernel"):
-        keep_all = E.op("or", p1, E.op("or", early[[0]], st["nomask"][[0]]))
-        return mask_kernel(E, x, pr, st, parts, Zh, M, S, bounds, h1, keep_all)
+        stop = E.op("or", p1, E.op("or", early, st["nomask"]))
+        return mask_kernel(E, x, pr, st, parts, Zh, M, S, bounds, h1, stop)
 
 
-def keep_word(E: Engine, x: Vec, p: Vec, splits: Vec) -> Vec:
+def keep_word(E: Engine, x: Vec, p: Vec, splits: Vec, parts_of=None) -> Vec:
     """``TopPMaskWordx{V}_v1``'s V keep bits: the pipeline of the split count ``splits`` names, none at any other value."""
     V = len(x)
     assert V < 1 << (CW - 1)
@@ -701,19 +707,19 @@ def keep_word(E: Engine, x: Vec, p: Vec, splits: Vec) -> Vec:
             keep = E.const([1] * V, 1)
         else:
             with E.at(f"pipeline S = {S}"):
-                keep = pipeline(E, x, p, S, p1)
+                keep = pipeline(E, x, p, S, p1, parts_of)
         with E.at("split count"):
             out = E.op("xor", out, E.op("and", keep, is_s))
     return out
 
 
-def evaluate(x_words, p_words, splits_words):
+def evaluate(x_words, p_words, splits_words, parts_of=None):
     """The circuit's keep bits (T, V) on T rows (uint32 logit words (T, V), p and splits words (T,))."""
     x_words = np.asarray(x_words, dtype=np.uint64)
     T, V = x_words.shape
     E = Engine(T)
     out = keep_word(E, E.free(V, 32, x_words), E.free(1, 32, np.asarray(p_words, np.uint64).reshape(T, 1)),
-                    E.free(1, 32, np.asarray(splits_words, np.uint64).reshape(T, 1)))
+                    E.free(1, 32, np.asarray(splits_words, np.uint64).reshape(T, 1)), parts_of)
     return out.d.astype(bool), E
 
 
