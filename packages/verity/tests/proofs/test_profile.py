@@ -299,3 +299,13 @@ def test_worst_case_is_the_convex_threshold_for_one_subset_level():
         ra, rb = a.rho(lo), a.rho(lo + 1)
         assert a.worst_case(lambda m: m) == pytest.approx(lo + (budget - ra) / (rb - ra), rel=1e-12)
 
+
+
+def test_the_float_pairwise_version_crashed_where_the_profile_now_serves():
+    """The profile's arithmetic before this fix: -log(float(accept)) underflows once accept < 1e-308, as it does at
+    n = 4,000, k = 256 (accept(n - k) = 1/C(4000, 256), about e^-960)."""
+    _, before = _before_levels(1, 4000, Fraction(1), 256, 2.0 ** -20)
+    with pytest.raises(ValueError):
+        before(lambda m: m)
+    bound = two_level(1, 4000, Fraction(1), 256, 2.0 ** -20).worst_case(lambda m: m)
+    assert int(bound) == _largest_admitted(4000, 256, 2.0 ** -20)
