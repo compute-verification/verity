@@ -110,7 +110,8 @@ def test_cross_call_finds_the_repeated_adds_only_per_forward():
     _m, once = _derived("once")
     r = X.check_program(_rows(per), strict=False)
     (a,) = r["recomputes"]
-    assert (a["definition"], a["level"], a["calls"]) == (ADD, "call", 2 * (FORWARDS - 1))
+    add = next(n.fn for n in per.program.fn.body.nodes if n.fn.id == ADD)
+    assert (a["definition"], a["level"], a["calls"]) == (_spec_id(add), "call", 2 * (FORWARDS - 1))
     assert X.check_program(_rows(once))["ok"]
 
 
