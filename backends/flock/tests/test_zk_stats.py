@@ -12,7 +12,10 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 import zk_stats  # noqa: E402
 
-SIZES = {"exposed": 60, "s_ab": 16, "s_c": 16, "inner_scalars": 3, "inner_y": 40, "inner_open_h": 20, "inner_open_mu": 20}
+SIZES = {"exposed": 60, "s_ab": 16, "s_c": 16, "inner_scalars": 3, "inner_y": 40, "inner_open_h": 20, "inner_open_mu": 20,
+         "lig_exposed": 10, "lig_tprime_ybar": 20, "lig_rows0": 20, "lig_deep": 20}
+#: positions of lig_deep that are public structure (always 0 in every kind)
+ZERO_AT = {"lig_deep": [3, 7]}
 
 
 def _row(kind, run, rep, rng, fixed=None):
@@ -22,6 +25,8 @@ def _row(kind, run, rep, rng, fixed=None):
             row[cls] = fixed[cls]
         else:
             row[cls] = [rng.integers(0, 256, 16, dtype=np.uint8).tobytes().hex() for _ in range(n)]
+        for i in ZERO_AT.get(cls, []):
+            row[cls][i] = bytes(16).hex()
     return row
 
 
@@ -41,6 +46,7 @@ def test_uniform_transcripts_pass_and_the_control_is_distinguished():
     res = zk_stats.analyse(zk_stats.load(_dump(24)))
     assert res["pass"], json.dumps(res, indent=1)
     assert all(res["classes"][c]["control_distinguished"] for c in zk_stats.MASKED)
+    assert res["classes"]["lig_deep"]["structural_constants"] == 2
 
 
 def test_a_witness_dependent_real_transcript_fails():

@@ -177,10 +177,10 @@ index 497b3fc..28e959f 100644
  pub fn commit_merkle(codeword: Vec<F128>, params: &PcsParams) -> (Commitment, ProverData) {
      let timing = std::env::var_os("FLOCK_COMMIT_TIMING").is_some();
 diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
-index 2dce928..bd89cd6 100644
+index 2dce928..12512f0 100644
 --- a/crates/flock-core/src/pcs/ligerito.rs
 +++ b/crates/flock-core/src/pcs/ligerito.rs
-@@ -64,6 +64,92 @@ use crate::{
+@@ -64,6 +64,93 @@ use crate::{
  
  pub(crate) mod extension;
  
@@ -189,8 +189,9 @@ index 2dce928..bd89cd6 100644
 +/// `< t_pad` uniform, `Ŵ_n = X_L` the novel basis's vanishing polynomial of the message subspace, `c` outside GF(2)):
 +/// `X_L` alone vanishes on half the codeword's positions, `X_L + c` on none, so any `t_pad` opened positions of a lane are
 +/// uniform. Two uniform lanes (padded too) follow the witness's, and after the lane rounds the fold takes
-+/// `ρ_0 R_0 + ρ_1 R_1` (`ρ` fresh F256 coins, F128-independent), so level 1 commits a uniform table. The prover sends the
-+/// extra lanes' sums `e` (exposed: masked by the caller's pads), the blinded claim `T'` and the padding's combination `ybar`.
++/// `ρ_0 R_0 + ρ_1 R_1` (`ρ` fresh F256 coins, F128-independent), so level 1 commits a uniform table. Before `ρ` the prover
++/// sends the extra lanes' sums `e` against the folded basis (exposed: masked by the caller's pads; VEIL Fig. 9 step 1), after it
++/// the blinded claim `T' = claim + ρ_0 e_0 + ρ_1 e_1` and the padding's combination `ybar`.
 +pub mod zk {
 +    use rayon::prelude::*;
 +
@@ -273,7 +274,7 @@ index 2dce928..bd89cd6 100644
  // ===================================================================
  // Config
  // ===================================================================
-@@ -2200,6 +2286,12 @@ pub struct LigeritoProof {
+@@ -2200,6 +2287,12 @@ pub struct LigeritoProof {
      /// queried consistency equations.
      #[serde(default)]
      pub consistency_batch_grinding_nonces: Vec<u64>,
@@ -286,7 +287,7 @@ index 2dce928..bd89cd6 100644
  }
  
  impl LigeritoProof {
-@@ -4762,6 +4854,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
+@@ -4762,6 +4855,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
          None,
          None,
          None,
@@ -294,7 +295,7 @@ index 2dce928..bd89cd6 100644
          challenger,
      )
  }
-@@ -4800,6 +4893,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
+@@ -4800,6 +4894,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
          }),
          round1_lookahead,
          None,
@@ -302,7 +303,7 @@ index 2dce928..bd89cd6 100644
          challenger,
      )
  }
-@@ -4829,6 +4923,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4829,6 +4924,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
      l0_jit_basis: Option<BasisWindowFn<'_>>,
      l0_virtual_basis: Option<VirtualEqBasis>,
      seeded_stats: Option<Vec<F128>>,
@@ -310,7 +311,7 @@ index 2dce928..bd89cd6 100644
      challenger: &mut Ch,
  ) -> LigeritoProof {
      recursive_prover_with_basis_impl(
-@@ -4848,6 +4943,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4848,6 +4944,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
          }),
          round1_lookahead,
          seeded_stats,
@@ -318,7 +319,7 @@ index 2dce928..bd89cd6 100644
          challenger,
      )
  }
-@@ -5034,6 +5130,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -5034,6 +5131,8 @@ fn recursive_prover_inner<Ch: Challenger>(
                  fold_grinding_nonces: Vec::new(),
                  claim_batch_grinding_nonces: Vec::new(),
                  consistency_batch_grinding_nonces: Vec::new(),
@@ -328,30 +329,33 @@ index 2dce928..bd89cd6 100644
          }
  
 diff --git a/crates/flock-core/src/pcs/ligerito/extension.rs b/crates/flock-core/src/pcs/ligerito/extension.rs
-index 195c44a..4bb492f 100644
+index 195c44a..0c11ec3 100644
 --- a/crates/flock-core/src/pcs/ligerito/extension.rs
 +++ b/crates/flock-core/src/pcs/ligerito/extension.rs
-@@ -1690,6 +1690,19 @@ impl SumcheckProver256 {
+@@ -1690,6 +1690,22 @@ impl SumcheckProver256 {
          }
      }
  
 +    /// Verity M1 (`super::zk`): fold the extra uniform lanes into the level-0 fold before its code switch,
 +    /// `f += ρ_0 R_0 + ρ_1 R_1`. Returns `e_i = Σ_x b[x] R_i[x]` and the blinded implicit claim `T' = Σ_x b[x] f[x]`.
-+    pub(super) fn zk_blind(&mut self, lanes: [&[F128]; 2], rho: [F256; 2]) -> ([F256; 2], F256) {
++    /// Verity M1 (`super::zk`): the extra lanes' sums against the folded basis, `e_i = Σ_x b[x] R_i[x]` (sent before `ρ`).
++    pub(super) fn zk_extra_sums(&self, lanes: [&[F128]; 2]) -> [F256; 2] {
 +        assert!(self.pending.is_none() && self.initial_f.is_none());
 +        assert!(lanes.iter().all(|l| l.len() == self.f.len()) && self.combined_basis.len() == self.f.len());
-+        let e = [0, 1].map(|i| {
-+            self.combined_basis.par_iter().zip(lanes[i].par_iter()).map(|(&b, &r)| b * r).reduce(|| F256::ZERO, |a, b| a + b)
-+        });
++        [0, 1].map(|i| self.combined_basis.par_iter().zip(lanes[i].par_iter()).map(|(&b, &r)| b * r).reduce(|| F256::ZERO, |a, b| a + b))
++    }
++
++    /// Verity M1: fold the extra lanes into the level-0 fold before its code switch, `f += ρ_0 R_0 + ρ_1 R_1`; returns the
++    /// blinded implicit claim `T' = Σ_x b[x] f[x]`.
++    pub(super) fn zk_blind(&mut self, lanes: [&[F128]; 2], rho: [F256; 2]) -> F256 {
 +        self.f.par_iter_mut().zip(lanes[0].par_iter().zip(lanes[1].par_iter())).for_each(|(f, (&r0, &r1))| *f += rho[0] * r0 + rho[1] * r1);
-+        let t = self.f.par_iter().zip(self.combined_basis.par_iter()).map(|(&f, &b)| f * b).reduce(|| F256::ZERO, |a, b| a + b);
-+        (e, t)
++        self.f.par_iter().zip(self.combined_basis.par_iter()).map(|(&f, &b)| f * b).reduce(|| F256::ZERO, |a, b| a + b)
 +    }
 +
      pub(super) fn f(&self) -> &[F256] {
          &self.f
      }
-@@ -2075,6 +2088,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2075,6 +2091,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
      // (the merged transport: its sumcheck's folded witness at the lane-block
      // round); `None` sweeps for them.
      seeded_stats: Option<Vec<F128>>,
@@ -360,7 +364,7 @@ index 195c44a..4bb492f 100644
      challenger: &mut Ch,
  ) -> LigeritoProof {
      let log_n = packed_witness.len().trailing_zeros() as usize;
-@@ -2117,6 +2132,14 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2117,6 +2135,14 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
      let cap_depth = |level: usize| config.stratified[level].cap_depth();
      let initial_cap = cap_layer(l0_tree, block_len_0, cap_depth(0)).to_vec();
      challenger.observe_bytes(initial_cap.as_flattened().as_flattened());
@@ -375,7 +379,7 @@ index 195c44a..4bb492f 100644
  
      let claim_bits = |level: usize| config.claim_batch_grinding_bits[level] as u32;
      let consistency_bits = |level: usize| config.consistency_batch_grinding_bits[level] as u32;
-@@ -2142,7 +2165,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2142,7 +2168,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
      // (len ≥ 8·d). FLOCK_NO_FOLD_LOOKAHEAD=1 / FOLD_LOOKAHEAD_OVERRIDE is
      // the A/B knob — value-identical either way (exact polynomial
      // identity), so proofs are byte-equal.
@@ -385,7 +389,7 @@ index 195c44a..4bb492f 100644
          1 => true,
          2 => false,
          _ => var_os("FLOCK_NO_FOLD_LOOKAHEAD").is_none(),
-@@ -2151,6 +2175,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2151,6 +2178,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
      // the factored basis. The combine skipped its O(L) sweep under the same
      // gate, so `first_msg`/`round1_lookahead` carry nothing here.
      let stats_path = virtual_basis.is_some() && l0_lane_major && crate::pcs::stats_ladder_enabled();
@@ -393,7 +397,7 @@ index 195c44a..4bb492f 100644
      let (mut sumcheck, lane_challenges) = if stats_path {
          let seeded = virtual_basis.take().expect("gated on Some");
          let _t = std::time::Instant::now();
-@@ -2215,6 +2240,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2215,6 +2243,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
              ood_values.push(y);
              let (nonce, beta) = challenger.grind_pow_and_sample_f128(claim_bits(0));
              claim_batch_grinding_nonces.push(nonce);
@@ -401,13 +405,12 @@ index 195c44a..4bb492f 100644
              target += beta * y;
              if let Some(msg) = first_msg.as_mut() {
                  msg.u_0 += beta * ood_msg.u_0;
-@@ -2332,6 +2358,40 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2332,6 +2361,41 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
                          } else {
                              sumcheck.fold_materialized(challenge, fold_block)
                          };
 +                        if let Some(z) = zk0 {
-+                            let rho = [challenger.sample_f256(), challenger.sample_f256()];
-+                            assert!(super::zk::rho_independent(rho), "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128");
++                            // e before rho (VEIL Fig. 9 step 1: the extra row's evaluation precedes the combination's coins)
 +                            let forged;
 +                            let lane0: &[F128] = if z.tamper == 1 {
 +                                forged = { let mut v = z.extra[0].clone(); v[0] += F128::ONE; v };
@@ -415,16 +418,18 @@ index 195c44a..4bb492f 100644
 +                            } else {
 +                                &z.extra[0]
 +                            };
-+                            let (e, mut t_prime) = sumcheck.zk_blind([lane0, &z.extra[1]], rho);
-+                            if z.tamper == 2 {
-+                                t_prime += F256::ONE;
-+                            }
-+                            let mut e = e;
++                            let mut e = sumcheck.zk_extra_sums([&z.extra[0], &z.extra[1]]);
 +                            if z.tamper == 4 {
 +                                e[0] += F256::ONE;
 +                            }
 +                            challenger.observe_f256(e[0]);
 +                            challenger.observe_f256(e[1]);
++                            let rho = [challenger.sample_f256(), challenger.sample_f256()];
++                            assert!(super::zk::rho_independent(rho), "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128");
++                            let mut t_prime = sumcheck.zk_blind([lane0, &z.extra[1]], rho);
++                            if z.tamper == 2 {
++                                t_prime += F256::ONE;
++                            }
 +                            challenger.observe_label(super::zk::LABEL_CLOSE);
 +                            challenger.observe_f256(t_prime);
 +                            let w = build_eq_table256(&lane_challenges);
@@ -442,7 +447,7 @@ index 195c44a..4bb492f 100644
                          let msg = sumcheck.code_switch_and_replace_message();
                          observe_message(challenger, msg);
                      }
-@@ -2492,7 +2552,16 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2492,7 +2556,16 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
      }
      let _t = Instant::now();
      let basis_0 = induced_basis(n1, log_inv_rate_0, &queries_0, &alpha_0);
@@ -460,7 +465,7 @@ index 195c44a..4bb492f 100644
      let msg = sumcheck.introduce_presplit_basis(basis_0, enforced_0);
      observe_message(challenger, msg);
      let (nonce, beta) = challenger.grind_pow_and_sample_f128(claim_bits(1));
-@@ -2661,6 +2730,10 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+@@ -2661,6 +2734,10 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
                  fold_grinding_nonces: Vec::new(),
                  claim_batch_grinding_nonces,
                  consistency_batch_grinding_nonces,
@@ -471,7 +476,7 @@ index 195c44a..4bb492f 100644
              };
          }
  
-@@ -2858,6 +2931,7 @@ fn eq_residual(point: &[F128], fixed: &[F256], residual_log: usize, scale: F256)
+@@ -2858,6 +2935,7 @@ fn eq_residual(point: &[F128], fixed: &[F256], residual_log: usize, scale: F256)
  }
  
  #[allow(clippy::too_many_arguments)]
@@ -479,7 +484,7 @@ index 195c44a..4bb492f 100644
  pub(crate) fn recursive_verifier_with_basis_succinct<Ch, F>(
      config: &VerifierConfig,
      proof: &LigeritoProof,
-@@ -2868,6 +2942,30 @@ pub(crate) fn recursive_verifier_with_basis_succinct<Ch, F>(
+@@ -2868,6 +2946,30 @@ pub(crate) fn recursive_verifier_with_basis_succinct<Ch, F>(
      eval_b_residual: F,
      challenger: &mut Ch,
  ) -> bool
@@ -510,7 +515,7 @@ index 195c44a..4bb492f 100644
  where
      Ch: Challenger,
      F: Fn(&[F256], usize) -> Vec<F256>,
-@@ -2881,6 +2979,9 @@ where
+@@ -2881,6 +2983,9 @@ where
          || !proof.fold_grinding_nonces.is_empty()
          || config.fold_grinding_bits.iter().any(|&bits| bits != 0)
          || config.recursive_ks.iter().any(|&k| k < 2)
@@ -520,7 +525,7 @@ index 195c44a..4bb492f 100644
      {
          return false;
      }
-@@ -2888,6 +2989,10 @@ where
+@@ -2888,6 +2993,10 @@ where
      challenger.observe_label(b"flock-ligerito-basis-f256-split-v0");
      challenger.observe_f128(target);
      challenger.observe_bytes(proof.initial_cap.as_flattened().as_flattened());
@@ -531,7 +536,7 @@ index 195c44a..4bb492f 100644
      let log_cols_0 = log_n - initial_k;
      let block_len_0 = 1usize << (log_cols_0 + config.log_inv_rates[0]);
      let strat = |level: usize| &config.stratified[level];
-@@ -2926,6 +3031,7 @@ where
+@@ -2926,6 +3035,7 @@ where
          };
          claim_nonce += 1;
          claim += F256::from(beta * y);
@@ -539,7 +544,7 @@ index 195c44a..4bb492f 100644
          ood_contexts.push(OodResidualContext {
              point,
              beta,
-@@ -2940,10 +3046,27 @@ where
+@@ -2940,10 +3050,27 @@ where
      observe_message(challenger, first);
      let mut quad = RoundQuad256::from_msg(first, claim);
      let mut initial_challenges = Vec::with_capacity(initial_k);
@@ -552,12 +557,12 @@ index 195c44a..4bb492f 100644
 +            && let Some(zp) = proof.zk_level0.as_ref()
 +        {
 +            // the lane phase's claim is masked (the caller's constraints); the blinded claim T' takes over
++            challenger.observe_f256(zp.e[0]);
++            challenger.observe_f256(zp.e[1]);
 +            let rho = [challenger.sample_f256(), challenger.sample_f256()];
 +            if !super::zk::rho_independent(rho) {
 +                return false;
 +            }
-+            challenger.observe_f256(zp.e[0]);
-+            challenger.observe_f256(zp.e[1]);
 +            challenger.observe_label(super::zk::LABEL_CLOSE);
 +            challenger.observe_f256(zp.t_prime);
 +            challenger.observe_f128_slice(&zp.ybar.iter().flat_map(|y| y.coordinates()).collect::<Vec<_>>());
@@ -568,7 +573,7 @@ index 195c44a..4bb492f 100644
          let Some(&msg) = proof.sumcheck_transcript_f256.get(tx) else {
              return false;
          };
-@@ -3027,11 +3150,19 @@ where
+@@ -3027,11 +3154,19 @@ where
      ) {
          return false;
      }

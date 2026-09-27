@@ -181,55 +181,70 @@ impl CircuitVerifier {
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
     fn verify_zk(&self, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
-        let st = &self.st;
-        let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        let pcs = params(st.m, LigeritoProfile::Fast100);
-        if commitment.params != pcs {
-            return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
-        }
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
-        let lay = zk_layout(st);
-        let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
-        catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-            bind_statement(ch, &st.r1cs, &commitment);
-            let rp = zkv::replay(&st.r1cs, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, &root, ch)?;
-            let extra = st.extra_claims(link.points, &self.inst);
-            let rs = &proof.pcs_open.ring_switches;
-            if rs.len() != 2 + extra.len() {
-                return Err("zk: the opening's ring switches are not one per claim".into());
-            }
-            let (cc_ab, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
-            let (cc_c, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
-            let (pab, pc) = (zkv::point_parts(&rp.ab_point), zkv::point_parts(&rp.c_point));
-            let mut values = vec![cc_ab, cc_c];
-            let mut skips = vec![pab.0, pc.0];
-            let mut xs = vec![pab.1, pc.1];
-            for e in &extra {
-                values.push(e.value);
-                skips.push(e.skip_weights.clone());
-                xs.push(e.x_full.clone());
-            }
-            let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
-            let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
-            let cfg = pcs.ligerito_verifier_config()?;
-            let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(&commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
-                                                                           pcs.opening_grinding(), Some(zk_t_pad(st.m)), ch)
-                .map_err(|e| format!("opening: {e:?}"))?
-                .ok_or("zk: the opening has no level-0 record")?;
-            let lg = &proof.pcs_open.ligerito;
-            let t_prime = lg.zk_level0.as_ref().ok_or("zk: level 0's hiding messages are missing")?.t_prime;
-            let mut cons = rp.cons;
-            cons.push(("ring switch ab", con_ab));
-            cons.push(("ring switch c", con_c));
-            cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
-            zkv::verify_inner(&inner, &lay, cons, ch)
-        }))
-        .map_err(|_| "verifier panicked".to_string())?
-        .map_err(|e| e.chars().take(200).collect::<String>())?;
+        let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        verify_zk_with(&self.st, &self.inst, &commitment, &proof, &inner, link.points, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
+}
+
+/// Everything M1's verifier checks before the inner proof, on any challenger (the session's replay, or a simulator's coin
+/// tape): the replayed zerocheck and lincheck, upstream's opening with the masked claims' ring-switch checks and level 0's lane
+/// phase turned into constraints. Returns the constraints the inner proof must prove.
+fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
+                                                                 root: &[u8; 64], points: &[Vec<F128>], ch: &mut Ch)
+    -> Result<Vec<(&'static str, zkv::Lin)>, String> {
+    let pcs = params(st.m, LigeritoProfile::Fast100);
+    if commitment.params != pcs {
+        return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
+    }
+    let lay = zk_layout(st);
+    bind_statement(ch, &st.r1cs, commitment);
+    let rp = zkv::replay(&st.r1cs, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, ch)?;
+    let extra = st.extra_claims(points, inst);
+    let rs = &proof.pcs_open.ring_switches;
+    if rs.len() != 2 + extra.len() {
+        return Err("zk: the opening's ring switches are not one per claim".into());
+    }
+    let (cc_ab, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
+    let (cc_c, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
+    let (pab, pc) = (zkv::point_parts(&rp.ab_point), zkv::point_parts(&rp.c_point));
+    let mut values = vec![cc_ab, cc_c];
+    let mut skips = vec![pab.0, pc.0];
+    let mut xs = vec![pab.1, pc.1];
+    for e in &extra {
+        values.push(e.value);
+        skips.push(e.skip_weights.clone());
+        xs.push(e.x_full.clone());
+    }
+    let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
+    let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
+    let cfg = pcs.ligerito_verifier_config()?;
+    let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
+                                                                   pcs.opening_grinding(), Some(zk_t_pad(st.m)), ch)
+        .map_err(|e| format!("opening: {e:?}"))?
+        .ok_or("zk: the opening has no level-0 record")?;
+    let lg = &proof.pcs_open.ligerito;
+    let t_prime = lg.zk_level0.as_ref().ok_or("zk: level 0's hiding messages are missing")?.t_prime;
+    let mut cons = rp.cons;
+    cons.push(("ring switch ab", con_ab));
+    cons.push(("ring switch c", con_c));
+    cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
+    Ok(cons)
+}
+
+/// M1's verifier on any challenger: [`zk_constraints`], then the inner proof.
+fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
+                                                                  inner: &InnerProof, points: &[Vec<F128>], ch: &mut Ch) -> Result<(), String> {
+    let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
+    catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
+        let cons = zk_constraints(st, inst, commitment, proof, &root, points, ch)?;
+        zkv::verify_inner(inner, &zk_layout(st), cons, ch)
+    }))
+    .map_err(|_| "verifier panicked".to_string())?
+    .map_err(|e| e.chars().take(200).collect::<String>())
 }
 
 fn config(st: &Stmt, inst: &Instances) -> SessionConfig {
@@ -539,25 +554,65 @@ fn checked_fields(kind: &str, run: usize, rep: usize, exposed: &[F128], s: [&[F1
            "inner_open_mu": f128s_hex(&inner.opened.iter().map(|x| x.1).collect::<Vec<_>>())})
 }
 
-/// M1's simulator for one rep, from the public statement and the verifier's coins alone (`zc_coins`: the algebraic phase's,
-/// `inner_coins`: the inner proof's): uniform exposed values, uniform `s_hat_v` for the two masked claims (the mask slot makes
-/// them so), and the simulated inner proof for the constraints those imply.
-fn simulate_rep(st: &Stmt, lay: &Layout, zc_coins: &[F128], inner_coins: &[F128], rng: &mut flock_live::zk_hooks::ProverRng, index: u64)
-    -> Result<(Vec<F128>, [Vec<F128>; 2], InnerProof), String> {
-    let base = 1u64 << 50 | index << 36;
-    let exposed = rng.f128s(zkv::STREAM_PADS, base, lay.exposed());
-    let s = [rng.f128s(zkv::STREAM_PADS, base + (1 << 30), 128), rng.f128s(zkv::STREAM_PADS, base + (1 << 31), 128)];
-    let (zc, lc) = zkv::from_exposed(&exposed, lay);
-    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, lay, &[0; 64], &mut zkv::Tape::new(zc_coins))?;
-    let (_, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &s[0], &rp.ab_value);
-    let (_, con_c) = zkv::ring_switch_constraint(&rp.c_point, &s[1], &rp.c_value);
-    let mut cons = rp.cons;
-    cons.push(("ring switch ab", con_ab));
-    cons.push(("ring switch c", con_c));
+/// Ligerito's checked fields of one rep's proof: level 0's exposed values (masked), `T'` and `ybar`, the first four level-0
+/// rows (the extra lanes included), and from levels 1+ the code-switch message and the next seven, the first two level-1
+/// rows and the final vector.
+fn ligerito_fields(v: &mut Value, lg: &flock_core::pcs::ligerito::LigeritoProof, lay: &Layout) {
+    let z = lg.zk_level0.as_ref().expect("a --zk proof");
+    let f256 = |x: &[flock_field::F256]| -> Vec<F128> { x.iter().flat_map(|y| y.coordinates()).collect() };
+    v["lig_exposed"] = json!(f128s_hex(&zkv::ligerito_exposed(lg, lay)));
+    v["lig_tprime_ybar"] = json!(f128s_hex(&[f256(&[z.t_prime]), f256(&z.ybar)].concat()));
+    v["lig_rows0"] = json!(f128s_hex(&lg.initial_proof.opened_rows[..4].concat()));
+    let msgs: Vec<flock_field::F256> = lg.sumcheck_transcript_f256[lay.k0..lay.k0 + 8].iter().flat_map(|m| [m.u_0, m.u_2]).collect();
+    v["lig_deep"] = json!(f128s_hex(&[f256(&msgs), lg.recursive_proofs[0].opened_rows[..2].concat(), lg.final_proof.yr.clone()].concat()));
+}
+
+/// M1's simulator for one rep's whole proof, from the public statement (`inst`'s public part: roots, `b || c`, outputs), the
+/// verifier's coins for the rep's stream (every squeeze, in order) and the link points: uniform exposed values and masked
+/// claims' `s_hat_v`, the region claims' `s_hat_v` from the public data, the opening as the honest prover makes it on a dummy
+/// (all-zero) witness with fresh masks (`dummy`: such a proof against the same coins) with level 0's exposed values drawn
+/// uniformly, and the inner proof simulated for the constraints the verifier derives from all of that (on the same coins).
+fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128>], dummy: &[u8], rng: &mut flock_live::zk_hooks::ProverRng,
+                 index: u64) -> Result<(Commitment, R1csProofLigerito, InnerProof), String> {
+    let lay = zk_layout(st);
+    let (commitment, dpr, _): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(dummy).map_err(|e| format!("dummy: {e}"))?;
+    let base = 3u64 << 50 | index << 36;
+    let (zc, lc) = zkv::from_exposed(&rng.f128s(zkv::STREAM_PADS, base, lay.piop_exposed()), &lay);
+    let mut ring_switches = dpr.pcs_open.ring_switches.clone();
+    ring_switches[0].s_hat_v = rng.f128s(zkv::STREAM_PADS, base + (1 << 30), 128);
+    ring_switches[1].s_hat_v = rng.f128s(zkv::STREAM_PADS, base + (1 << 31), 128);
+    let mut k = 2;
+    for reg in &st.regions {
+        for p in points {
+            ring_switches[k].s_hat_v = st.region_s_hat_v(reg, p, inst);
+            k += 1;
+        }
+    }
+    let mut lg = dpr.pcs_open.ligerito.clone();
+    zkv::set_ligerito_exposed(&mut lg, &lay, &rng.f128s(zkv::STREAM_PADS, base + (1 << 32), lay.n_ood0 + 4 * lay.k0 + 4));
+    let proof = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: flock_core::pcs::BatchOpeningProofLigerito {
+        ring_switches, batching_nonces: dpr.pcs_open.batching_nonces.clone(), ligerito: lg } };
+    let mut tape = zkv::Tape::new(coins);
+    let cons = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, &mut tape)?;
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
-    let inner = zkv::simulate_inner(lay, rng, index, cons, salts, &mut zkv::Tape::new(inner_coins))?;
-    Ok((exposed, s, inner))
+    let inner = zkv::simulate_inner(&lay, rng, index, cons, salts, &mut tape)?;
+    Ok((commitment, proof, inner))
+}
+
+/// A rep stream's coins from a session record (every squeeze, in order), and the link points.
+fn record_coins(rec: &Value, stream: &str) -> Vec<F128> {
+    let s = rec["streams"].as_array().unwrap().iter().find(|s| s["stream"] == stream).unwrap_or_else(|| panic!("no stream {stream}"));
+    s["rounds"].as_array().unwrap().iter().flat_map(|r| r["coins"].as_array().unwrap().iter().map(|h| f128_from_record(h.as_str().unwrap())).collect::<Vec<_>>()).collect()
+}
+
+fn f128_from_record(h: &str) -> F128 {
+    let b = hexb(h).unwrap();
+    F128::new(u64::from_be_bytes(b[8..16].try_into().unwrap()), u64::from_be_bytes(b[..8].try_into().unwrap()))
+}
+
+fn record_points(rec: &Value) -> Vec<Vec<F128>> {
+    rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| f128_from_record(h.as_str().unwrap())).collect()).collect()
 }
 
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
@@ -567,45 +622,61 @@ fn simulate_rep(st: &Stmt, lay: &Layout, zc_coins: &[F128], inner_coins: &[F128]
 fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "32").parse().unwrap();
     let lay = zk_layout(st);
-    let mut tapes: Option<Vec<(Vec<F128>, Vec<F128>)>> = None;
-    let one = |plan: &Plan| -> (Value, Vec<Vec<u8>>) {
+    let one = |plan: &Plan| -> (Value, Vec<Vec<u8>>, Value) {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
-        session(st, inst, shared(InProc(s0)), plan, ProverSeed::from_os())
+        let (v, p) = session(st, inst, shared(InProc(s0.clone())), plan, ProverSeed::from_os());
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        (v, p, rec)
     };
-    for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() })] {
+    let fields = |kind: &str, run: usize, rep: usize, pr: &R1csProofLigerito, inner: &InnerProof| -> Value {
+        let e = zkv::exposed_values(&pr.zerocheck, &pr.lincheck, &lay);
+        let rs = &pr.pcs_open.ring_switches;
+        let mut row = checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], inner);
+        ligerito_fields(&mut row, &pr.pcs_open.ligerito, &lay);
+        row
+    };
+    let mut tape: Option<(Vec<Vec<F128>>, Vec<Vec<F128>>)> = None;
+    let mut dummies: Vec<Vec<Vec<u8>>> = Vec::new();
+    for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() }),
+                         ("dummy", Plan { zero_witness: true, ..Plan::default() })] {
         for run in 0..n {
-            let (v, proofs) = one(&plan);
-            assert!(v["accepted"] == true, "{kind} session {run} rejected: {}", v["why"]);
-            let t: Vec<(Vec<F128>, Vec<F128>)> = (0..2).map(|r| (f128s_unhex(&v["buckets"][r]["zk_coins"]), f128s_unhex(&v["buckets"][r]["zk_inner_coins"]))).collect();
-            match &tapes {
-                None => tapes = Some(t),
+            let (v, proofs, rec) = one(&plan);
+            assert!(v["accepted"] == true || kind == "dummy", "{kind} session {run} rejected: {}", v["why"]);
+            let t = ((0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect::<Vec<_>>(), record_points(&rec));
+            match &tape {
+                None => tape = Some(t),
                 Some(t0) => assert!(*t0 == t, "the verifier's coins differ between sessions with one coin seed"),
             }
+            if kind == "dummy" {
+                dummies.push(proofs);
+                continue;
+            }
             for (rep, p) in proofs.iter().enumerate() {
-                let (_c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
-                let e = zkv::exposed_values(&pr.zerocheck, &pr.lincheck, &lay);
-                let rs = &pr.pcs_open.ring_switches;
-                println!("ZK{}\t{}", kind.to_uppercase(), checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], &inner));
+                let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
+                if run == 0 {
+                    let (coins, points) = tape.as_ref().unwrap();
+                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, &mut zkv::Tape::new(&coins[rep]));
+                    assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
+                }
+                println!("ZK{}\t{}", kind.to_uppercase(), fields(kind, run, rep, &pr, &inner));
             }
         }
     }
-    let tapes = tapes.unwrap();
+    let (coins, points) = tape.unwrap();
     let mut rng = flock_live::zk_hooks::ProverRng::from_os();
-    for run in 0..n {
-        for (rep, (zc, ic)) in tapes.iter().enumerate() {
-            let (e, s, inner) = simulate_rep(st, &lay, zc, ic, &mut rng, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
-            // the simulated inner proof must pass the verifier's inner check on the same coins
-            let (zcp, lcp) = zkv::from_exposed(&e, &lay);
-            let rp = zkv::replay(&st.r1cs, &zcp, &lcp, &st.circuit, &lay, &[0; 64], &mut zkv::Tape::new(zc)).unwrap();
-            let mut cons = rp.cons;
-            cons.push(("ring switch ab", zkv::ring_switch_constraint(&rp.ab_point, &s[0], &rp.ab_value).1));
-            cons.push(("ring switch c", zkv::ring_switch_constraint(&rp.c_point, &s[1], &rp.c_value).1));
-            let ok = zkv::verify_inner(&inner, &lay, cons, &mut zkv::Tape::new(ic));
-            assert!(ok.is_ok(), "the simulated inner proof fails the verifier's check: {ok:?}");
-            println!("ZKSIM\t{}", checked_fields("sim", run, rep, &e, [&s[0], &s[1]], &inner));
+    let mut accepted = 0;
+    for (run, dummy) in dummies.iter().enumerate() {
+        for rep in 0..2 {
+            let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
+            // the simulated proof must be accepted by the verifier on the same coins
+            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, &mut zkv::Tape::new(&coins[rep]));
+            assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
+            accepted += 1;
+            println!("ZKSIM\t{}", fields("sim", run, rep, &pr, &inner));
         }
     }
+    eprintln!("ZKSTAT\t{}", json!({"sessions_per_kind": n, "simulated_proofs_accepted": accepted}));
 }
 
 #[cfg(not(feature = "seed-injection"))]
@@ -654,7 +725,7 @@ fn parse_items(b: &[u8]) -> Result<Vec<Item>, String> {
 /// and each claim's `s_hat_v` (in opening order).
 fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128>, Vec<Vec<F128>>) {
     #[derive(PartialEq)]
-    enum Ph { Pre, R1cs(u8), Zc, Pads, Pcs, Rs, Lig, Inner(u8) }
+    enum Ph { Pre, R1cs(u8), Zc, Pads, Pcs, Rs, LigPre, L0, L0Post(u8), Lig1, Inner(u8) }
     let mut t: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
     let mut add = |c: &'static str, bytes: usize| { let e = t.entry(c).or_default(); e.0 += 1; e.1 += bytes; };
     let (mut ph, mut masked, mut rs) = (Ph::Pre, Vec::new(), Vec::new());
@@ -670,8 +741,10 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     b"flock-lincheck-v0" => Ph::Zc,
                     x if x == zkv::LABEL_PCS => Ph::Pcs,
                     b"flock-ring-switch-v0" => Ph::Rs,
+                    b"flock-ligerito-basis-f256-split-v0" => Ph::LigPre,
+                    x if x == zkv::L0_OPEN => Ph::L0,
+                    x if x == zkv::L0_CLOSE => Ph::L0Post(0),
                     x if x == zkv::LABEL_INNER => Ph::Inner(0),
-                    _ if matches!(ph, Ph::Pcs | Ph::Rs | Ph::Lig) => Ph::Lig,
                     _ => ph,
                 };
             }
@@ -680,7 +753,7 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                     Ph::R1cs(k) => { *k += 1; if *k == 1 { "public: statement digest" } else { "commitment: witness cap (hm96-sha512 leaves)" } }
                     Ph::Pads => "commitment: pads root (hm96-sha512 leaves)",
                     _ if *n == 8 => "public: pow nonce (live coins: always 0)",
-                    Ph::Pcs | Ph::Rs | Ph::Lig => "commitment: ligerito cap (hm96-sha512 leaves)",
+                    Ph::LigPre | Ph::L0Post(_) | Ph::Lig1 => "commitment: ligerito caps (hm96-sha512 leaves)",
                     _ => "UNATTRIBUTED",
                 };
                 add(c, *n);
@@ -695,7 +768,17 @@ fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128
                         add(c, n);
                         ph = Ph::Pcs;
                     }
-                    Ph::Pcs | Ph::Lig => add("CLEAR: ligerito sumcheck messages, final vector, ood values", n),
+                    Ph::LigPre => add("public: the opening's batched claim (from the ring switches' s_hat_v)", n),
+                    Ph::L0 => { masked.extend_from_slice(v); add("masked: ligerito level 0's ood value, lane-round messages, extra lanes' sums + committed pads", n) }
+                    Ph::L0Post(k) => {
+                        *k += 1;
+                        match *k {
+                            1 => add("masked: T' (the uniform level-1 table's claim)", n),
+                            2 => add("masked: ybar (the padding's combination, uniform through the extra lanes' padding)", n),
+                            _ => { add("masked: ligerito levels 1+ (functions of the uniform level-1 table)", n); ph = Ph::Lig1; }
+                        }
+                    }
+                    Ph::Lig1 => add("masked: ligerito levels 1+ (functions of the uniform level-1 table)", n),
                     Ph::Inner(k) => {
                         *k += 1;
                         add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner tau, Y (the dot-product mask)" }, n)
@@ -723,7 +806,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         (v, p, rec)
     };
     let (v, proofs, rec) = run(&Plan::default());
-    let (vc, _, recc) = run(&Plan { zk_zero_pads: true, ..Plan::default() });
+    let (vc, proofs_c, recc) = run(&Plan { zk_zero_pads: true, ..Plan::default() });
     assert!(v["accepted"] == true && vc["accepted"] == true, "the audit's sessions must be accepted");
     let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| {
         let b = hexb(h.as_str().unwrap()).unwrap();
@@ -735,6 +818,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     };
     let mut total: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
     let (mut all_differ, mut region_public, mut n_masked, mut n_region) = (true, true, 0usize, 0usize);
+    let mut lig_differ: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
     for rep in 0..2 {
         let name = rep_stream(TABLE, rep);
         let (t, m, rs) = classify(&stream_items(&rec, &name));
@@ -757,11 +841,23 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             }
         }
         let (_, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs[rep]).unwrap();
+        let (_, prc, _): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs_c[rep]).unwrap();
         let lg = &pr.pcs_open.ligerito;
+        // Ligerito's opened data against the control's (same coins, so the same positions): every value should differ
+        let flat = |l: &flock_core::pcs::ligerito::LigeritoProof| -> [Vec<F128>; 3] {
+            [l.initial_proof.opened_rows.concat(),
+             l.recursive_proofs.iter().flat_map(|p| p.opened_rows.concat()).chain(l.final_proof.opened_rows.concat()).collect(),
+             l.final_proof.yr.clone()]
+        };
+        for (k, (a, b)) in flat(lg).iter().zip(flat(&prc.pcs_open.ligerito).iter()).enumerate() {
+            let e = lig_differ.entry(["level-0 rows", "levels 1+ rows", "final vector"][k]).or_insert((0usize, 0usize));
+            e.0 += a.iter().zip(b).filter(|(x, y)| x != y).count();
+            e.1 += a.len().min(b.len());
+        }
         let rows = |p: &flock_core::pcs::ligerito::RecursiveProof| p.opened_rows.iter().map(|r| 16 * r.len()).sum::<usize>();
         let mut add = |c: &'static str, b: usize| { let e = total.entry(c).or_default(); e.0 += 1; e.1 += b; };
-        add("CLEAR (proof): ligerito level-0 opened rows", rows(&lg.initial_proof));
-        add("CLEAR (proof): ligerito recursive opened rows", lg.recursive_proofs.iter().map(rows).sum::<usize>()
+        add("masked (proof): ligerito level-0 rows ((W_n + c) mu padding per lane, uniform extra lanes)", rows(&lg.initial_proof));
+        add("masked (proof): ligerito levels 1+ rows (functions of the uniform level-1 table)", lg.recursive_proofs.iter().map(rows).sum::<usize>()
             + lg.final_proof.opened_rows.iter().map(|r| 16 * r.len()).sum::<usize>());
         add("commitment (proof): merkle paths and opened salts (hm96-sha512)", 64 * (lg.initial_proof.merkle_proof.len()
             + lg.recursive_proofs.iter().map(|p| p.merkle_proof.len()).sum::<usize>() + lg.final_proof.merkle_proof.len())
@@ -780,6 +876,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         "classes": total.iter().map(|(k, (n, b))| (k.to_string(), json!({"items": n, "bytes": b}))).collect::<serde_json::Map<_, _>>(),
         "masked_values": n_masked, "masked_all_differ_from_control": all_differ, "region_claims": n_region, "region_s_hat_v_is_public": region_public,
         "unattributed_bytes": unattributed, "clear": clear, "checks_pass": all_differ && region_public && unattributed == 0,
+        "ligerito_values_differing_from_control": lig_differ.iter().map(|(k, (d, n))| (k.to_string(), json!({"differ": d, "of": n}))).collect::<serde_json::Map<_, _>>(),
         "complete": all_differ && region_public && unattributed == 0 && clear.is_empty()});
     println!("ZKAUDIT\t{out}");
 }
@@ -848,6 +945,8 @@ struct Plan {
     zk_zero_pads: bool,
     /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
     zk_l0_tamper: u8,
+    /// prove the all-zero witness (M1's simulator runs the opening on a dummy witness)
+    zero_witness: bool,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -930,7 +1029,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let hello = config(st, inst).hello();
     let mut commit: Vec<F128> = Vec::new();
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
-    let w0 = wit(st, inst, plan, false, seed);
+    let w0 = wit(st, inst, plan, plan.zero_witness, seed);
     let (wt0, tw0) = witness(st, &w0, device);
     let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed), device) } else { (wt0.clone(), 0.0) };
     let witness_s = tw0 + tw1;

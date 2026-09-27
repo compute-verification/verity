@@ -10,6 +10,9 @@ prover with zero pads and a zero mask slot, i.e. M0's values in M1's format). Fo
   the witness and the coins but not on the prover's randomness XORs to zero);
 * ``constant``: the fraction of positions whose value is the same in every run, per kind.
 
+Positions holding one value in every real and simulated transcript are public structure (an F256 message's second
+coordinate after Ligerito's code switch is always 0) and are excluded and counted (``structural_constants``).
+
 Real and simulated must be indistinguishable (every ``p`` above ``ALPHA``); the control must be distinguished on the classes
 the masks cover (its ``xor`` test fails and its positions are constant), which shows the tests have power.
 """
@@ -22,8 +25,9 @@ from collections import defaultdict
 import numpy as np
 from scipy import stats
 
-CLASSES = ["exposed", "s_ab", "s_c", "inner_scalars", "inner_y", "inner_open_h", "inner_open_mu"]
-MASKED = ["exposed", "s_ab", "s_c"]
+CLASSES = ["exposed", "s_ab", "s_c", "inner_scalars", "inner_y", "inner_open_h", "inner_open_mu",
+           "lig_exposed", "lig_tprime_ybar", "lig_rows0", "lig_deep"]
+MASKED = ["exposed", "s_ab", "s_c", "lig_exposed", "lig_tprime_ybar", "lig_rows0", "lig_deep"]
 ALPHA = 1e-3
 
 
@@ -70,16 +74,25 @@ def constant_frac(a, reps):
     return max(fr)
 
 
+def structural(a):
+    """Positions holding one value in every real and simulated transcript (public structure, e.g. an F256 message's
+    second coordinate after the code switch, always 0): excluded from the tests and counted."""
+    both = np.concatenate([a["real"], a["sim"]])
+    return np.all(both == both[0], axis=0).all(axis=1)
+
+
 def analyse(by):
     reps = len({r["rep"] for r in by["real"]})
     out = {"n": {k: len(v) for k, v in by.items()}, "alpha": ALPHA, "classes": {}}
     ok = True
-    for cls in CLASSES:
+    for cls in [c for c in CLASSES if all(c in r for r in by["real"][:1])]:
         a = {k: values(by[k], cls) for k in ("real", "sim", "control")}
+        fixed = structural(a)
+        a = {k: v[:, ~fixed] for k, v in a.items()}
         tab = np.array([byte_hist(a["real"]), byte_hist(a["sim"])])
         tab = tab[:, tab.sum(axis=0) > 0]
         p_bytes = float(stats.chi2_contingency(tab)[1])
-        row = {"values_per_transcript": int(a["real"].shape[1]), "bytes_real_vs_sim": p_bytes}
+        row = {"values_per_transcript": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "bytes_real_vs_sim": p_bytes}
         for k in ("real", "sim", "control"):
             row[f"bits_{k}"] = bits_p(a[k])
             row[f"xor_{k}"] = xor_p(a[k], reps)

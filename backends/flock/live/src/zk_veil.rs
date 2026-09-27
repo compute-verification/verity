@@ -137,6 +137,10 @@ impl Layout {
     pub fn exposed(&self) -> usize {
         self.hab()
     }
+    /// The algebraic phase's exposed values (the first [`Self::piop_exposed`] indices).
+    pub fn piop_exposed(&self) -> usize {
+        self.zp(SKIP)
+    }
     pub fn len(&self) -> usize {
         self.tw() + 1
     }
@@ -412,9 +416,9 @@ impl Challenger for Tape {
     }
 }
 
-/// The exposed values in [`Layout`] order (a proof's masked zerocheck and lincheck fields).
+/// The algebraic phase's exposed values in [`Layout`] order (a proof's masked zerocheck and lincheck fields).
 pub fn exposed_values(zc: &ZerocheckProof, lc: &LincheckProof, lay: &Layout) -> Vec<F128> {
-    let mut v = vec![F128::ZERO; lay.exposed()];
+    let mut v = vec![F128::ZERO; lay.piop_exposed()];
     for i in 0..SKIP {
         v[lay.r1ab(i)] = zc.round1_ab[i];
         v[lay.r1c(i)] = zc.round1_c[i];
@@ -503,6 +507,21 @@ pub fn ligerito_exposed(lp: &flock_core::pcs::ligerito::LigeritoProof, lay: &Lay
         v.extend(z.e.iter().flat_map(|e| e.coordinates()));
     }
     v
+}
+
+/// Overwrite level 0's exposed fields with `v` (`ligerito_exposed` order): the simulator's uniform values.
+pub fn set_ligerito_exposed(lp: &mut flock_core::pcs::ligerito::LigeritoProof, lay: &Layout, v: &[F128]) {
+    assert_eq!(v.len(), lay.n_ood0 + 4 * lay.k0 + 4);
+    lp.ood_values[..lay.n_ood0].copy_from_slice(&v[..lay.n_ood0]);
+    let at = |k: usize| v[lay.n_ood0 + k];
+    for j in 0..lay.k0 {
+        lp.sumcheck_transcript_f256[j].u_0 = F256::new(at(4 * j), at(4 * j + 1));
+        lp.sumcheck_transcript_f256[j].u_2 = F256::new(at(4 * j + 2), at(4 * j + 3));
+    }
+    let z = lp.zk_level0.as_mut().expect("level 0's hiding messages");
+    for i in 0..2 {
+        z.e[i] = F256::new(at(4 * lay.k0 + 2 * i), at(4 * lay.k0 + 2 * i + 1));
+    }
 }
 
 /// An affine form over F256: two coordinate forms (`x = x_0 + x_1 U`).
