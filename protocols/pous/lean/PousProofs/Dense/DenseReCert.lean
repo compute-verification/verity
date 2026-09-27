@@ -306,16 +306,6 @@ none. The audit bound `2^-128` in `dense_meets_64`/`seg_meets_14` comes entirely
 argument of `Fin.append` and its value is never used. So any salt width (here 192 bits) works; the salt only separates
 *instances*/deployments, which is outside this per-store bound. -/
 
-/-- The global block index is exactly the `(segment, block)` pair. -/
-def segIndexEquiv (N B : ℕ) : Fin N × Fin B ≃ Fin (N * B) := finProdFinEquiv
-
-/-- The low 64 bits of `s` (`u64 s`), as in `tag_s = salt ‖ u64 s`. -/
-def u64 (s : ℕ) : Bits 64 := fun j => s.testBit j.val
-
-/-- The implementation's segment tag `tag_s = salt ‖ u64 s`: a 192-bit salt then `u64 s`, filling `chainDense`'s 256-bit
-salt slot exactly. -/
-def tag (salt : Bits 192) (s : ℕ) : Bits (192 + 64) := Fin.append salt (u64 s)
-
 theorem u64_inj {a b : ℕ} (ha : a < 2 ^ 64) (hb : b < 2 ^ 64)
     (h : ∀ j : Fin 64, a.testBit j.val = b.testBit j.val) : a = b := by
   apply Nat.eq_of_testBit_eq

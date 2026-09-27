@@ -5,9 +5,9 @@ import PousProofs.Dense.DenseReCert
 
 `seg_meets_14` is proved for `Pous.Dense.segScheme`, whose random oracle is keyed by the **global** block index and
 global parents. The implementation keys segment `s`'s oracle by `tag_s = salt ‖ u64 s` and **local** queries: segment
-`s` is the dense scheme on `B` blocks with oracle `H(tag_s, ·)`. That is `segTagScheme` below, over the random oracle
-`Bits 256 × LabelQry B ℓ → Bits ℓ`. Its queries are not the global scheme's queries, so the transfer is a statement
-about the two oracle games, proved here (`segTag_auditSecure`):
+`s` is the dense scheme on `B` blocks with oracle `H(tag_s, ·)`. That is the trusted `Pous.Dense.segTagScheme`, over the
+random oracle `Bits 256 × LabelQry B ℓ → Bits ℓ`. Its queries are not the global scheme's queries, so the transfer is a
+statement about the two oracle games, proved here (`segTag_auditSecure`):
 
 1. **An injective query map** `f : Bits 256 × LabelQry B ℓ → LabelQry (N*B) ℓ` sends `(tag_s, (i, p))` to the global
    query `(s·B + i, p placed in segment s)` (`tagEmbed`; injective for `2 ≤ N ≤ 2^64` and `ℓ ≥ 256`). Queries under a
@@ -28,32 +28,7 @@ namespace PousDenseReCert
 open Pous Pous.Labelling Pous.Dense
 open scoped ENNReal
 
-/-! ### The tagged scheme -/
-
-/-- The implementation's oracle: one random oracle keyed by a 256-bit segment tag and a local label query. -/
-abbrev tagModel (B ℓ : ℕ) : IdealModel := IdealModel.randomOracle (Bits (192 + 64) × LabelQry B ℓ) (Bits ℓ)
-
-/-- Block `i` of segment `s` of `W`, at global position `segIndexEquiv N B (s, i)`. -/
-def segBlocks (N B ℓ : ℕ) (W : Bits ((N * B) * ℓ)) (s : Fin N) : Fin B → Bits ℓ :=
-  fun i => blocks (N * B) ℓ W (segIndexEquiv N B (s, i))
-
-/-- **The segmented dense scheme as the implementation keys it.** Segment `s` is the dense scheme on `B` blocks with
-oracle `H(tag_s, ·)`, `tag_s = salt ‖ u64 s`, local block indices and local parents. Block `(s, i)` sits at global
-position `segIndexEquiv N B (s, i)` of the codeword. -/
-def segTagScheme (N B ℓ : ℕ) [NeZero (N * B)] (salt : Bits 192) : Scheme (tagModel B ℓ) where
-  n := (N * B) * ℓ
-  t := 0
-  B := N * B
-  ℓ := ℓ
-  B_pos := Nat.pos_of_ne_zero (NeZero.ne (N * B))
-  Coins := Unit
-  enc W H _ := (fun i => i.elim0, fun g =>
-    label (completeDAG B) (segBlocks N B ℓ W ((segIndexEquiv N B).symm g).1)
-      (fun q => H (tag salt ((segIndexEquiv N B).symm g).1.val, q)) ((segIndexEquiv N B).symm g).2)
-  dec _ C f := codeEquiv (N * B) ℓ fun g =>
-    bxor (C g) (f (tag salt ((segIndexEquiv N B).symm g).1.val, (((segIndexEquiv N B).symm g).2,
-      fun j => if j ∈ (completeDAG B).par ((segIndexEquiv N B).symm g).2
-        then some (C (segIndexEquiv N B (((segIndexEquiv N B).symm g).1, j))) else none)))
+/-! ### The tagged scheme decodes -/
 
 /-- Bit-exact public decoding for the tagged scheme. -/
 theorem segTagScheme_correct (N B ℓ : ℕ) [NeZero (N * B)] (salt : Bits 192) : (segTagScheme N B ℓ salt).Correct := by

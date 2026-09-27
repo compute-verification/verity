@@ -156,11 +156,10 @@
    "signature": [
     "PousDenseReCert.domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Pous.Bits 192) :",
     "  ∃ t,",
-    "    Function.Injective t ∧",
-    "      ∀ (p : Fin N × Fin B), (PousDenseReCert.tag salt ↑p.1, p.2) = t ((PousDenseReCert.segIndexEquiv N B) p)"
+    "    Function.Injective t ∧ ∀ (p : Fin N × Fin B), (Pous.Dense.tag salt ↑p.1, p.2) = t ((Pous.Dense.segIndexEquiv N B) p)"
    ],
    "assumptions": [],
-   "type_hash": "00000000d1af148f"
+   "type_hash": "00000000bb2e6343"
   },
   "PousDenseReCert.segTag_auditSecure": {
    "signature": [
@@ -169,21 +168,20 @@
     "  (hf : Function.Injective f)",
     "  (htag :",
     "    ∀ (s : Fin N) (i : Fin B) (p : Fin B → Option (Pous.Bits ℓ)),",
-    "      f (PousDenseReCert.tag salt ↑s, i, p) =",
-    "        ((PousDenseReCert.segIndexEquiv N B) (s, i), PousDenseReCert.liftPar N B ℓ s p))",
+    "      f (Pous.Dense.tag salt ↑s, i, p) = ((Pous.Dense.segIndexEquiv N B) (s, i), PousDenseReCert.liftPar N B ℓ s p))",
     "  {S D Q k : ℕ} {δ ε : ENNReal} (h : Pous.AuditSecure (Pous.Dense.segScheme N B ℓ) Pous.Reveal.sequential S D Q k δ ε) :",
-    "  Pous.AuditSecure (PousDenseReCert.segTagScheme N B ℓ salt) Pous.Reveal.sequential S D Q k δ ε"
+    "  Pous.AuditSecure (Pous.Dense.segTagScheme N B ℓ salt) Pous.Reveal.sequential S D Q k δ ε"
    ],
    "assumptions": [],
-   "type_hash": "000000003492c1a2"
+   "type_hash": "00000000e6ad9deb"
   },
   "PousDenseReCert.segTag_meets_14": {
    "signature": [
     "PousDenseReCert.segTag_meets_14 (salt : Pous.Bits 192) :",
-    "  Pous.Meets (PousDenseReCert.segTagScheme 448 (2 ^ 9) 524288 salt) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
+    "  Pous.Meets (Pous.Dense.segTagScheme 448 (2 ^ 9) 524288 salt) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
    ],
    "assumptions": [],
-   "type_hash": "00000000c109625d"
+   "type_hash": "0000000044e2fec1"
   },
   "PousDenseReCert.seg_meets_14": {
    "signature": [
@@ -195,10 +193,10 @@
   },
   "PousDenseReCert.tag_injective_14": {
    "signature": [
-    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 192) : Function.Injective fun s => PousDenseReCert.tag salt ↑s"
+    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 192) : Function.Injective fun s => Pous.Dense.tag salt ↑s"
    ],
    "assumptions": [],
-   "type_hash": "000000003687c59d"
+   "type_hash": "000000003e07c3b1"
   },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
@@ -579,20 +577,28 @@
    ]
   },
   "Pous.Model.Dense": {
-   "digest": "e9ebcffc908d29535874ab99f86a2511",
+   "digest": "83b9920272e6b01313d5b8c806a2fc15",
    "definitions": {
     "Pous.Dense.blocks": "a6725d1c65c0d10a",
     "Pous.Dense.completeDAG": "19f00178376f9067",
     "Pous.Dense.denseModel": "53c87493a8d7c89b",
     "Pous.Dense.denseScheme": "9ca3dbb2eba31360",
+    "Pous.Dense.segBlocks": "b2a3f569c91c4948",
     "Pous.Dense.segDAG": "b5a24cc870fd3ea9",
-    "Pous.Dense.segScheme": "b60c31b47dd43de7"
+    "Pous.Dense.segIndexEquiv": "dc4452dd92fff5a2",
+    "Pous.Dense.segScheme": "b60c31b47dd43de7",
+    "Pous.Dense.segTagScheme": "adf103dc3b44ffc8",
+    "Pous.Dense.tag": "532787597717d64b",
+    "Pous.Dense.tagModel": "8c440dec3e7101de",
+    "Pous.Dense.u64": "ace756ccab2b995d"
    },
    "pins": [
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.domainSep_equiv",
     "PousDenseReCert.segTag_auditSecure",
     "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
+    "PousDenseReCert.tag_injective_14",
     "PousProofs.DenseMeets"
    ]
   },
@@ -864,29 +870,12 @@
     "Pous.raw_sim_accepted"
    ]
   },
-  "PousProofs.Dense.DenseReCert": {
-   "digest": "74ab024b8d7a1e29ee07fb56bcf62970",
-   "definitions": {
-    "PousDenseReCert.segIndexEquiv": "a07d70a2b628ab34",
-    "PousDenseReCert.tag": "3518d1f52f4099f0",
-    "PousDenseReCert.u64": "6b625fbed4d9c726"
-   },
-   "pins": [
-    "PousDenseReCert.domainSep_equiv",
-    "PousDenseReCert.segTag_auditSecure",
-    "PousDenseReCert.segTag_meets_14",
-    "PousDenseReCert.tag_injective_14"
-   ]
-  },
   "PousProofs.Dense.SegTagged": {
-   "digest": "9f1137860a28056bede397736ec3dc01",
+   "digest": "f84373ab1e9bd60e8881e36ec8ae687f",
    "definitions": {
-    "PousDenseReCert.liftPar": "c8f4a02a18d9252d",
-    "PousDenseReCert.segBlocks": "5f37300d65e59c88",
-    "PousDenseReCert.segTagScheme": "694d5c8b8f39b702",
-    "PousDenseReCert.tagModel": "b75426eeb23cb14e"
+    "PousDenseReCert.liftPar": "f84373ab1e9bd60e"
    },
-   "pins": ["PousDenseReCert.segTag_auditSecure", "PousDenseReCert.segTag_meets_14"]
+   "pins": ["PousDenseReCert.segTag_auditSecure"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "88b5ece951ec73b38003348121ad3c79",
