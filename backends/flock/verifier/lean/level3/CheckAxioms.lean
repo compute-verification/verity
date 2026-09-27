@@ -23,3 +23,13 @@ import FlockLevel3
 #print axioms FlockLevel3.embed
 #print axioms FlockLevel3.ofLimbs
 #print axioms FlockLevel3.u_root
+#print axioms FlockLevel3.card_F
+#print axioms FlockLevel3.card_K
+#print axioms FlockLevel3.charTwoK
+#print axioms FlockLevel3.unpack_pack
+#print axioms FlockLevel3.pack_unpack
+#print axioms FlockLevel3.unpack_add
+#print axioms FlockLevel3.ofLimbs_bijective
+#print axioms FlockLevel3.lo_balanced
+#print axioms FlockLevel3.omega_injective
+#print axioms FlockLevel3.pinned_ne_one

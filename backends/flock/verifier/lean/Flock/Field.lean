@@ -98,7 +98,7 @@ end F128
 structure F256 where
   c0 : F128
   c1 : F128
-  deriving BEq, Inhabited, Repr
+  deriving BEq, Inhabited, Repr, DecidableEq
 
 namespace F256
 

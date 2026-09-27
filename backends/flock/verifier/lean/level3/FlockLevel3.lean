@@ -5,3 +5,4 @@ import FlockLevel3.GF128Field
 import FlockLevel3.GF256
 import FlockLevel3.Assembly
 import FlockLevel3.Seam
+import FlockLevel3.ArithFacts
