@@ -164,12 +164,14 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
     archive = out / "archive"
     tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
-    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables],
+    part = [str(st["partition_file"])] if st.get("partition_file") else []
+    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables, *part],
             out / "archive-put.log")
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
+    bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), "--session", str(sessions[-1].parent)], out / "lean-verify.log")
+             "--public", keys.get(f"pub-{n}.bin", ""), *bound, "--session", str(sessions[-1].parent)], out / "lean-verify.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
@@ -241,6 +243,9 @@ def main() -> int:
     # serving commits (the stand-in): M0 stages the captured values under frame-v3-sha512 / hm96-sha512
     t = time.time()
     st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
+    if a.bind:
+        (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
+        st["partition_file"] = st["dir"] / "partition.json"
     header = public_header(st["dir"], n)
     summary["stage_s"] = round(time.time() - t, 1)
     head_digest = program_digest(Program(template))

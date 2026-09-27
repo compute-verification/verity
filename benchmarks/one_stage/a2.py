@@ -93,7 +93,8 @@ def main() -> int:
             os.symlink((served / name).resolve(), target)
     shutil.copy(served / "index.json", out / "index.json")
     text = (st_dir / "circuit.txt").read_text()
-    st = {"dir": st_dir, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": mine["pin"]}
+    (st_dir / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    st = {"dir": st_dir, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": mine["pin"], "partition_file": st_dir / "partition.json"}
     header = a0.public_header(st_dir, n)
     fv = header["frame_v3"]
 
