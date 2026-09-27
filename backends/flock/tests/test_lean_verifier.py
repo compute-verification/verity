@@ -214,3 +214,69 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
+    """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
+    (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
+    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    for goal, witness in [
+        ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
+         "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
+         "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
+        ("MerkleScheme.hm96Sha512.Collision",
+         "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
+         "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
+    ]:
+        f = tmp_path / "Split.lean"
+        f.write_text(f"import FlockProofs\nopen Flock\nexample : {goal} :=\n  {witness}\n")
+        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+        assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
+
+
+TOY_EXTRACTOR = r"""import FlockProofs
+open Flock
+
+/-- A toy scheme with 1-byte digests: a node is the sum of its children's bytes, a leaf the row encoding's first byte. -/
+def toy : MerkleScheme :=
+  { id := "toy", digestLen := 1, pcsIndex := 0, node := fun l r => ⟨#[l.get! 0 + r.get! 0]⟩,
+    leaf := fun row _ => ⟨#[(MerkleScheme.rowBytes row).get! 0]⟩ }
+
+def b1 (x : UInt8) : ByteArray := ⟨#[x]⟩
+def cap : Array ByteArray := #[b1 6]
+def row1 : Array F128 := #[⟨1, 0⟩]
+def row2 : Array F128 := #[⟨2, 0⟩]
+def row3 : Array F128 := #[⟨257, 0⟩]
+
+def accepts (rows : Array (Array F128)) (sibs : Array ByteArray) : Bool :=
+  match merkleCheck toy cap 0 1 #[0] rows sibs #[] 1 with | .ok () => true | .error _ => false
+
+#eval (accepts #[row1] #[b1 5], accepts #[row2] #[b1 4], accepts #[row3] #[b1 5])
+
+/-- `MerklePair.Collides toy`, decided. -/
+def collides : MerklePair → Bool
+  | .node a b a' b' => a.size == 1 && b.size == 1 && a'.size == 1 && b'.size == 1 && (a != a' || b != b') &&
+      toy.node a b == toy.node a' b'
+  | .leaf r r' y y' => r != r' && toy.leaf r y == toy.leaf r' y'
+
+#eval (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0).render
+#eval (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0).render
+#eval (collides (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0),
+  collides (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0))
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_merkle_extractor_computes_a_collision(tmp_path):
+    """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
+    counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
+    give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
+    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
+    f = tmp_path / "Toy.lean"
+    f.write_text(TOY_EXTRACTOR)
+    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=LEAN, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
+        '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
