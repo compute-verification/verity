@@ -13,9 +13,10 @@ Code:
 **Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
 public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
 knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
-computational under the assumptions of §7. Malicious-verifier zero knowledge comes from M2's coin commitment and single
-rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives
-each rep its own pair. The proof class stays `NON_ZK_PROOF` until the red team re-reviews and the Lean proof covers it.
+statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge comes from
+M2's coin commitment and single rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared
+level 0's extra lanes; §7 now gives each rep its own pair, and the re-review grants M1 with conditions. The proof class
+stays `NON_ZK_PROOF` until the Lean proof covers it.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
 coordinates `(c0, c1)`. An F128's bytes are `lo` then `hi`, each little-endian. `v'` is a sent (masked) value, `v` the
@@ -262,13 +263,25 @@ is the minimum.
   prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal.
 - The statistics (§8) test both functionals as classes of one value per session.
 
-**Assumptions.** The argument above is exact for uniform prover randomness. In the implementation:
-- **ChaCha20 is a PRG.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20 output under the
-  session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`), so the simulation is computationally indistinguishable,
-  with ChaCha20's distinguishing advantage as the gap. The seed's quality is trusted.
-- **hm96-sha512 leaves hide.** Caps, paths and unopened leaves are hm96-sha512 outputs over 192-byte salts: hiding in
-  the random-oracle model (soundness ASSUMPTIONS.md §6, §7), binding under SHA-512 collision resistance.
-- So the notion is computational special honest-verifier zero knowledge for one session.
+**Assumptions.** The table's argument is exact (perfect hiding) for uniform prover randomness, given the commitments hide.
+- **hm96-sha512 hiding is statistical, in the standard model** (`verity/commitments/hm96/PROTOCOL.md` §3: a
+  leftover-hash-lemma argument over the Hankel family, which uses no property of SHA-512). Caps, paths and roots are
+  functions of the leaves, so they inherit the bound. It needs:
+  - uniform, independent salts, never reused: leaf `j` of tree `id` takes ChaCha20 blocks `3j … 3j+2` under nonce `id`, and
+    `next_id()` is never 0 and never repeats (level 0 is the one tree both reps share, each leaf salted once); the pads
+    trees and τ's commitment have their own salts;
+  - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
+    The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an `m = 25` session commits
+    about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`.
+- **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
+  with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
+  No random oracle is involved.
+- **The one caveat is the randomness source.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20
+  output under the session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`). The claim is statistical when that output
+  is treated as uniform, as hm96 §3 treats such streams (and `os.urandom`); otherwise it is computational, under ChaCha20
+  as a PRG.
+- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
+  verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), and mask-slot weights of rank `< 128·(claim points)` (§6).
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable; RoPE has 1024.
