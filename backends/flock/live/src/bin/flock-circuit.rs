@@ -1071,7 +1071,10 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
 /// every prover message. Rewinding V* is a fresh instance on the same tape, replayed to the same point. `Abort` and
 /// `AdaptiveCoins` act at the first round whose message, hashed with the tape, falls below [`TRIGGER`]: the first stops
 /// there; the second answers a coin it picks from that message, under the committed coin's opening. `CoinAt(k)` does the
-/// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`.
+/// latter at rep 0's round `k`. `ZeroBeta(k)` commits to β = 0 at rep 0's round `k`. The gated strategies decide on one
+/// message whether to continue for sure (half of those messages, "good") or only with probability `ε / 65536`:
+/// `CapGated(ε)` on the witness cap (red-team-m2-zk's; it stops at rep 0's first round), `LateGated(ε)` on rep 0's round
+/// that carries `T'` and `ybar` (it stops there). A simulator that reused messages across rewinds would fail against them.
 #[cfg(feature = "seed-injection")]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Strategy {
@@ -1080,6 +1083,8 @@ enum Strategy {
     AdaptiveCoins,
     CoinAt(usize),
     ZeroBeta(usize),
+    CapGated(u16),
+    LateGated(u16),
 }
 
 #[cfg(feature = "seed-injection")]
@@ -1093,6 +1098,8 @@ struct VStar {
     tape: [u8; 32],
     rounds: BTreeMap<String, usize>,
     stopped: bool,
+    /// the gated strategies' verdict on their message (for the test harness, which conditions on it)
+    gate: Arc<Mutex<Option<bool>>>,
     /// V*'s view: every request it received, with its answer
     view: Arc<Mutex<Vec<(Req, Resp)>>>,
 }
@@ -1110,7 +1117,7 @@ impl VStar {
                 }
             }));
         }
-        VStar { s, strategy, tape, rounds: BTreeMap::new(), stopped: false, view: Arc::new(Mutex::new(Vec::new())) }
+        VStar { s, strategy, tape, rounds: BTreeMap::new(), stopped: false, gate: Arc::new(Mutex::new(None)), view: Arc::new(Mutex::new(Vec::new())) }
     }
 
     fn hash(&self, what: &[u8], stream: &str, k: usize, content: &[u8]) -> [u8; 64] {
@@ -1125,16 +1132,28 @@ impl VStar {
         if self.stopped {
             return Resp::Refused("V* stopped".into());
         }
+        if let (Strategy::CapGated(_), Req::Commit { roots, .. }) = (self.strategy, &req) {
+            let good = self.hash(b"cap", "", 0, &roots[0].1)[0] < 128;
+            *self.gate.lock().unwrap_or_else(PoisonError::into_inner) = Some(good);
+        }
         let round = if let Req::Round { stream, content, .. } = &req { Some((stream.clone(), content.clone())) } else { None };
         let Some((stream, content)) = round else { return self.s.handle(req) };
         let k = self.rounds.get(&stream).copied().unwrap_or(0);
         self.rounds.insert(stream.clone(), k + 1);
+        let rep0 = stream == rep_stream(TABLE, 0);
+        let pass = |v: &Self, eps: u16| u16::from_le_bytes(v.hash(b"gate", &stream, k, &content)[..2].try_into().unwrap()) < eps;
         let fire = match self.strategy {
             Strategy::Abort | Strategy::AdaptiveCoins => u16::from_le_bytes(self.hash(b"trigger", &stream, k, &content)[..2].try_into().unwrap()) < TRIGGER,
-            Strategy::CoinAt(r) => stream == rep_stream(TABLE, 0) && k == r,
+            Strategy::CoinAt(r) => rep0 && k == r,
+            Strategy::CapGated(eps) => rep0 && k == 0 && *self.gate.lock().unwrap_or_else(PoisonError::into_inner) == Some(false) && !pass(self, eps),
+            Strategy::LateGated(eps) if rep0 && content.windows(zkv::L0_CLOSE.len()).any(|w| w == zkv::L0_CLOSE) => {
+                let good = self.hash(b"late", &stream, k, &content)[0] < 128;
+                *self.gate.lock().unwrap_or_else(PoisonError::into_inner) = Some(good);
+                !good && !pass(self, eps)
+            }
             _ => false,
         };
-        if fire && self.strategy == Strategy::Abort {
+        if fire && matches!(self.strategy, Strategy::Abort | Strategy::CapGated(_) | Strategy::LateGated(_)) {
             self.stopped = true;
             return Resp::Refused(format!("V* aborts at {stream} round {k}"));
         }
@@ -1380,7 +1399,8 @@ fn beta_round(view: &View) -> Option<usize> {
 #[cfg(feature = "seed-injection")]
 fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "16").parse().unwrap();
-    let t: usize = arg("--gk-t", "2").parse().unwrap();
+    let t: usize = arg("--gk-t", "4").parse().unwrap();
+    let eps: u16 = arg("--eps", "4096").parse().unwrap();
     let tape = [7u8; 32];
     let lay = zk_layout(st);
     let real = |make: &dyn Fn() -> VStar| -> View {
@@ -1393,28 +1413,36 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let emit = |kind: &str, name: &str, run: usize, view: &View| {
         let (s, proofs) = view_summary(kind, name, run, view);
         println!("ZKVIEW\t{s}");
-        if let (2, Ok((points, coins))) = (proofs.len(), extracted(st, view)) {
+        let ext = extracted(st, view).ok().map(|(points, coins)| (points, coins.iter().map(|c| c.concat()).collect::<Vec<Vec<F128>>>()));
+        if let (2, Some((points, flat))) = (proofs.len(), &ext) {
             let bytes: Vec<Vec<u8>> = proofs.iter().map(|p| p.1.clone()).collect();
-            let flat: Vec<Vec<F128>> = coins.iter().map(|c| c.concat()).collect();
-            if let Ok([l0, l1]) = session_relations(st, inst, &bytes, &flat, &points, [0, 1]) {
+            if let Ok([l0, l1]) = session_relations(st, inst, &bytes, flat, points, [0, 1]) {
                 println!("ZKVIEWREL\t{}", json!({"kind": kind, "strategy": name, "run": run, "rep": 0, "rel_level0": f128s_hex(&l0),
                                                   "rel_level1": f128s_hex(&l1)}));
             }
         }
         for (rep, b) in proofs {
-            if let Ok((_, pr, inner)) = bincode::deserialize::<(Commitment, R1csProofLigerito, InnerProof)>(&b) {
+            if let Ok((c, pr, inner)) = bincode::deserialize::<(Commitment, R1csProofLigerito, InnerProof)>(&b) {
                 let mut row = proof_fields(&lay, kind, run, rep, &pr, &inner);
                 row["strategy"] = json!(name);
+                // the level-0 positions of the sampled rows, from the verifier's record on the view's coins
+                if let (Some((points, flat)), Ok(root)) = (&ext, <[u8; 64]>::try_from(inner.root.clone())) {
+                    if let Ok((_, rec)) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[rep])) {
+                        row["lig_rows0_q"] = json!(rec.queries0[..4]);
+                    }
+                }
                 println!("ZKVIEWP\t{row}");
             }
         }
     };
-    for name in arg("--strategies", "honest,abort,adaptive-coins,zero-beta").split(',') {
+    for name in arg("--strategies", "honest,abort,adaptive-coins,zero-beta,cap-gated,late-gated").split(',') {
         let strategy = match name {
             "honest" => Strategy::Honest,
             "abort" => Strategy::Abort,
             "adaptive-coins" => Strategy::AdaptiveCoins,
             "zero-beta" => Strategy::ZeroBeta(beta_round(&real(&|| VStar::new(st, inst, Strategy::Honest, tape))).expect("rep 0's beta round")),
+            "cap-gated" => Strategy::CapGated(eps),
+            "late-gated" => Strategy::LateGated(eps),
             x => refuse(format!("unknown strategy {x}")),
         };
         let make = || VStar::new(st, inst, strategy, tape);
@@ -1434,6 +1462,58 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         println!("ZKREWIND\t{}", json!({"strategy": name, "n": n, "gk_t": t, "real_s": t_real, "sim_s": ts.elapsed().as_secs_f64() - t_real,
                                          "sims": stats}));
     }
+}
+
+/// `zkgk --zk --attempts A`: the rewinds are independent trials (red-team-m2-zk G1). For each gated V* (`cap-gated`,
+/// `late-gated`, `--eps`), A real sessions give its completion rate; then, conditioned on an extraction run that reached the
+/// proofs with its gate "bad", A rewinds with a fresh dummy opening each (as `gk_simulate` does) must complete at the same
+/// rate, not at ε. `--reuse-dummy` also runs A rewinds on the extraction run's own dummy opening, the defect, to show the
+/// comparison has power. Prints `ZKGK` lines for `backends/flock/tests/zk_rewind_stats.py`.
+#[cfg(feature = "seed-injection")]
+fn zkgk(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    let attempts: usize = arg("--attempts", "40").parse().unwrap();
+    let eps: u16 = arg("--eps", "4096").parse().unwrap();
+    let tape = [7u8; 32];
+    let run = |v: VStar, plan: &Plan| -> (View, Vec<Vec<u8>>, Option<bool>) {
+        let (view, gate) = (v.view.clone(), v.gate.clone());
+        let (_, proofs) = session(st, inst, shared(v), plan, ProverSeed::from_os());
+        let log = view.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let g = *gate.lock().unwrap_or_else(PoisonError::into_inner);
+        (log, proofs, g)
+    };
+    for name in arg("--strategies", "cap-gated,late-gated").split(',') {
+        let strategy = match name {
+            "cap-gated" => Strategy::CapGated(eps),
+            "late-gated" => Strategy::LateGated(eps),
+            x => refuse(format!("zkgk takes the gated strategies, not {x}")),
+        };
+        let make = || VStar::new(st, inst, strategy, tape);
+        let real = (0..attempts).filter(|_| complete(&run(make(), &Plan::default()).0)).count();
+        let dummy_plan = Plan { zero_witness: true, ..Plan::default() };
+        let mut tries = 0;
+        let (view, dummy) = loop {
+            tries += 1;
+            let (v, p, g) = run(make(), &dummy_plan);
+            if complete(&v) && g == Some(false) {
+                break (v, p);
+            }
+            if tries > 400 {
+                refuse(format!("{name}: no extraction run reached the proofs with its gate bad in 400 tries"));
+            }
+        };
+        let (points, coins) = extracted(st, &view).unwrap_or_else(|e| refuse(e));
+        let mut rng = flock_live::zk_hooks::ProverRng::from_os();
+        let mut done = |dummy: &[Vec<u8>], a: u64| matches!(rewind(st, inst, make(), &points, &coins, dummy, &mut rng, a), Ok(Rewound::Complete));
+        let fresh = (0..attempts).filter(|&a| done(&fresh_dummy(st, inst, &points, &coins).unwrap_or_else(|e| refuse(e)), a as u64)).count();
+        let reused = flag("--reuse-dummy").then(|| (0..attempts).filter(|&a| done(&dummy, 1000 + a as u64)).count());
+        println!("ZKGK\t{}", json!({"strategy": name, "eps": eps as f64 / 65536.0, "attempts": attempts, "real_complete": real,
+                                     "extraction_tries": tries, "rewinds_complete_fresh": fresh, "rewinds_complete_reused": reused}));
+    }
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn zkgk(_: &Arc<Stmt>, _: &Arc<Instances>) {
+    refuse("zkgk needs the test harness's seed-injection feature".into());
 }
 
 #[cfg(not(feature = "seed-injection"))]
@@ -2346,6 +2426,7 @@ fn main() {
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
+        "zkgk" => zkgk(&st, &inst),
         "serve" => serve_loop(move || server(&st, &inst)),
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();

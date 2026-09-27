@@ -10,7 +10,10 @@ messages), N real views and N simulated ones, the simulator seeing only the publ
 * ``online``: rep 0's first masked values in every view that reaches them, whatever its end; ``proofs``: the checked
   fields of every proof a complete view received; ``relations``: the session's two cross-rep functionals of a complete
   view (``ZKVIEWREL``); ``zk_stats``'s tests real against simulated (bytes, bits, xor, constant);
-* ``simulator``: no simulation failed (a binding failure, or no rewind within the estimate's bound).
+* ``simulator``: no simulation failed (a binding failure, or no rewind within the estimate's bound);
+* ``rewind_independence`` (``ZKGK`` lines of ``flock-circuit zkgk``): for a gated V*, rewinds after an extraction run whose
+  gate was bad complete at the rate of real sessions (two-sided Fisher test, ``p_fresh``), as independent trials do. With
+  ``--reuse-dummy``, rewinds on the extraction run's own dummy opening show the test's power (``p_reused``, expected small).
 """
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ MIN_ROWS = 8
 
 
 def load(lines):
-    views, proofs, rels, sims = defaultdict(list), defaultdict(list), defaultdict(list), {}
+    views, proofs, rels, sims, gk = defaultdict(list), defaultdict(list), defaultdict(list), {}, {}
     for line in lines:
         tag, _, body = line.partition("\t")
         if tag == "ZKVIEW":
@@ -44,7 +47,10 @@ def load(lines):
         elif tag == "ZKREWIND":
             v = json.loads(body)
             sims[v["strategy"]] = v
-    return views, proofs, rels, sims
+        elif tag == "ZKGK":
+            v = json.loads(body)
+            gk[v["strategy"]] = v
+    return views, proofs, rels, sims, gk
 
 
 def end_of(v):
@@ -79,27 +85,46 @@ def fields(rows_by_kind, classes, reps):
     for cls in classes:
         a = {k: zk_stats.values(rows_by_kind[k], cls) for k in ("real", "sim")}
         fixed = zk_stats.structural(a)
-        shared = zk_stats.shared_by_the_reps(a, reps) & ~fixed
+        equal = zk_stats.equal_across_reps(a, reps) & ~fixed
+        allowed = zk_stats.level0_shared(rows_by_kind, cls, a["real"].shape[1])
+        shared, reused = equal & allowed, equal & ~allowed
         a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
         tab = np.array([zk_stats.byte_hist(a["real"]), zk_stats.byte_hist(a["sim"])])
         tab = tab[:, tab.sum(axis=0) > 0]
         row = {"values_per_view": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
+               "reused_across_reps": int(reused.sum()),
                "bytes_real_vs_sim": float(stats.chi2_contingency(tab)[1])}
         for k in ("real", "sim"):
             row[f"bits_{k}"] = zk_stats.bits_p(a[k])
             row[f"xor_{k}"] = zk_stats.xor_p(a[k], reps)
             row[f"constant_{k}"] = zk_stats.constant_frac(a[k], reps)
         indist = min(row["bytes_real_vs_sim"], row["bits_real"], row["bits_sim"], row["xor_real"], row["xor_sim"]) > ALPHA \
-            and row["constant_real"] == 0 and row["constant_sim"] == 0
+            and row["constant_real"] == 0 and row["constant_sim"] == 0 and row["reused_across_reps"] == 0
         row["real_indistinguishable_from_sim"] = bool(indist)
         ok &= indist
         out[cls] = row
     return out, ok
 
 
-def analyse(views, proofs, rels, sims):
+def fisher(a, b, n):
+    return float(stats.fisher_exact([[a, n - a], [b, n - b]])[1])
+
+
+def analyse(views, proofs, rels, sims, gk=None):
     out = {"alpha": ALPHA, "strategies": {}}
     all_ok = True
+    if gk:
+        out["rewind_independence"] = {}
+        for strategy, v in gk.items():
+            n = v["attempts"]
+            row = {"attempts": n, "real_complete": v["real_complete"], "rewinds_complete_fresh": v["rewinds_complete_fresh"],
+                   "p_fresh": fisher(v["real_complete"], v["rewinds_complete_fresh"], n)}
+            if v.get("rewinds_complete_reused") is not None:
+                row["rewinds_complete_reused"] = v["rewinds_complete_reused"]
+                row["p_reused"] = fisher(v["real_complete"], v["rewinds_complete_reused"], n)
+            row["pass"] = row["p_fresh"] > ALPHA
+            all_ok &= row["pass"]
+            out["rewind_independence"][strategy] = row
     for strategy, vs in views.items():
         real = [v for v in vs if v["kind"] == "real"]
         sim = [v for v in vs if v["kind"] == "sim"]
