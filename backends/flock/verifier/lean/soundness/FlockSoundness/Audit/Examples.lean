@@ -451,16 +451,6 @@ theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ n
 
 /-! ## (b2) with a Bernoulli first stage is one-stage over the coarse partition, thinned -/
 
-/-- A uniform `k₂`-subset of `nv` misses one given unit with probability `1 − k₂/nv`. -/
-theorem choose_ratio {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1 ≤ nv) :
-    ((nv - 1).choose k₂ : ℝ≥0∞) / (nv.choose k₂ : ℝ≥0∞) = ((nv - k₂ : ℕ) : ℝ≥0∞) / (nv : ℝ≥0∞) := by
-  rw [ENNReal.div_eq_div_iff (by exact_mod_cast (show nv ≠ 0 by omega)) (ENNReal.natCast_ne_top _)
-    (by exact_mod_cast (Nat.choose_pos hk).ne') (ENNReal.natCast_ne_top _)]
-  have := Nat.choose_mul_succ_eq (nv - 1) k₂
-  rw [show nv - 1 + 1 = nv by omega] at this
-  rw [mul_comm]
-  exact_mod_cast this
-
 /-- The factor identity behind thinning: a coordinate drawn with probability `num/den` and then
 missed with probability `1 − k₂/nv` is a coordinate drawn with probability `num·k₂/(den·nv)`. -/
 theorem bernFactor_thin {num den k₂ : ℕ} (hnum : num ≤ den) (hden : 1 ≤ den) (hk : k₂ ≤ nv)
@@ -496,7 +486,7 @@ theorem effEscape_bernoulli {num den k₂ : ℕ} [NeZero den] [NeZero nv] (hnum 
   have hden : 1 ≤ den := Nat.one_le_iff_ne_zero.2 (NeZero.ne den)
   rw [effEscape_chains hk hnv B, Law.bernoulli_escape (Nat.mul_le_mul hnum hk) B]
   simp only [← Finset.prod_const]
-  rw [Law.bernoulli_avg_prod hnum, choose_ratio hk hnv, bernFactor_thin hnum hden hk hnv]
+  rw [Law.bernoulli_avg_prod hnum, Law.choose_ratio hk hnv, bernFactor_thin hnum hden hk hnv]
 
 /-! ## Fine values chosen after the fine draw -/
 

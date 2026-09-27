@@ -112,6 +112,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Law.avg_escape_subsets
 #print axioms FlockSoundness.Audit.Law.choose_support
 #print axioms FlockSoundness.Audit.Law.subset_minimax
+#print axioms FlockSoundness.Audit.Law.subset_escape_le_prod
 #print axioms FlockSoundness.Audit.Law.bernoulli_avg_prod
 #print axioms FlockSoundness.Audit.Law.bernoulli_escape
 #print axioms FlockSoundness.Audit.Law.demo_count_590

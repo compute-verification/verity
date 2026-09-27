@@ -149,6 +149,59 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
     have := (subset n k hk).escape_le_miss (K := K) hB.ge
     rwa [subset_escape, hB] at this
 
+/-- A uniform `k`-subset of `n` misses one given unit with probability `(n − k)/n`. -/
+theorem choose_ratio {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) :
+    ((n - 1).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
+  rw [ENNReal.div_eq_div_iff (by exact_mod_cast (show n ≠ 0 by omega)) (ENNReal.natCast_ne_top _)
+    (by exact_mod_cast (Nat.choose_pos hk).ne') (ENNReal.natCast_ne_top _)]
+  have := Nat.choose_mul_succ_eq (n - 1) k
+  rw [show n - 1 + 1 = n by omega] at this
+  rw [mul_comm]
+  exact_mod_cast this
+
+/-- `C(n − b, k)/C(n, k) ≤ ((n − k)/n)^b`, cross-multiplied. -/
+theorem choose_sub_mul_pow_le (n k : ℕ) : ∀ b, b ≤ n →
+    (n - b).choose k * n ^ b ≤ n.choose k * (n - k) ^ b := by
+  intro b
+  induction b with
+  | zero => intro _; simp
+  | succ b ih =>
+      intro hb
+      set m := n - b with hm
+      have hm1 : 1 ≤ m := by omega
+      have hid : (m - 1).choose k * m = m.choose k * (m - k) := by
+        have := Nat.choose_mul_succ_eq (m - 1) k
+        rwa [show m - 1 + 1 = m by omega] at this
+      have hmk : (m - k) * n ≤ (n - k) * m := by
+        rcases le_or_gt m k with h | h
+        · rw [Nat.sub_eq_zero_of_le h, zero_mul]; exact Nat.zero_le _
+        · have hmn : m ≤ n := by omega
+          zify [h.le, (h.trans_le hmn).le]
+          nlinarith
+      have hih := ih (by omega)
+      rw [show n - (b + 1) = m - 1 by omega]
+      refine Nat.le_of_mul_le_mul_right ?_ (show 0 < m by omega)
+      calc (m - 1).choose k * n ^ (b + 1) * m = (m - 1).choose k * m * n ^ b * n := by ring
+        _ = m.choose k * n ^ b * ((m - k) * n) := by rw [hid]; ring
+        _ ≤ n.choose k * (n - k) ^ b * ((n - k) * m) := Nat.mul_le_mul hih hmk
+        _ = n.choose k * (n - k) ^ (b + 1) * m := by ring
+
+/-- **The product bound for the uniform subset**: a set escapes with at most the product of its
+units' miss probabilities, so inclusion probabilities alone give a valid bound. -/
+theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finset (Fin n)) :
+    (subset n k hk).escape B ≤ ∏ u ∈ B, (1 - (subset n k hk).incl u) := by
+  have hu : ∀ u, 1 - (subset n k hk).incl u = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
+    intro u
+    rw [← escape_singleton, subset_escape, Finset.card_singleton, choose_ratio hk hn]
+  rw [Finset.prod_congr rfl fun u _ => hu u, Finset.prod_const, subset_escape, div_eq_mul_inv
+    (((n - k : ℕ) : ℝ≥0∞)), mul_pow, ← ENNReal.inv_pow, ← div_eq_mul_inv]
+  have hc : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
+  have hp : ((n : ℝ≥0∞)) ^ B.card ≠ 0 := pow_ne_zero _ (by exact_mod_cast (show n ≠ 0 by omega))
+  rw [ENNReal.div_le_iff hc (ENNReal.natCast_ne_top _), mul_comm, ← mul_div_assoc,
+    ENNReal.le_div_iff_mul_le (Or.inl hp) (Or.inl (ENNReal.pow_ne_top (ENNReal.natCast_ne_top _)))]
+  have := choose_sub_mul_pow_le n k B.card (by simpa using Finset.card_le_univ B)
+  exact_mod_cast this
+
 /-- **The demo's curve** (`docs/audit-protocols.md` §0.2): with 1,024 heads and 16 drawn, 590 or
 more wrong heads escape with probability at most `2^-20`. -/
 theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ≥0∞) ^ 20)⁻¹ := by
