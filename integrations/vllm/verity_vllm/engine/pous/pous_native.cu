@@ -263,6 +263,69 @@ __global__ void feistel_thread_kernel(uint8_t* x, int64_t x_stride, int64_t half
   }
 }
 
+// dst ^= SHAKE256(prefix || body)[0:olen] with 64-bit word I/O: `body` and `dst` 8-byte aligned, `blen` and `olen` multiples
+// of 8, the prefix (`plen` < 8 bytes, little-endian in `pre`) shifting the body's words by `plen` bytes in the message.
+__device__ void shake_thread_xor_words(uint64_t pre, int plen, const uint64_t* __restrict__ body, int64_t blen,
+                                       uint64_t* __restrict__ dst, int64_t olen) {
+  const int64_t len = plen + blen;
+  const int64_t nblk = len / RATE + 1;
+  const int sh = 8 * plen;
+  uint64_t st[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) st[i] = 0;
+  uint64_t prev = pre;  // message word j is (body[j] << sh) | (body[j - 1] >> (64 - sh)), body[-1] standing in for the prefix
+  for (int64_t b = 0; b < nblk; ++b) {
+    const int64_t base = b * RATE;
+    if (base + RATE <= len && (base + RATE) / 8 <= blen / 8) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        const uint64_t cur = body[b * RATE_WORDS + w];
+        st[w] ^= sh ? (cur << sh) | (b == 0 && w == 0 ? prev : prev >> (64 - sh)) : cur;
+        prev = cur;
+      }
+    } else {
+      const uint8_t* bb = reinterpret_cast<const uint8_t*>(body);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          const int64_t pos = base + w * 8 + k;
+          uint8_t byte = 0;
+          if (pos < plen) byte = (uint8_t)(pre >> (8 * pos));
+          else if (pos < len) byte = bb[pos - plen];
+          if (pos == len) byte ^= 0x1F;
+          if (b == nblk - 1 && w == RATE_WORDS - 1 && k == 7) byte ^= 0x80;
+          word |= (uint64_t)byte << (8 * k);
+        }
+        st[w] ^= word;
+      }
+    }
+    keccak_f_thread(st);
+  }
+  const int64_t owords = olen / 8;
+  for (int64_t o = 0; o < owords; o += RATE_WORDS) {
+    if (o > 0) keccak_f_thread(st);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w)
+      if (o + w < owords) dst[o + w] ^= st[w];
+  }
+}
+
+// feistel_thread_kernel with word I/O, for untweaked permutations whose halves are whole words (Π and Π₂).
+__global__ void feistel_words_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int inverse, int64_t rows) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  uint64_t* a = reinterpret_cast<uint64_t*>(x + n * x_stride);
+  uint64_t* b = a + half / 8;
+  for (int step = 0; step < 10; ++step) {
+    const int i = inverse ? 10 - step : step + 1;
+    const uint64_t pre = (uint64_t)(uint8_t)domain | ((uint64_t)(uint8_t)i << 8);
+    if (i % 2) shake_thread_xor_words(pre, 2, b, half, a, half);
+    else shake_thread_xor_words(pre, 2, a, half, b, half);
+  }
+}
+
 static void check_rows(const torch::Tensor& t, const char* name, int64_t rows) {
   TORCH_CHECK(t.is_cuda() && t.scalar_type() == torch::kUInt8 && t.dim() == 2, name, " must be a 2-D uint8 CUDA tensor");
   TORCH_CHECK(t.size(0) == rows || (t.size(0) == 1 && t.stride(0) == 0) || t.size(1) == 0, name, " has the wrong row count");
@@ -289,7 +352,7 @@ void shake256_rows(torch::Tensor prefix, torch::Tensor body, torch::Tensor out, 
 
 // Feistel-10 in place on the rows of x ([R, 2h]) with round functions SHAKE256(domain || u8(i) || tweak[r] || .): one warp
 // per row below `thread_rows` rows (latency), one thread per row from there (throughput).
-void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse, int64_t thread_rows) {
+void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse, int64_t thread_rows, bool word_io) {
   const int64_t rows = x.size(0);
   check_rows(x, "x", rows);
   check_rows(tweak, "tweak", rows);
@@ -298,6 +361,15 @@ void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inv
   if (rows == 0) return;
   const c10::cuda::CUDAGuard guard(x.device());
   auto stream = c10::cuda::getCurrentCUDAStream();
+  const bool words = word_io && tweak.size(1) == 0 && x.size(1) % 16 == 0 && x.stride(0) % 8 == 0 &&
+                     reinterpret_cast<uintptr_t>(x.data_ptr<uint8_t>()) % 8 == 0;
+  if (thread_rows > 0 && rows >= thread_rows && words) {
+    const int threads = 128;
+    feistel_words_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, inverse ? 1 : 0, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
   if (thread_rows > 0 && rows >= thread_rows) {
     const int threads = 128;
     feistel_thread_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
@@ -471,7 +543,8 @@ class Responder {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
-        pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0);
+        pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
+        pybind11::arg("word_io") = false);
   pybind11::class_<Responder>(m, "Responder")
       .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int, int>())
       .def("start", &Responder::start)
