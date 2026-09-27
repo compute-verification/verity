@@ -141,7 +141,7 @@ def _bf16_tensor(rows: list[list[int]]):
     return torch.from_numpy(np.asarray(rows, dtype=np.uint16).view(np.int16)).view(torch.bfloat16).cuda()
 
 
-def _launch(op, x, TOPK: int, renorm: bool, ind=None, tap=None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _launch(op, x, TOPK: int, renorm: bool, ind=None, tap=None, pad=None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     import torch
 
     M = x.shape[0]
@@ -149,9 +149,9 @@ def _launch(op, x, TOPK: int, renorm: bool, ind=None, tap=None) -> tuple[np.ndar
     ids = torch.empty(M, TOPK, dtype=ind or torch.int32, device="cuda")
     tei = torch.empty(M, TOPK, dtype=torch.int32, device="cuda")
     if tap is None:
-        op(w, ids, tei, x, renorm, None, None)
+        op(w, ids, tei, x, renorm, None, pad)
     else:
-        op(w, ids, tei, x, renorm, None, None, tap)
+        op(w, ids, tei, x, renorm, None, pad, tap)
     torch.cuda.synchronize()
     return _u32(w), ids.cpu().numpy().astype(np.int64) & 0xFFFFFFFF, tei.cpu().numpy().astype(np.int64)
 
@@ -181,7 +181,12 @@ def check_config(tap, pool, E: int, TOPK: int, VPT: int, renorm: bool, n_random:
     ref64 = _launch(installed, x, TOPK, renorm, ind=torch.int64)
     buf64 = torch.empty(len(rows), W, dtype=torch.float32, device="cuda")
     tapped64 = _launch(tap.topk_softmax_tap, x, TOPK, renorm, ind=torch.int64, tap=buf64)
-    rec["out_eq_installed"] = all(_same(o, ref) for o in outs) and _same(tapped64, ref64)
+    pad = torch.arange(len(rows), device="cuda") % 3 == 1                  # vLLM's is_padding mask: a padding row's ids, never its softmax
+    ref_pad = _launch(installed, x, TOPK, renorm, pad=pad)
+    buf_pad = torch.empty(len(rows), W, dtype=torch.float32, device="cuda")
+    tapped_pad = _launch(tap.topk_softmax_tap, x, TOPK, renorm, tap=buf_pad, pad=pad)
+    rec["padding_eq_installed"] = _same(tapped_pad, ref_pad) and bool(np.array_equal(_u32(buf_pad).reshape(len(rows), W), taps[0]))
+    rec["out_eq_installed"] = all(_same(o, ref) for o in outs) and _same(tapped64, ref64) and rec["padding_eq_installed"]
     rec["out_eq_untapped"] = _same(untapped, ref)
     rec["unwritten"] = int(np.count_nonzero(taps[0] != taps[1]))
     t0 = time.time()
