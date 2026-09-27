@@ -545,6 +545,7 @@ def test_declared_key_params_are_recorded_even_when_their_name_looks_secret(tmp_
         "a secret-shaped value stays redacted even under a key-param flag"
 
 
+@pytest.mark.skipif(not (REPO / ".git").exists(), reason="shipped tree: no .git to archive")
 def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     """The machine gets a `git archive` (no .git) as cwd and the research source on PYTHONPATH: `--tool tc_probe` must resolve
     there, the closure must come from the archive, and the source identity from the control side's hint."""

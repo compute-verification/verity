@@ -219,11 +219,9 @@ def temperature_scale_row(logits_bf16: np.ndarray, temp: int) -> np.ndarray:
 
 def topp_mask_row(x_f32: np.ndarray, top_p: int, splits: int) -> np.ndarray:
     """`TopPMask_v1{V}`: the row with every lane outside the top-p nucleus set to -inf (`TopPMaskWordx{V}` keep bits, then
-    `SelectF32(BitAt(keep, i), x, -inf)` per lane).  `splits` is refused outside the split counts, as the primitive refuses it."""
-    from verity_vllm.program.registry import topp_split as _TS
+    `SelectF32(BitAt(keep, i), x, -inf)` per lane), over every i32 `splits` as the primitive (`sampling.topp_keep`)."""
     x = _u32(x_f32)
-    keep = _TS.topp_keep_row(DR.as_f32(x), SP._f(int(top_p)), SP._splits_of(int(splits)))
-    keep = np.asarray(keep, dtype=bool).reshape(-1)
+    keep = SP.topp_keep(DR.as_f32(x), SP._f(int(top_p)), int(splits))
     if keep.shape[0] != x.shape[0]:
         raise ValueError(f"topp_keep_row returned {keep.shape[0]} keep bits for a {x.shape[0]}-lane row")
     return np.where(keep, x, _u32(SP.NEG_INF_BITS))
