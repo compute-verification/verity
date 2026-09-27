@@ -4062,7 +4062,7 @@
      "tool": "redigest.py art:82c73709/honest OUT; redigest.py --retain art:82c73709/honest OUT --upstream-checks link_sigma,retained_bytes",
      "cases": "as in the first set; the proofs' 64-byte digests are read off PcsParams.merkle_hash; retained-not-digest is rejected by both (no divergence at 631567f7)"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:2fb50856",
     "forgeries_note": "14 selftest forgeries that run a session, expectations in each case.json; cross_session_replay_both_reps is now caught at R2 by the retained bytes (both verifiers)",
     "fuzz": {
@@ -4107,7 +4107,7 @@
     "mutants": {
      "tool": "as in the previous set, on art:24aba3a2/honest"
     },
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "forgeries": "art:d13d622c",
     "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 63/63"
@@ -4129,7 +4129,7 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rope-head/records-cpu",
      "art:1100e385/rope-head/records-gpu"
@@ -4155,7 +4155,7 @@
      "link_sigma",
      "retained_bytes"
     ],
-    "lean_statement": "verity/flock-circuit",
+    "lean_statement": "verity/flock-circuit@631567f7",
     "selftest": [
      "art:1100e385/rmst128/records-cpu",
      "art:1100e385/rmst128/records-gpu"

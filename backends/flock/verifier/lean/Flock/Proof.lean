@@ -32,12 +32,15 @@ structure LincheckProof where
 structure LevelProof where
   rows : Array (Array F128)
   siblings : Array ByteArray
+  /-- `opened_salts`: one per opened row for a salted leaf scheme -/
+  salts : Array ByteArray := #[]
   deriving Inhabited
 
 structure FinalProof where
   yr : Array F128
   rows : Array (Array F128)
   siblings : Array ByteArray
+  salts : Array ByteArray := #[]
   deriving Inhabited
 
 structure LigeritoProof where
@@ -70,6 +73,8 @@ structure Shape where
   sched : Schedule
   /-- the Merkle digest width (§14): every cap entry and sibling -/
   hashLen : Nat := 32
+  /-- each level's openings carry `opened_salts` (PR #83's Flock patch from `2908d078`): this many bytes per opened row -/
+  saltLen : Option Nat := none
   deriving Inhabited
 
 open Reader in
@@ -78,6 +83,10 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
   let R := s.levels.size - 1
   let lvl := fun (i : Nat) => s.levels.getD i default
   let hash : M ByteArray := Reader.bytes sh.hashLen
+  let salts := fun (q : Nat) => match sh.saltLen with
+    | none => (pure #[] : M (Array ByteArray))
+    | some 0 => vecExact 0 (Reader.bytes 0) "opened_salts"
+    | some n => vecExact q (Reader.bytes n) "opened_salts"
   let prog : M Proof := do
     -- Commitment
     let cap ← vecExact (2 ^ (lvl 0).cap) hash "cap"
@@ -116,7 +125,7 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     let icap ← vecExact (2 ^ (lvl 0).cap) hash "initial_cap"
     let l0 := lvl 0
     let iproof : LevelProof := ⟨← vecExact l0.q (vecExact (2 ^ l0.lanes) f128 "row") "opened_rows",
-      ← vecExact (l0.q * (l0.d - l0.cap)) hash "merkle_proof"⟩
+      ← vecExact (l0.q * (l0.d - l0.cap)) hash "merkle_proof", ← salts l0.q⟩
     let mut rcaps := #[]
     let n ← u64
     if n.toNat != R then throw s!"recursive_caps: length {n}, want {R}"
@@ -128,10 +137,10 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     for i in [0:R - 1] do
       let li := lvl (i + 1)
       rproofs := rproofs.push ⟨← vecExact li.q (vecExact 16 f128 "row") "opened_rows",
-        ← vecExact (li.q * (li.d - li.cap)) hash "merkle_proof"⟩
+        ← vecExact (li.q * (li.d - li.cap)) hash "merkle_proof", ← salts li.q⟩
     let lR := lvl R
     let fproof : FinalProof := ⟨← vecExact (2 ^ (s.ext + 1)) f128 "yr",
-      ← vecExact lR.q (vecExact 16 f128 "row") "opened_rows", ← vecExact (lR.q * (lR.d - lR.cap)) hash "merkle_proof"⟩
+      ← vecExact lR.q (vecExact 16 f128 "row") "opened_rows", ← vecExact (lR.q * (lR.d - lR.cap)) hash "merkle_proof", ← salts lR.q⟩
     let _ ← vecExact 0 (do let _ ← f128; let _ ← f128; pure ()) "sumcheck_transcript"
     let msgs ← vecExact (s.k0 + 8 + 7 * (R - 1)) (do let a ← f256; let b ← f256; pure (a, b)) "sumcheck_transcript_f256"
     let qn ← vecExact (R + 1) u64 "grinding_nonces"

@@ -10,7 +10,7 @@ namespace Flock
 /-- A collision of a Merkle scheme's hash. -/
 def MerkleScheme.Collision (ms : MerkleScheme) : Prop :=
   (∃ a b a' b' : ByteArray, (a, b) ≠ (a', b') ∧ ms.node a b = ms.node a' b') ∨
-  (∃ r r' : Array F128, r ≠ r' ∧ ms.leaf r = ms.leaf r')
+  (∃ (r r' : Array F128) (y y' : ByteArray), (r, y) ≠ (r', y') ∧ ms.leaf r y = ms.leaf r' y')
 
 /-- Climbing from two different digests to one digest along paths of one length is a node collision. -/
 theorem climb_binding (ms : MerkleScheme) :
@@ -43,19 +43,19 @@ theorem climb_binding (ms : MerkleScheme) :
 
 /-- Two accepted openings of one position against one cap, with different rows, are a collision. -/
 theorem opens_binding (ms : MerkleScheme) (cap : Array ByteArray) (c d lanes pos : Nat) (r1 r2 : Array F128)
-    (s1 s2 : List ByteArray) (h1 : opens ms cap c d lanes pos r1 s1 = true) (h2 : opens ms cap c d lanes pos r2 s2 = true)
-    (hr : r1 ≠ r2) : ms.Collision := by
+    (y1 y2 : ByteArray) (s1 s2 : List ByteArray) (h1 : opens ms cap c d lanes pos r1 y1 s1 = true)
+    (h2 : opens ms cap c d lanes pos r2 y2 s2 = true) (hr : r1 ≠ r2) : ms.Collision := by
   simp only [opens, Bool.and_eq_true, decide_eq_true_eq] at h1 h2
-  have heq : climb ms (ms.leaf r1) pos s1 = climb ms (ms.leaf r2) pos s2 := h1.2.trans h2.2.symm
-  by_cases hl : ms.leaf r1 = ms.leaf r2
-  · exact Or.inr ⟨r1, r2, hr, hl⟩
-  · exact climb_binding ms s1 s2 _ _ pos (by rw [h1.1.2, h2.1.2]) hl heq
+  have heq : climb ms (ms.leaf r1 y1) pos s1 = climb ms (ms.leaf r2 y2) pos s2 := h1.2.trans h2.2.symm
+  by_cases hl : ms.leaf r1 y1 = ms.leaf r2 y2
+  · exact Or.inr ⟨r1, r2, y1, y2, fun hh => hr (Prod.mk.inj hh).1, hl⟩
+  · exact climb_binding ms s1 s2 _ _ pos (by rw [h1.1.1.2, h2.1.1.2]) hl heq
 
 /-- An accepted Merkle check opens every query. -/
 theorem merkleCheck_opens (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)
-    (rows : Array (Array F128)) (siblings : Array ByteArray) (lanes : Nat)
-    (h : merkleCheck ms cap c d positions rows siblings lanes = .ok ()) (j : Nat) (hj : j < positions.size) :
-    opens ms cap c d lanes positions[j]! rows[j]! (sibsOf siblings (d - c) j) = true := by
+    (rows : Array (Array F128)) (siblings salts : Array ByteArray) (lanes : Nat)
+    (h : merkleCheck ms cap c d positions rows siblings salts lanes = .ok ()) (j : Nat) (hj : j < positions.size) :
+    opens ms cap c d lanes positions[j]! rows[j]! (salts.getD j ByteArray.empty) (sibsOf siblings (d - c) j) = true := by
   unfold merkleCheck at h
   split at h
   · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
@@ -70,12 +70,12 @@ theorem merkleCheck_opens (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat
 /-- **Merkle binding (L3-M).** Two Merkle checks the verifier accepts against one cap at the same positions, whose opened
 rows differ at some query, give a collision of the scheme's hash. -/
 theorem merkle_binding (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)
-    (rows1 rows2 : Array (Array F128)) (sib1 sib2 : Array ByteArray) (lanes : Nat)
-    (h1 : merkleCheck ms cap c d positions rows1 sib1 lanes = .ok ())
-    (h2 : merkleCheck ms cap c d positions rows2 sib2 lanes = .ok ())
+    (rows1 rows2 : Array (Array F128)) (sib1 sib2 salt1 salt2 : Array ByteArray) (lanes : Nat)
+    (h1 : merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = .ok ())
+    (h2 : merkleCheck ms cap c d positions rows2 sib2 salt2 lanes = .ok ())
     (j : Nat) (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) : ms.Collision :=
-  opens_binding ms cap c d lanes positions[j]! _ _ _ _
-    (merkleCheck_opens ms cap c d positions rows1 sib1 lanes h1 j hj)
-    (merkleCheck_opens ms cap c d positions rows2 sib2 lanes h2 j hj) hr
+  opens_binding ms cap c d lanes positions[j]! _ _ _ _ _ _
+    (merkleCheck_opens ms cap c d positions rows1 sib1 salt1 lanes h1 j hj)
+    (merkleCheck_opens ms cap c d positions rows2 sib2 salt2 lanes h2 j hj) hr
 
 end Flock
