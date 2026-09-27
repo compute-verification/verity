@@ -190,10 +190,13 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     if obj["program"] != program_sha512(program):
         bad["program"] = [obj["program"]]
     try:
-        part = evaluate(program, obj["query"])
+        _verify_calls(evaluate(program, obj["query"]), served, bad)
     except QueryInapplicable as e:
         bad["query-inapplicable"] = [e.detail]
-        return _verdict(bad)
+    return _verdict(bad)
+
+
+def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, bad: dict[str, list]) -> None:
     if served is not None:
         known = {k for k, _c in part.calls}
         unknown = sorted((k for k in served if k not in known), key=repr)
@@ -211,7 +214,6 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
                 r = checked[c.fn.id] = check_cut(part.graph(p), part.owner(p), None, (part.X, part.W, 0))
         if not r.ok:
             bad.setdefault("cut", []).append({"call": k, "codes": list(r.codes), "detail": r.detail})
-    return _verdict(bad)
 
 
 def _verdict(bad: dict[str, list]) -> CutVerdict:
