@@ -56,16 +56,23 @@ def ofRows (rows : Array (Array Nat)) (width : Nat) : V Sparse := do
       data := pushLe32 data c
   return ⟨rows.size, width, data, start, len⟩
 
-/-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
-def foldT (m : Sparse) (e : Array F128) : Array F128 := Id.run do
-  let mut acc : Array F128 := Array.replicate m.width 0
-  for i in [0:min m.rows e.size] do
+/-- Column `t` of row `i`. -/
+@[inline] def col (m : Sparse) (i t : Nat) : Nat := rd32 m.data (m.start[i]! + 4 * t)
+
+/-- Entries `t, …, t + fuel − 1` of row `i`, each adding `ei` to its column. -/
+def foldRow (m : Sparse) (i : Nat) (ei : F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, t, acc => foldRow m i ei fuel (t + 1) (acc.modify (m.col i t) (· + ei))
+
+/-- Rows `i, …, i + fuel − 1`. -/
+def foldRows (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, i, acc =>
     let ei := e[i]!
-    if ei.isZero then continue
-    let s := m.start[i]!
-    for t in [0:m.len[i]!] do
-      acc := acc.modify (rd32 m.data (s + 4 * t)) (· + ei)
-  return acc
+    foldRows m e fuel (i + 1) (if ei.isZero then acc else m.foldRow i ei m.len[i]! 0 acc)
+
+/-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
+def foldT (m : Sparse) (e : Array F128) : Array F128 := m.foldRows e (min m.rows e.size) 0 (Array.replicate m.width 0)
 
 /-- `Mat(X)` of the circuit digest (§16.1), appended to `buf`, flushing into `h` every 64 KiB. -/
 def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) : Blake3.Hasher × ByteArray := Id.run do
