@@ -165,6 +165,16 @@ def test_edges_carry_the_words_each_read_takes(tmp_path):
     assert qkv and all(e["words_per_read"] < gid[e["from"]]["statics"]["N"] for e in qkv)     # each reader takes a slice of q | k | v
 
 
+def test_param_inputs_name_the_parameter_each_prescribed_input_feeds(tmp_path):
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    assert any(k == "p" for r in inst["rows"] for grp in r["args"] for k, *_ in grp)
+    down = next(x for x in g["groups"] if x["module"].endswith("down_proj"))
+    assert list(down["param_inputs"]) == ["w"] and all(k.startswith("weights:") for k in down["param_inputs"]["w"])
+    assert set(down["param_inputs"]["w"]) == set(down["prescribed_reads"])
+    assert all(x["param_inputs"] is not None for x in g["groups"])
+
+
 def test_word_rules_per_group_and_row(tmp_path):
     inst, _w = _program(attn=True)
     g = PG.with_word_rules(PG.program_graph([_write(inst, tmp_path / "instances.json.gz")]))
