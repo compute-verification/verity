@@ -279,6 +279,23 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         }
         return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
     }
+    #[cfg(feature = "gpu")]
+    // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
+    // the stages and lookups; the device the compressions, and the units from their converged inputs
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+        use rayon::prelude::*;
+        let c = &st.c;
+        let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
+        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let ins = st.converge_with(&*w.inputs, None, &w.nets, None);
+        let mut host = flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm);
+        for ni in (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net && n != c.unit_net) {
+            host.extend(flock_live::gpu_circuit::host_slots(st, ni, &ins[ni]));
+        }
+        let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
+        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+    }
     let _ = device;
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
