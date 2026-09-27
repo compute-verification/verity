@@ -53,16 +53,15 @@ theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sched
   push_cast
   ring
 
-/-- **Soundness of one table** (interactive-oracle layer). For every prover strategy, the
-verifier accepts both reps while the committed values do not satisfy the statement with
-probability at most `tableError`. -/
-theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+/-- **Soundness of one table, for the optimal prover** (interactive-oracle layer): the verifier
+accepts both reps while the committed values do not satisfy the statement with probability at most
+`tableError`. `table_sound` is its form for every prover strategy; this form composes with other
+tables through `Game.value_interleave_le`. -/
+theorem table_value_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
-    (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
-    (σ : Strategy (table A S sch hm ptLocal mPts)) :
-    prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts) σ
+    (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts) :
+    value (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts)
       ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) := by
-  refine (prob_le_value _ _ σ).trans ?_
   set ε := repError sch (S.shape mPts)
   have hε : 0 ≤ ε := repError_nonneg sch _ (fast100_levels_ok S.m sch hsch)
   have hlink0 : 0 ≤ linkError sch (S.shape mPts) := by
@@ -101,6 +100,17 @@ theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Co
         _ ≤ _ := value_interleave_le (fun b : Bool => b = true) (fun b : Bool => b = true) _ _
         _ ≤ ENNReal.ofReal ε * ENNReal.ofReal ε := mul_le_mul' h h
     · rw [tableError, ENNReal.ofReal_add hlink0 (by positivity), sq, ENNReal.ofReal_mul hε]
+
+/-- **Soundness of one table** (interactive-oracle layer). For every prover strategy, the
+verifier accepts both reps while the committed values do not satisfy the statement with
+probability at most `tableError`. -/
+theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+    (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
+    (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
+    (σ : Strategy (table A S sch hm ptLocal mPts)) :
+    prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts) σ
+      ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) :=
+  (prob_le_value _ _ σ).trans (table_value_sound hMCA A hA S sch hsch hm ptLocal mPts hlay)
 
 /-- **The theorem with the numbers.** `fast100` run twice on one root with live coins: at most
 `2^-195.5` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/

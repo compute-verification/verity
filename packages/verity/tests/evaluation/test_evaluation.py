@@ -58,7 +58,10 @@ def _id(t) -> str:
 
 
 def test_every_registered_kernel_is_self_checked_here() -> None:
-    assert set(_KERNELS) == {E.batch.key_of(t) for t, _ in SELF_CHECKED}
+    """Every kernel core registers; an integration's own kernels (vLLM's twins, registered when its package is imported in the same
+    session) are self-checked by that integration's tests."""
+    core = {k for k, ks in _KERNELS.items() if any(v.fn.__module__.partition(".")[0] == "verity" for v in ks.values())}
+    assert core == {E.batch.key_of(t) for t, _ in SELF_CHECKED}
 
 
 @pytest.mark.parametrize("target,n", SELF_CHECKED, ids=[_id(t) for t, _ in SELF_CHECKED])

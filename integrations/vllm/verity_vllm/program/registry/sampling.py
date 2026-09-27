@@ -390,8 +390,8 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 # [R16 stoch, coord M-0169 / global M-0189 (1)] S is an OPERAND (i32), not a static: the split count is the launch geometry
 # S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_split.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
 # from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
-# and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The evaluator REFUSES an S outside
-# {1, 2, 4, 8, 16, 32} (`_SPLIT_MAX_SPLITS`); it never defaults.
+# and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The keep word is TOTAL over the i32 operand:
+# an S outside {1, 2, 4, 8, 16, 32} keeps no lane (`topp_keep`), a word no launched S produces; it never defaults to a split count.
 
 _TOPP_WORDS: dict = {}
 _BIT_ATS: dict = {}
@@ -399,29 +399,42 @@ NEG_INF_BITS = 0xFF800000
 SPLIT_COUNTS = (1, 2, 4, 8, 16, 32)
 
 
-def _splits_of(word: int) -> int:
-    """The i32 `splits` operand as the split count; refused by name when it is not a power of two <= 32."""
+def _splits_of(word: int) -> int | None:
+    """The i32 `splits` operand as the split count; None when it is not a power of two <= 32 (no launch of the pipeline has it)."""
     S = int(word) & M32
-    if S not in SPLIT_COUNTS:
-        raise ValueError(f"TopPMask: splits operand {S} is not a split count of `_apply_topp_split` (one of {SPLIT_COUNTS}); "
-                         f"S = SplitsFor_v1(|live|, num_SMs) is a derived value of the workload, never a default")
-    return S
+    return S if S in SPLIT_COUNTS else None
+
+
+def topp_keep(x_f32, p: float, splits: int):
+    """The keep bits of `TopPMaskWordx{V}` for every i32 `splits`: `topp_split.topp_keep_row(x, p, S)` at a split count, and no lane
+    at any other value.  The one statement of the keep word's semantics (the primitive, `sampling_rows.topp_mask_row`, C-Flock's
+    native twin in `verity_flock.ir_sampling`)."""
+    import numpy as np
+    from verity_vllm.program.registry import topp_split as _TS
+    S = _splits_of(splits)
+    if S is None:
+        return np.zeros(len(x_f32), dtype=bool)
+    return np.asarray(_TS.topp_keep_row(x_f32, p, S), dtype=bool).reshape(-1)
 
 
 def topp_mask_word(vocab: int) -> PrimitiveDefinition:
     """`TopPMaskWordx{V}`: (logits: Array<V, f32>, top_p: f32, splits: i32) -> Value<V>; bit v = the split top-p pipeline's `keep` for
     lane v under S = splits (all ones when the pipeline leaves the row untouched: p >= 1, (nearly) uniform / empty row, `nomask` search
     outcome).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
-    with >= 64 SMs, 16 at 8 live on 142 SMs); a value outside {1, 2, 4, 8, 16, 32} is refused."""
+    with >= 64 SMs, 16 at 8 live on 142 SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
+    (0, negative, not a power of two, above 32) keeps no lane -- word 0.  Every launched split count keeps at least one lane, so word 0
+    is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the workload outside
+    this word: the Match's sampler geometry (GM-01 G6: S == SplitsFor_v1(|live(t)|, num_SMs) per engine step) and the Commit's
+    prescribed-input linkage (the committed `splits` == SplitsFor_v1(committed live count, num_SMs of record)), both of which yield only
+    the six split counts."""
     key = int(vocab)
     prim = _TOPP_WORDS.get(key)
     if prim is None:
         import numpy as np
-        from verity_vllm.program.registry import topp_split as _TS
 
         def ev(*ops, _V=int(vocab)) -> int:
             x = np.array(ops[:_V], dtype=np.uint32).view(np.float32)
-            keep = _TS.topp_keep_row(x, _f(ops[_V]), _splits_of(ops[_V + 1]))
+            keep = topp_keep(x, _f(ops[_V]), ops[_V + 1])
             return int.from_bytes(np.packbits(keep, bitorder="little").tobytes(), "little")
 
         prim = PrimitiveDefinition(f"TopPMaskWordx{vocab}", 1, (("logits", Array(int(vocab), F32)), ("top_p", F32), ("splits", I32)),

@@ -22,7 +22,8 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
 
     profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.proofs.target.TARGETS``);
                     the campaign target is FIRST.name (:data:`PROFILE`); results of different profiles are never compared
-    domain          the relation's domain, "finite" for FIRST (a total-semantics backend is another domain)
+    domain          the operand domain the proved statement covers, one of :data:`DOMAINS` (the vocab key ``domain``): ``total``
+                    (every encoding) or ``finite-only`` (non-finite operands asserted away), from the statement, never assumed
     K               GemmCoordinate<K>: a positive multiple of 16
     B               batch size: VU instances established by the one proof; B_real (optional) = real instances when padded
     N_subbatches    (optional, default 1) independently committed sub-batches behind the reported numbers; the soundness
@@ -96,6 +97,8 @@ __all__ = [
     "BUCKETS",
     "BUCKET_NAMES",
     "DOMAIN",
+    "DOMAINS",
+    "LEGACY_DOMAINS",
     "FP8_ADA_INSTANCES_DATASET",
     "FP8_ADA_INSTANCES_DIGEST",
     "FP8_ADA_INSTANCES_SEED",
@@ -153,9 +156,14 @@ __all__ = [
 
 RESULT_SCHEMA = "research/result/v0.1"
 
-#: The campaign target's profile name and domain label (``backends/AGENTS.md``: the target is fixed).
+#: The campaign target's profile name (``backends/AGENTS.md``: the target is fixed), and the domain of the FIRST relations,
+#: whose circuits assert their operands finite.  A backend proving a total statement records ``total``.
 PROFILE = FIRST.name
-DOMAIN = "finite"
+DOMAIN = "finite-only"
+#: The vocab's ``domain`` values (``research.store.vocab.DOMAINS``); a fingerprint records the one its statement covers.
+DOMAINS = ("total", "finite-only")
+#: What results registered before 2026-09-27 wrote: every writer hardcoded ``finite``, whatever its statement's domain.
+LEGACY_DOMAINS = {"finite": "finite-only"}
 #: Every profile a result may name: the targets of ``verity.proofs.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
 PROFILES = tuple(TARGETS)
@@ -476,6 +484,8 @@ def fingerprint(
         fp["B_real"] = B_real
     fp.update(extra)
     problems = validate_fingerprint(fp)
+    if domain in LEGACY_DOMAINS:
+        problems.append(f"domain {domain!r} is the pre-2026-09-27 hardcode; record the statement's domain, one of {DOMAINS}")
     if problems:
         raise ValueError("fingerprint does not conform: " + "; ".join(problems))
     return fp
@@ -525,8 +535,8 @@ def validate_fingerprint(fp: Any) -> list[str]:
 
     if "profile" in present and present["profile"] not in PROFILES:
         p.append(f"profile must be a target of verity.proofs.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
-    if "domain" in present and (not isinstance(present["domain"], str) or not present["domain"]):
-        p.append(f"domain must be a non-empty string (FIRST: {DOMAIN!r}), got {present['domain']!r}")
+    if "domain" in present and present["domain"] not in (*DOMAINS, *LEGACY_DOMAINS):
+        p.append(f"domain must be one of {DOMAINS} (the statement's operand domain), got {present['domain']!r}")
     if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):
         p.append(f"K must be a positive multiple of 16, got {present['K']!r}")
     if "B" in present and not (_is_int(present["B"]) and present["B"] > 0):
@@ -809,7 +819,9 @@ def identity(fp: Mapping[str, Any] | None) -> dict[str, Any]:
     """The :data:`IDENTITY_FIELDS` of ``fp`` (:data:`MISSING` where it does not carry one)."""
 
     fp = fp or {}
-    return {f: _lookup(fp, f) for f in IDENTITY_FIELDS}
+    out = {f: _lookup(fp, f) for f in IDENTITY_FIELDS}
+    out["domain"] = LEGACY_DOMAINS.get(out["domain"], out["domain"]) if isinstance(out["domain"], str) else out["domain"]
+    return out
 
 
 def incomparable(baseline: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None, allow: Sequence[str] = ()) -> list[tuple[str, Any, Any]]:
