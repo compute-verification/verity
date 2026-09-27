@@ -46,6 +46,7 @@ when it is proved.
 #print axioms FlockSoundness.value_drawK_le
 #print axioms FlockSoundness.prCoin_fromMsg_le
 #print axioms FlockSoundness.prCoin_eqList_le
+#print axioms FlockSoundness.prCoin_positions_miss_le
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound

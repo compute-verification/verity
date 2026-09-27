@@ -25,3 +25,4 @@ import FlockSoundness.LincheckPhase
 import FlockSoundness.ZerocheckPhase
 import FlockSoundness.LinkSound
 import FlockSoundness.LigeritoCoins
+import FlockSoundness.LigeritoQueries
