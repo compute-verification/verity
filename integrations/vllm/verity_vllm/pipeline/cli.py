@@ -60,6 +60,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "pous": ("verity_vllm.pipeline.pous_run", "POUS end to end: serve from the P3 encoding, audit the live server"),
     "pous-bench": ("verity_vllm.pipeline.pous_bench", "serving throughput, plaintext against POUS"),
+    "pous-dense-bench": ("verity_vllm.pipeline.dense_bench", "the frozen dense-decode microbenchmark"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),

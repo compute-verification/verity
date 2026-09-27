@@ -1,0 +1,68 @@
+{
+ "schema": "verity-vllm/dense-decode-shapes/v1",
+ "note": "Linear weights as vLLM holds them (merged qkv and gate_up, out x in, bf16), per the models' config.json; the frozen dense-decode benchmark (POUS docs/dense-decode-benchmark.md)",
+ "models": {
+  "Qwen/Qwen2.5-0.5B": {
+   "layers": 24,
+   "measured_layers": 24,
+   "layer": [
+    [
+     "qkv_proj",
+     1152,
+     896
+    ],
+    [
+     "o_proj",
+     896,
+     896
+    ],
+    [
+     "gate_up_proj",
+     9728,
+     896
+    ],
+    [
+     "down_proj",
+     896,
+     4864
+    ]
+   ],
+   "head": [
+    "lm_head",
+    151936,
+    896
+   ]
+  },
+  "Qwen/Qwen2.5-7B": {
+   "layers": 28,
+   "measured_layers": 1,
+   "layer": [
+    [
+     "qkv_proj",
+     4608,
+     3584
+    ],
+    [
+     "o_proj",
+     3584,
+     3584
+    ],
+    [
+     "gate_up_proj",
+     37888,
+     3584
+    ],
+    [
+     "down_proj",
+     3584,
+     18944
+    ]
+   ],
+   "head": [
+    "lm_head",
+    152064,
+    3584
+   ]
+  }
+ }
+}
