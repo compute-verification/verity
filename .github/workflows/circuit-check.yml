@@ -1,0 +1,41 @@
+name: circuit-check
+
+on:
+  pull_request:
+    paths:
+      - "packages/verity/src/verity/ir/**"
+      - "packages/verity/src/verity/ml/**"
+      - "packages/verity/src/verity/evaluation/**"
+      - "integrations/vllm/verity_vllm/program/**"
+      - "integrations/vllm/verity_vllm/query/**"
+      - "backends/flock/python/**"
+      - "backends/numerical/python/verity_numerical/bench/templates.py"
+      - "backends/numerical/python/verity_numerical/bench/lowerings.py"
+      - "tools/circuit_check/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/circuit-check.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  circuit-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: circuit-check over every registered Definition and template
+        run: uv run pytest tools/circuit_check/tests -q -p no:cacheprovider
+        env:
+          CIRCUIT_CHECK_REPORT: circuit-check.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: circuit-check-report
+          path: circuit-check.json
+          if-no-files-found: ignore
