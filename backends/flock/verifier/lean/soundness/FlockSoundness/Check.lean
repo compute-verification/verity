@@ -97,3 +97,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.SelfClash.collision
 #print axioms FlockSoundness.op₀_conflict_collision
 #print axioms FlockSoundness.opR_conflict_collision
+-- the executable's arithmetic: `Arith.Correct` from lane flock-verifier's level-3 theorems, so the
+-- theorem for the executable has BCHKS25 Thm 4.6 as its only hypothesis
+#print axioms FlockSoundness.execArith_correct
+#print axioms FlockSoundness.table_sound_exec
+#print axioms FlockSoundness.table_sound_exec_fast100
+#print axioms FlockSoundness.table_sound_exec_fast100_34_35

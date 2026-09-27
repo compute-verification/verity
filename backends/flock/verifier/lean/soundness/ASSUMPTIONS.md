@@ -28,6 +28,8 @@ at most `tableError(fast100 m, shape)`:
   statements of §16 satisfy it.
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
+- **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
+  `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
@@ -211,8 +213,9 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   (`Model.Arith`) and step order; the refinement proofs belong to the level-3 plan.
 - **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights on the skip nodes and the
   output coset, and the `Pcomb` weights on both (one `nodes` fact, so that all three use the same 128 points), the
-  packing basis, the Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are hypotheses until proved for
-  the instance the executable verifier defines. They are to be proved, not trusted. Two hold only on a range. The
+  packing basis, the Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are proved for
+  the instance the executable verifier defines (`execArith_correct`, from lane `flock-verifier`'s `FlockLevel3`). Two
+  hold only on a range. The
   domain points `ω_q` are distinct only for `2^d ≤ 2^64` (`ω_q` is the low word of `q`). The novel basis is a basis
   only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
   and every `fast100` level fits.
@@ -282,6 +285,13 @@ The weights are committed once and every later proof opens that root. The analys
 
 1. **`Arith.Correct`** for the GHASH instance. Lane `flock-verifier` proved every field for the executable's functions,
    in the field shapes of `Defs.lean`. What remains is to build the instance here, once both branches are on `main`.
+1. **Stages 1b and 1c (interactive), the compiled theorem** (§1.2). Merkle binding, the rewinding lemma and the
+   compilation steps are proved. Remaining:
+   - the compiled game: Ligerito with caps in place of oracles and query answers deferred to the end of the proof;
+   - the coupling between a compiled run and the oracle-model run of the plurality prover `P̃` on the same coins;
+   - `table_sound_compiled` from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound.
+
+   Session binding needs nothing, since the server keeps the round bytes.
 2. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
    registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
    term (DESIGN.md §3).
