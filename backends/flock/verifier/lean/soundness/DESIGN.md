@@ -542,15 +542,18 @@ If real concurrency is ever needed:
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
   (`table_value_sound`), which projects a batched session onto one table through `value_interleave_le`. The lowering
   is a named hypothesis.
-- **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`). The table's extractor is randomized
-  and its bound depends on the prover, so the audit carries, per drawn unit, the joint probabilities
-  `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run and the
-  reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the prover's
-  state (the form agreed with flock-soundness). `ks` is `table_knowledge_sound_joint`'s left side
-  (`FlockTableC.ksJoint_le`), and ε_ks is its bound averaged over the draw. A deterministic extractor is the special
-  case (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
-  - The configuration is one table per session with the leaf layer registered.
-  - Several tables: each unit reads one table of the plan, and `ks` is flock-soundness's `session_knowledge_sound`
-    for that table.
+- **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
+  table's extractor is randomized and its bound depends on the prover, so the audit carries, per drawn unit, the joint
+  probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a wrong drawn unit, and bounds that are functions of the
+  prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
+  (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
+  - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each drawn unit is read from
+    one table of the plan, `ks` is `Pr[accept]` times that table's extraction failure (the product is the joint
+    probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the draw.
+  - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
+  - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
+    `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
+    `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
   - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the spec
     decides between expected-time collision resistance and the random-oracle column.

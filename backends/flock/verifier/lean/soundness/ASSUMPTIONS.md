@@ -483,27 +483,37 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 
 The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 
-**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12):
+**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`; DESIGN.md
+§12):
 
 - `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
   extractor**. Per drawn unit, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
   `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
-- `flock_compiled_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit with one table per session and
-  the leaf layer registered (the demo's configuration). The knowledge term is `table_knowledge_sound_joint`'s bound
-  for the prover's table strategy after each draw, averaged over the draw (`ksAvg`):
-  $\mathbb E_\omega[2\varepsilon_c^-(\sigma_\omega) + 2(K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK))]$, which is
-  $2\varepsilon_c^- + t\cdot2^{-243.7}$ at the best $K$ under the generic collision bound. Its only named
-  assumption is BCHKS25 Theorem 4.6;
-- `flock_compiled_count`, `flock_compiled_drawn`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
-  \delta_{link}(\sigma)$, and drawn units up to $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
+- `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
+  of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each drawn unit is read from one
+  table of the plan (`tab`). The knowledge term is, after each draw, the largest over the plan's tables of the table's
+  $\varepsilon_c^-(\sigma) + K\,\mathrm{Adv}_0(\sigma) + N_0/(eK)$ computed in the session (`joint_le_B'`, from
+  `session_knowledge_sound`), averaged over the draw (`ksAvgB`);
+- `flock_compiled_knowledgeSound`: the same for one table on its own (`sessionC`), from
+  `table_knowledge_sound_joint_tight`: $\mathbb E_\omega[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega)
+  + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Both
+  have BCHKS25 Theorem 4.6 as their only named assumption;
+- `flock_batched_count`, `flock_batched_drawn` (and `flock_compiled_count`, `flock_compiled_drawn`):
+  $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$, and drawn units up to
+  $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
+
+**The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
+(`Prog.circuit`, `Lowering.lean`, §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
+computed row. "Each template's rows compute its gates" in the program's Boolean circuit is L1 (§1.5), named and
+tested. The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
+the link makes the readings agree.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
-| `Partition.LoweringSoundC` | a message packing a witness that satisfies the table's statement decodes to values on which every drawn unit is correct | the lowering theorem (level 3), with the `hm96` leaf layout (`decode`) |
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, §1.5), given the statement builder's `Placement` (level 3) and L1 |
 
-**Not yet:** sessions of several compiled tables, where `ks` for a unit is `session_knowledge_sound` for the one table
-of the plan that unit reads (flock-soundness, not yet merged); the serving-tree term when the leaf layer is not
-registered; `LinkSound` itself.
+**Not yet:** the serving-tree term when the leaf layer is not registered; `LinkSound` itself; `Placement` for the
+executable's statements.

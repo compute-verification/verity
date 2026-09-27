@@ -213,3 +213,12 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_count
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
+#print axioms FlockSoundness.Audit.Partition.loweringSoundC_of_place
+-- several tables per session: the protocol's batched session, a decoder per drawn unit
+#print axioms FlockSoundness.Audit.atTgt_le
+#print axioms FlockSoundness.Audit.Partition.prob_batchedSession
+#print axioms FlockSoundness.Audit.Partition.loweringSoundB_of_place
+#print axioms FlockSoundness.Audit.Partition.analysisB
+#print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSound
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn
