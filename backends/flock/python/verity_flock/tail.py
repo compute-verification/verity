@@ -225,9 +225,9 @@ def _ex2_pre(C, args):
     mant = list(frac) + [ONE] + [ZERO] * 29                  # 53 bits
     left = sub(C, e, const_bits(127, 8), 8)[0]
     right = sub(C, const_bits(127, 8), e, 8)[0]
-    # the reference shifts a u64 by up to 126; the shift amount is taken mod 64 (numpy on x86, Rust release), so a tiny |x|
-    # indexes the table at mant >> ((127 - e) mod 64), not at 0
-    k = mux(C, ge127, fp.shl(C, mant, left[:5]), fp.shr_sticky(C, mant, right[:6])[0])
+    # a right shift of 64 or more gives 0 (the rule's `checked_shr`), so every 0 < |x| < 2^-23 reads T[0] = 1.0
+    wide = OR(C, right[6], right[7])
+    k = mux(C, ge127, fp.shl(C, mant, left[:5]), [C.AND(b, NOT(wide)) for b in fp.shr_sticky(C, mant, right[:6])[0]])
     frac_zero = is_zero_bits(C, k[:23])
     neg = add(C, [NOT(w) for w in k] + [ONE], [frac_zero], width=54)
     fixed = mux(C, s, neg, list(k) + [ZERO])

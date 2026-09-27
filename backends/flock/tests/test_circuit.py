@@ -185,11 +185,14 @@ def test_attention_tail_ops_match_the_ir(name, arity):
 
 
 def test_mufu_ex2_matches_the_ir():
+    """The circuit's EX2 equals the IR's, and every 0 < |x| < 2^-23 gives T[0] = 1.0 (a reduction shift of 64 or more is 0),
+    including |x| < 2^-63, where a shift taken mod 64 read ex2(2^-64) as 2.0."""
     from verity_vllm.program.kernels import fa2_relation
     from verity_vllm.program.registry import prims as P
 
     ex2 = np.asarray(fa2_relation.tables().ex2, dtype=np.uint32)
-    xs = _f32_samples(300, 5)
+    tiny = [s << 31 | e << 23 | f for s in (0, 1) for e in (1, 2, 40, 63, 64, 65, 103, 104) for f in (0, 1, 0x7FFFFF)]
+    xs = _f32_samples(300, 5) + tiny
     t = len(xs)
     pre, post = TL.MUFU["MufuEx2Ftz_v1"]
     c1 = Circuit()
@@ -204,7 +207,12 @@ def test_mufu_ex2_matches_the_ir():
     ins = {f"c{i}": (o1[f"c{i}"], 32) for i in range(len(ctx))}
     ins["v"] = ([int(ex2[j]) & 0x7FFFFFFF for j in o1["idx"]], TL.VALUE_BITS)
     got = _run(c2, ins, t)["y"]
-    assert [hex(x) for x, g in zip(xs, got) if g != P.MufuEx2Ftz.evaluate(x)] == []
+    def below(x):
+        """0 < |x| < 2^-23, not flushed."""
+        return (x >> 23) & 0xFF != 0 and (x & 0x7FFFFFFF) < 0x34000000
+
+    want = [0x3F800000 if below(x) else P.MufuEx2Ftz.evaluate(x) for x in xs]
+    assert [hex(x) for x, g, w in zip(xs, got, want) if g != w] == []
 
 
 def test_fa2_inv_sum_matches_the_ir():
