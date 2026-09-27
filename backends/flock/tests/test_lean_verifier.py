@@ -304,6 +304,7 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
         "padding": (_net(edit(128, "1 5 1 1")), "row 128 reads column 5, an input padding column"),
         "padding-b": (_net(edit(129, "2 128 1 1 7")), "row 129 reads column 7, an input padding column"),
         "overrun": (_net(base, ins="1 0 1 1 200"), "a port group's ports overrun its words"),
+        "reach": (_net(base, ins="1 0 2 1 2"), "the input rows reach the constant"),
     }
     for name, (text, _) in cases.items():
         (tmp_path / f"{name}.net").write_text(text)
