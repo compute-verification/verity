@@ -20,9 +20,9 @@ at most `tableError(fast100 m, shape)`:
 > witness that satisfies the statement.
 
 - **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2. It was
-  `1/50` (0.2729) until Sep 27; the protocol and its queries are unchanged.
+  `1/50` (0.2729) until Sep 27; the protocol and queries are unchanged.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
-  is proved to be at most **2^-205 for 22 ≤ m ≤ 35** (`Accounting/Numbers.lean`).
+  is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^26 witness bits per block, 1,024 public regions and 64 link-point
   coordinates. That is every statement of §16, with room to spare.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
