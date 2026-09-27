@@ -2,8 +2,7 @@
 
 The sampled audit's guarantee, the integrity profile of `docs/audit-protocols.md` §2, over any Boolean circuit, any
 partition, any draw law, and any per-unit proof system. The derivations and the deviations from that plan are in
-`../../DESIGN.md` §12. Everything here is proved; the per-unit proof system enters only through named hypotheses,
-which `../../ASSUMPTIONS.md` indexes with the rest.
+`../../DESIGN.md` §12. Everything here is proved; the per-unit proof system enters only through named hypotheses.
 
 **The model.** The prover registers `R` (its roots); the verifier draws units from its own randomness after registration;
 one batched session proves the drawn units (`audit`). The **committed transcript** `X` is an analysis function of the
@@ -12,20 +11,7 @@ its wrong units; nobody computes it. A unit is **wrong** in `X` when its committ
 to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy (`Game.prob … σ`), the form
 `table_sound_exec` takes.
 
-**Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`):
-
-| Hypothesis | Term | Meaning | To be discharged by |
-|---|---|---|---|
-| `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`../../README.md` §1.3), after Jensen over the prover's states |
-| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
-| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`../../README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
-| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
-| `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
-| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
-| `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
-
-Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
-before the session's first coin, not bounds state by state.
+**Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`): each is stated in `../../ASSUMPTIONS.md`.
 
 **What the reviewer checks here.** The theorems hold for every choice of committed transcript `X` and extractor `ext`,
 so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
@@ -57,6 +43,14 @@ $\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/
 k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound; `subset_minimax`, **uniform is
 optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$; `demo_count_590`, the demo's
 point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability at most $2^{-20}$, by exact arithmetic.
+
+**Theorems, the stratified law** (`Audit/Stratified.lean`, the default draw law; `docs/sampling-strategies.md` §4):
+`Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$;
+`stratified_escape`, the product of hypergeometrics $\prod_s \binom{n_s - m_s}{k_s}/\binom{n_s}{k_s}$ with $m_s = |B \cap U_s|$,
+which is what `verity.proofs.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole
+stratum**: with $k_s \ge 1$, a set containing $U_s$ never escapes; `audit_whole_stratum` and
+`extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum is
+wrong with probability at most the per-unit terms.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
@@ -132,14 +126,11 @@ The hypotheses are the lowerings.
 
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
-computed row. "Each template's rows compute its gates" in the program's Boolean circuit is L1 (`../../assumptions/l1-template-rows.md`), named and
+computed row. "Each template's rows compute its gates" in the program's Boolean circuit is L1 (`../../ASSUMPTIONS.md`), named and
 tested. The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
-| Named at the compiled layer | Meaning | Discharged by |
-|---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `../../README.md` §1.5), given the statement builder's `Placement` (level 3) and L1 |
+The compiled layer's named hypotheses are stated there too.
 
 **Not yet:** the serving-tree term when the leaf layer is not registered; `ValueBinding` and `Placement` for the
 executable's statements.

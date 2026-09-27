@@ -23,7 +23,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
   and every `fast100` level fits.
 - **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is `../README.md` §1,
-  `Soundness.lean`, `Model/*` and `Accounting/Bound.lean`, with the hypotheses in `../ASSUMPTIONS.md`.
+  `../ASSUMPTIONS.md`, `Soundness.lean`, `Model/*` and `Accounting/Bound.lean`.
 - **Pinned dependencies.** ArkLib `b2e456fc`; through its manifest, VCVio `d7089e46`, CompPoly `v4.34.0-patch2` and
   Mathlib `v4.34.0`. Lean 4.34.0. The definitions used from them (Reed–Solomon codes, `mcaError`, Johnson bounds) are
   part of what the statement means.

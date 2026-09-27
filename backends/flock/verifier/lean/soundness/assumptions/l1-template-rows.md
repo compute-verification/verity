@@ -1,8 +1,6 @@
-# L1. Each template's rows compute its gates
+# L1: the evidence, and the path to discharge it
 
-A named hypothesis, outside Lean: the rows' outputs are the gates' outputs, in the program's Boolean circuit, on every
-input. The theorems are about the rows the verifier parses (`Prog.circuit`, `../README.md` §1.5), so the audit certifies
-drawn units against their rows. That says something about the program's Boolean circuit only through L1.
+The statement is in `../ASSUMPTIONS.md`.
 
 - **Evidence today:** the IR comparison tests in `backends/flock/tests/test_ir_lowering.py`, on sampled inputs.
   - They evaluate the pinned rows against the IR's primitives:

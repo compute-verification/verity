@@ -1,7 +1,7 @@
 # Flock interactive soundness: design and derivations
 
-This file holds the reasoning behind `README.md`, which lists the theorems, and `ASSUMPTIONS.md`, which indexes the named
-hypotheses, each justified under `assumptions/`. Each section derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
+This file holds the reasoning behind `README.md`, which lists the theorems, and `ASSUMPTIONS.md`, which states what they
+assume. Each section derives or plans an entry there. The long forms, with sources, are lane notes, cited as `note:<id>`.
 
 ## 1. The hash: why SHA-512
 
@@ -175,7 +175,7 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   It is classical only (§9).
 
 **The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
-A2 (`assumptions/a2-sha512-expected-time-cr.md`). One audit's knowledge-plus-link term, of record and, for comparison, under the other two
+`ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
 assumptions. $Q_s$ is the expected number of commit strings the drawn units read, at most the $N_s$ leaves under the
 serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$ the prover's SHA-512 evaluations. The
 audits are the lifetime doc's A–D.
@@ -251,7 +251,7 @@ strict time.
   protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
   openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
-  global $t^2/2^{511}$. `assumptions/cryptography-and-coins.md` keeps the random oracle as a cross-check only.
+  global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
   proved under strict-time collision resistance. A2 enters only the value layer.
 

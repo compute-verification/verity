@@ -1,14 +1,14 @@
 # Flock interactive soundness in Lean: what is proved
 
-For the expert reviewer and for Table 1. This directory's Lean development (`FlockSoundness/`) proves the soundness of the
-verifier specified in `../../PROTOCOL.md` (PR #85). This file lists what is proved. `ASSUMPTIONS.md` indexes the named
-hypotheses the theorems take, each justified in its own file under `assumptions/`. The audit layer's theorems are in
-`FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations: the hash-width analysis, the compiled proof, the
-knowledge extractor, the spec deviations, the zero-knowledge plan, the a16z staging, and the post-quantum and root-reuse
-analyses.
+For the expert reviewer and for Table 1. This file is the list of what is proved. `ASSUMPTIONS.md`, beside it, states
+what the theorems assume: every named assumption and hypothesis, in full, with the detail behind each in `assumptions/`.
+The audit layer's theorems are in `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations: the hash-width
+analysis, the compiled proof, the knowledge extractor, the spec deviations, the zero-knowledge plan, the a16z staging,
+and the post-quantum and root-reuse analyses.
 
-Lane `flock-soundness`, level 4a of the formal-verification plan: the interactive mode only. The work is staged along
-a16z's zkVM security stages (DESIGN.md §7). To check it: `lake build`, then `lake env lean FlockSoundness/Check.lean`.
+Lane `flock-soundness`, level 4a of the formal-verification plan: the interactive mode only. The Lean development is
+this directory (`FlockSoundness/`). The verifier it is about is specified in `../../PROTOCOL.md` (PR #85). The work is
+staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
@@ -22,13 +22,12 @@ at most `tableError(fast100 m, shape)`:
 > witness that satisfies the statement.
 
 - **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2. It was
-  `1/50` (0.2729) until Sep 27; the protocol and its queries are unchanged.
+  `1/50` (0.2729) until Sep 27; the protocol and queries are unchanged.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
-  is proved to be at most **2^-205 for 22 ≤ m ≤ 35** (`Accounting/Numbers.lean`).
+  is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^26 witness bits per block, 1,024 public regions and 64 link-point
   coordinates. That is every statement of §16, with room to spare.
-- **The link points' layout** is a named hypothesis (`Statement.LinkLayout`, `assumptions/link-layout.md`). The
-  statements of §16 satisfy it.
+- **The link points' layout** is a named hypothesis (`Statement.LinkLayout`, `ASSUMPTIONS.md`).
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
@@ -155,7 +154,7 @@ link term per audit.
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
-| L1: each template's rows compute its gates (`assumptions/l1-template-rows.md`) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
+| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
@@ -185,8 +184,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
-- **The placement is the statement builder's job,** a named hypothesis (`Placement`, `assumptions/placement.md`).
-- **L1**, that each template's rows compute its gates, is named (`assumptions/l1-template-rows.md`).
+- **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
+  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (`assumptions/trusted-components.md`).
+- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`).
 
 ### 1.6 Proved from the libraries, not assumed
 
@@ -199,7 +199,7 @@ numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds ev
 `prCoin_mca_le`). The accounting keeps `a`, so no number changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a
 term below 2^-170.
 
-Also proved, or to be proved, from the libraries:
+**Not assumptions** (proved, or to be proved, from the libraries):
 
 - **Ring switching.** The spec's variant (spec §12, A9: seven coins per claim, then batching, with Ligerito's sumcheck
   in place of the standalone one) is not Diamond–Posen's. Its soundness follows from the paper's Appendix B argument
