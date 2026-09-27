@@ -85,8 +85,8 @@ def test_a_dump_without_relations_fails():
     assert not zk_stats.analyse(zk_stats.load(lines))["pass"]
 
 
-def test_a_position_both_reps_open_counts_once():
-    """Both reps open the one level-0 codeword: a position both open holds the same row in both, which is one observation."""
+def _copy_rep0(cls, n, q=None):
+    """A dump whose rep 1 carries rep 0's first ``n`` values of ``cls`` in every run; ``q``: each rep's ``lig_rows0_q``."""
     lines = []
     for line in _dump(24):
         tag, _, body = line.partition("\t")
@@ -95,9 +95,29 @@ def test_a_position_both_reps_open_counts_once():
             if v["rep"] == 1:
                 twin = next(json.loads(x.partition("\t")[2]) for x in lines if x.startswith(tag + "\t")
                             and json.loads(x.partition("\t")[2])["run"] == v["run"] and json.loads(x.partition("\t")[2])["rep"] == 0)
-                v["lig_rows0"][:5] = twin["lig_rows0"][:5]
+                v[cls][:n] = twin[cls][:n]
+            if q is not None:
+                v["lig_rows0_q"] = q[v["rep"]]
             line = tag + "\t" + json.dumps(v)
         lines.append(line)
-    res = zk_stats.analyse(zk_stats.load(lines))
+    return zk_stats.analyse(zk_stats.load(lines))
+
+
+def test_a_position_both_reps_open_counts_once():
+    """Both reps open the one level-0 codeword: a position both open holds the same row in both, which is one observation."""
+    res = _copy_rep0("lig_rows0", 5, q=[[10, 11, 12, 13], [10, 21, 22, 23]])
     assert res["pass"], json.dumps(res["classes"]["lig_rows0"], indent=1)
     assert res["classes"]["lig_rows0"]["shared_by_the_reps"] == 5
+
+
+def test_a_row_equal_across_reps_at_positions_not_both_opened_fails():
+    res = _copy_rep0("lig_rows0", 5, q=[[10, 11, 12, 13], [20, 21, 22, 23]])
+    assert not res["pass"]
+    assert res["classes"]["lig_rows0"]["reused_across_reps"] == 5
+
+
+def test_randomness_reused_across_reps_fails_outside_the_level0_rows():
+    res = _copy_rep0("exposed", 3, q=[[10, 11, 12, 13], [10, 21, 22, 23]])
+    assert not res["pass"]
+    assert res["classes"]["exposed"]["reused_across_reps"] == 3
+    assert not res["classes"]["exposed"]["real_indistinguishable_from_sim"]

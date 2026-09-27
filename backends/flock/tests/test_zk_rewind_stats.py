@@ -65,3 +65,20 @@ def test_online_values_without_the_provers_randomness_fail():
     res = zk_rewind_stats.analyse(*zk_rewind_stats.load(_dump(40, sim_online_fixed=True)))
     assert not res["pass"]
     assert not res["strategies"]["abort"]["online"]["online_values"]["real_indistinguishable_from_sim"]
+
+
+def _gk(real, fresh, reused=None):
+    v = {"strategy": "cap-gated", "eps": 1 / 16, "attempts": 40, "real_complete": real, "extraction_tries": 3,
+         "rewinds_complete_fresh": fresh, "rewinds_complete_reused": reused}
+    return zk_rewind_stats.analyse(*zk_rewind_stats.load(["ZKGK\t" + json.dumps(v)]))
+
+
+def test_independent_rewinds_pass_and_reused_ones_are_told_apart():
+    res = _gk(21, 19, reused=2)
+    assert res["pass"], json.dumps(res, indent=1)
+    assert res["rewind_independence"]["cap-gated"]["p_reused"] < zk_rewind_stats.ALPHA
+
+
+def test_rewinds_on_one_dummy_opening_fail():
+    """red-team-m2-zk G1: rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
+    assert not _gk(21, 2)["pass"]

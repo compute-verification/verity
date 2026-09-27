@@ -15,9 +15,10 @@ Code:
 **Status.** CPU prototype, one template (RoPE d64), lane flock-zk. Every message a session sends is masked, committed or
 public, and the audit (`zkaudit`) attributes every byte. The target notion is VEIL's special honest-verifier zero
 knowledge for the whole session (both repetitions), meaning one simulator for every fixed coin sequence (DESIGN.md §11),
-computational under the assumptions of §7. Malicious-verifier zero knowledge comes from M2's coin commitment and single
-rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared level 0's extra lanes; §7 now gives
-each rep its own pair. The proof class stays `NON_ZK_PROOF` until the red team re-reviews and the Lean proof covers it.
+statistical in the common-reference-string model under the assumptions of §7. Malicious-verifier zero knowledge comes from
+M2's coin commitment and single rewind (§9). The first red-team review (red-team-m1-zk) found that the two reps shared
+level 0's extra lanes; §7 now gives each rep its own pair, and the re-review grants M1 with conditions. The proof class
+stays `NON_ZK_PROOF` until the Lean proof covers it.
 
 Conventions. The field is GF(2^128) (`F128`, characteristic 2, so `+` is `−`). F256 is `F128 ⊕ F128·U`, written by
 coordinates `(c0, c1)`. An F128's bytes are `lo` then `hi`, each little-endian. `v'` is a sent (masked) value, `v` the
@@ -270,13 +271,25 @@ is the minimum.
   prover that folds rep 0's pair in both reps (rejected by the verifier) reproduces the leak: every word is equal.
 - The statistics (§8) test both functionals as classes of one value per session.
 
-**Assumptions.** The argument above is exact for uniform prover randomness. In the implementation:
-- **ChaCha20 is a PRG.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20 output under the
-  session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`), so the simulation is computationally indistinguishable,
-  with ChaCha20's distinguishing advantage as the gap. The seed's quality is trusted.
-- **hm96-sha512 leaves hide.** Caps, paths and unopened leaves are hm96-sha512 outputs over 192-byte salts: hiding in
-  the random-oracle model (soundness ASSUMPTIONS.md §6, §7), binding under SHA-512 collision resistance.
-- So the notion is computational special honest-verifier zero knowledge for one session.
+**Assumptions.** The table's argument is exact (perfect hiding) for uniform prover randomness, given the commitments hide.
+- **hm96-sha512 hiding is statistical, in the standard model** (`verity/commitments/hm96/PROTOCOL.md` §3: a
+  leftover-hash-lemma argument over the Hankel family, which uses no property of SHA-512). Caps, paths and roots are
+  functions of the leaves, so they inherit the bound. It needs:
+  - uniform, independent salts, never reused: leaf `j` of tree `id` takes ChaCha20 blocks `3j … 3j+2` under nonce `id`, and
+    `next_id()` is never 0 and never repeats (level 0 is the one tree both reps share, each leaf salted once); the pads
+    trees and τ's commitment have their own salts;
+  - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
+    The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an `m = 25` session commits
+    about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`.
+- **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
+  with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
+  No random oracle is involved.
+- **The one caveat is the randomness source.** Every pad, mask, padding coefficient, extra lane and leaf salt is ChaCha20
+  output under the session's 32-byte seed from the OS (`ProverRng`, `LeafSalts`). The claim is statistical when that output
+  is treated as uniform, as hm96 §3 treats such streams (and `os.urandom`); otherwise it is computational, under ChaCha20
+  as a PRG.
+- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
+  verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), and mask-slot weights of rank `< 128·(claim points)` (§6).
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable; RoPE has 1024.
@@ -364,9 +377,13 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
 - Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
   and stops at one that does not open, before it answers anything that depends on it.
-- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. Binding rests on SHA-512 collision
-  resistance, hiding of the unopened coins on hm96 (ROM). The prover's refusals (`β = 0`, the mask rank, dependent `ρ`)
-  stay functions of committed coins.
+- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
+  rank, dependent `ρ`) stay functions of committed coins.
+- **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
+  (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
+  assumption M2's zero knowledge adds: SHA-512 collision resistance (`cr/sha-512`), which holds whatever salts V* chooses
+  (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers the commitment must
+  be collapse-binding (ASSUMPTIONS.md §6).
 
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
@@ -376,17 +393,28 @@ and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
    run is distributed as a real one until the proofs, which follow the last coin. If it stops before the proofs (V*
    aborted or cheated, or the prover refused a degenerate coin), its view is the output.
 2. **The extracted coins.** Every opening V* sent, checked against its commitment; the link points and each rep's rounds.
-3. **Estimation.** More dummy runs until `t` of them reach the proofs; `p̃ = t / runs`.
-4. **Rewinds**, at most `4t/p̃`, each to just after the coin commitment: V* from the start of the session, answered by a
-   scripted prover whose messages are the per-rep SHVZK simulations from the extracted coins (`simulate_full` on the
-   extraction run's dummy opening, §8, each rep with its own pair). A `RecordingChallenger` recovers each round's message
-   by replaying the verifier on the simulated proof. Every coin V* answers is checked against its commitment. The first
-   rewind that reaches the proofs is the output. A rewound V* that opens another coin than it did in step 2 is a binding
-   failure, and the simulator fails; so does exhausting the bound.
+3. **Estimation** (`zk_veil::gk_estimate`). Fresh dummy runs against V*, with no cap and not counting the extraction run,
+   until `t` of them reach the proofs; `p̃ = t / runs`. It runs only after an extraction run that reached the proofs
+   (probability `p`), so it costs `t` runs in expectation.
+4. **Rewinds**, at most `4t/p̃ = 4·runs`, each to just after the coin commitment and each with a **fresh dummy opening**
+   for the extracted coins (`fresh_dummy`: the honest prover on the dummy witness with fresh masks, level-0 padding, extra
+   lanes and salts, against a local coin server that commits to those coins; no interaction with V*). So the rewinds are
+   independent trials, each succeeding with V*'s completion probability `p`. Each rewind is V* from the start of the
+   session, answered by a scripted prover whose messages are the per-rep SHVZK simulations (`simulate_full` on that fresh
+   opening, §8, each rep with its own pair). A `RecordingChallenger` recovers each round's message by replaying the
+   verifier on the simulated proof. Every coin V* answers is checked against its commitment. The first rewind that
+   reaches the proofs is the output. A rewound V* that opens another coin than it did in step 2 is a binding failure, and
+   the simulator fails; so does exhausting the bound.
+
+**The parameter `t` grows with the security parameter:** `t = Θ(λ)`, so that `p̃ ∈ [p/2, 2p]` except with probability
+`2^-Ω(λ)`, and then all `4t/p̃ ≥ 2t/p` rewinds fail with probability at most `e^-2t`. A fixed `t` would leave a failure
+probability that is noticeable against some V* (red-team-m2-zk G2, G3). The tests run at `t = 4` (`zkrewind --gk-t`); that
+is a test's λ, not a bound for any production claim.
 
 Against the theorem's statement (ASSUMPTIONS.md §6): one extraction run of the honest prover on a dummy witness (step 1,
-with the estimation's repeats of it); rewinding only to just after the coin commitment (step 4, the one rewind point,
-repeated under Goldreich–Kahan's abort handling); expected polynomial time (`p̃`'s bound); resting on special HVZK for
+with the estimation's fresh repeats of it); rewinding only to just after the coin commitment (step 4, the one rewind point,
+repeated under Goldreich–Kahan's abort handling with independent trials); expected polynomial time (`O(t)` runs in
+expectation), with failure probability `2^-Ω(t)` for `t = Θ(λ)`; resting on special HVZK for
 every fixed coin sequence (§7's session argument, with the extracted coins); the tables' simulations composing through
 independent masks (per rep: the pads and the pair; per session: the mask slot and the witness lanes' padding, which §7
 spends once).
@@ -394,9 +422,17 @@ spends once).
 **Verifier strategies** (`VStar`): honest (its coins from its tape); `abort` at the first round whose message, hashed with
 the tape, falls below a threshold (about half the sessions); `adaptive-coins`, which at such a round answers a coin it
 picks from the prover's message under the committed coin's opening (the prover stops there); `zero-beta`, which commits
-to `β = 0` at rep 0's β round (the prover refuses it before sending `Y`). `zkrewind --zk --n N` prints N real and N
-simulated views per strategy, and `tests/zk_rewind_stats.py` compares how they end (a permutation test), their verdicts,
-rep 0's first 256 masked values, every received proof's checked fields and the session relations of §7.
+to `β = 0` at rep 0's β round (the prover refuses it before sending `Y`); and two gated ones, which continue for sure if
+one message hashes "good" (half the time) and otherwise with probability `ε = 1/16`: `cap-gated` on the witness cap
+(red-team-m2-zk's), `late-gated` on rep 0's round with `T'` and `ybar`. A simulator that reused messages across rewinds
+fails against the gated ones. `zkrewind --zk --n N` prints N real and N simulated views per strategy, and
+`tests/zk_rewind_stats.py` compares how they end (a permutation test), their verdicts, rep 0's first 256 masked values,
+every received proof's checked fields and the session relations of §7.
+
+**The rewinds are independent trials** (`zkgk --zk --attempts A --reuse-dummy`): for each gated V*, conditioned on an
+extraction run whose gate was bad, A rewinds with fresh dummy openings complete at the rate of A real sessions (a Fisher
+test in `zk_rewind_stats.py`), while A rewinds on the extraction run's own dummy opening (red-team-m2-zk G1, the defect)
+complete at about ε, which shows the test's power.
 
 Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V* tape, `t = 2`:
 

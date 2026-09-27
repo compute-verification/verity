@@ -11,9 +11,12 @@ prover with zero pads and a zero mask slot, i.e. M0's values in M1's format). Fo
 * ``constant``: the fraction of positions whose value is the same in every run, per kind.
 
 Positions holding one value in every real and simulated transcript are public structure (an F256 message's second
-coordinate after Ligerito's code switch is always 0) and are excluded and counted (``structural_constants``). So are
-positions where rep 1's value is rep 0's in every run (``shared_by_the_reps``): both reps open the one level-0 codeword, so
-a position both open under the fixed coins is one observation of the session, not two.
+coordinate after Ligerito's code switch is always 0) and are excluded and counted (``structural_constants``).
+
+Rep 1's value equal to rep 0's in every run is a reuse of randomness across the reps, which fails the class
+(``reused_across_reps``), with one exception: the level-0 rows (``lig_rows0``) at a sample slot where both reps opened the same
+level-0 position (``lig_rows0_q``, from the verifier's record). Both reps open the one level-0 codeword, so such a row is one
+observation of the session, not two; it is excluded and counted (``shared_by_the_reps``).
 
 Relations across fields and reps: the ``ZKREL`` lines hold, per session, two linear functionals of the public transcript that
 combine both reps' ``ybar``, their opened level-0 rows and their shared level-1 positions (``flock-circuit``'s
@@ -93,31 +96,46 @@ def structural(a):
     return np.all(both == both[0], axis=0).all(axis=1)
 
 
-def shared_by_the_reps(a, reps):
-    """Positions whose rep-1 value equals rep 0's in every real and every simulated run."""
+def equal_across_reps(a, reps):
+    """Positions whose rep-1 value equals rep 0's in every real run or in every simulated run."""
     if reps != 2:
         return np.zeros(a["real"].shape[1], dtype=bool)
     same = [np.all(v[: len(v) // 2] == v[len(v) // 2:], axis=(0, 2)) for v in (a["real"], a["sim"])]
-    return same[0] & same[1]
+    return same[0] | same[1]
+
+
+def level0_shared(rows, cls, width):
+    """``lig_rows0``'s positions at the sample slots where both reps opened the same level-0 position (``lig_rows0_q``)."""
+    out = np.zeros(width, dtype=bool)
+    q = {rep: next((r.get("lig_rows0_q") for r in rows["real"] if r["rep"] == rep), None) for rep in (0, 1)}
+    if cls != "lig_rows0" or not q[0] or not q[1]:
+        return out
+    lanes = width // len(q[0])
+    for k, (a, b) in enumerate(zip(q[0], q[1])):
+        if a == b:
+            out[k * lanes:(k + 1) * lanes] = True
+    return out
 
 
 def test_class(rows, cls, reps, masked):
-    """The four tests on one class; ``rows``: kind -> rows."""
+    """The four tests on one class, and reuse across reps; ``rows``: kind -> rows."""
     a = {k: values(rows[k], cls) for k in ("real", "sim", "control")}
     fixed = structural(a)
-    shared = shared_by_the_reps(a, reps) & ~fixed
+    equal = equal_across_reps(a, reps) & ~fixed
+    allowed = level0_shared(rows, cls, a["real"].shape[1])
+    shared, reused = equal & allowed, equal & ~allowed
     a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
     tab = np.array([byte_hist(a["real"]), byte_hist(a["sim"])])
     tab = tab[:, tab.sum(axis=0) > 0]
     p_bytes = float(stats.chi2_contingency(tab)[1])
     row = {"values_per_transcript": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
-           "bytes_real_vs_sim": p_bytes}
+           "reused_across_reps": int(reused.sum()), "bytes_real_vs_sim": p_bytes}
     for k in ("real", "sim", "control"):
         row[f"bits_{k}"] = bits_p(a[k])
         row[f"xor_{k}"] = xor_p(a[k], reps)
         row[f"constant_{k}"] = constant_frac(a[k], reps)
     indist = min(p_bytes, row["bits_real"], row["bits_sim"], row["xor_real"], row["xor_sim"]) > ALPHA \
-        and row["constant_real"] == 0 and row["constant_sim"] == 0
+        and row["constant_real"] == 0 and row["constant_sim"] == 0 and row["reused_across_reps"] == 0
     row["real_indistinguishable_from_sim"] = bool(indist)
     ok = indist
     if masked:

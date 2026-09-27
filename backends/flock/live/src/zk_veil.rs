@@ -72,6 +72,24 @@ pub fn level0_bits(l: usize, q: usize) -> f64 {
     -(q as f64) * (rate.sqrt() + 0.02).log2()
 }
 
+/// Goldreich–Kahan's estimate of a verifier's completion probability `p` (M2's simulator): fresh runs (`run`: whether one
+/// reached the proofs) until `t` of them do, with no cap and without the extraction run; returns the runs, so
+/// `p̃ = t / runs`. `t = Θ(λ)` keeps `p̃` within `[p/2, 2p]` except with probability `2^-Ω(λ)`. The estimation follows an
+/// extraction run that reached the proofs (probability `p`), so it costs `t` runs in expectation.
+pub fn gk_estimate(t: usize, mut run: impl FnMut() -> bool) -> usize {
+    let (mut ok, mut runs) = (0, 0);
+    while ok < t {
+        runs += 1;
+        ok += run() as usize;
+    }
+    runs
+}
+
+/// The simulator's rewinds after an estimate from `runs` runs: `4t / p̃ = 4·runs`.
+pub fn gk_rewinds(runs: usize) -> usize {
+    4 * runs
+}
+
 /// The least `q ≥ q_min` with Fast100's 100 bits per run at level 0 ([`level0_bits`]); `None` when the padding outgrows the
 /// lane first.
 pub fn level0_queries(l: usize, q_min: usize) -> Option<usize> {
@@ -1279,6 +1297,32 @@ mod tests {
             rank(all) - rank(rand)
         }
 
+        /// Coins and query sets a malicious verifier could choose (red-team-m1-zk's variant): with a pair per rep nothing
+        /// leaks, and the shared-pair control leaks wherever the reps' coins differ.
+        #[test]
+        fn adversarial_coins_and_queries_leak_nothing() {
+            let unit = |i: usize| -> Vec<F256> { (0..W).map(|l| if l == i { F256::ONE } else { F256::ZERO }).collect() };
+            for (name, q, same, boolean, shared_leaks) in [
+                ("identical queries", [vec![1, 7, 20], vec![1, 7, 20]], false, false, true),
+                ("disjoint, t_pad = distinct", [vec![1, 2, 3], vec![4, 5, 6]], false, false, true),
+                ("identical coins in both reps", [vec![1, 7, 20], vec![3, 7, 30]], true, false, false),
+                ("identical coins and queries", [vec![2, 9, 17], vec![2, 9, 17]], true, false, false),
+                ("boolean lane challenges", [vec![1, 7, 20], vec![3, 7, 30]], false, true, true),
+            ] {
+                let mut c = coins(q);
+                if same {
+                    c.eq[1] = c.eq[0].clone();
+                    c.rho[1] = c.rho[0];
+                    c.b[1] = c.b[0].clone();
+                }
+                if boolean {
+                    c.eq = [unit(0), unit(3)];
+                }
+                assert_eq!(leak(6, [0, 1], &c), 0, "{name}: a pair per rep leaks");
+                assert_eq!(leak(6, [0, 0], &c) > 0, shared_leaks, "{name}: the shared-pair control");
+            }
+        }
+
         #[test]
         fn a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not() {
             // 3 queries per rep, 5 distinct positions: t_pad = 2 * 3 covers them
@@ -1291,6 +1335,28 @@ mod tests {
             assert!(leak(6, [0, 0], &c) > 0, "a shared pair should leak (red-team-m1-zk F1)");
             // padding below the distinct opened positions leaks too
             assert!(leak(4, [0, 1], &c) > 0, "t_pad below the opened positions should leak");
+        }
+    }
+
+    /// The estimate runs until `t` successes whatever `p` (red-team-m2-zk G2: a cap of 64t runs let a tiny `p` stop it at one
+    /// success), lands within `[p/2, 2p]`, and the rewinds it allows all fail with probability `(1 − p)^(4·runs) ≈ e^-4t`.
+    #[test]
+    fn the_gk_estimate_is_uncapped_and_its_rewinds_suffice() {
+        let mut rng = ProverRng::from_seed(ProverSeed::injected([31; 32]));
+        let t = 32;
+        for (i, p) in [1.0, 0.5, 1.0 / 64.0, 1.0 / 4096.0].into_iter().enumerate() {
+            let mut k = 0u64;
+            let mut coin = || {
+                k += 1;
+                (rng.f128s(9, (i as u64) << 40 | k, 1)[0].lo as f64 / u64::MAX as f64) < p
+            };
+            let runs = gk_estimate(t, &mut coin);
+            let est = t as f64 / runs as f64;
+            assert!(runs >= t && est >= p / 2.0 && est <= 2.0 * p, "p = {p}: p̃ = {est} from {runs} runs");
+            if p < 1.0 {
+                let fail = (1.0 - p).powi(gk_rewinds(runs) as i32);
+                assert!(fail < 2f64.powi(-(t as i32)), "p = {p}: the rewinds all fail with probability {fail}");
+            }
         }
     }
 
