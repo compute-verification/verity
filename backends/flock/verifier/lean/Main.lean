@@ -158,11 +158,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
   let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition with
-    | .ok st => Except.ok (Setup.ofCircuit st)
+    | .ok st => Except.ok (Setup.ofCircuit st, st.partition)
     | .error e => Except.error s!"setup: {e}"
   let setup := setupOf none
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
-  let mut drawn : Array (String × Except String Setup) := #[]
+  let mut drawn : Array (String × Except String (Setup × Lean.Json)) := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
@@ -182,10 +182,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
           | none =>
             st := setupOf (some d)
             drawn := drawn.push (key, st)
-    let verdict := do let (record, proofs) ← files; verify (← st) record proofs
+    let verdict := do let (record, proofs) ← files; verify (← st).1 record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
-    let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)]
+    -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
+    let part := match st with | .ok (_, p) => p | .error _ => Lean.Json.null
+    let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
+      (if part.isNull then [] else [("partition", part)]))
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
@@ -214,7 +217,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2)),
       ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
       ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
-      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null)]
+      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null), ("partition_check", st.partition)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1

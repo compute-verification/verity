@@ -130,6 +130,8 @@ structure Stmt where
   sigma : ByteArray
   hello : String
   merkle : MerkleScheme
+  /-- what the statement check established about the partition (`HmRow.PartitionFinding`), for the verdict; null before e51e2b86 -/
+  partition : Json := Json.null
   deriving Inhabited
 
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V String :=

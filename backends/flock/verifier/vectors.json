@@ -4216,6 +4216,24 @@
     ],
     "selftest_note": "19 selftest cases and the draw cases (a drawn session over the caller's indices, and one that ignores the draw)",
     "agreement": "r20260927-070106-614e: 21/21"
+   },
+   {
+    "tags": "verity/flock-circuit (the e2e bindings, an open query name)",
+    "pr83": "e51e2b86",
+    "generator": "flock-circuit selftest --record-dir --only honest / unit_draw_session (PR #83 e51e2b86 with circuit-vectors-eb90718f.patch, --features sha512,seed-injection); staged with --partition (the tagged digest of a Q_template_instance v1 object) --program --unit-indices [3, 17, 40, 1001]",
+    "statement": {
+     "circuit": "art:3f2298b6/rope-head/stage/circuit.txt",
+     "public": "art:3f2298b6/rope-head/stage/pub-4.bin",
+     "partition": "art:3f2298b6/rope-head/partition.json",
+     "circuit_sha512": "d9f93aee013f00493ae22761f71539f4596c61788e540c44ea5e12850882d19174f3114d2a2eba0f294fa5497894702b0af69a8cd668bd33d8134574d6381212",
+     "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001]; partition verity/partition/v1 c920dfc8, query Q_template_instance v1 (not evaluated by the verifier: its verdicts say units as stated)"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:3f2298b6/rope-head/records-cpu"
+    ],
+    "selftest_note": "honest and unit_draw_session, both accepted; rope-head/partition-noformat.json (no format) is refused at setup",
+    "agreement": "2/2 (local, 2026-09-27T07:25Z)"
    }
   ],
   "recorded_runs": [

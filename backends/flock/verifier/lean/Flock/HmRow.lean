@@ -393,9 +393,14 @@ def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
   Json.mkObj (if c.classSha.isEmpty then base
     else base ++ [("classes", Json.arr (Array.replicate indices.size (Json.str (hexOf c.classSha))))])
 
-/-- A `verity/partition/v1` object's form (core's `partition_object.validate`, PR #111): exactly `format`, `program`, `query`; a
-SHA-512 program; the query `Q_word` v1 with exactly its parameters `X`, `W`, each a positive integer. -/
-def checkPartitionObject (obj : Json) : V Unit := do
+/-- The queries the verifier can evaluate itself (`Flock.Qword`), given the program's Call graphs. -/
+def EVALUABLE : List (String × Nat) := [("Q_word", 1)]
+
+/-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
+SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
+query the verifier evaluates, its parameters too (`Q_word` v1: exactly `X`, `W`, positive integers). The query's name and
+version. -/
+def checkPartitionObject (obj : Json) : V (String × Nat) := do
   let keys := fun (j : Json) => match j with
     | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
     | _ => #[]
@@ -404,34 +409,63 @@ def checkPartitionObject (obj : Json) : V Unit := do
   if !isSha512Hex ((obj.getObjValAs? String "program").toOption.getD "") then throw "partition: program is not a SHA-512 digest"
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   if keys q != #["name", "params", "version"] then throw "partition: the query's keys are not name, version, params"
-  if (q.getObjValAs? String "name").toOption != some "Q_word" || (q.getObjVal? "version").toOption != some (Lean.toJson (1 : Nat)) then
-    throw "partition: the query is not Q_word v1"
+  let name := (q.getObjValAs? String "name").toOption.getD ""
+  if name.isEmpty then throw "partition: the query's name is not a non-empty string"
+  let version ← match (q.getObjVal? "version").toOption with
+    | some (.num n) => if n.exponent == 0 && n.mantissa ≥ 0 then pure n.mantissa.toNat else throw "partition: the query's version is not a natural number"
+    | _ => throw "partition: the query's version is not a natural number"
   let ps := (q.getObjVal? "params").toOption.getD Json.null
-  if keys ps != #["W", "X"] then throw "partition: Q_word v1's parameters are not X, W"
-  for k in ["X", "W"] do
-    match (ps.getObjVal? k).toOption with
-    | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
-    | _ => throw s!"partition: {k} is not a positive integer"
+  match ps with
+  | .obj _ => pure ()
+  | _ => throw "partition: the query's params are not an object"
+  if (name, version) == ("Q_word", 1) then
+    if keys ps != #["W", "X"] then throw "partition: Q_word v1's parameters are not X, W"
+    for k in ["X", "W"] do
+      match (ps.getObjVal? k).toOption with
+      | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
+      | _ => throw s!"partition: {k} is not a positive integer"
+  return (name, version)
 
 /-- `SHA-512("verity/partition/v1\0" ‖ canon(object))`. -/
 def partitionDigest (obj : Json) : V ByteArray := do
   return Sha512.hash (PARTITION_V1.toUTF8.push 0 ++ (← canon obj).toUTF8)
 
+/-- What the statement check established about the partition: the rule, the query, the digest, and whether the verifier
+derived the units itself or took them as stated (the audit reports the latter as a gap). -/
+structure PartitionFinding where
+  rule : String
+  query : String := ""
+  digest : String := ""
+  derived : Bool := false
+  note : String
+  deriving Inhabited
+
+def PartitionFinding.toJson (f : PartitionFinding) : Json :=
+  Json.mkObj [("rule", Json.str f.rule), ("query", Json.str f.query), ("digest", Json.str f.digest),
+    ("units", Json.str (if f.derived then "derived" else "as stated")), ("note", Json.str f.note)]
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
-must be the tagged digest of that object, over META's `program_sha512`; the provisional unit cover takes none. -/
-def checkPartition (c : Circuit) (obj : Option Json) : V Unit := do
+must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
+none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
+today every finding says the units were taken as stated, and why. -/
+def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
   let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
   let rule := (part.getObjValAs? String "rule").toOption.getD ""
+  let digest := (part.getObjValAs? String "digest").toOption.getD ""
   match rule, obj with
   | "verity/partition/v1", none => throw "partition: the circuit binds a verity/partition/v1 digest; the verifier's partition object is required"
   | "verity/partition/v1", some o =>
-    checkPartitionObject o
-    if hexOf (← partitionDigest o) != (part.getObjValAs? String "digest").toOption.getD "" then
+    let (name, version) ← checkPartitionObject o
+    if hexOf (← partitionDigest o) != digest then
       throw "partition: the circuit's partition digest is not the verifier's partition object's"
     if (o.getObjValAs? String "program").toOption != (c.metaJ.getObjValAs? String "program_sha512").toOption then
       throw "partition: the partition object is over another program than META's program_sha512"
+    let note := if EVALUABLE.contains (name, version) then
+        s!"units taken as stated, not derived: {name} v{version} is a query the verifier evaluates (Flock.Qword), but it does not yet decode the program into its Call graphs"
+      else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
+    return { rule, query := s!"{name} v{version}", digest, derived := false, note }
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
-  | _, none => pure ()
+  | _, none => return { rule, digest, derived := false, note := "units taken as stated, not derived: the provisional unit cover names no query" }
 
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
@@ -551,8 +585,8 @@ drawn units' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) : V Stmt := do
   let c ← HmRow.parse tags circuitFile tables
-  if tags.bindings then HmRow.checkPartition c partition
-  else if partition.isSome then throw s!"{tags.name}: the statement binds no partition"
+  let finding ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
+    else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   let pop ← HmRow.loadPublic tags c publicFile
   let pub ← match draw with
@@ -576,6 +610,6 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
-           hello, merkle }
+           hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 end Flock

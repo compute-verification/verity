@@ -1107,10 +1107,15 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   pin binds them into the statement digest and Σ. The public header's `units` adds `classes`, one per instance: each must be
   the verifier's own class of the circuit, `SHA-512(head ‖ "\nMETA " ‖ canon(META without partition, program_sha512,
   program_digests) ‖ "\n" ‖ the file after its META line)`. For a `verity/partition/v1` binding the verifier needs its own copy
-  of the partition object (`--partition`, by path or archive digest): its form is core's `partition_object.validate` (exactly
-  `format`, `program`, `query`; `Q_word` v1 with exactly `X`, `W`, positive integers), its tagged digest
-  `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its `program` must be META's `program_sha512`. The
-  provisional unit cover takes no object.
+  of the partition object (`--partition`, by path or archive digest). Its form is #111's canonical one with open query names:
+  exactly `format`, `program`, `query`; a SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a
+  natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1: exactly
+  `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
+  `program` must be META's `program_sha512`. The provisional unit cover takes no object.
+- **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
+  `units` is `derived` only when the verifier derived the statement's units itself: for a query it evaluates (`Q_word` v1,
+  `Flock.Qword`), from the program's Call graphs. It does not decode the program yet, so today `units` is always `as
+  stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
