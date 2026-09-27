@@ -195,3 +195,36 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
+    """A `flock-ir-unit/v2` expanded circuit: one input group of 2 bits (rows 2..127 input padding), one output group."""
+    return "\n".join([f"flock-ir-unit/v2 tiny {len(rows)} {len(rows) - 1} {ins} {outs}"] + rows) + "\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_net_parser_refuses_rows_out_of_order(tmp_path):
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
+    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    groups must fit their words, and input groups the input rows."""
+    base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
+
+    def edit(r, row):
+        return base[:r] + [row] + base[r + 1:]
+
+    cases = {
+        "ok": (_net(base), None),
+        "later": (_net(edit(128, "1 129 1 1")), "row 128 reads column 129, not an earlier one"),
+        "itself": (_net(edit(128, "1 128 1 1")), "row 128 reads column 128, not an earlier one"),
+        "padding": (_net(edit(128, "1 5 1 1")), "row 128 reads column 5, an input padding column"),
+        "padding-b": (_net(edit(129, "2 128 1 1 7")), "row 129 reads column 7, an input padding column"),
+        "overrun": (_net(base, ins="1 0 1 1 200"), "a port group's ports overrun its words"),
+    }
+    for name, (text, _) in cases.items():
+        (tmp_path / f"{name}.net").write_text(text)
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
+                         capture_output=True, text=True).stdout
+    got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
+    for name, (_, why) in cases.items():
+        assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])

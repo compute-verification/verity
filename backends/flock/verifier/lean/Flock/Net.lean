@@ -73,6 +73,17 @@ structure Net where
 
 namespace Net
 
+/-- Topological order: every computed row (after the `inCols` input rows, before the constant) reads, in A and in B, only
+earlier columns that are not input padding (an empty input row: a forced zero), or the constant. With the input rows and
+the constant row, every column a row reads is then below `useful`. -/
+def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat)) : V Unit := do
+  let padding := fun (c : Nat) => c < inCols && (ra.getD c #[]).isEmpty && (rb.getD c #[]).isEmpty
+  for r in [inCols:constPos] do
+    for c in ra.getD r #[] ++ rb.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+
 private def num (h : Array String) (i : Nat) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
@@ -106,6 +117,9 @@ def parse (lines : Array String) : V Net := do
   if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
   if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
   let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
+      || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
+    throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
   let unitLog := max 7 (log2ceil useful)
   let mut ra := #[]
   let mut rb := #[]
@@ -124,6 +138,7 @@ def parse (lines : Array String) : V Net := do
     if !((ai == #[i] && bi == #[i]) || (ai.isEmpty && bi.isEmpty)) then throw s!"flock-ir-unit/v2: row {i} is not an input row"
   if ra.getD constPos #[] != #[constPos] || rb.getD constPos #[] != #[constPos] then
     throw "flock-ir-unit/v2: the constant row is not A = B = [const]"
+  checkOrder "flock-ir-unit/v2" (inWords * WORD) constPos ra rb
   -- after the rows: an optional `LEAVES <json>` line (bound by the pin, not read), and nothing else
   let mut at_ := 1 + useful
   if (lines.getD at_ "").startsWith "LEAVES " then
