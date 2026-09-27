@@ -5,7 +5,7 @@ WORKLOAD the request Program reads from its request-owned `splits` Input (one en
 kernels' constexpr (`Const32[S]`).  CPU, torch-free:
 
   1. the operand form evaluates to `topp_split.topp_keep_row(x, p, S)` at every S in {1, 2, 4, 8, 16, 32} (the masked row lane by lane);
-  2. an S the pipeline never launches (0, 3, 64, 2^31) is REFUSED by the evaluator by name -- never a default;
+  2. the keep word is total: an S the pipeline never launches (0, 3, 64, 2^31, -1) keeps no lane (word 0, a word no launched S gives);
   3. `GumbelTopPTokenSelect_v1{V}` with the splits operand == the difftest composite with the same S as a static (the R15 body), token
      and masked row, at every S -- the numerics did not move, only where S enters;
   4. the F-stoch-01 record rows (kernel-consumed bf16 logits at S = 16, V = 128256) through the operand form: masked row bit-exact
@@ -92,16 +92,31 @@ def test_the_operand_changes_the_result_where_the_geometry_matters():
     assert k16.tolist() != k32.tolist(), "the record row masks the same at S = 16 and 32 -- not a geometry-sensitive row"
 
 
-# ------------------------------------------------------------------------------------------------ 2. refusal by name
+# ------------------------------------------------------------------------------------------------ 2. total over every splits word
 
 
-@pytest.mark.parametrize("bad", [0, 3, 64, 0x80000000, 0xFFFFFFFF])
-def test_a_split_count_the_pipeline_never_launches_is_refused(bad):
+@pytest.mark.parametrize("bad", [0, 3, 5, 31, 33, 64, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF0])
+def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
+    from verity_vllm.program.registry import sampling_rows as SR
     V = 64
     x = _row(V)
-    with pytest.raises(ValueError, match="splits operand .* is not a split count"):
-        _eval(bind(SM.TopPMask, V=V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])
+    word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])[0]
+    masked = _eval(bind(SM.TopPMask, V=V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])
+    assert word == 0 and masked == [NEG_INF_BITS] * V
+    assert SR.topp_mask_row(x.view(np.uint32), _bits(0.9), bad).tolist() == masked            # the numpy row, the same semantics
+    token = _eval(bind(SM.GumbelTopPTokenSelect, V=V), [_u32s((x.view(np.uint32) >> 16).tolist()), _u32(_bits(0.9)), _u64(7), _u64(3),
+                                                         _u32(_bits(0.8)), _u32(bad)])
+    assert token == [0]                                                                        # every lane -inf: the first index
     assert SM.SPLIT_COUNTS == (1, 2, 4, 8, 16, 32)
+
+
+def test_every_launched_split_count_keeps_a_lane():
+    rng = np.random.default_rng(5)
+    for k in range(40):
+        x = (rng.standard_normal(128) * rng.choice([0.01, 1.0, 30.0])).astype(f32)
+        for S in SM.SPLIT_COUNTS:
+            for p in (1e-6, 0.3, 0.95, 1.0):
+                assert SM.topp_keep(x, p, S).any(), (k, S, p)
 
 
 # ------------------------------------------------------------------------------------------------ 3. select: operand == static body
