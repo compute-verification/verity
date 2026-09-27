@@ -209,15 +209,100 @@ pub fn prove<Ch: Challenger>(rels: &[Relation], m: usize, z: &[bool], ch: &mut C
     (GlueProof { rounds, value: zz[0] }, rho)
 }
 
-/// [`prove`] over a packed witness: address `a` is bit `a % 128` of word `a / 128` (`2^(m-7)` words).
+fn word_bit(w: &F128, t: usize) -> bool {
+    (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1 == 1
+}
+
+/// `W`'s support and values, sorted by address (`W` is zero elsewhere).
+fn sparse_weights(rels: &[Relation], gamma: F128, u: &[F128]) -> Vec<(usize, F128)> {
+    let mut e = Vec::new();
+    let mut g = gamma;
+    for r in rels {
+        let ud = &u[..r.dst.free.len()];
+        for (side, vals) in [(&r.dst, ud.to_vec()), (&r.src, r.src_vals(ud))] {
+            e.extend(side.eq_entries(&vals).into_iter().map(|(a, w)| (a, g * w)));
+        }
+        g *= gamma;
+    }
+    e.sort_unstable_by_key(|x| x.0);
+    let mut out: Vec<(usize, F128)> = Vec::with_capacity(e.len());
+    for (a, w) in e {
+        match out.last_mut() {
+            Some(l) if l.0 == a => l.1 += w,
+            _ => out.push((a, w)),
+        }
+    }
+    out
+}
+
+/// One round over a sparse `W` (sorted): `(e0, e2)` from its support's pairs, `z_at(v)` the level's `z` at index `v`.
+fn sparse_round(w: &[(usize, F128)], z_at: &(dyn Fn(usize) -> F128 + Sync)) -> (F128, F128) {
+    use rayon::prelude::*;
+    let pairs: Vec<(usize, F128, F128)> = pair_up(w);
+    pairs.par_iter().map(|&(p, w0, w1)| {
+        let (z0, z1) = (z_at(2 * p), z_at(2 * p + 1));
+        (z0 * w0, (z1 + z0) * (w1 + w0))
+    }).reduce(|| (F128::ZERO, F128::ZERO), |a, b| (a.0 + b.0, a.1 + b.1))
+}
+
+/// `W`'s support grouped by pair: `(pair, W(2p), W(2p+1))`.
+fn pair_up(w: &[(usize, F128)]) -> Vec<(usize, F128, F128)> {
+    let mut out: Vec<(usize, F128, F128)> = Vec::with_capacity(w.len());
+    for &(a, v) in w {
+        let p = a >> 1;
+        if out.last().map_or(true, |l| l.0 != p) {
+            out.push((p, F128::ZERO, F128::ZERO));
+        }
+        let l = out.last_mut().unwrap();
+        if a & 1 == 0 { l.1 = v } else { l.2 = v }
+    }
+    out
+}
+
+/// [`prove`] over a packed witness (address `a` is bit `a % 128` of word `a / 128`, `2^(m-7)` words), in one pass over it:
+/// the rounds inside a word read only the words `W` touches, then every word folds once to the seven coins drawn so far (`2^(m-7)`
+/// field elements), and the rest is dense over those with `W` sparse throughout. Its messages are [`prove`]'s.
 pub fn prove_packed<Ch: Challenger>(rels: &[Relation], m: usize, words: &[F128], ch: &mut Ch) -> (GlueProof, Vec<F128>) {
-    assert_eq!(words.len() << 7, 1 << m);
-    let z: Vec<bool> = (0..1usize << m).map(|a| {
-        let w = words[a >> 7];
-        let t = a & 127;
-        (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1 == 1
+    use rayon::prelude::*;
+    assert!(m >= 7 && words.len() << 7 == 1 << m);
+    let (gamma, u) = draw(rels, ch);
+    let mut w = sparse_weights(rels, gamma, &u);
+    let (mut rounds, mut rho) = (Vec::with_capacity(m), Vec::with_capacity(m));
+    let mut eq = vec![F128::ONE];
+    let mut fold_w = |w: &mut Vec<(usize, F128)>, r: F128| {
+        *w = pair_up(w).into_iter().map(|(p, w0, w1)| (p, w0 + (w1 + w0) * r)).filter(|x| x.1 != F128::ZERO).collect();
+    };
+    for j in 0..7 {
+        // z at level j: index v covers addresses v·2^j .. (v+1)·2^j, inside one word
+        let z_at = |v: usize| -> F128 {
+            let (word, base) = (&words[(v << j) >> 7], (v << j) & 127);
+            eq.iter().enumerate().fold(F128::ZERO, |s, (t, e)| if word_bit(word, base + t) { s + *e } else { s })
+        };
+        let (e0, e2) = sparse_round(&w, &z_at);
+        ch.observe_f128(e0);
+        ch.observe_f128(e2);
+        rounds.push([e0, e2]);
+        let r = ch.sample_f128();
+        // eq over the address offset's low j+1 bits (bit t of the index against r_t)
+        eq = eq.iter().map(|&e| e * (r + F128::ONE)).chain(eq.iter().map(|&e| e * r)).collect();
+        fold_w(&mut w, r);
+        rho.push(r);
+    }
+    let mut z: Vec<F128> = words.par_iter().map(|word| {
+        eq.iter().enumerate().fold(F128::ZERO, |s, (t, e)| if word_bit(word, t) { s + *e } else { s })
     }).collect();
-    prove(rels, m, &z, ch)
+    for _ in 7..m {
+        let (e0, e2) = sparse_round(&w, &|v| z[v]);
+        ch.observe_f128(e0);
+        ch.observe_f128(e2);
+        rounds.push([e0, e2]);
+        let r = ch.sample_f128();
+        z = z.par_chunks(2).map(|p| p[0] + (p[1] + p[0]) * r).collect();
+        fold_w(&mut w, r);
+        rho.push(r);
+    }
+    ch.observe_f128(z[0]);
+    (GlueProof { rounds, value: z[0] }, rho)
 }
 
 /// `W̃(ρ)` from the relations alone.
@@ -346,7 +431,13 @@ mod tests {
         }).collect();
         let a = prove(&rels, M, &z, &mut FsChallenger::new(b"glue-test"));
         let b = prove_packed(&rels, M, &words, &mut FsChallenger::new(b"glue-test"));
-        assert_eq!(a, b);
+        assert_eq!(a, b, "the word-level prover's messages are the dense prover's");
+        let mut bad = z.clone();
+        bad[(2 << 4) + 9] = !bad[(2 << 4) + 9];
+        let pack = |z: &[bool]| -> Vec<F128> { z.chunks(128).map(|c| c.iter().enumerate().fold(F128::ZERO, |w, (t, &x)| {
+            if x { w + if t < 64 { F128::new(1 << t, 0) } else { F128::new(0, 1 << (t - 64)) } } else { w }
+        })).collect() };
+        assert_eq!(prove(&rels, M, &bad, &mut FsChallenger::new(b"glue-test")), prove_packed(&rels, M, &pack(&bad), &mut FsChallenger::new(b"glue-test")));
     }
 
     #[test]
