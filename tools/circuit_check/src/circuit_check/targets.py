@@ -29,6 +29,12 @@ _LOADED = False
 REGISTERED: list[str] = []
 
 
+def _authored(d: Any) -> bool:
+    """A Definition the core or the vLLM registry defines (not one a test module registered in the same session)."""
+    fn = getattr(d, "evaluate", None) or getattr(d, "body", None)
+    return getattr(fn, "__module__", "").partition(".")[0] in ("verity", "verity_vllm")
+
+
 def load_registries() -> None:
     """Register every Definition and kernel: core's `verity.ml`, and each module of the vLLM registry and kernel registry."""
     global _LOADED
@@ -44,7 +50,7 @@ def load_registries() -> None:
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
-    REGISTERED[:] = sorted(REGISTRY.defs)
+    REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
 
 
