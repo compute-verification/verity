@@ -62,20 +62,61 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
     if ← p.pathExists then out := out ++ [(name, ← IO.FS.readBinFile p)]
   return out
 
+/-- `ARCHIVE/sha256/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
+def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
+  if hex.length != 64 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
+    return .error s!"archive: {hex} is not a SHA-256 digest"
+  let p : System.FilePath := archive ++ s!"/sha256/{hex}"
+  if !(← p.pathExists) then return .error s!"archive: {hex} is not held"
+  let b ← IO.FS.readBinFile p
+  if hexOf (Sha256.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
+  return .ok b
+
+/-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
+named by `--circuit`, `--public`, `--comp` digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8); without it,
+the files at those paths. -/
+def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
+  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
+    | return .error "--circuit, --comp and --public are required"
+  match argOf args "--archive" with
+  | none => return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, ← IO.FS.readBinFile comp, ← readTables args)
+  | some dir =>
+    let get := fun hex => archiveGet dir hex
+    let c ← match ← get circuit with | .ok b => pure b | .error e => return .error s!"circuit: {e}"
+    let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
+    let cm ← match ← get comp with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
+    -- `Circuit.parse` hashes each table a lookup uses against the digest it is held under here (`MUFU_TABLES`)
+    let mut tables := []
+    for (name, sha, _) in MUFU_TABLES do
+      let p : System.FilePath := dir ++ s!"/sha256/{sha}"
+      if ← p.pathExists then tables := tables ++ [(name, ← IO.FS.readBinFile p)]
+    return .ok (c, pb, cm, tables)
+
+/-- `archive-put DIR FILE...`: store each file under `DIR/sha256/<its SHA-256>`, and print the digests. -/
+def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
+  IO.FS.createDirAll (dir ++ "/sha256")
+  for path in paths do
+    let b ← IO.FS.readBinFile path
+    let hex := hexOf (Sha256.hash b)
+    IO.FS.writeBinFile (dir ++ s!"/sha256/{hex}") b
+    IO.println s!"{hex}  {path}"
+  return 0
+
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
 tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
 verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify verify [--statement ID] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
+  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
+    | IO.eprintln "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
-  let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
-  let tables ← readTables args
+  let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
     | .ok st => pure (Except.ok (Setup.ofCircuit st))
     | .error e => pure (Except.error s!"setup: {e}")
@@ -98,13 +139,14 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
-  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] --circuit F --comp F --public F [--coins seed|os]"; return 2
+  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
-  let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
-  let tables ← readTables args
+  let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
   | .ok st =>
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), ("circuit_sha256", Lean.Json.str (hexOf st.c.sha)),
@@ -183,6 +225,7 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path] => hm96Test path
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
+  | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

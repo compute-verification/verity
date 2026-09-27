@@ -984,6 +984,19 @@ circuit is malformed. `unit_cut_agree.py` checks the codes against the reference
 exercised). Still ahead, once the verifier holds the IR program (§16.8): the width rule, the claimed units' membership in
 the partition, and the leaf positions derived from it.
 
+### 16.8 Objects by content
+
+The verifier loads each statement's objects from its own archive, keyed by content, and never from the prover's session
+directory: `verify --archive DIR --circuit H --public H --comp H` reads `DIR/sha256/<H>` for each, and rejects an object
+that is not held or does not hash to its key. The lookup tables are those `MUFU_TABLES` pins, loaded by those digests.
+A digest is only a lookup key into what the verifier holds: the statement it verifies is the one those objects define,
+and the record must bind that statement (S1). `archive-put DIR FILE...` stores files under their digests. A session
+directory supplies only the record and the openings. Without `--archive`, the flags are paths (the development and
+agreement tools). `agree.py` drives the Lean verifier through an archive.
+
+The same applies to the program and partition (§16.7) once the verifier holds the IR program, and to `flock-live serve`
+(PR #83).
+
 ### 16.9 Strict and legacy conformance
 
 Daniel's rules: the verifier checks proofs and never evaluates any part of the computation; circuits are total; the

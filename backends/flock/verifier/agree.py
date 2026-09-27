@@ -10,10 +10,11 @@ is its directory's basename, and `why` is a prefix of the Lean verifier's reason
 `upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
 of the Lean verifier's. A session directory may carry its own
 public file (`pub.bin`, a forgery's false statement) and its expected verdict (`case.json`, from the vectors patch's
-`forgeries` subcommand). Writes DIR/agreement.tsv, the two
+`forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
+their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
 verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
 """
-import argparse, json, subprocess, sys
+import argparse, hashlib, json, os, shutil, subprocess, sys
 from pathlib import Path
 
 
@@ -40,12 +41,28 @@ def upstream_verdicts(a):
     return out
 
 
+def archived(a, path):
+    """Hold `path` in the run's archive, `OUT/archive/sha256/<hex>`, and return its digest: the Lean verifier loads the
+    statement's objects by content (PROTOCOL.md §16.8)."""
+    h = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    d = a.out / "archive" / "sha256"
+    d.mkdir(parents=True, exist_ok=True)
+    if not (d / h).exists():
+        try:
+            os.link(path, d / h)
+        except OSError:
+            shutil.copyfile(path, d / h)
+    return h
+
+
 def lean_run(a, public, sessions):
-    cmd = [a.lean, "verify", "--statement", a.statement, "--circuit", a.circuit, "--comp", a.comp, "--public", public]
+    if a.tables:
+        for t in sorted(Path(a.tables).glob("*.u32")):
+            archived(a, t)
+    cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(a.out / "archive"), "--circuit", archived(a, a.circuit),
+           "--comp", archived(a, a.comp), "--public", archived(a, public)]
     if a.coins:
         cmd += ["--coins", a.coins]
-    if a.tables:
-        cmd += ["--tables", a.tables]
     p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
     with open(a.out / "lean.txt", "a") as f:
         f.write(p.stdout)
