@@ -210,6 +210,9 @@ class UnifiedAttentionWithOutputRule(StateRule):
                 refuse("numerics_unregistered", node, mp, f"layer {layer_name!r}: kind {role!r} has no target-keyed variant on {tp.tensor_core_family} "
                        f"(FA{tp.effective_flash_attn_version()}); only the plain causal GQA chain is registered off the accepted target")
             geom = TG.attention_geometry(tp, D, launch_sq, NH, KVH)
+        # FA3's per-iteration Check_inf chain (`fa3_construction = check-inf-per-iteration`): each row's tile decides which of its key blocks
+        # the kernel guards -- the row's index among this request's query rows at the step (i on the prefill, 0 on a decode step)
+        check_inf = geom is not None and TG.fa3_check_inf(tp)
         for i in range(T):
             P = P0 + i + 1
             if window is not None and P > window:
@@ -219,7 +222,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
             if geom is None:
                 fn = ctx.kind(role, node, T=P, NH=NH, KVH=KVH, D=D, **extra)
             else:
-                fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"])
+                fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+                              **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}))
             kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in krow_list[:P]]))
             vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in vrow_list[:P]]))
             outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
@@ -233,5 +237,6 @@ class UnifiedAttentionWithOutputRule(StateRule):
                                                                                         "fa_version": geom["fa_version"], "tensor_core_family": tp.tensor_core_family,
                                                                                         # [R15 hopper HOP-03] what the tile rule read and where it came from
                                                                                         "launch_seqlen_q": launch_sq, "launch_seqlen_q_source": launch_src,
-                                                                                        "request_step": req_step, "own_rows": own_rows})}},
+                                                                                        "request_step": req_step, "own_rows": own_rows,
+                                                                                        **({"fa3_construction": tp.effective_fa3_construction()} if check_inf else {})})}},
                    emitted=f"{fn.id} x{T} (T={P0 + 1}..{P0 + T})")

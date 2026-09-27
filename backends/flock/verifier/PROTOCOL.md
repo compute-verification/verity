@@ -1269,8 +1269,30 @@ uses `native_decide`.
 
 Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
 `Classical.choice` and `Quot.sound`):
-- **1b, Merkle:** `merkle_binding` is proved, for any `MerkleScheme`. Two accepted checks against one cap at the same
-  positions, whose rows differ at a query, give a node or leaf collision (`climb_binding`, `opens_binding`).
+- **1b, Merkle: an explicit collision extractor.** A fixed hash with 32- or 64-byte digests has collisions by counting, so
+  a proposition "a collision exists" holds outright and says nothing about the verifier. The statements therefore carry the
+  reduction as computable functions from the verifier's accepted checks to an explicit pair of inputs, with theorems that
+  the pair collides:
+  - `merklePair` (through `opensPair` and `climbPair`) maps two Merkle checks the verifier accepts against one cap, whose
+    rows differ at a query, to a `MerklePair`. That is either the first node whose two parents are one while its children
+    differ, or the two rows when their leaves are one.
+  - `merkle_binding` proves the pair collides (`MerklePair.Collides`), for any `MerkleScheme` whose nodes and leaves have its
+    digest width (`Sized`; `MerkleScheme.all_sized` for every known scheme, from `Sha256.hash_size` and `Sha512.hash_size`,
+    proved from the definitions). The collision is either two different pairs of digest-width children with one node, or
+    two different rows with one leaf, under any salts.
+  - `MerklePair.shaInputs` and `MerklePair.hm96Inputs` map the pair to the hash's own inputs. `sha256_inputs`,
+    `sha512_inputs` and `hm96_inputs` prove those two inputs differ and have one digest:
+    - a node's input is its two children, concatenated at a fixed split, so different pairs are different inputs;
+    - the row encoding is injective (`rowBytes_inj`);
+    - for `hm96-sha512/v1`, `Hm96.leafPair` gives the outer inputs, or the salt digest's (`leafPair_collides`), or the rows'
+      when their row hashes are one.
+  - The propositions `merkle_binding_collision` and `MerkleScheme.collision_hash` are corollaries.
+  - A test evaluates the extractor on a toy scheme with 1-byte digests, whose accepted checks do collide.
+  - The executable only ever hashes digest-width children: `merkleCheck` refuses a sibling or cap entry of another width,
+    and the running digests are hash outputs.
+  - Nodes and leaves are not tag-separated in the unsalted schemes, and binding doesn't need it. Both openings climb from
+    a leaf at one position through `d − c` nodes, so a leaf is only ever compared with a leaf. As a backstop, under
+    `fast100` an opened row has 16, 32 or 64 elements (256, 512 or 1,024 bytes), while a node's input is 64 or 128 bytes.
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
 - **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its

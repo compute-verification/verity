@@ -546,33 +546,32 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
 /-! ## The phase -/
 
 open Classical in
-/-- **The lincheck phase** (§10), for a list of at most `L` codewords near the committed table:
-from a doomed zerocheck, the lincheck ends undoomed with probability at most
-`L·(2 + 2(k_log − 6) + 63)/|F|`. -/
-theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
-    (C : Oracle F) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
-    (hzc : DZc A S sch C extra (some zc)) (L : ℕ)
-    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
-    value (fun o => ¬ DLc A S sch C extra zc o) (lincheck A S zc) ≤
+/-- **The lincheck phase** (§10), for a list `W` of at most `L` messages: from a doomed zerocheck, the
+lincheck ends undoomed with probability at most `L·(2 + 2(k_log − 6) + 63)/|F|`. -/
+theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
+    (hzc : DZcW A S sch W extra (some zc)) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
+    value (fun o => ¬ DLcW A S sch W extra zc o) (lincheck A S zc) ≤
       L * (((2 + 2 * (S.kLog - 6) + 63 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
   classical
-  set s := Finset.univ.filter fun M => M ∈ closeMsgs A sch C
+  set s := Finset.univ.filter fun M => M ∈ W
   let E : Message F sch.k0 sch.level₀.logCols → Option (Claim F S.m) → Prop := fun M o =>
     ∃ ab, o = some ab ∧ ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
       ∧ ∀ e ∈ extra, e.Holds (wit A S sch M)
-  calc value (fun o => ¬ DLc A S sch C extra zc o) (lincheck A S zc)
+  calc value (fun o => ¬ DLcW A S sch W extra zc o) (lincheck A S zc)
       ≤ value (fun o => ∃ M ∈ s, E M o) (lincheck A S zc) := by
         refine value_mono (fun o h => ?_) _
         cases o with
         | none => exact absurd trivial h
         | some ab =>
-          simp only [DLc, not_forall, not_not] at h
+          simp only [DLcW, not_forall, not_not] at h
           obtain ⟨M, hM, hab⟩ := h
           exact ⟨M, by simp [s, hM], ab, rfl, hab⟩
     _ ≤ ∑ M ∈ s, value (E M) (lincheck A S zc) := value_exists_finset_le _ _ _
     _ ≤ ∑ _M ∈ s, ((2 + 2 * (S.kLog - 6) + 63 : ℕ) : ℝ≥0∞) / Fintype.card F := by
         refine Finset.sum_le_sum fun M hM => ?_
-        have hMc : M ∈ closeMsgs A sch C := by simpa [s] using hM
+        have hMc : M ∈ W := by simpa [s] using hM
         by_cases hce : (cClaim A zc).Holds (wit A S sch M) ∧ ∀ e ∈ extra, e.Holds (wit A S sch M)
         · refine (value_mono (fun o ⟨ab, hab, hh, _⟩ => ⟨ab, hab, hh⟩) _).trans
             (value_lincheck_le A hA S zc _ fun ⟨ha, hb, hp⟩ => hzc M hMc ⟨ha, hb, hce.1, hp, hce.2⟩)
@@ -584,5 +583,17 @@ theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) 
         rw [Finset.sum_const, nsmul_eq_mul]
     _ ≤ L * (((2 + 2 * (S.kLog - 6) + 63 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
         gcongr
+
+open Classical in
+/-- **The lincheck phase** for the codewords near the committed table: `lincheck_phase_of_list` at
+`closeMsgs`. -/
+theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (C : Oracle F) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
+    (hzc : DZc A S sch C extra (some zc)) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
+    value (fun o => ¬ DLc A S sch C extra zc o) (lincheck A S zc) ≤
+      L * (((2 + 2 * (S.kLog - 6) + 63 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
+  simp only [dLc_eq]
+  exact lincheck_phase_of_list A hA S sch _ extra zc (by rw [← dZc_eq]; exact hzc) L hL
 
 end FlockSoundness
