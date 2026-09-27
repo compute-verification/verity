@@ -1,6 +1,6 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
-    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F --comp F --public F \
+    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] --public F \
         [--tables DIR] [--expect FILE]... --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
@@ -60,7 +60,9 @@ def lean_run(a, public, sessions):
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
     cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(a.out / "archive"), "--circuit", archived(a, a.circuit),
-           "--comp", archived(a, a.comp), "--public", archived(a, public)]
+           "--public", archived(a, public)]
+    if a.comp:
+        cmd += ["--comp", archived(a, a.comp)]
     if a.coins:
         cmd += ["--coins", a.coins]
     p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
@@ -95,8 +97,9 @@ def upstream_run(a, public, sessions):
 
 def main():
     ap = argparse.ArgumentParser()
-    for k in ("--lean", "--upstream", "--circuit", "--comp", "--public"):
+    for k in ("--lean", "--upstream", "--circuit", "--public"):
         ap.add_argument(k, required=True)
+    ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
