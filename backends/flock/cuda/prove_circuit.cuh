@@ -22,10 +22,14 @@ typedef struct {
     const uint32_t* t_b_col_ptr[FC_MAX_TYPES]; const uint32_t* t_b_rows[FC_MAX_TYPES]; uint32_t t_b_nnz[FC_MAX_TYPES];
     int n_ranges;
     int r_type[FC_MAX_RANGES]; int r_pos0[FC_MAX_RANGES]; int r_count[FC_MAX_RANGES];
-    // device witness (c.host_z == NULL): every compression's inputs, block-major, comp_per_block per block, at the
-    // block-local 2^14-slot comp_slot[j]
-    long long n_comp; int comp_per_block; const uint32_t* comp_slot;
-    const uint32_t* cv; const uint32_t* msg; const uint64_t* ctr; const uint32_t* blen; const uint32_t* flags;
+    // device witness (c.host_z == NULL): the compression slots (sha512x3), a second circuit evaluated like the units: its range,
+    // rows as CSR, level schedule and every slot's input words ([blocks * count][in_words] F128); then the host slots given up
+    // front (the hm96 slots: z, a, b words at absolute F128 word offsets)
+    int h_range; int h_useful; int h_const; int h_in_words;
+    const uint32_t* h_a_off; const uint32_t* h_a_col; const uint32_t* h_b_off; const uint32_t* h_b_col;
+    int h_levels; const uint32_t* h_level_off; const uint32_t* h_order;
+    const uint64_t* h_inputs;
+    long long n_host0; const long long* host0_at; const int* host0_words; const uint64_t* host0_zab;
     // the unit type: its range, its rows as CSR, its level schedule and every unit's input words
     int u_range; int u_useful; int u_const; int u_in_words;
     const uint32_t* u_a_off; const uint32_t* u_a_col; const uint32_t* u_b_off; const uint32_t* u_b_col;
@@ -106,7 +110,9 @@ __global__ void fc_unit_witness(const uint64_t* __restrict__ inputs, int in_word
                                 int n_levels, const uint32_t* __restrict__ level_off, const uint32_t* __restrict__ order,
                                 uint32_t* __restrict__ scratch, uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out,
                                 uint32_t* __restrict__ b_out, int phase, int lv0, int lv1, int n_late, const uint32_t* __restrict__ late_rows,
-                                const uint32_t* __restrict__ late, int n_cut, const uint32_t* __restrict__ cut_rows, uint32_t* __restrict__ cut) {
+                                const uint32_t* __restrict__ late, int n_cut, const uint32_t* __restrict__ cut_rows, uint32_t* __restrict__ cut,
+                                long long g_base) {
+    // g_base: this launch's first group (inputs and n_units are the launch's; the slots it writes are absolute)
     const long long g = blockIdx.x;
     uint32_t* Z = scratch + g * 3LL * useful;
     uint32_t* A = Z + useful;
@@ -149,14 +155,14 @@ __global__ void fc_unit_witness(const uint64_t* __restrict__ inputs, int in_word
         return;
     }
     const int nrb = (useful + 31) / 32;
-    const long long ul = 32 * g + lane;
+    const long long ul = 32 * (g_base + g) + lane;
     const long long blk = ul / per_block, kk = ul % per_block;
     const long long base = (blk << (k_log - 5)) + ((long long)(pos0 + kk) << (unit_log - 5));
     for (int rb = warp; rb < nrb; rb += nw) {
         const int r = 32 * rb + lane;
         uint32_t zv = r < useful ? Z[r] : 0, av = r < useful ? A[r] : 0, bv = r < useful ? B[r] : 0;
         zv = fc_transpose32(zv, lane); av = fc_transpose32(av, lane); bv = fc_transpose32(bv, lane);
-        if (ul < n_units) { z_out[base + rb] = zv; a_out[base + rb] = av; b_out[base + rb] = bv; }
+        if (ul < n_units + 32 * g_base) { z_out[base + rb] = zv; a_out[base + rb] = av; b_out[base + rb] = bv; }
     }
 }
 
@@ -203,25 +209,51 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         auto t0 = std::chrono::steady_clock::now();
         CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
         CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
-        const long long nc = N->n_comp;
-        uint32_t *d_cv, *d_m, *d_blen, *d_flags, *d_slot; b3u64* d_ctr;
-        CK(cudaMalloc(&d_cv, (size_t)nc * 32)); CK(cudaMalloc(&d_m, (size_t)nc * 64)); CK(cudaMalloc(&d_blen, (size_t)nc * 4));
-        CK(cudaMalloc(&d_flags, (size_t)nc * 4)); CK(cudaMalloc(&d_ctr, (size_t)nc * 8)); CK(cudaMalloc(&d_slot, (size_t)N->comp_per_block * 4));
-        CK(cudaMemcpy(d_cv, N->cv, (size_t)nc * 32, cudaMemcpyHostToDevice)); CK(cudaMemcpy(d_m, N->msg, (size_t)nc * 64, cudaMemcpyHostToDevice));
-        CK(cudaMemcpy(d_ctr, N->ctr, (size_t)nc * 8, cudaMemcpyHostToDevice)); CK(cudaMemcpy(d_blen, N->blen, (size_t)nc * 4, cudaMemcpyHostToDevice));
-        CK(cudaMemcpy(d_flags, N->flags, (size_t)nc * 4, cudaMemcpyHostToDevice));
-        CK(cudaMemcpy(d_slot, N->comp_slot, (size_t)N->comp_per_block * 4, cudaMemcpyHostToDevice));
-        F128 *tz, *ta, *tb;
-        CK(cudaMalloc(&tz, nc * 128 * sizeof(F128))); CK(cudaMalloc(&ta, nc * 128 * sizeof(F128))); CK(cudaMalloc(&tb, nc * 128 * sizeof(F128)));
-        launch_blake3_witness_blocks(d_cv, d_m, d_ctr, d_blen, d_flags, (int)nc, nc, (b3u64*)tz, (b3u64*)ta, (b3u64*)tb);
-        CK(cudaGetLastError());
-        fc_comp_scatter<<<8192, 256>>>(tz, nc, N->comp_per_block, d_slot, k_log, df);
-        fc_comp_scatter<<<8192, 256>>>(ta, nc, N->comp_per_block, d_slot, k_log, d_a);
-        fc_comp_scatter<<<8192, 256>>>(tb, nc, N->comp_per_block, d_slot, k_log, d_b);
-        CK(cudaGetLastError());
-        CK(cudaStreamSynchronize(0));
-        cudaFree(tz); cudaFree(ta); cudaFree(tb);
-        cudaFree(d_cv); cudaFree(d_m); cudaFree(d_blen); cudaFree(d_flags); cudaFree(d_ctr); cudaFree(d_slot);
+        {
+            static std::once_flag h_once;
+            static cudaError_t h_err = cudaSuccess;
+            static uint32_t *h_ao = nullptr, *h_ac = nullptr, *h_bo = nullptr, *h_bc = nullptr, *h_lo = nullptr, *h_ord = nullptr;
+            std::call_once(h_once, [&] {
+                auto up = [&](uint32_t** d, const uint32_t* h, size_t n) {
+                    if (h_err == cudaSuccess) h_err = cudaMalloc(d, (n ? n : 1) * sizeof(uint32_t));
+                    if (h_err == cudaSuccess && n) h_err = cudaMemcpy(*d, h, n * sizeof(uint32_t), cudaMemcpyHostToDevice);
+                };
+                up(&h_ao, N->h_a_off, N->h_useful + 1); up(&h_bo, N->h_b_off, N->h_useful + 1);
+                up(&h_ac, N->h_a_col, N->h_a_off[N->h_useful]); up(&h_bc, N->h_b_col, N->h_b_off[N->h_useful]);
+                up(&h_lo, N->h_level_off, N->h_levels + 1); up(&h_ord, N->h_order, N->h_level_off[N->h_levels]);
+            });
+            CK(h_err);
+            const int hr = N->h_range;
+            const int hl = N->type_log[N->r_type[hr]];
+            const long long hper = N->r_count[hr];
+            const long long n_h = (1LL << (m - k_log)) * hper;
+            const long long hg = (n_h + 31) / 32;
+            uint64_t* d_hin; uint32_t* d_hs;
+            CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
+            CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
+            const long long per = 3LL * N->h_useful * 4;
+            const long long batch = std::max(1LL, std::min(hg, (2LL << 30) / per));
+            CK(cudaMalloc(&d_hs, (size_t)(batch * per)));
+            for (long long g0 = 0; g0 < hg; g0 += batch) {
+                const long long ng = std::min(batch, hg - g0);
+                CK(cudaMemsetAsync(d_hs, 0, (size_t)(ng * per)));
+                fc_unit_witness<<<(unsigned)ng, 32 * 8>>>(d_hin + 2LL * 32 * g0 * N->h_in_words, N->h_in_words, n_h - 32 * g0, (int)hper,
+                    N->r_pos0[hr] + 0, hl, k_log, h_ao, h_ac, h_bo, h_bc, N->h_useful, N->h_const, N->h_levels, h_lo, h_ord, d_hs,
+                    (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->h_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
+                CK(cudaGetLastError());
+            }
+            CK(cudaStreamSynchronize(0));
+            cudaFree(d_hs); cudaFree(d_hin);
+            const uint64_t* p = N->host0_zab;
+            for (long long i = 0; i < N->n_host0; i++) {
+                const size_t w = (size_t)N->host0_words[i];
+                CK(cudaMemcpyAsync(df + N->host0_at[i], p, w * 16, cudaMemcpyHostToDevice));
+                CK(cudaMemcpyAsync(d_a + N->host0_at[i], p + 2 * w, w * 16, cudaMemcpyHostToDevice));
+                CK(cudaMemcpyAsync(d_b + N->host0_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
+                p += 6 * w;
+            }
+            CK(cudaStreamSynchronize(0));
+        }
         auto t1 = std::chrono::steady_clock::now();
 
         static std::once_flag net_once;
@@ -257,7 +289,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
                 fc_unit_witness<<<(unsigned)ng, 32 * warps>>>(d_in + 2LL * 32 * g0 * N->u_in_words, N->u_in_words, n_units - 32 * g0, (int)per_block,
                     N->r_pos0[ur] + 0, ul, k_log, d_ao, d_ac, d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch,
-                    (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->u_levels, 0, nullptr, nullptr, 0, nullptr, nullptr);
+                    (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->u_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
                 CK(cudaGetLastError());
             }
         } else {
@@ -270,7 +302,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             CK(cudaMemcpy(d_cr, N->u_cut_rows, N->u_n_cut * 4, cudaMemcpyHostToDevice));
             fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
                 d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
-                0, 0, N->u_levels0, 0, nullptr, nullptr, N->u_n_cut, d_cr, d_cut);
+                0, 0, N->u_levels0, 0, nullptr, nullptr, N->u_n_cut, d_cr, d_cut, 0);
             CK(cudaGetLastError());
             std::vector<uint32_t> cut((size_t)groups * N->u_n_cut), late((size_t)groups * N->u_n_late);
             CK(cudaMemcpy(cut.data(), d_cut, cut.size() * 4, cudaMemcpyDeviceToHost));
@@ -281,7 +313,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             CK(cudaMemcpy(d_late, late.data(), late.size() * 4, cudaMemcpyHostToDevice));
             fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
                 d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
-                1, N->u_levels0, N->u_levels, N->u_n_late, d_lr, d_late, 0, nullptr, nullptr);
+                1, N->u_levels0, N->u_levels, N->u_n_late, d_lr, d_late, 0, nullptr, nullptr, 0);
             CK(cudaGetLastError());
             // the host slots (tail stages, lookups): z, a, b words at their word offsets
             const uint64_t* p = host_zab;

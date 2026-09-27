@@ -9,7 +9,6 @@ use flock_prover::{
     pcs::{Commitment, PcsParams},
     proof::R1csProofLigerito,
     r1cs::SparseBinaryMatrix,
-    r1cs_hashes::blake3::Compression,
 };
 use rayon::prelude::*;
 
@@ -39,14 +38,24 @@ struct CircuitParams {
     r_type: [i32; FC_MAX_RANGES],
     r_pos0: [i32; FC_MAX_RANGES],
     r_count: [i32; FC_MAX_RANGES],
-    n_comp: i64,
-    comp_per_block: i32,
-    comp_slot: *const u32,
-    cv: *const u32,
-    msg: *const u32,
-    ctr: *const u64,
-    blen: *const u32,
-    flags: *const u32,
+    /// the compression slots (sha512x3), evaluated on the device like the units
+    h_range: i32,
+    h_useful: i32,
+    h_const: i32,
+    h_in_words: i32,
+    h_a_off: *const u32,
+    h_a_col: *const u32,
+    h_b_off: *const u32,
+    h_b_col: *const u32,
+    h_levels: i32,
+    h_level_off: *const u32,
+    h_order: *const u32,
+    h_inputs: *const u64,
+    /// host slots given up front (the hm96 slots): absolute F128 word offsets, word counts, z ‖ a ‖ b words
+    n_host0: i64,
+    host0_at: *const i64,
+    host0_words: *const i32,
+    host0_zab: *const u64,
     u_range: i32,
     u_useful: i32,
     u_const: i32,
@@ -155,15 +164,18 @@ pub fn device_salts(key: &[u8; 32], nonce: u64, idx: &[i64]) -> Vec<u8> {
     out
 }
 
+/// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
+pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
+
 /// Where a rep's witness comes from.
 pub enum CircuitSrc<'a> {
     /// The whole packed `(z, a, b)` from the host (any witness, a tampered one included).
     Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
-    /// A cut template: the compressions and the units' leaf words as `Device`, the units in two passes around `mid`.
-    DeviceCut { comps: &'a [Compression], inputs: &'a [F128], mid: Mid<'a> },
-    /// Every block's compressions (block-major, each block's in slot order) and every unit's input words
-    /// (`[blocks][units per block][in_words]`): the honest witness, built on the device.
-    Device { comps: &'a [Compression], inputs: &'a [F128] },
+    /// A cut template: as `Device`, the units in two passes around `mid`.
+    DeviceCut { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128], mid: Mid<'a> },
+    /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
+    /// (host slots), and every unit's input words (`[blocks][units per block][in_words]`): the honest witness, built on the device.
+    Device { rows: &'a [F128], host: &'a [HostSlot], inputs: &'a [F128] },
 }
 
 /// The unit's expanded circuit's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
@@ -246,7 +258,8 @@ struct Types {
     ranges: Vec<(i32, i32, i32)>,
     u_range: usize,
     sched: UnitSched,
-    comp_slot: Vec<u32>,
+    h_range: usize,
+    hsched: UnitSched,
 }
 
 fn types(st: &Stmt) -> &'static Types {
@@ -284,18 +297,28 @@ fn types(st: &Stmt) -> &'static Types {
         }
         assert!(logs.len() <= FC_MAX_TYPES && ranges.len() <= FC_MAX_RANGES, "too many slot types or ranges for the FFI");
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
-        let comp_slot: Vec<u32> = Vec::new();
-        Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), comp_slot }
+        let h_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.sha_net)).unwrap();
+        Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(&c.nets[c.sha_net].1) }
     })
 }
 
-/// The device witness's host inputs: every unit's input words, from the prover's rows (the row slots are the host's until the
-/// device evaluates them).
-pub fn device_inputs(st: &Stmt, rows: &[u8]) -> (Vec<Compression>, Vec<F128>) {
-    let comps: Vec<Compression> = Vec::new();
+/// The device witness's host inputs for an honest prover: every compression slot's input words, the hm96 slots' witness, and
+/// every unit's input words.
+pub fn device_inputs(st: &Stmt, rows: &[u8], salts: &[u8]) -> (Vec<F128>, Vec<HostSlot>, Vec<F128>) {
+    let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| st.row_inputs(Some(rows), Some(salts), b, Default::default())).collect();
+    let sha: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+    let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+    let host = host_slots(st, st.c.hm_net, &hm);
     let ur = st.c.unit_range();
     let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| st.unit_inputs(Some(rows), x / ur.count, x % ur.count)).collect();
-    (comps, inputs)
+    (sha, host, inputs)
+}
+
+/// Circuit `ni`'s slots evaluated on the host from their input words (`[blocks * count]`), placed at their absolute word offsets.
+pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
+    let r = st.c.range_of(ni);
+    let wpb = 1usize << (st.c.k_log - 7);
+    st.slot_zab(ni, &st.c.nets[ni].1, ins).into_iter().map(|(x, z, a, b)| ((x / r.count) * wpb + r.slot(x % r.count) / 128, z, a, b)).collect()
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
@@ -321,12 +344,13 @@ pub fn prove_circuit(
     let mut phase = [0f64; 8];
     let mut wphase = [0f64; 3];
     let (mut hz, mut ha, mut hb): (*const u64, *const u64, *const u64) = (null(), null(), null());
-    let (mut cv, mut msg, mut ctr, mut blen, mut flags, mut n_comp, mut uin) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), 0usize, null());
+    let (mut uin, mut hin): (*const u64, *const u64) = (null(), null());
+    let (mut h_at, mut h_words, mut h_zab): (Vec<i64>, Vec<i32>, Vec<u64>) = (Vec::new(), Vec::new(), Vec::new());
     let mut src = src;
     let mut mctx: Option<MidCtx<'_>> = None;
-    if let CircuitSrc::DeviceCut { comps, inputs, mid } = src {
+    if let CircuitSrc::DeviceCut { rows, host, inputs, mid } = src {
         mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
-        src = CircuitSrc::Device { comps, inputs };
+        src = CircuitSrc::Device { rows, host, inputs };
     }
     match &src {
         CircuitSrc::Host { z, a, b } => {
@@ -334,16 +358,18 @@ pub fn prove_circuit(
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
         }
         CircuitSrc::DeviceCut { .. } => unreachable!(),
-        CircuitSrc::Device { comps, inputs } => {
-            assert_eq!(comps.len(), st.blocks() * t.comp_slot.len());
+        CircuitSrc::Device { rows, host, inputs } => {
             assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
-            cv = comps.iter().flat_map(|c| c.0).collect();
-            msg = comps.iter().flat_map(|c| c.1).collect();
-            ctr = comps.iter().map(|c| c.2).collect();
-            blen = comps.iter().map(|c| c.3).collect();
-            flags = comps.iter().map(|c| c.4).collect();
-            n_comp = comps.len();
+            assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
             uin = inputs.as_ptr() as *const u64;
+            hin = rows.as_ptr() as *const u64;
+            for (at, z, a, b) in host.iter() {
+                h_at.push(*at as i64);
+                h_words.push(z.len() as i32);
+                for v in [z, a, b] {
+                    h_zab.extend(v.iter().flat_map(|x| [x.lo, x.hi]));
+                }
+            }
         }
     }
     let c = ChunkParams {
@@ -376,14 +402,22 @@ pub fn prove_circuit(
         r_type: [0; FC_MAX_RANGES],
         r_pos0: [0; FC_MAX_RANGES],
         r_count: [0; FC_MAX_RANGES],
-        n_comp: n_comp as i64,
-        comp_per_block: t.comp_slot.len() as i32,
-        comp_slot: t.comp_slot.as_ptr(),
-        cv: cv.as_ptr(),
-        msg: msg.as_ptr(),
-        ctr: ctr.as_ptr(),
-        blen: blen.as_ptr(),
-        flags: flags.as_ptr(),
+        h_range: t.h_range as i32,
+        h_useful: st.c.nets[st.c.sha_net].1.useful as i32,
+        h_const: st.c.nets[st.c.sha_net].1.const_pos as i32,
+        h_in_words: st.c.nets[st.c.sha_net].1.in_words as i32,
+        h_a_off: t.hsched.a_off.as_ptr(),
+        h_a_col: t.hsched.a_col.as_ptr(),
+        h_b_off: t.hsched.b_off.as_ptr(),
+        h_b_col: t.hsched.b_col.as_ptr(),
+        h_levels: (t.hsched.level_off.len() - 1) as i32,
+        h_level_off: t.hsched.level_off.as_ptr(),
+        h_order: t.hsched.order.as_ptr(),
+        h_inputs: hin,
+        n_host0: h_at.len() as i64,
+        host0_at: h_at.as_ptr(),
+        host0_words: h_words.as_ptr(),
+        host0_zab: h_zab.as_ptr(),
         u_range: t.u_range as i32,
         u_useful: unit.useful as i32,
         u_const: unit.const_pos as i32,

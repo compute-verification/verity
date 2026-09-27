@@ -32,7 +32,7 @@ use flock_live::{
 };
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
 #[cfg(feature = "gpu")]
-use flock_prover::r1cs_hashes::blake3::Compression;
+use flock_live::gpu_circuit::HostSlot;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -214,19 +214,33 @@ type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
 #[derive(Clone)]
 enum WitData {
     Host(Witness),
+    /// the device witness's inputs: every compression slot's input words, the hm96 slots (host slots), every unit's input words
     #[cfg(feature = "gpu")]
-    #[allow(dead_code)]
-    Dev(Vec<Compression>, Vec<F128>),
-    /// a cut template on the device: the units' inputs (leaf words; the late words come from the host tail between passes)
+    Dev(Vec<F128>, Vec<HostSlot>, Vec<F128>),
+    /// a cut template on the device: as `Dev` (the late words come from the host tail between the units' passes)
     #[cfg(feature = "gpu")]
-    #[allow(dead_code)]
-    DevCut(Vec<Compression>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
+    DevCut(Vec<F128>, Vec<HostSlot>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
 }
 
-/// A rep's host witness. The device witness (`gpu_circuit`'s compressions and units) has no sha512x3 or hm96 slots yet, so
-/// every rep's witness is built here and uploaded.
-fn witness(st: &Stmt, w: &Wit) -> (WitData, f64) {
+/// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
+/// units' input words, the hm96 slots computed here); otherwise the packed host witness.
+fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
+    #[cfg(feature = "gpu")]
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+        use rayon::prelude::*;
+        let ur = st.c.unit_range();
+        let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
+        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
+        let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
+        if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
+            return (WitData::DevCut(rows, host, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+        }
+        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+    }
+    let _ = device;
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
         let word = &mut ins[n][x][col / 128];
@@ -261,12 +275,10 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     let mut mid_fn;
     let src = match wt {
         WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
-        #[cfg(feature = "gpu")]
-        WitData::Dev(c, i) => CircuitSrc::Device { comps: c, inputs: i },
-        #[cfg(feature = "gpu")]
-        WitData::DevCut(c, i, ui) => {
+        WitData::Dev(r, h, i) => CircuitSrc::Device { rows: r, host: h, inputs: i },
+        WitData::DevCut(r, h, i, ui) => {
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
-            CircuitSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
+            CircuitSrc::DeviceCut { rows: r, host: h, inputs: i, mid: &mut mid_fn }
         }
     };
     let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch, Some(salts));
@@ -372,9 +384,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
     let mut commit: Vec<F128> = Vec::new();
+    let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false, seed);
-    let (wt0, tw0) = witness(st, &w0);
-    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed)) } else { (wt0.clone(), 0.0) };
+    let (wt0, tw0) = witness(st, &w0, device);
+    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true, seed), device) } else { (wt0.clone(), 0.0) };
     let witness_s = tw0 + tw1;
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
