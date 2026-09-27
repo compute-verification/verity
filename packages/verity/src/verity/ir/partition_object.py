@@ -26,7 +26,11 @@
   instance of the template (a unit, not a node: a batch of 0 members is no instance).
 * **Q_template_instances v0**, `params = {"templates": [<descriptor id>, ...]}` (non-empty, distinct, order as given).  The same, a node
   an instance of any listed template, every listed template with at least one instance; the unit order is node order, not list order.
-  `tests/ir/test_template_instance.py` pins both (`template_instance_vectors.json`).
+  `tests/ir/test_template_instance.py` pins both (`template_instance_vectors.json`).  Like every query, both apply only to a
+  topological program (below), so an instance never reads its own gates.
+* **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
+  nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
+  refuse the same programs (`query-inapplicable`, with the definition, node, argument and reference).
 * `validate` checks the object's form (exact keys; a known query with exactly its parameters); `digest` digests only a valid object.
   `verify` evaluates the query and checks every Call's cut on its derived graph (the invariant, the width rule), and, given what serving
   commits, holds it to the derived committed set: every Call that commits must be given and no other key (`served-missing`,
@@ -45,6 +49,7 @@ from .codec import SCHEMA_V1
 from .cut import WIRING, CallGraph, DefinitionCut, QueryInapplicable, check_cut, derived_committed, evaluate_definition, member_refs
 from .layout import resolve
 from .partition import CutVerdict
+from .refs import Concat, Explicit
 
 FORMAT = "verity/partition/v1"
 _KEYS = {"format", "program", "query"}
@@ -268,7 +273,52 @@ class TemplatePartition:
         return sorted(out)
 
 
+def order_violation(program: Any) -> dict | None:
+    """The first reference of the program that names neither a parameter of its body nor an earlier node of it (a body's `ret` may
+    name any of its nodes), over every body the root reaches, root first and callees in node order, each Definition once; None when the
+    program is topological.  A program with such a reference is no computation (a gate would read itself or a later gate): every query
+    is inapplicable to it."""
+    seen: set[int] = set()
+    todo = [program.root]
+    while todo:
+        fn = todo.pop(0)
+        if id(fn) in seen or not hasattr(fn, "body"):
+            continue
+        seen.add(id(fn))
+        body = fn.body
+        for k, node in enumerate(body.nodes):
+            for i, a in enumerate(node.args):
+                bad = _out_of_order(a.refs, len(body.params), k)
+                if bad is not None:
+                    return {"definition": fn.id, "node": k, "arg": i, "reference": bad, "why": "not topological"}
+            todo.append(node.fn)
+        bad = _out_of_order(body.ret, len(body.params), len(body.nodes))
+        if bad is not None:
+            return {"definition": fn.id, "node": "ret", "reference": bad, "why": "not topological"}
+    return None
+
+
+def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
+    """The first (space, index) of `refs` outside the body's parameters `0..params-1` and nodes `0..nodes-1`, or None."""
+    parts = [refs]
+    while parts:
+        r = parts.pop(0)
+        if isinstance(r, Concat):
+            parts[:0] = r.parts
+            continue
+        names = [(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else ([(r.space, r.idx)] if r.count else [])
+        for space, idx in names:
+            if not (_is_int(idx) and 0 <= idx < (params if space == "p" else nodes if space == "n" else 0)):
+                return [space, idx]
+    return None
+
+
 def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition | TemplatePartition:
+    """The query `q` (default `Q_word{16, 32}` v1) applied to `program`: `QueryInapplicable` when the program is not topological
+    (`order_violation`), checked once here for every query, or when the query does not apply to it."""
+    bad = order_violation(program)
+    if bad is not None:
+        raise QueryInapplicable(f"{bad['definition']} node {bad['node']} names {bad['reference']}: not a parameter or an earlier node", bad)
     q = dict(q or query())
     if (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES):
         return TemplatePartition(program, q)
@@ -293,8 +343,10 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
 
     `served`, when given: root-body index -> the gates serving commits for that Call, numbered as `CallGraph` numbers the Call's
     computing gates (compacted, in layout order; not the Call's raw gate indices).  Its keys must be exactly Calls, including every
-    Call whose derived committed set is not empty (`served-missing`: such a Call not given; `served-unknown`: a key that is no Call);
-    each given Call is held to its derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`, under `cut`)."""
+    Call whose derived committed set is not empty (`served-missing`: such a Call not given; `served-unknown`: a key that is no Call;
+    `served-malformed`: a Call's entry that is not a list of distinct non-negative integers);
+    each given Call is held to its derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`, under `cut`).  A template
+    query commits whole instances' inputs and results; `served` with one is refused (`served-unsupported`)."""
     v = validate(obj)
     if not v.ok:
         return v
@@ -303,7 +355,7 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
         bad["program"] = [obj["program"]]
     template = (obj["query"]["name"], obj["query"]["version"]) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
     if template and served is not None:
-        raise ValueError("served commits are checked for Q_word; a template query commits whole instances' inputs and results")
+        bad["served-unsupported"] = [obj["query"]["name"]]
     try:
         part = evaluate(program, obj["query"])
         if not template:
@@ -319,6 +371,10 @@ def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, b
         unknown = sorted((k for k in served if k not in known), key=repr)
         if unknown:
             bad["served-unknown"] = unknown
+        malformed = sorted((k for k, v in served.items() if k in known and not _gate_list(v)), key=repr)
+        if malformed:
+            bad["served-malformed"] = malformed
+            return
     checked: dict[str, CutVerdict] = {}
     for p, (k, c) in enumerate(part.calls):
         if served is not None and k in served:
@@ -331,6 +387,11 @@ def _verify_calls(part: Partition, served: Mapping[int, Iterable[int]] | None, b
                 r = checked[c.fn.id] = check_cut(part.graph(p), part.owner(p), None, (part.X, part.W, 0))
         if not r.ok:
             bad.setdefault("cut", []).append({"call": k, "codes": list(r.codes), "detail": r.detail})
+
+
+def _gate_list(v: Any) -> bool:
+    """A Call's served commits: a list or tuple of distinct non-negative integers (never coerced)."""
+    return isinstance(v, (list, tuple)) and all(_is_int(g) and g >= 0 for g in v) and len(set(v)) == len(v)
 
 
 def _verdict(bad: dict[str, list]) -> CutVerdict:

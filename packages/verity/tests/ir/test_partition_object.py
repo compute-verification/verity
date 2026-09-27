@@ -144,6 +144,7 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
     desc = codec.encode_program(program)
     assert codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"}).decode() == VECTORS["descriptor"]
     D = codec.decode_program(json.loads(VECTORS["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
+    assert PO.order_violation(D) is None                                             # topological: every query applies
     assert PO.program_sha512(D.desc) == VECTORS["program_sha512"] == PO.program_sha512(program)
     obj = PO.build(D)
     assert obj == VECTORS["object"] and PO.digest(obj) == VECTORS["object_digest"]

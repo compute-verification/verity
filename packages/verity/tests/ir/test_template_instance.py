@@ -121,6 +121,15 @@ def _refusal(program, q) -> str | None:
     return None
 
 
+def _order_refused() -> list:
+    """The population program whose instances read their own outputs: not topological, so no query applies."""
+    d = json.loads(_canon(POPULATION))
+    d["definitions"][d["root"]]["body"]["nodes"][2]["args"][0]["refs"] = {"affine": ["n", 2, 0, 6]}
+    D = codec.decode_program(d, REG)
+    v = PO.verify(PO.build(D, PO.template_instance_query(Scale)), D)
+    return [list(v.codes), v.detail["query-inapplicable"]["gates"]]
+
+
 def build(decode: bool = True) -> dict:
     progs = {k: codec.decode_program(json.loads(_canon(p)), REG) if decode else p for k, p in PROGRAMS.items()}
     return {
@@ -131,6 +140,8 @@ def build(decode: bool = True) -> dict:
         "template_ids": {"TScale descriptor id": SCALE_ID, "TScale readable id": Scale.id, "TDot": DOT_ID},
         "cases": [[label, name, q, _evaluated(progs[name], q)] for label, name, q in CASES],
         "refused": [[label, name, q, _refusal(progs[name], q)] for label, name, q in REFUSED],
+        "order_refused": _order_refused(),
+        "served_unsupported": list(PO.verify(PO.build(POPULATION, PO.template_instance_query(Scale)), POPULATION, served={}).codes),
         "malformed": [[label, q, list(PO.validate({"format": PO.FORMAT, "program": "0" * 128, "query": q}).codes)] for label, q in MALFORMED],
     }
 
@@ -172,6 +183,15 @@ def test_the_mixed_program_commits_the_value_across_units():
 @pytest.mark.parametrize("n", range(len(REFUSED)), ids=[r[0] for r in REFUSED])
 def test_the_query_refuses(live, n):
     assert live["refused"][n] == VECTORS["refused"][n] and VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
+
+
+def test_a_program_that_is_not_topological_and_served(live):
+    assert live["order_refused"] == VECTORS["order_refused"] and live["served_unsupported"] == VECTORS["served_unsupported"]
+    codes, (detail,) = VECTORS["order_refused"]
+    assert codes == ["query-inapplicable"] and detail["node"] == 2 and detail["why"] == "not topological"
+    assert VECTORS["served_unsupported"] == ["served-unsupported"]
+    for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
+        assert PO.order_violation(codec.decode_program(json.loads(text), REG)) is None, name
 
 
 @pytest.mark.parametrize("n", range(len(MALFORMED)), ids=[m[0] for m in MALFORMED])

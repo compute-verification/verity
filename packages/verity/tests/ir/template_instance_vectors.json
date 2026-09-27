@@ -605,6 +605,26 @@
    "('query-inapplicable',) the program has no instance of ['TDot_v1']"
   ]
  ],
+ "order_refused": [
+  [
+   "query-inapplicable"
+  ],
+  [
+   {
+    "definition": "Root[TemplateInstances_v0{N=3}]_v1",
+    "node": 2,
+    "arg": 0,
+    "reference": [
+     "n",
+     2
+    ],
+    "why": "not topological"
+   }
+  ]
+ ],
+ "served_unsupported": [
+  "served-unsupported"
+ ],
  "malformed": [
   [
    "a template that is not a string",

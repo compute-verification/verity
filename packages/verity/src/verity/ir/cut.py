@@ -10,9 +10,10 @@ a body's gates are its nodes' in order, node k at `body.offsets[k]`, a batch nod
 `m * callee.gates`), a primitive node one gate per member, recursively; `layout.resolve` maps a reference (`("p", param, leaf)` or
 `("n", node, leaf)`, `refs.Affine` / `Strided` / `Concat` / `Explicit` sequences) to a gate id.
 
-0. **Applicability.**  Q_word v1 applies to a program whose root body's nodes other than its Input nodes are each of form `call` or
-   `primitive`.  A root `batch` or `scan` node makes the query inapplicable: `evaluate` raises `QueryInapplicable` and `verify`
-   refuses with `query-inapplicable` (the root index and form).
+0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
+   parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
+   whose root body's nodes other than its Input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
+   `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).
 1. **Calls.**  The root body's nodes whose callee's family is not `Input`, in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.
