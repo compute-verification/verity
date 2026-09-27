@@ -39,12 +39,26 @@ def test_no_escape_hatches():
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_proofs_use_only_standard_axioms():
-    subprocess.run(["lake", "build", "FlockProofs"], cwd=LEAN, check=True, capture_output=True)
-    out = subprocess.run(["lake", "env", "lean", "CheckAxioms.lean"], cwd=LEAN, check=True, capture_output=True, text=True).stdout
+def check_axioms(root, target):
+    subprocess.run(["lake", "build", target], cwd=root, check=True, capture_output=True)
+    out = subprocess.run(["lake", "env", "lean", "CheckAxioms.lean"], cwd=root, check=True, capture_output=True, text=True).stdout
     lines = [l for l in out.splitlines() if "depends on axioms" in l or "does not depend on any axioms" in l]
     assert lines, out
     for l in lines:
         used = set(re.findall(r"[\w.]+", l.split(":", 1)[1])) if "depends on axioms" in l else set()
         assert used <= STANDARD_AXIOMS, l
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_proofs_use_only_standard_axioms():
+    check_axioms(LEAN, "FlockProofs")
+
+
+LEVEL3 = LEAN / "level3"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or not (LEVEL3 / ".lake" / "packages" / "mathlib" / ".lake" / "build").is_dir(),
+                    reason="level3 needs Mathlib's build cache (`lake exe cache get` in lean/level3)")
+def test_field_proofs_use_only_standard_axioms():
+    assert (LEVEL3 / "lean-toolchain").read_text().strip() == TOOLCHAIN
+    check_axioms(LEVEL3, "FlockLevel3")

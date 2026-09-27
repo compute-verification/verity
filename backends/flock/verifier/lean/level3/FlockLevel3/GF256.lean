@@ -3,7 +3,7 @@ Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, PROTOCOL.md §2.4) is t
 `c0 + c1·u` is the residue class of `c0 + c1·Y`, and `F256.mul` (three products, `p0 + x⁻¹·p1`, `p2 + p0`) is the quotient
 ring's product. The structure is transported onto the synonym `GF256`, whose `+` and `*` are the executable's.
 -/
-import FlockLevel3.GF128Ring
+import FlockLevel3.GF128Field
 
 open Polynomial Flock
 
@@ -13,12 +13,6 @@ open GF128 in
 theorem GF128.two_eq_zero : (2 : GF128) = 0 := by
   rw [show (2 : GF128) = 1 + 1 by norm_num, one_eq, add_eq, zero_eq]
   exact congrArg of (by decide)
-
-theorem GF128.nontrivial : (0 : GF128) ≠ 1 := by
-  rw [GF128.zero_eq, GF128.one_eq]
-  exact fun h => absurd (congrArg id h : (0 : F128) = 1) (by decide)
-
-instance : Nontrivial GF128 := ⟨⟨0, 1, GF128.nontrivial⟩⟩
 
 abbrev K := GF128
 

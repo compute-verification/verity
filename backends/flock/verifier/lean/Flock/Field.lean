@@ -53,13 +53,13 @@ instance : Mul F128 := ⟨mul⟩
 
 def square (a : F128) : F128 := mul a a
 
-/-- `a^(2^128 − 2)`: the inverse, with `inv 0 = 0` (§2.1). -/
-def inv (a : F128) : F128 := Id.run do
-  -- 2^128 − 2 = 0b111…10: square-and-multiply over 127 ones then one zero.
-  let mut acc := one
-  for _ in [0:127] do
-    acc := mul (square acc) a
-  return square acc
+/-- `k` square-and-multiply steps by `a` from `acc`: `acc^(2^k) · a^(2^k − 1)`. -/
+def invGo (a : F128) : Nat → F128 → F128
+  | 0, acc => acc
+  | k + 1, acc => invGo a k (mul (square acc) a)
+
+/-- `a^(2^128 − 2)`: the inverse, with `inv 0 = 0` (§2.1). 2^128 − 2 = 0b111…10: 127 ones, then one zero. -/
+def inv (a : F128) : F128 := square (invGo a 127 one)
 
 /-- The 16-byte encoding `le64(lo) ‖ le64(hi)`. -/
 def toBytes (a : F128) : ByteArray := Id.run do

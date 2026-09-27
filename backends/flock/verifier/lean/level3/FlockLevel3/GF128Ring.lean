@@ -1,7 +1,6 @@
 /-
 Level 3, L3-F: the executable's `F128` is the ring GF(2)[X]/(G). `toAdj` sends an element to its residue class; it is a
-bijection that carries `+` and `*` to the quotient ring's. The ring structure is transported onto the synonym `GF128`, whose
-`+` and `*` are the executable's (`GF128.add_eq`, `GF128.mul_eq`).
+bijection that carries `+` and `*` to the quotient ring's (the field structure, once `G` is irreducible: `GF128Field`).
 -/
 import FlockLevel3.GF128
 import Mathlib.RingTheory.AdjoinRoot
@@ -80,41 +79,5 @@ theorem toAdj_surjective : Function.Surjective toAdj := by
 noncomputable def equivAdj : F128 ≃ AdjoinRoot G := Equiv.ofBijective toAdj ⟨toAdj_injective, toAdj_surjective⟩
 
 theorem equivAdj_apply (a : F128) : equivAdj a = toAdj a := rfl
-
-/-- GF(2^128) with the ring structure of GF(2)[X]/(G), on the executable's representation. -/
-def GF128 := F128
-
-noncomputable instance : CommRing GF128 := equivAdj.commRing
-
-namespace GF128
-
-def of (a : F128) : GF128 := a
-
-theorem add_eq (a b : F128) : of a + of b = of (a + b) := by
-  show equivAdj.symm (equivAdj a + equivAdj b) = a + b
-  apply equivAdj.injective
-  simp only [Equiv.apply_symm_apply, equivAdj_apply, toAdj_add]
-
-theorem mul_eq (a b : F128) : of a * of b = of (a * b) := by
-  show equivAdj.symm (equivAdj a * equivAdj b) = a * b
-  apply equivAdj.injective
-  simp only [Equiv.apply_symm_apply, equivAdj_apply, toAdj_mul]
-
-theorem zero_eq : (0 : GF128) = of 0 := by
-  show equivAdj.symm 0 = 0
-  apply equivAdj.injective
-  simp only [Equiv.apply_symm_apply, equivAdj_apply, toAdj_zero]
-
-theorem one_eq : (1 : GF128) = of 1 := by
-  show equivAdj.symm 1 = 1
-  apply equivAdj.injective
-  simp only [Equiv.apply_symm_apply, equivAdj_apply, toAdj_one]
-
-/-- `x · x⁻¹ = 1`: the executable's `F256.xinv` is the inverse of the generator `x` (checked by the kernel). -/
-theorem xinv_mul_x : of F256.xinv * of (F128.monomial 1) = 1 := by
-  rw [mul_eq, one_eq]
-  exact congrArg of (by decide)
-
-end GF128
 
 end FlockLevel3
