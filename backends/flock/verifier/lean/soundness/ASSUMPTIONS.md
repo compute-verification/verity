@@ -393,7 +393,7 @@ The weights are committed once and every later proof opens that root. The analys
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
   - Under A2 that term is `t·N_s(8N₀/e)/2^256` (audit B: 2^-125.1 at `t = 2^80`; strict time 2^-69.8), and it
-    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^66` to `2^87`, with `N` counting audits.
+    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^65.4` to `2^86.7`, with `N` counting audits.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.

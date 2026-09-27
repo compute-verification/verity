@@ -230,7 +230,7 @@ strict time.
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot N_s(8N_0/e)/2^{256}$ up to lower-order
-    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 23 bits below.
+    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 24 bits below.
   - **Half of it,** $4N_0/e$, would come from a value layer drawn from a sequence of auxiliary extractions (the first
     recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by averaging
     over that sequence. The record keeps $8N_0/e$, the form the Lean plan proves.
