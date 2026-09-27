@@ -541,6 +541,10 @@ class SingleRow(Row):
             cmd += ["--required-classes", ck.required_classes]
         if ck.vu_export != "0":
             cmd += ["--vu-export-dir", self.vu_export_dir()]
+        if ck.serving_rows:
+            rd = self.env.research_run_dir
+            cmd += ["--serving-rows-dir", os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows",
+                    "--serving-rows-partition", ck.serving_rows]
         if self.norm_tap():
             cmd += ["--norm-tap-so", self.env.norm_tap_so]
         if self.router_tap():

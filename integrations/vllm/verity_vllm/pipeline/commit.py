@@ -1087,6 +1087,8 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
+    serving_rows_dir: str | None = option("--serving-rows-dir", env="VERITY_SERVING_ROWS_DIR", default=None, help="opt-in, not on the record: after pair 0's roots are final and before its challenge, commit every RoPE head in M0's serving row format (verity_vllm.commit.serving_rows) and write the registration, the unit index and M0's public and prover bodies here")
+    serving_rows_partition: str | None = option("--serving-rows-partition", env="VERITY_SERVING_ROWS_PARTITION", default=None, help="with --serving-rows-dir: the verifier's partition file ({partition, partition_digest, population}), fixed before serving")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -2373,6 +2375,22 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                    "why": None if (_w_ref and str(_w_now.get("root")) == str(_w_ref)) else ("no committed weights root on the run" if not _w_ref else "root differs")}
                         except Exception as _we:  # noqa: BLE001
                             _wc = {"equal": None, "note": f"by reference, unverified at replay: {_we!r}"[:200]}
+                        if getattr(args, "serving_rows_dir", None) and pair == 0:
+                            # opt-in, never the record: the rows are read through their own opened reader (every word an opening under
+                            # this run root), before the seed below exists; a failure is written beside them and changes no verdict
+                            from verity_vllm.commit import serving_rows as SRW
+                            try:
+                                SRW.after_commit(args.serving_rows_dir, partition_file=args.serving_rows_partition, programs=_progs, bmap=_bm,
+                                                 committed=OC.OpenedReader(com, rc), weights=_wp,
+                                                 manifest=(required_manifest if isinstance(required_manifest, dict) else None), run_root=rc.run_root,
+                                                 run=os.environ.get("RESEARCH_RUN_ID") or Path(args.out).name, arrivals=_arr,
+                                                 program_dirs={_k: _v.get("dir") for _k, _v in _loaded.items()},
+                                                 committer={"source": os.environ.get("RESEARCH_SOURCE_SHA")})
+                            except Exception as _se:  # noqa: BLE001
+                                import traceback
+                                Path(args.serving_rows_dir).mkdir(parents=True, exist_ok=True)
+                                (Path(args.serving_rows_dir) / "error.txt").write_text(traceback.format_exc())
+                                print(f"[serving-rows] FAILED (no verdict changes): {_se!r}"[:400], flush=True)
                         # [O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given
                         _seed_chal = None
                         if getattr(args, "replay_seed", None) is not None:
