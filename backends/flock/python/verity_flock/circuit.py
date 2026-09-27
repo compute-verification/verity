@@ -65,15 +65,16 @@ SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
 SHA_LOG = HM_LOG = 18
 MASK_LOG = 14
 K_MAX = 26
-#: The partition digest here covers this lowering's own split of a VU into slots (its unit circuit, leaf and output maps and
-#: wires). Provisional: the partition checker's partition digest replaces it (commitments-decisions-routing §1).
+#: The partition is a named query of the program, P = Q(C) (Daniel, 2026-09-27): its digest is SHA-512 over the tag and
+#: canon({program, query, version, params}). Until core's verity/partition/v1 lands (#111), the query here is this lowering's
+#: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
 PARTITION_RULE = "flock-circuit/unit-cover/v0"
 SALT_BYTES, BC_BYTES = 192, 128
 
 
 def partition_digest(obj: dict) -> str:
-    """``SHA-512(rule || 0 || canon(object))``, 64 bytes, the shape of ``verity/partition/v1``'s digest; the rule is
-    :data:`PARTITION_RULE` until core's ``verity/partition/v1`` object replaces the unit cover."""
+    """``SHA-512(rule || 0 || canon({program, query, version, params}))``, 64 bytes: ``verity/partition/v1``'s shape under the
+    provisional :data:`PARTITION_RULE`."""
     return hashlib.sha512(PARTITION_RULE.encode() + b"\0" + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -263,16 +264,17 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": 1 for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []
-    cover = {"rule": PARTITION_RULE, "unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"],
-             "tail_wires": tail_wires, "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)],
-             "lookups": lk}
+    programs = sub.program_digests()
+    cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
+             "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
+                        "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)], "lookups": lk}}
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "row_schema": ROW_SCHEMA, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "out_ports": outs, "ranges": ranges, "rows": [_row_consts(p) for p in ports],
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
             "dummy": _dummy(low, ports), "leaf_scheme": LEAF_SCHEME, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
-            "wires": _row_wires(ports) + tail_wires, "program_digests": sub.program_digests(),
-            "partition": {"rule": PARTITION_RULE, "digest": partition_digest(cover)}}
+            "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
+            "partition": {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)}}
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
     texts = [("unit", _expanded(low.layout, low.name)),
              (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
