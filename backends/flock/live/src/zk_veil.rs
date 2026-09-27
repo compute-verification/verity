@@ -476,6 +476,7 @@ pub fn from_exposed(v: &[F128], lay: &Layout) -> (ZerocheckProof, LincheckProof)
 pub fn mask_proof(zc: &ZerocheckProof, lc: &LincheckProof, lay: &Layout, h: &[F128]) -> (ZerocheckProof, LincheckProof) {
     let mut z = zc.clone();
     let mut l = lc.clone();
+    l.comb_partial = Vec::new();
     assert!(z.grinding_nonces.is_empty() && l.grinding_nonces.is_empty() && l.matrix_evals.is_empty());
     for i in 0..SKIP {
         z.round1_ab[i] += h[lay.r1ab(i)];
@@ -607,9 +608,12 @@ pub struct Replayed {
 
 /// Re-run upstream's zerocheck and lincheck verifiers (`zerocheck::verify_with_grinding`, `lincheck::verify_with_grinding`,
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
-/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads.
+/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
+/// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
+/// and folds its own (a proof's field is never read).
+#[allow(clippy::too_many_arguments)]
 pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &LincheckProof, circuit: &dyn LincheckCircuit, lay: &Layout,
-                              root: &[u8; 64], ch: &mut Ch) -> Result<Replayed, String> {
+                              root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
     let s = lay.len();
     let m = r1cs.m;
     if !r1cs.c0_is_identity() || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
@@ -673,8 +677,10 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
     // ---- lincheck
     ch.observe_label(b"flock-lincheck-v0");
     let alpha = ch.sample_f128();
-    // the prover's own replay takes its lincheck's folded comb (`comb_partial`, never serialized); a verifier folds its own
-    let own = lc.comb_partial.len() == SKIP;
+    if own_comb.is_some_and(|c| c.len() != SKIP) {
+        return Err("zk: the prover's folded comb has the wrong length".into());
+    }
+    let own = own_comb.is_some();
     let mut comb_vec = if own {
         Vec::new()
     } else {
@@ -708,8 +714,8 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
         }
         r_rounds.push(rr);
     }
-    if own {
-        comb_vec = lc.comb_partial.clone();
+    if let Some(c) = own_comb {
+        comb_vec = c.to_vec();
     }
     ch.observe_f128_slice(&lc.z_partial);
     let zp: Vec<Lin> = (0..SKIP).map(|i| Lin::masked(lc.z_partial[i], lay.zp(i), s)).collect();
