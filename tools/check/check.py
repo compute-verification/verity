@@ -14,7 +14,9 @@ Steps, in order; `check` stops at the first that fails:
     lean-build      `lake build` of the Lean verifier (PR #85, `backends/flock/verifier/lean`), then
     lean-unit-cut   its partition check against `verity.ir.partition` on random cuts (`unit_cut_agree.py`), then
     lean-audit      `tools/lean/audit.py --all --build`: every Lake package with a `lean-audit.json` built and audited
-                    (axioms, sorry, declared axioms, escapes, files, kernel bypasses, pinned statements, a kernel replay),
+                    (axioms, sorry, declared axioms, escapes, files, kernel bypasses, code run while compiling, dependency
+                    .olean digests, pinned statements, a kernel replay; facts read from the .olean files as data, builds
+                    in a sandbox where the machine allows one),
                     after the controls; its reports under `lean-audit/`, then
     lean-agreement  its agreement with upstream's Rust verifier (`ci-pod.sh`) when the run is sent the input bundle
                     (`--send ci-bundle.tar.gz`); skipped by name without one (`lean_steps`)
