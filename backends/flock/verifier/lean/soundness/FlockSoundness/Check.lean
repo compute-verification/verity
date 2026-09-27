@@ -203,3 +203,20 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_count
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
+-- M1's padded level 0 (§1.1): the novel basis's degree structure, the padded code's list size,
+-- MCA and decoding, Ligerito with the padded level 0, the phases over any list, the table theorem
+-- for any padding and extra lanes, and its value at M1's parameters
+#print axioms FlockSoundness.xP_natDegree_le
+#print axioms FlockSoundness.card_closeRows_le
+#print axioms FlockSoundness.prCoin_pad_mca_le
+#print axioms FlockSoundness.decode_pad
+#print axioms FlockSoundness.value_drawKs_affine_le
+#print axioms FlockSoundness.value_drawKs_extras_le
+#print axioms FlockSoundness.phaseA0Pad
+#print axioms FlockSoundness.ligeritoPad_sound
+#print axioms FlockSoundness.zerocheck_phase_of_list
+#print axioms FlockSoundness.link_sound_of_list
+#print axioms FlockSoundness.rep_sound_pad
+#print axioms FlockSoundness.table_sound_pad
+#print axioms FlockSoundness.Accounting.padTableError_le_m1
+#print axioms FlockSoundness.table_sound_pad_m1
