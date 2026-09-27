@@ -11,9 +11,10 @@
 //! `set_word_pos`), so a device kernel can expand the same words later. It never reads the transcript, and the only constructor
 //! outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a production build.
 //!
-//! The Merkle leaf salts of `hm96-sha512/v1` are NOT drawn from it: [`SaltTape`] gives each leaf 192 bytes straight from
-//! `getrandom`, so the leaves hide statistically given uniform salts (hm96 PROTOCOL.md section 3). With an injected seed (a test
-//! harness only) the tape is a ChaCha20 stream of that seed instead, so a test proof is reproducible. The hm96 key is not prover
+//! The Merkle leaf salts of `hm96-sha512/v1` are NOT drawn from it: [`LeafSalts`] expands them with ChaCha20 from their own fresh
+//! 256-bit OS key per proof (on the device, where the trees are built), modelled as uniform like the OS generator's own ChaCha20
+//! output (red-team-hm96 F4). With an injected seed (a test harness only) the key comes from that seed, so a test proof is
+//! reproducible. The hm96 key is not prover
 //! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
@@ -55,39 +56,101 @@ impl ProverSeed {
     }
 }
 
-/// The salts of one session's `hm96-sha512/v1` Merkle leaves, 192 bytes per leaf, in draw order (the level-0 tree once, then
-/// every later tree of each repetition). From an OS seed every draw is fresh `getrandom` output, independent of the seed; from an
-/// injected seed (test harness only) draw k is bytes `[2^40 k, ...)` of the seed's ChaCha20 stream `STREAM_SALT`.
-pub struct SaltTape {
-    stream: Option<ChaCha20Rng>,
-    draws: u64,
+/// The salts of one proof's `hm96-sha512/v1` Merkle leaves: a ChaCha20 expansion of a 256-bit salt key (Daniel, 2026-09-27;
+/// this replaced salts drawn from `getrandom` leaf by leaf, which cost +96% prover time at m = 33). Leaf `i` of tree `id` is
+/// ChaCha20 blocks `3i, 3i + 1, 3i + 2` under the key with nonce `id` ([`chacha20_block`]); the level-0 tree is id 0 (both reps
+/// bind one root) and every later tree takes the next id, so no salt is used twice. The key is a fresh `getrandom` draw per proof
+/// (an injected seed's `STREAM_SALT` bytes in a test harness only), never reused, never written anywhere, and zeroed on drop.
+/// The device expands the same stream (`hm96_finish_leaves`).
+pub struct LeafSalts {
+    key: [u8; 32],
+    next: u64,
 }
 
-impl SaltTape {
+impl LeafSalts {
     pub fn for_seed(seed: &ProverSeed) -> Self {
-        let stream = seed.injected.then(|| {
+        let mut key = [0u8; 32];
+        if seed.injected {
             let mut r = ChaCha20Rng::from_seed(seed.seed);
             r.set_stream(STREAM_SALT);
-            r
-        });
-        SaltTape { stream, draws: 0 }
+            r.fill_bytes(&mut key);
+        } else {
+            getrandom::fill(&mut key).expect("the OS random generator failed: refusing to commit without a salt key");
+        }
+        LeafSalts { key, next: 1 }
     }
 
-    pub fn draw(&mut self, leaves: usize) -> Vec<u8> {
-        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+    /// The salt key, for the device to expand; it stays in memory only.
+    pub fn key(&self) -> &[u8; 32] {
+        &self.key
+    }
+
+    /// The id of the next tree after level 0.
+    pub fn next_id(&mut self) -> u64 {
+        self.next += 1;
+        self.next - 1
+    }
+
+    /// Tree `id`'s salts, `leaves` × 192 bytes.
+    pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
+        use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
         let mut b = vec![0u8; leaves * SALT_BYTES];
-        match &mut self.stream {
-            None => b.par_chunks_mut(1 << 20).for_each(|c| {
-                getrandom::fill(c).expect("the OS random generator failed: refusing to commit without leaf salts")
-            }),
-            Some(r) => {
-                r.set_word_pos((self.draws as u128) << 38);
-                r.fill_bytes(&mut b);
+        b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
+            for j in 0..3 {
+                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(&self.key, 3 * i as u64 + j as u64, id));
             }
-        }
-        self.draws += 1;
+        });
         b
     }
+}
+
+impl Drop for LeafSalts {
+    fn drop(&mut self) {
+        for b in self.key.iter_mut() {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
+        std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// One ChaCha20 block (20 rounds): state = "expand 32-byte k", the key, a 64-bit block counter (words 12-13) and a 64-bit
+/// nonce (words 14-15), output little-endian.
+pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
+    let mut s = [0u32; 16];
+    s[..4].copy_from_slice(&[0x6170_7865, 0x3320_646e, 0x7962_2d32, 0x6b20_6574]);
+    for i in 0..8 {
+        s[4 + i] = u32::from_le_bytes(key[4 * i..4 * i + 4].try_into().unwrap());
+    }
+    s[12] = counter as u32;
+    s[13] = (counter >> 32) as u32;
+    s[14] = nonce as u32;
+    s[15] = (nonce >> 32) as u32;
+    let mut x = s;
+    let qr = |x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize| {
+        x[a] = x[a].wrapping_add(x[b]);
+        x[d] = (x[d] ^ x[a]).rotate_left(16);
+        x[c] = x[c].wrapping_add(x[d]);
+        x[b] = (x[b] ^ x[c]).rotate_left(12);
+        x[a] = x[a].wrapping_add(x[b]);
+        x[d] = (x[d] ^ x[a]).rotate_left(8);
+        x[c] = x[c].wrapping_add(x[d]);
+        x[b] = (x[b] ^ x[c]).rotate_left(7);
+    };
+    for _ in 0..10 {
+        qr(&mut x, 0, 4, 8, 12);
+        qr(&mut x, 1, 5, 9, 13);
+        qr(&mut x, 2, 6, 10, 14);
+        qr(&mut x, 3, 7, 11, 15);
+        qr(&mut x, 0, 5, 10, 15);
+        qr(&mut x, 1, 6, 11, 12);
+        qr(&mut x, 2, 7, 8, 13);
+        qr(&mut x, 3, 4, 9, 14);
+    }
+    let mut out = [0u8; 64];
+    for i in 0..16 {
+        out[4 * i..4 * i + 4].copy_from_slice(&x[i].wrapping_add(s[i]).to_le_bytes());
+    }
+    out
 }
 
 pub struct ProverRng {
@@ -168,6 +231,14 @@ mod tests {
         assert_eq!(r.f128s(STREAM_MASK, 5, 2), a, "the words are a function of the seed and their address");
         assert_ne!(r.f128s(STREAM_MASK, 6, 2), a);
         assert_ne!(r.f128s(STREAM_PAD, 5, 2), a);
+    }
+
+    /// RFC 7539 section 2.3.2: key 00..1f, block counter 1, nonce 000000090000004a00000000 (words 13-15).
+    #[test]
+    fn chacha20_block_matches_rfc7539() {
+        let key: [u8; 32] = std::array::from_fn(|i| i as u8);
+        let b = chacha20_block(&key, 1 | (0x0900_0000u64 << 32), 0x4a00_0000);
+        assert_eq!(crate::hex(&b[..16]), "10f1e7e4d13b5915500fdd1fa32071c4");
     }
 
     #[test]

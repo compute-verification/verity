@@ -53,7 +53,7 @@ pub const PT_LOCAL: usize = 24;
 /// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves).
 pub fn leaf_scheme() -> Value {
     let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
-    json!({"id": id, "inner": "sha512 column digest", "salt_bytes": salt, "salt_source": "os generator, one draw per leaf",
+    json!({"id": id, "inner": "sha512 column digest", "salt_bytes": salt, "salt_source": "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored",
            "key": "default_key, a statement constant for every tree",
            "key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key()))})
 }

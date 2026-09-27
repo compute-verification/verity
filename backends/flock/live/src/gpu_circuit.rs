@@ -68,26 +68,26 @@ struct CircuitParams {
     u_cut_rows: *const u32,
     mid_cb: Option<MidCb>,
     mid_ctx: *mut c_void,
-    /// hm96-sha512 Merkle leaves (the SHA-512 build): the salts of each tree the device builds, in build order, and the
-    /// scheme's constants (salt prefix ‖ leaf prefix, 256 bytes; the key's byte tables, 192 × 256 × 8 u64). Null: unsalted.
-    hm96_cb: Option<Hm96Cb>,
+    /// hm96-sha512 Merkle leaves (the SHA-512 build): the device expands each tree's salts with ChaCha20 under `hm96_key` (32
+    /// bytes, `zk_hooks::LeafSalts`) with the nonce `hm96_tree` returns for this proof's k-th tree; and the scheme's constants
+    /// (salt prefix ‖ leaf prefix, 256 bytes; the key's byte tables, 192 × 256 × 8 u64). Null: unsalted.
+    hm96_tree: Option<Hm96TreeCb>,
     hm96_ctx: *mut c_void,
+    hm96_key: *const u8,
     hm96_prefixes: *const u8,
     hm96_tables: *const u64,
 }
 
-type Hm96Cb = unsafe extern "C" fn(*mut c_void, i32, i64, *mut u8) -> i32;
+type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
 
-/// Tree `tree`'s salts (`n` leaves × 192 bytes) from the proof's salt context (`flock_merkle::hm96`).
+/// The salt-stream nonce of this proof's k-th tree: 0 for level 0 (both reps share it), a fresh id for every later tree.
 #[cfg(feature = "sha512")]
-unsafe extern "C" fn hm96_cb(_ctx: *mut c_void, _tree: i32, n: i64, out: *mut u8) -> i32 {
-    match std::panic::catch_unwind(|| flock_merkle::hm96::next_tree_salts(n as usize)) {
-        Ok(s) => {
-            unsafe { std::ptr::copy_nonoverlapping(s.as_ptr(), out, s.len()) };
-            0
-        }
-        Err(_) => -1,
+unsafe extern "C" fn hm96_tree(ctx: *mut c_void, tree: i32) -> i64 {
+    if tree == 0 {
+        return 0;
     }
+    let salts = unsafe { &*(ctx as *const std::sync::Mutex<crate::zk_hooks::LeafSalts>) };
+    salts.lock().unwrap_or_else(std::sync::PoisonError::into_inner).next_id() as i64
 }
 
 type MidCb = unsafe extern "C" fn(*mut c_void, *const u32, i64, *mut u32, *mut i64, *mut *const i64, *mut *const i32, *mut *const u64) -> i32;
@@ -296,6 +296,7 @@ pub fn prove_circuit(
     domain: &[u8],
     mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
     ch: &mut LiveChallenger,
+    salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
 ) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3]) {
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
@@ -392,22 +393,29 @@ pub fn prove_circuit(
         u_cut_rows: t.sched.cut_rows.as_ptr(),
         mid_cb: mctx.is_some().then_some(mid_cb as MidCb),
         mid_ctx: mctx.as_mut().map_or(null_mut(), |m| m as *mut MidCtx<'_> as *mut c_void),
-        hm96_cb: None,
+        hm96_tree: None,
         hm96_ctx: null_mut(),
+        hm96_key: std::ptr::null(),
         hm96_prefixes: std::ptr::null(),
         hm96_tables: std::ptr::null(),
     };
     #[cfg(feature = "sha512")]
     let hm96_prefixes: Vec<u8> = {
         let c = flock_merkle::hm96::consts();
-        p.hm96_cb = Some(hm96_cb as Hm96Cb);
-        p.hm96_tables = c.tables.as_ptr() as *const u64;
         [c.salt_prefix, c.leaf_prefix].concat()
     };
     #[cfg(feature = "sha512")]
-    {
+    let key_guard = salts.map(|s| s.lock().unwrap_or_else(std::sync::PoisonError::into_inner).key().to_vec());
+    #[cfg(feature = "sha512")]
+    if let (Some(s), Some(k)) = (salts, &key_guard) {
+        p.hm96_tree = Some(hm96_tree as Hm96TreeCb);
+        p.hm96_ctx = s as *const _ as *mut c_void;
+        p.hm96_key = k.as_ptr();
         p.hm96_prefixes = hm96_prefixes.as_ptr();
+        p.hm96_tables = flock_merkle::hm96::consts().tables.as_ptr() as *const u64;
     }
+    #[cfg(not(feature = "sha512"))]
+    let _ = salts;
     for (i, l) in t.logs.iter().enumerate() {
         p.type_log[i] = *l;
         if let Some(((ac, ar), (bc, br))) = &t.csc[i] {
@@ -426,6 +434,12 @@ pub fn prove_circuit(
     let mut out_len: usize = 0;
     let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
     drop(mctx);
+    #[cfg(feature = "sha512")]
+    if let Some(mut k) = key_guard {
+        for b in k.iter_mut() {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
+    }
     assert_eq!(rc, 0, "CUDA circuit prover returned error {rc} at m={m}");
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };

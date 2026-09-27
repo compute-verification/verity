@@ -253,7 +253,8 @@ fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: 
 }
 
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
+             salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
     use flock_live::gpu_circuit::{CircuitSrc, prove_circuit};
     let sched = flock_live::gpu_circuit::schedule(st.c.unit());
     let (cut_rows, late_rows): (Vec<usize>, Vec<usize>) = (sched.cut_rows.iter().map(|&r| r as usize).collect(), sched.late_rows.iter().map(|&r| r as usize).collect());
@@ -266,7 +267,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
             CircuitSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
         }
     };
-    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch);
+    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch, Some(salts));
     let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
                     "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
@@ -275,7 +276,8 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
+             _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -410,11 +412,11 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             r => return Err(format!("hello: step 0 expects the verifier's seed commitment, got {r:?}")),
         }
         let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
-        // hm96-sha512 leaf salts: the level-0 tree's once (both reps bind one root), every later tree's fresh per rep
+        // hm96-sha512 leaf salts: one ChaCha20 key per proof; the level-0 tree is id 0 (both reps bind one root), every later
+        // tree a fresh id. The device expands its own trees' salts; a CPU proof takes host expansions.
+        let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
         #[cfg(feature = "sha512")]
-        let tape = Arc::new(Mutex::new(flock_live::zk_hooks::SaltTape::for_seed(&seed)));
-        #[cfg(feature = "sha512")]
-        let level0 = Arc::new(tape.lock().unwrap_or_else(PoisonError::into_inner).draw(params(st.m, lig).n_leaves()));
+        let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
         for rep in 0..2 {
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
@@ -439,15 +441,21 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             let tp = Instant::now();
             let wt = if rep == 0 { &wt0 } else { &wt1 };
             #[cfg(feature = "sha512")]
-            {
-                let tape = tape.clone();
-                flock_merkle::hm96::begin(level0.clone(), Box::new(move |n| tape.lock().unwrap_or_else(PoisonError::into_inner).draw(n)));
+            if let Some(l0) = &level0 {
+                let s = salts.clone();
+                flock_merkle::hm96::begin(l0.clone(), Box::new(move |n| {
+                    let mut g = s.lock().unwrap_or_else(PoisonError::into_inner);
+                    let id = g.next_id();
+                    g.expand(id, n)
+                }));
             }
             let proved = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, wt, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, wt, lig, &mut hook, &mut lch) }
+                if plan.gpu { prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts) } else { prove_cpu(st, wt, lig, &mut hook, &mut lch) }
             }));
             #[cfg(feature = "sha512")]
-            flock_merkle::hm96::end();
+            if level0.is_some() {
+                flock_merkle::hm96::end();
+            }
             let (p, bk) = proved.map_err(panic_msg)?;
             prove_s.push(tp.elapsed().as_secs_f64());
             buckets.push(bk);

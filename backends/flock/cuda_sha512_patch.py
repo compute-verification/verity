@@ -53,7 +53,7 @@ edit("prove_ffi.cu", [
 ])
 SALTS = ("        W.hashes(lo.path);\n",
          "        W.hashes(lo.path);\n"
-         "        if (g_hm96.cb) { W.u64(lo.salts.size() / 192); W.buf.insert(W.buf.end(), lo.salts.begin(), lo.salts.end()); }\n")
+         "        if (g_hm96.tree_cb) { W.u64(lo.salts.size() / 192); W.buf.insert(W.buf.end(), lo.salts.begin(), lo.salts.end()); }\n")
 for f in ("prove_chunk.cuh", "prove_circuit.cuh"):
     edit(f, [
         ("(size_t)(2 * l0_bl - 1) * 32)", "(size_t)(2 * l0_bl - 1) * FLOCK_HB)"),
@@ -63,7 +63,7 @@ for f in ("prove_chunk.cuh", "prove_circuit.cuh"):
 edit("prove_circuit.cuh", [
     ("uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n",
      "uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n"
-     "    Hm96Guard hm96_guard(N->hm96_cb, N->hm96_ctx, N->hm96_prefixes, N->hm96_tables);\n"),
+     "    Hm96Guard hm96_guard(N->hm96_tree, N->hm96_ctx, N->hm96_key, N->hm96_prefixes, N->hm96_tables);\n"),
 ])
 edit("ligerito_f256.cuh", [
     ("out.initial_cap.size() * 32", "out.initial_cap.size() * FLOCK_HB"),
