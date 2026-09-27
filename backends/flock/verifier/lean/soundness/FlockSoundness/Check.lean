@@ -6,8 +6,8 @@ import FlockSoundness
 Run `lake env lean FlockSoundness/Check.lean`.
 
 The proved results must depend only on Lean's three standard axioms (`propext`,
-`Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.BCHKS25Thm46`) are hypotheses
-of the theorems that use them, never `axiom` declarations, so they cannot appear here.
+`Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.SHA512ExpectedTimeCR`) are
+hypotheses of the theorems that use them, never `axiom` declarations, so they cannot appear here.
 -/
 
 -- the interaction model and the repetition theorem
@@ -44,7 +44,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.prCoin_fromMsg_le
 #print axioms FlockSoundness.prCoin_eqList_le
 #print axioms FlockSoundness.prCoin_positions_miss_le
--- mutual correlated agreement at the folds, from the named assumption
+-- mutual correlated agreement up to the Johnson bound, from DKT26, and at the folds
+#print axioms FlockSoundness.mcaError_le_bchks25_of_lt
+#print axioms FlockSoundness.mcaError_le_bchks25
 #print axioms FlockSoundness.prCoin_mca_le
 #print axioms FlockSoundness.rowsAgreeOn_of_fold
 #print axioms FlockSoundness.rowsAgreeOn_of_foldAll
@@ -86,7 +88,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
 -- the executable's arithmetic: `Arith.Correct` from lane flock-verifier's level-3 theorems, so the
--- theorem for the executable has BCHKS25 Thm 4.6 as its only hypothesis
+-- theorem for the executable has no named assumption
 #print axioms FlockSoundness.execArith_correct
 #print axioms FlockSoundness.table_sound_exec
 #print axioms FlockSoundness.table_sound_exec_fast100

@@ -652,7 +652,7 @@ $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{e
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on
 every table's `N₀/(ek)`, `t'` the SHA-512 evaluations of one session run, `M` the finder's further
 trials and `Rw` the waits' length. -/
-theorem flock_batched_linkSoundE (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_linkSoundE
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
     (ht : 0 ≤ t')
@@ -661,7 +661,7 @@ theorem flock_batched_linkSoundE (hMCA : Assumptions.BCHKS25Thm46)
         (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
         (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
         (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
-    (P.analysisBE (L := L) H E plan tab hMCA decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
+    (P.analysisBE (L := L) H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
         (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
       (fun _ _ => ENNReal.ofReal
         ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
@@ -681,9 +681,9 @@ theorem flock_batched_linkSoundE (hMCA : Assumptions.BCHKS25Thm46)
   have hΛ0 : ∀ ω, 0 ≤ Λ ω := fun ω =>
     div_nonneg (Finset.sum_nonneg fun c _ => hf0 c ω) hρ1.le
   have step1 : ∀ ω, atTgt (L.draw ω) (tgt ω) (fun u =>
-      (P.analysisBE (L := L) H E plan tab hMCA decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
+      (P.analysisBE (L := L) H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
         (fun S R j => (hr S R j).trans_lt hρ) hlow).link (L.draw ω) R (τ ω) u
-        ((P.analysisBE (L := L) H E plan tab hMCA decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
+        ((P.analysisBE (L := L) H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
           (fun S R j => (hr S R j).trans_lt hρ) hlow).committed R τ)) ≤ ENNReal.ofReal (Λ ω) := by
     intro ω
     refine atTgt_le (fun u hu => ?_) (tgt ω)

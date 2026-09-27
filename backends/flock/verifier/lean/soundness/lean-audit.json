@@ -1,5 +1,5 @@
 {
- "roots": ["FlockSoundness", "FlockSoundnessTest.AssumptionIsArkLibs"],
+ "roots": ["FlockSoundness"],
  "exempt": {
   "FlockSoundness.Check": "the lane's #print axioms list, which this audit supersedes (every declaration is audited)"
  },
@@ -24,24 +24,23 @@
   "FlockSoundness.table_sound": {
    "signature": [
     "FlockSoundness.table_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]",
-    "  (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)",
-    "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
+    "  (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m)",
+    "  (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
     "      (FlockSoundness.Model.table A S sch hm ptLocal mPts) σ ≤",
     "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000003b47bb96"
+   "assumptions": [],
+   "type_hash": "00000000ff68839c"
   },
   "FlockSoundness.table_sound_compiled": {
    "signature": [
     "FlockSoundness.table_sound_compiled {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] {D : Type} (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K)",
-    "  (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc (List F) D)",
-    "  (S : FlockSoundness.Model.Statement) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)",
-    "  (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)",
+    "  [DecidableEq K] {D : Type} (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List F) D) (S : FlockSoundness.Model.Statement) (m k0 : ℕ)",
+    "  (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)",
     "  (hsch : FlockSoundness.Accounting.fast100 S.m = some { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext })",
     "  (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ :",
@@ -71,79 +70,75 @@
     "          mPts)",
     "        σ"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000005fae07d4"
+   "assumptions": [],
+   "type_hash": "00000000b260307d"
   },
   "FlockSoundness.table_sound_exec": {
    "signature": [
-    "FlockSoundness.table_sound_exec (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (S : FlockSoundness.Model.Statement)",
-    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m)",
-    "  (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "FlockSoundness.table_sound_exec (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)",
+    "  (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
     "      (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts) σ ≤",
     "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000003f17c9a1"
+   "assumptions": [],
+   "type_hash": "000000002aa866d9"
   },
   "FlockSoundness.table_sound_exec_fast100": {
    "signature": [
-    "FlockSoundness.table_sound_exec_fast100 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "FlockSoundness.table_sound_exec_fast100 (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
     "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
     "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
     "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.5))"
+    "    ENNReal.ofReal (2 ^ (-205))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "00000000d627bb2f"
+   "assumptions": [],
+   "type_hash": "000000001e3027e6"
   },
   "FlockSoundness.table_sound_exec_fast100_34_35": {
    "signature": [
-    "FlockSoundness.table_sound_exec_fast100_34_35 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "FlockSoundness.table_sound_exec_fast100_34_35 (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m)",
+    "  (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
     "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.4))"
+    "    ENNReal.ofReal (2 ^ (-205))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "0000000026f3eb6e"
+   "assumptions": [],
+   "type_hash": "000000001b91fe83"
   },
   "FlockSoundness.table_sound_fast100": {
    "signature": [
     "FlockSoundness.table_sound_fast100 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m)",
+    "  (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
     "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.5))"
+    "    ENNReal.ofReal (2 ^ (-205))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "00000000bc426dc5"
+   "assumptions": [],
+   "type_hash": "00000000cb254820"
   },
   "FlockSoundness.table_sound_fast100_34_35": {
    "signature": [
     "FlockSoundness.table_sound_fast100_34_35 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m)",
+    "  (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
     "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
     "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.4))"
+    "    ENNReal.ofReal (2 ^ (-205))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "0000000074c9083c"
+   "assumptions": [],
+   "type_hash": "00000000afa9b1c8"
   }
  },
  "reads": {
@@ -286,10 +281,10 @@
    ]
   },
   "FlockSoundness.Accounting.Bound": {
-   "digest": "a734a553cf2fb20da04e46029a71b51f",
+   "digest": "ee105483efdfe8dcabdaeb8673f1359d",
    "definitions": {
     "FlockSoundness.Accounting.Level.foldError": "fbfa2e025d009956",
-    "FlockSoundness.Accounting.Level.listBound": "95af9351ebf02b1b",
+    "FlockSoundness.Accounting.Level.listBound": "980778a29acd534c",
     "FlockSoundness.Accounting.Level.mcaA": "0d0c735eae15bb8f",
     "FlockSoundness.Accounting.Level.queryError": "8cf2d72b0122f0c3",
     "FlockSoundness.Accounting.Level.radius": "1c8f26a5e79092f9",
@@ -301,7 +296,7 @@
     "FlockSoundness.Accounting.Stmt.nClaims": "7991c5fa6348aa15",
     "FlockSoundness.Accounting.Stmt.nRegions": "ce2346f0db0b5e9b",
     "FlockSoundness.Accounting.ceilLog2": "9af703a41d8f29ce",
-    "FlockSoundness.Accounting.eta": "920bce284addedac",
+    "FlockSoundness.Accounting.eta": "a336aa40bf61289e",
     "FlockSoundness.Accounting.lastLevelError": "0a9c9ad4914ec348",
     "FlockSoundness.Accounting.ligeritoError": "41a3c2013a71c3ea",
     "FlockSoundness.Accounting.linkError": "54c5bf01a6b38dc4",
@@ -357,21 +352,6 @@
     "FlockSoundness.Accounting.instInhabitedLevel": "620091930bd0c03e",
     "FlockSoundness.Accounting.instInhabitedLevel.default": "107d561c7d8d775c",
     "FlockSoundness.Accounting.queriesAt": "1f62ee663f3e17b3"
-   },
-   "pins": [
-    "FlockSoundness.table_sound",
-    "FlockSoundness.table_sound_compiled",
-    "FlockSoundness.table_sound_exec",
-    "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35",
-    "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35"
-   ]
-  },
-  "FlockSoundness.Assumptions": {
-   "digest": "3bbb81d392f3ace37ec35c5c9c05dea4",
-   "definitions": {
-    "FlockSoundness.Assumptions.BCHKS25Thm46": "3bbb81d392f3ace3"
    },
    "pins": [
     "FlockSoundness.table_sound",

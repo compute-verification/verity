@@ -19,8 +19,10 @@ at most `tableError(fast100 m, shape)`:
 > the verifier accepts both reps, while no codeword within the level-0 proximity radius of the committed table packs a
 > witness that satisfies the statement.
 
+- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2. It was
+  `1/50` (0.2729) until Sep 27; the protocol and its queries are unchanged.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
-  is proved to be at most **2^-195.5 for 22 ≤ m ≤ 33** and **2^-195.4 for m = 34, 35** (`Accounting/Numbers.lean`).
+  is proved to be at most **2^-205 for 22 ≤ m ≤ 35** (`Accounting/Numbers.lean`).
 - **The statement shapes covered** have at most 2^26 witness bits per block, 1,024 public regions and 64 link-point
   coordinates. That is every statement of §16, with room to spare.
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
@@ -29,7 +31,7 @@ at most `tableError(fast100 m, shape)`:
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
-  `Arith.Correct` from `execArith_correct`, so BCHKS25 Theorem 4.6 is their only hypothesis.
+  `Arith.Correct` from `execArith_correct`, so they have no named assumption.
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (§9, `value_batch_le`).
 - **With M1's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Model/LigeritoPad.lean`). M1 (#123,
@@ -38,7 +40,7 @@ at most `tableError(fast100 m, shape)`:
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
   - **At #123's values** (`8d621454`): `q₀ = 277, 242, 229` at `m = 25, 26, 27`, `t = 2q₀`, and a pair of extra lanes per
-    rep. The bound is at most **2^-196.5 per table** (`table_sound_pad_m1`).
+    rep. The bound is at most **2^-205 per table** (`table_sound_pad_m1`).
   - **The committed values** are the witness lanes' messages `a − c₀·pad` of lane families within the padded radius
     (`CommittedPad`).
   - **The model is M1 in the clear.** The verifier computes the restarted claim `s + Σ_i ρ_i·e_i` itself. M1 masks the
@@ -66,7 +68,7 @@ after its level-0 cap):
   (`op₀_conflict_collision`, `opR_conflict_collision`). Level 0 is opened by both reps, hence `2Q_0`.
 - **`Adv_×`** is the probability that one run opens a position two ways, both verifying under one cap. Every such run
   is a collision (`SelfClash.collision`).
-- **Under the generic bound** this is at most `2^-195.5 + t·2^{17.3−256} + t²/2^511` for a prover making `t` hash
+- **Under the generic bound** this is at most `2^-205 + t·2^{17.3−256} + t²/2^511` for a prover making `t` hash
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
 
@@ -139,7 +141,7 @@ link term per audit.
 | Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
 | M1's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
-| The padded bound at #123's values: 2^-196.5 per table at m = 25–27 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
+| The padded bound at #123's values: 2^-205 per table at m = 25–27 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
@@ -150,7 +152,7 @@ link term per audit.
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (§9) | (composition) | `Audit/*` | proved; per-unit terms named |
-| The Flock audit at the oracle layer: the batched session's projection to one table, `2^-195.4` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
+| The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
 | L1: each template's rows compute its gates (§1.5) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
 
@@ -228,7 +230,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     every prover strategy.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
   commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
-  not to one witness. The list has at most 50 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with η = 0.02).
+  not to one witness. The list has at most 200 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with
+  `η = 1/200`; PROTOCOL.md §15's 0.02 is a diagnostic).
   - "The committed values satisfy the circuit" means that some codeword of that list packs a satisfying witness
     (`Model.CommittedSatisfies`), which is exactly right for soundness.
   - Claims that use the committed values elsewhere (registered data, links to other proofs, recursion) need them
@@ -239,28 +242,18 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 
 ## 3. Named assumptions (taken without proof)
 
-There are two. Each is a `Prop` (`Assumptions.BCHKS25Thm46`, `Assumptions.SHA512ExpectedTimeCR`), and the theorems
-that use one take it as a hypothesis (`hMCA`; `hCR` in the link theorem). §1.5 names one more, L1, about
-the lowering. The development declares no `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can
-never make Lean prove something false.
+There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem takes as a hypothesis (`hCR`).
+§1.5 names one more, L1, about the lowering. The development declares no `axiom`. So a mis-stated assumption can make a
+theorem vacuous, but it can never make Lean prove something false.
 
-**A1. Reed–Solomon mutual correlated agreement up to the Johnson bound** (BCHKS25, ePrint 2025/2055, Theorem 4.6).
-
-- **Statement.** Take a Reed–Solomon code with `k` coefficients on `n` points, reduced rate `ρ = (k − 1)/n`, and radius
-  `0 < δ < 1 − √ρ`. The prover fixes any two words `u₀, u₁`. Over a uniform field element `γ`, consider the event that
-  `u₀ + γ·u₁` agrees with a codeword on at least `(1 − δ)·n` positions on which `u₀, u₁` are not both codewords. Its
-  probability is at most `a / |F|`, where:
-  - `m = max(⌈√ρ/(1 − √ρ − δ)⌉, 3)`;
-  - `a = (2(m + ½)^5 + 3(m + ½)·δ·ρ)/(3ρ^{3/2})·n + (m + ½)/√ρ`.
-- **It is literally ArkLib's pinned statement.** ArkLib states it as `CodingTheory.rs_mcaError_le_in_johnson_range` and
-  admits it. `FlockSoundnessTest/AssumptionIsArkLibs.lean` proves our `Prop` from ArkLib's by `exact`.
-- **Where Flock uses it.** Every Ligerito folding challenge (spec §13.3), with the field GF(2^256) and the level's code
-  embedded from GF(2^128). The paper's Lemma 9 turns it into "folding preserves the list", paying a row union of
-  `2^(k−i)` at round `i`. Lemma 9 is to be proved from A1, not assumed.
-- **One difference from the paper.** Flock's paper (Theorem 8) and its accounting use the multiplicity `⌈√ρ/(2η)⌉`.
-  BCHKS25's proof supports it, but the paper does not state it. We use the printed one. This costs nothing visible:
-  the term is below 2^-170, against 2^-97.8 for the query terms.
-- **Status upstream.** Unproved in ArkLib, and not plannable (the design doc, level 4b).
+**A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved** (Sep 27). BCHKS25 (ePrint
+2025/2055) Theorem 4.6 as printed, which ArkLib admits, is `mcaError_le_bchks25` (`JohnsonMCA.lean`) on `Fin n`
+domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), proved in ArkLib at our pin
+(`ReedSolomon.mcaError_affineLine_johnson_le`, #907). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
+`(8/3)·n·t'³/ρ`, where `t' = max(⌈√ρ/(2η)⌉, 3) + ½ ≤ m + ½` for BCHKS25's `m = max(⌈√ρ/η⌉, 3)`, so below BCHKS25's
+numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3,
+`prCoin_mca_le`). The accounting keeps `a`, so no number changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a
+term below 2^-170.
 
 **A2. Expected-time collision resistance of SHA-512** (in CDGSY24's expected-time sense, ePrint 2024/1434), for the
 audit's value layer (Daniel, Sep 27; constant corrected the same day).
@@ -314,8 +307,8 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
-- **Table 1** cites `computational-soundness` under `cr/sha-512`, `live-verifier` and `rs-proximity-johnson` (A1).
-  An audit's integrity profile would add A2, a new claim in `verity.claims` once a render cites it.
+- **Table 1** cites `computational-soundness` under `cr/sha-512` and `live-verifier`; A1's proof took
+  `rs-proximity-johnson` off. An audit's integrity profile would add A2, a new claim once a render cites it.
 
 ## 5. Trusted components
 
@@ -388,7 +381,7 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 
 The weights are committed once and every later proof opens that root. The analysis is DESIGN.md §10.
 
-- **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus `t²/2^513` once for the root. So
+- **Soundness over N tables**, by union bound: `N·2^-205 + N·t·2^{17.3−256}`, plus `t²/2^513` once for the root. So
   2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision, with
   Daniel:** state security per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
@@ -439,9 +432,9 @@ to its committed inputs (`Partition.Correct`). Every bound holds for every prove
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
 | `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
-| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-195.4`), given `InputsLoweringSound` |
+| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
-| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-195.4`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
 | `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
@@ -524,18 +517,18 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 
 - `value_batch_le`: in a batched session, whose tables run concurrently on a schedule the prover chooses, every table
   accepting is at most as likely as any one table accepting (`Game.value_interleave_le`, table by table);
-- `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-195.4` for `22 ≤ m ≤ 35`;
-- `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-195.4`, given `LoweringSound`;
+- `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-205` for `22 ≤ m ≤ 35`;
+- `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-205`, given `LoweringSound`;
 - `flock_inputs_sound`: the input unit, likewise, given `InputsLoweringSound`;
-- `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-195.4}$,
-  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-195.4}$ for the uniform $k$-subset;
-- `flock_oracle_drawn`: drawn units correct up to $2^{-195.4}$;
-- `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-195.4}$.
+- `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-205}$,
+  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-205}$ for the uniform $k$-subset;
+- `flock_oracle_drawn`: drawn units correct up to $2^{-205}$;
+- `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-205}$.
 
 - `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
-  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-195.4}$, given the fine partition's lowering.
+  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-205}$, given the fine partition's lowering.
 
-The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
+The hypotheses are the lowerings.
 
 **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`; DESIGN.md
 §12):
@@ -552,8 +545,8 @@ The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
   `session_knowledge_sound`), averaged over the draw (`ksAvgB`);
 - `flock_compiled_knowledgeSound`: the same for one table on its own (`sessionC`), from
   `table_knowledge_sound_joint_tight`: $\mathbb E_\omega[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega)
-  + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Both
-  have BCHKS25 Theorem 4.6 as their only named assumption;
+  + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Neither
+  has a named assumption;
 - `flock_batched_count`, `flock_batched_drawn` (and `flock_compiled_count`, `flock_compiled_drawn`):
   $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$, and drawn units up to
   $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
