@@ -977,7 +977,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 k += 1;
             }
         }
-        let (_, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs[rep]).unwrap();
+        let (cm, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs[rep]).unwrap();
         let (_, prc, _): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs_c[rep]).unwrap();
         let lg = &pr.pcs_open.ligerito;
         // Ligerito's opened data against the control's (same coins, so the same positions): every value should differ
@@ -1002,6 +1002,11 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                      + lg.final_proof.opened_salts.len()));
         add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
         add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
+        add("masked (proof): final_c' (never absorbed; its pad h_fc)", 16);
+        let nonces_zero = pr.pcs_open.batching_nonces.iter().all(|x| *x == 0);
+        add(if nonces_zero { "public (proof): the opening's batching nonces (live coins: always 0)" } else { "CLEAR (proof): nonzero batching nonces" },
+            8 * pr.pcs_open.batching_nonces.len());
+        add("public (proof): the commitment's parameters", bincode::serialized_size(&cm.params).unwrap() as usize);
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
@@ -1014,7 +1019,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         "masked_values": n_masked, "masked_all_differ_from_control": all_differ, "region_claims": n_region, "region_s_hat_v_is_public": region_public,
         "unattributed_bytes": unattributed, "clear": clear, "checks_pass": all_differ && region_public && unattributed == 0,
         "ligerito_values_differing_from_control": lig_differ.iter().map(|(k, (d, n))| (k.to_string(), json!({"differ": d, "of": n}))).collect::<serde_json::Map<_, _>>(),
-        "complete": all_differ && region_public && unattributed == 0 && clear.is_empty()});
+        "attributed": all_differ && region_public && unattributed == 0 && clear.is_empty()});
     println!("ZKAUDIT\t{out}");
 }
 
