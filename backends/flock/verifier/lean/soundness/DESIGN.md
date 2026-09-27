@@ -42,8 +42,9 @@ on the hash's output width `n`.
 - **Width needed.** Clearing 2^-128 at budget `t` needs `n ≥ 2·(log2 t + 128 + log2(√2·S_m))`. That is 437–451 bits at
   `t = 2^80`, and 477–491 bits at `t = 2^100`. Only SHA-512 among the standard hashes qualifies.
 - **More reps make it slightly worse.** Every rep opens the shared level-0 table, adding about 0.4 bit per extra rep.
-- **Tight terms need `n ≥ 128 + 2·log2 t`** (straight-line reductions, the random-oracle bound, any long-lived data
-  root): SHA-256 meets that only up to `t = 2^64.5`, so **at `t ≥ 2^65` SHA-256 misses 2^-128 in every model.**
+- **Tight terms need `n ≥ 128 + 2·log2 t`** (straight-line reductions, the random-oracle bound, a long-lived data root
+  checked against a registrant's opening): SHA-256 meets that only up to `t = 2^64.5`, so **at `t ≥ 2^65` SHA-256
+  misses 2^-128 in every model.**
 
 **The route that avoids both the random oracle and the knowledge assumption** (adopted by Daniel, 2026-09-26):
 
@@ -54,9 +55,21 @@ on the hash's output width `n`.
 The compiled bound is then 2^-195.5 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
 every prover, up to `t ≈ 2^110`. ASSUMPTIONS.md §1.2 states it, and §2 below derives it.
 
-**Outside the verifier:** the statement's own data commitments (frame-v3 roots, row digests, Halevi–Micali leaves
-hashed in the circuit) are tight collision-resistance terms. At `t ≥ 2^65` they too need a hash of at least 288 bits.
-That is a separate commitment-scheme decision.
+**Outside the verifier,** the statement's data commitments (frame-v3 roots, row digests, Halevi–Micali leaves hashed
+in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and §3):
+
+- **Tight against a registrant's opening.** Where someone other than the prover holds an opening, as the registrant
+  holds `(W, R)` for the weights root, binding is a straight-line reduction: `t²/2^513` once (`registered_weights`, §3).
+  At `t ≥ 2^65` such roots need a hash of at least 288 bits.
+- **Not tight for serving roots in a sampled audit.** Serving registers its roots before the draw and nobody else holds
+  an opening, so against arbitrary provers they need the rewinding argument too. `Rewinding.bad_sq_le` applies unchanged
+  with the unit draw in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
+  the leaves under every serving root registered before the draw, and `Q_s` the leaves the sampled units open.
+  - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
+    2^17.
+  - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for a #23-sized
+    audit. SHA-512 serving roots are therefore required for the audit composition. With SHA-256 roots the tree term is
+    `t·2^-101.3` for a #101-sized audit with per-value leaves.
 
 ## 2. The compiled theorem: its terms, its number, its proof
 
@@ -136,6 +149,11 @@ table, is `note:20260926T2330Z-finding-knowledge-soundness`.
   verified with no `sorry`, and ArkLib's Johnson bound covers the punctured interleaved code. Write and review the
   analysis on paper first. It follows `table_sound_compiled`; `registered_weights` waits for the SHA-512 leaf layout,
   and recursion for M1/M2.
+- **Sampled audits need it** (the lifetime-soundness desk study, §2 and §3). The audit bound defines a wrong unit
+  through the committed transcript: the plurality table lifted to the serving commitments, then the value the extractor
+  recovers most often behind each commit string. So each audit pays the table's knowledge error, plus a link term
+  `δ_link` (a rewinding whose collision finder runs the extractor). Bound `δ_link` together with
+  `table_knowledge_sound`. The first estimate above gives about `√(t·2^-227)` per audit, which is 2^-73.5 at `t = 2^80`.
 - **Risks:** the concrete knowledge error; a thin decoding margin at level 0 (`η = 1/50` leaves under 1% after
   erasures, so coverage must be about 99%); bridging CompPoly, ArkLib and `Model`. It is classical only (§9).
 
@@ -394,6 +412,8 @@ later proof opens that root. Numbers and sources: `note:20260926T2310Z-finding-r
   - The rewinding term needs `N·t ≤ 2^110.7`, about 2^30 tables at `t = 2^80`.
   - So the per-table hash term runs out, not the root. The random-oracle version's hash term is global.
   - **Decision:** state security per table, or as a lifetime budget on `N·t`.
+  - For sampled audits the count is audits, not tables, and the composition needs knowledge soundness
+    (ASSUMPTIONS.md §7).
 - **Binding for the root's life.** Proofs publish the leaves' commit strings and paths, so binding is straight-line
   against the adversary's cumulative work. It must hold as long as anyone relies on the root, disputes about old proofs
   included.

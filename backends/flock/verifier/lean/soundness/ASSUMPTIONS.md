@@ -45,6 +45,11 @@ table (at each level-0 position, the column `P*` opens there most often over the
 It is needed for any claim about which data a proof used ("these proofs used the registered weights"), and for the
 recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
+**It is required for the partial-integrity composition of sampled audits** (§7). Halevi–Micali leaves are statistically
+hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
+unit used. The audit bound defines a wrong unit through extracted values, so it pays the table's knowledge error and a
+link term per audit.
+
 - **`table_knowledge_sound`.** An extractor that reruns any classical prover accepted with probability ε outputs a
   satisfying witness or a SHA-512 collision, with probability at least `ε − κ`. Here `κ` is the compiled soundness error
   plus extraction terms.
@@ -75,7 +80,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2) | 1c, interactive | `table_sound_compiled` | **to write**: the compiled game (openings at the end of the proof) and the coupling (DESIGN.md §2) |
-| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write**, after `table_sound_compiled` (DESIGN.md §3) |
+| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write**, after `table_sound_compiled` (DESIGN.md §3); required for sampled audits (§7) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
@@ -242,7 +247,16 @@ one rewind to just after the coin commitment, and runs in expected polynomial ti
 The weights are committed once and every later proof opens that root. The analysis is DESIGN.md §10.
 
 - **Soundness over N tables**, by union bound: `N·2^-195.5 + N·t·2^{17.3−256}`, plus `t²/2^513` once for the root. So
-  2^-128 holds while `N·t ≤ 2^110.7`. **Decision, with Daniel:** state security per table, or as a lifetime budget.
+  2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision, with
+  Daniel:** state security per table, or as a lifetime budget.
+- **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
+  - In a sampled audit only the first wrong sampled unit matters. So an audit costs one table's hash term plus one
+    serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit, and 2^-128 over the lifetime holds while
+    `N·t ≤ 2^94` to `2^110`, with `N` counting audits.
+  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
+    to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
+  - The first estimate of that term, `√(t·2^-227)` per audit (2^-73.5 at `t = 2^80`), is negligible next to realistic
+    sampling terms but not next to 2^-128. It is the number to sharpen.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.
@@ -271,7 +285,8 @@ The weights are committed once and every later proof opens that root. The analys
 
    Session binding needs nothing, since the server keeps the round bytes.
 5. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
-   registered data and for recursion's outer proof.
+   registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
+   term (DESIGN.md §3).
 6. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 7. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
