@@ -173,12 +173,9 @@ def spec (st : Stmt) : SessionSpec :=
     retainRounds := st.tags.retainRounds }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
-def tensor (lw : Array F128) (rho : Array F128) : Array F128 := Id.run do
+def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=
   let eIn := eqTable rho
-  let mut e : Array F128 := Array.mkEmpty (64 * eIn.size)
-  for eu in eIn do
-    for l in lw do e := e.push (l * eu)
-  return e
+  Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
 
 /-- The lincheck fold (§10, §16.1): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
 `e[(q << sl) | c] = e_lo[c] · eq(ρ[sl−6 ..], q)` with `e_lo = lw ⊗ eq(ρ[.. sl−6])`, so each slot type is folded once on
