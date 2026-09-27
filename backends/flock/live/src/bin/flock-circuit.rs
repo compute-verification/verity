@@ -794,7 +794,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             // under the population's statement Σ differs (the draw is under Σ); with the record's draw altered, U1
             let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }), &rec, map.clone()).err();
             let mut bad = rec.clone();
-            bad["unit_draw"]["units"] = json!([(draw["units"][0].as_u64().unwrap_or(0) + 1) % inst.n as u64]);
+            bad["unit_draw"]["k"] = json!(draw["k"].as_u64().unwrap_or(0) + 1);
             let u1 = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &bad, map).err();
             json!({"drawn_accepted": ok, "population_refused": pop, "altered_draw_refused": u1})
         } else { Value::Null };
