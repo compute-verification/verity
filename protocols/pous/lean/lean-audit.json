@@ -152,6 +152,16 @@
    "assumptions": [],
    "type_hash": "000000009c8f81e5"
   },
+  "PousDenseReCert.domainSep_equiv": {
+   "signature": [
+    "PousDenseReCert.domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Pous.Bits 256) :",
+    "  ∃ t,",
+    "    Function.Injective t ∧",
+    "      ∀ (p : Fin N × Fin B), (PousDenseReCert.tag salt ↑p.1, p.2) = t ((PousDenseReCert.segIndexEquiv N B) p)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000032a3db7"
+  },
   "PousDenseReCert.seg_meets_14": {
    "signature": [
     "PousDenseReCert.seg_meets_14 :",
@@ -159,6 +169,13 @@
    ],
    "assumptions": [],
    "type_hash": "00000000502a7ca7"
+  },
+  "PousDenseReCert.tag_injective_14": {
+   "signature": [
+    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 256) : Function.Injective fun s => PousDenseReCert.tag salt ↑s"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001aa7783d"
   },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
@@ -440,7 +457,9 @@
     "Pous.raw_sim_accepted",
     "PousBridge.b5_stacked",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.domainSep_equiv",
     "PousDenseReCert.seg_meets_14",
+    "PousDenseReCert.tag_injective_14",
     "PousProofs.A1CompressionPr",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -802,12 +821,15 @@
    ]
   },
   "PousProofs.Dense.DenseReCert": {
-   "digest": "5f7dd3ca5cb444396c261feb89537584",
+   "digest": "5bc15f42d1625c0917319ef68371f03e",
    "definitions": {
     "PousDenseReCert.segDAG": "9648793ee7d01726",
-    "PousDenseReCert.segScheme": "3c26bb1db290e208"
+    "PousDenseReCert.segIndexEquiv": "a07d70a2b628ab34",
+    "PousDenseReCert.segScheme": "3c26bb1db290e208",
+    "PousDenseReCert.tag": "0a792ea19381614b",
+    "PousDenseReCert.u64": "6b625fbed4d9c726"
    },
-   "pins": ["PousDenseReCert.seg_meets_14"]
+   "pins": ["PousDenseReCert.domainSep_equiv", "PousDenseReCert.seg_meets_14", "PousDenseReCert.tag_injective_14"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "88b5ece951ec73b38003348121ad3c79",

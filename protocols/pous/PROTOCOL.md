@@ -40,7 +40,11 @@ sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits pa
 
 Each composes B5 (`dense_timedINC`, `seg_timedINC`, from the pebbling bounds `complete_hard` and `seg_hard`) with
 Theorem 1(ii) sequential. At the 64 KB point the sampling term is `p₀^106 ≈ 0.98%`, while `p₀^105 > 1%`, so `k = 106` is
-tight. The 14 GB store needs the same `k` as one segment.
+tight. The 14 GB store needs the same `k` as one segment. The implementation keys each segment's oracle by the tag
+`salt ‖ u64 s` instead of the global index. `domainSep_equiv` proves that this keying is the global-index keying
+followed by an injective relabeling when `N ≤ 2^64`, and `tag_injective_14` gives distinct tags for the 448 segments.
+The step from there to `seg_meets_14` under the tagged keying (an injectively relabeled random oracle is again one) is
+argued in the file, not proved as a separate `Meets`.
 
 **Not proved here:**
 - the concrete H, `ChainExPostFacto` (the main caveat);
@@ -101,7 +105,7 @@ Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: th
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
 band graph `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels
 (`PousP3Column.band_twoWay_*`); and the dense scheme at the deployment point (`PousDenseReCert.dense_meets_64`,
-`seg_meets_14`, above).
+`seg_meets_14`, `domainSep_equiv`, `tag_injective_14`, above).
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over

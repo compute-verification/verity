@@ -71,3 +71,6 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- the dense scheme at the deployment point: one 32 MiB segment, and 448 segments (14 GB), random-oracle `H`
 #print axioms PousDenseReCert.dense_meets_64
 #print axioms PousDenseReCert.seg_meets_14
+-- the 14 GB theorem's global indices are the implementation's per-segment tags `salt ‖ u64 s`, relabeled injectively
+#print axioms PousDenseReCert.domainSep_equiv
+#print axioms PousDenseReCert.tag_injective_14
