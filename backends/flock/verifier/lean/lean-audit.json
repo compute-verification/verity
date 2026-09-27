@@ -9,6 +9,32 @@
   "Flock.TemplateQuery.Desc.gates": "partial def: a descriptor definition's gate count, recursing through its callees (the template query, PROTOCOL.md 16.10); no proof is about it, and template_query_agree.py covers it"
  },
  "pins": {
+  "Flock.MerklePair.hm96_inputs": {
+   "signature": [
+    "Flock.MerklePair.hm96_inputs (p : Flock.MerklePair) (h : Flock.MerklePair.Collides Flock.MerkleScheme.hm96Sha512 p) :",
+    "  p.hm96Inputs.fst ≠ p.hm96Inputs.snd ∧ Flock.Sha512.hash p.hm96Inputs.fst = Flock.Sha512.hash p.hm96Inputs.snd"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000fe81cab5"
+  },
+  "Flock.MerklePair.sha256_inputs": {
+   "signature": [
+    "Flock.MerklePair.sha256_inputs (id : String) (p : Flock.MerklePair)",
+    "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha256 id) p) :",
+    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha256.hash p.shaInputs.fst = Flock.Sha256.hash p.shaInputs.snd"
+   ],
+   "assumptions": [],
+   "type_hash": "000000000e191f17"
+  },
+  "Flock.MerklePair.sha512_inputs": {
+   "signature": [
+    "Flock.MerklePair.sha512_inputs (id : String) (p : Flock.MerklePair)",
+    "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha512 id) p) :",
+    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha512.hash p.shaInputs.fst = Flock.Sha512.hash p.shaInputs.snd"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000f3d5d62d"
+  },
   "Flock.MerkleScheme.all_sized": {
    "signature": ["Flock.MerkleScheme.all_sized (ms : Flock.MerkleScheme) : ms ∈ Flock.MerkleScheme.all → ms.Sized"],
    "assumptions": [],
@@ -97,21 +123,25 @@
  },
  "reads": {
   "FlockProofs.Hash": {
-   "digest": "563865e962d64903b1736cefe95373c8",
+   "digest": "a481dc312234461e46ba285cadf4b271",
    "definitions": {
+    "Flock.Hm96.leafPair": "b4bf28ca826525ea",
+    "Flock.Hm96.xor64": "dbce741ca19bc58e",
     "Flock.Sha256.Collision": "7b84693561fac7e7",
     "Flock.Sha512.Collision": "e8c4eb0d16296d82"
    },
-   "pins": ["Flock.MerkleScheme.collision_hash"]
+   "pins": ["Flock.MerklePair.hm96_inputs", "Flock.MerkleScheme.collision_hash"]
   },
   "FlockProofs.Merkle": {
-   "digest": "9934798b7d179376ace4504ce6a77e06",
+   "digest": "a5741b8c677009f13330f0fe789962b5",
    "definitions": {
     "Flock.MerklePair": "29e02b12b83d0586",
     "Flock.MerklePair.Collides": "8c9bcfd8351cc8e0",
+    "Flock.MerklePair.hm96Inputs": "2b06fe8642cf0aca",
     "Flock.MerklePair.leaf": "2bd6284720240b5d",
     "Flock.MerklePair.node": "eb392dedaec4fb2a",
     "Flock.MerklePair.render": "3648e1c7232d5441",
+    "Flock.MerklePair.shaInputs": "8f02bf17a0f700e3",
     "Flock.MerkleScheme.Collision": "dd21237148cedcd8",
     "Flock.MerkleScheme.Sized": "b52d9f2a32a77c84",
     "Flock.climbPair": "fa1dd289df953f42",
@@ -119,6 +149,9 @@
     "Flock.opensPair": "503b97dd1cb6dff0"
    },
    "pins": [
+    "Flock.MerklePair.hm96_inputs",
+    "Flock.MerklePair.sha256_inputs",
+    "Flock.MerklePair.sha512_inputs",
     "Flock.MerkleScheme.all_sized",
     "Flock.MerkleScheme.collision_hash",
     "Flock.climb_binding",
