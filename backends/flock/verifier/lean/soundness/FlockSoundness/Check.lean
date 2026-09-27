@@ -59,6 +59,10 @@ when it is proved.
 -- a level's folds against a list
 #print axioms FlockSoundness.value_foldRounds_sum_le
 #print axioms FlockSoundness.value_foldRounds_sum_invariant
+-- the algebra of the final check's weights
+#print axioms FlockSoundness.sum_eqList_prod
+#print axioms FlockSoundness.sum_eqList_split
+#print axioms FlockSoundness.sum_eqList_Xhat
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound
