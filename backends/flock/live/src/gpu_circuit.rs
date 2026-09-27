@@ -198,8 +198,8 @@ pub struct UnitSched {
 pub fn schedule(net: &IrUnitNet) -> UnitSched {
     let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
     let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
-    let late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
-    let cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
+    let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
+    let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
     let mut late = vec![false; u];
     for &r in &late_rows {
         late[r as usize] = true;
@@ -209,7 +209,13 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
             late[i] = net.a[i].iter().chain(&net.b[i]).any(|&c| c != i && c != cpos && late[c]);
         }
     }
-    assert!(cut_rows.iter().all(|&r| !late[r as usize]), "a cut output row reads a late input: the unit is not two-phase");
+    if cut_rows.iter().any(|&r| late[r as usize]) {
+        // not two-phase (a cut output reads a late input: attention's and GEMM's tensor-core steps): one phase; such a unit's
+        // witness is the host's (flock-circuit keeps it off the device)
+        late_rows.clear();
+        cut_rows.clear();
+        late = vec![false; u];
+    }
     let csr = |rows: &Vec<Vec<usize>>| {
         let mut off = vec![0u32];
         let mut col = Vec::new();

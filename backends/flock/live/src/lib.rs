@@ -33,6 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
+pub mod glue;
 pub mod pure_block;
 pub mod vllm_block;
 pub mod zk_hooks;
@@ -881,12 +882,14 @@ pub struct SessionConfig {
     /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
     pub coin_tree: Option<coin_tree::Spec>,
+    /// Or serve this draw, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
+    pub draw_given: Option<Value>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, coin_tree: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None }
     }
 
     /// The record's digest of `b`.
@@ -1262,8 +1265,12 @@ impl Server {
                 if self.hello.is_some() || self.cfg.unit_draw.is_some() {
                     return self.refuse("U: the units are drawn once, after registration and before Hello".into());
                 }
-                let Some((law, population)) = self.cfg.draw_law else { return Resp::Draw("null".into()) };
-                let draw = match unit_draw::draw(law, population) {
+                let drawn = match (&self.cfg.draw_given, self.cfg.draw_law) {
+                    (Some(d), _) => unit_draw::check(d).map(|_| d.clone()),
+                    (None, Some((law, population))) => unit_draw::draw(law, population),
+                    (None, None) => return Resp::Draw("null".into()),
+                };
+                let draw = match drawn {
                     Ok(d) => d,
                     Err(e) => return self.refuse(format!("U: {e}")),
                 };

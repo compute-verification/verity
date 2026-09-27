@@ -161,7 +161,7 @@ index c36ce18..5281a68 100644
              )
          },
 diff --git a/crates/flock-core/src/pcs/commit.rs b/crates/flock-core/src/pcs/commit.rs
-index 497b3fc..8c2474b 100644
+index 83a6207..68455c7 100644
 --- a/crates/flock-core/src/pcs/commit.rs
 +++ b/crates/flock-core/src/pcs/commit.rs
 @@ -837,6 +837,36 @@ fn commit_encode_finish(
@@ -202,7 +202,7 @@ index 497b3fc..8c2474b 100644
  pub fn commit_merkle(codeword: Vec<F128>, params: &PcsParams) -> (Commitment, ProverData) {
      let timing = std::env::var_os("FLOCK_COMMIT_TIMING").is_some();
 diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
-index 2dce928..6f7da15 100644
+index 31b6d20..a25080b 100644
 --- a/crates/flock-core/src/pcs/ligerito.rs
 +++ b/crates/flock-core/src/pcs/ligerito.rs
 @@ -64,6 +64,137 @@ use crate::{
@@ -343,7 +343,7 @@ index 2dce928..6f7da15 100644
  // ===================================================================
  // Config
  // ===================================================================
-@@ -2200,6 +2331,12 @@ pub struct LigeritoProof {
+@@ -2201,6 +2332,12 @@ pub struct LigeritoProof {
      /// queried consistency equations.
      #[serde(default)]
      pub consistency_batch_grinding_nonces: Vec<u64>,
@@ -356,7 +356,7 @@ index 2dce928..6f7da15 100644
  }
  
  impl LigeritoProof {
-@@ -4762,6 +4899,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
+@@ -4763,6 +4900,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
          None,
          None,
          None,
@@ -364,7 +364,7 @@ index 2dce928..6f7da15 100644
          challenger,
      )
  }
-@@ -4800,6 +4938,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
+@@ -4801,6 +4939,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
          }),
          round1_lookahead,
          None,
@@ -372,7 +372,7 @@ index 2dce928..6f7da15 100644
          challenger,
      )
  }
-@@ -4829,6 +4968,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4830,6 +4969,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
      l0_jit_basis: Option<BasisWindowFn<'_>>,
      l0_virtual_basis: Option<VirtualEqBasis>,
      seeded_stats: Option<Vec<F128>>,
@@ -380,7 +380,7 @@ index 2dce928..6f7da15 100644
      challenger: &mut Ch,
  ) -> LigeritoProof {
      recursive_prover_with_basis_impl(
-@@ -4848,6 +4988,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+@@ -4849,6 +4989,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
          }),
          round1_lookahead,
          seeded_stats,
@@ -388,7 +388,7 @@ index 2dce928..6f7da15 100644
          challenger,
      )
  }
-@@ -5034,6 +5175,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+@@ -5035,6 +5176,8 @@ fn recursive_prover_inner<Ch: Challenger>(
                  fold_grinding_nonces: Vec::new(),
                  claim_batch_grinding_nonces: Vec::new(),
                  consistency_batch_grinding_nonces: Vec::new(),

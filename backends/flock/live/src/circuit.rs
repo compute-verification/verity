@@ -16,7 +16,9 @@
 //! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
 //! every row's `b || c` (its hm96 slot's output) and every unit's returned-output words. The rows, their salts, the chaining
 //! values and every word between slots stay private. A padding instance is the all-zero instance with zero salts, whose
-//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned.
+//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned. A shared-row file
+//! (header `shared_rows`) commits each input port's rows once, as one table, and names the row each instance reads (its refs):
+//! the instance's digest values are those rows' `b || c`, so the rows it hashes in the circuit are the committed ones.
 //!
 //! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3-sha512 roots against
 //! the public `b || c` and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
@@ -165,6 +167,14 @@ pub struct Composite {
     pub rows: Vec<RowConsts>,
     pub sha_net: usize,
     pub hm_net: usize,
+    /// the circuit whose output group holds the returned outputs: the unit, or (a tail that returns them) the last stage
+    pub out_net: usize,
+    /// `out_net`'s output ports that are the output words (a stage), in output-leaf order
+    pub out_ports: Vec<usize>,
+    /// a unit input that is a row word (attention's public query): `(unit, input port, leaf)`; low 16 bits the message bits
+    pub leaf_cuts: Vec<(usize, usize, usize)>,
+    /// `leaf_cuts` by unit: `(input port, leaf)`
+    pub leaf_cuts_of: Vec<Vec<(usize, usize)>>,
     /// the all-zero instance's `b || c` per port
     pub dummy_bc: Vec<[u8; BC_BYTES]>,
     pub dummy_outputs: Vec<u16>,
@@ -414,6 +424,14 @@ impl Composite {
             }
         }
         let (sha_net, hm_net) = (net_of(SHA_NET)?, net_of(HM_NET)?);
+        let out_net = net_of(meta["out_net"].as_str().unwrap_or("unit"))?;
+        let out_ports: Vec<usize> = meta["out_net_ports"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as usize).collect()).unwrap_or_default();
+        let leaf_cuts: Vec<(usize, usize, usize)> = meta["leaf_cuts"].as_array().map(|a| a.iter().map(|w| {
+            (w[1].as_u64().unwrap_or(u64::MAX) as usize, w[2].as_u64().unwrap_or(u64::MAX) as usize, w[3].as_u64().unwrap_or(u64::MAX) as usize)
+        }).collect()).unwrap_or_default();
+        if meta["leaf_cuts"].as_array().is_some_and(|a| a.iter().any(|w| w[0] != "unit")) {
+            return Err("META: a leaf cut into anything but a unit".into());
+        }
         let mut wires = Vec::new();
         for w in meta["wires"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
             let n = |i: usize| w[i].as_str().ok_or("a wire's circuit".to_string()).and_then(net_of);
@@ -429,7 +447,8 @@ impl Composite {
         }
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
-            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, dummy_bc, dummy_outputs, per_vu, wires,
+            leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
+            out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
@@ -442,8 +461,8 @@ impl Composite {
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
             let (span, align) = if r.packed { (r.count << r.slot_log, 1 << r.slot_log) } else { (r.count.next_power_of_two() << r.slot_log, r.count.next_power_of_two() << r.slot_log) };
-            if r.packed && r.kind != Kind::Net(self.sha_net) {
-                return Err("a packed range that is not the compressions'".into());
+            if r.packed && (r.kind == Kind::Net(self.hm_net) || r.kind == Kind::Net(self.out_net) || r.kind == Kind::Mask) {
+                return Err("a packed range that a region reads".into());
             }
             if r.start() % align != 0 || r.start() + span > 1 << self.k_log {
                 return Err("a range is not aligned to its span or overruns the block".into());
@@ -476,13 +495,25 @@ impl Composite {
         }
         let unit = &self.nets[self.unit_net].1;
         let ur: Vec<&Range> = self.ranges.iter().filter(|r| r.kind == Kind::Net(self.unit_net)).collect();
-        if ur.len() != 1 || ur[0].count != self.g * self.upv || !ur[0].count.is_power_of_two() {
+        if ur.len() != 1 || ur[0].count != self.g * self.upv || (self.out_net == self.unit_net && !ur[0].count.is_power_of_two()) {
             return Err("not one unit range of vus_per_block x units_per_vu (a power of two) units".into());
         }
+        let tail_out = self.out_net != self.unit_net;
         if unit.in_groups.is_empty() || unit.in_groups.len() > 2 || unit.out_groups.is_empty() || unit.out_groups.len() > 2
-            || unit.in_groups[0].bits.iter().any(|&b| b != 16) || unit.out_groups[0].bits.iter().any(|&b| b != 16)
+            || unit.in_groups[0].bits.iter().any(|&b| b != 16) || (!tail_out && unit.out_groups[0].bits.iter().any(|&b| b != 16))
         {
             return Err("the unit's ports are not a group of 16-bit leaf inputs (then cut inputs) and one of 16-bit returned outputs (then cut outputs)".into());
+        }
+        if tail_out {
+            let n_out: usize = self.out_words.iter().sum();
+            let net = &self.nets[self.out_net].1;
+            let oc = port_cols(&net.out_groups);
+            if !self.nets[self.out_net].0.starts_with("stage") || self.out_ports != (0..oc.len()).collect::<Vec<_>>() || oc.len() != n_out
+                || oc.iter().any(|x| x.1 != 16) || net.out_groups.len() != 1 || !(16 * n_out).is_power_of_two()
+                || self.leaves_out.iter().any(|l| !l.is_empty())
+            {
+                return Err("the returned outputs are not the last stage's only output group: one 16-bit port per output word".into());
+            }
         }
         for (i, r) in self.ranges.iter().enumerate() {
             if let Kind::Net(n) = r.kind
@@ -511,6 +542,14 @@ impl Composite {
             }
             *wired.entry(w.dst).or_default() += 1;
         }
+        for &(u, j, leaf) in &self.leaf_cuts {
+            let n_in: usize = self.ports.iter().map(|p| p.words).sum();
+            let pc = port_cols(&unit.in_groups);
+            if u >= self.upv || j < unit.in_groups[0].bits.len() || j >= pc.len() || pc[j].1 < 16 || leaf >= n_in {
+                return Err("a leaf cut outside the unit's cut inputs or the rows".into());
+            }
+            *wired.entry((self.unit_net, u, j)).or_default() += 1;
+        }
         for (n, (nm, net)) in self.nets.iter().enumerate() {
             if n == self.sha_net || n == self.hm_net {
                 continue;
@@ -529,10 +568,11 @@ impl Composite {
         if self.leaves_in.len() != self.upv || self.leaves_out.len() != self.upv {
             return Err("the leaf maps are not one per unit".into());
         }
-        let mut seen_out = vec![false; n_out];
+        // a tail that returns the outputs returns every one of them (the units return none)
+        let mut seen_out = vec![tail_out; n_out];
         for u in 0..self.upv {
             if self.leaves_in[u].len() != unit.in_groups[0].bits.len() || self.leaves_in[u].iter().any(|&x| x < -1 || x >= n_in as i64)
-                || self.leaves_out[u].len() != unit.out_groups[0].bits.len()
+                || (!tail_out && self.leaves_out[u].len() != unit.out_groups[0].bits.len())
             {
                 return Err(format!("unit {u}'s leaf maps are not its circuit's ports"));
             }
@@ -652,6 +692,16 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             }
         }
     }
+    let pc = port_cols(&unit.in_groups);
+    for g in 0..c.g {
+        for &(u, j, leaf) in &c.leaf_cuts {
+            let p = starts.iter().rposition(|&s| s <= leaf).unwrap();
+            let dst = c.slot_col(c.unit_net, g, u) + pc[j].0;
+            for t in 0..pc[j].1 {
+                both(&mut da, &mut db, dst + t, if t < 16 { msg_col(g, p, 2 * (leaf - starts[p]) + t / 8, t % 8) } else { zero });
+            }
+        }
+    }
     for g in 0..c.g {
         for w in &c.wires {
             let (dc, sc) = (port_cols(&c.nets[w.dst.0].1.in_groups)[w.dst.2], port_cols(&c.nets[w.src.0].1.out_groups)[w.src.2]);
@@ -673,14 +723,35 @@ pub struct Instances {
     pub rows: Option<Vec<u8>>,
     /// every row's salt, instance-major, ports in order (the prover's file only)
     pub salts: Option<Vec<u8>>,
-    /// every row's `b || c`, instance-major, ports in order
+    /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     pub outputs: Vec<u16>,
-    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, outputs): what Σ binds
+    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, refs, outputs): what Σ binds
     pub public_sha512: [u8; 64],
     /// the registered population's `b || c` and outputs (a drawn statement: the frame-v3 roots are over them); `None`: the
     /// statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>, Vec<u16>)>,
+    /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
+    pub tables: Option<RowTables>,
+}
+
+/// Header `shared_rows: {port: R_p}`: input port `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i`
+/// reads its row `refs[i * ports + p]`. Rows, salts and `b || c` are the tables', port-major.
+#[derive(Clone)]
+pub struct RowTables {
+    pub counts: Vec<usize>,
+    /// every table's rows (u16 LE), port-major (the prover's file only)
+    pub rows: Option<std::sync::Arc<Vec<u8>>>,
+    /// every table row's salt, port-major (the prover's file only)
+    pub salts: Option<std::sync::Arc<Vec<u8>>>,
+    pub refs: Vec<u32>,
+}
+
+impl RowTables {
+    /// port `p`'s first row among the tables' rows
+    pub fn start(&self, p: usize) -> usize {
+        self.counts[..p].iter().sum()
+    }
 }
 
 /// The header's `units`: the instances' global unit indices (the partition's order: ascending), and per block its units.
@@ -705,15 +776,45 @@ impl Instances {
         let rb = c.row_bytes();
         let (n_out, np) = (c.out_words.iter().sum::<usize>(), c.ports.len());
         let body = &b[nl + 1..];
-        let (rows_len, salts_len) = if has_rows { (n * rb, n * np * SALT_BYTES) } else { (0, 0) };
-        if body.len() != rows_len + salts_len + BC_BYTES * n * np + 2 * n * n_out {
+        let counts: Option<Vec<usize>> = match header.get("shared_rows") {
+            None => None,
+            Some(s) => {
+                let m = s.as_object().ok_or("header: shared_rows is not an object")?;
+                if m.len() != np || c.ports.iter().any(|p| !m.contains_key(&p.name)) {
+                    return Err("header: shared_rows does not name exactly the circuit's input ports".into());
+                }
+                let counts: Vec<usize> = c.ports.iter().map(|p| m[&p.name].as_u64().unwrap_or(0) as usize).collect();
+                if counts.contains(&0) {
+                    return Err("header: a shared_rows table has no row".into());
+                }
+                Some(counts)
+            }
+        };
+        // a per-instance file is `n` rows per port, instance-major; a shared-row file `R_p` table rows per port, port-major
+        let (rows_len, salts_len, n_bcs, refs_len) = match &counts {
+            None => (n * rb, n * np * SALT_BYTES, n * np, 0),
+            Some(k) => (k.iter().zip(&c.ports).map(|(r, p)| r * 2 * p.words).sum(), k.iter().sum::<usize>() * SALT_BYTES, k.iter().sum(), 4 * n * np),
+        };
+        let (rows_len, salts_len) = if has_rows { (rows_len, salts_len) } else { (0, 0) };
+        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len + 2 * n * n_out {
             return Err("instance file length".into());
         }
-        let rows = has_rows.then(|| body[..rows_len].to_vec());
-        let salts = has_rows.then(|| body[rows_len..rows_len + salts_len].to_vec());
+        let private = |a: usize, len: usize| has_rows.then(|| body[a..a + len].to_vec());
+        let (rows, salts) = (private(0, rows_len), private(rows_len, salts_len));
         let pubs = &body[rows_len + salts_len..];
-        let bcs = pubs[..BC_BYTES * n * np].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
-        let outputs = pubs[BC_BYTES * n * np..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let bcs = pubs[..BC_BYTES * n_bcs].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
+        let tail = &pubs[BC_BYTES * n_bcs..];
+        let outputs = tail[refs_len..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let (rows, salts, tables) = match counts {
+            None => (rows, salts, None),
+            Some(counts) => {
+                let refs: Vec<u32> = tail[..refs_len].chunks(4).map(|x| u32::from_le_bytes(x.try_into().unwrap())).collect();
+                if refs.iter().enumerate().any(|(k, &r)| r as usize >= counts[k % np]) {
+                    return Err("shared rows: an instance's ref is past its table".into());
+                }
+                (None, None, Some(RowTables { counts, rows: rows.map(std::sync::Arc::new), salts: salts.map(std::sync::Arc::new), refs }))
+            }
+        };
         let indices: Vec<usize> = header["units"]["indices"].as_array().ok_or("header: units.indices")?.iter()
             .map(|x| x.as_u64().map(|v| v as usize).ok_or("header: a unit index")).collect::<Result<_, _>>()?;
         if indices.len() != n || indices.windows(2).any(|w| w[0] >= w[1]) || header["units"] != units_entry(c, &indices) {
@@ -724,7 +825,7 @@ impl Instances {
         }
         header["rows"] = Value::Bool(false);
         let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None })
+        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None, tables })
     }
 
     fn public_digest(header: &Value, pubs: &[u8]) -> [u8; 64] {
@@ -751,26 +852,74 @@ impl Instances {
         header["population"] = json!(self.n);
         header["units"] = units_entry(c, &indices);
         let mut pubs: Vec<u8> = self.bcs.iter().flatten().copied().collect();
+        if let Some(t) = &self.tables {
+            pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
         pubs.extend(self.outputs.iter().flat_map(|w| w.to_le_bytes()));
         let public_sha512 = Self::public_digest(&header, &pubs);
+        let outputs = units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect();
+        let population = Some((self.n, self.bcs.clone(), self.outputs.clone()));
+        if let Some(t) = &self.tables {
+            // the tables stay the population's; the drawn instances keep their refs into them
+            let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
+            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), outputs, public_sha512, population,
+                                  tables: Some(RowTables { refs, ..t.clone() }) });
+        }
         Ok(Instances {
             header, n: units.len(),
             rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
             salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
-            outputs: units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect(),
+            outputs,
             public_sha512,
-            population: Some((self.n, self.bcs.clone(), self.outputs.clone())),
+            population,
+            tables: None,
         })
     }
 
-    pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
-        self.bcs[i * np + p]
+    /// Where instance `i`'s port-`p` `b || c` sits in `bcs` (a shared-row file: its ref into table `p`).
+    pub fn bc_index(&self, i: usize, p: usize, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.start(p) + t.refs[i * np + p] as usize,
+            None => i * np + p,
+        }
     }
 
-    pub fn salt(&self, i: usize, p: usize, np: usize) -> &[u8] {
-        let s = self.salts.as_ref().expect("the prover's instance file has the salts");
-        &s[(i * np + p) * SALT_BYTES..(i * np + p + 1) * SALT_BYTES]
+    pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
+        self.bcs[self.bc_index(i, p, np)]
+    }
+
+    /// Whether this is a prover's file (it holds rows and salts).
+    pub fn has_rows(&self) -> bool {
+        self.rows.is_some() || self.tables.as_ref().is_some_and(|t| t.rows.is_some())
+    }
+
+    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs); `None`: the
+    /// verifier's file.
+    pub fn instance_rows(&self, c: &Composite) -> Option<Vec<u8>> {
+        let Some(t) = &self.tables else { return self.rows.clone() };
+        let rows = t.rows.as_ref()?;
+        let np = c.ports.len();
+        let base: Vec<usize> = c.ports.iter().zip(&t.counts).scan(0, |a, (p, &r)| { let s = *a; *a += r * 2 * p.words; Some(s) }).collect();
+        let mut out = Vec::with_capacity(self.n * c.row_bytes());
+        for i in 0..self.n {
+            for (p, port) in c.ports.iter().enumerate() {
+                let (w, r) = (2 * port.words, t.refs[i * np + p] as usize);
+                out.extend_from_slice(&rows[base[p] + r * w..base[p] + (r + 1) * w]);
+            }
+        }
+        Some(out)
+    }
+
+    /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
+    /// verifier's file.
+    pub fn instance_salts(&self, np: usize) -> Option<Vec<u8>> {
+        let Some(t) = &self.tables else { return self.salts.clone() };
+        let salts = t.salts.as_ref()?;
+        Some((0..self.n * np).flat_map(|k| {
+            let s = t.start(k % np) + t.refs[k] as usize;
+            salts[s * SALT_BYTES..(s + 1) * SALT_BYTES].iter().copied()
+        }).collect())
     }
 }
 
@@ -861,9 +1010,6 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     if fv["frame"] != "frame-v3-sha512" || fv["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
         return Err("the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key".into());
     }
-    let np = c.ports.len();
-    // the frame-v3 roots are over the registered population (a drawn statement's instances are some of its units)
-    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
     if let Some(d) = inst.header.get("unit_draw") {
         let units = crate::unit_draw::check(d)?;
         if inst.header["instances"].as_u64() != Some(units.len() as u64) || inst.n != units.len() {
@@ -871,30 +1017,52 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     for (p, port) in c.ports.iter().enumerate() {
-        let dom = get("domain_ids", &port.name)?;
         if fv["schemas"][&port.name] != ROW_SCHEMA {
             return Err(format!("input port {}: schema is not {ROW_SCHEMA}", port.name));
-        }
-        let leaves = (0..n).into_par_iter().map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[i * np + p]))).collect();
-        if fv3_root(&dom, leaves).to_vec() != get("roots", &port.name)? {
-            return Err(format!("input port {}: the rows' b || c do not hash to the header's frame-v3-sha512 root", port.name));
         }
         if zero_row_bc(port.words) != c.dummy_bc[p] {
             return Err(format!("the pinned dummy b || c of port {} is not the zero row's", port.name));
         }
     }
+    for (k, (name, root)) in frame_roots(c, inst)?.into_iter().enumerate() {
+        if root.to_vec() != get("roots", &name)? {
+            return Err(if k < c.ports.len() {
+                format!("input port {name}: the rows' b || c do not hash to the header's frame-v3-sha512 root")
+            } else {
+                format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root")
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The frame-v3-sha512 roots of the file's public part, input ports' row trees then output ports' word trees: over the
+/// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
+pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
+    let fv = &inst.header["frame_v3"];
+    let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
+    let np = c.ports.len();
+    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
+    let mut out = Vec::new();
+    for (p, port) in c.ports.iter().enumerate() {
+        let dom = dom_of(&port.name)?;
+        let (count, row): (usize, Box<dyn Fn(usize) -> usize + Sync>) = match &inst.tables {
+            Some(t) => (t.counts[p], Box::new(move |r| t.start(p) + r)),
+            None => (n, Box::new(move |i| i * np + p)),
+        };
+        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
+        out.push((port.name.clone(), fv3_root(&dom, leaves)));
+    }
     let n_out: usize = c.out_words.iter().sum();
     let mut at = 0;
     for (name, w) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)) {
-        let dom = get("domain_ids", name)?;
+        let dom = dom_of(name)?;
         let words: Vec<u16> = (0..n).flat_map(|i| outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
         let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_leaf(&dom, r, b"u16", &v.to_be_bytes())).collect();
-        if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
-            return Err(format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root"));
-        }
+        out.push((name.to_string(), fv3_root(&dom, leaves)));
         at += w;
     }
-    Ok(())
+    Ok(out)
 }
 
 // --- the statement -------------------------------------------------------------------------------------------------------
@@ -1095,6 +1263,14 @@ impl Stmt {
         for p in 0..c.ports.len() {
             out.push(mk(Region::Digest(p), [bits(0, 10), bits(hr.slot_log + lp, lg)].concat(), hr.start() + (p << hr.slot_log) + bc0)?);
         }
+        if c.out_net != c.unit_net {
+            // the last stage's output group is the output words (one slot per VU)
+            let (net, r) = (&c.nets[c.out_net].1, c.range_of(c.out_net));
+            let nbits = 16 * c.out_words.iter().sum::<usize>();
+            out.push(mk(Region::Out, [bits(0, nbits.trailing_zeros() as usize), bits(r.slot_log, r.count.trailing_zeros() as usize)].concat(),
+                        r.start() + net.out_groups[0].col * WORD)?);
+            return Ok(out);
+        }
         let unit = c.unit();
         let ur = c.unit_range();
         let g0 = &unit.out_groups[0];
@@ -1191,6 +1367,14 @@ impl Stmt {
             }
             col += unit.in_groups[0].bits[j];
         }
+        // a leaf cut (a row word read as a cut input): the word in the port's low 16 bits
+        let pc = port_cols(&unit.in_groups);
+        for &(j, leaf) in &c.leaf_cuts_of[u] {
+            let at = i * rb + 2 * leaf;
+            let v = u16::from_le_bytes([rows[at], rows[at + 1]]) as u64;
+            let col = pc[j].0;
+            if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
+        }
         w
     }
 
@@ -1251,22 +1435,33 @@ impl Stmt {
         if wires.is_empty() {
             return ins;
         }
+        // slot by slot: a round re-evaluates only the slots whose inputs changed (a chain of units, GEMM's accumulator, costs one
+        // pass rather than one round of every slot per link)
         let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
-        let mut dirty: Vec<bool> = (0..c.nets.len()).map(|n| !row_net(n)).collect();
+        let mut dirty: Vec<Vec<bool>> = (0..c.nets.len()).map(|n| vec![!row_net(n); ins[n].len()]).collect();
         let fixed = unit_outs.is_some();
         if let Some(u) = unit_outs {
             outs[c.unit_net] = u;
-            dirty[c.unit_net] = false;
+            dirty[c.unit_net].iter_mut().for_each(|d| *d = false);
         }
-        for _round in 0..64 {
+        let cap = ins.iter().map(|x| x.len()).sum::<usize>() + 64;
+        for _round in 0..cap {
             for n in 0..c.nets.len() {
                 if fixed && n == c.unit_net {
-                    dirty[n] = false;
                     continue;
                 }
-                if dirty[n] {
-                    outs[n] = self.eval_outputs(n, net_of(n), &ins[n]);
-                    dirty[n] = false;
+                let todo: Vec<usize> = (0..ins[n].len()).filter(|&x| dirty[n][x]).collect();
+                if todo.is_empty() {
+                    continue;
+                }
+                let sub: Vec<Vec<F128>> = todo.iter().map(|&x| ins[n][x].clone()).collect();
+                let got = self.eval_outputs(n, net_of(n), &sub);
+                if outs[n].is_empty() {
+                    outs[n] = vec![Vec::new(); ins[n].len()];
+                }
+                for (&x, o) in todo.iter().zip(got) {
+                    outs[n][x] = o;
+                    dirty[n][x] = false;
                 }
             }
             let mut changed = false;
@@ -1284,7 +1479,7 @@ impl Stmt {
                             if bit(d, (dcol + t) % WORD) != v {
                                 flip_bit(d, (dcol + t) % WORD);
                                 changed = true;
-                                dirty[dn] = true;
+                                dirty[dn][xd] = true;
                             }
                         }
                     }
@@ -1414,6 +1609,11 @@ impl Stmt {
         let np = c.ports.len();
         match reg {
             Region::Digest(p) => (0..c.g).flat_map(|g| match self.inst_of(b, g) { Some(i) => inst.bc(i, *p, np), None => c.dummy_bc[*p] }).collect(),
+            Region::Out if c.out_net != c.unit_net => {
+                let n_out = c.out_words.iter().sum::<usize>();
+                (0..c.g).flat_map(|g| (0..n_out).flat_map(move |o| match self.inst_of(b, g) { Some(i) => inst.outputs[i * n_out + o], None => c.dummy_outputs[o] }.to_le_bytes()))
+                    .collect()
+            }
             Region::Out => {
                 let unit = c.unit();
                 let ur = c.unit_range();

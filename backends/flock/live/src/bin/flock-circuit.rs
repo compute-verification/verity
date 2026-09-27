@@ -153,8 +153,8 @@ fn identity(c: &Composite) -> Value {
            "seed_injection": cfg!(feature = "seed-injection"),
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
-                      "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
-                      "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
+                      "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
+                      "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks})
@@ -379,6 +379,18 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
     let s = Server::new(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }));
+    let file = arg("--draw-file", "");
+    if !file.is_empty() {
+        // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
+        // registered population when the drawn statement is built)
+        let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
+            .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
+        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
+        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        s.cfg.draw_law = None;
+        s.cfg.draw_given = Some(draw);
+        return s;
+    }
     let law = arg("--draw", "");
     if law.is_empty() {
         return s;
@@ -432,7 +444,8 @@ enum WitData {
 fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
     #[cfg(feature = "gpu")]
-    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+    // a tail that returns the outputs interleaves with the units round by round: the device's two passes cannot follow it
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.out_net == st.c.unit_net {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
@@ -443,6 +456,23 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             return (WitData::DevCut(rows, host, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
         }
+        return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
+    }
+    #[cfg(feature = "gpu")]
+    // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
+    // the stages and lookups; the device the compressions, and the units from their converged inputs
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
+        use rayon::prelude::*;
+        let c = &st.c;
+        let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
+        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        let ins = st.converge_with(&*w.inputs, None, &w.nets, None);
+        let mut host = flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm);
+        for ni in (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net && n != c.unit_net) {
+            host.extend(flock_live::gpu_circuit::host_slots(st, ni, &ins[ni]));
+        }
+        let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
         return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
     }
     let _ = device;
@@ -1490,12 +1520,12 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
 }
 
 fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed) -> Wit {
-    let mut rows = inst.rows.clone().expect("the prover's instance file has the rows");
+    let mut rows = inst.instance_rows(&st.c).expect("the prover's instance file has the rows");
     if plan.message_flip {
         rows[3] ^= 0x10;
     }
     let rows = Arc::new(rows);
-    let salts = Arc::new(inst.salts.clone().expect("the prover's instance file has the salts"));
+    let salts = Arc::new(inst.instance_salts(st.c.ports.len()).expect("the prover's instance file has the salts"));
     let (s1, r1, sa1) = (st.clone(), rows.clone(), salts.clone());
     let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged };
     let rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send> = Arc::new(move |b| {
@@ -1719,6 +1749,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("mask_cells_random", true, false),
     ("output_claim_false", false, true),
     ("digest_claim_false", false, true),
+    ("row_ref_claim_false", false, true),
     ("message_byte_differs_from_the_committed_row", false, true),
     ("unit_input_differs_from_its_message_bits", false, true),
     ("unit_internal_bit_flipped", false, true),
@@ -1746,6 +1777,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("coin_seed_record_replays", true, false),
     ("record_replays_offline", true, false),
     ("unit_draw_session", true, false),
+    ("unit_draw_from_file", true, false),
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
     ("zk_pads_not_the_committed_ones", false, true),
@@ -1767,10 +1799,14 @@ const NOT_ZK: &[&str] = &["coin_seed_opening_forged", "coin_seed_record_replays"
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
     let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
+    // a tail with no positive constant to forge (GEMM's: the zero accumulator and the cast) forges to itself: nothing to swap
+    let forged_same = std::fs::read_to_string(arg("--forged", "circuit-forged.txt"))
+        .map(|f| f == std::fs::read_to_string(arg("--circuit", "")).unwrap_or_default()).unwrap_or(true);
     (name == "chaining_value_forged" && !multi_block)
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (is_zk(st) && NOT_ZK.contains(&name))
         || (!is_zk(st) && name.starts_with("zk_"))
+        || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -1804,36 +1840,30 @@ fn load_composite(path: &str) -> Composite {
     Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
 }
 
-/// The verifier's file with one public word changed and its frame-v3 roots recomputed: a self-consistent, false statement.
+/// The verifier's file with one public claim changed and its frame-v3 roots recomputed: a self-consistent, false statement. `ref`
+/// (a shared-row file) points instance 0 at another row of a table, whose roots are unchanged.
 fn false_statement(st: &Stmt, what: &str) -> Instances {
     let path = arg("--instances", "");
     let mut v = Instances::load(&path, &st.c).unwrap();
-    match what {
-        "output" => v.outputs[5] ^= 1,
-        _ => v.bcs[1][0] ^= 1,
-    }
-    let text = std::fs::read(&path).unwrap();
-    let nl = text.iter().position(|&x| x == b'\n').unwrap();
-    let head: Value = serde_json::from_slice(&text[..nl]).unwrap();
-    let fv = &head["frame_v3"];
-    let mut roots = fv["roots"].clone();
     let np = st.c.ports.len();
-    for (p, port) in st.c.ports.iter().enumerate() {
-        let dom = hexb(fv["domain_ids"][&port.name].as_str().unwrap()).unwrap();
-        let leaves: Vec<[u8; 64]> = (0..v.n).map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&v.bc(i, p, np)))).collect();
-        roots[&port.name] = json!(hex(&fv3_root(&dom, leaves)));
+    match what {
+        "output" => {
+            let k = 5.min(v.outputs.len() - 1);
+            v.outputs[k] ^= 1
+        }
+        "ref" => {
+            let t = v.tables.as_mut().expect("a shared-row file");
+            let p = (0..np).find(|&p| t.counts[p] > 1).expect("a table of two rows or more");
+            t.refs[p] = (t.refs[p] + 1) % t.counts[p] as u32;
+        }
+        _ => {
+            let k = if v.tables.is_some() { v.bc_index(0, 0, np) } else { 1 };
+            v.bcs[k][0] ^= 1
+        }
     }
-    let n_out: usize = st.c.out_words.iter().sum();
-    let mut at = 0;
-    for x in st.c.meta["out_ports"].as_array().unwrap() {
-        let (name, w) = (x[0].as_str().unwrap(), x[1].as_u64().unwrap() as usize);
-        let dom = hexb(fv["domain_ids"][name].as_str().unwrap()).unwrap();
-        let words: Vec<u16> = (0..v.n).flat_map(|i| v.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
-        let leaves = words.iter().enumerate().map(|(r, x)| fv3_leaf(&dom, r, b"u16", &x.to_be_bytes())).collect();
-        roots[name] = json!(hex(&fv3_root(&dom, leaves)));
-        at += w;
+    for (name, root) in frame_roots(&st.c, &v).unwrap() {
+        v.header["frame_v3"]["roots"][&name] = json!(hex(&root));
     }
-    v.header["frame_v3"]["roots"] = roots;
     check_public(&st.c, &v).expect("the false statement is self-consistent");
     let mut h = Sha512::new();
     h.update(v.public_sha512);
@@ -1992,6 +2022,18 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
+    if name == "unit_draw_from_file" {
+        // the verifier's own draw (units 0 and the last), served at Register: the session proves exactly those units
+        let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
+        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        srv.cfg.draw_law = None;
+        srv.cfg.draw_given = Some(draw.clone());
+        let s = Arc::new(Mutex::new(srv));
+        let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+        let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        let pass = v["accepted"] == true && rec["unit_draw"] == draw;
+        return json!({"case": name, "gpu": gpu, "accepted": v["accepted"], "pass": pass, "unit_draw": rec["unit_draw"], "why": v["why"]});
+    }
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
         // the verifier draws one unit of the registered population after Register; the prover proves the drawn statement
         // (or, ignoring the draw, the population's, whose Σ is not the verifier's)
@@ -2010,7 +2052,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             // under the population's statement Σ differs (the draw is under Σ); with the record's draw altered, U1
             let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }), &rec, map.clone()).err();
             let mut bad = rec.clone();
-            bad["unit_draw"]["units"] = json!([(draw["units"][0].as_u64().unwrap_or(0) + 1) % inst.n as u64]);
+            bad["unit_draw"]["k"] = json!(draw["k"].as_u64().unwrap_or(0) + 1);
             let u1 = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &bad, map).err();
             json!({"drawn_accepted": ok, "population_refused": pop, "altered_draw_refused": u1})
         } else { Value::Null };
@@ -2062,8 +2104,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os()).1);
     }
     let (pst, pinst, vinst) = match name {
-        "output_claim_false" | "digest_claim_false" => {
-            let v = Arc::new(false_statement(st, if name.starts_with("output") { "output" } else { "digest" }));
+        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" => {
+            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", _ => "digest" };
+            let v = Arc::new(false_statement(st, what));
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
             p.public_sha512 = v.public_sha512;
             (st.clone(), Arc::new(p), v)
@@ -2192,7 +2235,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if skipped(st, name) {
+        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1))) {
             continue;
         }
         let v = if gpu {
@@ -2298,7 +2341,7 @@ fn main() {
         refuse(format!("the circuit's SHA-512 {} is not the pinned circuit {pin}", hex(&c.sha512)));
     }
     let inst = Arc::new(Instances::load(&arg("--instances", "inst.bin"), &c).unwrap_or_else(|e| refuse(e)));
-    if cmd == "serve" && inst.rows.is_some() {
+    if cmd == "serve" && inst.has_rows() {
         refuse("the verifier's instance file holds rows: stage its own public file (public_only)".into());
     }
     if let Err(e) = check_public(&c, &inst) {

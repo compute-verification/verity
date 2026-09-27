@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 from . import circuit as FC
-from .bench import PER_PROOF_LOG2, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
+from .bench import PER_PROOF_LOG2, PROFILES, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
 
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
 
@@ -177,8 +177,10 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     first = timed[0]
     sub = input_set.subcircuit
     and_count = ands(low) * n
+    # a GEMM coordinate's result names its campaign target and K, as flock-pure's cells do (bench.PROFILES)
+    gemm = sub.template.id == "gemm-coordinate"
     fp = contract.fingerprint(
-        profile=None, domain="finite", K=None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+        profile=PROFILES["bf16-ampere"] if gemm else None, domain="finite", K=int(sub.params["K"]) if gemm else None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "commitments": "one root per proof, bound by both reps (R1)",
@@ -302,7 +304,7 @@ def main(argv=None) -> int:
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     net = out / "circuit.txt"
-    net.write_text(FC.compose(low, input_set.subcircuit))
+    net.write_text(FC.compose(low, input_set.subcircuit, statics=FC.set_statics(input_set)))
     pin = hashlib.sha512(net.read_bytes()).hexdigest()
     a.tables = []
     if low.units.cut:

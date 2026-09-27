@@ -13,7 +13,9 @@ G=1; [ $ROLE = verifier ] && G=0
 MODE=build GPU=$G bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }
-TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) / PER_ )) ); export RAYON_NUM_THREADS=$TH
+# one core under the quota's floor: the host witness (row inputs, hm96 slots) runs beside the CUDA driver's threads, and a
+# pool at the quota throttles the cgroup, which the timing guard reads as contention
+TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( Q / PER_ > 2 ? Q / PER_ - 1 : 1 )) ); export RAYON_NUM_THREADS=$TH
 B=/workspace/flock-gpu-link/flock/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
