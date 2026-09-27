@@ -59,7 +59,7 @@ def hex (x : UInt64) : String :=
   "".pushn '0' (16 - s.length) ++ s
 
 /-- The definitions under `meaning` that the constants `roots` read, transitively. -/
-def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Array Json := Id.run do
+def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Array (Name × Name × ConstantInfo) := Id.run do
   let mut seen : NameSet := {}
   let mut stack := roots
   let mut out := #[]
@@ -74,10 +74,16 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) : Arra
       let some m := moduleOf env c | continue
       if !under meaning m then continue
       if ci matches .thmInfo _ then continue
-      out := out.push <| Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
-        ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}")]
+      out := out.push (c, m, ci)
       stack := stack ++ meaningDeps ci
   return out
+
+/-- One definition a statement reads: its name, module, kind, hash, and source lines when Lean recorded them. -/
+def readJson : Name × Name × ConstantInfo → CommandElabM Json
+  | (c, m, ci) => do
+    let lines := (← findDeclarationRanges? c).map fun r => #[r.range.pos.line, r.range.endPos.line]
+    return Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
+      ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"), ("lines", toJson lines)]
 
 def pinInfo (n : Name) : CommandElabM Json := do
   let env ← getEnv
@@ -96,7 +102,8 @@ def pinInfo (n : Name) : CommandElabM Json := do
     return out
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf env n).map toString)),
     ("signature", toJson signature), ("axioms", toJson (axioms.map toString)), ("hypotheses", toJson hypotheses),
-    ("type_hash", toJson (hex ci.type.hash)), ("reads", toJson (reads env Config.meaning ci.type.getUsedConstants))]
+    ("type_hash", toJson (hex ci.type.hash)),
+    ("reads", toJson (← (reads env Config.meaning ci.type.getUsedConstants).mapM readJson))]
 
 def run : CommandElabM Unit := do
   let env ← getEnv

@@ -98,8 +98,10 @@ passing `check` of that exact commit in the evidence store, or when `main` has m
   `Prop` in the package's assumptions module, taken as a hypothesis; every `.lean` file is built, and every declaration
   is replayed through the kernel.
 - A theorem that a ledger, a table or a PR cites as proved is pinned in `lean-audit.json`. `audit.py --update` records
-  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads):
-  say so in the PR.
+  it. A changed record means the theorem now says something else (its statement, or a definition the statement reads).
+  No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
+  `--update` prints (each changed signature before and after, each changed definition as it is now), and the merge
+  handoff names them.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 
 ## Working principles
