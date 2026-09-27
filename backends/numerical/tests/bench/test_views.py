@@ -413,7 +413,7 @@ def test_table1_carries_the_security_properties(store: LocalStore) -> None:
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
         "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id]
     assert all(c.interaction for c in V.CONFIGURATIONS)
-    assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
+    assert all(x.basis.startswith(("proven", V.MACHINE_CHECKED, "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
     committed(store, t_total=0.4)
     rows = dict((r[0], r) for _, r in V.table1_rows(V.build(store)))
@@ -968,7 +968,9 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     # an in-circuit configuration whose ZK text names no coin commitment rests its ZK only on the unsalted Merkle leaves' hiding
     assert [a["id"] for a in by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"]] == ["random-oracle"]
     rt = cfgs[V.ROUTE_A]
-    assert {"cr/sha-256", "cr/blake3", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
+    assert {"cr/sha-256", "cr/blake3", "cr/sha-512", "rs-proximity-udr"} <= set(rt["assumptions"])
+    # Flock's Johnson-range MCA is proved in its Lean soundness theorem, so no Flock configuration cites it
+    assert not any("rs-proximity-johnson" in cfgs[k]["assumptions"] for k in (V.ROUTE_A, V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id))
     assert rt["properties"] == ["statistical-soundness", "no-zk", "designated-verifier", "transparent-setup"]
     assert not any(t.startswith("SHA-256 (Fiat–Shamir / coins") for t in rt["unmapped"])
     assert "cr/blake3" in cfgs[V.FLOCK_CONFIG.id]["assumptions"] and "cr/sha-256" in cfgs[V.FLOCK_CONFIG.id]["assumptions"]

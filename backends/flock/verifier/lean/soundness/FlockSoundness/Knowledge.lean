@@ -67,7 +67,7 @@ theorem epsCminus_nonneg [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
 open Classical in
 /-- The fixed-table fact behind extraction: if the extractor's table is not committed, a fresh run
 opens a level-0 position off it with probability at least `ε − ε_c⁻`. -/
-theorem uncommitted_costs (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem uncommitted_costs (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -83,7 +83,7 @@ theorem uncommitted_costs (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA 
             (Extract.firstTable (op₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1) (fun _ _ => 0) bs)
             ω p)
           (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2 := by
-  have h := table_sound_compiled_of_table hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts
+  have h := table_sound_compiled_of_table A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts
     hlay (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs) σ
   have e1 : (ind fun out : OutC F D => out.accepted = true ∧
       ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
@@ -112,7 +112,7 @@ open Classical in
 probability `ε > ε_c⁻`, the extractor's table from `K ≥ 1` reruns after the level-0 cap fails to be
 committed with probability at most `(K·adv₀ + N₀/(eK))/(ε − ε_c⁻)`, where `N₀ = 2^{d₀}` is the
 level-0 codeword length. -/
-theorem table_knowledge_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
+theorem table_knowledge_sound (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -138,7 +138,7 @@ theorem table_knowledge_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) 
     (fun bs => Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
       (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
     (fun bs => expect_nonneg (ind_nonneg _) _ _) _ _ hε
-    (fun bs hbs => uncommitted_costs hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
+    (fun bs hbs => uncommitted_costs A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
       hbs) Kr
   have hmass := Extract.expect_off_firstTable_le' (op₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1)
     (fun _ _ => 0) (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2 Kr hK
@@ -157,7 +157,7 @@ open Classical in
 /-- **Knowledge soundness of one table, the audit's form.** The probability that a fresh run
 accepts while the extraction from `K ≥ 1` independent reruns after the level-0 cap fails is at
 most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with no condition on `ε`. -/
-theorem table_knowledge_sound_joint_tight (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem table_knowledge_sound_joint_tight (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -227,7 +227,7 @@ theorem table_knowledge_sound_joint_tight (hMCA : Assumptions.BCHKS25Thm46) (A :
       (extractTable H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1 bs))
     (fun bs => expect_nonneg (ind_nonneg _) _ _) ε _
     (epsCminus_nonneg A H E S m k0 l₀ l₁ rest ext _ hm ptLocal mPts σ)
-    (fun bs hbs => uncommitted_costs hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
+    (fun bs hbs => uncommitted_costs A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay σ bs
       hbs) Kr
   have hmass := Extract.expect_off_firstTable_le' (op₀ H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ σ.1)
     (fun _ _ => 0) (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1) σ.2 Kr hK
@@ -248,7 +248,7 @@ theorem table_knowledge_sound_joint_tight (hMCA : Assumptions.BCHKS25Thm46) (A :
 open Classical in
 /-- **The audit's form with `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`**, which
 `table_knowledge_sound_joint_tight` implies. -/
-theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem table_knowledge_sound_joint (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -263,7 +263,7 @@ theorem table_knowledge_sound_joint (hMCA : Assumptions.BCHKS25Thm46) (A : Arith
       2 * epsCminus A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts σ +
         2 * (Kr * adv₀ A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ +
           2 ^ l₀.logLen / (Real.exp 1 * Kr)) := by
-  have h := table_knowledge_sound_joint_tight hMCA A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal
+  have h := table_knowledge_sound_joint_tight A hA H E S m k0 l₀ l₁ rest ext hsch hm ptLocal
     mPts hlay σ Kr hK
   have h1 := epsCminus_nonneg A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal
     mPts σ

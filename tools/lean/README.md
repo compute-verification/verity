@@ -2,7 +2,8 @@
 
 One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `sandbox.sh`, `setup.sh`, `tests/`) and point it at its own packages.
+(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `sandbox.sh`, `setup.sh`, `tests/`) and point it
+at its own packages.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -13,6 +14,7 @@ bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Ma
 python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
+python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 ~~~
 
 ## What it checks
@@ -35,6 +37,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
 - the pinned theorems say what their records say (below);
+- no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
+  statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
   that skipped the kernel shows no axiom, and only the replay catches it. The replay also walks the environment it
   checked for the axioms the package uses, and the audit fails if they differ from the sets the `.olean` files recorded.
@@ -99,6 +103,42 @@ pin reads, with the pins that read it and its source now (also in `review.txt` a
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
 and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
 reviewer.
+
+## Noticing when a dependency proves what we assume: `upstream.py`
+
+A named assumption, or a lemma we prove by hand, may be proved upstream one day, and the proof may arrive as a different
+theorem, with a different constant, under a name nobody watches. So the watch list names what a statement is about, and
+the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+
+~~~json
+"upstream": {
+ "scan": {"Arklib": {"baseline": "scripts/axiom_baseline.json", "sources": ["ArkLib"]}},
+ "imports": ["ArkLib", "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"],
+ "watch": {
+  "A1-johnson-mca": {"about": "Assumptions.BCHKS25Thm46 (A1)",
+                     "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
+                     "ack": ["ReedSolomon.mcaError_affineLine_johnson_le"]}
+ }
+}
+~~~
+
+A hit is a theorem whose statement mentions every constant under `mentions`. There are two passes.
+
+- **No build.** The pass reads each `scan` package's sources with `git show`, in its checkout under `.lake/packages/`, at
+  the pinned revision. It matches the constants' last components as words in each theorem's statement (comments aside),
+  and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
+  with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
+  that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.
+- **Exact.** `upstream.py PKG --lean` builds `imports` and runs `Upstream.lean`. That matches the constants in the
+  elaborated types of everything imported, and walks each hit's proof for its axioms. It covers packages without a
+  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump. The first build of all of ArkLib
+  takes a while; after that the pass takes about half a minute.
+
+A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
+assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
+used. To see what upstream has proved since the pin, run `upstream.py PKG --fetch --rev origin/main`; a weekly
+`research run` of it tells us when a bump would gain something. A document's "status upstream" line cites this output
+instead of asserting a status.
 
 ## Using it from another repository
 
