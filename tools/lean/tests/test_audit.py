@@ -48,7 +48,7 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
     assert pol["pins"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
                                   "type_hash": "00000000000000aa"}
-    assert pol["reads"]["P.Defs"]["definitions"] == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
+    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
 
@@ -96,10 +96,29 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
     assert len(fails) == 1 and fails[0].startswith("pins: P.t's signature changed:") and "+P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n" in fails[0]
     moved = pin(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
                        {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])
-    assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == [
-        "pins: definitions in P.Defs that P.t read changed (a definition's content)"]
+    assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == ["pins: definitions in P.Defs that P.t read changed (changed: P.f)"]
     grown = pin(reads=pin()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def", "hash": "4" * 32}])
     assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pinned statements now read definitions in P.More (P.t)"]
+
+
+def test_generated_constants_belong_to_their_declaration():
+    assert [A.parent(n) for n in ("P.f.match_1", "P.walk._f", "P.Enc.mk", "P.instDecidableFits", "mk")] == [
+        "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
+
+
+def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
+    (tmp_path / "Defs.lean").write_text("namespace P\n\ndef f (n : Nat) : Nat := n\n\nend P\n")
+    old = recorded()
+    reads = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32, "lines": [3, 3]},
+             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32, "lines": None}]
+    now = facts(pins={"P.t": pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb", reads=reads)})
+    fails, new = A.judge(old, now, FILES, update=True)
+    assert fails == []
+    text = A.review(old, new, now, {"P.Defs": tmp_path / "Defs.lean"})
+    assert text[:5] == ["pin P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
+                        "    P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n"]
+    assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
+    assert A.review(new, new, now, {}) == []
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():

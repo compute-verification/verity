@@ -29,8 +29,10 @@ replays the audited modules through the kernel (`Replay.lean`). It fails a packa
                  arbitrary code); the Lean files are run from a copy taken before the first build
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
-axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them: its diff is the
-change to what the pinned theorems say, which is what a reviewer reads.  `--all` first runs the controls (`controls`): a
+axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, and prints what
+changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
+weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
+handoff; `--update` records them, it does not approve them.  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain, which must pass clean and fail each check once a violation is added.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
@@ -165,8 +167,18 @@ def digest(entries: list[dict]) -> str:
                           .encode()).hexdigest()[:32]
 
 
-def listed(name: str, kind: str) -> bool:
-    return kind in ("def", "inductive", "opaque") and not any(GENERATED.match(c) for c in name.split("."))
+def parent(name: str) -> str:
+    """The declaration a generated constant belongs to: `Foo.match_1`, `Foo._f`, `Enc.mk` belong to `Foo`, `Foo`, `Enc`."""
+    parts = name.split(".")
+    while len(parts) > 1 and GENERATED.match(parts[-1]):
+        parts.pop()
+    return ".".join(parts)
+
+
+def definitions(record: dict) -> dict:
+    """A `reads` record's {definition: hash} (a record written before hashes were kept: {name: None})."""
+    d = record.get("definitions", {})
+    return d if isinstance(d, dict) else dict.fromkeys(d)
 
 
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False) -> tuple[list[str], dict]:
@@ -249,9 +261,13 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {now[k]}"
                 fails.append(f"pins: {name}'s {k.replace('_', ' ')} changed:\n{diff}")
                 break
-    now_reads = {m: {"digest": digest(list(es.values())),
-                     "definitions": sorted(n for n, e in es.items() if listed(n, e["kind"])),
-                     "pins": sorted(set().union(*(e["pins"] for e in es.values())))} for m, es in sorted(reads.items())}
+    now_reads = {}
+    for m, es in sorted(reads.items()):
+        groups: dict[str, list] = {}
+        for n, e in es.items():
+            groups.setdefault(parent(n), []).append(e)
+        now_reads[m] = {"digest": digest(list(es.values())), "definitions": {p: digest(g)[:16] for p, g in sorted(groups.items())},
+                        "pins": sorted(set().union(*(e["pins"] for e in es.values())))}
     if not update and ("reads" in policy or any(policy.get("pins", {}).values())):
         old = policy.get("reads", {})
         for m in sorted(set(old) | set(now_reads)):
@@ -261,15 +277,58 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             elif b is None:
                 fails.append(f"pins: the pinned statements no longer read {m}")
             elif a["digest"] != b["digest"]:
-                added = sorted(set(b["definitions"]) - set(a["definitions"]))
-                gone = sorted(set(a["definitions"]) - set(b["definitions"]))
-                change = "; ".join(x for x in (f"new: {', '.join(added)}" if added else "",
-                                               f"gone: {', '.join(gone)}" if gone else "") if x) or "a definition's content"
+                x, y = definitions(a), definitions(b)
+                change = "; ".join(s for s in (
+                    f"changed: {', '.join(d for d in sorted(set(x) & set(y)) if x[d] is not None and x[d] != y[d])}",
+                    f"new: {', '.join(sorted(set(y) - set(x)))}", f"gone: {', '.join(sorted(set(x) - set(y)))}")
+                    if not s.endswith(": ")) or "a definition's content"
                 fails.append(f"pins: definitions in {m} that {', '.join(b['pins'])} read changed ({change})")
     out = dict(policy)
     if pins:
         out["pins"], out["reads"] = pins, now_reads
     return fails, out
+
+
+def module_files(pkg: Path) -> dict[str, Path]:
+    """{module: source file} for the package and the packages it requires by path, whose definitions a pin may read."""
+    manifest = pkg / "lake-manifest.json"
+    deps = [(pkg / d["dir"]).resolve() for d in json.loads(manifest.read_text()).get("packages", [])
+            if d.get("type") == "path"] if manifest.exists() else []
+    return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
+
+
+def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
+    """What a statement reviewer reads for an `--update`: each changed pin's signature before and after, and each changed
+    definition a pin reads, with the pins that read it and its source as it is now."""
+    out = []
+    op, np = old.get("pins", {}), new.get("pins", {})
+    for name in sorted(set(op) | set(np)):
+        a, b = op.get(name) or {}, np.get(name) or {}
+        if a == b:
+            continue
+        out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}")
+        out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
+        out += ["  after:", *(f"    {s}" for s in b.get("signature", []))] if b else []
+        if a and b and a.get("assumptions") != b.get("assumptions"):
+            out.append(f"  named assumptions: {', '.join(a.get('assumptions', [])) or 'none'} -> "
+                       f"{', '.join(b.get('assumptions', [])) or 'none'}")
+    spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
+    oreads, nreads = old.get("reads", {}), new.get("reads", {})
+    for m in sorted(set(oreads) | set(nreads)):
+        a, b = oreads.get(m), nreads.get(m)
+        if a and b and a.get("digest") == b.get("digest"):
+            continue
+        x, y = definitions(a or {}), definitions(b or {})
+        for d in sorted(set(x) | set(y)):
+            if d in x and d in y and x[d] is not None and x[d] == y[d]:
+                continue
+            state = "new" if d not in x else "gone" if d not in y else "changed" if x[d] is not None else "in a changed module"
+            out.append(f"definition {d} ({m}), read by {', '.join((b or a)['pins'])}: {state}")
+            span, src = spans.get(d), sources.get(m)
+            if d in y and span and src is not None and src.exists():
+                text = src.read_text().splitlines()[span[0] - 1:span[1]]
+                out += [f"  now ({os.path.relpath(src)}:{span[0]}-{span[1]}):", *(f"    {s}" for s in text)]
+    return out
 
 
 def killed(rc: int) -> bool:
@@ -333,7 +392,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
     if update and new != policy:
         dump(pkg, new)
-        log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build")
+        notes = review(policy, new, facts, module_files(pkg))
+        (work / "review.txt").write_text("\n".join(notes) + "\n")
+        rep["review"] = notes
+        log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
+            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in notes)
+            if notes else ""))
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "pins": new.get("pins", {}), "reads": new.get("reads", {}),
             "failures": fails}
@@ -458,6 +522,9 @@ def main(argv: list[str]) -> int:
             print("  " + f.replace("\n", "\n    "), flush=True)
         if rep["failures"]:
             failed.append(str(pkg))
+    if changed := [r["package"] for r in reports if r.get("review")]:
+        print(f"audit: pinned statements or the definitions they read changed in {', '.join(changed)}: the merge handoff must "
+              f"name the statement reviewer who read the changes above (review.txt in each package's reports)", flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
                                                ensure_ascii=False) + "\n")
     print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)

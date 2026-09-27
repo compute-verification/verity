@@ -45,6 +45,9 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR.
   `pins` and run `python tools/lean/audit.py --update PKG`. Commit the record with the proof.
 - **A changed record is a changed claim.** If `--update` changes a record or `reads` for a theorem you didn't mean to
   change, your edit changed what that theorem says: undo it, or say so in the PR and update the ledger.
+- **A changed record needs a named statement reviewer.** The axiom checks and the replay pass a weakened definition
+  (a vacuous theorem is still a theorem), so paste what `--update` printed into the PR, and ask someone other than the
+  author to read it. The merge handoff names that reviewer.
 
 ## Before the PR
 

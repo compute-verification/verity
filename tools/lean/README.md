@@ -62,9 +62,16 @@ and fail once for each violation in `tests/fixtures/violations.json`. One of the
   statement is about (an executable, Mathlib) stays outside.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
   build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
-  definitions the pinned statements read, with a digest. Without `--update` the audit fails on any difference, so a
+  definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a
   statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
   statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+
+**A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
+and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
+a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
+change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
+pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
+names the reviewer and the pins they read.
 
 ## Using it from another repository
 
