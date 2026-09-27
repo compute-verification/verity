@@ -33,3 +33,4 @@ import FlockLevel3
 #print axioms FlockLevel3.lo_balanced
 #print axioms FlockLevel3.omega_injective
 #print axioms FlockLevel3.pinned_ne_one
+#print axioms FlockLevel3.pinned_indep
