@@ -42,6 +42,8 @@ class Options:
     reps: int = option("--reps", type=int, default=3, help="timed repetitions after one warm-up; medians are reported")
     thread_rows: int = option("--thread-rows", type=int, default=4096, help="rows from which a Feistel launch runs a thread per row")
     word_io: bool = option("--word-io", action="store_true", default=False, help="one-thread Π₂ launches use 64-bit word I/O")
+    fused: bool = option("--fused", action="store_true", default=False,
+                         help="with --word-io, fuse each Feistel round's squeeze to the next round's absorb")
     gate_segments: int = option("--gate-segments", type=int, default=2, help="segments whose sampled blocks the reference decodes")
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
@@ -268,6 +270,7 @@ def main(a: Options) -> int:
     native.load(a.build_dir)
     codec.THREAD_ROWS[0] = a.thread_rows
     codec.WORD_IO[0] = a.word_io
+    codec.FUSED[0] = a.fused
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors()}}
     salt = bytes(range(24))
     table = models(a.shapes)
@@ -298,7 +301,7 @@ def main(a: Options) -> int:
         Path(a.result).write_text(json.dumps({
             "schema": "research/result/v0.1", "run_id": a.run_id,
             "workload_fingerprint": {"benchmark": "dense-decode/v1", "models": list(doc["models"]), "thread_rows": a.thread_rows,
-                                     "word_io": a.word_io},
+                                     "word_io": a.word_io, "fused": a.fused},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))

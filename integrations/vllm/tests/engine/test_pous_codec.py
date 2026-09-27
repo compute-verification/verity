@@ -177,20 +177,21 @@ def test_the_gpu_twin_is_chosen_by_reference_codec():
 
 @needs_cuda
 def test_feistel_kernels_agree(ext):
-    """The one-warp, one-thread and word-I/O Feistel kernels give the same bits on Π₂ at both schemes' widths."""
+    """The one-warp, one-thread, word-I/O and fused Feistel kernels give the same bits on Π₂ at both schemes' widths, and at a
+    width whose half is a whole number of Keccak blocks."""
     from verity_vllm.engine.pous import codec
 
     g = torch.Generator().manual_seed(6)
-    for width in (2 * 65_536 + 64, 2 * codec.M + 64):
+    for width in (2 * 65_536 + 64, 2 * codec.M + 64, 2 * 136 * 8):
         x = torch.randint(0, 256, (37, width), dtype=torch.uint8, generator=g).cuda()
         empty = x.new_empty((37, 0))
         outs = []
-        for thread_rows, words in ((0, False), (1, False), (1, True)):
+        for thread_rows, words, fused in ((0, False, False), (1, False, False), (1, True, False), (1, True, True)):
             y = x.clone()
-            ext.feistel_rows(y, empty, codec.PI_DOMAIN, False, thread_rows, words)
+            ext.feistel_rows(y, empty, codec.PI_DOMAIN, False, thread_rows, words, fused)
             outs.append(y)
-        assert torch.equal(outs[0], outs[1]) and torch.equal(outs[0], outs[2]), width
-        ext.feistel_rows(outs[2], empty, codec.PI_DOMAIN, True, 1, True)
+        assert all(torch.equal(outs[0], o) for o in outs[1:]), width
+        ext.feistel_rows(outs[2], empty, codec.PI_DOMAIN, True, 1, True, True)
         assert torch.equal(outs[2], x)
 
 
