@@ -170,6 +170,11 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.UnitPlace.decode_one
 #print axioms FlockSoundness.Prog.topo
 #print axioms FlockSoundness.Prog.isRowsUnit
+-- a verified lowering: RoPE's pinned rows compute its Boolean export, by the kernel in chunks (L1 for RoPE)
+#print axioms FlockSoundness.GateRows.rows_sound
+#print axioms FlockSoundness.GateRows.chunks_sound
+#print axioms FlockSoundness.Rope.pinned_eq
+#print axioms FlockSoundness.Rope.rope_sound
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

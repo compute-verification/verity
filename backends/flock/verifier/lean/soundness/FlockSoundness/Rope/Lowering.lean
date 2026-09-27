@@ -1,6 +1,4 @@
-import FlockSoundness.GateRows
-import FlockSoundness.Rope.Gates
-import FlockSoundness.Rope.Pinned
+import FlockSoundness.Rope.Chunks
 
 /-!
 # RoPE's rows are its Boolean export's rows
@@ -12,7 +10,7 @@ are generated data (`Rope/Pinned.lean`, `Rope/Gates.lean`). `backends/flock/test
 regenerates both and checks them byte for byte.
 
 * `pinned_eq`: the pinned rows are the rows `GateRows.rows` derives from the gate circuit, by a
-  kernel computation (`decide +kernel`, on bitmasks).
+  kernel computation (`pinnedRuns_eq`, `decide +kernel` on the masks of the rows' runs of columns).
 * `rope_sound`: so every column assignment that satisfies the pinned rows, with the constant 1,
   carries on its 32 output columns the gate circuit's outputs on its 64 input columns
   (`GateRows.rows_sound`).
@@ -22,38 +20,110 @@ namespace FlockSoundness.Rope
 
 open GateRows Audit
 
-def decSrc (n : ℕ) : Src := if n = 0 then .zero else if n = 1 then .one else .wire (n - 2)
+theorem start_good : (decCP cpData0).Good (start circ lay) := by
+  have h : ((decCP cpData0).entries.all fun e => decide (e.1 < 64) && decide (e.2 = (2 ^ e.1, false))) = true := by
+    decide +kernel
+  refine ⟨rfl, rfl, fun e he => ?_⟩
+  have := List.all_eq_true.mp h e he
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+  rw [this.2]
+  exact get_inputs lay 64 e.1 this.1 (by decide)
 
-/-- A gate from its code `op + 3·(a + 2^17·b)`, operands coded `0`, `1` (constants) or `2 + wire`. -/
-def decGate (c : ℕ) : Gate :=
-  if c % 3 = 0 then .and (decSrc (c / 3 % 2 ^ 17)) (decSrc (c / 3 / 2 ^ 17))
-  else if c % 3 = 1 then .xor (decSrc (c / 3 % 2 ^ 17)) (decSrc (c / 3 / 2 ^ 17))
-  else .not (decSrc (c / 3 % 2 ^ 17))
+theorem final_eq : final circ lay = (start circ lay).steps (chunks.flatMap (·.1)) := by rw [final, gates_eq]
 
-/-- A row's columns from their code: base-8192 digits, each column plus one. -/
-def unpack : ℕ → ℕ → List ℕ
-  | 0, _ => []
-  | f + 1, n => if n = 0 then [] else (n % 8192 - 1) :: unpack f (n / 8192)
+/-- The chunks, composed: the final state is at the last checkpoint, and its AND rows are the chunks'. -/
+theorem final_good : (decCP cpData18).Good (final circ lay) ∧ gatesWF circ.nIn circ.gates = true ∧
+    (final circ lay).rows.reverse.map (fun p => (mask 6272 p.1, mask 6272 p.2)) = chunks.flatMap (·.2.2) := by
+  obtain ⟨hG, hwf, l, hl, hout⟩ := chunks_sound 6272 chunks (decCP cpData0) (start circ lay) start_good chunksOK
+  rw [lastCP_chunks] at hG
+  refine ⟨final_eq ▸ hG, by rw [gates_eq]; exact hwf, ?_⟩
+  rw [final_eq, hl]; simpa [start] using hout
 
-/-- The gate circuit: the Boolean export of the unit. -/
-def circ : Circ := ⟨nIn, gateCodes.map decGate, outCodes.map decSrc⟩
+theorem nAnd_circ : nAnd circ = 5996 := by
+  have h : (chunks.flatMap (·.2.2)).length = 5996 := by decide +kernel
+  rw [← final_rows_length circ lay, ← List.length_reverse, ← List.length_map (f := fun p : Form × Form =>
+    (mask 6272 p.1, mask 6272 p.2)), final_good.2.2, h]
 
-/-- The v2 layout of the unit: one input group (four 16-bit ports in one 128-bit word, columns
-`0 … 63`), the ANDs from column 128, and one output group (two 16-bit ports) at word 48, so the
-output region runs from column 6124 to 6271 with its copy rows at `6144 … 6175`. -/
-def lay : Lay := ⟨fun k => k, 128, 148, fun r => if 6144 ≤ r ∧ r < 6176 then some (r - 6144) else none⟩
+theorem outRowK_congr (S S' : St) (h : ∀ s ∈ circ.outs, srcForm S.forms s = srcForm S'.forms s) (k r : ℕ) :
+    outRowK k S r = outRowK k S' r := by
+  unfold outRowK
+  split
+  · rename_i o _
+    rw [List.getD_eq_getElem?_getD]
+    rcases h' : circ.outs[o]? with _ | s
+    · rfl
+    · simp only [Option.getD_some]; rw [h s (List.mem_of_getElem? h')]
+  · rfl
 
-/-- The pinned rows, as the file lists their columns. -/
-def pinned : List (List ℕ × List ℕ) := pinnedCodes.map fun p => (unpack 512 p.1, unpack 512 p.2)
-
-/-- **The pinned rows are the derived rows**, checked by the kernel. -/
-theorem pinned_eq : pinned.map (fun p => (listMask p.1, listMask p.2)) = rows circ lay := by
+/-- The small regions, by the kernel: the input region, the output region from the last
+checkpoint, the constant's row, and the facts about the last checkpoint and the outputs. -/
+theorem regions : (List.range lay.andBase).map (inRow circ lay) = pinIn.map pinMasks ∧
+    (List.range lay.outLen).map (fun i => outRowK 6272 (decCP cpData18).st (lay.andBase + 5996 + i)) =
+      pinOut.map pinMasks ∧ pinMasks pinConst = (2 ^ 6272, 2 ^ 6272) ∧
+    pinIn.all runsBounded = true ∧ pinOut.all runsBounded = true ∧ runsBounded pinConst = true ∧
+    (decCP cpData18).keys.Nodup ∧ (decCP cpData18).keys.all (· < 2 ^ depth) = true ∧
+    (circ.outs.all fun s => match s with | .wire i => (decCP cpData18).keys.contains i | _ => true) = true := by
   decide +kernel
 
-theorem facts : pinned.length = 6273 ∧ (pinned.all fun p => p.1.all (· < 6273) && p.2.all (· < 6273)) = true ∧
+/-- The kernel's check, on the masks of the runs. -/
+theorem pinnedRuns_eq : pinnedRuns.map (fun p => (runsMask p.1, runsMask p.2)) = rows circ lay := by
+  obtain ⟨hG, -, hrows⟩ := final_good
+  obtain ⟨ein, eout, econst, -, -, -, hnd, hkb, houts⟩ := regions
+  have hk : constCol circ lay = 6272 := by simp [constCol, lay, nAnd_circ]
+  have hst := (decCP cpData18).st_good hnd (fun i hi => by simpa using List.all_eq_true.mp hkb i hi)
+  have hagree : ∀ s ∈ circ.outs, srcForm (final circ lay).forms s = srcForm (decCP cpData18).st.forms s := by
+    intro s hs
+    cases s with
+    | zero => simp only [srcForm]
+    | one => simp only [srcForm]
+    | wire i =>
+      have hi : i ∈ (decCP cpData18).keys := by simpa using List.all_eq_true.mp houts _ hs
+      obtain ⟨e, he, rfl⟩ := List.mem_map.mp hi
+      simp only [srcForm, hG.2.2 e he, hst.2.2 e he]
+  have eout' : (List.range lay.outLen).map (fun i => outRow circ lay (final circ lay) (lay.andBase + nAnd circ + i)) =
+      pinOut.map pinMasks := by
+    rw [← eout, nAnd_circ]
+    refine List.map_congr_left fun i _ => ?_
+    show outRowK (constCol circ lay) _ _ = _
+    rw [hk]; exact outRowK_congr _ _ hagree _ _
+  have hpin : pinnedRuns.map (fun p => (runsMask p.1, runsMask p.2)) = pinnedCodes.map pinMasks := by
+    simp only [pinnedRuns, List.map_map]; rfl
+  rw [hpin, pinned_split]
+  show _ = (List.range lay.andBase).map (inRow circ lay) ++
+    (final circ lay).rows.reverse.map (fun p => (mask (constCol circ lay) p.1, mask (constCol circ lay) p.2)) ++
+    (List.range lay.outLen).map (fun i => outRow circ lay (final circ lay) (lay.andBase + nAnd circ + i)) ++
+    [(2 ^ constCol circ lay, 2 ^ constCol circ lay)]
+  rw [ein, eout', hk, hrows, econst]
+
+/-- **The pinned rows are the derived rows.** -/
+theorem pinned_eq : pinned.map (fun p => (listMask p.1, listMask p.2)) = rows circ lay := by
+  rw [← pinnedRuns_eq, pinned, List.map_map]
+  congr 1; funext p; simp [listMask_runsList]
+
+theorem facts : pinnedRuns.length = 6273 ∧
+    (pinnedRuns.all fun p => (p.1 ++ p.2).all fun r => r.1 + r.2 ≤ 6273) = true ∧
     gatesWF circ.nIn circ.gates = true ∧ circ.nIn = 64 ∧ circ.gates.length = 17503 ∧ nAnd circ = 5996 ∧
     circ.outs.length = 32 ∧ (circ.outs.all fun o => o.below (64 + 17503)) = true := by
-  decide +kernel
+  obtain ⟨-, -, -, h1, h2, h3, -, -, -⟩ := regions
+  have hb := pinnedCodes_bounded h1 h2 h3
+  refine ⟨by rw [← List.length_map (f := fun p => (runsMask p.1, runsMask p.2)), pinnedRuns_eq, rows_length, constCol,
+      nAnd_circ]; rfl, ?_, final_good.2.1, rfl, ?_, nAnd_circ, ?_, ?_⟩
+  · simpa [pinnedRuns, runsBounded, List.all_map, Function.comp_def] using hb
+  · rw [gates_eq]; decide +kernel
+  · decide +kernel
+  · decide +kernel
+
+theorem lt_of_mem_runsList {rs : List (ℕ × ℕ)} {n c : ℕ} (h : ∀ r ∈ rs, r.1 + r.2 ≤ n) (hc : c ∈ runsList rs) :
+    c < n := by
+  obtain ⟨r, hr, hcr⟩ := List.mem_flatMap.mp hc
+  have := h r hr
+  have := List.mem_range'_1.mp hcr
+  omega
+
+theorem outAt_lay (o : ℕ) (ho : o < 32) : lay.outAt (lay.andBase + 5996 + (20 + o)) = some o := by
+  have e1 : lay.andBase + 5996 + (20 + o) = 6144 + o := by show 128 + 5996 + (20 + o) = 6144 + o; omega
+  have e2 : lay.outAt (6144 + o) = some (6144 + o - 6144) := ite_eq_left ⟨by omega, by omega⟩
+  exact (congrArg lay.outAt e1).trans (e2.trans (congrArg some (by omega)))
 
 /-- Rows satisfied by column values `z`, reading each row's columns as a list. -/
 def SatList (R : List (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=
@@ -65,21 +135,24 @@ with the constant (column 6272) at 1, carry on output column `6144 + o` the gate
 theorem rope_sound (z : ℕ → Bool) (hz : SatList pinned z) (h1 : z 6272 = true) (o : ℕ) (ho : o < 32) :
     z (6144 + o) = (circ.eval z)[o]'(by simpa [Circ.eval, facts.2.2.2.2.2.2.1] using ho) := by
   obtain ⟨hlen, hcols, hwf, hin, hgl, hand, hol, hob⟩ := facts
-  have hR : (rows circ lay).length = 6273 := by rw [← pinned_eq, List.length_map, hlen]
+  have hR : (rows circ lay).length = 6273 := by rw [← pinnedRuns_eq, List.length_map, hlen]
   have hsat : Sat (rows circ lay) z := by
     intro r p hp
     rw [← pinned_eq, List.getElem?_map] at hp
     obtain ⟨q, hq, rfl⟩ := Option.map_eq_some_iff.mp hp
-    have hqm : q ∈ pinned := List.mem_of_getElem? hq
-    have hall := List.all_eq_true.mp hcols q hqm
-    simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at hall
-    rw [hR, hz r q hq, xorSum_eq_psum z 6273 q.1 hall.1, xorSum_eq_psum z 6273 q.2 hall.2]
+    obtain ⟨u, hu, rfl⟩ : ∃ u ∈ pinnedRuns, (runsList u.1, runsList u.2) = q :=
+      List.mem_map.mp (by rw [← pinned]; exact List.mem_of_getElem? hq)
+    have hall := List.all_eq_true.mp hcols u hu
+    simp only [List.all_eq_true, List.mem_append, decide_eq_true_eq] at hall
+    have h1' : ∀ c ∈ runsList u.1, c < 6273 := fun c hc => lt_of_mem_runsList (fun r hr => hall r (Or.inl hr)) hc
+    have h2' : ∀ c ∈ runsList u.2, c < 6273 := fun c hc => lt_of_mem_runsList (fun r hr => hall r (Or.inr hr)) hc
+    rw [hR, hz r _ hq, xorSum_eq_psum z 6273 _ h1', xorSum_eq_psum z 6273 _ h2']
   have hc : constCol circ lay = 6272 := by simp [constCol, lay, hand]
   have houts : ∀ s ∈ circ.outs, s.below (circ.nIn + circ.gates.length) = true := by
     intro s hs; rw [hin, hgl]; exact List.all_eq_true.mp hob s hs
   have key := rows_sound circ lay hwf (by rw [hin, hgl]; decide) (fun k hk => by simp [lay]; omega) houts z hsat
     (by rw [hc]; exact h1) (20 + o) (by simp [lay]; omega) o
-    (by simp only [lay, hand]; rw [if_pos (by omega)]; congr 1; omega) (by rw [hol]; exact ho)
+    (by rw [hand]; exact outAt_lay o ho) (by rw [hol]; exact ho)
   simp only [lay, hand, show 128 + 5996 + (20 + o) = 6144 + o by omega] at key
   exact key
 

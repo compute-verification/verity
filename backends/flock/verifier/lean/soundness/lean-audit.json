@@ -146,6 +146,14 @@
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.Rope.rope_sound": {
+   "signature": [
+    "FlockSoundness.Rope.rope_sound (z : ℕ → Bool) (hz : FlockSoundness.Rope.SatList FlockSoundness.Rope.pinned z)",
+    "  (h1 : z 6272 = true) (o : ℕ) (ho : o < 32) : z (6144 + o) = (FlockSoundness.Rope.circ.eval z)[o]"
+   ],
+   "assumptions": [],
+   "type_hash": "000000004b824360"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
@@ -493,6 +501,13 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.Audit.Circuit": {
+   "digest": "05493c94f08c51532df94b847f41e713",
+   "definitions": {
+    "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
   "FlockSoundness.CompiledLock": {
    "digest": "703ed11cb8289e0e443a40539e2782a6",
    "definitions": {
@@ -643,6 +658,31 @@
     "FlockSoundness.Game.Lock.table": "dcb2a3475ca6b33e"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.GateRows": {
+   "digest": "c105c0c80ea0329ac48e53aac43ef21b",
+   "definitions": {
+    "FlockSoundness.GateRows.Circ": "c3d79ef60ee593d5",
+    "FlockSoundness.GateRows.Circ.eval": "e86e5c36574024e3",
+    "FlockSoundness.GateRows.Circ.gates": "b16fd0739e99d971",
+    "FlockSoundness.GateRows.Circ.nIn": "149dd71678b6d768",
+    "FlockSoundness.GateRows.Circ.outs": "8b5fb86e9b42061c",
+    "FlockSoundness.GateRows.Gate": "3831d4ebd47743ff",
+    "FlockSoundness.GateRows.Gate.and": "a736c612871c3cfe",
+    "FlockSoundness.GateRows.Gate.not": "833a87555c5e419a",
+    "FlockSoundness.GateRows.Gate.val": "cbfe04640799134a",
+    "FlockSoundness.GateRows.Gate.xor": "017609dc9c853089",
+    "FlockSoundness.GateRows.Src": "ccc2d9fe39969171",
+    "FlockSoundness.GateRows.Src.one": "15583fa12d1b1f26",
+    "FlockSoundness.GateRows.Src.val": "0de3caef17305923",
+    "FlockSoundness.GateRows.Src.wire": "5af8f0a7ed3164f6",
+    "FlockSoundness.GateRows.Src.zero": "87ec73cd2b8adfeb",
+    "FlockSoundness.GateRows.gatesWF": "d5e68be2329d92ea",
+    "FlockSoundness.GateRows.nAnd": "8847e06879559520",
+    "FlockSoundness.GateRows.run": "927948e95290f765",
+    "FlockSoundness.GateRows.runsList": "13a1a437aad8d735"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Instance": {
    "digest": "614e3e3f08e4cd9422ad82c3c4444147",
@@ -929,6 +969,148 @@
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
+  },
+  "FlockSoundness.Rope.Defs": {
+   "digest": "8b06163f6e89ba32e532404ab3ca3ab1",
+   "definitions": {
+    "FlockSoundness.Rope.circ": "c3cbe7720de6bff7",
+    "FlockSoundness.Rope.decGate": "9a995d28e8e0b85b",
+    "FlockSoundness.Rope.decSrc": "4e5aae1fd74b0df4",
+    "FlockSoundness.Rope.pinned": "2b43990a89c1587e",
+    "FlockSoundness.Rope.pinnedRuns": "a733b84daa315397",
+    "FlockSoundness.Rope.unpackRuns": "0d63f82b79bf0d34"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Gates": {
+   "digest": "027b4c9626a8ccabc701d3fa4085349d",
+   "definitions": {
+    "FlockSoundness.Rope.gateCodes": "b1b28a9c920ae295",
+    "FlockSoundness.Rope.gatesChunk0": "5c3dc82fc67d675e",
+    "FlockSoundness.Rope.gatesChunk0_0": "27385c92caedd38a",
+    "FlockSoundness.Rope.gatesChunk0_1": "9af57c83b4e41803",
+    "FlockSoundness.Rope.gatesChunk1": "5fd4e79fb8340ad3",
+    "FlockSoundness.Rope.gatesChunk10": "004417f63b7fb3e0",
+    "FlockSoundness.Rope.gatesChunk10_0": "4faf7f7f9cdfd70b",
+    "FlockSoundness.Rope.gatesChunk10_1": "6343d0b7f76d3ceb",
+    "FlockSoundness.Rope.gatesChunk11": "78f0591c34733d93",
+    "FlockSoundness.Rope.gatesChunk11_0": "c8476465f43ba928",
+    "FlockSoundness.Rope.gatesChunk11_1": "606333ef4f9156c3",
+    "FlockSoundness.Rope.gatesChunk12": "a1acb532fec57dbb",
+    "FlockSoundness.Rope.gatesChunk12_0": "4d4c4de704a0e573",
+    "FlockSoundness.Rope.gatesChunk12_1": "a98271e41a866e0f",
+    "FlockSoundness.Rope.gatesChunk13": "03917b076fd1f98a",
+    "FlockSoundness.Rope.gatesChunk13_0": "e7d6ba47b9a78855",
+    "FlockSoundness.Rope.gatesChunk13_1": "d30a708086841fe5",
+    "FlockSoundness.Rope.gatesChunk14": "6325cbe2df397a4c",
+    "FlockSoundness.Rope.gatesChunk14_0": "4514f4575e0e3b96",
+    "FlockSoundness.Rope.gatesChunk14_1": "8c345911bc07cbdd",
+    "FlockSoundness.Rope.gatesChunk15": "b89d71ebc281e4e8",
+    "FlockSoundness.Rope.gatesChunk15_0": "c298539f30d4625e",
+    "FlockSoundness.Rope.gatesChunk15_1": "ced43c0e191d72c0",
+    "FlockSoundness.Rope.gatesChunk16": "ada64b8b7f587966",
+    "FlockSoundness.Rope.gatesChunk16_0": "e5544f817a7a050c",
+    "FlockSoundness.Rope.gatesChunk16_1": "e80cfd920a739575",
+    "FlockSoundness.Rope.gatesChunk17": "84810e692aa78880",
+    "FlockSoundness.Rope.gatesChunk17_0": "d8cfb82dd65cdcd9",
+    "FlockSoundness.Rope.gatesChunk17_1": "3dfbd41987542b93",
+    "FlockSoundness.Rope.gatesChunk1_0": "3a68792599640211",
+    "FlockSoundness.Rope.gatesChunk1_1": "69cefae7fa2305e0",
+    "FlockSoundness.Rope.gatesChunk2": "c5ff5f1ad8a619da",
+    "FlockSoundness.Rope.gatesChunk2_0": "2955f17d9afa7ab7",
+    "FlockSoundness.Rope.gatesChunk2_1": "402f8cbdac1bb395",
+    "FlockSoundness.Rope.gatesChunk3": "4d5b3e047d1e2a41",
+    "FlockSoundness.Rope.gatesChunk3_0": "758f524c18389ad1",
+    "FlockSoundness.Rope.gatesChunk3_1": "c316d3b10ddb5d71",
+    "FlockSoundness.Rope.gatesChunk4": "8b73c7bc5f86ccf4",
+    "FlockSoundness.Rope.gatesChunk4_0": "7cf0b805bbc69a59",
+    "FlockSoundness.Rope.gatesChunk4_1": "abdca14fb2117a8f",
+    "FlockSoundness.Rope.gatesChunk5": "d61e396f0809390c",
+    "FlockSoundness.Rope.gatesChunk5_0": "28afbd7d8209ec5d",
+    "FlockSoundness.Rope.gatesChunk5_1": "4ed44f3a5a28a915",
+    "FlockSoundness.Rope.gatesChunk6": "7d0268cf2d7ef9cf",
+    "FlockSoundness.Rope.gatesChunk6_0": "b0499bb5e43d0b1a",
+    "FlockSoundness.Rope.gatesChunk6_1": "3c12572dc22f14d4",
+    "FlockSoundness.Rope.gatesChunk7": "a00de0ff631d09b3",
+    "FlockSoundness.Rope.gatesChunk7_0": "1da9d827b4b75fe9",
+    "FlockSoundness.Rope.gatesChunk7_1": "beea525fbffc8855",
+    "FlockSoundness.Rope.gatesChunk8": "549102e2ef6a1382",
+    "FlockSoundness.Rope.gatesChunk8_0": "4bc7363c74dd794b",
+    "FlockSoundness.Rope.gatesChunk8_1": "48911b407548b247",
+    "FlockSoundness.Rope.gatesChunk9": "56c546d28a3d6f76",
+    "FlockSoundness.Rope.gatesChunk9_0": "ed7aea5e31295e5e",
+    "FlockSoundness.Rope.gatesChunk9_1": "52248ab5fd7a1613",
+    "FlockSoundness.Rope.nIn": "1c335152cc1b7125",
+    "FlockSoundness.Rope.outCodes": "cb4305751f987a8e"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Lowering": {
+   "digest": "f90b5834ad7a996e466e5a117a377947",
+   "definitions": {
+    "FlockSoundness.Rope.SatList": "f90b5834ad7a996e"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Pinned": {
+   "digest": "2ecceb270214e3acd14bf23175663df8",
+   "definitions": {
+    "FlockSoundness.Rope.pinAnd0": "06d1ff54ad33d816",
+    "FlockSoundness.Rope.pinAnd0_0": "add6a28b5cd298f3",
+    "FlockSoundness.Rope.pinAnd0_1": "1acaadc02d6b7d52",
+    "FlockSoundness.Rope.pinAnd1": "bc4ac95fc03c9aab",
+    "FlockSoundness.Rope.pinAnd10": "5f64aea27c373fdd",
+    "FlockSoundness.Rope.pinAnd10_0": "35009af9d37bb7f4",
+    "FlockSoundness.Rope.pinAnd10_1": "09baee655f0cae15",
+    "FlockSoundness.Rope.pinAnd11": "51c667483b45f208",
+    "FlockSoundness.Rope.pinAnd11_0": "32875df352f4500a",
+    "FlockSoundness.Rope.pinAnd11_1": "55972ba84953e873",
+    "FlockSoundness.Rope.pinAnd12": "d25d3d8f15618d0c",
+    "FlockSoundness.Rope.pinAnd12_0": "e9d63f499bbb8fbe",
+    "FlockSoundness.Rope.pinAnd12_1": "f08c48d18b3b87bb",
+    "FlockSoundness.Rope.pinAnd13": "f909d23f855aeed9",
+    "FlockSoundness.Rope.pinAnd13_0": "8d8c564480eab1bd",
+    "FlockSoundness.Rope.pinAnd13_1": "e0ff5a6bb9370fff",
+    "FlockSoundness.Rope.pinAnd14": "169b36bba0fa2f8c",
+    "FlockSoundness.Rope.pinAnd14_0": "f162a584e5f60af5",
+    "FlockSoundness.Rope.pinAnd14_1": "5f40ff73929ced5d",
+    "FlockSoundness.Rope.pinAnd15": "fc6acce5ebc66419",
+    "FlockSoundness.Rope.pinAnd15_0": "525105164b060f94",
+    "FlockSoundness.Rope.pinAnd15_1": "13bf0785487d9031",
+    "FlockSoundness.Rope.pinAnd16": "b2ccff6c725be040",
+    "FlockSoundness.Rope.pinAnd16_0": "d9a54e40d9815213",
+    "FlockSoundness.Rope.pinAnd16_1": "841a570455ad20c1",
+    "FlockSoundness.Rope.pinAnd17": "73bb811179799058",
+    "FlockSoundness.Rope.pinAnd1_0": "b8ed1e17476fceea",
+    "FlockSoundness.Rope.pinAnd1_1": "519e787a50942ec6",
+    "FlockSoundness.Rope.pinAnd2": "d9905d593f689a09",
+    "FlockSoundness.Rope.pinAnd2_0": "530ef17dbca69435",
+    "FlockSoundness.Rope.pinAnd2_1": "561fdd7907c8fa68",
+    "FlockSoundness.Rope.pinAnd3": "fa87fc02a351afcc",
+    "FlockSoundness.Rope.pinAnd3_0": "83054ab018635d38",
+    "FlockSoundness.Rope.pinAnd3_1": "a02b0808caa1f96b",
+    "FlockSoundness.Rope.pinAnd4": "072c71ae409f124e",
+    "FlockSoundness.Rope.pinAnd5": "2efdac29a1412dad",
+    "FlockSoundness.Rope.pinAnd5_0": "f4883ce11582943d",
+    "FlockSoundness.Rope.pinAnd5_1": "749bbbe4f809afcf",
+    "FlockSoundness.Rope.pinAnd6": "e12d928d72c199f6",
+    "FlockSoundness.Rope.pinAnd6_0": "ec8ee3a60948f403",
+    "FlockSoundness.Rope.pinAnd6_1": "b64c9c2fca7492ff",
+    "FlockSoundness.Rope.pinAnd7": "8cbadb8ec18b3cc0",
+    "FlockSoundness.Rope.pinAnd7_0": "838b815d4513ac7e",
+    "FlockSoundness.Rope.pinAnd7_1": "63605c73dfd2534c",
+    "FlockSoundness.Rope.pinAnd8": "ced7f365c7c2ea7d",
+    "FlockSoundness.Rope.pinAnd8_0": "9e71dab61bbef87a",
+    "FlockSoundness.Rope.pinAnd8_1": "8e7410f11531063f",
+    "FlockSoundness.Rope.pinAnd9": "1c031d2943b8d6e2",
+    "FlockSoundness.Rope.pinAnd9_0": "d665a2b9a4f2a5da",
+    "FlockSoundness.Rope.pinAnd9_1": "c171241d5cf47a42",
+    "FlockSoundness.Rope.pinConst": "e3870edc2f6138c5",
+    "FlockSoundness.Rope.pinIn": "e4fb21f09fca9847",
+    "FlockSoundness.Rope.pinOut": "9d4eefeb404c2682",
+    "FlockSoundness.Rope.pinnedCodes": "05868213389d218a"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   }
  }
 }

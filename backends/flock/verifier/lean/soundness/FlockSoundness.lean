@@ -68,6 +68,7 @@ import FlockSoundness.Game.Seq
 import FlockSoundness.ExtractWait
 import FlockSoundness.LinkFinder
 import FlockSoundness.Lowering
+import FlockSoundness.Rope.Lowering
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
