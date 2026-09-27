@@ -80,3 +80,4 @@ import FlockSoundness.Audit.FlockCompiled
 import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
+import FlockSoundness.Audit.FlockLinked
