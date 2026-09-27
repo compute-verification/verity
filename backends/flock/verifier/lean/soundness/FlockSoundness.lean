@@ -56,3 +56,4 @@ import FlockSoundness.Audit.Examples
 import FlockSoundness.Audit.Flock
 import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.FlockCompiled
+import FlockSoundness.Audit.Stratified

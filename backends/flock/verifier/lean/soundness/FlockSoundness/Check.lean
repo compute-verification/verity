@@ -188,3 +188,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_count
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
+-- the stratified draw law: independent uniform subsets inside the strata, and a floor catches its stratum
+#print axioms FlockSoundness.Audit.Law.stratified
+#print axioms FlockSoundness.Audit.Law.stratified_escape
+#print axioms FlockSoundness.Audit.Law.stratified_escape_floor
+#print axioms FlockSoundness.Audit.audit_whole_stratum
+#print axioms FlockSoundness.Audit.extraction_audit_whole_stratum
