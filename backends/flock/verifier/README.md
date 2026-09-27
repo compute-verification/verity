@@ -5,9 +5,14 @@
 Rust verifier is the cross-validation oracle (§17.1).
 
 Scope today: the circuit statement in strict mode, including lookup slots (built from the pinned MUFU tables), tail stages
-and wires. It covers three versions of PR #83: `9294e161` (tags `verity/flock-netlist/v1`), `19c7269a` and the final
-format `fd02e847` (tags `verity/flock-circuit`). All three use the keyed-BLAKE3 row leaf and unsalted SHA-256 Merkle
-trees. Four things are parameters: the byte tags (`Flock.Tags`), the in-circuit row leaf (`Flock.RowLeaf`), the proof's
+and wires. The default, `verity/flock-circuit`, is M0's format at PR #83 `eb90718f` (§16.10):
+- serving rows are `hm96-sha512/row/v1` leaves proved in the circuit;
+- every identity and binding digest is SHA-512;
+- the proof's Merkle leaves are `hm96-sha512/v1`;
+- the unit draw is live.
+
+The older versions keep their names: `9294e161` (`verity/flock-netlist/v1`), `19c7269a`, `fd02e847` and `631567f7` (the
+keyed-BLAKE3 row leaf, SHA-256 or SHA-512 unsalted trees). Four things are parameters: the byte tags (`Flock.Tags`), the in-circuit row leaf (`Flock.RowLeaf`), the proof's
 Merkle scheme (`Flock.MerkleScheme`: SHA-256, or SHA-512 with 64-byte siblings) and the Halevi–Micali leaf (`Flock.Hm96`,
 generic over the hash). The legacy module (pure-block, IR frame) is not written yet.
 
@@ -15,14 +20,25 @@ generic over the hash). The legacy module (pure-block, IR frame) is not written 
 
 ~~~text
 cd backends/flock/verifier/lean && lake build          # .lake/build/bin/flock-verify
-flock-verify verify [--statement ID] --circuit F --comp comp.rows --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
-flock-verify statement [--statement ID] --circuit F --comp comp.rows --public pub.bin [--tables DIR]   # digest, Σ, Hello
+flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] --session DIR...
+flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR]   # digest, Σ, Hello
 ~~~
 
-`ID` is one of three versions:
-- `verity/flock-circuit`, the final format and the default;
-- `verity/flock-circuit@19c7269a`;
-- `verity/flock-netlist/v1`.
+`ID` names a version:
+- `verity/flock-circuit`: PR #83 from `e51e2b86`, the default. It needs no `--comp`, and it pins `seed_injection: false`,
+  as a proving build does. A circuit that binds a `verity/partition/v1` digest needs `--partition F`, the verifier's own
+  copy of the partition object (§16.10).
+  Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
+  decodes the program and evaluates the query itself (§16.10).
+- `verity/flock-circuit+seed-injection`: the same statement as M0's selftest build pins it, for its recorded cases.
+- `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
+  statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
+  staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.
+- `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
+- `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
+
+A session whose record carries a `unit_draw` is verified against the drawn units' statement, which the verifier derives
+from the population's public file and the draw (§7.3, §16.10).
 
 `--tables` names the directory of the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots. Each `DIR` holds `session.json` (the
 `flock-live-session/v1` record) and `<table>.rep0.bin`, `<table>.rep1.bin` (the proofs the server received; the table is
@@ -57,6 +73,11 @@ every coin. Only the check the edit breaks can then reject. `OUT_DIR/mutants.jso
 ## Agreement with upstream
 
 The vectors patch of each version applies to its PR #83 commit (`git apply` in a checkout):
+- `circuit-vectors-eb90718f.patch`, for `eb90718f` (build Flock with PR #83's `flock-sha512-b684b12.patch` and `flock-live`
+  with `--features sha512 --features seed-injection`), patches `flock-circuit`. It has `vectors`, which records the honest
+  session (this prover refuses R-BREAK's second level-0 tree under shared salts), and `replay`, which replays drawn records
+  under the drawn statement (`--drawn-only`: only the drawn units' statement is built). It drops `forgeries`, and it records
+  the selftest's two draw cases under `--record-dir`.
 - `netlist-vectors.patch`, for `9294e161`, patches `flock-netlist`;
 - `circuit-vectors.patch`, for `631567f7` (the SHA-512 statement: build Flock with PR #83's `flock-sha512-b684b12.patch` and
   `flock-live` with `--features sha512`), patches `flock-circuit`. Its `fd02e847` version is in commit a2c4e9fd and its
@@ -72,12 +93,30 @@ The two older patches also fix `from_record` for a table that commits no public 
 patches applied (`cargo build --release -p flock-live --bin <binary>`). Then compare the two verifiers:
 
 ~~~text
-python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --circuit F --comp comp.rows --public pub.bin \
+python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --circuit F [--comp comp.rows] --public pub.bin \
     [--expect mutants.json]... --out DIR --sessions DIR...
 ~~~
 
+`--jobs J` runs `J` verifier processes at once: each public file's sessions are dealt into chunks of four or more, one Lean
+and one upstream process per chunk, and the verdicts are reassembled, so every output is the same as with `--jobs 1`. `ci.py
+--session-jobs K` shares `K` such processes among all the sets it runs (by default the cores, and the available memory at 8
+GB a process). Set 8 on a 4-core VM: 156 s with one process, 62 s with four.
+
 It writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict, on any
-session. Recorded runs:
+session. At `eb90718f` (RoPE, 4 instances; `vectors.json` set 8, `art:c49cb61e`; recorded run `r20260927-060508-66c0`,
+result `art:294b6cf1`), 25 of 25 sessions agree:
+- the CPU selftest's 19 recorded cases (`selftest --record-dir`, `selftest_records.py`);
+- its two draw cases (a drawn session, and one that ignores the draw);
+- the honest vector;
+- two draw negatives (the record's draw altered, and dropped);
+- a salt mutant (an opened salt flipped, with `proof_sha512` rebuilt), which Lean rejects at the Merkle opening.
+
+Triton RMSNorm n128 at `eb90718f` (lookup slots; `vectors.json` set 9, `art:187679d7`, recorded on a CPU pod in
+`r20260927-061936-560b`): every selftest case, the draw cases included, 25 of 25. `agree.py` replays each drawn session
+through upstream in its own process (`replay --drawn-only`), since upstream leaks a statement's matrices and two RMSNorm
+statements do not fit in 15 GB.
+
+Recorded runs:
 - `art:f1f3c2aa` (`9294e161`): 25 of 25 sessions agree;
 - `art:81645236` (`19c7269a`): 25 of 25 agree;
 - `art:78ef0a6e` (`fd02e847`): 27 of 27 agree, with the retained-bytes sessions.

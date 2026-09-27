@@ -215,11 +215,11 @@ def mufu_ex2_ftz(x: np.ndarray, table: np.ndarray | None = None) -> np.ndarray:
     mant = ((ax & 0x7FFFFF) | 0x800000).astype(np.int64)
     unb = e - 127
     sh_l = np.clip(unb, 0, 63)
-    # the registered evaluator is the compiled C rule (`mant >> (-unb)`), whose shift amount is taken
-    # mod 64 on both x86-64 and arm64; the exhaustive sm_89 verification (attention-model.md §3.1,
-    # all 2^32 inputs, 0 mismatches) pinned exactly this behaviour, so it is replicated bit for bit
-    sh_r = (-unb) & 63
-    K = np.where(unb >= 0, mant << sh_l, mant >> np.where(unb < 0, sh_r, 0))
+    # K = floor(|x| 2^23): mant < 2^24, so every right shift of 24 or more is 0 and |x| < 2^-23 reads T[0] = 1.0
+    # at n = 0 for either sign.  The exhaustive sm_89 verification (attention-model.md §3.1, all 2^32 inputs,
+    # 0 mismatches) ran the model on the device, where the shift clamps; a host C shift by >= 64 wraps mod 64
+    sh_r = np.clip(-unb, 0, 24)
+    K = np.where(unb >= 0, mant << sh_l, mant >> sh_r)
     frac_zero = (K & 0x7FFFFF) == 0
     fixed = np.where(~neg, K, np.where(frac_zero, -K, -K - 1))
     n = fixed >> 23  # arithmetic

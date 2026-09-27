@@ -110,6 +110,11 @@ class TargetProfile:
                            `"check-inf-per-iteration"` binds `Attention_v4` (`registry.fa3_check_inf`), which guards only the kernel's
                            `Check_inf` iterations (the first and the causal-masked ones) as FA3's mainloop does.  Opt-in until the
                            re-baseline epoch; only an effective FA3 target reads it.  Omitted from `to_json()` when None.
+    weight_only_calls   -> how often the Program issues a Call that reads only weights (a Program static, declared-and-bound, never
+                           attested).  `"per-forward"` (the default when None) = as vLLM executes it: every forward issues its own, so a
+                           request Program of T+1 forwards computes the same value T+1 times (Gemma's `GemmaRMSNorm` weight + 1).
+                           `"once"` = the Build issues it at its first forward and every later forward reads that value (the
+                           `vllm_bindings.norm_chain` rules).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -146,6 +151,11 @@ class TargetProfile:
     moe_construction: str | None = None
     #: FA3's attention construction (None = "guard-every-block", `Attention_v2`; see the doc)
     fa3_construction: str | None = None
+    #: how often the Program issues a weight-only Call (None = "per-forward"; see the doc); never attested
+    weight_only_calls: str | None = None
+
+    WEIGHT_ONLY_CALLS = ("per-forward", "once")
+    DEFAULT_WEIGHT_ONLY_CALLS = "per-forward"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -217,6 +227,9 @@ class TargetProfile:
         if self.fa3_construction is not None and self.fa3_construction not in self.FA3_CONSTRUCTIONS:
             raise ValueError(f"fa3_construction must be None ({self.DEFAULT_FA3_CONSTRUCTION}) or one of {sorted(self.FA3_CONSTRUCTIONS)}; "
                              f"got {self.fa3_construction!r}")
+        if self.weight_only_calls is not None and self.weight_only_calls not in self.WEIGHT_ONLY_CALLS:
+            raise ValueError(f"weight_only_calls must be None ({self.DEFAULT_WEIGHT_ONLY_CALLS}) or one of {list(self.WEIGHT_ONLY_CALLS)}; "
+                             f"got {self.weight_only_calls!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -228,6 +241,9 @@ class TargetProfile:
     def effective_fa3_construction(self) -> str:
         """The construction FA3's attention rows are built with: the declared knob, else `guard-every-block` (`Attention_v2`)."""
         return self.fa3_construction if self.fa3_construction is not None else self.DEFAULT_FA3_CONSTRUCTION
+    def effective_weight_only_calls(self) -> str:
+        """How often the Program issues a weight-only Call: the declared knob, else `per-forward` (as vLLM executes it)."""
+        return self.weight_only_calls if self.weight_only_calls is not None else self.DEFAULT_WEIGHT_ONLY_CALLS
 
     def moe_construction_declaration(self) -> dict:
         """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
@@ -353,6 +369,8 @@ class TargetProfile:
             d.pop("moe_construction", None)   # [R17-42] absent = indexed-read (MOE-01); every earlier profile digest unchanged
         if d.get("fa3_construction") is None:
             d.pop("fa3_construction", None)   # absent = guard-every-block (Attention_v2); every earlier profile digest unchanged
+        if d.get("weight_only_calls") is None:
+            d.pop("weight_only_calls", None)  # absent = per-forward; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:
