@@ -59,10 +59,53 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}" for r in rows) or "none"
         raise Refused(f"no passing `{tool}` attempt for {commit} in the evidence store (attempts of it: {seen}); "
                       f"record one: `uv run python tools/check/check.py --record` on that commit")
-    return commit, ids[0]
+    need = required_steps(repo, "HEAD", commit, tool)
+    if not need:
+        return commit, ids[0]
+    why = []
+    for rid in ids:
+        missing = [s for s in need if step_status(store, rid, s) != "passed"]
+        if not missing:
+            return commit, rid
+        why.append(f"{rid}: {', '.join(f'{s} {step_status(store, rid, s)}' for s in missing)}")
+    raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
+                  f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
+                  f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
 
 
-def _record(tree: Path, tool: str, command: list[str], on: str | None, project: str | None, log=print) -> str:
+def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
+    """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
+    merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
+    from .store import tools_registry
+
+    module, _, attr = tools_registry.REGISTRY.get(tool, tool).rpartition(":")
+    try:
+        rules = tools_registry._from_file(module, attr, repo).merge_requires
+    except Exception:  # noqa: BLE001  (a tool the checkout does not declare has no path rules)
+        return {}
+    if not rules:
+        return {}
+    changed = [p for p in _git(repo, "diff", "--name-only", base, commit).stdout.splitlines() if p]
+    out = {}
+    for step, prefixes in rules.items():
+        hit = [p for p in prefixes if any(c == p.rstrip("/") or c.startswith(p.rstrip("/") + "/") for c in changed)]
+        if hit:
+            out[step] = hit
+    return out
+
+
+def step_status(store, run_id: str, step: str) -> str:
+    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none)."""
+    try:
+        art = (store.get_attempt(run_id) or {}).get("outputs", {}).get("result")
+        doc = store.get_manifest(art).meta if art else {}       # a result artifact's document is its manifest's meta
+    except Exception as e:  # noqa: BLE001  (an unreadable result admits nothing)
+        return f"unreadable ({type(e).__name__})"
+    return next((s.get("status", "absent") for s in doc.get("steps", []) if s.get("step") == step), "absent")
+
+
+def _record(tree: Path, tool: str, command: list[str], on: str | None, project: str | None, log=print,
+            sends: list[str] = ()) -> str:
     """Record ``tool`` on the commit checked out in ``tree`` (``research run --tool``; ``--on`` a machine: launched there and
     polled until it ends); returns the run id."""
     from . import runs as R
@@ -71,7 +114,8 @@ def _record(tree: Path, tool: str, command: list[str], on: str | None, project: 
     base = [sys.executable, "-m", "research", "run", "--id", rid, "--tool", tool, "--cwd", "source",
             *(["--project", project] if project else [])]
     if on:
-        r = subprocess.run([*base, "--on", on, "--source", str(tree), "--", *command], cwd=tree, capture_output=True, text=True)
+        r = subprocess.run([*base, "--on", on, "--source", str(tree), *[x for f in sends for x in ("--send", f)], "--", *command],
+                           cwd=tree, capture_output=True, text=True)
         if r.returncode:
             raise Refused(f"`research run --on {on}` failed: {(r.stderr or r.stdout).strip()[-400:]}")
         status = R.runs_root(None) / rid / "status.json"
@@ -93,7 +137,7 @@ POLL_S = 20
 
 
 def train(repo: Path, refs: list[str], into: str, store, tool: str, command: list[str], on: str | None = None,
-          project: str | None = None, log=print, spec: str | None = None) -> tuple[str | None, str | None]:
+          project: str | None = None, log=print, spec: str | None = None, sends: list[str] = ()) -> tuple[str | None, str | None]:
     """Merge ``refs`` in order onto ``into``'s tip as one candidate (a chain of `--no-ff` merges in a scratch worktree), record
     `tool` on it once and fast-forward ``into`` to it when it passes: the tree that lands is the one checked.  When it fails,
     bisect the chain's prefixes (each an exact commit, checked the same way) to the first ref whose merge makes it fail, and
@@ -115,13 +159,21 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
                 _git(tree, "merge", "--abort", check=False)
                 raise Refused(f"{ref} does not merge onto the train so far: {(r.stderr or r.stdout).strip()[-300:]}")
             chain.append(_git(tree, "rev-parse", "HEAD").stdout.strip())
+        need = required_steps(repo, "HEAD", chain[-1], tool)
+        if need and on and not sends:
+            raise Refused(f"the train changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must run "
+                          f"{', '.join(need)}: pass what it needs with --send (for `check`: `uv run python tools/check/check.py "
+                          f"--agreement-files` prints the flags)")
 
         def passes(k: int) -> bool:
             _git(tree, "checkout", "-q", "--detach", chain[k - 1])
-            _record(tree, spec or tool, command, on, project, log)
-            if store.remote is not None:
-                store.refresh(attempts_only=True)
-            ok = bool(passing(store, chain[k - 1], tool))
+            _record(tree, spec or tool, command, on, project, log, sends)
+            try:
+                gate(repo, chain[k - 1], into, store, tool, log=lambda *_: None)
+                ok = True
+            except Refused as e:
+                ok = False
+                log(f"research merge: {e}")
             log(f"research merge: train prefix {k}/{len(chain)} ({chain[k - 1][:12]}): `{tool}` {'passed' if ok else 'FAILED'}")
             return ok
 
@@ -149,6 +201,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE", help="--train: record the tool on this machine (research run --on)")
     ap.add_argument("--project", default=None, help="--train: the project the run belongs to (required with --on)")
     ap.add_argument("--command", default=None, help="--train: the workload command (default the tool declaration's)")
+    ap.add_argument("--send", action="append", default=[], metavar="FILE", help="--train --on: ship this file with every run (research run --send)")
     ap.add_argument("--into", default="main", help="the branch checked out here that receives the merge (default main)")
     ap.add_argument("--tool", default="check", help="the tool whose passing attempt the merge requires (default check)")
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
@@ -164,7 +217,7 @@ def main(argv: list[str]) -> int:
         decl = tools_registry.load(a.tool, repo)
         command = shlex.split(a.command) if a.command else list(decl.command)
         try:
-            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool)
+            land, bad = train(repo, a.ref, a.into, LocalStore(a.store), decl.name, command, a.on, a.project, spec=a.tool, sends=a.send)
         except Refused as e:
             print(f"research merge: refused: {e}", file=sys.stderr)
             return 1

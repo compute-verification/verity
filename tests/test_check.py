@@ -18,19 +18,72 @@ def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, mo
     assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
 
 
+def _pinned(tmp_path, monkeypatch, binary=b"bin"):
+    """A verifier tree with a pin over a one-binary upstream build and an inputs tree, both built here."""
+    import hashlib
+    import io
+    import json
+    import tarfile
+
+    v = tmp_path / "verifier"
+    (v / "lean").mkdir(parents=True)
+    (v / "lean" / "lakefile.toml").write_text("")
+    (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
+
+    def tgz(path, files):
+        with tarfile.open(path, "w:gz") as t:
+            for name, data in files.items():
+                i = tarfile.TarInfo(name)
+                i.size = len(data)
+                t.addfile(i, io.BytesIO(data))
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    sent = tmp_path / "out" / "inputs"
+    sent.mkdir(parents=True)
+    up = tgz(sent / "a.tar.gz", {"upstream-abc": binary, "BUILD.json": b"{}"})
+    ins = tgz(sent / "b.tar.gz", {"0123/x": b"x"})
+    pin = {"upstream": {"art": "art:u", "sha256": up, "binaries": {"abc": hashlib.sha256(b"bin").hexdigest()}},
+           "inputs": {"art": "art:i", "sha256": ins}, "ci": {"seed": 1, "fuzz": 2}}
+    (v / "upstream.json").write_text(json.dumps(pin))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    monkeypatch.setattr(CHECK, "UPSTREAM_PIN", v / "upstream.json")
+    return tmp_path / "out", sent
+
+
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
-    """`lake build` and the unit-cut conformance are required; the upstream agreement runs when the run was sent its bundle."""
-    (tmp_path / "verifier" / "lean").mkdir(parents=True)
-    (tmp_path / "verifier" / "lean" / "lakefile.toml").write_text("")
-    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (build, lake, _), (unit, cut, _), (agree, why, _) = CHECK.lean_steps(tmp_path)
+    """`lake build` and the unit-cut conformance are required; the agreement runs when the run has the pinned upstream build and
+    inputs (found by hash, whatever their names), and is skipped by name otherwise."""
+    out, sent = _pinned(tmp_path, monkeypatch)
+    (build, lake, _), (unit, cut, _), (agree, argv, _) = CHECK.lean_steps(out)
     assert (build, unit, agree) == ("lean-build", "lean-unit-cut", "lean-agreement") and lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
-    assert why.startswith("skipped: no upstream bundle sent")
-    (tmp_path / "inputs").mkdir()
-    (tmp_path / "inputs" / "ci-bundle.tar.gz").write_bytes(b"")
-    argv = CHECK.lean_steps(tmp_path)[2][1]
-    assert argv[:2] == ["bash", "-c"] and "ci-pod.sh" in argv[2] and "ci-bundle.tar.gz" in argv[2]
+    assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
+    (sent / "b.tar.gz").unlink()
+    assert CHECK.lean_steps(out)[2][1] == "only upstream of the pinned upstream build and inputs was sent"
+    (sent / "a.tar.gz").unlink()
+    assert CHECK.lean_steps(out)[2][1].startswith("skipped: the pinned upstream build was not sent")
+
+
+def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch):
+    import json
+
+    out, sent = _pinned(tmp_path, monkeypatch)
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 0
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
+    assert argv[argv.index("--inputs") + 1].endswith("flock-agreement/inputs") and argv[argv.index("--fuzz") + 1] == "2"
+    out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
+    assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+
+
+def test_the_rule_the_gate_reads(monkeypatch):
+    spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["backends/flock/"]}
+    pin = __import__("json").loads((ROOT / "backends" / "flock" / "verifier" / "upstream.json").read_text())
+    assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
+        (ROOT / "backends" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
 
 
 def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):

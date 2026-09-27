@@ -1,10 +1,11 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`).
 
-    uv run python tools/check/check.py              run every step here, in the checkout
-    uv run python tools/check/check.py --record     the same through `research run --tool check`: published as an Attempt of the
-                                                    commit checked out (a clean tree), the record `research merge` reads
-    research run --on MACHINE --project verity --source . --cwd source --tool check -- uv run --locked python tools/check/check.py
-                                                    the same on a machine (a multi-core CPU pod)
+    uv run python tools/check/check.py                      run every step here, in the checkout
+    uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
+                                                            multi-core CPU pod): an Attempt of the clean commit checked out, the
+                                                            record `research merge` reads; with the pinned upstream build and
+                                                            inputs when the commit changes backends/flock/ against --base REF
+                                                            (default origin/main)
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
@@ -12,8 +13,9 @@ Three independent groups run at once, the cores split between them (`--cores N`,
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result
     lean            `lake build` of the Lean verifier (PR #85), then its partition check against `verity.ir.partition`
-                    (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci-pod.sh`) when the run is sent
-                    the input bundle (`--send ci-bundle.tar.gz`), skipped by name without one (`lean_steps`)
+                    (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build
+                    stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by
+                    name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -29,6 +31,7 @@ with each step's log beside it.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -69,25 +72,124 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 
 
+#: upstream's verifier builds and the sets' stored inputs, stored once and pinned by hash (`upstream-build.sh`)
+UPSTREAM_PIN = FLOCK_VERIFIER / "upstream.json"
+#: where check looks for them besides the run's `inputs/` (`--send`): a local recorded run's launcher sets it
+AGREEMENT_DIR_ENV = "FLOCK_AGREEMENT_INPUTS"
+
+
+def _sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def agreement_files(out: Path) -> dict[str, Path]:
+    """The pinned upstream build and inputs among the files sent with the run (`$RESEARCH_RUN_DIR/inputs/`) or in
+    ``$FLOCK_AGREEMENT_INPUTS``, found by sha256: {"upstream": path, "inputs": path} for those present."""
+    pin = json.loads(UPSTREAM_PIN.read_text())
+    want = {pin[k]["sha256"]: k for k in ("upstream", "inputs")}
+    dirs = [out / "inputs", *([Path(os.environ[AGREEMENT_DIR_ENV])] if os.environ.get(AGREEMENT_DIR_ENV) else [])]
+    found = {}
+    for p in (q for d in dirs if d.is_dir() for q in sorted(d.iterdir()) if q.is_file()):
+        if p.stat().st_size and (k := want.get(_sha256(p))):
+            found[k] = p
+    return found
+
+
 def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing until PR #85 is on the tree (a skip, named); then `lake build`, the Lean partition check's
-    conformance with `verity.ir.partition` (`unit_cut_agree.py`), and the agreement job against upstream's Rust verifier
-    (`ci-pod.sh`) when the run was sent its input bundle (`--send ci-bundle.tar.gz`, made by `ci-bundle.sh` on a machine with
-    store credentials); without one that step is skipped by name, and the cross-check stays the recorded `flock_agreement` job."""
+    conformance with `verity.ir.partition` (`unit_cut_agree.py`), and the agreement job against upstream's Rust verifier on the
+    pinned upstream build (`upstream.json`) when the run has it; without it that step is skipped by name.  `research merge`
+    requires it for a change under `backends/flock/` (`tools/check/tool.py`), and `--record` sends it then."""
     lean = FLOCK_VERIFIER / "lean"
     if not (lean / "lakefile.toml").exists():
         return [("lean", "skipped: PR #85 (backends/flock/verifier) is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    bundles = sorted((out / "inputs").glob("ci-bundle*.tar.gz"))
-    agreement: list[str] | str = "skipped: no upstream bundle sent with this run (--send ci-bundle.tar.gz); the cross-check is `flock_agreement`"
-    if bundles:
-        work = out / "flock-agreement"
-        agreement = ["bash", "-c", f'mkdir -p "{work}/inputs" && ln -sf "{bundles[0]}" "{work}/inputs/" && '
-                     f'RESEARCH_RUN_DIR="{work}" bash "{FLOCK_VERIFIER / "ci-pod.sh"}"']
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing backends/flock/ requires "
+                                  "this step: `check.py --record` sends it)")
+    if UPSTREAM_PIN.exists():
+        got = agreement_files(out)
+        if len(got) == 2:
+            agreement = [sys.executable, str(Path(__file__).resolve()), "--lean-agreement", str(out), str(got["upstream"]), str(got["inputs"])]
+        elif got:
+            agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
     return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
             ("lean-agreement", agreement, ROOT)]
+
+
+def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
+    """Unpack the pinned upstream build and inputs, check every binary against the pin, and run `ci.py` on every replayable set."""
+    import tarfile
+
+    pin = json.loads(UPSTREAM_PIN.read_text())
+    w = out / "flock-agreement"
+    for name, src in (("upstream", upstream), ("inputs", inputs)):
+        if _sha256(src) != pin[name]["sha256"]:
+            print(f"check: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
+            return 1
+        with tarfile.open(src) as t:
+            t.extractall(w / name, filter="data")
+    ups = []
+    for c, h in sorted(pin["upstream"]["binaries"].items()):
+        b = w / "upstream" / f"upstream-{c}"
+        if not b.is_file() or _sha256(b) != h:
+            print(f"check: upstream-{c} does not match the pin", file=sys.stderr)
+            return 1
+        b.chmod(0o755)
+        ups += ["--upstream", f"{c}={b}"]
+    ci = pin.get("ci", {})
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
+            *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, cores() // 4)),
+            "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
+    return subprocess.run(argv, cwd=ROOT).returncode
+
+
+def record(argv: list[str]) -> int:
+    """`--record [--on MACHINE] [--base REF]`: `research run --tool check` on this clean commit, with the pinned upstream build and
+    inputs (fetched from the store) when the commit changes a path `tools/check/tool.py` names against REF (default origin/main)."""
+    on = base = None
+    rest = []
+    it = iter(argv)
+    for x in it:
+        if x == "--on":
+            on = next(it)
+        elif x == "--base":
+            base = next(it)
+        else:
+            rest.append(x)
+    spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    base = base or "origin/main"
+    changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    need = [s for s, ps in tool.CHECK.merge_requires.items() if any(c.startswith(p) for p in ps for c in changed)]
+    cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
+    env = dict(os.environ)
+    if "lean-agreement" in need:
+        from research.store.local import LocalStore
+
+        pin = json.loads(UPSTREAM_PIN.read_text())
+        store = LocalStore()
+        files = {k: Path(store.fetch(pin[k]["art"])) for k in ("upstream", "inputs")}
+        print(f"check: changes under {', '.join(tool.CHECK.merge_requires['lean-agreement'])} against {base}: sending the pinned "
+              f"upstream build and inputs")
+        cmd += [x for k in ("upstream", "inputs") for x in ("--input", f"flock_{k}={pin[k]['art']}")]
+        if on:
+            cmd += [x for f in files.values() for x in ("--send", str(f))]
+        else:
+            d = Path(tempfile.mkdtemp(prefix="check-agreement-"))
+            for k, f in files.items():
+                (d / f"{k}.tar.gz").symlink_to(f)
+            env[AGREEMENT_DIR_ENV] = str(d)
+    if on:
+        cmd += ["--on", on, "--source", "."]
+    cmd += ["--", *tool.CHECK.command, *rest]
+    return subprocess.run(cmd, cwd=ROOT, env=env).returncode
 
 
 def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
@@ -207,14 +309,19 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if argv == ["--agreement-files"]:
+        from research.store.local import LocalStore
+
+        pin = json.loads(UPSTREAM_PIN.read_text())
+        print(" ".join(f"--send {LocalStore().fetch(pin[k]['art'])}" for k in ("upstream", "inputs")))
+        return 0
+    if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
+        return lean_agreement(*map(Path, argv[1:]))
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
             return 2
-        rest = [a for a in argv if a != "--record"]
-        cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source", "--",
-               sys.executable, "tools/check/check.py", *rest]
-        return subprocess.run(cmd, cwd=ROOT).returncode
+        return record([a for a in argv if a != "--record"])
     cache = "--no-cache" not in argv
     rest = [a for a in argv if a != "--no-cache"]
     n = None

@@ -112,3 +112,40 @@ def test_a_train_lands_what_it_checked_and_bisects_to_the_breaking_ref(tmp_path,
     out = capsys.readouterr().out
     assert out.count("recorded as") == 1 and "`check` passed; main fast-forwarded" in out and (main / "c.txt").exists()
     assert not _git(main, "worktree", "list").count("research-train")
+
+
+_RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
+           "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
+           "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
+
+
+def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, monkeypatch, capsys):
+    """The target's declaration says `agree` must pass for a change under flock/: an attempt that skipped it admits a change
+    elsewhere but not one under flock/; one where it passed admits both."""
+    import sys
+
+    main, feat, _tip = _repos(tmp_path)
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
+                                                      "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "rule")
+    _git(feat, "merge", "-q", "main")
+    def run(status: str) -> int:
+        monkeypatch.chdir(feat)
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "check",
+                              "--cwd", "source", "--", sys.executable, "-c", _RESULT % status])
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0                                  # a.txt only: the rule does not apply
+    (feat / "flock").mkdir()
+    (feat / "flock" / "x.txt").write_text("x\n")
+    _git(feat, "add", "-A")
+    _git(feat, "commit", "-q", "-m", "flock change")
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 1
+    assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
+    assert run("passed") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 0
