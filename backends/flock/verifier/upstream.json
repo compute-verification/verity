@@ -1,26 +1,29 @@
 {
- "note": "What check's lean-agreement step runs against, stored once (upstream-build.sh from a ci-bundle.sh bundle) and pinned by hash. A new #83 version or replayable set in vectors.json: rebuild, `research data put`, re-pin.",
+ "note": "What check's lean-agreement step runs against, stored once (upstream-build.sh from a ci-bundle.sh bundle, on the oldest glibc checks run on: Ubuntu 22.04) and pinned by hash. A new #83 version or replayable set in vectors.json: rebuild, `research data put`, re-pin.",
  "upstream": {
-  "art": "art:fd494a071c4046acd4fecd03501e85f75d6c0b521f5b73310b5b8c568b80108a",
-  "sha256": "301bce3ea13aeaa944a93ddab0d79cf3cfaa86d9dc0ee99bb33b58bee838dc8d",
+  "art": "art:5e8c9749b03e1dd1234335bbbe419197c83e01b4934cd5f52f8120e8e2459805",
+  "sha256": "f9896e3c4acc1f883dd1edd5e9c7d00861896ba44e93caab1b8a3590b1f87d1a",
   "flock": "b684b1258e4b1f202bec24afd660ace851b09e5e",
   "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "host": "x86_64-unknown-linux-gnu",
-  "bundle_sha256": "e45725808c13286e174578e5da291867804121647f3ca36f6d1686157351243f",
-  "built_in": "r20260927-100321-0f1d",
+  "glibc": "2.34",
+  "build_glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
+  "bundle_sha256": "957f5751b566127942b91ca9a79c02ae930d328f4028c7e94fd2b267b1f663cf",
+  "built_in": "r20260927-172821-01e6",
   "binaries": {
-   "19c7269a": "f903a8cd92266cfb024900c3ae9f519333dd75b478d97cface5b09a1e826a7c0",
-   "25519ba1": "58ff418bdede9e00e600ec6264c7f99fa7dbc3adb73843ff46d64189c9d0e6a1",
-   "631567f7": "22cab2e50fe23a268e6317365f0d121513d64cacd85139d76768501c4deb7446",
-   "9294e161": "447a591c26335bd5bd2ab4ade005de0cf82cc99b6fb9e6e380d0e58817a2e414",
-   "e51e2b86": "bc22e9b8dfd42fab801a638bd15e7de8621f1b62f8997f4a221754e14d3bd84f",
-   "eb90718f": "0a09e9840c419a2262b884ec5cfa565885b37dc316af7b4acc8cf10bbad34ee5",
-   "fd02e847": "a0b9b12b8bbbb6487f36b35685cbd32a2ed983961c1f0ef91fddc52143b6eaaa"
+   "19c7269a": "4deb004ba300b1415232ce1eae8c0b39fe2d828ea04209feaf9d803a7375a057",
+   "25519ba1": "e53bb0c8a7a2f20e4df7f5275da1f97b893a712dc4de3efb62fbb64d09ef5bdc",
+   "631567f7": "217d193586a40f0c9168386777d14fe34bd509976d42cf24a73586371466197d",
+   "9294e161": "bd0f95f14ebaaa00497602b62930302f3ace50ba7388be83ee649ade944969a3",
+   "967b8d06": "a86db754365dfc0424655599cddde8f95eda452d23f9fd7ad5b5ad5233102eb3",
+   "e51e2b86": "f3a30409c1346c4cdf648b2e2e39a08793136fdbb4c8a875fd050f66437c0a53",
+   "eb90718f": "bab4f3602e72f1892b4c38db0d5cf5ca64db26273d8231bd03e63fd43a2332a1",
+   "fd02e847": "8f7d37591d1683850fb62115488dfba6162c7094f1b3b80b6fd2ce3a23ba1417"
   }
  },
  "inputs": {
-  "art": "art:a8c94db65fb53e6152e6c8317dfd1d78a4928adab801234c64e806ad4e3b6613",
-  "sha256": "60b47cecff4a6dfe6af285b560246ec9c0ae86a8b8bd4eb8714de049f913cce5"
+  "art": "art:2843f78c17db2a49e60f0323d14c3940fce1d4df0682f6e17a527815c9bbad4d",
+  "sha256": "d467437a7e6dd2742bd1b1d7b56fe07b659bf517212c301acdb0689417f5c759"
  },
  "ci": {
   "seed": 20260926,
