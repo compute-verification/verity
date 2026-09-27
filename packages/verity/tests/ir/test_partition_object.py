@@ -114,11 +114,16 @@ def test_the_evaluation(program):
 def test_verify_holds_serving_to_the_derived_committed_set(program):
     obj = PO.build(program)
     fan = 11
-    assert PO.verify(obj, program, served={fan: [0, 2, 3]}).ok
-    (f,) = PO.verify(obj, program, served={fan: [2, 3]}).detail["cut"]["gates"]  # the interior value read by two units, not served
+    part = PO.evaluate(program)
+    full = {k: part.committed(p) for p, (k, _c) in enumerate(part.calls)}
+    assert full[fan] == [0, 2, 3] and PO.verify(obj, program, served=full).ok
+    (f,) = PO.verify(obj, program, served=full | {fan: [2, 3]}).detail["cut"]["gates"]  # the interior value read by two units, not served
     assert f["call"] == fan and "read-uncommitted" in f["codes"]
-    (f,) = PO.verify(obj, program, served={fan: [0, 1, 2, 3]}).detail["cut"]["gates"]   # the dead gate served
+    (f,) = PO.verify(obj, program, served=full | {fan: [0, 1, 2, 3]}).detail["cut"]["gates"]   # the dead gate served
     assert f["codes"] == ["committed-unread"]
+    v = PO.verify(obj, program, served={fan: [0, 2, 3]})                       # every Call that commits must be given
+    assert v.codes == ("served-missing",) and v.detail["served-missing"]["gates"] == sorted(set(full) - {fan})
+    assert PO.verify(obj, program, served=full | {999: [0]}).codes == ("served-unknown",)
     other = copy.deepcopy(obj)
     other["program"] = "f" * 128
     assert PO.verify(other, program).codes == ("program",)
