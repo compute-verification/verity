@@ -1,6 +1,6 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
-    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F --comp F --public F \
+    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] --public F \
         [--tables DIR] [--expect FILE]... --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
@@ -34,18 +34,33 @@ def lean_verdicts(a):
     return out
 
 
+def drawn(s):
+    """The session's record carries a unit draw (PR #83 from eb90718f)."""
+    try:
+        return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
+    except (OSError, ValueError):
+        return False
+
+
 def upstream_verdicts(a):
     out = {}
     for public, sessions in groups(a).items():
-        out.update(upstream_run(a, public, sessions))
+        plain = [s for s in sessions if not drawn(s)]
+        if plain:
+            out.update(upstream_run(a, public, plain))
+        # each drawn session in its own process, which builds only its drawn units' statement (`replay --drawn-only`): upstream
+        # leaks a statement's matrices, so one process holds one statement
+        for s in sessions:
+            if drawn(s):
+                out.update(upstream_run(a, public, [s], ["--drawn-only"]))
     return out
 
 
 def archived(a, path):
-    """Hold `path` in the run's archive, `OUT/archive/sha256/<hex>`, and return its digest: the Lean verifier loads the
+    """Hold `path` in the run's archive, `OUT/archive/sha512/<hex>`, and return its SHA-512: the Lean verifier loads the
     statement's objects by content (PROTOCOL.md §16.8)."""
-    h = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-    d = a.out / "archive" / "sha256"
+    h = hashlib.sha512(Path(path).read_bytes()).hexdigest()
+    d = a.out / "archive" / "sha512"
     d.mkdir(parents=True, exist_ok=True)
     if not (d / h).exists():
         try:
@@ -60,7 +75,11 @@ def lean_run(a, public, sessions):
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
     cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(a.out / "archive"), "--circuit", archived(a, a.circuit),
-           "--comp", archived(a, a.comp), "--public", archived(a, public)]
+           "--public", archived(a, public)]
+    if a.comp:
+        cmd += ["--comp", archived(a, a.comp)]
+    if a.partition:
+        cmd += ["--partition", archived(a, a.partition)]
     if a.coins:
         cmd += ["--coins", a.coins]
     p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
@@ -76,10 +95,10 @@ def lean_run(a, public, sessions):
     return out
 
 
-def upstream_run(a, public, sessions):
+def upstream_run(a, public, sessions, extra=()):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    p = subprocess.run([a.upstream, "replay", "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
+    p = subprocess.run([a.upstream, "replay", *extra, "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
                        capture_output=True, text=True)
     with open(a.out / "upstream.txt", "a") as f:
         f.write(p.stdout)
@@ -95,8 +114,10 @@ def upstream_run(a, public, sessions):
 
 def main():
     ap = argparse.ArgumentParser()
-    for k in ("--lean", "--upstream", "--circuit", "--comp", "--public"):
+    for k in ("--lean", "--upstream", "--circuit", "--public"):
         ap.add_argument(k, required=True)
+    ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
+    ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")

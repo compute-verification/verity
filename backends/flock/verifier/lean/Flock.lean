@@ -22,3 +22,4 @@ import Flock.Blake3Row
 import Flock.Statement
 import Flock.Verify
 import Flock.Partition
+import Flock.HmRow
