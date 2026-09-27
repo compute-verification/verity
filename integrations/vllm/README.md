@@ -55,7 +55,9 @@ primitive families through `verity.ir.codec.register_lazy_family`), lowering (`f
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).
+VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).  `registry/fa3_check_inf.py` is FA3's
+per-iteration `Check_inf` chain (`Attention_v4`), bound only under `TargetProfile.fa3_construction = "check-inf-per-iteration"` until the
+re-baseline epoch switches the record to it.
 
 **`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
@@ -75,11 +77,15 @@ required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
-`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py`), `fa2_plane_classes.py`,
-`committer_api.py`, and the shipped tap sources (`fa2_tap_src/`, `fa3_tap_src/`, `norm_tap_src/`).  `gate.py` is the CPU gate
-(one row's acquisition plan, off-pod).  The norm-scale tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so
-is the guarded-max tap (`GUARDED_MAX_TAP=1`, `query/guarded_max.py`): the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
-`pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write `GuardNegInfZero(m)` into word 3 of the stream's ROW entry.
+`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py` / `router_softmax_source.py` /
+`vocab_range_source.py`, attached by `taps.py`), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
+`fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  The norm-scale
+tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so are the guarded-max tap (`GUARDED_MAX_TAP=1`,
+`query/guarded_max.py`: the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` / `pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write
+`GuardNegInfZero(m)` into word 3 of the stream's ROW entry, and each key block's `max * scale` into the MS class appended after
+FIN (`VERITY_MAT_SRC=123`), which lengthens every stream identity of the manifest), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
+router's committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a
+TP rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change).
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
@@ -96,12 +102,12 @@ runtime metadata in the identity tuple.
 
 **`properties/`** holds the property harnesses: `noninterference.py`, `census.py` + `kernel_allowlist.py`, `golden.py` +
 `golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
-`fa_tap_exactness.py`, `norm_tap_exactness.py`.  Never: a per-run check.
+`fa_tap_exactness.py`, `norm_tap_exactness.py`, `router_tap_exactness.py`, `vocab_range_exactness.py`.  Never: a per-run check.
 
 **`collectives/`** holds the collective record (`collective_record.py`), the communicator hook sites (`collective_sites.py`)
 and the embedding shard layout (`embedding_shard.py`).
 
-**`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
+**`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
 `*_negative*.sh` runs, `cov_pod.sh`, the gates (`pod_gate.sh`, `verify_lane.sh`), `known_roots.json`.  Never: Python that a layer
 above would import.
 

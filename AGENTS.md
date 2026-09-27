@@ -12,7 +12,17 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   from the owning module (`from verity.ir import Program`), never a
   convenience re-export at `verity`.
   - `verity.ir`: types, definitions, canonical layout, evaluator, descriptor
-    codec. Stdlib only; imports no other core module.
+    codec. Stdlib only; imports no other core module. The program format
+    (descriptor v1, canonical JSON = RFC 8785, layout, scope resolution) is
+    specified in `verity/ir/PROTOCOL.md`, every rule pinned by
+    `tests/ir/format_vectors.json`. The partition checker's
+    references live here: `cut` (the query `Q_word` v1's canonical evaluator:
+    each Call's computing graph, the cut, the width rule in bits; the algorithm
+    is written in its docstring), `partition.validate_unit_cut` (the invariant)
+    and `partition_object` (`verity/partition/v1` = program digest + query,
+    `Q_word` v1 or the instance-granular `Q_template_instance(s)` v0:
+    `evaluate`, `locate`, `validate`, `verify`; pinned by
+    `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
@@ -45,7 +55,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
- `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
+ audit: registration, the verifier's draw over a partition's units, and the
+ audit record with its profile; `benchmarks/one_stage` runs it end to end with
+ M0's prover and the Lean verifier. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -55,6 +68,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
   enforces it. Developer notes in its `README.md`.
+- `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
+- `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code. The first is `backends/sp1`; its `README.md` is
   the how-to (build, identity, Python API, tests, recorded pod runs).
@@ -66,9 +81,23 @@ Dependency direction (README "Development"): `ir <- ml`, `ir <- commitments`,
 core. Backends must be testable without a frontend or runtime integration.
 
 ~~~text
-uv sync            # workspace root; installs research and verity editable
-uv run pytest      # all tests
+uv sync                                   # workspace root; installs research and verity editable
+uv run pytest                             # all tests
+uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
 ~~~
+
+## Circuits
+
+Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
+`circuit-check` (`uv run circuit-check <definition|template|row>`); include its report in the PR. A new Definition needs a
+small binding in `circuit_check.targets`, which the suite enforces.
+
+## Checking and merging
+
+There is no GitHub Actions CI. `check` (`tools/check/check.py`) is the one check: pytest, `circuit-check --all`, and the Lean
+verifier's build with its upstream cross-check once PR #85 is on `main`. `--record` runs it through `research run` as an
+Attempt of the checked-out clean commit. Merge into `main` only through `research merge <branch>`, which refuses without a
+passing `check` of that exact commit in the evidence store, or when `main` has moved past it.
 
 ## Working principles
 
@@ -112,7 +141,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
 
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
-coordinator merges `main`, and it merges from origin; `research notes branches --fetch` lists open lanes' work origin lacks.
+coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
+origin lacks.
 
 ## Skills
 

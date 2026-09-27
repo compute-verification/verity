@@ -390,8 +390,8 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 # [R16 stoch, coord M-0169 / global M-0189 (1)] S is an OPERAND (i32), not a static: the split count is the launch geometry
 # S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_split.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
 # from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
-# and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The evaluator REFUSES an S outside
-# {1, 2, 4, 8, 16, 32} (`_SPLIT_MAX_SPLITS`); it never defaults.
+# and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The keep word is TOTAL over the i32 operand:
+# an S outside {1, 2, 4, 8, 16, 32} keeps no lane (`topp_keep`), a word no launched S produces; it never defaults to a split count.
 
 _TOPP_WORDS: dict = {}
 _BIT_ATS: dict = {}
@@ -399,29 +399,48 @@ NEG_INF_BITS = 0xFF800000
 SPLIT_COUNTS = (1, 2, 4, 8, 16, 32)
 
 
-def _splits_of(word: int) -> int:
-    """The i32 `splits` operand as the split count; refused by name when it is not a power of two <= 32."""
+def _splits_of(word: int) -> int | None:
+    """The i32 `splits` operand as the split count; None when it is not a power of two <= 32 (no launch of the pipeline has it)."""
     S = int(word) & M32
-    if S not in SPLIT_COUNTS:
-        raise ValueError(f"TopPMask: splits operand {S} is not a split count of `_apply_topp_split` (one of {SPLIT_COUNTS}); "
-                         f"S = SplitsFor_v1(|live|, num_SMs) is a derived value of the workload, never a default")
-    return S
+    return S if S in SPLIT_COUNTS else None
+
+
+def topp_keep(x_f32, p: float, splits: int):
+    """The keep bits of `TopPMaskWordx{V}` for every i32 `splits`: `topp_split.topp_keep_row(x, p, S)` at a split count, and no lane
+    at any other value.  The one statement of the keep word's semantics (the primitive, `sampling_rows.topp_mask_row`, C-Flock's
+    native twin in `verity_flock.ir_sampling`).
+
+    Defined on every row.  The split kernels hold the row's scalars per warp half, and on a row where the two halves disagree on
+    stopping (the uniform-or-empty test, or a `nomask` search outcome) every lane follows its own half: a lane of a half that stops
+    keeps its logit, and a lane of a half that goes on is masked by that half's pivot, dup and quota (`topp_split.mask_kernel`).
+    That is each GPU thread's own early return, and the kernels' result wherever no collective follows the divergent return; the
+    same reading defines the rest."""
+    import numpy as np
+    from verity_vllm.program.registry import topp_split as _TS
+    S = _splits_of(splits)
+    if S is None:
+        return np.zeros(len(x_f32), dtype=bool)
+    return np.asarray(_TS.topp_keep_row(x_f32, p, S), dtype=bool).reshape(-1)
 
 
 def topp_mask_word(vocab: int) -> PrimitiveDefinition:
     """`TopPMaskWordx{V}`: (logits: Array<V, f32>, top_p: f32, splits: i32) -> Value<V>; bit v = the split top-p pipeline's `keep` for
     lane v under S = splits (all ones when the pipeline leaves the row untouched: p >= 1, (nearly) uniform / empty row, `nomask` search
-    outcome).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
-    with >= 64 SMs, 16 at 8 live on 142 SMs); a value outside {1, 2, 4, 8, 16, 32} is refused."""
+    outcome; ones on its lanes when only one warp half stops, `topp_keep`).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
+    with >= 64 SMs, 16 at 8 live on 142 SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
+    (0, negative, not a power of two, above 32) keeps no lane -- word 0.  Every launched split count keeps at least one lane, so word 0
+    is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the workload outside
+    this word: the Match's sampler geometry (GM-01 G6: S == SplitsFor_v1(|live(t)|, num_SMs) per engine step) and the Commit's
+    prescribed-input linkage (the committed `splits` == SplitsFor_v1(committed live count, num_SMs of record)), both of which yield only
+    the six split counts."""
     key = int(vocab)
     prim = _TOPP_WORDS.get(key)
     if prim is None:
         import numpy as np
-        from verity_vllm.program.registry import topp_split as _TS
 
         def ev(*ops, _V=int(vocab)) -> int:
             x = np.array(ops[:_V], dtype=np.uint32).view(np.float32)
-            keep = _TS.topp_keep_row(x, _f(ops[_V]), _splits_of(ops[_V + 1]))
+            keep = topp_keep(x, _f(ops[_V]), ops[_V + 1])
             return int.from_bytes(np.packbits(keep, bitorder="little").tobytes(), "little")
 
         prim = PrimitiveDefinition(f"TopPMaskWordx{vocab}", 1, (("logits", Array(int(vocab), F32)), ("top_p", F32), ("splits", I32)),
@@ -476,6 +495,59 @@ def GumbelTopPTokenSelect(B, S, logits, top_p, seed, pos, temp, splits):
     scaled = B.call(bind(TemperatureScale, V=S.V), logits, temp)
     masked = B.call(bind(TopPMask, V=S.V), scaled, top_p, splits)
     return B.call(bind(GumbelSelectF32, V=S.V), masked, seed, pos, temp)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# the same two selects with `temp == 0` computed once and read by both halves (opt-in: nothing binds them until the re-baseline).
+# `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1` compute it in `TemperatureScale_v1` (the early return) and again in
+# `GumbelSelectF32_v1` (noise or not): one value computed twice inside the sampler's one unit, 1 redundant gate per Call.
+# ---------------------------------------------------------------------------------------------------------
+
+
+@composite("TemperatureScaleGivenGreedy", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)), ("temp", F32), ("greedy", BIT)), Array(S.V, F32)),
+           conformance="exact-model-tested")
+def TemperatureScaleGivenGreedy(B, S, logits, temp, greedy):
+    """`TemperatureScale_v1{V}` with `greedy` = (temp == 0) read, not computed: the early return is greedy | (temp == 1)."""
+    rcp = B.call(P.DivFullRcp, temp)
+    skip = B.call(BitOr, greedy, B.call(F32Eq, temp, B.call(const(32, ONE_BITS))))
+    return B.batch(TemperatureLane, logits, temp, rcp, skip, axes=(0, None, None, None))
+
+
+@composite("GumbelSelectF32GivenGreedy", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("seed", I64), ("pos", I64), ("greedy", BIT)), I32),
+           conformance="exact-model-tested")
+def GumbelSelectF32GivenGreedy(B, S, logits, seed, pos, greedy):
+    """`GumbelSelectF32_v1{V}` with `greedy` = (temp == 0) read, not computed: noise iff not greedy."""
+    key = B.call(GumbelStreamKey, seed, pos)
+    noisy = B.call(BitNot, greedy)
+    zero = B.call(const(32, 0))
+    y0 = B.call(P.SelectF32, noisy, B.call(P.F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
+    return step[0][1]
+
+
+@composite("GumbelTokenSelectSharedGreedy", 1, ["V"],
+           lambda S: ((("logits", Array(S.V, BF16)), ("seed", I64), ("pos", I64), ("temp", F32)), I32), conformance="exact-model-tested")
+def GumbelTokenSelectSharedGreedy(B, S, logits, seed, pos, temp):
+    """`GumbelTokenSelect_v1{V}`'s function and signature, `temp == 0` computed once."""
+    greedy = B.call(F32Eq, temp, B.call(const(32, 0)))
+    scaled = B.call(bind(TemperatureScaleGivenGreedy, V=S.V), logits, temp, greedy)
+    return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), scaled, seed, pos, greedy)
+
+
+@composite("GumbelTopPTokenSelectSharedGreedy", 1, ["V"],
+           lambda S: ((("logits", Array(S.V, BF16)), ("top_p", F32), ("seed", I64), ("pos", I64), ("temp", F32), ("splits", I32)), I32),
+           conformance="exact-model-tested")
+def GumbelTopPTokenSelectSharedGreedy(B, S, logits, top_p, seed, pos, temp, splits):
+    """`GumbelTopPTokenSelect_v1{V}`'s function and signature, `temp == 0` computed once."""
+    greedy = B.call(F32Eq, temp, B.call(const(32, 0)))
+    scaled = B.call(bind(TemperatureScaleGivenGreedy, V=S.V), logits, temp, greedy)
+    masked = B.call(bind(TopPMask, V=S.V), scaled, top_p, splits)
+    return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), masked, seed, pos, greedy)
+
+
+#: each restated select by the Definition it restates (the re-baseline binds these instead)
+SHARED_GREEDY = {"GumbelTokenSelect_v1": GumbelTokenSelectSharedGreedy, "GumbelTopPTokenSelect_v1": GumbelTopPTokenSelectSharedGreedy}
 
 
 def f32_bits(x: float) -> int:

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 PLANES = ("S", "P", "RP", "ROW", "O", "FIN")          # native_collect.cpp `name_id_seq` planes[6]; hidden_stream.StreamLayout order
+PLANES_MS = PLANES + ("MS",)                           # a build that writes the MS class (`LayoutPolicy.ms`): the seventh plane
 PLANES_PER_SEQ = len(PLANES)
 TAP_PREFIXES = ("fa2.m1/L", "fa3.m1/L")
 WHOLE, PER_SEQ, NONE = "whole", "per_seq", "none"
@@ -167,6 +168,7 @@ class LayoutPolicy:
     (`VERITY_FA2_COMPACT`, native_collect.cpp `compacted_path = (b >= 2 || in_split) && compact && !swapped`); FA3 stages whole launches."""
     backend: str = "fa2"                                   # "fa2" | "fa3"
     compact: bool = True
+    ms: bool = False                                       # the tap build writes the MS class (hidden_source.tap_ms)
 
 
 @dataclass(frozen=True)
@@ -178,6 +180,7 @@ class PlaneClass:
     rows: int                                              # WHOLE: M (row pitch); PER_SEQ: 0 (per-sequence sl, see `seqlen_q`)
     swapped: bool
     why: str
+    planes: tuple[str, ...] = PLANES                       # PER_SEQ: the planes every active sequence carries
 
     def as_dict(self) -> dict[str, Any]:
         return {"class": self.kind, "count": self.count, "slabs": self.slabs, "rows": self.rows, "swapped": self.swapped, "why": self.why}
@@ -197,10 +200,10 @@ def plane_class(decl: AttnLayerDecl, seqs: StepSequences, policy: LayoutPolicy =
         return PlaneClass(WHOLE, 1, b * decl.KVH, decl.NH // decl.KVH, True,
                           f"decode launch of a GQA layer without a window: swapped kernel (HB = b*KVH = {b}*{decl.KVH}, M = NH/KVH); staged whole")
     if b >= 2 and policy.compact:
-        n = len(seqs.active)
-        return PlaneClass(PER_SEQ, PLANES_PER_SEQ * n, decl.NH, 0, False,
+        n, planes = len(seqs.active), (PLANES_MS if policy.ms else PLANES)
+        return PlaneClass(PER_SEQ, len(planes) * n, decl.NH, 0, False,
                           f"un-swapped multi-sequence launch ({'window ' + str(decl.window) if decl.window is not None else 'NH == KVH or prefill'}): "
-                          f"per-sequence compaction, {PLANES_PER_SEQ} planes x {n} sequence(s) with rows, h = NH = {decl.NH}")
+                          f"per-sequence compaction, {len(planes)} planes x {n} sequence(s) with rows, h = NH = {decl.NH}", planes)
     return PlaneClass(WHOLE, 1, b * decl.NH, mq, False,
                       f"un-swapped launch staged whole ({'single sequence' if b == 1 else 'compaction off'}: HB = b*NH = {b}*{decl.NH}, M = max_seqlen_q = {mq})")
 
@@ -261,7 +264,7 @@ def observe(names: Iterable[str]) -> dict[int, ObservedLayer]:
                 ol.unparsed.append(n)
             else:
                 ol.whole.append(g)
-        elif len(parts) == 3 and parts[0].startswith("s") and parts[0][1:].isdigit() and parts[2] in PLANES:
+        elif len(parts) == 3 and parts[0].startswith("s") and parts[0][1:].isdigit() and parts[2] in PLANES_MS:
             i, g = int(parts[0][1:]), _geom(parts[1])
             if g is None:
                 ol.unparsed.append(n)
@@ -299,10 +302,10 @@ def _layer_diffs(decl: AttnLayerDecl, exp: PlaneClass, obs: ObservedLayer | None
         got = set(obs.per_seq)
         if got != want:
             d.append(f"sequences {sorted(got)} observed, {sorted(want)} active")
-        short = {i: dict(c) for i, c in obs.per_seq.items() if sorted(c.elements()) != sorted(PLANES)}
+        short = {i: dict(c) for i, c in obs.per_seq.items() if sorted(c.elements()) != sorted(exp.planes)}
         if short:
             i0 = min(short)
-            d.append(f"sequence s{i0} carries planes {short[i0]} (each active sequence carries exactly {list(PLANES)})")
+            d.append(f"sequence s{i0} carries planes {short[i0]} (each active sequence carries exactly {list(exp.planes)})")
         for i, gs in sorted(obs.per_seq_geom.items()):
             for h, sl, _NB, _BN, D in gs:
                 if h != exp.slabs:

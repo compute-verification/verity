@@ -864,6 +864,7 @@ struct Fa2Wrap {
   // elsewhere), so the committed leaves/roots are unchanged by construction; unsplit launches (b == 1, swapped decode, small) keep the
   // per-geometry buffers bit-for-bit.  Telemetry: stats() split_* / bound_* fields; the Python driver writes the per-window jsonl.
   int64_t bound_words = 0;                                   // 0 = bounded path off (per-geometry buffers only)
+  bool ms = false;                                           // the build writes the MS class (verity_tap_src() & 64): a seventh plane
   at::Tensor boundbuf;
   int64_t seq_base = 0;
   bool hold_launch = false;
@@ -892,9 +893,10 @@ struct Fa2Wrap {
     if (num_splits != 1 || !(D == 64 || D == 96 || D == 128 || D == 256)) return 0;
     return D <= 64 ? 128 : 64;
   }
-  static inline int64_t mat_total_words(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D) {
+  // the MS class (a guarded-max build, verity_tap_src() & 64): one word per (slab, row, key block) after FIN (hidden_source.mat_total_words)
+  int64_t mat_total_words(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D) const {
     const int64_t N = NB * BN;
-    return HB * M * N * 2 + HB * M * (N / 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4;
+    return HB * M * N * 2 + HB * M * (N / 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (ms ? HB * M * NB : 0);
   }
   static inline bool legacy_tile(int64_t BN, int64_t D) { return BN == 128 && D == 64; }
 
@@ -1049,16 +1051,17 @@ struct Fa2Wrap {
         seqlens = cit->second;
       }
       const int64_t N = NB * BN;
-      const int64_t widths[6] = {N, N, N / 2, NB * 8, NB * D, 4};    // S, P, RP, ROW, O, FIN (hidden_stream.StreamLayout.offsets; mat_total_words)
+      const int64_t widths[7] = {N, N, N / 2, NB * 8, NB * D, 4, NB};    // S, P, RP, ROW, O, FIN[, MS] (hidden_stream.StreamLayout.offsets; mat_total_words)
+      const int np = ms ? 7 : 6;
       int64_t off = 0;
-      int64_t plane_off[6];
-      for (int p = 0; p < 6; ++p) { plane_off[p] = off; off += HB * M * widths[p]; }
+      int64_t plane_off[7];
+      for (int p = 0; p < np; ++p) { plane_off[p] = off; off += HB * M * widths[p]; }
       std::vector<at::Tensor> staged;
-      staged.reserve(static_cast<size_t>(b) * 6);
+      staged.reserve(static_cast<size_t>(b) * np);
       for (int64_t i = 0; i < b; ++i) {
         const int64_t sl = seqlens[i];
         if (sl <= 0) continue;
-        for (int p = 0; p < 6; ++p) {
+        for (int p = 0; p < np; ++p) {
           at::Tensor view = buf.narrow(0, plane_off[p], HB * M * widths[p]).view({HB, M, widths[p]}).narrow(0, i * h, h).narrow(1, 0, sl);
           c->note_expected(1);
           // [R18 tap] the GLOBAL sequence index (seq_base + local i): a split group names its sequences exactly as the unsplit launch did
@@ -1107,7 +1110,7 @@ struct Fa2Wrap {
   }
 
   int64_t name_id_seq(int64_t k, int64_t i, int64_t h, int64_t sl, int64_t NB, int64_t BN, int64_t D, int plane) {
-    static const char* planes[6] = {"S", "P", "RP", "ROW", "O", "FIN"};
+    static const char* planes[7] = {"S", "P", "RP", "ROW", "O", "FIN", "MS"};
     std::string name = "fa2.m1/L" + std::to_string(k) + "/s" + std::to_string(i) + "/g" + std::to_string(h) + "x" + std::to_string(sl) + "x" + std::to_string(NB);
     if (!legacy_tile(BN, D)) name += "x" + std::to_string(BN) + "x" + std::to_string(D);   // v8 tiles (hd 96/128): distinct identity per tile
     name += std::string("/") + planes[plane];
@@ -1122,7 +1125,7 @@ struct Fa2Wrap {
     py::dict d;
     d["launches"] = tot_launches; d["bytes"] = tot_bytes; d["wrap_s"] = tot_wrap_s; d["geometries"] = geometries;
     d["compacted_launches"] = tot_compacted; d["compact"] = compact; d["zero_after"] = zero_after;
-    d["refused"] = tot_refused; d["tap_layout"] = set_tap_v8 ? 8 : 7; d["hdims_mask"] = hdims_mask;
+    d["refused"] = tot_refused; d["tap_layout"] = set_tap_v8 ? 8 : 7; d["hdims_mask"] = hdims_mask; d["ms"] = ms;
     // [R18 tap, F-r17-23] bounded-tap telemetry (bytes): the cap, the one bounded allocation, its peak prefix in use, split counts
     d["bound_bytes"] = bound_words * 4; d["bound_alloc_bytes"] = bound_alloc_bytes; d["bound_used_peak_bytes"] = bound_used_peak_words * 4;
     d["split_launches"] = tot_split_launches; d["split_groups"] = tot_groups;
@@ -1149,6 +1152,7 @@ struct Fa3Wrap {
   c10::OperatorHandle set_tap_v9, tap_skipped;
   int64_t hdims_mask = 0, tap_layout = 9;
   bool zero_after = true;                                    // R13 P0-03 twin: zero the staged buffer after staging when b >= 2 (history-independent identity)
+  bool ms = false;                                           // the build writes the MS class (verity_tap_src() & 64), sized into every buffer
   std::unordered_map<uint64_t, at::Tensor> bufs;
   std::unordered_map<uint64_t, int64_t> nids;
   int64_t launch = 0, launches_in_step = 0, tot_launches = 0, tot_bytes = 0, tot_refused = 0;
@@ -1176,9 +1180,9 @@ struct Fa3Wrap {
     if (D == 128) return one_wg ? std::make_pair<int64_t, int64_t>(64, 128) : std::make_pair<int64_t, int64_t>(128, 128);
     return {0, 0};
   }
-  static inline int64_t mat_total_words(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D) {
+  int64_t mat_total_words(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D) const {
     const int64_t N = NB * BN;
-    return HB * M * N * 2 + HB * M * (N / 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4;
+    return HB * M * N * 2 + HB * M * (N / 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (ms ? HB * M * NB : 0);
   }
 
   const at::Tensor& buffer(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D) {
@@ -1286,7 +1290,7 @@ struct Fa3Wrap {
   py::dict stats() const {
     py::dict d;
     d["launches"] = tot_launches; d["bytes"] = tot_bytes; d["wrap_s"] = tot_wrap_s; d["geometries"] = geometries; d["tiles"] = tiles;
-    d["refused"] = tot_refused; d["tap_layout"] = tap_layout; d["hdims_mask"] = hdims_mask; d["zero_after"] = zero_after;
+    d["refused"] = tot_refused; d["tap_layout"] = tap_layout; d["hdims_mask"] = hdims_mask; d["zero_after"] = zero_after; d["ms"] = ms;
     return d;
   }
 };
@@ -1598,6 +1602,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("bound_words", &Fa2Wrap::bound_words)      // [R18 tap] bounded tap: cap in i32 words (0 = off)
       .def_readwrite("seq_base", &Fa2Wrap::seq_base)
       .def_readwrite("hold_launch", &Fa2Wrap::hold_launch)
+      .def_readwrite("ms", &Fa2Wrap::ms)
       .def("end_launch", &Fa2Wrap::end_launch);
   py::class_<Fa3Wrap>(m, "Fa3Wrap")
       .def(py::init<py::object, py::object, py::object, py::object, std::string>(), py::arg("collector"), py::arg("orig_op"), py::arg("tapped_op"),
@@ -1607,6 +1612,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("stats", &Fa3Wrap::stats)
       .def_readonly("launches_in_step", &Fa3Wrap::launches_in_step)
       .def_readonly("launch", &Fa3Wrap::launch)
-      .def_readwrite("zero_after", &Fa3Wrap::zero_after);
+      .def_readwrite("zero_after", &Fa3Wrap::zero_after)
+      .def_readwrite("ms", &Fa3Wrap::ms);
   m.def("cuda_runtime_version", []() { int v = 0; cudaRuntimeGetVersion(&v); return v; });
 }
