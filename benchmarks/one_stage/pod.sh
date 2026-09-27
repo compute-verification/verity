@@ -47,8 +47,14 @@ export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REP
 if [ "${RUN:-a0}" = a4 ]; then
   mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))
-  $W/py/bin/python benchmarks/one_stage/a4.py --served $SERVED --template-sets $W/set --layout ${LAYOUT:-P6} \
-    ${LAYOUT_FILE:+--layout-file $SERVED/$LAYOUT_FILE} --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit --lean $W/bin/flock-verify \
+  CHECK_M0=$M0PATH; SESSION=
+  if [ -f $I/m0b.tar ]; then   # m0b.tar: the M0 tree serving's files were written with; m0.tar builds the session binary
+    rm -rf $W/m0b && mkdir -p $W/m0b && tar -xf $I/m0b.tar -C $W/m0b || exit 1
+    CHECK_M0=$W/m0b/packages/verity/src:$W/m0b/backends/numerical/python:$W/m0b/backends/flock/python:$W/m0b/integrations/vllm
+    SESSION="--session-m0-pythonpath $M0PATH"
+  fi
+  $W/py/bin/python benchmarks/one_stage/a4.py --served $SERVED --template-sets $W/set --layout ${LAYOUT:-P6} $SESSION \
+    ${LAYOUT_FILE:+--layout-file $SERVED/$LAYOUT_FILE} --m0-pythonpath $CHECK_M0 --bin $W/bin/flock-circuit --lean $W/bin/flock-verify \
     --out $O/a4 --k ${K:-1024} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a4.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a2 ]; then
   mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1

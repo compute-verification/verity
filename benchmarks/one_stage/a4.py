@@ -16,6 +16,10 @@ registration, one draw and one integrity profile, with the Lean verifier derivin
   port's table size, and the public file lists every instance's row references. The references must be exactly what the
   layout's grid rule gives (`gemm-grid/v0`: instance i of group g, j = i - base_g, reads `x` row `x_base + j div columns`
   and `w` row `w_base + j mod columns`); the verifier checks all of them against its own copy of the rule before the draw.
+* **`--session-m0-pythonpath`**: after every check on serving's files as received, the sessions run on the verifier's own copies
+  re-headered for the circuit that M0 tree composes (e.g. `program_digests` keyed by descriptor id): the leaf layer is byte
+  for byte serving's, and only the header's circuit pin (and each class, unchanged since the class leaves the bindings out)
+  follows the verifier's circuit.
 * **One draw** of `subset:k` over the whole population by the verifier's Lean `flock-verify draw`; each member's server
   serves its share (`serve --draw-file`). Each member's session is one table; Lean verifies each with `--partition` and
   `--program` (units derived).
@@ -87,6 +91,35 @@ def check_shared_rows(pub: Path, header: dict, meta: dict, n: int, row_map: dict
     return ok
 
 
+def template_program_ok(meta: dict, defn) -> bool:
+    """META's one `program_digests` entry is this template's: keyed by its descriptor id (or, before M0 re-keyed it, its
+    display id), valued core's `program_digest` of its Program."""
+    pd = meta.get("program_digests", {})
+    return len(pd) == 1 and next(iter(pd)) in (P.template_id(defn), defn.id) and next(iter(pd.values())) == program_digest(Program(defn))
+
+
+def rekey(m: dict, pd: str, part: dict, a, out: Path) -> dict:
+    """The verifier's session copies of member m's files for the circuit `--session-m0-pythonpath` composes."""
+    sd = out / f"m{m['k']}-session"
+    sd.mkdir(parents=True, exist_ok=True)
+    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", str(m["set"]), "--out", str(sd / "circuit.txt"),
+                "--partition", pd, "--program", part["program"]], sd / "compose.log", {"PYTHONPATH": a.session_m0_pythonpath})
+    made = json.loads(p.stdout.strip().splitlines()[-1])
+    for kind in ("pub", "inst"):
+        with open(m["st"]["dir"] / f"{kind}-{m['n']}.bin", "rb") as f:
+            head = json.loads(f.readline())
+            body = f.read()
+        head["circuit_sha512"] = made["pin"]
+        if made.get("class_sha512"):
+            head["units"]["classes"] = [made["class_sha512"]] * m["n"]
+        with open(sd / f"{kind}-{m['n']}.bin", "wb") as f:
+            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+    text = (sd / "circuit.txt").read_text()
+    return {"dir": sd, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": made["pin"], "partition_file": m["st"]["partition_file"],
+            "program_file": m["st"]["program_file"], "pin_as_served": m["st"]["pin"], "class_unchanged":
+            made.get("class_sha512") == m["header"]["units"].get("classes", [None])[0]}
+
+
 def expected_draws(members: list[dict], n_all: int, k: int) -> dict[str, dict]:
     """Per member under the uniform k-subset: the expected number of drawn units, k n / N, and the chance of at least one,
     1 - C(N - n, k) / C(N, k), so a small template's rare draws are visible in the report."""
@@ -120,6 +153,8 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=1024)
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7541)
+    ap.add_argument("--session-m0-pythonpath", default=None,
+                    help="run the sessions on copies re-headered for the circuit this M0 tree composes (after the checks)")
     a = ap.parse_args()
     out, served, sets_root = Path(a.out), Path(a.served), Path(a.template_sets)
     out.mkdir(parents=True, exist_ok=True)
@@ -175,7 +210,7 @@ def main() -> int:
               "program": meta.get("program_sha512") == part["program"],
               "indices": header["units"]["indices"] == list(range(m["base"], m["base"] + m["n"])),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m["n"],
-              "template_program": meta.get("program_digests", {}).get(m["defn"].id) == program_digest(Program(m["defn"]))}
+              "template_program": template_program_ok(meta, m["defn"])}
         if m["row_map"]:
             ok.update(check_shared_rows(st_dir / f"pub-{m['n']}.bin", header, meta, m["n"], m["row_map"]))
         else:
@@ -198,6 +233,14 @@ def main() -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A4 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}))
         return 1
+
+    if a.session_m0_pythonpath:
+        summary["rekeyed"] = {}
+        for m in members:
+            m["st"] = rekey(m, pd, part, a, out)
+            m["header"] = a0.public_header(m["st"]["dir"], m["n"])
+            summary["rekeyed"][m["tid"]] = {"pin_as_served": m["st"]["pin_as_served"], "pin": m["st"]["pin"],
+                                            "class_unchanged": m["st"]["class_unchanged"]}
 
     # one draw over the whole population, each member served its share
     p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(a.k)], out / "draw.log")
