@@ -872,13 +872,13 @@ class Walker:
                 C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                 return C
             C, root = trace(build)
-            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "proof-unit", list_root=True)
+            self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "tc-step", list_root=True)
         return self.cache[key]
 
     def prim(self, pid: str, consts: tuple):
         """(child entry without count) for primitive ``pid`` with operand constants ``consts`` (None = free)."""
         if pid in IL.TC_STEPS:
-            return {"ref": self.tc_unit(pid), "proof_unit": True}
+            return {"ref": self.tc_unit(pid)}
         p = prims().get(pid)
         if p is None:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
@@ -901,7 +901,7 @@ class Walker:
             got = self.cache[ck]
             if not got.startswith("sc-"):
                 return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()), "reason": got}
-            return {"ref": got, "proof_unit": False, "placement": "outside the committed units"}
+            return {"ref": got}
         if not free:
             return None
         return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()),
@@ -974,6 +974,248 @@ class Walker:
         rec.update(t)
 
 
+# --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
+
+X_BITS, W_BITS = 16, 32
+UNIT_PARTS_LIMIT = 4096
+
+
+class Commitments:
+    """Each Call specialization's cut under the no-recompute partition, by its descriptor id.
+
+    A record: the partition's totals; ``units``, its classes (as ``word.unit_rule`` groups them: kind, head primitive @ activation,
+    word gates, |out(S)|, count per Call), each with every primitive of one unit and that unit's AND/XOR/NOT from the pieces, and a
+    unit of at most UNIT_PARTS_LIMIT word gates also as a part graph (its parts index the record's ``pieces``); ``committed``,
+    ``[activation, body node, kind (MARK_KINDS), values]``: every value the cut commits, counted at the Definition body node that
+    computes it; ``structure``, the gates in no unit (constants, wiring); ``violations``. Activations are indices into the record's
+    ``scopes`` (descriptor ids, as the program graphs' Definitions). A separable Definition (a Gemm's coordinates,
+    attention's heads) is its members' cuts: its record lists ``separable`` and its unit classes point at the member record holding
+    them (``graph``), as in ``word.unit_rule``."""
+
+    def __init__(self, walker: "Walker"):
+        self.walker = walker
+        self.records: dict[str, dict] = {}
+
+    def of(self, fn) -> str:
+        from verity.ir.codec import _spec_id
+        from verity.ir.defs import PrimitiveDefinition
+        from verity_vllm.query import word as WQ
+
+        fid = _spec_id(fn)
+        if fid in self.records:
+            return fid
+        if isinstance(fn, PrimitiveDefinition):
+            rec = self._primitive(fn, fid, WQ)
+        elif (sep := WQ._separable(fn)) is not None:
+            rec = self._combine(fid, fn.gates, [(self.records[self.of(c)], m) for c, m in sep])
+        elif fn.gates > WQ.MAX_GATES:
+            rec = _empty(fid, fn.gates)
+            rec["violations"] = [{"class": "too-large", "gates": fn.gates, "limit": WQ.MAX_GATES}]
+        else:
+            rec = self._partition(fn, fid, WQ)
+        self.records[fid] = rec
+        return fid
+
+    def _boolean(self, gates: list[tuple[str, tuple]], pieces: dict) -> dict:
+        """The gates' AND/XOR/NOT from their pieces (constant operands propagated), and each gate's index in ``pieces``
+        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``)."""
+        t = {"and": 0, "xor": 0, "not": 0}
+        nyl: dict[str, int] = {}
+        parts: list[int] = []
+        memo: dict = {}
+        for sig in gates:
+            if sig not in memo:
+                memo[sig] = self.walker.prim(*sig)
+            e = memo[sig]
+            if e is not None and "ref" in e:
+                n = self.walker.reg.nodes[e["ref"]]
+                for k in t:
+                    t[k] += n[k]
+                key = ("ref", e["ref"])
+            elif e is not None:
+                nyl[sig[0]] = nyl.get(sig[0], 0) + 1
+                key = ("not_yet_lowered", sig[0])
+            else:
+                key = ("constant", True)
+            parts.append(pieces.setdefault(key, len(pieces)))
+        return {**t, "not_yet_lowered": nyl, "parts": parts}
+
+    def _primitive(self, fn, fid, WQ) -> dict:
+        rec = _empty(fid, 1)
+        if not fn.params or fn.id in WQ.WIRING:
+            rec.update(structure_gates=1, structure={fn.id: 1})
+            return rec
+        leaves = [(name, w) for name, t in fn.params for w in t.leaf_widths()]
+        pieces: dict = {}
+        b = self._boolean([(fn.id, (None,) * len(leaves))], pieces)
+        reads: dict = {}
+        for name, w in leaves:
+            reads[name] = reads.get(name, 0) + w
+        rec.update(scopes=[fid], pieces=_pieces(pieces), units_per_call=1, by_kind={"output": 1}, committed=[[0, 0, 0, 1]],
+                   units=[{"kind": "output", "head": fn.id, "scope": 0, "count": 1, "word_gates": 1, "out_bits": fn.ret.w, "out_gates": 1,
+                           "ok": fn.ret.w <= X_BITS or fn.ret.w <= W_BITS, "nodes": {fn.id: 1},
+                           **{k: b[k] for k in ("and", "xor", "not", "not_yet_lowered", "parts")}, "part_nodes": [[0, 0]], "wiring": [],
+                           "reads": [[-1, 0, w, name] for name, w in reads.items()], "outputs": [0]}])
+        return rec
+
+    def _partition(self, fn, fid, WQ) -> dict:
+        from collections import Counter
+
+        import numpy as np
+        from verity.ir.codec import _spec_id
+        from verity.ir.layout import WIDE_FAN_IN
+
+        G = WQ.Graph(fn)
+        R = WQ.units(G, X_BITS, W_BITS)
+        owner, kinds = R["owner"], R["kinds"]
+        own2, _k, head = WQ.partition(G, X_BITS)
+        if not (own2 == owner).all():
+            raise AssertionError(f"{fid}: the partition is not deterministic")
+        c, call = WQ._call_scope(fn)
+        lo = call.offset
+        leaves = [(name, w) for name, t in fn.signature()[0] for w in t.leaf_widths()]
+        scopes: dict[str, int] = {}
+        pieces: dict = {}
+        sid: dict[int, int] = {}
+        cval: dict[int, int | None] = {}
+
+        def const(o):
+            if o in cval:
+                return cval[o]
+            cval[o] = None
+            if not 0 <= o - lo < fn.gates:
+                return None
+            g = c.gate(o)
+            ops = g.operands
+            if not g.prim.params:
+                v = g.prim.evaluate()
+            elif len(ops) <= WIDE_FAN_IN and all(const(x) is not None for x in ops):
+                v = g.prim.evaluate(*[cval[x] for x in ops])
+            else:
+                return None
+            cval[o] = int(v) if isinstance(v, (int, bool)) else None
+            return cval[o]
+
+        def where(i):
+            g = c.gate(lo + int(G.keep[i]))
+            s = g.scope
+            if id(s.spec) not in sid:
+                sid[id(s.spec)] = scopes.setdefault(_spec_id(s.spec), len(scopes))
+            return sid[id(s.spec)], int(s.spec.body.node_at(g.index - s.offset)), g
+
+        kind_ix = np.array([("output", "committed", "dead").index(k) for k in kinds], np.int64)
+        cols = np.stack([kind_ix, R["head_prim"], R["head_scope"], R["gates"], R["out_bits"], R["out_gates"]], 1)
+        keys, first, count, inv = [], [], [], np.zeros(0, np.int64)
+        if len(kinds):
+            keys, first, inv, count = np.unique(cols, axis=0, return_index=True, return_inverse=True, return_counts=True)
+            inv = inv.reshape(-1)
+        members: dict[int, list[int]] = {int(u): [] for u in first}
+        for i, u in enumerate(owner.tolist()):
+            if u in members:
+                members[u].append(i)
+        order = sorted(range(len(first)), key=lambda j: (-int(count[j]), int(keys[j][0]), int(keys[j][2])))
+        rank = {j: n for n, j in enumerate(order)}
+        units = []
+        for j in order:
+            kd, hp, hs, ng, ob, og = (int(x) for x in keys[j])
+            u = int(first[j])
+            gates = members[u]
+            info = [where(i) for i in gates]
+            sig = [(g.prim.id, tuple(const(o) for o in g.operands) if len(g.operands) <= WIDE_FAN_IN else (None,) * len(g.operands))
+                   for _, _, g in info]
+            b = self._boolean(sig, pieces)
+            name = G.scope_names.get(hs)
+            e = {"kind": ("output", "committed", "dead")[kd], "head": G.prim_names.get(hp),
+                 "scope": next((s for s, _k, g in info if g.scope.spec.id == name), None), "count": int(count[j]), "word_gates": ng,
+                 "out_bits": ob, "out_gates": og, "ok": bool(R["ok"][u]),
+                 "nodes": dict(Counter(G.prim_names[int(G.prim[i])] for i in gates).most_common()),
+                 **{x: b[x] for x in ("and", "xor", "not", "not_yet_lowered")}}
+            if ng <= UNIT_PARTS_LIMIT:
+                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, gates, info, leaves))
+            units.append(e)
+        marks: Counter = Counter()
+        for i in np.flatnonzero(head >= 0).tolist():
+            s, k, _g = where(i)
+            marks[(s, k, MARK_KINDS.index(kinds[int(head[i])]))] += 1
+        cut = R["cut"]
+        rec = _empty(fid, G.total)
+        rec.update(scopes=sorted(scopes, key=scopes.__getitem__), pieces=_pieces(pieces), structure_gates=G.free,
+                   redundant_gates=cut.detail.get("redundant_gates", 0),
+                   units_per_call=len(kinds), by_kind=dict(Counter(kinds)),
+                   committed_interior_words=sum(e["out_gates"] * e["count"] for e in units if e["kind"] == "committed"),
+                   units=units, committed=[[s, k, kd, n] for (s, k, kd), n in sorted(marks.items())],
+                   structure=dict(G.free_by_prim.most_common()),
+                   violations=([] if cut.ok else [{"class": "cut", "codes": list(cut.codes)}])
+                   + [{"class": f"{e['kind']}:{e['head']}", "out_bits": e["out_bits"], "units": e["count"]} for e in units if not e["ok"]])
+        return rec
+
+    def _combine(self, fid, gates, parts) -> dict:
+        from collections import Counter
+
+        rec = _empty(fid, gates)
+        agg: dict[tuple, dict] = {}
+        scopes: dict[str, int] = {}
+        kinds: Counter = Counter()
+        structure: Counter = Counter()
+        for r, m in parts:
+            for e in r["units"]:
+                where = e.get("graph", r["id"])
+                scope = scopes.setdefault(r["scopes"][e["scope"]], len(scopes)) if e["scope"] is not None else None
+                k = (e["kind"], e["head"], scope, e["word_gates"], e["out_bits"], e["out_gates"], where)
+                if k not in agg:
+                    agg[k] = {x: v for x, v in e.items() if x not in ("parts", "part_nodes", "wiring", "reads", "outputs")}
+                    agg[k].update(scope=scope, count=0, graph=where)
+                agg[k]["count"] += e["count"] * m
+            for kd, n in r["by_kind"].items():
+                kinds[kd] += n * m
+            for p, n in r["structure"].items():
+                structure[p] += n * m
+            for f in ("structure_gates", "redundant_gates", "units_per_call", "committed_interior_words"):
+                rec[f] += r[f] * m
+            rec["violations"] += [dict(v, units=v.get("units", 1) * m) for v in r["violations"]]
+        rec.update(units=sorted(agg.values(), key=lambda e: (-e["count"], e["kind"], str(e["scope"]))), by_kind=dict(kinds),
+                   scopes=sorted(scopes, key=scopes.__getitem__), structure=dict(structure.most_common()),
+                   separable=[[r["id"], m] for r, m in parts])
+        rec.pop("committed")
+        rec.pop("pieces")
+        return rec
+
+
+MARK_KINDS = ("output", "committed")
+
+
+def _pieces(pieces: dict) -> list[dict]:
+    return [{k: v} for (k, v), _i in sorted(pieces.items(), key=lambda kv: kv[1])]
+
+
+def _empty(fid, gates) -> dict:
+    return {"id": fid, "word_gates": gates, "structure_gates": 0, "redundant_gates": 0, "units_per_call": 0, "by_kind": {},
+            "committed_interior_words": 0, "scopes": [], "pieces": [], "units": [], "committed": [], "structure": {}, "violations": []}
+
+
+def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
+    """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
+    ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
+    ``[unit class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
+    ``outputs``: the parts whose value the cut commits (returned, or read by another unit)."""
+    at = {i: n for n, i in enumerate(gates)}
+    wiring, reads = [], []
+    for a, b in zip(G.src.tolist(), G.dst.tolist()):
+        if b in at:
+            if a in at:
+                wiring.append([at[a], at[b], int(G.width[a])])
+            else:
+                reads.append([rank[int(inv[owner[a]])], at[b], int(G.width[a])])
+    inputs: dict[tuple, int] = {}
+    for inp, b in G.input_reads:
+        if b in at:
+            name, w = leaves[G.input_ids[inp]]
+            inputs[(at[b], name)] = inputs.get((at[b], name), 0) + w
+    reads += [[-1, d, w, name] for (d, name), w in inputs.items()]
+    return {"part_nodes": [[s, k] for s, k, _g in info], "wiring": wiring, "reads": reads,
+            "outputs": [at[i] for i in gates if head[i] >= 0]}
+
+
 # --- templates and rows -------------------------------------------------------------------------------------------------
 
 #: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
@@ -1036,7 +1278,7 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
             if not cache[ck].startswith("sc-"):
                 out.append({"not_yet_lowered": pid, "count": n, "in_bits": sum(free), "out_bits": prim.ret.w, "reason": cache[ck]})
                 continue
-            out.append({"ref": cache[ck], "count": n, "proof_unit": False, "placement": "outside the committed units (the template's tail)"})
+            out.append({"ref": cache[ck], "count": n})
         elif free:
             prev = next((e for e in out if e.get("not_yet_lowered") == pid and e["in_bits"] == sum(free)), None)
             if prev:
@@ -1059,7 +1301,7 @@ def _unit(reg: Registry, units, name: str, cache: dict) -> str:
     key = ("unit", units.signature if units.builder is None else "tc")
     if key not in cache:
         C, root = trace(units.circuit)
-        cache[key] = reg.analyse(C, root, name, "proof-unit")
+        cache[key] = reg.analyse(C, root, name, "c-flock-unit")
     return cache[key]
 
 
@@ -1119,7 +1361,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
             return rec
         low = mod.lowering(sub)
         uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
-        children = [{"ref": uid, "count": low.units.n, "proof_unit": True}] + _tail(reg, low.units, low.definition, cache)
+        children = [{"ref": uid, "count": low.units.n, "c_flock_unit": True}] + _tail(reg, low.units, low.definition, cache)
         ib, ob = _io_bits(low.definition)
         return dict(base, name=f"{tname}{json.dumps(_params(tname, tp), sort_keys=True)}", kind="template", subcircuit=sub.id,
                     children=children, unit=uid, in_bits=ib, out_bits=ob)
@@ -1150,7 +1392,8 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
     return t
 
 
-def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker") -> dict:
+def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
+               checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
     row = p["row"]
     nodes, used = [], []
@@ -1181,9 +1424,50 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
                 node["instances_per_T"] = g["instances"] // n_t
                 node["instances_per_T_rule"] = "instances / (T range size): the program graph gives the range, not the histogram"
         node.update(_roles(g, into.get(g["id"], []), tpl, walker.store))
+        if cm is not None:
+            node.update(_commitment(g, cm, checks))
         nodes.append(node)
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
             "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
+
+
+_CHECKED = {"units_per_call": "units_per_call", "gates": "word_gates", "free_gates": "structure_gates",
+            "committed_interior_words": "committed_interior_words"}
+
+
+def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
+    """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
+    whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
+    checked against the program graph's own ``q_word_v1`` summary where it has one."""
+    from verity_vllm.pipeline.program_graph import _word_values
+    from verity_vllm.query.word import specialization
+
+    if g["template"].startswith(("Const32", "Const64")):
+        return {}
+    q = g.get("q_word_v1") or {}
+    try:
+        if g.get("varying") and len(g["varying"]) == 1 and g.get("varying_calls"):
+            (a,) = g["varying"]
+            vals = sorted(int(v) for v in g["varying_calls"])
+            bn = g["statics"].get("BN") if a == "T" else None
+            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            ids = {v: cm.of(specialization(g["definition"], dict(g["statics"], **{a: v}))) for v in pts}
+            if "per_call" in q and checks is not None:
+                for end, v in (("min", vals[0]), ("max", vals[-1])):
+                    r = cm.records[ids[v]]
+                    ok = all(q["per_call"][f][end] == r[k] for f, k in _CHECKED.items() if f in q["per_call"])
+                    checks["agree" if ok else "differ"].append(f"{g['id']} {g['definition']} {a}={v}")
+            return {"commitment_by_T": {str(v): i for v, i in ids.items()},
+                    "commitment_partitioned_at": "every T" if len(pts) == len(vals) else
+                    f"{len(pts)} of {len(vals)} T values: the key-block boundaries and their neighbours; the others are not partitioned"}
+        fid = cm.of(specialization(g["definition"], g["statics"]))
+        if "per_call" in q and checks is not None:
+            r = cm.records[fid]
+            ok = all(q["per_call"][f] == r[k] for f, k in _CHECKED.items() if f in q["per_call"])
+            checks["agree" if ok else "differ"].append(f"{g['id']} {g['definition']}")
+        return {"commitment": fid}
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        return {"commitment": None, "commitment_unresolved": f"{type(e).__name__}: {e}"[:300]}
 
 
 def _input_role(name: str) -> str:
@@ -1227,35 +1511,14 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
                            "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
 
 
-def _membership(reg: Registry, templates, defs: dict | None = None) -> None:
-    """Every subcircuit's proof-unit membership under the committed cut: the unit roots whose trees contain it, and whether it
-    also appears outside the units (a template's lowered tail)."""
-    for n in reg.nodes.values():
-        n["proof_units"], n["outside_units"] = [], False
-    done = set()
+def _git_head() -> str | None:
+    import subprocess
 
-    def mark(h, unit):
-        key = (h, unit)
-        if key in done:
-            return
-        done.add(key)
-        n = reg.nodes[h]
-        if unit is None:
-            n["outside_units"] = True
-        elif unit not in n["proof_units"]:
-            n["proof_units"].append(unit)
-        for c in n["children"]:
-            mark(c["ref"], unit)
-    for t in templates:
-        variants = [t["children"]] + [v["children"] for v in (t.get("per_key_count") or {}).values() if "children" in v]
-        for ch in variants:
-            for c in ch:
-                if "ref" in c:
-                    mark(c["ref"], c["ref"] if c.get("proof_unit") else None)
-    for d in (defs or {}).values():
-        for c in d["children"]:
-            if "ref" in c:
-                mark(c["ref"], c["ref"] if c.get("proof_unit") else None)
+    try:
+        return subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=Path(__file__).parent, capture_output=True, text=True,
+                              check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 
 
 def main(argv=None) -> int:
@@ -1269,20 +1532,25 @@ def main(argv=None) -> int:
     ntpl = out / "templates.json"
     tpl_cache, cache = {}, {}
     walker = Walker(reg, DefStore(Path(a.program_graph[0]).parent), cache)
+    cm = Commitments(walker)
+    checks: dict[str, list] = {"agree": [], "differ": []}
     rows = []
     for pg in a.program_graph:
         t0 = time.time()
-        doc = export_row(Path(pg), out, reg, tpl_cache, cache, walker)
+        doc = export_row(Path(pg), out, reg, tpl_cache, cache, walker, cm, checks)
         f = out / (doc["row_key"] + ".boolean.json")
         f.write_text(json.dumps(doc, separators=(",", ":")))
         rows.append({"row": doc["row"], "row_key": doc["row_key"], "file": f.name, "bytes": f.stat().st_size, "nodes": len(doc["nodes"]),
                      "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1)})
         print(f"row {doc['row']}: {len(doc['nodes'])} nodes, {len(doc['templates'])} templates, {time.time() - t0:.0f}s", flush=True)
-    _membership(reg, tpl_cache.values(), walker.defs)
     ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()},
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "gate_limit": GATE_LIMIT, "nodes": reg.nodes},
                                                      separators=(",", ":")))
+    from verity_vllm.query.word import query_id
+    (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
+                                                      "code": f"verity_vllm.query.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
+                                                      "records": cm.records}, separators=(",", ":")))
     nyl: dict[str, dict] = {}
     for t in tpl_cache.values():
         if t["kind"] == "not-yet-lowered":
@@ -1304,7 +1572,8 @@ def main(argv=None) -> int:
     index = {"schema": SCHEMA + "/index", "generator": "verity_flock.boolean_export (lane flock-ir-lowering)",
              "source": "internal/datasets/program-graphs/<row>.program.json (its groups' templates)",
              "rows": rows, "files": {"row": "<row_key>.boolean.json", "templates": "templates.json", "subcircuits": "subcircuits.json",
-                                     "gates": "gates/<circuit root id>.json.gz: {lists: {subcircuit id: gate list}}"},
+                                     "gates": "gates/<circuit root id>.json.gz: {lists: {subcircuit id: gate list}}",
+                                     "commitments": "commitments.json: {records: {Call descriptor id: its cut}}"},
              "gate_list_rule": "wires 0..inputs-1 are the inputs; each gate appends one wire; -1 = 0, -2 = 1; gates = flat [op, a, b], "
                                "op 0 AND, 1 XOR, 2 NOT (b = -1); tags[g] indexes tag_scopes = [subcircuit id, parent scope, part index] "
                                "(preorder, scope 0 = the list's subcircuit)",
@@ -1322,6 +1591,10 @@ def main(argv=None) -> int:
                                     f"{sum(any(e[0] == -2 and e[1] == -1 for e in n.get('wiring', ())) for n in reg.nodes.values())} "
                                     f"types have a constant input whose value differs between instances (port -1)",
              "tag_scopes": reg.tag_scopes, "tag_scopes_whose_tagged_ands_differ_from_the_tree": reg.tag_and_differs,
+             "commitments": {"query": query_id(X_BITS, W_BITS), "records": len(cm.records),
+                             "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
+                                      f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
+                             "differ": checks["differ"][:50]},
              "not_yet_lowered": nyl}
     (out / "index.json").write_text(json.dumps(index, indent=1))
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
