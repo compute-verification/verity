@@ -489,6 +489,8 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     assert doc["computation"]["inputs"][0]["sha256_hashed_at"] == "preserve.verify" and "sha256_deferred_to" not in doc["computation"]["inputs"][0]
     # a file replaced between launch and preserve is flagged
     big.write_bytes(b"y" * 4096)
+    st = big.stat()                                        # later, as a replacement is: within one mtime tick the stat cannot tell
+    os.utime(big, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
     doc["computation"]["inputs"][0]["sha256"] = None
     (tmp_path / "job.json").write_text(json.dumps(doc))
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
