@@ -5,6 +5,7 @@
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
 #      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean draw)
+#      RUN=a4 (served.tar per a4.py: LAYOUT=P6|P4, K=1024; LAYOUT_FILE=<name in the served dir>, rehearsal only)
 #      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256;
 #              UNBIND=1: run the session on re-headered copies for M0's unbound statement, m0.tar then eb90718f,
 #              m0b.tar the bound tree e51e2b86 for the verifier's checks of serving's files)
@@ -43,7 +44,19 @@ sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 M0PATH=$W/m0/packages/verity/src:$W/m0/backends/numerical/python:$W/m0/backends/flock/python:$W/m0/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/integrations/vllm:$REPO/protocols/one_stage
-if [ "${RUN:-a0}" = a2 ]; then
+if [ "${RUN:-a0}" = a4 ]; then
+  mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
+  SERVED=$(dirname $(find $W/served -name registration.json | head -1))
+  CHECK_M0=$M0PATH; SESSION=
+  if [ -f $I/m0b.tar ]; then   # m0b.tar: the M0 tree serving's files were written with; m0.tar builds the session binary
+    rm -rf $W/m0b && mkdir -p $W/m0b && tar -xf $I/m0b.tar -C $W/m0b || exit 1
+    CHECK_M0=$W/m0b/packages/verity/src:$W/m0b/backends/numerical/python:$W/m0b/backends/flock/python:$W/m0b/integrations/vllm
+    SESSION="--session-m0-pythonpath $M0PATH"
+  fi
+  $W/py/bin/python benchmarks/one_stage/a4.py --served $SERVED --template-sets $W/set --layout ${LAYOUT:-P6} $SESSION \
+    ${LAYOUT_FILE:+--layout-file $SERVED/$LAYOUT_FILE} --m0-pythonpath $CHECK_M0 --bin $W/bin/flock-circuit --lean $W/bin/flock-verify \
+    --out $O/a4 --k ${K:-1024} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a4.log | cut -c1-4000
+elif [ "${RUN:-a0}" = a2 ]; then
   mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))
   BOUND=$M0PATH

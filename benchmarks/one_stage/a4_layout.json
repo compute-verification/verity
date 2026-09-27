@@ -1,0 +1,28 @@
+{
+ "P6": {
+  "note": "#101 layer 0, six templates (vllm-serving-commit handoff 20260927T0905Z)",
+  "digest": "631d88f80fe161a1398d0874d09005006b49f767a6f423a3076f19596a49502997ac56a0e6013274979c946b17c2407f380735d2df715166b39b6eaa60fb958b",
+  "members": [
+   {"set": "rmstriton", "count": 287},
+   {"set": "gemm2048", "count": 6171648, "row_map": {"rule": "verity/one-stage/gemm-grid/v0", "groups": [
+     {"name": "qkv_proj", "tokens": 287, "columns": 3072, "x_base": 0, "w_base": 0},
+     {"name": "o_proj", "tokens": 287, "columns": 2048, "x_base": 287, "w_base": 3072},
+     {"name": "gate_up_proj", "tokens": 287, "columns": 16384, "x_base": 574, "w_base": 5120}]}},
+   {"set": "rope", "count": 11480},
+   {"set": "rmsfused", "count": 287},
+   {"set": "silu", "count": 287},
+   {"set": "gemm8192", "count": 587776, "row_map": {"rule": "verity/one-stage/gemm-grid/v0", "groups": [
+     {"name": "down_proj", "tokens": 287, "columns": 2048, "x_base": 0, "w_base": 0}]}}
+  ]
+ },
+ "P4": {
+  "note": "#101 layer 0 without GEMM: the fallback",
+  "digest": "46f80472fdd25c284af5a8ccac303743f60c022031c071cc6372bd07ce698587eb3d04a5fed816d01a8759102dfef37802b5e4c6134297bd044a3268edb59fd0",
+  "members": [
+   {"set": "rmstriton", "count": 287},
+   {"set": "rope", "count": 11480},
+   {"set": "rmsfused", "count": 287},
+   {"set": "silu", "count": 287}
+  ]
+ }
+}
