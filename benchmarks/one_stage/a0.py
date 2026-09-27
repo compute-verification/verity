@@ -163,7 +163,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path) -> dict:
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
     archive = out / "archive"
-    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin")], out / "archive-put.log")
+    tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
+    p = run([lean, "archive-put", str(archive), str(st["dir"] / "circuit.txt"), str(st["dir"] / f"pub-{n}.bin"), *tables],
+            out / "archive-put.log")
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
