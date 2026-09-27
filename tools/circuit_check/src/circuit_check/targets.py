@@ -229,6 +229,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("LMoeBlockL_v1", lambda: bind(moe_pad.LMoeBlockL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("LMoeFfn_v1", lambda: bind(moe_pad.LMoeFfn, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("GumbelTokenSelect_v1", lambda: bind(sampling.GumbelTokenSelect, V=16)),
+        ("GumbelTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTokenSelectSharedGreedy, V=16)),
+        ("GumbelTopPTokenSelectSharedGreedy_v1", lambda: bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)),
         ("EmbeddingShard_v1", lambda: bind(b1_tp2.EmbeddingShard, VS=16, H=16, START=16)),
         ("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16)),
         ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),

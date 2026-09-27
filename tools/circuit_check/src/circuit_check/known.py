@@ -19,6 +19,7 @@ KNOWN: dict[str, str] = {
     "correspondence/reference-not-total TopPMaskWordx64_v1": _TOPP,
     "correspondence/reference-not-total TopPMask_v1": _TOPP,
     "correspondence/reference-not-total GumbelTopPTokenSelect_v1": _TOPP,
+    "correspondence/reference-not-total GumbelTopPTokenSelectSharedGreedy_v1": _TOPP,
     "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
         "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
         "word.unit_rule partitions the batch's members one by one and does not see it",
