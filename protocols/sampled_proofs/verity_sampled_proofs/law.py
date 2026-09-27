@@ -4,20 +4,21 @@ Each replay unit (RU) of a class is selected with probability `p`; then exactly 
 units (VUs) are checked, all of them when it holds fewer.  The law is data, so a Bernoulli law over single units stays
 expressible: every unit its own RU, `k = 1`.
 
-Every coin comes from `verity.randomness.derive` (decision 42).  The RU draw uses a beacon round published after the
-boundary commitment, and the VU draw one published after the interiors commitment; the bindings each draw follows
-(the Program digest, the roots) are its derivation context.  Draws are addressed by the RU's index in the committed
-order, so any shard of the population draws its own RUs.
+The verifier draws every coin from its own randomness (`OwnRandomness`), with no derivation: the RU draw after the
+boundary is registered, the VU draw after the interiors are.  There is no beacon.  `ru_key` and `vu_key` keep decision 42's
+derivation (`verity.randomness.derive` of a caller's source and the bindings) only for vLLM's LEGACY challenge, until its
+re-baseline; they are not a draw of record.  Both kinds of draw take an RU's index in the committed order.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+import os
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
 
-from verity.randomness import Key, Part, derive
+from verity.randomness import Key, Part, derive, uniform_from_words
 from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
 
 REPLAY, CHECK = "replay", "check"
@@ -89,13 +90,61 @@ def _key(domain: str, round_: bytes, bindings: Mapping[str, Part]) -> Key:
     return derive(round_, domain, bindings)
 
 
+class OwnRandomness:
+    """The verifier's own randomness, read directly: exact samplers over raw bytes from `source` (default the operating
+    system's generator), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    M0's `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the first
+    below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and p = 1
+    read nothing); `subset`
+    is a sparse partial Fisher-Yates.  `index` is accepted for `Key`'s interface and ignored: every draw reads fresh bytes."""
+
+    def __init__(self, source: Callable[[int], bytes] = os.urandom) -> None:
+        self._source = source
+
+    def _words(self, width: int) -> Iterator[int]:
+        while True:
+            b = self._source(width)
+            if len(b) != width:
+                raise ValueError("the randomness source ran out")
+            yield int.from_bytes(b, "big")
+
+    def uniform(self, n: int, index: Any = None) -> int:
+        if n <= 0:
+            raise ValueError("uniform(n) needs n > 0")
+        width = (n.bit_length() + 64 + 7) // 8
+        return uniform_from_words(n, self._words(width), 8 * width)
+
+    def bernoulli(self, p: Fraction, index: Any = None) -> bool:
+        p = Fraction(p)
+        if not 0 <= p <= 1:
+            raise ValueError("bernoulli(p) needs 0 <= p <= 1")
+        if p in (0, 1):
+            return p == 1
+        return self.uniform(p.denominator) < p.numerator
+
+    def subset(self, k: int, n: int, index: Any = None) -> tuple[int, ...]:
+        if not 0 <= k <= n:
+            raise ValueError("subset needs 0 <= k <= n")
+        swapped: dict[int, int] = {}
+        for i in range(k):
+            j = i + self.uniform(n - i)
+            swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+        return tuple(sorted(swapped.get(i, i) for i in range(k)))
+
+
+Draws = Key | OwnRandomness
+"""A draw's randomness: the verifier's own (`OwnRandomness`), or LEGACY's derived `Key`."""
+
+
 def ru_key(round_: bytes, bindings: Mapping[str, Part]) -> Key:
-    """The RU draw's key: `round_` is the first beacon round after the boundary commitment was registered."""
+    """LEGACY (vLLM's challenge, until its re-baseline): the RU draw derived from `round_` and the bindings.  The draw of
+    record is `OwnRandomness`, drawn after the boundary is registered."""
     return _key(RU_DOMAIN, round_, bindings)
 
 
 def vu_key(round_: bytes, bindings: Mapping[str, Part]) -> Key:
-    """The VU draw's key: `round_` is the first beacon round after the interiors commitment was registered."""
+    """LEGACY (vLLM's challenge, until its re-baseline): the VU draw derived from `round_` and the bindings.  The draw of
+    record is `OwnRandomness`, drawn after the interiors are registered."""
     return _key(VU_DOMAIN, round_, bindings)
 
 
@@ -106,12 +155,12 @@ def _distinct(units: Iterable[ReplayUnit]) -> list[ReplayUnit]:
     return units
 
 
-def select_replay_units(key: Key, law: TwoStageLaw, units: Iterable[ReplayUnit]) -> list[ReplayUnit]:
+def select_replay_units(key: Draws, law: TwoStageLaw, units: Iterable[ReplayUnit]) -> list[ReplayUnit]:
     """The first stage: each RU independently with its class's `p`."""
     return [u for u in _distinct(units) if key.bernoulli(Fraction(law.stage(u.cls).p), ("ru", u.index))]
 
 
-def select_verification_units(key: Key, law: TwoStageLaw, selected: Iterable[ReplayUnit]) -> dict[int, tuple[int, ...]]:
+def select_verification_units(key: Draws, law: TwoStageLaw, selected: Iterable[ReplayUnit]) -> dict[int, tuple[int, ...]]:
     """The second stage: RU index -> the sorted VU positions (0 .. n_v - 1) checked in it."""
     return {u.index: key.subset(law.stage(u.cls).checked(u.n_v), u.n_v, ("vu", u.index)) for u in _distinct(selected)}
 
@@ -122,5 +171,5 @@ def check_probability(law: TwoStageLaw, cls: str, n_v: int) -> Fraction:
     return Fraction(stage.p) * Fraction(stage.checked(n_v), n_v) if n_v else Fraction(0)
 
 
-__all__ = ["CHECK", "REPLAY", "RU_DOMAIN", "VU_DOMAIN", "ReplayUnit", "Stage", "TwoStageLaw", "check_probability",
+__all__ = ["CHECK", "REPLAY", "RU_DOMAIN", "VU_DOMAIN", "Draws", "OwnRandomness", "ReplayUnit", "Stage", "TwoStageLaw", "check_probability",
            "ru_key", "select_replay_units", "select_verification_units", "vu_key"]

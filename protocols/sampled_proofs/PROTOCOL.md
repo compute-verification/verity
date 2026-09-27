@@ -5,11 +5,10 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 ## Lifecycle
 
 1. The prover commits the transcript's boundary (the replay units' interface values) and registers the root.
-2. The RU draw: `law.ru_key(beacon(t), bindings)`, where `beacon(t)` is the first round published after the root's
-   registration time `t`, and `bindings` holds the Program digest and the boundary root. Each replay unit (RU) of a
+2. The RU draw, after the root's registration: the verifier's own randomness (`law.OwnRandomness`). Each replay unit (RU) of a
    class is selected with its stage's probability `p` (`select_replay_units`).
 3. The prover replays the selected RUs, then commits and registers their interiors.
-4. The VU draw: `law.vu_key(beacon(t'), bindings)`, which also binds the interiors root. In each selected RU,
+4. The VU draw, after the interiors' registration: the verifier's own randomness again. In each selected RU,
    exactly `k` of its verification units (VUs) are checked (`select_verification_units`), or all of them when it
    holds fewer.
 5. Each checked VU is established on its authenticated boundary values.
@@ -22,10 +21,14 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
 
 ## Randomness
 
-Every coin is drawn through `verity.randomness.derive(source, domain, context)` (decision 42). The source is a beacon
-round or a key holder's secret, never the prover's own root. The domains are `verity/sampled-proofs/ru-sample/v1`
-and `verity/sampled-proofs/vu-sample/v1`. Draws are addressed by RU index in the committed order, so a shard of the
-population draws its own RUs.
+The verifier draws every coin from its own randomness, directly: `law.OwnRandomness` reads the operating system's
+generator with the exact samplers of the Lean verifier's `Flock.Draw` (uniform by rejection on big-endian words,
+Bernoulli as a uniform below the numerator, subset by partial Fisher-Yates), with no hash and no derivation. There is no
+beacon. Each draw comes after the registration it follows: the RU draw after the boundary, the VU draw after the
+interiors. Draws are addressed by RU index in the committed order.
+
+`law.ru_key` and `law.vu_key` keep decision 42's `verity.randomness.derive` of a caller's source and the bindings only for
+vLLM's LEGACY challenge, until its re-baseline. They are not a draw of record.
 
 ## The law
 
