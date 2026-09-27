@@ -316,7 +316,9 @@ to its committed inputs (`Partition.Correct`). Every bound holds for every prove
 |---|---|---|---|
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
 | `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | the link theorem, to write (flock-soundness review of the extraction analysis, §4d) |
-| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); zero at the oracle layer (`RejectsBadInputs`) |
+| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
+| `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-195.4`), given `InputsLoweringSound` |
+| `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
 | `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-195.4`), from `table_value_sound`, `execArith_correct` and the lowering |
 | `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
 
@@ -345,8 +347,8 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
 - `Partition.audit_cone_count`: at least $j$ wrong units in a cone;
 - `Partition.audit_covered`: a cone inside the draw, for wires chosen even after the draw: $\varepsilon_{ks} +
   \delta_{link} + \delta_{in}$;
-- `Partition.oracle_count`, `oracle_profile`, `oracle_cone`: the same at the oracle layer, from `SessionSound ε`, with
-  $\delta_{link} = \delta_{in} = 0$.
+- `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
+  `SessionSound ε` and `InputsSound δ_in`, with $\delta_{link} = 0$.
 
 **Theorems, laws** (`Audit/Law.lean`): `bernoulli_escape`, a Bernoulli($p$) draw's escape $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's escape
 $\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_escape_le_prod`, the product bound $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 -
@@ -391,8 +393,12 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
   accepting is at most as likely as any one table accepting (`Game.value_interleave_le`, table by table);
 - `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-195.4` for `22 ≤ m ≤ 35`;
 - `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-195.4`, given `LoweringSound`;
+- `flock_inputs_sound`: the input unit, likewise, given `InputsLoweringSound`;
 - `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-195.4}$,
-  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-195.4}$ for the uniform $k$-subset. The hypotheses are BCHKS25 Theorem 4.6 and the
-  lowering.
+  and $\binom{n-K}{k}/\binom{n}{k} + 2^{-195.4}$ for the uniform $k$-subset;
+- `flock_oracle_drawn`: drawn units correct up to $2^{-195.4}$;
+- `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-195.4}$.
+
+The hypotheses are BCHKS25 Theorem 4.6 and the two lowerings.
 
 **Not yet:** the compiled instantiation, `KnowledgeSound` and `LinkSound` for Flock (DESIGN.md §12.5).

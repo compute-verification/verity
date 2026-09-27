@@ -333,8 +333,8 @@ theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
 
 The prover sends the committed transcript itself, as tables are sent at the oracle layer, so the
 committed transcript is the registration and extraction returns it. Knowledge soundness is then
-soundness of the session (`SessionSound`), the link term is zero, and the anchors term is zero when
-the session rejects inputs other than the anchors' (`RejectsBadInputs`). -/
+soundness of the session (`SessionSound`), the link term is zero, and the anchors term is the
+session's error on inputs other than the anchors' (`InputsSound`). -/
 
 /-- The oracle-layer analysis: the registration is the transcript. -/
 noncomputable def oracle (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) :
@@ -346,12 +346,13 @@ session accepts with probability at most `ε`, for every prover strategy. -/
 def SessionSound (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) (ε : ℝ≥0∞) : Prop :=
   ∀ S X u, u ∈ S → u ∈ P.wrong X → ∀ τ : Strategy (session S X), prob (· = true) (session S X) τ ≤ ε
 
-/-- The session checks the input unit: it never accepts inputs other than the anchors' `a`. -/
-def RejectsBadInputs (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) (a : Fin C.N → Bool) :
-    Prop :=
-  ∀ S X, ¬ C.InputsAgree X a → ∀ τ : Strategy (session S X), prob (· = true) (session S X) τ = 0
+/-- **The input unit, at the oracle layer** (named hypothesis): the session accepts inputs other
+than the anchors' `a` with probability at most `δ`, for every prover strategy. -/
+def InputsSound (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) (a : Fin C.N → Bool)
+    (δ : ℝ≥0∞) : Prop :=
+  ∀ S X, ¬ C.InputsAgree X a → ∀ τ : Strategy (session S X), prob (· = true) (session S X) τ ≤ δ
 
-variable {session' : Finset (Fin n) → (Fin C.N → Bool) → Game Bool} {ε : ℝ≥0∞}
+variable {session' : Finset (Fin n) → (Fin C.N → Bool) → Game Bool} {ε δ : ℝ≥0∞}
 
 theorem oracle_knowledgeSound (hs : P.SessionSound session' ε) :
     (P.oracle (L := L) session').KnowledgeSound ε := by
@@ -378,16 +379,17 @@ theorem oracle_linkSound : (P.oracle (L := L) session').LinkSound 0 := by
   obtain rfl := Option.some.inj hY
   exact hne rfl
 
-theorem oracle_anchorsSound (hr : RejectsBadInputs session' a) :
-    AnchorsSound (L := L) (session := session') (fun R _ => R) a 0 := by
+theorem oracle_anchorsSound (hr : InputsSound session' a δ) :
+    AnchorsSound (L := L) (session := session') (fun R _ => R) a δ := by
   rintro ⟨R, τ'⟩
-  show prob _ (audit L _ session') ⟨R, τ'⟩ ≤ 0
-  refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 0).le
+  show prob _ (audit L _ session') ⟨R, τ'⟩ ≤ δ
+  refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) δ).le
   rw [prob_map]
-  change prob (fun ok => ok = true ∧ ¬ C.InputsAgree R a) _ _ ≤ 0
+  change prob (fun ok => ok = true ∧ ¬ C.InputsAgree R a) _ _ ≤ δ
   by_cases h : C.InputsAgree R a
-  · exact (prob_mono (q := fun _ => False) (fun ok hok => hok.2 h) _ _).trans (prob_false _ _).le
-  · exact (prob_mono (fun ok hok => hok.1) _ _).trans (hr _ R h _).le
+  · exact (prob_mono (q := fun _ => False) (fun ok hok => hok.2 h) _ _).trans
+      ((prob_false _ _).le.trans (zero_le))
+  · exact (prob_mono (fun ok hok => hok.1) _ _).trans (hr _ R h _)
 
 /-- **The design's one-stage count curve, at the oracle layer**: `δ(K) = miss K + ε`. -/
 theorem oracle_count (hs : P.SessionSound session' ε) (K : ℕ)
@@ -404,13 +406,19 @@ theorem oracle_profile (hs : P.SessionSound session' ε) (𝓑 : Finset (Fin n) 
   have := audit_profile (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound 𝓑 σ
   rwa [add_zero] at this
 
+/-- **The design's drawn-unit bound, at the oracle layer.** -/
+theorem oracle_drawn (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ session') σ ≤ ε := by
+  have := audit_drawn (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
+  rwa [add_zero] at this
+
 /-- **The design's cone bound, at the oracle layer.** -/
-theorem oracle_cone (hs : P.SessionSound session' ε) (hr : RejectsBadInputs session' a)
+theorem oracle_cone (hs : P.SessionSound session' ε) (hr : InputsSound session' a δ)
     (T : Finset (Fin C.N)) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ reg σ t ≠ C.eval a t)
-        (audit L _ session') σ ≤ (⨆ u ∈ P.cone T, (1 - L.incl u)) + ε := by
+        (audit L _ session') σ ≤ (⨆ u ∈ P.cone T, (1 - L.incl u)) + ε + δ := by
   have := P.audit_cone (P.oracle_knowledgeSound hs) P.oracle_linkSound (oracle_anchorsSound hr) T σ
-  rwa [add_zero, add_zero] at this
+  rwa [add_zero] at this
 
 end Partition
 

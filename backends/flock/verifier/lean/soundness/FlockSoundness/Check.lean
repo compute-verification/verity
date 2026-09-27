@@ -133,6 +133,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.audit_covered
 #print axioms FlockSoundness.Audit.Partition.oracle_count
 #print axioms FlockSoundness.Audit.Partition.oracle_profile
+#print axioms FlockSoundness.Audit.Partition.oracle_drawn
 #print axioms FlockSoundness.Audit.Partition.oracle_cone
 -- two-stage audits and their relation to one-stage
 #print axioms FlockSoundness.Game.prCoin_pi_forall
@@ -153,6 +154,10 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 -- the Flock instantiation at the oracle layer
 #print axioms FlockSoundness.Audit.value_batch_le
 #print axioms FlockSoundness.Audit.FlockTable.value_le
+#print axioms FlockSoundness.Audit.Partition.flockSession_le
 #print axioms FlockSoundness.Audit.Partition.flock_session_sound
+#print axioms FlockSoundness.Audit.Partition.flock_inputs_sound
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_count
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_count_subset
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_drawn
+#print axioms FlockSoundness.Audit.Partition.flock_oracle_cone

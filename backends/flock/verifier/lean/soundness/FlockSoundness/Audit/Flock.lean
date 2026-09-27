@@ -16,8 +16,10 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_session_sound`: so the session is `SessionSound` at `2^-195.4`, given **the lowering**
   (`LoweringSound`, named): a drawn wrong unit lies in a table whose statement no committed table
   satisfies;
+* `flock_inputs_sound`: the input unit, an always-proved table, likewise (`InputsLoweringSound`);
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
-  `δ(K) = miss K + 2^-195.4`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-195.4`.
+  `δ(K) = miss K + 2^-195.4`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-195.4`;
+* `flock_oracle_drawn`, `flock_oracle_cone`: drawn units, and a consumer's value through its cone.
 
 The only other hypothesis is BCHKS25 Theorem 4.6 (`Assumptions.BCHKS25Thm46`). This is the only
 file of `Audit/` that imports the Flock theorems.
@@ -111,6 +113,27 @@ outputs. -/
 def LoweringSound (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) : Prop :=
   ∀ S tr u, u ∈ S → u ∈ P.wrong tr → ∃ T ∈ plan S tr, ∀ C₀, ¬ Committed execArith T.S T.sch C₀
 
+/-- **The input unit's lowering** (named hypothesis): when the transcript's inputs are not the
+anchors' values `a`, some table of the plan (the always-proved input statement) is satisfied by no
+committed table. -/
+def InputsLoweringSound (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable)
+    (a : Fin C.N → Bool) : Prop :=
+  ∀ S tr, ¬ C.InputsAgree tr a → ∃ T ∈ plan S tr, ∀ C₀, ¬ Committed execArith T.S T.sch C₀
+
+/-- A batched session one of whose tables no committed table satisfies accepts with probability
+at most `2^-195.4`, whatever the prover does. -/
+theorem flockSession_le (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (S : Finset (Fin n))
+    (tr : Fin C.N → Bool) {T : FlockTable} (hT : T ∈ plan S tr)
+    (hno : ∀ C₀, ¬ Committed execArith T.S T.sch C₀) (τ : Strategy (flockSession plan S tr)) :
+    prob (· = true) (flockSession plan S tr) τ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) := by
+  refine (prob_le_value _ _ τ).trans ?_
+  rw [flockSession, value_map]
+  refine (value_mono (q := fun outs => ∀ o ∈ outs, o.1 = true) (fun outs h => by simpa using h)
+    _).trans ?_
+  refine (value_batch_le _ _ T.game (List.mem_map.2 ⟨T, hT, rfl⟩)).trans ?_
+  exact (value_mono (fun out h => ⟨h, hno out.2⟩) _).trans (T.value_le hMCA)
+
 /-- **Flock's batched session is `SessionSound` at `2^-195.4`**, given the lowering: the first
 wrong drawn unit's table bounds the whole session. -/
 theorem flock_session_sound (hMCA : Assumptions.BCHKS25Thm46)
@@ -118,12 +141,15 @@ theorem flock_session_sound (hMCA : Assumptions.BCHKS25Thm46)
     P.SessionSound (flockSession plan) (ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ)))) := by
   intro S tr u hu hw τ
   obtain ⟨T, hT, hno⟩ := hlow S tr u hu hw
-  refine (prob_le_value _ _ τ).trans ?_
-  rw [flockSession, value_map]
-  refine (value_mono (q := fun outs => ∀ o ∈ outs, o.1 = true) (fun outs h => by simpa using h)
-    _).trans ?_
-  refine (value_batch_le _ _ T.game (List.mem_map.2 ⟨T, hT, rfl⟩)).trans ?_
-  exact (value_mono (fun out h => ⟨h, hno out.2⟩) _).trans (T.value_le hMCA)
+  exact flockSession_le hMCA plan S tr hT hno τ
+
+theorem flock_inputs_sound (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) {a : Fin C.N → Bool}
+    (hin : InputsLoweringSound plan a) :
+    InputsSound (flockSession plan) a (ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ)))) := by
+  intro S tr hbad τ
+  obtain ⟨T, hT, hno⟩ := hin S tr hbad
+  exact flockSession_le hMCA plan S tr hT hno τ
 
 /-- **The Flock audit's count curve, at the oracle layer**: `δ(K) = miss K + 2^-195.4`. -/
 theorem flock_oracle_count (hMCA : Assumptions.BCHKS25Thm46)
@@ -143,6 +169,28 @@ theorem flock_oracle_count_subset (hMCA : Assumptions.BCHKS25Thm46)
       ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) := by
   have := P.flock_oracle_count hMCA plan hlow (Law.subset n k hk) K σ
   rwa [Law.subset_miss hk hK] at this
+
+/-- **Drawn units of the Flock audit** are correct up to `2^-195.4`, even for a consumer who looks
+after the draw. -/
+theorem flock_oracle_drawn (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
+    (L : Law n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ (flockSession plan)) σ ≤
+      ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
+  P.oracle_drawn (P.flock_session_sound hMCA plan hlow) σ
+
+/-- **A consumer's value in the Flock audit**: for committed wires `T` fixed before the draw, the
+audit accepts with a wrong wire of `T` with probability at most the largest miss probability in
+`T`'s cone, plus `2^-195.4` for the drawn units and `2^-195.4` for the input unit. -/
+theorem flock_oracle_cone (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
+    {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : Law n) (T : Finset (Fin C.N))
+    (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ reg σ t ≠ C.eval a t)
+        (audit L _ (flockSession plan)) σ ≤
+      (⨆ u ∈ P.cone T, (1 - L.incl u)) + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) +
+        ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
+  P.oracle_cone (P.flock_session_sound hMCA plan hlow) (flock_inputs_sound hMCA plan hin) T σ
 
 end Partition
 
