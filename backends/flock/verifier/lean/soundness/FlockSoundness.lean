@@ -31,3 +31,4 @@ import FlockSoundness.LigeritoLevels
 import FlockSoundness.LigeritoOOD
 import FlockSoundness.LigeritoFolds
 import FlockSoundness.LigeritoWeights
+import FlockSoundness.LigeritoRes
