@@ -83,27 +83,46 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],
            inWords := 1, a, b, unitLog, lookup := some { table, n, lo, bits, prod0, loTop } }
 
+/-- One subset-sum entry: `t[x] = t[x without its lowest set bit] + f(that bit)`. -/
+@[inline] def subsetStep (f : Nat → F128) (t : Array F128) (x : Nat) : Array F128 :=
+  let low := x &&& (256 - x)
+  t.set! x (t[x ^^^ low]! + f (Nat.log2 low))
+
+def subsetGo (f : Nat → F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, t => t
+  | fuel + 1, x, t => subsetGo f fuel (x + 1) (subsetStep f t x)
+
+/-- `t[x] = Σ_{i < 8, bit i of x} f(i)` for bytes `x`. -/
+def subsetTab (f : Nat → F128) : Array F128 := subsetGo f 255 1 (Array.replicate 256 0)
+
+/-- Table word `h·nlo + l`, masked by `wmask` (`nlo = 2^lo`, `wmask = 2^bits − 1`). -/
+@[inline] def word (lk : LookupTable) (nlo wmask h l : Nat) : Nat := rd32 lk.table (4 * (h * nlo + l)) &&& wmask
+
+/-- `e` at product row `(j, h)`, zero past the output bits (`nh = 2^(n − lo)`). -/
+@[inline] def ej (lk : LookupTable) (nh : Nat) (e : Array F128) (h j : Nat) : F128 :=
+  if j < lk.bits then e.getD (lk.prod0 + j * nh + h) 0 else 0
+
+/-- The low minterms `l, …, l + fuel − 1` of high minterm `h`. -/
+def foldBLow (lk : LookupTable) (nlo wmask : Nat) (tabs : Array (Array F128)) (h : Nat) :
+    Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, l, acc =>
+    let w := word lk nlo wmask h l
+    let v := tabs[0]![w % 256]! + tabs[1]![(w >>> 8) % 256]! + tabs[2]![(w >>> 16) % 256]! + tabs[3]![(w >>> 24) % 256]!
+    foldBLow lk nlo wmask tabs h fuel (l + 1) (if w == 0 then acc else acc.modify (lk.loTop + l) (· + v))
+
+/-- The high minterms `h, …, h + fuel − 1`. -/
+def foldBHigh (lk : LookupTable) (nh nlo wmask : Nat) (e : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, h, acc =>
+    let tabs := (Array.range 4).map fun k => subsetTab fun i => ej lk nh e h (8 * k + i)
+    foldBHigh lk nh nlo wmask e fuel (h + 1) (foldBLow lk nlo wmask tabs h nlo 0 acc)
+
 /-- The product rows' B side of `Bᵀe`: `out[loTop + l] += Σ_{j, h : bit j of table[h·2^lo + l]} e[prod0 + j·nh + h]`,
 with one table of subset sums per byte of the word, per high minterm. -/
-def foldB (lk : LookupTable) (e : Array F128) (acc0 : Array F128) : Array F128 := Id.run do
-  let nlo := 2 ^ lk.lo
+def foldB (lk : LookupTable) (e : Array F128) (acc0 : Array F128) : Array F128 :=
   let nh := 2 ^ (lk.n - lk.lo)
-  let mut acc := acc0
-  let wmask := 2 ^ lk.bits - 1
-  for h in [0:nh] do
-    let ej := fun (j : Nat) => if j < lk.bits then e.getD (lk.prod0 + j * nh + h) 0 else 0
-    let tabs := (Array.range 4).map fun k => Id.run do
-      let mut t : Array F128 := Array.replicate 256 0
-      for x in [1:256] do
-        let low := x &&& (256 - x)
-        t := t.set! x (t[x ^^^ low]! + ej (8 * k + Nat.log2 low))
-      return t
-    for l in [0:nlo] do
-      let w := rd32 lk.table (4 * (h * nlo + l)) &&& wmask
-      if w == 0 then continue
-      let v := tabs[0]![w % 256]! + tabs[1]![(w >>> 8) % 256]! + tabs[2]![(w >>> 16) % 256]! + tabs[3]![(w >>> 24) % 256]!
-      acc := acc.modify (lk.loTop + l) (· + v)
-  return acc
+  foldBHigh lk nh (2 ^ lk.lo) (2 ^ lk.bits - 1) e nh 0 acc0
 
 end Lookup
 
