@@ -36,3 +36,5 @@ import FlockLevel3
 #print axioms FlockLevel3.pinned_indep
 #print axioms FlockLevel3.nodes
 #print axioms FlockLevel3.xhat_poly
+#print axioms FlockLevel3.eqAt_split
+#print axioms FlockLevel3.slot_factor
