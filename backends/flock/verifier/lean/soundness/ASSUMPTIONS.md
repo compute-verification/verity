@@ -162,6 +162,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     base `base u`, the shared constant at the pin) follows from three facts about the level-0 matrices: at each copy's
     computed rows they are the net's rows shifted to the slot, and each copy's constant row and the pin's own row read
     the pin. Those facts are what the verifier's matrices (L3-A's `placedA`/`placedB`) and Δ give, next.
+  - **Δ's rows** (`delta_rows`, `ExecDelta.lean`): every row `HmRow.delta` writes is a slot constant other than the pin,
+    or an input-port bit of a net slot (a row's first `cv`, an hm96 `pad`, a unit's leaf or leaf-cut bit, a wire's
+    destination). That none is a unit's computed row follows from the layout checks, next.
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the transcript decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:

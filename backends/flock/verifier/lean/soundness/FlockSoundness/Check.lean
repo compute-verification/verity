@@ -241,3 +241,6 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.stackPlace_stackCol
 #print axioms FlockSoundness.stackPlace_comp
 #print axioms FlockSoundness.placement_stack
+-- the rows Δ writes, by loop (HmRow.delta)
+#print axioms FlockSoundness.forIn_id_inv
+#print axioms FlockSoundness.delta_rows
