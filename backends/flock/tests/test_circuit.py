@@ -30,18 +30,33 @@ def test_rope_composes_private_by_default(tmp_path):
     meta = json.loads(text.split("\n", 2)[1][5:])
     assert meta["statement"] == FC.STATEMENT and meta["leaf_scheme"] == FC.LEAF_SCHEME
     assert not any(k in meta for k in ("tail", "cut", "public_ports", "native")), "no verifier-evaluated part"
-    kinds = {r["type"] for r in meta["ranges"]}
-    assert kinds == {"comp", "unit", "mask"}
-    spans = sorted(((r["pos0"] << r["slot_log"]), ((r["pos0"] + FC._pow2(r["count"])) << r["slot_log"])) for r in meta["ranges"])
+    assert {r["net"] for r in meta["ranges"]} == {FC.SHA_NET, FC.HM_NET, "unit", "mask"}
+    spans = sorted(((r["pos0"] << r["slot_log"]), ((r["pos0"] + (r["count"] if r.get("packed") else FC._pow2(r["count"]))) << r["slot_log"]),
+                    bool(r.get("packed")), r["slot_log"]) for r in meta["ranges"])
     assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])), "ranges are disjoint"
-    assert all(start % (end - start) == 0 for start, end in spans), "ranges are aligned to their spans"
+    assert all(start % ((1 << sl) if packed else end - start) == 0 for start, end, packed, sl in spans), "ranges are aligned"
+    assert [r["net"] for r in meta["ranges"] if r.get("packed")] == [FC.SHA_NET], "only the compressions are packed"
+    assert meta["program_digests"] and meta["partition"]["rule"] == FC.PARTITION_RULE
     FC.stage(low, s, 0, 4, tmp_path / "st")
-    FC.stage(low, s, 0, 4, tmp_path / "st", public_only=True)
+    with pytest.raises(ValueError, match="salt key"):
+        FC.stage(low, s, 0, 4, tmp_path / "v", public_only=True)
     prover, verifier = (tmp_path / "st" / "inst-4.bin").read_bytes(), (tmp_path / "st" / "pub-4.bin").read_bytes()
     hp, hv = (json.loads(b.split(b"\n", 1)[0]) for b in (prover, verifier))
     assert hp["rows"] and not hv["rows"], "the verifier's file holds no row"
     assert prover.split(b"\n", 1)[1].endswith(verifier.split(b"\n", 1)[1]), "the public part is the same bytes"
     assert hp["circuit_sha256"] == FC.digest(text)
+    assert hp["units"]["blocks"] == [[b * meta["vus_per_block"], min(meta["vus_per_block"], 4 - b * meta["vus_per_block"])]
+                                     for b in range(-(-4 // meta["vus_per_block"]))]
+    # a row's public b || c is hm96-sha512 of its private row and salt
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+
+    ports = meta["ports"]
+    rb, np_ = sum(2 * w for _, w, _ in ports), len(ports)
+    body = prover.split(b"\n", 1)[1]
+    salt0, bc0 = body[4 * rb:4 * rb + FC.SALT_BYTES], body[4 * rb + 4 * np_ * FC.SALT_BYTES:][:FC.BC_BYTES]
+    words = np.frombuffer(body[:2 * ports[0][1]], dtype="<u2").tolist()
+    assert bc0 == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt0)
 
 
 def test_leaf_scheme_reserves_what_hm96_needs():

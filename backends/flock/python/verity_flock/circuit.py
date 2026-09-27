@@ -350,12 +350,23 @@ def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
 
 
-def write(text: str, input_set, lo: int, hi: int, path, public_only: bool) -> dict:
+def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | None) -> dict[str, list[bytes]]:
+    """Every row's salt: fresh from the OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's
+    verifier pod can stage its own public file. A key makes the salts known to whoever holds it; the verifier's checking
+    process never reads them either way (its file has none). A serving committer draws its own."""
+    if key is None:
+        return {p.name: [os.urandom(SALT_BYTES) for _ in range(lo, hi)] for p in ports}
+    tag = b"verity/flock-circuit/stage-salt/v1\0" + key + bytes.fromhex(input_set.content_digest)
+    return {p.name: [hashlib.shake_256(tag + p.name.encode() + b"\0" + i.to_bytes(8, "big")).digest(SALT_BYTES) for i in range(lo, hi)]
+            for p in ports}
+
+
+def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
-    every row's salt (192 bytes, instance-major, ports in order; fresh from the OS generator), then every row's ``b || c``
-    (128 bytes) and every instance's output words (u16 LE, output leaves in order). The verifier's own file (``public_only``)
-    has neither rows nor salts: it never holds a private word. Staging draws the salts; a serving committer draws its own."""
+    every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
+    and every instance's output words (u16 LE, output leaves in order). ``path`` gets the prover's file (``None``: none),
+    ``pub_path`` the verifier's own file from the same salts, which has neither rows nor salts: it never holds a private word."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
@@ -363,28 +374,33 @@ def write(text: str, input_set, lo: int, hi: int, path, public_only: bool) -> di
     out_ports = [tuple(x) for x in meta["out_ports"]]
     rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
     outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
-    salts = {p.name: [os.urandom(SALT_BYTES) for _ in range(n)] for p in ports}
+    salts = stage_salts(input_set, lo, hi, ports, salt_key)
     fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
     G = meta["vus_per_block"]
     units = {"vu_range": [lo, hi], "vus_per_block": G, "units_per_vu": meta["units_per_vu"],
              "blocks": [[lo + b * G, min(G, n - b * G)] for b in range(-(-n // G))]}
     head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha256": digest(text),
-            "units": units, "frame_v3": fv, "rows": not public_only}
-    body = b""
-    if not public_only:
-        body += b"".join(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")[i].tobytes() for i in range(n))
-        body += b"".join(salts[p.name][i] for i in range(n) for p in ports)
-    body += b"".join(bcs[p.name][i] for i in range(n) for p in ports)
-    body += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()
-    with open(path, "wb") as f:
-        f.write(json.dumps(head, sort_keys=True).encode() + b"\n")
-        f.write(body)
+            "units": units, "frame_v3": fv, "rows": True}
+    public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
+    public += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()
+    if path is not None:
+        private = b"".join(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")[i].tobytes() for i in range(n))
+        private += b"".join(salts[p.name][i] for i in range(n) for p in ports)
+        with open(path, "wb") as f:
+            f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + private + public)
+    if pub_path is not None:
+        with open(pub_path, "wb") as f:
+            f.write(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public)
     return head
 
 
-def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False) -> Path:
-    """``<out_dir>/circuit.txt`` (the composite circuit) and ``<out_dir>/inst-<n>.bin`` (``pub-<n>.bin`` for the verifier)."""
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None) -> Path:
+    """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
+    ``pub-<n>.bin`` from the same salts; returns the prover's path, or (``public_only``: a verifier staging its own public file,
+    which needs the prover's ``salt_key``) writes and returns only ``pub-<n>.bin``."""
+    if public_only and salt_key is None:
+        raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     text = compose(low, input_set.subcircuit)
@@ -393,9 +409,9 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True))
-    path = out / f"{'pub' if public_only else 'inst'}-{hi - lo}.bin"
-    write(text, input_set, lo, hi, path, public_only)
-    return path
+    inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
+    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key)
+    return pub if public_only else inst
 
 
 def lowering_for_set(input_set) -> IL.Lowering:
@@ -422,7 +438,6 @@ def main(argv=None) -> int:
     low = lowering_for_set(s)
     for n in a.n:
         stage(low, s, 0, n, a.out)
-        stage(low, s, 0, n, a.out, public_only=True)
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest((Path(a.out) / "circuit.txt").read_text()), "n": a.n}))
     return 0
 

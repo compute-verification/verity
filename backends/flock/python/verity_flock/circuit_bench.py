@@ -34,12 +34,22 @@ def relation(template: str) -> str:
     return f"circuit:{template}"
 
 
+#: Both pods stage from one salt key, derived from the set's content digest, so the verifier pod stages its own public files: the
+#: salts are public in a benchmark, which measures proving, not the serving side's hiding (the checking process never reads a
+#: salt: its file has none).
+STAGE_SALTS = "public benchmark key: sha256('verity/flock-circuit/bench-stage-salts' || content_digest)"
+
+
+def salt_key(input_set) -> bytes:
+    return hashlib.sha256(b"verity/flock-circuit/bench-stage-salts\0" + bytes.fromhex(input_set.content_digest)).digest()
+
+
 def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[list[tuple[int, int]], float]:
     d.mkdir(parents=True, exist_ok=True)
     subs = subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
-        p = FC.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public)
+        p = FC.stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
@@ -188,7 +198,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
         private="every word but the frame-v3 roots, the row digests, the declared outputs and the pinned layout",
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)",
-                  "instance_file": "its own public file (no rows)"})
+                  "instance_file": "its own public file (no rows, no salts)", "stage_salts": STAGE_SALTS})
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
           {"name": "ands.count", "value": and_count, "unit": "count"}, {"name": "ands.per_second", "value": and_count / t_e2e, "unit": "1/s"},

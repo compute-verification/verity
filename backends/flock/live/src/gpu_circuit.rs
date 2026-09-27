@@ -21,7 +21,7 @@ use crate::{
     circuit::{Kind, Stmt},
 };
 
-const FC_MAX_TYPES: usize = 8;
+const FC_MAX_TYPES: usize = 12;
 const FC_MAX_RANGES: usize = 32;
 
 #[repr(C)]
@@ -265,7 +265,6 @@ fn types(st: &Stmt) -> &'static Types {
                     key.push(k);
                     logs.push(r.slot_log as i32);
                     csc.push(match r.kind {
-                        Kind::Comp => None,
                         Kind::Net(i) => {
                             let net = &c.nets[i].1;
                             let n = 1usize << net.unit_log;
@@ -285,15 +284,15 @@ fn types(st: &Stmt) -> &'static Types {
         }
         assert!(logs.len() <= FC_MAX_TYPES && ranges.len() <= FC_MAX_RANGES, "too many slot types or ranges for the FFI");
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
-        let comp_slot: Vec<u32> = c.ranges.iter().filter(|r| r.kind == Kind::Comp).flat_map(|r| (0..r.count).map(|s| (r.slot(s) >> 14) as u32))
-            .collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+        let comp_slot: Vec<u32> = Vec::new();
         Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), comp_slot }
     })
 }
 
-/// The device witness's host inputs: every block's compressions and every unit's input words, from the prover's rows.
+/// The device witness's host inputs: every unit's input words, from the prover's rows (the row slots are the host's until the
+/// device evaluates them).
 pub fn device_inputs(st: &Stmt, rows: &[u8]) -> (Vec<Compression>, Vec<F128>) {
-    let comps: Vec<Compression> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| st.compressions(Some(rows), b)).collect();
+    let comps: Vec<Compression> = Vec::new();
     let ur = st.c.unit_range();
     let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| st.unit_inputs(Some(rows), x / ur.count, x % ur.count)).collect();
     (comps, inputs)

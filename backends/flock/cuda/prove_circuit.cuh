@@ -10,7 +10,7 @@
 // unit's slot), the mask slot's free cells left zero (the no-op mask hook). With host_z the whole witness comes from the
 // host instead (a tampered witness).
 
-#define FC_MAX_TYPES 8
+#define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
 
 typedef struct {
