@@ -1078,12 +1078,13 @@ class Commitments:
         pieces: dict = {}
         sid: dict[int, int] = {}
         cval: dict[int, int | None] = {}
+        computing = set(G.keep.tolist())
 
         def const(o):
             if o in cval:
                 return cval[o]
             cval[o] = None
-            if not 0 <= o - lo < fn.gates:
+            if not 0 <= o - lo < fn.gates or o - lo in computing:
                 return None
             g = c.gate(o)
             ops = g.operands
