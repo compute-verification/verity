@@ -75,8 +75,8 @@ fn identity(c: &Composite) -> Value {
            "seed_injection": cfg!(feature = "seed-injection"),
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
-                      "round_digest": "sha256 (framing: the coin server retains every round's bytes and the replay compares them)",
-                      "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
+                      "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
+                      "statement_digest": "sha512", "sigma": "sha512", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": NoMask::new(ProverSeed::from_os()).identity()})
