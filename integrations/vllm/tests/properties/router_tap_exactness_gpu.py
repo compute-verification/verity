@@ -451,6 +451,9 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
         tok_dir = prof.checkpoint_for("B0", "manifests/checkpoints.json")["local_path"]
         doc["live"] = {"tokenizer": tok_dir, "models": [_guarded(check_live, {"kind": k}, so, pool, k, tok_dir, out) for k in TINY]}
         for m in doc["live"]["models"]:
+            m["ok"] = X.live_model_ok(m)
+        doc["live"]["ok"] = X.live_ok(doc["live"])
+        for m in doc["live"]["models"]:
             print(f"[router-tap] live {json.dumps({k: v for k, v in m.items() if not k.startswith('tokens_')})[:900]}", flush=True)
     pool.close()
     doc = X.seal(doc)
