@@ -10,3 +10,4 @@ import FlockLevel3.Pinned
 import FlockLevel3.Nodes
 import FlockLevel3.NovelBasis
 import FlockLevel3.Fold
+import FlockLevel3.LookupFold

@@ -39,3 +39,5 @@ import FlockLevel3
 #print axioms FlockLevel3.eqAt_split
 #print axioms FlockLevel3.slot_factor
 #print axioms FlockLevel3.foldT_get
+#print axioms FlockLevel3.subsetTab_get
+#print axioms FlockLevel3.foldB_get
