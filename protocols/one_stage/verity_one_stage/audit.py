@@ -11,14 +11,14 @@ Two forms of the profile, from the same facts:
 
 The audit record carries the registration and its receipt, the draw, the proved units, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
-the record incomplete. The profiles are present only when every verdict that ran accepted and the draw and the proved
-units passed their checks.
+the record incomplete. The record is accepted, and the profiles are present, only when there is a verifier of record
+(`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
+units, the served draw and the sessions' roots passed their checks.
 """
 from __future__ import annotations
 
 import hashlib
 from fractions import Fraction
-from math import comb, inf, log
 from typing import Any, Mapping, Sequence
 
 from verity.ir.codec import canonical_json
@@ -44,40 +44,10 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
                             drawn={LEVEL: len(draw["units"])})
 
 
-def _log_comb(n: int, k: int) -> float:
-    return log(comb(n, k)) if 0 <= k <= n else -inf
-
-
 def wrong_units_bound(p: IntegrityProfile) -> float:
-    """The most wrong units an accepted transcript can hold except with probability delta: `worst_case` with utility m.
-
-    For one level drawn `Subset(k)` over n units it is computed directly: rho(m) = ln C(n, k) - ln C(n - m, k) is convex
-    with rho(0) = 0, so the linear relaxation's optimum lies between the largest m with rho(m) <= ln(1/delta) and the next,
-    found by bisection with exact integer binomials (the generic `worst_case` tries every pair of m, and its float
-    `accept(m)` underflows, so it can't serve a population of 10^5).  Otherwise it is `worst_case`.
-
-    TEMPORARY, until #135 (core's exact rho and linear `worst_case`) merges: then this whole function is
-    `p.worst_case(lambda m: float(m))`; `test_the_wrong_unit_bound_matches_worst_case_and_scales` must pass unchanged."""
-    law = next(iter(p.draws.values()))
-    if len(p.levels) != 1 or not isinstance(law, Subset):
-        return p.worst_case(lambda m: float(m))
-    n, k, budget = p.sizes[0], law.k, log(1 / p.delta)
-    base = _log_comb(n, k)
-
-    def rho(m: int) -> float:
-        return base - _log_comb(n - m, k)
-
-    if rho(n) <= budget:
-        return float(n)
-    lo, hi = 0, n            # rho(lo) <= budget < rho(hi)
-    while hi - lo > 1:
-        mid = (lo + hi) // 2
-        if rho(mid) <= budget:
-            lo = mid
-        else:
-            hi = mid
-    ra, rb = rho(lo), rho(hi)
-    return lo + (0.0 if rb == inf else (budget - ra) / (rb - ra))
+    """The most wrong units an accepted transcript can hold except with probability delta: core's `worst_case` with
+    utility m (the linear relaxation, rounded upward)."""
+    return p.worst_case(lambda m: float(m))
 
 
 def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
@@ -97,13 +67,26 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
 
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
-                 verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = ()) -> dict[str, Any]:
+                 verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """`draw` is the verifier's own draw. `served`: the units the sessions were served, when the draw was handed to them
+    (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
+    must be the registered root)."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
         checks["receipt"] = {"ok": False, "codes": ["receipt"], "detail": {"receipt": receipt.get("registration")}}
+    if served is not None and sorted(served) != sorted(draw["units"]):
+        checks["served"] = {"ok": False, "codes": ["served"], "detail": {"served": sorted(served)[:16], "drawn": list(draw["units"])[:16]}}
+    if session_roots is not None:
+        registered = {r["port"]: r["root"] for r in registration["roots"]}
+        wrong = sorted(p for p, r in session_roots.items() if registered.get(p) != r)
+        if not session_roots or wrong:
+            checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
-    accepted = bool(ran) and all(v["accepted"] is True for v in ran.values()) and all(c["ok"] for c in checks.values())
+    of_record = [v for v in verdicts.values() if v.get("of_record")]
+    accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)
+                and all(v["accepted"] is True for v in ran.values()) and all(c["ok"] for c in checks.values()))
     rec: dict[str, Any] = {
         "format": FORMAT, "registration": dict(registration), "registration_digest": registration_digest(registration),
         "receipt": dict(receipt), "draw": dict(draw), "law": law_of(draw), "proved_units": list(proved_units),
@@ -113,9 +96,9 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     if accepted:
         p = profile(registration, draw, delta)
         rec["profile"] = p.to_json()
-        of_record = [v.get("digest") for v in ran.values() if v.get("of_record")]
+        digests = [v.get("digest") for v in of_record]
         rec["integrity_profile"] = integrity_profile(registration, receipt, draw, sessions,
-                                                     of_record[0] if len(of_record) == 1 else (of_record or None))
+                                                     digests[0] if len(digests) == 1 else digests)
         rec["wrong_units"] = {"delta": delta, "bound": wrong_units_bound(p), "of": registration["population"],
                               "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
     return rec

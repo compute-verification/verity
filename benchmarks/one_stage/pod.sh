@@ -66,13 +66,13 @@ elif [ "${RUN:-a0}" = a2 ]; then
   fi
   $W/py/bin/python benchmarks/one_stage/a2.py --served $SERVED --template-set $SET --m0-pythonpath $BOUND --bin $W/bin/flock-circuit \
     --lean $W/bin/flock-verify --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} ${UNBIND:+--unbind --unbound-m0-pythonpath $M0PATH} ${LEGACY_PARTITION:+--legacy-partition} \
-    2>&1 | tee $O/a2.log | cut -c1-4000
+    ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a2.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a3 ]; then
   $W/py/bin/python benchmarks/one_stage/a3.py --sets $W/set --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
     --lean $W/bin/flock-verify --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} ${DRAW_FILE:+--draw-file} \
-    2>&1 | tee $O/a3.log | cut -c1-4000
+    ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a3.log | cut -c1-4000
 else
   $W/py/bin/python benchmarks/one_stage/a0.py --set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
-    --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} 2>&1 | tee $O/a0.log | cut -c1-4000
+    --lean $W/bin/flock-verify --out $O/a0 --k ${K:-16} --delta ${DELTA:-0.01} ${BIND:+--bind} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a0.log | cut -c1-4000
 fi
 exit ${PIPESTATUS[0]}

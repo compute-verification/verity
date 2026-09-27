@@ -101,7 +101,7 @@ def test_registration_refusals():
              ({"scheme": "frame-v3/blake3"}, "R3-scheme"), ({"roots": rec["roots"][:1]}, "R3-ports"),
              ({"roots": [dict(rec["roots"][0], leaves=5), rec["roots"][1]]}, "R3-leaves"),
              ({"roots": [dict(rec["roots"][0], domain="00" * 64), rec["roots"][1]]}, "R3-domain"),
-             ({"leaf_layer": "ff" * 64}, "R4-leaf-layer"), ({"anchors": ["weights"]}, "R5-anchors"),
+             ({"leaf_layer": "ff" * 64}, "R4-leaf-layer"), ({"leaf_layer": None}, "R4-leaf-layer"), ({"anchors": ["weights"]}, "R5-anchors"),
              ({"previous": "11" * 64}, "R6-previous")]
     for change, code in cases:
         assert code in _check({**rec, **change}, prog, q).codes, code
@@ -185,13 +185,29 @@ def test_audit_record_needs_every_check_and_verdict():
     ip = ok["integrity_profile"]
     assert ip["format"] == "verity/integrity-profile/v1" and ip["drawn"] == [1, 4] and ip["registration"] == R.digest(rec)
     assert ip["partition"] == rec["partition"] and ip["evidence"]["verdict"] == "dd" * 64 and ip["evidence"]["sessions"] == ["aa" * 64]
-    part = audit.audit_record(rec, rcpt, d, law, [1, 4], 2, {}, {"m0": {"accepted": True}, "lean": {"accepted": None}}, 0.25)
-    assert part["accepted"] and not part["complete"] and part["integrity_profile"]["evidence"]["verdict"] is None
+    part = audit.audit_record(rec, rcpt, d, law, [1, 4], 2, {}, {"m0": {"accepted": True}, "lean": {**lean, "accepted": None}}, 0.25)
+    assert not part["accepted"] and not part["complete"] and part["profile"] is None and part["integrity_profile"] is None
     bad_receipt = dict(rcpt, registration="00" * 64)
-    for r_, verdicts, proved in ((rcpt, {"m0": {"accepted": False}}, [1, 4]), (rcpt, {"m0": {"accepted": True}}, [1, 5]),
-                                 (rcpt, {}, [1, 4]), (bad_receipt, {"m0": {"accepted": True}}, [1, 4])):
+    for r_, verdicts, proved in ((rcpt, {"lean": lean, "m0": {"accepted": False}}, [1, 4]), (rcpt, {"lean": lean}, [1, 5]),
+                                 (rcpt, {}, [1, 4]), (rcpt, {"m0": {"accepted": True}}, [1, 4]),
+                                 (rcpt, {"lean": {**lean, "accepted": False}}, [1, 4]), (bad_receipt, {"lean": lean}, [1, 4])):
         r = audit.audit_record(rec, r_, d, law, proved, 2, {}, verdicts, 0.25)
         assert not r["accepted"] and r["profile"] is None and r["integrity_profile"] is None
+
+
+def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
+    """The sessions must have been served exactly the verifier's draw, and each session's root must be the registered one."""
+    _, _, rec = _registration(6)
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_law("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
+    assert audit.audit_record(*args, served=[4, 1], session_roots=dict(ROOTS))["accepted"]
+    r = audit.audit_record(*args, served=[1, 3])
+    assert not r["accepted"] and r["checks"]["served"]["codes"] == ["served"] and r["profile"] is None
+    r = audit.audit_record(*args, session_roots={**ROOTS, "x": "ef" * 64})
+    assert not r["accepted"] and r["checks"]["roots"]["detail"]["ports"] == ["x"] and r["profile"] is None
+    for roots in ({}, {"y": ROOTS["x"]}):
+        assert not audit.audit_record(*args, session_roots=roots)["accepted"]
 
 
 def test_a_record_over_an_explicit_partition_object():

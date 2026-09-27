@@ -127,8 +127,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
-    # R4
-    if rec["leaf_layer"] is not None and rec["leaf_layer"] != leaf_layer:
+    # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
+    if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
     # R5
     if rec["anchors"] != list(anchors):
