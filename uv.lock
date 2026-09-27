@@ -9,6 +9,7 @@ members = [
     "verity-circuit-check",
     "verity-flock",
     "verity-numerical",
+    "verity-one-stage",
     "verity-sampled-proofs",
     "verity-sp1",
     "verity-vllm",
@@ -1291,6 +1292,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-one-stage"
+version = "0.1.0"
+source = { editable = "protocols/one_stage" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
 name = "verity-sampled-proofs"
 version = "0.1.0"
 source = { editable = "protocols/sampled_proofs" }
@@ -1346,6 +1358,7 @@ dependencies = [
     { name = "verity-circuit-check" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-one-stage" },
     { name = "verity-sampled-proofs" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
@@ -1365,6 +1378,7 @@ requires-dist = [
     { name = "verity-circuit-check", editable = "tools/circuit_check" },
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
     { name = "verity-sp1", editable = "backends/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },
