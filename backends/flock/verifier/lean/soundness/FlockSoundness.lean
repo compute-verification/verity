@@ -24,3 +24,4 @@ import FlockSoundness.ListSize
 import FlockSoundness.LincheckPhase
 import FlockSoundness.ZerocheckPhase
 import FlockSoundness.LinkSound
+import FlockSoundness.LigeritoCoins

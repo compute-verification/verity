@@ -41,6 +41,11 @@ when it is proved.
 #print axioms FlockSoundness.lincheck_phase
 #print axioms FlockSoundness.opening_phase_of_card
 #print axioms FlockSoundness.opening_phase
+-- Ligerito's generic pieces: the list size at every level, K coins, rounds over K, α batching
+#print axioms FlockSoundness.card_close_le
+#print axioms FlockSoundness.value_drawK_le
+#print axioms FlockSoundness.prCoin_fromMsg_le
+#print axioms FlockSoundness.prCoin_eqList_le
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound

@@ -172,66 +172,70 @@ theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((25 * 2 
   ring
 
 open Classical in
-/-- **The list size.** At most `listBound₀ = 25·2^r` messages encode within the level-0 radius of
-any table: ArkLib's Johnson bound for the level-0 interleaved Reed–Solomon code. -/
-theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
-    (hsch : fast100 m = some sch) (C : Oracle F) :
-    (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ sch.listBound₀ := by
-  -- level 0
-  obtain ⟨l0, rest, hlev⟩ : ∃ l0 rest, sch.levels = l0 :: rest := by
-    cases h : sch.levels with
-    | nil => exact absurd h (fast100_levels_ne_nil m sch hsch)
-    | cons l0 rest => exact ⟨l0, rest, rfl⟩
-  have hL : sch.level₀ = l0 := by simp [Schedule.level₀, hlev]
-  have hbound : sch.listBound₀ = l0.listBound := by simp [Schedule.listBound₀, hlev]
-  rw [hbound, Level.listBound]
-  -- the level-0 code and the committed table as an interleaved word
-  set d := sch.level₀.logLen with hd
-  set cols := sch.level₀.logCols with hcols
-  have hdc : d = cols + sch.level₀.logInvRate := rfl
-  have : NeZero (2 ^ sch.k0) := ⟨pow_ne_zero _ two_ne_zero⟩
-  have : NeZero (2 ^ d) := ⟨pow_ne_zero _ two_ne_zero⟩
-  set code := ReedSolomon.Interleaved.irsCode (domainEmb A hA d) (2 ^ sch.k0 * 2 ^ cols)
-    (2 ^ sch.k0) with hcode
-  set y := tr (asTable sch C)
-  set S := Finset.univ.filter fun M => M ∈ closeMsgs A sch C
-  -- the close messages inject into the close codewords
-  have hinj : Function.Injective (fun M : Message F sch.k0 cols => tr (encode A d M)) :=
+/-- **The list size at any level.** At most `listBound l = 25·2^r` messages with `2^lanes` lanes
+encode within `l`'s radius of any table: ArkLib's Johnson bound for `l`'s interleaved
+Reed–Solomon code, `1/(2ηρ)`. -/
+theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ)
+    (T : Table F lanes l.logLen) :
+    (Finset.univ.filter fun M : Message F lanes l.logCols =>
+      Close l.radius T (encode A l.logLen M)).card ≤ l.listBound := by
+  rw [Level.listBound]
+  have hdc : l.logLen = l.logCols + l.logInvRate := rfl
+  have : NeZero (2 ^ lanes) := ⟨pow_ne_zero _ two_ne_zero⟩
+  have : NeZero (2 ^ l.logLen) := ⟨pow_ne_zero _ two_ne_zero⟩
+  set code := ReedSolomon.Interleaved.irsCode (domainEmb A hA l.logLen) (2 ^ lanes * 2 ^ l.logCols)
+    (2 ^ lanes) with hcode
+  set y := tr T
+  set S := Finset.univ.filter fun M : Message F lanes l.logCols =>
+    Close l.radius T (encode A l.logLen M)
+  have hinj : Function.Injective (fun M : Message F lanes l.logCols => tr (encode A l.logLen M)) :=
     encode_injective A hA (by omega)
-  have hsub : ((S.image fun M => tr (encode A d M) : Finset _) : Set _) ⊆
-      Code.closeCodewordsRel (code : Set (Fin (2 ^ d) → Fin (2 ^ sch.k0) → F)) y
-        sch.level₀.radius := by
+  have hsub : ((S.image fun M => tr (encode A l.logLen M) : Finset _) : Set _) ⊆
+      Code.closeCodewordsRel (code : Set (Fin (2 ^ l.logLen) → Fin (2 ^ lanes) → F)) y l.radius := by
     intro w hw
     simp only [Finset.coe_image, Set.mem_image, Finset.mem_coe] at hw
     obtain ⟨M, hM, rfl⟩ := hw
-    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and, closeMsgs, Set.mem_setOf_eq] at hM
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hM
     exact Code.mem_closeCodewordsRel_iff.2
-      ⟨tr_encode_mem A hA d M, relHammingDist_tr_le _ _ _ hM⟩
+      ⟨tr_encode_mem A hA l.logLen M, relHammingDist_tr_le _ _ _ hM⟩
   have hcardS : (S.card : ℕ∞) ≤
-      Code.Lambda (code : Set (Fin (2 ^ d) → Fin (2 ^ sch.k0) → F)) sch.level₀.radius := by
+      Code.Lambda (code : Set (Fin (2 ^ l.logLen) → Fin (2 ^ lanes) → F)) l.radius := by
     rw [← Finset.card_image_of_injective S hinj, ← Set.encard_coe_eq_coe_finsetCard]
     exact Code.encard_le_Lambda_of_subset_closeCodewordsRel hsub
-  -- the rate is `2^-r`, so the radius is the Johnson radius
-  have hks : 0 < 2 ^ sch.k0 * 2 ^ cols / 2 ^ sch.k0 := by
+  have hks : 0 < 2 ^ lanes * 2 ^ l.logCols / 2 ^ lanes := by
     rw [Nat.mul_div_cancel_left _ (Nat.two_pow_pos _)]; exact Nat.two_pow_pos _
-  have hrate : (LinearCode.alphabetRate code : ℝ) = sch.level₀.rate := by
+  have hrate : (LinearCode.alphabetRate code : ℝ) = l.rate := by
     rw [hcode, ReedSolomon.Interleaved.alphabetRate_irsCode_eq_min,
       Nat.mul_div_cancel_left _ (Nat.two_pow_pos _), Fintype.card_fin,
       min_eq_left (Nat.pow_le_pow_right (by norm_num) (by omega)), Level.rate, hdc]
     push_cast
     rw [pow_add, inv_pow]
-    have : (2 : ℝ) ^ cols ≠ 0 := pow_ne_zero _ two_ne_zero
+    have : (2 : ℝ) ^ l.logCols ≠ 0 := pow_ne_zero _ two_ne_zero
     field_simp
-  have hJ := CodingTheory.irs_lambda_le_johnson_mds (domainEmb A hA d) (2 ^ sch.k0 * 2 ^ cols)
-    (2 ^ sch.k0) hks eta (by unfold eta; norm_num)
+  have hJ := CodingTheory.irs_lambda_le_johnson_mds (domainEmb A hA l.logLen) (2 ^ lanes * 2 ^ l.logCols)
+    (2 ^ lanes) hks eta (by unfold eta; norm_num)
   simp only at hJ
   rw [← hcode, hrate] at hJ
-  have hrad : 1 - Real.sqrt sch.level₀.rate - eta = sch.level₀.radius := rfl
+  have hrad : 1 - Real.sqrt l.rate - eta = l.radius := rfl
   rw [hrad, Level.rate, johnson_value, ENNReal.ofReal_natCast] at hJ
-  -- conclude
-  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ((25 * 2 ^ sch.level₀.logInvRate : ℕ) : ℝ≥0∞) :=
+  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ((25 * 2 ^ l.logInvRate : ℕ) : ℝ≥0∞) :=
     (ENat.toENNReal_le.2 hcardS).trans hJ
-  rw [← hL]
   exact_mod_cast h1
+
+open Classical in
+/-- **The list size.** At most `listBound₀ = 25·2^r` messages encode within the level-0 radius of
+any table: `card_close_le` at level 0. -/
+theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
+    (hsch : fast100 m = some sch) (C : Oracle F) :
+    (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ sch.listBound₀ := by
+  obtain ⟨l0, rest, hlev⟩ : ∃ l0 rest, sch.levels = l0 :: rest := by
+    cases h : sch.levels with
+    | nil => exact absurd h (fast100_levels_ne_nil m sch hsch)
+    | cons l0 rest => exact ⟨l0, rest, rfl⟩
+  have hL : sch.level₀ = l0 := by simp [Schedule.level₀, hlev]
+  have hbound : sch.listBound₀ = sch.level₀.listBound := by
+    simp [Schedule.listBound₀, hlev, hL]
+  rw [hbound]
+  exact card_close_le A hA sch.level₀ sch.k0 (asTable sch C)
 
 end FlockSoundness

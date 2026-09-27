@@ -48,6 +48,8 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   omega_injective : ∀ d, Set.InjOn A.omega {q | q < 2 ^ d}
   xhat_poly : ∀ L, ∃ P : Fin (2 ^ L) → Polynomial F, (∀ c, (P c).natDegree < 2 ^ L) ∧
     LinearIndependent F P ∧ ∀ (c : Fin (2 ^ L)) ω, A.Xhat c.val L ω = (P c).eval ω
+  /-- `K = F ⊕ F·u` (§2.4): a `K` coin is two `F` limbs (`drawK`, §13.2). -/
+  ofLimbs_bijective : Function.Bijective fun w : F × F => A.ofLimbs w.1 w.2
   /-- Query coins give uniform positions (§13.5): the low `b ≤ 64` bits of `lo` are balanced. -/
   lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
     (Finset.univ.filter fun w : F => A.lo w % 2 ^ b = t).card = Fintype.card F / 2 ^ b
