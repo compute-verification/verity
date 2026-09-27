@@ -542,9 +542,7 @@ class SingleRow(Row):
         if ck.vu_export != "0":
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
-            rd = self.env.research_run_dir
-            cmd += ["--serving-rows-dir", os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows",
-                    "--serving-rows-partition", ck.serving_rows]
+            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
         if self.norm_tap():
             cmd += ["--norm-tap-so", self.env.norm_tap_so]
         if self.router_tap():
@@ -564,6 +562,18 @@ class SingleRow(Row):
                        "source": {"commit": self.env.environ.get("RESEARCH_SOURCE_SHA"),
                                   "dirty": False if self.env.environ.get("RESEARCH_SOURCE_SHA") else None}}, f)
         return d
+
+    def serving_rows_request(self, partition: str) -> str:
+        """The Commit's serving-rows request (`pipeline.serving_rows`): its directory inside the research run dir when there is one,
+        so the run's custody preserves it, the verifier's partition file, and the run id and source the roots' domains bind."""
+        rd = self.env.research_run_dir
+        d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
+        os.makedirs(d, exist_ok=True)
+        req = os.path.join(d, "request.json")
+        with open(req, "w") as f:
+            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+        return req
 
     def manifest_of_record(self) -> str:
         """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it

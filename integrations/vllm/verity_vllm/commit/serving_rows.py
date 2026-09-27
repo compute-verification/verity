@@ -32,7 +32,7 @@ that differs.  ``write`` puts into a window directory:
                      prover body.  Prover only; it holds every private word
   window.json        roots, domains, digests and timings
 
-``m0_files`` wraps the two bodies as M0's ``pub-N.bin`` (``rows: false``) and ``inst-N.bin`` under the header of M0's composed
+``flock_input_files`` wraps the two bodies as M0's ``pub-N.bin`` (``rows: false``) and ``inst-N.bin`` under the header of M0's composed
 ``circuit.txt``.
 """
 from __future__ import annotations
@@ -42,9 +42,7 @@ import hashlib
 import json
 import multiprocessing
 import os
-import re
 import time
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -252,7 +250,7 @@ class Committed:
         ys = np.concatenate([np.frombuffer(self.salts[p], dtype=np.uint8).reshape(self.n, SALT_BYTES) for p in IN_PORTS], axis=1)
         return rows + ys.tobytes()
 
-    def frame_v3(self) -> dict[str, Any]:
+    def frame_entry(self) -> dict[str, Any]:
         """M0's header ``frame_v3`` entry for these roots."""
         return {"frame": "frame-v3-sha512", "roots": {p: r.hex() for p, r in self.roots.items()},
                 "domain_ids": {p: d.domain_id.hex() for p, d in self.domains.items()},
@@ -363,7 +361,7 @@ def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict
     with os.fdopen(fd, "wb") as f:
         f.write(c.private_body())
     win = {"schema": "verity-vllm/serving-rows/v0", "scheme": SCHEME, "n": c.n, "ports": [[p, int(c.rows[p].shape[1])] for p in IN_PORTS],
-           "out_ports": [[OUT_PORT, int(c.out.shape[1])]], "frame_v3": c.frame_v3(), "domain_tag": DOMAIN_TAG,
+           "out_ports": [[OUT_PORT, int(c.out.shape[1])]], "frame_v3": c.frame_entry(), "domain_tag": DOMAIN_TAG,
            "registration_sha512": registration_digest(rec), "public_sha512": hashlib.sha512(pub).hexdigest(),
            "index_sha512": hashlib.sha512(ib).hexdigest(), "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, "
            "nonce = port index (12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds,
@@ -372,7 +370,7 @@ def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict
     return win
 
 
-def m0_files(window_dir: str | Path, circuit_text: str, out_dir: str | Path, subcircuit: str) -> dict[str, Any]:
+def flock_input_files(window_dir: str | Path, circuit_text: str, out_dir: str | Path, subcircuit: str) -> dict[str, Any]:
     """M0's ``pub-N.bin`` (``rows: false``) and ``inst-N.bin`` from a window, under the header ``verity_flock.circuit.write``
     gives the circuit it composed: its SHA-512 pin, its META's block shape and class, global unit indices ``0..N-1``, and the
     window's ``frame_v3``.  The bodies are the window's bytes."""
@@ -407,114 +405,3 @@ def program_sha512(program_dir: str | Path) -> str:
     """SHA-512 over the canonical descriptor bytes core's ``program_digest`` hashes with SHA-256."""
     desc = json.loads(gzip.open(Path(program_dir) / "descriptor.json.gz").read())
     return hashlib.sha512(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
-
-
-# --- the RoPE heads of a run ---------------------------------------------------------------------------------------------
-
-def rope_rows(programs: dict[str, dict[str, Any]], program_dirs: dict[str, str] | None = None) -> list[tuple[str, Any, dict, dict]]:
-    """The ``RoPE_v1`` rows in :data:`ORDER`: (request, its ProgramIndex, the row, its description).  The population is the sum of
-    their NHEADS, fixed by the Build's Programs before serving."""
-    from verity_vllm.check.replay.index import ProgramIndex
-    from verity_vllm.query.manifest import format as RM
-
-    out = []
-    for rid, inst in programs.items():
-        pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)))
-        for i in sorted(pi.by_i):
-            r = pi.by_i[i]
-            if RM.spec_family(r["spec"]) == FAMILY:
-                d = pi.describe(r)
-                if int(d["statics"]["D"]) != D:
-                    raise ValueError(f"row {i}: RoPE_v1 D={d['statics']['D']}; serving rows commit D={D} heads only")
-                out.append((str(rid), pi, r, d))
-    if not out:
-        raise LookupError(f"no {FAMILY} rows in the run's Programs")
-    return out
-
-
-def population(programs: dict[str, dict[str, Any]], program_dirs: dict[str, str] | None = None) -> int:
-    return sum(int(d["statics"]["NHEADS"]) for _, _, _, d in rope_rows(programs, program_dirs))
-
-
-_LAYER = re.compile(r"\.layers\.(\d+)\.")
-
-
-def rope_units(rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable, *, arrivals: dict[str, int] | None = None,
-               ) -> tuple[list[list[Any]], dict[str, np.ndarray], np.ndarray]:
-    """Every head of every row, its words read from the committed store (``x``, ``out``) and the registered weights (``cs``)
-    exactly as the replay reads them.  Returns (index entries, rows per input port, out)."""
-    entries: list[list[Any]] = []
-    xs, css, outs = [], [], []
-    n = 0
-    for rid, pi, r, d in rows:
-        arrive = int((arrivals or {}).get(rid, 0))
-        nh = int(d["statics"]["NHEADS"])
-        ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
-        (member, width, _dt), = d["members"]
-        w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
-        if w is None:
-            raise LookupError(f"row {r['i']} output: {why}")
-        xs.append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
-        css.append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
-        outs.append(np.asarray(w, dtype=np.uint16).reshape(nh, D))
-        m = _LAYER.search(d["op_path"])
-        entries.append([n, n + nh, rid, arrive + int(d["step"]), int(m.group(1)) if m else None, d["op_path"], str(member), int(d["row"]), int(r["i"])])
-        n += nh
-    return entries, {"x": np.concatenate(xs), "cs": np.concatenate(css)}, np.concatenate(outs)
-
-
-def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> np.ndarray:
-    words = []
-    for sl in group:
-        kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
-        if kind == "n":
-            m = pi.member_at(a, lo, hi)
-            if m is None:
-                raise LookupError(f"arg slice {list(sl)} is not inside one committed member")
-            pd, member, mlo, mhi, _dt = m
-            width = next(int(mm[1]) for mm in pd["members"] if mm[0] == member)
-            w, why = store.words(rid, arrive + pd["step"], pd["op_path"], member, pd["row"] * width + mlo, pd["row"] * width + mhi)
-            if w is None:
-                raise LookupError(why)
-            words.append(np.asarray(w).reshape(-1))
-        elif kind == "p" and (pi.pnames[a] if a < len(pi.pnames) else None) == "weights":
-            ws = pi.weight_slice(lo, hi)
-            if ws is None:
-                raise LookupError(f"weights slice [{lo}, {hi}) spans fields")
-            fname, flo, fhi, _shape = ws
-            arr = weights(fname, flo, fhi)
-            if arr is None:
-                raise LookupError(f"registered weight field {fname} is not available")
-            words.append(np.asarray(arr).reshape(-1))
-        else:
-            raise LookupError(f"arg slice {list(sl)}: the serving rows read committed members and registered weights only")
-    return np.concatenate(words)
-
-
-def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str, row: Any = None,
-                 arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None, committer: dict[str, Any] | None = None,
-                 workers: int | None = None) -> dict[str, Any]:
-    """The Commit stage's opt-in hook, after the vllm-v1 roots are final and before any challenge: commit the run's RoPE heads
-    and write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
-    from verity_vllm.check.replay.opening import CommittedStore
-
-    t0 = time.perf_counter()
-    dirs = {str(k): v for k, v in (program_dirs or {}).items()}
-    served = {program_sha512(dirs[str(r)]) for r in programs}
-    if len(served) != 1:
-        raise NotImplementedError(f"serving rows register one served Program; this run has {len(served)}")
-    window = Window.from_file(partition_file, run)
-    rows = rope_rows(programs, dirs)
-    entries, cols, out = rope_units(rows, CommittedStore.of_record(bmap, committed, manifest), weights, arrivals=arrivals)
-    t_read = time.perf_counter()
-    c = commit(window, cols, out, workers=workers or min(16, os.cpu_count() or 1))
-    source = {"row": row, "run": run, "committer": dict(committer or {}, module=__name__), "served_program": served.pop(),
-              "served_program_digest": sorted({str(i.get("digest")) for i in programs.values()}), "vllm_v1_run_root": bytes(run_root).hex()}
-    c.seconds["read_s"] = round(t_read - t0, 3)
-    res = write(c, out_dir, source, index_doc(entries, run))
-    res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
-    (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
-    print(f"[serving-rows] {c.n} {FAMILY} heads committed ({SCHEME}): roots " + ", ".join(f"{p} {c.roots[p].hex()[:16]}" for p in c.roots)
-          + f"; registration {res['registration_sha512'][:16]}; {res['seconds']}", flush=True)
-    return res

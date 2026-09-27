@@ -115,14 +115,14 @@ def test_domains_follow_the_agreed_rule_from_registration_fields(tmp_path):
     assert all(other.domains[p].domain_id != c.domains[p].domain_id for p in c.domains)
 
 
-def test_m0_files_wrap_the_window_bodies(tmp_path):
+def test_flock_input_files_wrap_the_window_bodies(tmp_path):
     rows, out = heads(4)
     c = SR.commit(window(4, "r-m0"), rows, out, salt_key=bytes(32))
     SR.write(c, tmp_path / "w", {"row": 101, "run": "r-m0"}, SR.index_doc([], "r-m0"))
     meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["cs", 64, 1]], "out_ports": [["out", 64]], "vus_per_block": 2, "units_per_vu": 32,
             "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {}}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit\n..."
-    got = SR.m0_files(tmp_path / "w", text, tmp_path / "m0", "rope-head/d64")
+    got = SR.flock_input_files(tmp_path / "w", text, tmp_path / "m0", "rope-head/d64")
     pub, inst = Path(got["pub"]).read_bytes(), Path(got["inst"]).read_bytes()
     ph, pbody = pub.split(b"\n", 1)
     ih, ibody = inst.split(b"\n", 1)
@@ -134,4 +134,4 @@ def test_m0_files_wrap_the_window_bodies(tmp_path):
     assert ph["units"]["indices"] == [0, 1, 2, 3] and ph["units"]["blocks"] == [[0, 1], [2, 3]]
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
     with pytest.raises(ValueError, match="ports"):
-        SR.m0_files(tmp_path / "w", text.replace('["cs", 64, 1]', '["cs", 128, 1]'), tmp_path / "m1", "rope-head/d64")
+        SR.flock_input_files(tmp_path / "w", text.replace('["cs", 64, 1]', '["cs", 128, 1]'), tmp_path / "m1", "rope-head/d64")
