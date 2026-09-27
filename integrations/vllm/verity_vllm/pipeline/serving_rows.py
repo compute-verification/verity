@@ -37,7 +37,7 @@ from verity_vllm.commit import serving_rows as CS
 from verity_vllm.query.manifest import format as RM
 
 ROPE, ROPE_FAMILY, D = "RoPEHead_v1", "RoPE_v1", 64
-GEMM, GEMM_FAMILY, GRID = "GemmCoordinate", "Gemm_v1", "verity/one-stage/gemm-grid/v0"
+GEMM, GEMM_FAMILY = "GemmCoordinate", "Gemm_v1"
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
