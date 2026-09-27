@@ -46,3 +46,4 @@ import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
 import FlockSoundness.Audit.OneStage
+import FlockSoundness.Audit.TwoStage

@@ -73,6 +73,52 @@ theorem avg_ite_eq_prCoin {C : Type} [Fintype C] (p : C → Prop) [DecidablePred
   unfold prCoin
   exact congrArg avg (funext fun c => by by_cases h : p c <;> simp [h])
 
+/-- **Independent coordinates.** Averaging a product of per-coordinate functions over a product of
+uniform coins gives the product of the averages. -/
+theorem avg_pi_prod {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type} [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (f : ∀ i, Ω i → ℝ≥0∞) :
+    avg (fun ω : ∀ i, Ω i => ∏ i, f i (ω i)) = ∏ i, avg (f i) := by
+  unfold avg
+  have hinv : ((Fintype.card (∀ i, Ω i) : ℝ≥0∞))⁻¹ = ∏ i, ((Fintype.card (Ω i) : ℝ≥0∞))⁻¹ := by
+    rw [Fintype.card_pi, Nat.cast_prod]
+    exact ENNReal.prod_inv_distrib fun i _ j _ _ => Or.inl (by exact_mod_cast Fintype.card_ne_zero)
+  simp only [hinv, ← Finset.prod_mul_distrib]
+  exact (Fintype.prod_sum fun i j => ((Fintype.card (Ω i) : ℝ≥0∞))⁻¹ * f i j).symm
+
+/-- The probability that independent coordinates all satisfy their events is the product. -/
+theorem prCoin_pi_forall {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type} [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (D : Finset ι) (P : ∀ i, Ω i → Prop) :
+    prCoin (fun ω : ∀ i, Ω i => ∀ i ∈ D, P i (ω i)) = ∏ i ∈ D, prCoin (P i) := by
+  classical
+  have key : (fun ω : ∀ i, Ω i => if ∀ i ∈ D, P i (ω i) then (1 : ℝ≥0∞) else 0) =
+      fun ω => ∏ i, (if i ∈ D then (if P i (ω i) then 1 else 0) else 1) := by
+    funext ω
+    by_cases hω : ∀ i ∈ D, P i (ω i)
+    · rw [ite_eq_left_iff.2 fun h => absurd hω h]
+      exact (Finset.prod_eq_one fun i _ => by by_cases hi : i ∈ D <;> simp [hi, hω i]).symm
+    · rw [ite_eq_right_iff.2 fun h => absurd h hω]
+      push Not at hω
+      obtain ⟨i, hi, hP⟩ := hω
+      exact (Finset.prod_eq_zero (Finset.mem_univ i) (by simp [hi, hP])).symm
+  have h1 : ∏ i ∈ Finset.univ.filter (· ∉ D),
+      avg (fun c : Ω i => if i ∈ D then (if P i c then (1 : ℝ≥0∞) else 0) else 1) = 1 :=
+    Finset.prod_eq_one fun i hi => by
+      rw [Finset.mem_filter] at hi
+      simp only [hi.2, ite_false]
+      exact avg_const 1
+  calc prCoin (fun ω : ∀ i, Ω i => ∀ i ∈ D, P i (ω i))
+      = avg (fun ω : ∀ i, Ω i => if ∀ i ∈ D, P i (ω i) then (1 : ℝ≥0∞) else 0) :=
+        (avg_ite_eq_prCoin _).symm
+    _ = ∏ i, avg (fun c : Ω i => if i ∈ D then (if P i c then (1 : ℝ≥0∞) else 0) else 1) := by
+        rw [key]
+        exact avg_pi_prod (fun i c => if i ∈ D then (if P i c then (1 : ℝ≥0∞) else 0) else 1)
+    _ = ∏ i ∈ D, prCoin (P i) := by
+        rw [← Finset.prod_filter_mul_prod_filter_not Finset.univ (· ∈ D), h1, mul_one,
+          Finset.filter_mem_eq_inter, Finset.univ_inter]
+        refine Finset.prod_congr rfl fun i hi => ?_
+        simp only [hi, ite_true]
+        exact avg_ite_eq_prCoin _
+
 /-- A strategy for the relabelled game is a strategy for the game. -/
 def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
   | .ret _, _ => PUnit.unit

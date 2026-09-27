@@ -124,3 +124,11 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.oracle_count
 #print axioms FlockSoundness.Audit.Partition.oracle_profile
 #print axioms FlockSoundness.Audit.Partition.oracle_cone
+-- two-stage audits and their relation to one-stage
+#print axioms FlockSoundness.Game.prCoin_pi_forall
+#print axioms FlockSoundness.Audit.twoStage_profile
+#print axioms FlockSoundness.Audit.twoStage_count
+#print axioms FlockSoundness.Audit.effEscape_full
+#print axioms FlockSoundness.Audit.twoStage_full_profile
+#print axioms FlockSoundness.Audit.Partition.two_stage_a_coarse
+#print axioms FlockSoundness.Audit.Partition.Refines.analysis₂
