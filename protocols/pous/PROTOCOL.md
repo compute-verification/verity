@@ -3,8 +3,8 @@
 A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` from it on every use. A timed audit
 must certify that the GPU still holds more than a `ρ` fraction of `C`, so the memory it claims is really spent on the
 weights. This directory holds the problem's Lean formalization (`lean/`): the definitions, the pinned statements, and
-the proofs so far. A Python distribution (`verity_pous`: reference encoder, decoder and audit simulator) comes when that
-code lands.
+the proofs so far. The secure-first scheme is the dense single-layer scheme (below). A Python distribution
+(`verity_pous`: reference encoder, decoder and audit simulator) comes when that code lands.
 
 ## Main caveat: H is a monolithic random oracle (narrow-state H)
 
@@ -15,9 +15,38 @@ state breaks the instantiation. The adversary stores each label's pre-squeeze st
 those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of `C`, and P3 in three rounds from about
 39%. This is the Ristenpart–Shacham–Shrimpton limit: indifferentiability does not carry over to storage games, so no
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
-ideal-hash model only. The planned fix is H as a wide sponge (state at least `m` bits) over an ideal permutation,
-re-proved in the ideal-permutation model; a pilot has started. The Lean statements are unchanged. Source: the POUS
-store's `docs/p3-cryptanalysis.md`, "Narrow-state H".
+ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
+over an ideal permutation `Π₂` of width `2m + 512`, to be proved in the ideal-permutation model. Its pebbling side is
+proved, but its ex post facto bound, `ChainExPostFacto` (B5 for `Π₂`), is stated and not yet proved, and it is not in
+this package. `Π₂` itself (Feistel-SHAKE) is a heuristic ideal permutation. Sources: the POUS store's
+`docs/p3-cryptanalysis.md`, "Narrow-state H", and `docs/scheme-choice-e2e.md`.
+
+## The secure-first scheme: dense
+
+Daniel chose the dense single-layer scheme as the secure-first build (the POUS store's `docs/scheme-choice-e2e.md`).
+`Pous.Dense.denseScheme B ℓ` is one segment of `B` blocks of `ℓ` bits: `C_i = W_i ⊕ H(i, C_{<i})` over the complete DAG,
+with no `pp` and no coins, so its rate is 1. Decoding recomputes each block with one query. `PousDenseReCert.segScheme N
+B ℓ` lays out `N` such segments on global block indices, so each block reads only its own segment's earlier blocks, and
+the oracle's queries differ across segments.
+
+**Proved, with H a random oracle.** Each is `Meets` with no named assumption: correct, rate 1, the space bound, and the
+sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits passes with probability at most `1% + 2^-128`.
+
+| Theorem | Store | `D` rounds, `Q` queries | `k` |
+|---|---|---|---|
+| `PousDenseReCert.dense_meets_64` | one segment: 512 blocks of 64 KB (32 MiB) | 5, `2^20` | 106 |
+| `PousDenseReCert.seg_meets_14` | 448 such segments (14 GB) | 5, `2^20` | 106 |
+| `PousProofs.DenseMeets` (`Pous.Pinned.DenseMeets`) | one segment: `2^16` blocks of 1 KB | 64, `2^20` | 107 |
+
+Each composes B5 (`dense_timedINC`, `seg_timedINC`, from the pebbling bounds `complete_hard` and `seg_hard`) with
+Theorem 1(ii) sequential. At the 64 KB point the sampling term is `p₀^106 ≈ 0.98%`, while `p₀^105 > 1%`, so `k = 106` is
+tight. The 14 GB store needs the same `k` as one segment.
+
+**Not proved here:**
+- the concrete H, `ChainExPostFacto` (the main caveat);
+- the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and perfect
+  isolation: both outside Lean;
+- decode cost, which isn't modeled.
 
 ## The problem: timed audit, perfect isolation
 
@@ -71,7 +100,8 @@ The floor is `k = 86` challenges (`ρ^k ≤ δ`). Locality (bandwidth-limited of
 Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: the one-way bound on Fisch's stacked
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
 band graph `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels
-(`PousP3Column.band_twoWay_*`).
+(`PousP3Column.band_twoWay_*`); and the dense scheme at the deployment point (`PousDenseReCert.dense_meets_64`,
+`seg_meets_14`, above).
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over

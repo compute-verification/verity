@@ -41,8 +41,8 @@ grader and its sandbox. Everything else is checked by machine. Docstring paths s
 
 **The audit.** `tools/lean/audit.py` audits every declaration under `Pous` and `PousProofs`: allowed axioms, named
 assumptions, escapes, orphan files, import layers (`Pous` imports no proofs), a kernel replay, and the pinned theorems'
-records. `lean-audit.json` pins the sanity theorems, every `PousProofs.X`, the stacked one-way bound and the band
-certificate. A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
+records. `lean-audit.json` pins the sanity theorems, every `PousProofs.X`, the stacked one-way bound, the band
+certificate, and the dense scheme at the deployment point (`dense_meets_64`, `seg_meets_14`). A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
 
 **Submissions** are one file that imports only `Pous` and `Mathlib.*` and declares
 `theorem solution : Pous.Pinned.<Name>`. `grade.sh` builds the trusted layer and the grader first and records their
