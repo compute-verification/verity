@@ -1,4 +1,5 @@
 import FlockSoundness.RepSound
+import FlockSoundness.LinkSound
 
 /-!
 # Soundness of Flock's interactive protocol, as PROTOCOL.md specifies it
@@ -16,8 +17,12 @@ committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with 
 SHA-256's collision term for the compiled protocol.
 
 **Status.** `table_sound` is proved from `rep_sound` (one rep from a doomed start, `RepSound`,
-itself proved from four phase lemmas) and `link_sound` (the link points), with the phase lemmas
-and `link_sound` still `sorry`; see `ASSUMPTIONS.md` for the plan.
+itself proved from four phase lemmas) and `link_sound` (the link points, proved in `LinkSound`).
+Only the Ligerito phase lemma is still `sorry`; see `ASSUMPTIONS.md` for the plan.
+
+Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
+are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
+fit inside the point, as the statements of PROTOCOL.md §16 have them.
 -/
 
 namespace FlockSoundness
@@ -27,22 +32,33 @@ open Game Model Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
 /-- **The link points** (§16.2): if the committed values do not satisfy the statement, the two
-link points leave some rep start undoomed with probability at most `linkError`.
-*Status: to prove* (Schwartz–Zippel on each region's multilinear difference, twice). -/
+link points leave some rep start undoomed with probability at most `linkError`: Schwartz–Zippel
+on a failing region's difference, at two independent points, for every codeword near the
+committed table (`LinkSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/
 theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (ptLocal mPts : ℕ) (C : Oracle F)
-    (hC : ¬ Committed A S sch C) :
+    (hC : ¬ Committed A S sch C) (hlay : S.LinkLayout ptLocal mPts) :
     prCoin (fun pts : Fin 2 → Fin mPts → F =>
         ¬ RepDoomed A S sch C (extraClaims S ptLocal mPts pts)) ≤
       ENNReal.ofReal (linkError sch (S.shape mPts)) := by
-  sorry
+  classical
+  refine (link_sound_of_card A hA S sch ptLocal mPts C hC hlay _
+    (closeMsgs_card_le A hA sch S.m hsch C)).trans (le_of_eq ?_)
+  rw [hA.card_F, linkError]
+  simp only [Statement.shape]
+  rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_mul (by positivity),
+    ENNReal.ofReal_natCast, ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by unfold qF; positivity),
+    ofReal_nat_div_qF]
+  push_cast
+  ring
 
 /-- **Soundness of one table** (interactive-oracle layer). For every prover strategy, the
 verifier accepts both reps while the committed values do not satisfy the statement with
 probability at most `tableError`. -/
 theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
-    (ptLocal mPts : ℕ) (σ : Strategy (table A S sch hm ptLocal mPts)) :
+    (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
+    (σ : Strategy (table A S sch hm ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts) σ
       ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) := by
   refine (prob_le_value _ _ σ).trans ?_
@@ -68,7 +84,7 @@ theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Co
   · refine (value_coin_le _ _ _
       (fun pts => ¬ RepDoomed A S sch C (extraClaims S ptLocal mPts pts))
       (ENNReal.ofReal (linkError sch (S.shape mPts))) (ENNReal.ofReal ε * ENNReal.ofReal ε)
-      (link_sound A hA S sch hsch ptLocal mPts C hC) fun pts hpts => ?_).trans ?_
+      (link_sound A hA S sch hsch ptLocal mPts C hC hlay) fun pts hpts => ?_).trans ?_
     · rw [not_not] at hpts
       rw [value_bind_ret]
       have h := rep_sound hMCA A hA S sch hsch hm mPts C _
@@ -90,10 +106,10 @@ theorem table_sound (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Co
 theorem table_sound_fast100 (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
     (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
-    (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
+    (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
       (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.5 : ℝ))) :=
-  (table_sound hMCA A hA S sch hsch (by omega) ptLocal mPts σ).trans
+  (table_sound hMCA A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
 end FlockSoundness
