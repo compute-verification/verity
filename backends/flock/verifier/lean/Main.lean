@@ -219,6 +219,49 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
+/-- `draw --population N (--k K | --p NUM/DEN) [--stream HEX]`: the unit draw (§7.3), from the operating system's randomness,
+or from the given bytes (a test). Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+def drawCmd (args : List String) : IO UInt32 := do
+  let some pop := (argOf args "--population").bind String.toNat? | IO.eprintln "draw: --population N"; return 2
+  let law ← match argOf args "--k", argOf args "--p" with
+    | some k, none => match k.toNat? with
+      | some k => if k ≤ pop then pure (Draw.Law.subset k) else IO.eprintln "draw: k > population"; return 2
+      | none => IO.eprintln "draw: --k K"; return 2
+    | none, some p => match p.splitOn "/" with
+      | [a, b] => match a.toNat?, b.toNat? with
+        | some a, some b => if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
+        | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+      | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+    | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
+  let d ← match argOf args "--stream" with
+    | none => Draw.drawOS law pop
+    | some hex =>
+      let src ← match unhex hex with | .ok b => pure b | .error e => IO.eprintln s!"draw: {e}"; return 2
+      let r := match law with
+        | .subset k => Draw.subset k pop src
+        | .bernoulli a b => Draw.bernoulli a b pop src
+      match r with
+      | some units => pure { law, population := pop, units : Draw.UnitDraw }
+      | none => IO.eprintln "draw: the stream ran out"; return 1
+  IO.println s!"DRAW {d.toJson.compress}"
+  return 0
+
+/-- `draw-test FILE`: U1–U3 (§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one
+`DRAWCHECK {"ok", "why"}` line per case. -/
+def drawTest (path : String) : IO UInt32 := do
+  let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
+  for c in cases do
+    let side := fun (k : String) => match c.getObjVal? k with
+      | .ok .null => none
+      | .ok v => some v
+      | .error _ => none
+    let n := (c.getObjValAs? Nat "instances").toOption.getD 0
+    let (ok, why) := match Draw.check (side "record") (side "statement") n with
+      | .ok () => (true, "")
+      | .error e => (false, e)
+    IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -226,6 +269,8 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
+  | "draw" :: rest => drawCmd rest
+  | ["draw-test", path] => drawTest path
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

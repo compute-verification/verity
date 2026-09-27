@@ -170,7 +170,7 @@ namespace Stmt
 
 def spec (st : Stmt) : SessionSpec :=
   { table := st.tags.table, domain := st.tags.domain, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
-    retainRounds := st.tags.retainRounds }
+    retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=

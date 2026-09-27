@@ -192,6 +192,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
 | S4 | `link.sigma = hex(Σ)` | the session is about this statement |
+| U1–U3 | the record's `unit_draw` is the statement's, well formed, and the statement's instances are the drawn units (§7.3) | the drawn units are the proved ones |
 | S5 | for every configured table `t`: `root_b.<t>` present, non-empty, and `SHA-256(root_b.<t>) = root_b_sha256.<t>` (keys for other tables are ignored, as upstream does) | L1/L3 |
 | S6 | `SHA-256(root_f) = root_f_sha256` and `root_f` non-empty; for these statements `root_f = Σ` (intended divergence D1, §17.1) | L1: statements without a prime half commit Σ as root_F |
 | S7 | for every configured `t`: `SHA-256(publics.<t>) = publics_sha256.<t>` (absent key = empty bytes; other keys ignored) | C4 prerequisites |
@@ -302,6 +303,39 @@ store (rounds are grouped by stream, and interleaved reps are allowed). Recommen
 Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
 of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
 pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
+
+### 7.3 The unit draw
+
+The verifier draws the sampled units itself, in the clear, between registration and the session
+(`note:20260927T0210Z-finding-unit-draw-placement`). Serving registers its roots; the verifier draws the unit set from
+its operating system's randomness and sends it; the drawn units' statements are fixed; only then does the verifier send
+its coin commitment. The draw is not under the coin commitment, and no hash derives it.
+
+The samplers are `verity.randomness`'s exact ones, read straight from the OS bytes (`Flock.Draw`, `flock-verify draw`).
+`uniform(n)` takes big-endian words of `w = ⌈(bitlen(n) + 64) / 8⌉` bytes and returns the first `x < 2^(8w) − 2^(8w) mod n`,
+mod `n`. `subset(k, n)` is the partial Fisher–Yates of `Key.subset`: for `i < k`, `j = i + uniform(n − i)`, swap `i` and
+`j`, and return the first `k`, sorted. `bernoulli(p)` over `[0, N)` takes unit `u` when `uniform(den) < num`. A stream
+that runs out is extended and the sampler rerun, so the draw stays exact.
+
+The draw is the object
+
+~~~text
+{"law": "subset",    "population": N, "k": K,          "units": [u_0 < u_1 < …]}
+{"law": "bernoulli", "population": N, "p": "num/den",  "units": [u_0 < u_1 < …]}
+~~~
+
+The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
+and the record keeps it as `unit_draw`. The offline checks:
+
+| check | rule |
+|---|---|
+| U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1` |
+| U3 | the statement's `instances` is the number of drawn units |
+
+Offline, the draw's uniformity is not checkable; soundness rests on the verifier's honest draw after registration. A
+session without a draw on either side is unchanged. The live side (PR #83) sends the draw after registration, stages the
+public header with it and records it; until then no recorded session carries one.
 
 ## 8. The proof container
 
