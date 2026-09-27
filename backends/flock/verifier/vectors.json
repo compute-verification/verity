@@ -4180,6 +4180,24 @@
     "forgeries": "art:c49cb61e/rope-head/extra",
     "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
     "agreement": "r20260927-060508-66c0 (result art:294b6cf1, run files art:2b8201f1): 25/25"
+   },
+   {
+    "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
+    "pr83": "eb90718f",
+    "generator": "flock-circuit selftest --record-dir on a CPU pod (r20260927-061936-560b: PR #83 eb90718f with circuit-vectors-eb90718f.patch, --features sha512,seed-injection), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:187679d7/rmst128/stage/circuit.txt",
+     "public": "art:187679d7/rmst128/stage/pub-2.bin",
+     "tables": "art:925d6833",
+     "circuit_sha512": "33edd22b8db746e6390e6ee6de646a7847f407d545a49b51edba7d14f5b7c1661bab120168e01d902cdc870187b0a1982685cd193beb24f26e7b3173689d1e67",
+     "detail": "Triton RMSNorm n128, 2 instances (population): lookup slots, tail stages; CPU selftest build (seed_injection: true)"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:187679d7/rmst128/records-cpu"
+    ],
+    "selftest_note": "every selftest case that runs a session (23) and the draw cases unit_draw_session (accepted) and unit_draw_ignored_refused; each drawn session replays upstream in its own process (upstream leaks a statement's matrices; two RMSNorm statements exceed 15 GB)",
+    "agreement": "25/25 (local, 2026-09-27T06:45Z)"
    }
   ],
   "recorded_runs": [

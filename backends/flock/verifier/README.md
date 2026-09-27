@@ -69,7 +69,8 @@ The vectors patch of each version applies to its PR #83 commit (`git apply` in a
 - `circuit-vectors-eb90718f.patch`, for `eb90718f` (build Flock with PR #83's `flock-sha512-b684b12.patch` and `flock-live`
   with `--features sha512 --features seed-injection`), patches `flock-circuit`. It has `vectors`, which records the honest
   session (this prover refuses R-BREAK's second level-0 tree under shared salts), and `replay`, which replays drawn records
-  under the drawn statement. It drops `forgeries`, and it records the selftest's two draw cases under `--record-dir`.
+  under the drawn statement (`--drawn-only`: only the drawn units' statement is built). It drops `forgeries`, and it records
+  the selftest's two draw cases under `--record-dir`.
 - `netlist-vectors.patch`, for `9294e161`, patches `flock-netlist`;
 - `circuit-vectors.patch`, for `631567f7` (the SHA-512 statement: build Flock with PR #83's `flock-sha512-b684b12.patch` and
   `flock-live` with `--features sha512`), patches `flock-circuit`. Its `fd02e847` version is in commit a2c4e9fd and its
@@ -97,6 +98,11 @@ result `art:294b6cf1`), 25 of 25 sessions agree:
 - the honest vector;
 - two draw negatives (the record's draw altered, and dropped);
 - a salt mutant (an opened salt flipped, with `proof_sha512` rebuilt), which Lean rejects at the Merkle opening.
+
+Triton RMSNorm n128 at `eb90718f` (lookup slots; `vectors.json` set 9, `art:187679d7`, recorded on a CPU pod in
+`r20260927-061936-560b`): every selftest case, the draw cases included, 25 of 25. `agree.py` replays each drawn session
+through upstream in its own process (`replay --drawn-only`), since upstream leaks a statement's matrices and two RMSNorm
+statements do not fit in 15 GB.
 
 Recorded runs:
 - `art:f1f3c2aa` (`9294e161`): 25 of 25 sessions agree;

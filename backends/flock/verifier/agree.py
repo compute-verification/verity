@@ -34,10 +34,25 @@ def lean_verdicts(a):
     return out
 
 
+def drawn(s):
+    """The session's record carries a unit draw (PR #83 from eb90718f)."""
+    try:
+        return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
+    except (OSError, ValueError):
+        return False
+
+
 def upstream_verdicts(a):
     out = {}
     for public, sessions in groups(a).items():
-        out.update(upstream_run(a, public, sessions))
+        plain = [s for s in sessions if not drawn(s)]
+        if plain:
+            out.update(upstream_run(a, public, plain))
+        # each drawn session in its own process, which builds only its drawn units' statement (`replay --drawn-only`): upstream
+        # leaks a statement's matrices, so one process holds one statement
+        for s in sessions:
+            if drawn(s):
+                out.update(upstream_run(a, public, [s], ["--drawn-only"]))
     return out
 
 
@@ -78,10 +93,10 @@ def lean_run(a, public, sessions):
     return out
 
 
-def upstream_run(a, public, sessions):
+def upstream_run(a, public, sessions, extra=()):
     flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
-    p = subprocess.run([a.upstream, "replay", "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
+    p = subprocess.run([a.upstream, "replay", *extra, "--instances", public, flag, a.circuit, *tables, "--sessions", *sessions],
                        capture_output=True, text=True)
     with open(a.out / "upstream.txt", "a") as f:
         f.write(p.stdout)

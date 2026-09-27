@@ -1,5 +1,5 @@
 diff --git a/backends/flock/live/src/bin/flock-circuit.rs b/backends/flock/live/src/bin/flock-circuit.rs
-index c6f9abf3..22bb790c 100644
+index c6f9abf3..421069b8 100644
 --- a/backends/flock/live/src/bin/flock-circuit.rs
 +++ b/backends/flock/live/src/bin/flock-circuit.rs
 @@ -772,6 +772,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
@@ -220,7 +220,38 @@ index c6f9abf3..22bb790c 100644
      if cmd == "replay-coins" {
          let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
          match flock_live::replay_coin_seed(&rec) {
-@@ -1083,6 +1280,19 @@ fn main() {
+@@ -1052,6 +1249,30 @@ fn main() {
+     if let Err(e) = check_public(&c, &inst) {
+         refuse(e);
+     }
++    if cmd == "replay" && flag("--drawn-only") {
++        // drawn sessions alone: only the drawn units' statement is built, never the population's (one statement in memory)
++        let a: Vec<String> = std::env::args().collect();
++        let dirs = &a[a.iter().position(|x| x == "--sessions").map(|i| i + 1).unwrap_or(a.len())..];
++        for d in dirs {
++            let rec: Value = serde_json::from_slice(&std::fs::read(format!("{d}/session.json")).unwrap()).unwrap();
++            let proofs: Vec<Vec<u8>> = (0..2).map(|r| std::fs::read(format!("{d}/{TABLE}.rep{r}.bin")).unwrap()).collect();
++            let v = (|| -> Result<Value, String> {
++                let di = Arc::new(inst.drawn(&c, &rec["unit_draw"])?);
++                check_public(&c, &di)?;
++                let ds = Arc::new(Stmt::new(c.clone(), di.n, identity(&c))?);
++                let m: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
++                Ok(match Server::from_record(config(&ds, &di), Box::new(CircuitVerifier { st: ds.clone(), inst: di.clone() }), &rec, m) {
++                    Ok(mut s) => {
++                        let v = s.finish();
++                        json!({"accepted": v["accepted"], "why": v["why"]})
++                    }
++                    Err(e) => json!({"accepted": false, "why": e}),
++                })
++            })().unwrap_or_else(|e| json!({"accepted": false, "why": e}));
++            println!("UPSTREAM\t{}", json!({"session": d, "verdict": v}));
++        }
++        return;
++    }
+     let id = identity(&c);
+     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
+@@ -1083,6 +1304,19 @@ fn main() {
                  println!("LIVE\t{v}");
              }
          }
