@@ -346,7 +346,9 @@ structure Layout (st : Stmt) : Prop where
   /-- the unit is a text net (not a lookup slot) -/
   unit_parsed : ∃ lines, Net.parse lines = .ok st.c.unit
   unit_lookup : st.c.unit.lookup = none
-  unit_const : ConstRow st.c.unit
+  unit_in : st.c.unit.inWords * WORD ≤ st.c.unit.constPos
+  /-- the unit's constant row reads itself (its rows fit `rd32`'s words when its slot fits the block) -/
+  unit_const : st.c.unit.unitLog ≤ 32 → ConstRow st.c.unit
   /-- the pin is the first slot's constant of a net range with a slot -/
   pin : ∃ rp ∈ st.c.ranges.toList, ∃ ip, rp.kind = .net ip ∧ 0 < rp.count ∧
     st.pin = rp.start + (st.c.nets.getD ip default).2.constPos ∧ ConstRow (st.c.nets.getD ip default).2
@@ -450,7 +452,7 @@ include L
 theorem unit_const_lt : st.c.unit.constPos < 2 ^ st.c.unit.unitLog := (L.fit st.c.unitNet).1
 
 theorem unitRows_nIn : (unitRows st L.unit_parsed).nIn = st.c.unit.inWords * WORD :=
-  Nat.min_eq_left L.unit_const.1
+  Nat.min_eq_left L.unit_in
 
 theorem unitRows_nIn_nComp :
     (unitRows st L.unit_parsed).nIn + (unitRows st L.unit_parsed).nComp = st.c.unit.constPos := by
@@ -552,7 +554,7 @@ theorem delta_unit_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (j : �
   have hoffW : st.c.unit.constPos < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact L.unit_const_lt
   have hx := inSpan_of_covers (covers_slot hs hoffW)
   rw [deltaEntry_eq_count, hsplit, List.count_append,
-    List.count_eq_zero.2 (fun hm => L.not_inBit L.unit_mem L.unit_kind hs hoffW L.unit_const.1 (hrest _ hm)),
+    List.count_eq_zero.2 (fun hm => L.not_inBit L.unit_mem L.unit_kind hs hoffW L.unit_in (hrest _ hm)),
     Nat.add_zero, constPairs, count_flatMap_apart L.disj L.unit_mem hx _ _ (fun a ha hax => by
       refine List.count_eq_zero.2 fun hm => hax ?_
       obtain ⟨i, hki, s, hs', heq, -⟩ := slotPairs_fst hm
@@ -658,7 +660,8 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
         (unitRows st L.unit_parsed).one.val) j.val +
       deltaEntry st.da (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_parsed).one.val) j.val = _
     rw [L.unitRows_one, L.rangesEntry_unit hs L.unit_const_lt, L.delta_unit_const hs,
-      ite_slot_eq (v := slotEntryA st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt L.unit_const.2.1]
+      ite_slot_eq (v := slotEntryA st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt
+        (L.unit_const (L.unitLog_le hs)).2.1]
     have hx : (st.c.unitRange.pos0 + (g * st.c.upv + u)) * 2 ^ st.c.unit.unitLog + st.c.unit.constPos =
         st.c.unitRange.slot (g * st.c.upv + u) + st.c.unit.constPos := by
       unfold Range.slot; rw [L.unit_slotLog]
@@ -670,7 +673,8 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
         (unitRows st L.unit_parsed).one.val) j.val +
       deltaEntry st.db (st.c.unitRange.slot (g * st.c.upv + u) + (unitRows st L.unit_parsed).one.val) j.val = _
     rw [L.delta_b, L.unitRows_one, L.rangesEntry_unit hs L.unit_const_lt, L.delta_unit_const hs,
-      ite_slot_eq (v := slotEntryB st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt L.unit_const.2.2]
+      ite_slot_eq (v := slotEntryB st (.net st.c.unitNet) st.c.unit.constPos) hW L.unit_const_lt
+        (L.unit_const (L.unitLog_le hs)).2.2]
     have hx : (st.c.unitRange.pos0 + (g * st.c.upv + u)) * 2 ^ st.c.unit.unitLog + st.c.unit.constPos =
         st.c.unitRange.slot (g * st.c.upv + u) + st.c.unit.constPos := by
       unfold Range.slot; rw [L.unit_slotLog]

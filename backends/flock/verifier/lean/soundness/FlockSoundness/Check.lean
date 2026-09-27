@@ -252,3 +252,19 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Layout.delta_pin
 #print axioms FlockSoundness.Layout.placement
 #print axioms FlockSoundness.Layout.unitPlace
+-- the layout facts, from the executable's accept step (Stmt.setupH)
+#print axioms FlockSoundness.parse_spec
+#print axioms FlockSoundness.portCols_le
+#print axioms FlockSoundness.delta_split
+#print axioms FlockSoundness.loop_inv
+#print axioms FlockSoundness.parse_facts
+#print axioms FlockSoundness.check_facts
+#print axioms FlockSoundness.build_spec
+#print axioms FlockSoundness.setupH_spec
+#print axioms FlockSoundness.pin_spec
+#print axioms FlockSoundness.rowSlots_spec
+#print axioms FlockSoundness.portCols_toList
+#print axioms FlockSoundness.deltaIn_inBit
+#print axioms FlockSoundness.setupH_layout
+#print axioms FlockSoundness.placement_of_setupH
+#print axioms FlockSoundness.unitPlace_of_setupH
