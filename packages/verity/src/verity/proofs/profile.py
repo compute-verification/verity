@@ -17,7 +17,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
-from itertools import combinations
 from math import comb, inf, log, prod
 from types import MappingProxyType
 
@@ -149,31 +148,61 @@ class IntegrityProfile:
             raise ValueError(f"0 <= m <= {n}")
         return 1 - p + p * Fraction(comb(n - m, k), comb(n, k))
 
+    def _odds(self) -> tuple[int, int, int, int, int]:
+        """(n, k, p's numerator, p's denominator, C(n, k)): accept(m) = ((den - num) C(n, k) + num C(n - m, k)) /
+        (den C(n, k)), in integers."""
+        _, n, p, k = self._law()
+        return n, k, p.numerator, p.denominator, comb(n, k)
+
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m)."""
-        a = self.accept(m)
-        return inf if a == 0 else -log(a)
+        """Detection risk -ln accept(m), in log space from exact integers, so it never underflows (`accept` is a ratio
+        of binomials that can fall far below the smallest float)."""
+        n, k, num, den, top = self._odds()
+        if not 0 <= m <= n:
+            raise ValueError(f"0 <= m <= {n}")
+        a = (den - num) * top + num * comb(n - m, k)
+        return inf if a == 0 else log(den * top) - log(a)
+
+    def _rhos(self) -> list[float]:
+        """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, no underflow."""
+        n, k, num, den, top = self._odds()
+        whole, c, out = log(den * top), top, []
+        for m in range(n + 1):
+            a = (den - num) * top + num * c
+            out.append(inf if a == 0 else whole - log(a))
+            c = c * (n - m - k) // (n - m) if n - m > k else 0
+        return out
 
     def worst_case(self, utility: Callable[[int], float], cap: float | None = None) -> float:
         """An upper bound on sum_i utility(m_i) over the Bernoulli members i the profile admits, for utility(0) = 0.
 
         It is the optimum of the linear relaxation: choose x_m >= 0 Bernoulli members at each m in 1..n with
-        sum x_m <= members and sum x_m rho(m) <= ln(1/delta).  Two constraints, so an optimal vertex uses at most two
-        values of m, and every pair is tried.  A consumer reading at a level above the Bernoulli level (touched
-        requests, say) passes `cap`, that level's member count (`count`), which the bound never exceeds."""
+        sum x_m <= members and sum x_m rho(m) <= ln(1/delta).  Scaled by `members`, that is the largest value, at
+        mean risk at most ln(1/delta)/members, of the upper concave envelope of the points (rho(m), utility(m)) and
+        (0, 0).  rho is nondecreasing in m (accept is), so the points arrive sorted and one pass builds the envelope:
+        linear in n, where trying every pair of m was quadratic.  A consumer reading at a level above the Bernoulli
+        level (touched requests, say) passes `cap`, that level's member count (`count`), which the bound never
+        exceeds."""
         if cap is not None and cap < 0:
             raise ValueError("cap >= 0")
         members, n, _, _ = self._law()
-        budget = log(1 / self.delta)
-        options = [(float(u), self.rho(m)) for m in range(1, n + 1) if (u := utility(m)) > 0]
-        options = [(u, r) for u, r in options if r < inf]
+        rhos = self._rhos()
+        points = [(r, float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
         best = 0.0
-        if options:
-            best = max(u * (members if r == 0 else min(members, budget / r)) for u, r in options)
-            for (ua, ra), (ub, rb) in combinations(sorted(options, key=lambda o: o[1]), 2):
-                if rb > ra and ra * members < budget < rb * members:
-                    xb = (budget - members * ra) / (rb - ra)
-                    best = max(best, ua * (members - xb) + ub * xb)
+        if points and members > 0:
+            hull: list[tuple[float, float]] = []
+            for pt in sorted([(0.0, 0.0), *points]):
+                while len(hull) >= 2 and ((hull[-1][0] - hull[-2][0]) * (pt[1] - hull[-2][1])
+                                          >= (hull[-1][1] - hull[-2][1]) * (pt[0] - hull[-2][0])):
+                    hull.pop()
+                hull.append(pt)
+            t = log(1 / self.delta) / members
+            for (ra, ua), (rb, ub) in zip(hull, hull[1:] + [(inf, 0.0)]):
+                if ra <= t:
+                    best = max(best, ua)
+                    if t < rb < inf:
+                        best = max(best, ua + (ub - ua) * (t - ra) / (rb - ra))
+            best *= members
         return best if cap is None else min(best, float(cap))
 
     def to_json(self) -> dict:

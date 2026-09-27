@@ -2,8 +2,9 @@
 
 The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
 with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units drawn with p, then k of the n_v
-inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers, kept as the oracle
-the level form must reproduce exactly."""
+inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
+oracle the level form must reproduce: `accept` exactly, and `worst_case` up to float rounding (the envelope and the
+pairs round differently, by about 1e-15)."""
 
 from __future__ import annotations
 
@@ -149,7 +150,7 @@ def test_the_two_level_case_reproduces_the_four_number_law_exactly(n_r, n_v, p, 
         a = two_level(n_r, n_v, p, k, delta)
         assert all(a.accept(m) == accept(m) for m in range(n_v + 1))
         for utility in (lambda m: m, lambda m: 1, lambda m: m * m, lambda m: 4 * m):
-            assert a.worst_case(utility) == worst_case(utility)
+            assert a.worst_case(utility) == pytest.approx(worst_case(utility), rel=1e-12, abs=1e-12)
 
 
 def test_undrawn_levels_only_group():
@@ -232,3 +233,69 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
                          (coarse.count(), per[0]), {"coordinate": Bernoulli(Fraction(1, 2)), "call": Subset(1)}, 0.01)
     assert a.count("call") == fine.count() == 8 and a.accept(2) == Fraction(1, 2)
+
+
+def one_level(n, k, delta) -> IntegrityProfile:
+    return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
+
+
+#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, worst_case(m), at most).
+E2E = {"A0": (1024, 16, 0.01, 254.22632080026347, 254),
+       "A1": (1024, 256, 2.0 ** -20, 46.92437954253062, 46),
+       "A3": (344, 128, 2.0 ** -20, 28.25559880146837, 28),
+       "A2": (183_680, 256, 2.0 ** -20, 9675.419457199421, 9675)}
+
+
+@pytest.mark.parametrize("run", sorted(E2E))
+def test_the_one_stage_audit_bounds(run):
+    """A2 is serving's real population (183,680 units); the quadratic, float `worst_case` crashed there."""
+    n, k, delta, value, at_most = E2E[run]
+    bound = one_level(n, k, delta).worst_case(lambda m: m)
+    assert bound == pytest.approx(value, rel=1e-12)
+    assert int(bound) == at_most
+
+
+def _largest_admitted(n, k, delta) -> int:
+    """The largest K with C(n - K, k)/C(n, k) >= delta, in exact rationals: `audit_count` (`Audit/OneStage.lean`)
+    bounds Pr[accept and at least K wrong] by that ratio (`Law.subset_miss`) plus the per-unit terms."""
+    d, top = Fraction(delta), comb(n, k)
+    lo, hi = 0, n + 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if Fraction(comb(n - mid, k), top) >= d else (lo, mid)
+    return lo
+
+
+@pytest.mark.parametrize("run", sorted(E2E))
+def test_the_count_bound_is_the_lean_curve(run):
+    """For one level drawn Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
+    (`Law.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
+    n, k, delta, _, at_most = E2E[run]
+    a = one_level(n, k, delta)
+    top = comb(n, k)
+    for K in {0, 1, k, n // 3, at_most, at_most + 1, n - k, n - k + 1, n}:
+        assert a.accept(K) == Fraction(comb(n - K, k), top)
+    assert _largest_admitted(n, k, delta) == at_most == int(a.worst_case(lambda m: m))
+
+
+def test_rho_is_exact_where_accept_underflows():
+    """At A2's size accept(m) falls far below the smallest float; rho stays exact, from integer binomials."""
+    n, k = 183_680, 256
+    a = one_level(n, k, 2.0 ** -20)
+    assert a.accept(n - k) > 0 and float(a.accept(n - k)) == 0.0
+    assert a.rho(n - k) == pytest.approx(log(comb(n, k)), rel=1e-15)
+    assert a.rho(n - k + 1) == inf and a.rho(0) == 0.0
+    assert [a.rho(m) for m in (0, 1, 1000, 9675, 9676, n - k)] == [a._rhos()[m] for m in (0, 1, 1000, 9675, 9676, n - k)]
+    with pytest.raises(ValueError):
+        a.rho(n + 1)
+
+
+def test_worst_case_is_the_convex_threshold_for_one_subset_level():
+    """With one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between
+    the last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b, now served by core)."""
+    for n, k, delta, _, _ in E2E.values():
+        a, budget = one_level(n, k, delta), log(1 / delta)
+        lo = _largest_admitted(n, k, delta)
+        ra, rb = a.rho(lo), a.rho(lo + 1)
+        assert a.worst_case(lambda m: m) == pytest.approx(lo + (budget - ra) / (rb - ra), rel=1e-12)
+
