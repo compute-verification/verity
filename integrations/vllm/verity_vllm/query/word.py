@@ -512,14 +512,16 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
 
 
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
-                specialize: Callable[[str, dict], Any] = specialization, acquired: Mapping[str, int] | None = None) -> dict[str, Any]:
+                specialize: Callable[[str, dict], Any] = specialization,
+                acquired: Mapping[str, int | Callable[[dict], int]] | None = None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` over a Program's Calls, grouped: each group {"family", "statics", "definition", "calls", "where",
     "inputs_committed", "outputs_committed"}.  Per group: its Definition's unit rule and the committed-boundary conditions (every
     Value the Call reads and every Value it outputs is committed, else a unit would cross Calls).  Violations are aggregated per
     (Definition, class) with the Calls they cover and the first modules; `strict` raises `QueryRuleViolation` naming them.
 
-    `acquired` (Definition family -> committed interior words per Call a tap acquires, e.g. `query.norm_scales.TAP_WORDS`): those
-    interior values are committed boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
+    `acquired` (Definition family -> committed interior words per Call a tap acquires, e.g. `query.norm_scales.TAP_WORDS`, or a function
+    of the Call's statics for a tap whose words depend on them, `query.router_softmax.TAP_WORDS`): those interior values are committed
+    boundaries too.  Each group of such a family reports `acquired_interior_words`, and one whose
     partition commits another number of interior words per Call is an `interior-not-acquired` violation."""
     memo: dict = {}
     out: list[dict[str, Any]] = []
@@ -544,7 +546,8 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         if not g.get("outputs_committed", True):
             v.append({"definition": g["definition"], "class": "output-not-committed",
                       "why": "the Call's output is interior to its module body (not a required value): no unit can end at it"})
-        tap = int(acquired.get(g["family"], 0)) if acquired is not None else 0
+        a = acquired.get(g["family"], 0) if acquired is not None else 0
+        tap = int(a(g["statics"]) if callable(a) else a)
         if tap and rule["committed_interior_words"] != tap:
             v.append({"definition": g["definition"], "class": "interior-not-acquired",
                       "why": f"the tap acquires {tap} interior word(s) per Call; the partition commits {rule['committed_interior_words']}"})
