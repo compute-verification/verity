@@ -297,6 +297,40 @@ impl<C: Challenger> Challenger for Masking<C> {
     }
 }
 
+/// Logs every coin drawn through it (the inner phase's coins, for the simulator's input).
+pub struct Logging<'a, C: Challenger> {
+    pub inner: &'a mut C,
+    pub coins: Vec<F128>,
+}
+
+impl<C: Challenger> Challenger for Logging<'_, C> {
+    fn observe_label(&mut self, l: &[u8]) {
+        self.inner.observe_label(l)
+    }
+    fn observe_f128(&mut self, v: F128) {
+        self.inner.observe_f128(v)
+    }
+    fn observe_f128_slice(&mut self, v: &[F128]) {
+        self.inner.observe_f128_slice(v)
+    }
+    fn observe_bytes(&mut self, b: &[u8]) {
+        self.inner.observe_bytes(b)
+    }
+    fn sample_f128(&mut self) -> F128 {
+        let x = self.inner.sample_f128();
+        self.coins.push(x);
+        x
+    }
+    fn sample_f128_vec(&mut self, n: usize) -> Vec<F128> {
+        let x = self.inner.sample_f128_vec(n);
+        self.coins.extend_from_slice(&x);
+        x
+    }
+    fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
+        unreachable!()
+    }
+}
+
 /// A challenger that hands out logged coins and ignores what it absorbs: the prover's replay of its own checks.
 pub struct Tape {
     coins: std::collections::VecDeque<F128>,
@@ -316,6 +350,43 @@ impl Challenger for Tape {
     fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
         unreachable!()
     }
+}
+
+/// The exposed values in [`Layout`] order (a proof's masked zerocheck and lincheck fields).
+pub fn exposed_values(zc: &ZerocheckProof, lc: &LincheckProof, lay: &Layout) -> Vec<F128> {
+    let mut v = vec![F128::ZERO; lay.exposed()];
+    for i in 0..SKIP {
+        v[lay.r1ab(i)] = zc.round1_ab[i];
+        v[lay.r1c(i)] = zc.round1_c[i];
+        v[lay.zp(i)] = lc.z_partial[i];
+    }
+    for (j, r) in zc.multilinear_rounds.iter().enumerate() {
+        v[lay.ml(j, 0)] = r.0;
+        v[lay.ml(j, 1)] = r.1;
+    }
+    v[lay.fa()] = zc.final_a_eval;
+    v[lay.fb()] = zc.final_b_eval;
+    v[lay.fc()] = zc.final_c_eval;
+    for (j, r) in lc.rounds.iter().enumerate() {
+        v[lay.lc(j, 0)] = r.0;
+        v[lay.lc(j, 1)] = r.1;
+    }
+    v
+}
+
+/// A zerocheck and lincheck proof holding the exposed values `v` (the inverse of [`exposed_values`]).
+pub fn from_exposed(v: &[F128], lay: &Layout) -> (ZerocheckProof, LincheckProof) {
+    let zc = ZerocheckProof {
+        round1_ab: (0..SKIP).map(|i| v[lay.r1ab(i)]).collect(),
+        round1_c: (0..SKIP).map(|i| v[lay.r1c(i)]).collect(),
+        multilinear_rounds: (0..lay.n_mlv).map(|j| (v[lay.ml(j, 0)], v[lay.ml(j, 1)])).collect(),
+        final_a_eval: v[lay.fa()], final_b_eval: v[lay.fb()], final_c_eval: v[lay.fc()], grinding_nonces: vec![],
+    };
+    let lc = LincheckProof {
+        rounds: (0..lay.n_lc).map(|j| (v[lay.lc(j, 0)], v[lay.lc(j, 1)])).collect(),
+        z_partial: (0..SKIP).map(|i| v[lay.zp(i)]).collect(), matrix_evals: vec![], grinding_nonces: vec![],
+    };
+    (zc, lc)
 }
 
 /// The proof's zerocheck and lincheck with every exposed value masked (the values [`Masking`] sent).
@@ -461,6 +532,35 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
     let ab_point = r1cs.ab_claim_point(r_inner_skip, &r_inner_rest, &x_ab.x_outer);
     let c_point = r1cs.c_claim_point(SkipPoint::Phi8(z), &r_rest);
     Ok(Replayed { ab_point, c_point, ab_value: w, c_value: fc, cons, a_value: a, b_value: b })
+}
+
+/// The two z-claim points from the algebraic phase's coins alone (in [`replay`]'s draw order; no message is needed).
+pub fn points_from_coins(r1cs: &BlockR1cs, lay: &Layout, has_pin: bool, coins: &[F128]) -> Result<(QuirkyPoint, QuirkyPoint), String> {
+    let m = r1cs.m;
+    let need = K_SKIP + (m - K_SKIP - N_INNER) + 1 + lay.n_mlv + 1 + usize::from(has_pin) + lay.n_lc + 1;
+    if coins.len() != need {
+        return Err(format!("zk: {} coins in the algebraic phase, not {need}", coins.len()));
+    }
+    let mut at = 0;
+    let mut take = |n: usize| { let v = coins[at..at + n].to_vec(); at += n; v };
+    let r_skip = take(K_SKIP);
+    let r_outer = take(m - K_SKIP - N_INNER);
+    let z = take(1)[0];
+    let rhos = take(lay.n_mlv);
+    let _alpha = take(1);
+    if has_pin {
+        take(1);
+    }
+    let mut r_inner_rest = take(lay.n_lc);
+    let r_inner_skip = SkipPoint::Phi8(take(1)[0]);
+    r_inner_rest.reverse();
+    let mut r_rest = vec![F128::ZERO; m - K_SKIP];
+    r_rest[..3].copy_from_slice(&small_challenges_ghash());
+    r_rest[3..N_INNER].copy_from_slice(&medium_challenges_ghash());
+    r_rest[N_INNER..].copy_from_slice(&r_outer);
+    let _ = r_skip;
+    let x_ab = r1cs.x_ab_from_multilinear_values(SkipPoint::Phi8(z), &rhos);
+    Ok((r1cs.ab_claim_point(r_inner_skip, &r_inner_rest, &x_ab.x_outer), r1cs.c_claim_point(SkipPoint::Phi8(z), &r_rest)))
 }
 
 /// The ring switch's claim check on a claim whose value is masked, as a constraint: `claim_check(weights, s_hat_v) = value`.

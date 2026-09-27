@@ -424,12 +424,9 @@ fn mask_words(st: &Stmt) -> Vec<usize> {
 /// The two z-claims' word coordinates (`x_outer[1..]` of the opening's claim point) for the phase's coins: the replay on a
 /// zero proof of the right shape (the points depend on the coins alone).
 fn claim_word_points(st: &Stmt, lay: &Layout, coins: &[F128]) -> Result<[Vec<F128>; 2], String> {
-    use flock_core::{lincheck::LincheckProof, zerocheck::ZerocheckProof};
-    let zc = ZerocheckProof { round1_ab: vec![F128::ZERO; zkv::SKIP], round1_c: vec![F128::ZERO; zkv::SKIP], multilinear_rounds: vec![(F128::ZERO, F128::ZERO); lay.n_mlv],
-                              final_a_eval: F128::ZERO, final_b_eval: F128::ZERO, final_c_eval: F128::ZERO, grinding_nonces: vec![] };
-    let lc = LincheckProof { rounds: vec![(F128::ZERO, F128::ZERO); lay.n_lc], z_partial: vec![F128::ZERO; zkv::SKIP], matrix_evals: vec![], grinding_nonces: vec![] };
-    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, lay, &[0; 64], &mut zkv::Tape::new(coins))?;
-    Ok([zkv::point_parts(&rp.ab_point).1[1..].to_vec(), zkv::point_parts(&rp.c_point).1[1..].to_vec()])
+    use flock_core::lincheck::LincheckCircuit;
+    let (ab, c) = zkv::points_from_coins(&st.r1cs, lay, st.circuit.const_pin_col().is_some(), coins)?;
+    Ok([zkv::point_parts(&ab).1[1..].to_vec(), zkv::point_parts(&c).1[1..].to_vec()])
 }
 
 /// M1's CPU prover: upstream's prover under the masking challenger, the masked proof, the constraints replayed from the
@@ -463,6 +460,9 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &root, &mut zkv::Tape::new(&coins)).unwrap_or_else(|e| panic!("{e}"));
+    let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
+    assert!(wp[0] == zkv::point_parts(&rp.ab_point).1[1..] && wp[1] == zkv::point_parts(&rp.c_point).1[1..],
+            "the rank check's claim points are not the replay's");
     let rs = &proof.pcs_open.ring_switches;
     let (_, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
     let (_, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
@@ -470,11 +470,276 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     cons.push(("ring switch ab", con_ab));
     cons.push(("ring switch c", con_c));
     let fails = zkv::failing(&cons, &zk.pads.h);
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, inner_ch.0).unwrap_or_else(|e| panic!("{e}"));
+    let mut lch = zkv::Logging { inner: inner_ch.0, coins: Vec::new() };
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
     (bincode::serialize(&(commitment, masked, inner)).unwrap(),
-     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "constraints_failing_on_pads": fails}))
+     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "constraints_failing_on_pads": fails,
+            "zk_coins": f128s_hex(&coins), "zk_inner_coins": f128s_hex(&lch.coins)}))
+}
+
+fn f128s_hex(v: &[F128]) -> Vec<String> {
+    v.iter().map(|x| hex(&f128_bytes(&[*x]))).collect()
+}
+
+fn f128s_unhex(v: &Value) -> Vec<F128> {
+    v.as_array().map(|a| a.iter().filter_map(|s| hexb(s.as_str()?).ok()).map(|b| F128::new(u64::from_le_bytes(b[..8].try_into().unwrap()), u64::from_le_bytes(b[8..16].try_into().unwrap()))).collect()).unwrap_or_default()
+}
+
+/// One rep's checked fields: the exposed values (masked), the two masked claims' `s_hat_v`, the inner proof's messages and
+/// opened columns.
+fn checked_fields(kind: &str, run: usize, rep: usize, exposed: &[F128], s: [&[F128]; 2], inner: &InnerProof) -> Value {
+    json!({"kind": kind, "run": run, "rep": rep, "exposed": f128s_hex(exposed), "s_ab": f128s_hex(s[0]), "s_c": f128s_hex(s[1]),
+           "inner_scalars": f128s_hex(&[inner.rho, inner.sigma, inner.tau]), "inner_y": f128s_hex(&inner.y),
+           "inner_open_h": f128s_hex(&inner.opened.iter().map(|x| x.0).collect::<Vec<_>>()),
+           "inner_open_mu": f128s_hex(&inner.opened.iter().map(|x| x.1).collect::<Vec<_>>())})
+}
+
+/// M1's simulator for one rep, from the public statement and the verifier's coins alone (`zc_coins`: the algebraic phase's,
+/// `inner_coins`: the inner proof's): uniform exposed values, uniform `s_hat_v` for the two masked claims (the mask slot makes
+/// them so), and the simulated inner proof for the constraints those imply.
+fn simulate_rep(st: &Stmt, lay: &Layout, zc_coins: &[F128], inner_coins: &[F128], rng: &mut flock_live::zk_hooks::ProverRng, index: u64)
+    -> Result<(Vec<F128>, [Vec<F128>; 2], InnerProof), String> {
+    let base = 1u64 << 50 | index << 36;
+    let exposed = rng.f128s(zkv::STREAM_PADS, base, lay.exposed());
+    let s = [rng.f128s(zkv::STREAM_PADS, base + (1 << 30), 128), rng.f128s(zkv::STREAM_PADS, base + (1 << 31), 128)];
+    let (zc, lc) = zkv::from_exposed(&exposed, lay);
+    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, lay, &[0; 64], &mut zkv::Tape::new(zc_coins))?;
+    let (_, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &s[0], &rp.ab_value);
+    let (_, con_c) = zkv::ring_switch_constraint(&rp.c_point, &s[1], &rp.c_value);
+    let mut cons = rp.cons;
+    cons.push(("ring switch ab", con_ab));
+    cons.push(("ring switch c", con_c));
+    let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+    let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
+    let inner = zkv::simulate_inner(lay, rng, index, cons, salts, &mut zkv::Tape::new(inner_coins))?;
+    Ok((exposed, s, inner))
+}
+
+/// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
+/// coins, and N control sessions (zero pads, zero mask slot: M0's values in M1's format), each rep's checked fields printed as
+/// `ZKREAL`, `ZKSIM`, `ZKCTRL` lines for `backends/flock/tests/zk_stats.py`. Needs the `seed-injection` harness.
+#[cfg(feature = "seed-injection")]
+fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    let n: usize = arg("--n", "32").parse().unwrap();
+    let lay = Layout::new(st.m, st.c.k_log);
+    let mut tapes: Option<Vec<(Vec<F128>, Vec<F128>)>> = None;
+    let one = |plan: &Plan| -> (Value, Vec<Vec<u8>>) {
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+        session(st, inst, shared(InProc(s0)), plan, ProverSeed::from_os())
+    };
+    for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() })] {
+        for run in 0..n {
+            let (v, proofs) = one(&plan);
+            assert!(v["accepted"] == true, "{kind} session {run} rejected: {}", v["why"]);
+            let t: Vec<(Vec<F128>, Vec<F128>)> = (0..2).map(|r| (f128s_unhex(&v["buckets"][r]["zk_coins"]), f128s_unhex(&v["buckets"][r]["zk_inner_coins"]))).collect();
+            match &tapes {
+                None => tapes = Some(t),
+                Some(t0) => assert!(*t0 == t, "the verifier's coins differ between sessions with one coin seed"),
+            }
+            for (rep, p) in proofs.iter().enumerate() {
+                let (_c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
+                let e = zkv::exposed_values(&pr.zerocheck, &pr.lincheck, &lay);
+                let rs = &pr.pcs_open.ring_switches;
+                println!("ZK{}\t{}", kind.to_uppercase(), checked_fields(kind, run, rep, &e, [&rs[0].s_hat_v, &rs[1].s_hat_v], &inner));
+            }
+        }
+    }
+    let tapes = tapes.unwrap();
+    let mut rng = flock_live::zk_hooks::ProverRng::from_os();
+    for run in 0..n {
+        for (rep, (zc, ic)) in tapes.iter().enumerate() {
+            let (e, s, inner) = simulate_rep(st, &lay, zc, ic, &mut rng, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
+            // the simulated inner proof must pass the verifier's inner check on the same coins
+            let (zcp, lcp) = zkv::from_exposed(&e, &lay);
+            let rp = zkv::replay(&st.r1cs, &zcp, &lcp, &st.circuit, &lay, &[0; 64], &mut zkv::Tape::new(zc)).unwrap();
+            let mut cons = rp.cons;
+            cons.push(("ring switch ab", zkv::ring_switch_constraint(&rp.ab_point, &s[0], &rp.ab_value).1));
+            cons.push(("ring switch c", zkv::ring_switch_constraint(&rp.c_point, &s[1], &rp.c_value).1));
+            let ok = zkv::verify_inner(&inner, &lay, cons, &mut zkv::Tape::new(ic));
+            assert!(ok.is_ok(), "the simulated inner proof fails the verifier's check: {ok:?}");
+            println!("ZKSIM\t{}", checked_fields("sim", run, rep, &e, [&s[0], &s[1]], &inner));
+        }
+    }
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn zkstat(_: &Arc<Stmt>, _: &Arc<Instances>) {
+    refuse("zkstat needs the test harness's seed-injection feature".into());
+}
+
+/// A framed transcript item (transcript-v2: a 16-byte header `[op][kind][0;6][len u64 LE]`, the payload padded to 16).
+enum Item {
+    Framing(usize),
+    Label(Vec<u8>, usize),
+    Bytes(usize),
+    Obs(Vec<F128>),
+}
+
+fn parse_items(b: &[u8]) -> Result<Vec<Item>, String> {
+    let (mut at, mut out) = (0usize, Vec::new());
+    let pad = |n: usize| n.div_ceil(16) * 16;
+    while at < b.len() {
+        if at + 16 > b.len() {
+            return Err("a truncated frame header".into());
+        }
+        let (op, len) = (b[at], u64::from_le_bytes(b[at + 8..at + 16].try_into().unwrap()) as usize);
+        at += 16;
+        match op {
+            OP_DOMAIN => { out.push(Item::Framing(16 + pad(len))); at += pad(len); }
+            OP_LABEL => { out.push(Item::Label(b[at..at + len].to_vec(), 16 + pad(len))); at += pad(len); }
+            OP_BYTES => { out.push(Item::Bytes(len)); out.push(Item::Framing(16 + pad(len) - len)); at += pad(len); }
+            OP_OBSERVE => {
+                out.push(Item::Obs((0..len).map(|i| F128::new(u64::from_le_bytes(b[at + 16 * i..at + 16 * i + 8].try_into().unwrap()),
+                                                              u64::from_le_bytes(b[at + 16 * i + 8..at + 16 * i + 16].try_into().unwrap()))).collect()));
+                out.push(Item::Framing(16));
+                at += 16 * len;
+            }
+            OP_SQUEEZE => out.push(Item::Framing(16)),
+            x => return Err(format!("unknown frame op {x}")),
+        }
+    }
+    if at != b.len() {
+        return Err("a frame overruns its round".into());
+    }
+    Ok(out)
+}
+
+/// Every item one rep's stream sent, attributed to a class. Returns the tally, the masked values (algebraic phase, in order)
+/// and each claim's `s_hat_v` (in opening order).
+fn classify(items: &[Item]) -> (BTreeMap<&'static str, (usize, usize)>, Vec<F128>, Vec<Vec<F128>>) {
+    #[derive(PartialEq)]
+    enum Ph { Pre, R1cs(u8), Zc, Pads, Pcs, Rs, Lig, Inner(u8) }
+    let mut t: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
+    let mut add = |c: &'static str, bytes: usize| { let e = t.entry(c).or_default(); e.0 += 1; e.1 += bytes; };
+    let (mut ph, mut masked, mut rs) = (Ph::Pre, Vec::new(), Vec::new());
+    for it in items {
+        match it {
+            Item::Framing(n) => add("public: framing (domain, labels, headers, padding)", *n),
+            Item::Label(l, n) => {
+                add("public: framing (domain, labels, headers, padding)", *n);
+                ph = match l.as_slice() {
+                    b"flock-r1cs-v0" => Ph::R1cs(0),
+                    x if x == zkv::LABEL_ZC => Ph::Zc,
+                    x if x == zkv::LABEL_PADS => Ph::Pads,
+                    b"flock-lincheck-v0" => Ph::Zc,
+                    x if x == zkv::LABEL_PCS => Ph::Pcs,
+                    b"flock-ring-switch-v0" => Ph::Rs,
+                    x if x == zkv::LABEL_INNER => Ph::Inner(0),
+                    _ if matches!(ph, Ph::Pcs | Ph::Rs | Ph::Lig) => Ph::Lig,
+                    _ => ph,
+                };
+            }
+            Item::Bytes(n) => {
+                let c = match &mut ph {
+                    Ph::R1cs(k) => { *k += 1; if *k == 1 { "public: statement digest" } else { "commitment: witness cap (hm96-sha512 leaves)" } }
+                    Ph::Pads => "commitment: pads root (hm96-sha512 leaves)",
+                    _ if *n == 8 => "public: pow nonce (live coins: always 0)",
+                    Ph::Pcs | Ph::Rs | Ph::Lig => "commitment: ligerito cap (hm96-sha512 leaves)",
+                    _ => "UNATTRIBUTED",
+                };
+                add(c, *n);
+            }
+            Item::Obs(v) => {
+                let n = 16 * v.len();
+                match &mut ph {
+                    Ph::Zc | Ph::Pads => { masked.extend_from_slice(v); add("masked: zerocheck and lincheck values + committed pads", n) }
+                    Ph::Rs => {
+                        let c = if rs.len() < 2 { "masked: s_hat_v of the two masked claims (uniform mask-slot words)" } else { "public: s_hat_v of the region claims (public region data)" };
+                        rs.push(v.clone());
+                        add(c, n);
+                        ph = Ph::Pcs;
+                    }
+                    Ph::Pcs | Ph::Lig => add("CLEAR: ligerito sumcheck messages, final vector, ood values", n),
+                    Ph::Inner(k) => {
+                        *k += 1;
+                        add(if *k == 1 { "masked: inner rho, sigma (a fresh triple)" } else { "masked: inner tau, Y (the dot-product mask)" }, n)
+                    }
+                    _ => add("UNATTRIBUTED", n),
+                }
+            }
+        }
+    }
+    (t, masked, rs)
+}
+
+/// `zkaudit --zk`: nothing leaves the prover but committed, masked or public data. One real session and one control session
+/// (zero pads, zero mask slot) against one verifier coin seed; every byte of every round the verifier kept is parsed and
+/// attributed; the masked values must all differ from the control's (the unmasked values), the region claims' `s_hat_v` must
+/// equal their recomputation from the public file alone, and nothing may be unattributed. The proofs' opened data is
+/// attributed too. `complete` holds only when no class is in the clear.
+#[cfg(feature = "seed-injection")]
+fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    let run = |plan: &Plan| -> (Value, Vec<Vec<u8>>, Value) {
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
+        let (v, p) = session(st, inst, shared(InProc(s0.clone())), plan, ProverSeed::from_os());
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        (v, p, rec)
+    };
+    let (v, proofs, rec) = run(&Plan::default());
+    let (vc, _, recc) = run(&Plan { zk_zero_pads: true, ..Plan::default() });
+    assert!(v["accepted"] == true && vc["accepted"] == true, "the audit's sessions must be accepted");
+    let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| {
+        let b = hexb(h.as_str().unwrap()).unwrap();
+        F128::new(u64::from_be_bytes(b[8..16].try_into().unwrap()), u64::from_be_bytes(b[..8].try_into().unwrap()))
+    }).collect()).collect();
+    let stream_items = |rec: &Value, name: &str| -> Vec<Item> {
+        let s = rec["streams"].as_array().unwrap().iter().find(|s| s["stream"] == name).unwrap_or_else(|| panic!("no stream {name}"));
+        s["rounds"].as_array().unwrap().iter().flat_map(|r| parse_items(&hexb(r["msg"].as_str().unwrap_or("")).unwrap()).unwrap()).collect()
+    };
+    let mut total: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
+    let (mut all_differ, mut region_public, mut n_masked, mut n_region) = (true, true, 0usize, 0usize);
+    for rep in 0..2 {
+        let name = rep_stream(TABLE, rep);
+        let (t, m, rs) = classify(&stream_items(&rec, &name));
+        let (_, mc, rsc) = classify(&stream_items(&recc, &name));
+        for (k, (a, b)) in t {
+            let e = total.entry(k).or_default();
+            e.0 += a;
+            e.1 += b;
+        }
+        n_masked += m.len();
+        all_differ &= m.len() == mc.len() && m.iter().zip(&mc).all(|(x, y)| x != y);
+        all_differ &= rs[..2].iter().zip(&rsc[..2]).all(|(a, b)| a.iter().zip(b).all(|(x, y)| x != y));
+        let mut k = 2;
+        for reg in &st.regions {
+            for p in &pts {
+                let want = st.region_s_hat_v(reg, p, inst);
+                region_public &= rs.get(k) == Some(&want) && rsc.get(k) == Some(&want);
+                n_region += 1;
+                k += 1;
+            }
+        }
+        let (_, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&proofs[rep]).unwrap();
+        let lg = &pr.pcs_open.ligerito;
+        let rows = |p: &flock_core::pcs::ligerito::RecursiveProof| p.opened_rows.iter().map(|r| 16 * r.len()).sum::<usize>();
+        let mut add = |c: &'static str, b: usize| { let e = total.entry(c).or_default(); e.0 += 1; e.1 += b; };
+        add("CLEAR (proof): ligerito level-0 opened rows", rows(&lg.initial_proof));
+        add("CLEAR (proof): ligerito recursive opened rows", lg.recursive_proofs.iter().map(rows).sum::<usize>()
+            + lg.final_proof.opened_rows.iter().map(|r| 16 * r.len()).sum::<usize>());
+        add("commitment (proof): merkle paths and opened salts (hm96-sha512)", 64 * (lg.initial_proof.merkle_proof.len()
+            + lg.recursive_proofs.iter().map(|p| p.merkle_proof.len()).sum::<usize>() + lg.final_proof.merkle_proof.len())
+            + 192 * (lg.initial_proof.opened_salts.len() + lg.recursive_proofs.iter().map(|p| p.opened_salts.len()).sum::<usize>()
+                     + lg.final_proof.opened_salts.len()));
+        add("masked (proof): inner opened columns (rs with 192 uniform padding symbols)", 32 * inner.opened.len());
+        add("commitment (proof): inner paths and salts (hm96-sha512)", 64 * inner.paths.iter().map(|p| p.len()).sum::<usize>() + 192 * inner.salts.len());
+    }
+    let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
+    let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
+    let out = json!({"statement": STATEMENT, "unit": st.c.name, "instances": st.n,
+        "classes": total.iter().map(|(k, (n, b))| (k.to_string(), json!({"items": n, "bytes": b}))).collect::<serde_json::Map<_, _>>(),
+        "masked_values": n_masked, "masked_all_differ_from_control": all_differ, "region_claims": n_region, "region_s_hat_v_is_public": region_public,
+        "unattributed_bytes": unattributed, "clear": clear, "checks_pass": all_differ && region_public && unattributed == 0,
+        "complete": all_differ && region_public && unattributed == 0 && clear.is_empty()});
+    println!("ZKAUDIT\t{out}");
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn zkaudit(_: &Arc<Stmt>, _: &Arc<Instances>) {
+    refuse("zkaudit needs the test harness's seed-injection feature".into());
 }
 
 #[cfg(feature = "gpu")]
@@ -532,6 +797,8 @@ struct Plan {
     substitute: Option<Vec<Vec<u8>>>,
     /// M1: mask the sent values with pads other than the committed ones
     zk_pad_mismatch: bool,
+    /// M1's control: zero pads and a zero mask slot (M0's values, in M1's format)
+    zk_zero_pads: bool,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -568,7 +835,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
     // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v)
-    let random = plan.mask_random || is_zk(st);
+    let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads);
     let hooks = Arc::new(Mutex::new(NoMask::new(seed)));
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
         let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
@@ -642,7 +909,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
             let zkrep = (is_zk(st) && !plan.gpu).then(|| {
                 let lay = Layout::new(st.m, st.c.k_log);
-                let pads = zkv::Pads::draw(&mut prng, &lay, rep);
+                let mut pads = zkv::Pads::draw(&mut prng, &lay, rep);
+                if plan.zk_zero_pads {
+                    pads.h.iter_mut().for_each(|x| *x = F128::ZERO);
+                }
                 let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
                 let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
                 let ic = zkv::InnerCommit::new(&pads, sb);
@@ -1275,6 +1545,8 @@ fn main() {
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
+        "zkstat" => zkstat(&st, &inst),
+        "zkaudit" => zkaudit(&st, &inst),
         "serve" => serve_loop(move || server(&st, &inst)),
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
