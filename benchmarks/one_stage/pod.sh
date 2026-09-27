@@ -44,7 +44,7 @@ M0PATH=$W/m0/packages/verity/src:$W/m0/backends/numerical/python:$W/m0/backends/
 export RAYON_NUM_THREADS=$(nproc)
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/integrations/vllm:$REPO/protocols/one_stage
 if [ "${RUN:-a0}" = a2 ]; then
-  mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
+  rm -rf $W/served && mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))
   BOUND=$M0PATH
   if [ -n "${UNBIND:-}" ]; then
