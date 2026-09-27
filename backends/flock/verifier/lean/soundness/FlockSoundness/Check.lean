@@ -176,3 +176,12 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_cone
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_sound
 #print axioms FlockSoundness.Audit.Partition.flock_two_stage_full_profile
+-- the audit with a randomized extractor, and the compiled Flock audit: ε_ks from table_knowledge_sound_joint
+#print axioms FlockSoundness.Audit.extraction_audit_le
+#print axioms FlockSoundness.Audit.extraction_audit_count
+#print axioms FlockSoundness.Audit.extraction_audit_drawn
+#print axioms FlockSoundness.Audit.FlockTableC.joint_le
+#print axioms FlockSoundness.Audit.Partition.analysisC
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_count
+#print axioms FlockSoundness.Audit.Partition.flock_compiled_drawn
