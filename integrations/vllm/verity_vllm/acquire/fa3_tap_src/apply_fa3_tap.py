@@ -186,6 +186,11 @@ int64_t verity_tap_skipped() { return g_verity_tap_skipped; }
 int64_t verity_tap_mode() { return VERITY_TAP; }
 int64_t verity_tap_src() { return VERITY_MAT_SRC; }
 int64_t verity_tap_layout_version() { return 9; }
+// what word 3 of a ROW entry holds: 0 = never written, 1 = GuardNegInfZero(row_max) after a row's first key block (VERITY_ROW_GUARD=1)
+#ifndef VERITY_ROW_GUARD
+#define VERITY_ROW_GUARD 0
+#endif
+int64_t verity_tap_row3() { return VERITY_ROW_GUARD; }
 // bitmask 1 << (hd / 32) of the bf16 paged PackGQA FA3 forward kernels compiled into this build
 int64_t verity_tap_hdims() {
     int64_t m = 0;
@@ -206,6 +211,7 @@ defs = r'''    ops.def("verity_set_tap_v9(int mode, Tensor? diag, int HB, int M,
     ops.def("verity_tap_src() -> int");
     ops.def("verity_tap_layout_version() -> int");
     ops.def("verity_tap_hdims() -> int");
+    ops.def("verity_tap_row3() -> int");
 }
 '''
 impls = r'''
@@ -217,6 +223,7 @@ STABLE_TORCH_LIBRARY_IMPL_EXPAND(TORCH_EXTENSION_NAME, CompositeExplicitAutograd
     ops.impl("verity_tap_src", TORCH_BOX(&verity_tap_src));
     ops.impl("verity_tap_layout_version", TORCH_BOX(&verity_tap_layout_version));
     ops.impl("verity_tap_hdims", TORCH_BOX(&verity_tap_hdims));
+    ops.impl("verity_tap_row3", TORCH_BOX(&verity_tap_row3));
 }
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME);

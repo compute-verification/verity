@@ -269,6 +269,8 @@ __device__ __forceinline__ void verity_p1_store(const Params &params, const uint
 //   VERITY_MAT_SRC   bitmask: 1 S (masked fp32 scores), 2 P fp32, 4 rP bf16 (packed u32, N/2 words per row),
 //                    8 per-block row state (row_max, rescale, step, lane sums l0..l3), 16 acc_o after each block,
 //                    32 epilogue (sum, inv_sum, final row_max, lse)
+//   VERITY_ROW_GUARD 1 = the guarded-max build: word 3 of the row state holds GuardNegInfZero(row_max) at every key block after the
+//                    first a row visits (0 at the first); 0 (default) = word 3 is never written.  `verity_tap_row3()` reports it.
 //   VERITY_TAP == 4  "H1" per-thread SHA-256 leaf: every thread hashes, per visited 128-key block, exactly its own
 //                    register words of the classes in VERITY_SHA_SRC with a real SHA-256 (FIPS 180-4, verified on the
 //                    host with hashlib on the M1-materialised words), preceded by one 16-word position header
@@ -362,7 +364,9 @@ struct Verity_mat_ctx {
             }
         }
     }
-    // per-block row state: [slab][row][nblk][8] = row_max, rescale, step, 0, l0, l1, l2, l3
+    // per-block row state: [slab][row][nblk][8] = row_max, rescale, step, word 3, l0, l1, l2, l3.  Word 3 is never written, except by the
+    // guarded-max build (VERITY_ROW_GUARD=1): GuardNegInfZero(row_max), the max this block's rescale reads, at every block after the first
+    // (step > 0), and 0 at the first.
     template <typename TensorR>
     __device__ __forceinline__ void rowstat(TensorR const &row_max, TensorR const &scale, TensorR const &row_sum, const int nblk, const int step) {
         float *plane = buf + L.off_row + (long)slab * L.M * L.NB * 8;
@@ -372,6 +376,9 @@ struct Verity_mat_ctx {
             if (row < seqlen_q) {
                 float *dst = plane + ((long)row * L.NB + nblk) * 8;
                 if (lane % 4 == 0) { dst[0] = row_max(mi); dst[1] = scale(mi); dst[2] = __int_as_float(step); }
+#if defined(VERITY_ROW_GUARD) && VERITY_ROW_GUARD
+                if (lane % 4 == 0) { dst[3] = step > 0 && row_max(mi) != -INFINITY ? row_max(mi) : 0.f; }
+#endif
                 dst[4 + (lane % 4)] = row_sum(mi);
             }
         }
