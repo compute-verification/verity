@@ -318,7 +318,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "out_ports": outs, "ranges": ranges, "rows": [_row_consts(p) for p in ports],
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key_sha512": LEAF_SCHEME["key_sha512"],
-            "dummy": _dummy(low, ports, sub), "leaf_scheme": LEAF_SCHEME, "out_net": out_net, "out_net_ports": out_net_ports, "leaf_cuts": leaf_cuts, "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
+            "dummy": _dummy(low, ports, sub), "leaf_scheme": LEAF_SCHEME,
+            # only for a template that needs them (attention, GEMM): absent means the unit returns the outputs and no leaf cut
+            **({"out_net": out_net, "out_net_ports": out_net_ports} if U.tail_rets else {}), **({"leaf_cuts": leaf_cuts} if leaf_cuts else {}), "mask_log": MASK_LOG, "per_vu": per_vu, "lookups": lk,
             "wires": _row_wires(ports) + tail_wires, "program_digests": programs,
             "program_sha512": program or program_sha512(sub, statics),
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
