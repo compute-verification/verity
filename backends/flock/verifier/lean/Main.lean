@@ -387,6 +387,50 @@ def cutCheckCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUTCHECK {line.compress}"
   return (if all then 0 else 1)
 
+/-- `evaluate FILE...`: `Q_word` v1 on each case `{"X", "calls": [{"call", "def", "graph"?}]}` (`Flock.Qword`): per Call its
+owners, units, committed set (from its graph) and, for a flat cut, its kinds and heads; the population and every unit's
+`locate`. One `EVALUATE` line per file. -/
+def evaluateCmd (paths : List String) : IO UInt32 := do
+  let mut all := true
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Lean.Json.parse text with
+        | .ok j => pure j
+        | .error e => throw s!"not JSON: {e}"
+      let X ← match j.getObjValAs? Nat "X" with | .ok x => pure x | .error _ => throw "evaluate: X"
+      let cs ← match j.getObjVal? "calls" with
+        | .ok (.arr a) => pure a
+        | _ => throw "evaluate: calls"
+      let mut calls := #[]
+      let mut outs := #[]
+      for c in cs do
+        let k := (c.getObjValAs? Nat "call").toOption.getD 0
+        let d ← Qword.defOfJson ((c.getObjVal? "def").toOption.getD Lean.Json.null)
+        let dc := Qword.evaluate X d
+        calls := calls.push (k, dc)
+        let own := dc.owner
+        let mut o := [("call", Lean.toJson k), ("owner", Lean.toJson own), ("units", Lean.toJson dc.units)]
+        if let .ok gj := c.getObjVal? "graph" then
+          let (g, _, _, _) ← Partition.checkCutOfJson (Lean.Json.mkObj [("graph", gj), ("owner", Lean.Json.arr #[])])
+          o := o ++ [("committed", Lean.toJson (if own.size == g.n then Partition.derivedCommitted g own else #[]))]
+        if let .flat g := d then
+          let (_, kinds, heads) := Qword.cutWord g X
+          o := o ++ [("kinds", Lean.toJson kinds), ("head", Lean.toJson heads)]
+        outs := outs.push (Lean.Json.mkObj o)
+      let P : Qword.Units := ⟨calls⟩
+      let loc := (Array.range P.population).map fun i => match P.locate i with
+        | some (p, k, u, path) => Lean.Json.arr #[Lean.toJson i, Lean.toJson #[p, k, u],
+            Lean.Json.arr (path.toArray.map fun (a, b, c) => Lean.toJson #[a, b, c])]
+        | none => Lean.Json.null
+      return Lean.Json.mkObj [("calls", Lean.Json.arr outs), ("population", Lean.toJson P.population), ("locate", Lean.Json.arr loc)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    all := all && (line.getObjValAs? Bool "ok").toOption.getD false
+    IO.println s!"EVALUATE {line.compress}"
+  return (if all then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -394,6 +438,7 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "cut-check" :: paths => cutCheckCmd paths
+  | "evaluate" :: paths => evaluateCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "draw" :: rest => drawCmd rest

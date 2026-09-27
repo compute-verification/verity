@@ -1026,8 +1026,27 @@ committed exactly when another unit reads it or the Call returns it. Then the wi
 today `(16, 32, 0)`): for each unit `u`, with `ob` the summed `w` of its boundary gates (another unit reads them, or the
 Call returns them) and `og` their number, `u` passes when `ob ≤ X + EXTRAS`, or `og = 1` and `ob ≤ W + EXTRAS`; else
 `unit-too-wide`, with `(u, ob, og)`. `cut_check_agree.py` checks codes and too-wide units against the reference on random
-graphs (7000 agree). Still ahead: the graph derived from the verifier's own copy of the program (cross-call-check's format),
-the partition query evaluated on it (P = Q(C), #111), the claimed units' membership, and the leaf positions.
+graphs (7000 agree).
+
+**`Q_word` v1, the partition query** (`Flock.Qword`, `flock-verify evaluate`; reference `verity.ir.cut` and
+`verity.ir.partition_object`, #111), over each Call's graph:
+- **The flat cut** (`cutWord`). The returned computing gates, first occurrence in return order, are packed greedily into
+  runs of at most `X` declared bits (a wider gate is a run alone); each run is an output unit and heads its gates. Then,
+  repeatedly: every gate starts at its head's unit or −1, and backward each gate without a head takes the unit its consumers
+  agree on (−2 when two differ). The producers of edges from a −2 gate into a unit, ascending, become committed units. If
+  there are none, each gate still at −1 joins the one live unit its unheaded producers are all in, and every gate still at
+  −1 heads its own dead unit. The producers of edges across units that head nothing, ascending, then become committed units
+  (the dead units are dropped and the pass repeats); if there are none, the cut is final. Units are numbered as created:
+  outputs, committed in promotion order, dead last.
+- **A Definition's cut.** A primitive is one unit, or none when it is structure (no parameters, or wiring). A separable body
+  is its nodes' members' cuts, in node then member order. Any other body is the flat cut of its graph.
+- **The Program's units.** By Call (the root body's non-Input nodes in order), then within the Call's cut. `locate` maps a
+  unit to its Call, its unit within the Call's cut, and its path `(node, member, unit)` through separable cuts.
+
+`qword_agree.py` checks these against core's objects on random graphs, Definition trees and Programs (3500 agree), and on
+#111's pinned vector (owners, units, committed sets, population, `locate`). Still ahead: decoding the verifier's own copy of
+the program and extracting each Call's graph from it (cross-call-check's format, and recompute detection on exact interned
+ids), then the claimed units' membership and the leaf positions.
 
 ### 16.8 Objects by content
 

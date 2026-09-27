@@ -208,3 +208,22 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _qword_vectors():
+    try:
+        import verity.ir.partition_object  # noqa: F401
+        from verity.ir.cut import cut_word  # noqa: F401
+    except ImportError:
+        return None
+    import verity
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "partition_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
+def test_qword_evaluator_agrees_with_the_reference(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
