@@ -299,9 +299,9 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
-   registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
-   term (DESIGN.md §3).
+1. **Knowledge soundness, the rest** (§1.3). The table theorems are proved. Remaining:
+   - the link term `δ_link` (DESIGN.md §3), which the sampled-audit composition needs;
+   - the canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout in the model.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
