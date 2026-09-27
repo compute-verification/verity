@@ -434,18 +434,28 @@ extraction run whose gate was bad, A rewinds with fresh dummy openings complete 
 test in `zk_rewind_stats.py`), while A rewinds on the extraction run's own dummy opening (red-team-m2-zk G1, the defect)
 complete at about ε, which shows the test's power.
 
-Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V* tape, `t = 2`:
+Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V* tape, `t = 4`, `ε = 1/16`:
 
-| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | rewinds | failures |
-|---|---|---|---|---|---|
-| honest | 40 / 40, all accepted | identical | 40 of 40 | 40 | 0 |
-| abort | 26 / 28, all accepted | 0.48 | 28 of 40 | 40 | 0 |
-| adaptive-coins | 22 / 25, all accepted | 0.41 | 25 of 40 | 36 | 0 |
-| zero-beta | 0 / 0 (all stop at the β round) | identical | 0 of 40 | 0 | 0 |
+| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | estimation runs | rewinds | failures |
+|---|---|---|---|---|---|---|
+| honest | 40 / 40, all accepted | identical | 40 of 40 | 160 | 40 | 0 |
+| abort | 23 / 25, all accepted | 0.99 | 25 of 40 | 158 | 37 | 0 |
+| adaptive-coins | 24 / 20, all accepted | 0.56 | 20 of 40 | 148 | 33 | 0 |
+| zero-beta | 0 / 0 (all stop at the β round) | identical | 0 of 40 | 0 | 0 | 0 |
+| cap-gated | 22 / 24, all accepted | 0.82 | 24 of 40 | 172 | 41 | 0 |
+| late-gated | 23 / 21, all accepted | 0.82 | 21 of 40 | 160 | 38 | 0 |
 
 Rep 0's online values, the proofs' checked fields (11 classes) and the session relations are indistinguishable real
-against simulated wherever there are enough views (smallest p-value 0.001, α = 10^-3 per test). Evidence is kept in the
-private store.
+against simulated wherever there are enough views, with no value reused across reps (smallest p-value 0.0033, α = 10^-3
+per test). The rewinds are independent trials (`zkgk`, 40 attempts):
+
+| gated V* | real sessions complete | fresh rewinds complete (p) | rewinds on one reused dummy (p), the defect |
+|---|---|---|---|
+| cap-gated | 22 | 24 (0.82) | 5 (1.1·10^-4) |
+| late-gated | 25 | 25 (1.0) | 40 (1.2·10^-5) |
+
+The reused opening is caught in both directions: cap-gated's rewinds then complete at about ε, and late-gated's replay the
+extraction run's lucky pass every time. Evidence is kept in the private store.
 
 Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
 `zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_dummy_witness_passes_the_region_claims` (the dummy is
