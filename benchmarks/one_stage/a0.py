@@ -159,10 +159,11 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     return (json.loads(recs[-1].read_text()) if recs else None), live
 
 
-def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
+def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str, flags: list[str] = ()) -> list[dict]:
+    """`flags`: the stratified law's `--program P --partition Q --stratified K`, holding each draw to the verifier's law."""
     f = out / f"{name}.cases.json"
     f.write_text(json.dumps(cases))
-    p = run([lean, "draw-test", str(f)], out / f"{name}.lean.log")
+    p = run([lean, "draw-test", str(f), *flags], out / f"{name}.lean.log")
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 

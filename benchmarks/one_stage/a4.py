@@ -124,6 +124,54 @@ def expected_draws(members: list[dict], n_all: int, k: int) -> dict[str, dict]:
             for m in members}
 
 
+def stratified_draw(lean: str, law: dict, n: int, flags: list[str], out: Path) -> tuple[dict, str]:
+    """The verifier's stratified draw: the Lean sampler of record (`draw --stratified`, PR #167), or failing that one
+    uniform `draw --population n_s --k k_s` per stratum from the verifier's randomness, local index j mapped to the
+    stratum's j-th unit. The same law either way; the second value says which path drew it."""
+    p = a0.run([lean, "draw", *flags], out / "draw.log")
+    line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
+    if line:
+        return json.loads(line.split(" ", 1)[1]), "flock-verify draw --program --partition --stratified"
+    units = []
+    for i, s in enumerate(law["strata"]):
+        size = sum(hi - lo for lo, hi in s["units"])
+        q = a0.run([lean, "draw", "--population", str(size), "--k", str(s["k"])], out / f"draw-stratum-{i}.log")
+        for j in json.loads(next(x for x in q.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])["units"]:
+            for lo, hi in s["units"]:
+                if j < hi - lo:
+                    units.append(lo + j)
+                    break
+                j -= hi - lo
+    return ({"law": "stratified", "population": n, "k": law["k"], "strata": law["strata"], "units": sorted(units)},
+            "per stratum: flock-verify draw --population n_s --k k_s")
+
+
+def stratified_negatives(rec: dict, program, query, law: dict, want: dict, leaf_layer: str, log: list, draw: dict, lean: str,
+                         flags: list[str], out: Path) -> dict[str, dict]:
+    """The stratified law's refusals: the registered law with one stratum's k changed (R1); the draw with one unit of the
+    largest stratum swapped for a second unit of the first (`strata-count`); a stratum's k written `true` (`law`, `strata`).
+    The two draws are held by `check_draw` and by Lean `draw-test` under the verifier's own law."""
+    big = max(law["strata"], key=lambda s: s["k"])["template"]
+    first = law["strata"][0]["template"]
+    changed = {**law, "strata": [{**s, "k": s["k"] + 1} if s["template"] == big else s for s in law["strata"]]}
+    v = R.check(dict(rec, law=changed), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, log=log)
+    neg = {"registered-law-with-a-stratum-k-changed (R1)": {"refused": not v.ok and "R1-law" in v.codes, "codes": list(v.codes)}}
+    ranges = {s["template"]: s["units"] for s in draw["strata"]}
+    drawn = set(draw["units"])
+    extra = next(u for lo, hi in ranges[first] for u in range(lo, hi) if u not in drawn)
+    drop = next(u for u in draw["units"] if any(lo <= u < hi for lo, hi in ranges[big]))
+    swapped = {**draw, "units": sorted((drawn - {drop}) | {extra})}
+    k_true = {**draw, "strata": [{**s, "k": True} if s["template"] == first else s for s in draw["strata"]]}
+    held = a0.lean_draw_test(lean, [{"record": d, "statement": d, "instances": len(d["units"])} for d in (swapped, k_true)],
+                             out, "stratified-negatives", flags=flags)
+    for i, (name, d, code) in enumerate((("draw-swaps-a-unit-into-a-second-of-the-first-stratum (strata-count)", swapped, "strata-count"),
+                                          ("stratum-k-written-true (law, strata)", k_true, "strata"))):
+        v = D.check_draw(d, rec, law)
+        lean_refused = len(held) > i and not held[i]["ok"]
+        neg[name] = {"refused": not v.ok and code in v.codes and lean_refused, "codes": list(v.codes), "lean": held[i:i + 1]}
+    return neg
+
+
 def link(src: Path, dst: Path) -> None:
     if not dst.exists():
         try:
@@ -149,6 +197,10 @@ def main() -> int:
                     help="run the sessions on copies re-headered for the circuit this M0 tree composes (after the checks)")
     ap.add_argument("--statement", default=a0.STATEMENT_ID,
                     help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+    ap.add_argument("--law", default=None, help="the agreement's law rule, e.g. stratified:1024 (default subset:--k)")
+    ap.add_argument("--reaudit", default=None,
+                    help="re-audit the served registration's commitment under --law: a new record with the same roots, domains, "
+                         "scheme and leaf layer, previous = the served record's digest, and its window plus {reaudit: TAG}")
     a = ap.parse_args()
     a0.STATEMENT_ID = a.statement
     out, served, sets_root = Path(a.out), Path(a.served), Path(a.template_sets)
@@ -168,9 +220,14 @@ def main() -> int:
     part = P.partition(program, query)
     pd = P.digest(part)
     n_all = P.units(program, query)
-    summary: dict = {"layout": a.layout, "population": n_all, "partition": pd, "k": a.k, "delta": a.delta, "statement": a.statement,
-                     "members": [{"k": m["k"], "template": m["tid"], "n": m["n"], "base": m["base"]} for m in members],
-                     "expected_draws": expected_draws(members, n_all, a.k)}
+    law = D.derive(program, query, D.parse_law(a.law or f"subset:{a.k}"))
+    summary: dict = {"layout": a.layout, "population": n_all, "partition": pd, "k": law.get("k"), "law": a.law or f"subset:{a.k}",
+                     "delta": a.delta, "statement": a.statement,
+                     "members": [{"k": m["k"], "template": m["tid"], "n": m["n"], "base": m["base"]} for m in members]}
+    if law["law"] == "stratified":
+        summary["strata_k"] = {s["template"]: {"n": sum(hi - lo for lo, hi in s["units"]), "k_s": s["k"]} for s in law["strata"]}
+    else:
+        summary["expected_draws"] = expected_draws(members, n_all, a.k)
     if pd != lay["digest"]:
         summary["refused"] = {"layout-digest": {"layout": lay["digest"], "verifier": pd}}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -179,10 +236,20 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
-    rec = json.loads((served / "registration.json").read_text())
+    served_rec = json.loads((served / "registration.json").read_text())
     shutil.copy(served / "index.json", out / "index.json")
+    log: list = []
+    rec = served_rec
+    if a.reaudit:
+        # the served commitment re-audited: one new record naming it (previous), its roots, domains, scheme and leaf layer as they are
+        rec = R.record(program, query, law, served_rec["scheme"], served_rec["roots"], {**served_rec["window"], "reaudit": a.reaudit},
+                       leaf_layer=served_rec["leaf_layer"], anchors=served_rec["anchors"], previous=R.digest(served_rec))
+        log = [served_rec]
+        (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+        summary["reaudit"] = {"of": R.digest(served_rec), "tag": a.reaudit,
+                              "unchanged": {f: rec[f] == served_rec[f] for f in ("roots", "scheme", "leaf_layer", "anchors", "partition",
+                                                                                 "program", "population")}}
     run_id = rec.get("window", {}).get("run", "")
-    law = D.parse_law(f"subset:{a.k}")
 
     # every member's served files against the verifier's own circuit, bindings and served domains
     want, publics, checks = {}, {}, {}
@@ -218,7 +285,12 @@ def main() -> int:
         checks[f"m{m['k']}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m["tid"]] = a0.sha512_file(st_dir / f"pub-{m['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
-    checks["registration"] = R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()
+    checks["registration"] = R.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, log=log).to_json()
+    if a.reaudit:
+        checks["registration-of-record"] = R.check(served_rec, program, query, served_rec["law"], a0.SCHEME, want,
+                                                   leaf_layer=leaf_layer).to_json()
+        same = summary["reaudit"]["unchanged"]
+        checks["reaudit-unchanged"] = {"ok": all(same.values()), "codes": [f for f, v in same.items() if not v], "detail": {}}
     checks["source"] = {"ok": rec.get("window", {}).get("kind") == "served", "codes": [], "detail": rec.get("window", {}).get("kind")}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a4.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
@@ -237,11 +309,20 @@ def main() -> int:
             summary["rekeyed"][m["tid"]] = {"pin_as_served": m["st"]["pin_as_served"], "pin": m["st"]["pin"],
                                             "class_unchanged": m["st"]["class_unchanged"]}
 
-    # one draw over the whole population, each member served its share
-    p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(a.k)], out / "draw.log")
-    union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
-    (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    # one draw over the whole population by the verifier's law, each member served its share
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
+    law_flags: list[str] = []
+    if law["law"] == "stratified":
+        law_flags = ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"), "--stratified", str(law["k"])]
+        union_draw, summary["draw_path"] = stratified_draw(a.lean, law, n_all, law_flags, out)
+        held = a0.lean_draw_test(a.lean, [{"record": union_draw, "statement": union_draw, "instances": len(union_draw["units"])}],
+                                 out, "stratified-draw", flags=law_flags)
+        verdicts["lean-draw/stratified-law"] = {"accepted": bool(held) and all(c["ok"] for c in held), "detail": held,
+                                                "tool": "flock-verify draw-test --program --partition --stratified (PR #167)"}
+    else:
+        p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(a.k)], out / "draw.log")
+        union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
+    (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     for m in members:
         local = sorted(u - m["base"] for u in union_draw["units"] if m["base"] <= u < m["base"] + m["n"])
         counts[m["tid"]] = len(local)
@@ -280,9 +361,10 @@ def main() -> int:
 
     neg: dict[str, dict] = {}
     other = P.mixed_population_program([(m["defn"], m["n"] - (1 if i == 0 else 0)) for i, m in enumerate(members)])
-    v = R.check(rec, other, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = R.check(rec, other, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, log=log)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, program, query, law, a0.SCHEME, {nm: {**w, "domain": "00" * 64} for nm, w in want.items()}, leaf_layer=leaf_layer)
+    v = R.check(rec, program, query, law, a0.SCHEME, {nm: {**w, "domain": "00" * 64} for nm, w in want.items()}, leaf_layer=leaf_layer,
+                log=log)
     neg["domains-not-the-layout's (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = D.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -290,9 +372,14 @@ def main() -> int:
         kept = proved[1:]
         v = D.check_proved(union_draw, kept, len(kept))
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, log=log)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     neg.update(a0.audit_negatives(result, law, a.delta, session_roots, served=sorted(served_units)))
+    if law["law"] == "stratified":
+        neg.update(stratified_negatives(rec, program, query, law, want, leaf_layer, log, union_draw, a.lean, law_flags, out))
+    if a.reaudit:
+        v = R.check(dict(rec, window=served_rec["window"]), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, log=log)
+        neg["reaudit-reuses-the-window (R6)"] = {"refused": not v.ok, "codes": list(v.codes)}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
