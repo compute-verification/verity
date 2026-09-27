@@ -129,7 +129,9 @@ def plan(backend: str, statement: str, input_set: str, prover: str, relation: st
     drv = drivers.driver(backend)
     if drv is None:
         raise NotSupported(f"{backend}: no driver module {drivers.module_path(backend)} (no sweep of this backend is wrapped yet)")
-    why = LW.registry(family).supports(sub, scheme)
+    # a driver judges the schemes of its own relations (None: supported, a reason, or False: the template module's to judge)
+    judged = drv.supports_relation(relation, sub, scheme) if relation and hasattr(drv, "supports_relation") else False
+    why = LW.registry(family).supports(sub, scheme) if judged is False else judged
     if why:
         raise NotSupported(why)
     ref = resolve_input_set(input_set)

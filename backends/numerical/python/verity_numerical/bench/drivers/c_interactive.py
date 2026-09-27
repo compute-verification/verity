@@ -32,6 +32,15 @@ CIRCUIT_SCRIPT = "backends/flock/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
 RELATIONS = (CIRCUIT_PREFIX,)
+#: the circuit statement's row scheme (``verity_flock.circuit.SCHEME``): frame-v3-sha512 with ``hm96-sha512/row/v1`` leaves
+CIRCUIT_SCHEME = "frame-v3-sha512/hm96-sha512"
+
+
+def supports_relation(relation: str, sub, scheme: str):
+    """The circuit statement binds its rows under :data:`CIRCUIT_SCHEME` only; other relations are the template module's."""
+    if relation.startswith(CIRCUIT_PREFIX):
+        return None if scheme == CIRCUIT_SCHEME else f"verity/flock-circuit binds rows under {CIRCUIT_SCHEME}, not {scheme}"
+    return False
 
 
 def set_tarball(cell) -> str:
