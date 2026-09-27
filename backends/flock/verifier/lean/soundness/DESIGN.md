@@ -573,3 +573,6 @@ If real concurrency is ever needed:
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
     analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
+  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
+    hypothesis. They rest on A2, `ValueBinding`, BCHKS25 and the lowering; the `_placed` forms take `UnitPlace`
+    (row placement and L1) for the lowering.
