@@ -40,6 +40,6 @@ unsafe def main (args : List String) : IO UInt32 := do
     IO.eprintln s!"replay: the kernel rejects a declaration of {", ".intercalate args}:\n{e}"
     return 1
   let sent := constants.fold (fun n _ c => if c.isUnsafe || c.isPartial then n else n + 1) 0
-  IO.println s!"replay: {sent} constants of {mods.size} modules accepted by the kernel (the {constants.size - sent} unsafe \
-    or partial ones are compiled code, which the audit lists)"
+  IO.println s!"replay: {sent} constants of {mods.size} modules accepted by the kernel ({constants.size - sent} more are \
+    unsafe or partial: compiled code, which the kernel does not check)"
   return 0
