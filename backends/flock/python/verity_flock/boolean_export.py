@@ -27,11 +27,12 @@ import hashlib
 import inspect
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
 
-from . import fp, gf2, ir_lower as IL, tail_pieces as TP, unit as U
+from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from .gf2 import Circuit, L, const_bits
 
 SCHEMA = "verity-boolean-circuit/v1"
@@ -52,10 +53,14 @@ DISPLAY = {
     "lzc": "leading-zero count", "shr": "shift right", "shl_window": "shift left (window)", "mux": "mux",
     "or_reduce": "OR-reduce", "and_reduce": "AND-reduce", "group_sum": "group sum (align + add + normalize)",
     "saturated": "saturation test", "decode_operand": "operand decode", "max_tree": "max tree",
-    "table_read": "MUFU table read (lookup slot)", "ftz": "flush to zero", "f32_sub": "f32 subtract", "f32_gt": "f32 compare (>)",
+    "table_read": "MUFU table read (lookup slot)", "ftz": "flush to zero", "f32_gt": "f32 compare (>)",
     "mufu_ex2": "MUFU.EX2", "mufu_rcp": "MUFU.RCP", "rcp_post": "MUFU.RCP exponent", "_rsq_post": "MUFU.RSQ exponent",
     "_div_scale": "div.full range scaling", "_abs_gt_big": "|b| > 2^126", "_scale": "scale by a power of two",
     "_parity_index": "rsq / sqrt table index", "_word": "special cases",
+    "tl_exp": "tl.exp (MUFU.EX2, non-ftz)", "tl_div": "div.full (scaled numerator times the reciprocal)", "f32_ge": "f32 compare (>=)",
+    "f32_near": "|a - b| < 1e-9", "py_max": "max (Python)", "py_min": "min (Python)", "nan_max": "max (numpy, NaN wins)",
+    "nan_min": "min (numpy, NaN wins)", "int_to_f32": "count to f32", "numkeep": "numkeep (truncate, clamp)",
+    "word_eq": "word compare (==)", "nv_logf": "__nv_logf",
 }
 KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "add": "add", "f32_add": "add",
         "sub": "add", "_normalize_sig": "normalize", "lzc": "normalize", "shl": "normalize", "round_f32": "round",
@@ -213,13 +218,13 @@ def _patch():
     if _PATCHED:
         return
     originals = {}
-    for mod in (gf2, fp, U, TP):
+    for mod in (gf2, fp, U, TP, TW):
         for name in DISPLAY:
             f = getattr(mod, name, None)
             if callable(f) and not isinstance(f, type):
                 originals[id(f)] = (name, f)
     wrapped = {k: _wrap(n, f) for k, (n, f) in originals.items()}
-    for mod in (gf2, fp, U, IL, TP):
+    for mod in (gf2, fp, U, IL, TP, TW):
         for name in dir(mod):
             f = getattr(mod, name)
             if callable(f) and id(f) in wrapped:
@@ -960,6 +965,8 @@ class Walker:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
         widths = [w for _, t in p.params for w in t.leaf_widths()]
         consts = consts if len(consts) == len(widths) else (None,) * len(widths)
+        if (m := re.fullmatch(r"TopPMaskWordx(\d+)_v1", pid)):
+            return {"def": self.composed(pid, int(m.group(1)), consts[-2], consts[-1])}
         free = [w for c, w in zip(consts, widths) if c is None]
         if pid in IL.PIECES and free:
             ck = ("prim", pid, consts, tuple(widths))
@@ -984,6 +991,52 @@ class Walker:
             return None
         return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()),
                 "reason": next((r for f, r in NO_PIECE.items() if pid.startswith(f)), "ir_lower has no piece for this primitive yet")}
+
+    def piece(self, name: str, key: tuple) -> str:
+        """The subcircuit of ``topp_word`` piece ``name`` with constant operands ``key``."""
+        ck = ("tw", name, key)
+        if ck not in self.cache:
+            C, root = trace(lambda: TW.build(name, key))
+            consts = ", ".join(f"operand {j} = 0x{c:x}" for j, c in enumerate(key) if c is not None)
+            self.cache[ck] = self.reg.analyse(C, root, TW.NAMES[name] + (f" ({consts})" if consts else ""), "piece")
+            del C, root
+            gc.collect()
+        return self.cache[ck]
+
+    def composed(self, pid: str, V: int, p, splits) -> str:
+        """A primitive too large to hold as one circuit (``TopPMaskWordx{V}_v1``: about 10^11 ANDs at V = 128256), as a tree of
+        its stages (``topp_word``'s paths) whose leaves are its pieces with instance counts."""
+        ck = ("composed", pid, p, splits)
+        if ck in self.cache:
+            return self.cache[ck]
+        counts = TW.count(V, p, splits)
+        tree: dict = {}
+        for (path, name, key), n in counts.items():
+            node = tree
+            for label in path:
+                node = node.setdefault(label, {})
+            leaf = node.setdefault(None, {})
+            ref = self.piece(name, key)
+            leaf[ref] = leaf.get(ref, 0) + n
+        tag = f"{pid} p={p} splits={splits}"
+
+        def make(label, node, where):
+            rid = "def-" + hashlib.sha256(f"composed:{tag}:{where}".encode()).hexdigest()[:16]
+            rec = {"id": rid, "name": label, "kind": "definition", "children": []}
+            for sub, kid in node.items():
+                if sub is not None:
+                    rec["children"].append({"def": make(sub, kid, f"{where}/{sub}"), "count": 1})
+            rec["children"] += [{"ref": r, "count": n} for r, n in node.get(None, {}).items()]
+            self.defs[rid] = rec
+            self._total(rec)
+            return rid
+
+        top = make(pid, tree, "")
+        self.defs[top].update(in_bits=V * 32 + 64, out_bits=V, composed=(
+            "topp_word: the split top-p pipeline per split count (stages, then pieces with instance counts), too large to hold "
+            "as one circuit; checked against sampling.topp_keep by evaluating every piece instance on test rows"))
+        self.cache[ck] = top
+        return top
 
     def walk(self, did: str) -> str:
         rid = "def-" + hashlib.sha256(did.encode()).hexdigest()[:16]
@@ -1124,6 +1177,11 @@ class Commitments:
                 for k in t:
                     t[k] += n[k]
                 key = ("ref", e["ref"])
+            elif e is not None and "def" in e:
+                n = self.walker.defs[e["def"]]
+                for k in t:
+                    t[k] += n[k]
+                key = ("def", e["def"])
             elif e is not None:
                 nyl[sig[0]] = nyl.get(sig[0], 0) + 1
                 key = ("not_yet_lowered", sig[0])
@@ -1350,8 +1408,7 @@ SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED: dict[str, str] = {}
 #: primitive families with no piece, and why (anything else: no piece yet)
-NO_PIECE = {"TopPMaskWordx": "the top-p keep word: the whole row's split pipeline, and partial (it raises unless splits is 1, 2, 4, "
-                             "8, 16 or 32: circuit-checks' finding 2, verity PR #100); no Boolean lowering yet"}
+NO_PIECE: dict[str, str] = {}
 #: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
 OPENED = {
     "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
