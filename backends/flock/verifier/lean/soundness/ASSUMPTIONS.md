@@ -10,7 +10,7 @@ staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
-### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`)
+### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
 Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
 root, with live coins, for any statement of PROTOCOL.md §16. For every prover strategy, the probability of this event is
@@ -76,7 +76,7 @@ link term per audit.
 | Lincheck phase: `α`, `β`, the rounds, the final check and the skip coin (statements have `k_log ≥ 6`, as `k_skip = 6` requires) | 1a | `lincheck_phase` (`RepSound.lean`), `lincheck_phase_of_card` (`LincheckPhase.lean`) | proved |
 | Opening phase: ring switching (seven coins per claim) and the batch | 1a | `opening_phase` (`RepSound.lean`), `opening_phase_of_card` (`OpeningPhase.lean`) | proved |
 | The list size: at most `L₀` codewords near the committed table (ArkLib's Johnson bound) | 1a | `closeMsgs_card_le` (`ListSize.lean`) | proved |
-| Phase lemma: Ligerito | 1a | `ligerito_phase` | **to prove** |
+| Phase lemma: Ligerito, level by level: the folds (sumcheck and MCA), the next level's OOD binding, the queries and batching coins, the final check | 1a | `ligerito_phase` (`RepSound.lean`), `ligerito_sound` (`LigeritoPhase.lean`) | proved |
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`LinkSound.lean`) | proved |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
@@ -89,8 +89,7 @@ link term per audit.
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until `ligerito_phase`
-is proved.
+`lake env lean FlockSoundness/Check.lean` to check.
 
 ## 2. The model
 
@@ -207,7 +206,10 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 - **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights on the skip nodes and the
   output coset, and the `Pcomb` weights on both (one `nodes` fact, so that all three use the same 128 points), the
   packing basis, the Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are hypotheses until proved for
-  the instance the executable verifier defines. They are to be proved, not trusted.
+  the instance the executable verifier defines. They are to be proved, not trusted. Two hold only on a range. The
+  domain points `ω_q` are distinct only for `2^d ≤ 2^64` (`ω_q` is the low word of `q`). The novel basis is a basis
+  only for `L ≤ 40` columns (the range the executable's normalisers are checked on). `Level.Fits` carries those bounds,
+  and every `fast100` level fits.
 - **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is §1 of this file,
   `Soundness.lean`, `Model/*` and `Accounting/Bound.lean`.
 - **Pinned dependencies.** ArkLib `b2e456fc`; through its manifest, VCVio `d7089e46`, CompPoly `v4.34.0-patch2` and
@@ -272,27 +274,21 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Stage 1a, the last phase lemma of `rep_sound`.** The composition, the round lemmas, the shared list size, the
-   zerocheck, the lincheck (with the pin) and the opening phase are done.
-   - **Ligerito,** level by level (fold, bind, query, batch; MCA commutes with list decoding from A1), and the final
-     check. The plan and its terms are `note:20260927T0205Z-finding-ligerito-proof-plan`.
-
-   Each phase is a doomed-state transition bounded by the matching `Accounting` term. `Game.value_bind_le` chains them.
-   `link_sound` is proved, so this is the last piece of `table_sound`.
-2. **`Arith.Correct`** for the GHASH instance, from CompPoly's definitions.
-3. **Stages 1b and 1c (interactive), the compiled theorem** (§1.2). Merkle binding, the rewinding lemma and the
+1. **`Arith.Correct`** for the GHASH instance. Lane `flock-verifier` proved every field for the executable's functions,
+   in the field shapes of `Defs.lean`. What remains is to build the instance here, once both branches are on `main`.
+2. **Stages 1b and 1c (interactive), the compiled theorem** (§1.2). Merkle binding, the rewinding lemma and the
    compilation steps are proved. Remaining:
    - the compiled game: Ligerito with caps in place of oracles and query answers deferred to the end of the proof;
    - the coupling between a compiled run and the oracle-model run of the plurality prover `P̃` on the same coins;
    - `table_sound_compiled` from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound.
 
    Session binding needs nothing, since the server keeps the round bytes.
-4. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
+3. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
    registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
    term (DESIGN.md §3).
-5. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
+4. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-6. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
+5. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
    honest-verifier ZK lemma, then single-rewind simulation of one batched session.
-7. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
+6. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".

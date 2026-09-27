@@ -8,9 +8,6 @@ Run `lake env lean FlockSoundness/Check.lean`.
 The proved results must depend only on Lean's three standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.BCHKS25Thm46`) are hypotheses
 of the theorems that use them, never `axiom` declarations, so they cannot appear here.
-
-`rep_sound` and `table_sound` still show `sorryAx`, from `ligerito_phase` alone; that disappears
-when it is proved.
 -/
 
 -- the interaction model and the repetition theorem
@@ -59,15 +56,31 @@ when it is proved.
 -- a level's folds against a list
 #print axioms FlockSoundness.value_foldRounds_sum_le
 #print axioms FlockSoundness.value_foldRounds_sum_invariant
--- the algebra of the final check's weights
+-- the algebra of the final check's weights, and a level's fold identity
 #print axioms FlockSoundness.sum_eqList_prod
 #print axioms FlockSoundness.sum_eqList_split
 #print axioms FlockSoundness.sum_eqList_Xhat
+#print axioms FlockSoundness.foldLoL_preW
+#print axioms FlockSoundness.foldLoL_W0
+-- decoding a fold near a codeword
+#print axioms FlockSoundness.decode
+-- a level's folds, and from one level to the next
+#print axioms FlockSoundness.phaseB
+#print axioms FlockSoundness.phaseB0
+#print axioms FlockSoundness.value_twoOod_good
+#print axioms FlockSoundness.value_queryAndBatch_le
+#print axioms FlockSoundness.phaseA
+-- the last level, every level, Ligerito
+#print axioms FlockSoundness.finalStage
+#print axioms FlockSoundness.value_recursiveRounds_le
+#print axioms FlockSoundness.ligerito_sound
+#print axioms FlockSoundness.ligerito_phase
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and
--- `link_sound`; the Ligerito phase lemma is still `sorry`
+-- `link_sound`
 #print axioms FlockSoundness.rep_sound
 #print axioms FlockSoundness.table_sound
 #print axioms FlockSoundness.table_sound_fast100
+#print axioms FlockSoundness.table_sound_fast100_34_35

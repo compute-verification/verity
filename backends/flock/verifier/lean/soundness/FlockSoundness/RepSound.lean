@@ -4,6 +4,7 @@ import FlockSoundness.OpeningPhase
 import FlockSoundness.ListSize
 import FlockSoundness.LincheckPhase
 import FlockSoundness.ZerocheckPhase
+import FlockSoundness.LigeritoPhase
 
 /-!
 # One rep is sound
@@ -147,15 +148,31 @@ theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sc
   rw [mul_div_assoc]
   norm_num
 
-/-- **Ligerito.** *Status: to prove.* Level by level: the folds (sumcheck `2L/|K|` per round,
-`Rounds.sumRound_sound` over `K`; mutual correlated agreement from BCHKS25 Theorem 4.6, with the
-row union of paper Lemma 9), the binding of the next level by its two out-of-domain samples, the
-stratified queries (`(1 − γ)^Q`), and the batching coins. -/
+/-- **Ligerito.** Level by level: the folds (sumcheck `2L/|K|` per round; mutual correlated
+agreement from BCHKS25 Theorem 4.6, with the row union of paper Lemma 9), the binding of the next
+level by its two out-of-domain samples, the stratified queries (`(1 − γ)^Q`), and the batching
+coins. Proved in `LigeritoPhase` (`ligerito_sound`) for every schedule of the `fast100` shape
+(`fast100_shape`). -/
 theorem ligerito_phase (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (C : Oracle F)
     (op : OpenOut F) (hop : DOp A S sch C (some op)) :
     value (fun b => b = true) (ligerito A sch op.T op.b C) ≤ ENNReal.ofReal (εLig sch) := by
-  sorry
+  classical
+  have hshape := fast100_shape S.m sch hsch
+  have hm := fast100_m S.m sch hsch
+  refine (ligerito_sound hMCA A hA sch hshape op.T op.b C fun M hM => ?_).trans (le_of_eq ?_)
+  · have hmem : M ∈ closeMsgs A sch C := by
+      simp only [closeL, Finset.mem_filter, Finset.mem_univ, true_and] at hM
+      exact hM
+    have := hop M hmem
+    rw [hm]
+    exact this
+  · have hL : sch.listBound₀ = sch.level₀.listBound := by
+      obtain ⟨hlen, -⟩ := hshape
+      cases h : sch.levels with
+      | nil => rw [h] at hlen; simp at hlen
+      | cons l rest => simp [Schedule.listBound₀, Schedule.level₀, h]
+    rw [εLig, hL]
 
 /-! ## Composition -/
 
