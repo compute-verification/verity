@@ -3,6 +3,7 @@ import FlockSoundness.Game.Interleave
 import FlockSoundness.Game.Poly
 import FlockSoundness.Game.Union
 import FlockSoundness.Game.Expect
+import FlockSoundness.Game.Lock
 import FlockSoundness.Accounting.Schedule
 import FlockSoundness.Accounting.Bound
 import FlockSoundness.Accounting.Fast100
