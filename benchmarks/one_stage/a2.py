@@ -36,18 +36,22 @@ from verity_one_stage import audit, draw as D, partition as P, registration as R
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
-    """The verifier's own copies of the public and prover files for M0's unbound statement: the same body, a header whose
-    `units` has no `classes` and whose `circuit_sha512` is the unbound circuit's pin (composed by the verifier)."""
+    """The verifier's own copies of the public and prover files for M0's unbound statement (its provisional unit cover): the
+    same body, and a header whose `circuit_sha512` is the unbound circuit's pin, composed by the verifier. A class leaves
+    META's bindings out, so `units.classes` is unchanged where that M0 has classes and dropped where it hasn't."""
     ub = out / "unbound"
     ub.mkdir(parents=True, exist_ok=True)
     p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
                out / "compose-unbound.log", {"PYTHONPATH": a.unbound_m0_pythonpath or a.m0_pythonpath})
-    pin = json.loads(p.stdout.strip().splitlines()[-1])["pin"]
+    made = json.loads(p.stdout.strip().splitlines()[-1])
+    pin = made["pin"]
     for name in (f"pub-{n}.bin", f"inst-{n}.bin"):
         with open(st["dir"] / name, "rb") as f:
             head = json.loads(f.readline())
             body = f.read()
         head["units"] = {k: v for k, v in head["units"].items() if k != "classes"}
+        if made.get("class_sha512"):
+            head["units"]["classes"] = [made["class_sha512"]] * n
         head["circuit_sha512"] = pin
         with open(ub / name, "wb") as f:
             f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
@@ -97,7 +101,10 @@ def main() -> int:
     for name in (f"pub-{n}.bin", f"inst-{n}.bin"):
         target = st_dir / name
         if not target.exists():
-            os.symlink((served / name).resolve(), target)
+            try:
+                os.link((served / name).resolve(), target)
+            except OSError:
+                shutil.copyfile(served / name, target)
     shutil.copy(served / "index.json", out / "index.json")
     text = (st_dir / "circuit.txt").read_text()
     (st_dir / "partition.json").write_text(json.dumps(part, sort_keys=True))
