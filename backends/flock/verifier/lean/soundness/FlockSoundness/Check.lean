@@ -47,6 +47,12 @@ when it is proved.
 #print axioms FlockSoundness.prCoin_fromMsg_le
 #print axioms FlockSoundness.prCoin_eqList_le
 #print axioms FlockSoundness.prCoin_positions_miss_le
+-- mutual correlated agreement at the folds, from the named assumption
+#print axioms FlockSoundness.prCoin_mca_le
+#print axioms FlockSoundness.rowsAgreeOn_of_fold
+#print axioms FlockSoundness.rowsAgreeOn_of_foldAll
+#print axioms FlockSoundness.foldAllRows_eq_sum
+#print axioms FlockSoundness.value_foldRounds_mca_le
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound
