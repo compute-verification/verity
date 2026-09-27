@@ -145,7 +145,7 @@ TEMPLATE_PARAMS = {
     "attention-head": [{"D": 64, "BN": 128, "T": "1:17"}],
     "rope-head": [{"D": 64}],
     "rmsnorm-fused-cuda": [{"N": 2048, "EPS": 1e-05}],
-    "rmsnorm-triton": [{"N": 2048, "EPS": 1e-05}],
+    "rmsnorm-triton": [{"N": 128, "EPS": 1e-06}],
     "silu-mul": [{"I": 8192}],
     "gumbel-top-p-token-select": [{"V": 64}],
     "token-select-greedy": [{"V": 64}],

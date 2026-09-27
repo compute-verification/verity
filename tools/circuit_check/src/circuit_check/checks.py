@@ -54,7 +54,7 @@ class Options:
     vectors: int = 64
     min_vectors: int = 4
     seed: int = 20260926
-    reference_budget: int = 1_000_000
+    reference_budget: int = 400_000
     X: int = 16
     W: int = 32
     extras: int = 0
@@ -635,6 +635,17 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
                calls=v["calls"], where=v.get("where"))
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
+    try:
+        from verity_vllm.query import cross_call
+    except ImportError:
+        out["cross_call"] = {"checked": False, "reason": "verity_vllm.query.cross_call is not on this tree (PR #98)"}
+    else:
+        x = cross_call.check_program(str(inst), strict=False)
+        out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
+        for a in x["recomputes"]:
+            F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "
+                   f"gate(s) of {a['originals']} earlier Call(s) again, e.g. {a['examples'][0][0]} = {a['examples'][0][1]})",
+                   level=a["level"], calls=a["calls"], gates=a["gates"])
     groups = W.call_groups(P, Q)
     calls: Counter = Counter()
     for g in groups:
