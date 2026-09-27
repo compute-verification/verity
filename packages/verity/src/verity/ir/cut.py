@@ -11,6 +11,9 @@ The width rule (`Q_word_v1{X,W,EXTRAS}`, today X = 16, W = 32, EXTRAS = 0) count
 another unit reads or the Call returns; with ob their summed declared widths and og their number, the unit passes when
 ob <= X + EXTRAS, or when og == 1 and ob <= W + EXTRAS (one value of at most W bits).  `check_cut` applies it with
 `partition.validate_unit_cut`, the invariant, to one Call's cut: failure code `unit-too-wide`, listing (unit, ob, og).
+
+A cut is its owner per computing gate.  Its committed set is derived (`derived_committed`): a value is committed exactly when a unit
+other than its producer's reads it, or the Call returns it; what serving commits is checked against that set.
 """
 from __future__ import annotations
 
@@ -218,15 +221,26 @@ def boundary_widths(graph: CallGraph, owner: Sequence[int], units: int | None = 
     return ob, og
 
 
-def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int],
+def derived_committed(graph: CallGraph, owner: Sequence[int]) -> list[int]:
+    """The computing gates the cut `owner` commits, ascending: a value is committed exactly when a unit other than its producer's reads
+    it, or the Call returns it (the invariant's boundary set; a cut never stores it)."""
+    c = {p for p, q in zip(graph.src, graph.dst) if owner[p] != owner[q]}
+    c.update(graph.outputs)
+    return sorted(c)
+
+
+def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int] | None = None,
               limits: tuple[int, int, int] | None = WIDTH_RULE) -> CutVerdict:
     """One Call's cut against its graph: `validate_unit_cut` (every computing gate in one unit, reads across units only of committed
     values, returned values committed, no value computed in two units), the Call's parameters standing for the input unit, and, unless
     `limits` is None, the width rule (`unit-too-wide`: (unit, ob, og) per failing unit).  `owner`: a unit per computing gate;
-    `committed`: the computing gates committed at serving."""
+    `committed`: what serving commits, held to the derived set (`committed-unread`: served but not derived; `read-uncommitted` /
+    `output-uncommitted`: derived but not served); None: the derived set (`derived_committed`)."""
     owner = [int(u) for u in owner]
     if len(owner) != graph.n:
         return CutVerdict(False, ("owner-length",), {"owner-length": {"n": 1, "gates": [len(owner), graph.n]}})
+    if committed is None:
+        committed = derived_committed(graph, owner)
     k = len(graph.input_ids)
     reads = list(zip(graph.src, graph.dst)) + [(graph.n + i, q) for i, q in graph.input_reads]
     cut = validate_unit_cut(graph.total + k, graph.free, owner + [INPUT_UNIT] * k, reads,
@@ -244,4 +258,4 @@ def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int],
     return CutVerdict(False, tuple(cut.codes) + ("unit-too-wide",), detail)
 
 
-__all__ = ["WIRING", "WIDTH_RULE", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "check_cut"]
+__all__ = ["WIRING", "WIDTH_RULE", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut"]

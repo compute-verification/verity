@@ -238,6 +238,8 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
         assert (c.n, c.free, c.outputs, c.recomputed, c.input_reads) == (g.n, g.free, g.outputs, g.recomputed, g.input_reads)
         assert list(c.src) == g.src.tolist() and list(c.width) == g.width.tolist()
         R = W.units(g, 16, 32)
+        own, _kinds, head = W.partition(g, 16)
+        assert cut.derived_committed(c, own.tolist()) == np.flatnonzero(head >= 0).tolist()   # the heads are the derived committed set
         ob, og = cut.boundary_widths(c, R["owner"].tolist(), len(R["kinds"]))
         assert ob == R["out_bits"].tolist() and og == R["out_gates"].tolist()
     sig = [f.signature() for f in fns]
@@ -253,5 +255,6 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
     P = Program(bind(CompositeDefinition("PartitionTop", 1, (), lambda S: (params, Tuple(*[r for _p, r in sig])), body, register=False)))
     obj = W.partition_object(P)
     assert PO.validate(obj).ok and PO.verify(obj, P).ok and len(obj["calls"]) == 3
-    assert len(obj["units"]) == sum(W.unit_rule(f)["units_per_call"] for f in fns[:2]) + len(set(obj["calls"][2]["owner"]))
+    attn = obj["cuts"][obj["calls"][2]["cut"]]
+    assert PO.Units(obj).population == sum(W.unit_rule(f)["units_per_call"] for f in fns[:2]) + len(attn["classes"]) and len(obj["cuts"]) == 3
     assert PO.digest(obj) == PO.digest(W.partition_object(P))

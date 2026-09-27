@@ -158,7 +158,7 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
 
 def partition_object(program: Any, X: int = 16, *, classes: Callable[[int, int], str] | None = None) -> dict[str, Any]:
     """`verity/partition/v1` (`verity.ir.partition_object`) of `program`: every `call` node of its root body, cut by `partition` (a unit
-    per computing gate; committed: the heads).  `classes`: see `partition_object.build`."""
+    per computing gate; the committed set is derived from it).  `classes`: see `partition_object.build`."""
     from verity.ir.partition_object import build
     cuts, memo = [], {}
     for k, node in enumerate(program.fn.body.nodes):
@@ -166,9 +166,8 @@ def partition_object(program: Any, X: int = 16, *, classes: Callable[[int, int],
             continue
         r = memo.get(node.fn.id)
         if r is None:
-            own, _kinds, head = partition(Graph(node.fn), X)
-            r = memo[node.fn.id] = (own.tolist(), np.flatnonzero(head >= 0).tolist())
-        cuts.append((k, *r))
+            r = memo[node.fn.id] = partition(Graph(node.fn), X)[0].tolist()
+        cuts.append((k, r))
     return build(program, cuts, classes)
 
 

@@ -34,7 +34,7 @@ def program():
 
 
 def _good(program):
-    return PO.build(program, [(0, [0, 0], [1]), (1, [0, 1], [0, 1])])
+    return PO.build(program, [(0, [0, 0]), (1, [0, 1])])
 
 
 def test_the_call_graph_removes_structure_and_keeps_the_returned_gates():
@@ -52,44 +52,71 @@ def test_the_width_rule_counts_bits():
     p = cut.CallGraph(Pair)
     assert cut.boundary_widths(p, [0, 1]) == ([32, 32], [1, 1])
     assert cut.boundary_widths(p, [0, 0]) == ([64], [2])
-    v = cut.check_cut(p, [0, 0], [0, 1])
+    v = cut.check_cut(p, [0, 0])
     assert v.codes == ("unit-too-wide",) and v.detail["unit-too-wide"]["gates"] == [[0, 64, 2]]
-    assert cut.check_cut(p, [0, 0], [0, 1], limits=None).ok                  # the invariant alone holds
+    assert cut.check_cut(p, [0, 0], limits=None).ok                          # the invariant alone holds
 
 
 def test_build_digest_and_canonical_bytes(program):
     obj = _good(program)
-    assert obj["format"] == "verity/partition/v1" and len(obj["program"]) == 128
-    assert [(u["call"], u["unit"]) for u in obj["units"]] == [(0, 0), (1, 0), (1, 1)]
+    assert obj["format"] == "verity/partition/v1" and len(obj["program"]) == 128 and set(obj) == {"format", "program", "cuts", "calls"}
+    assert [c["call"] for c in obj["calls"]] == [0, 1] and len(obj["cuts"]) == 2
+    for key, cut in obj["cuts"].items():
+        assert key == hashlib.sha512(canonical_json(cut)).hexdigest() == PO.cut_key(cut)
     assert PO.canonical(obj) == canonical_json(obj)
     assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + canonical_json(obj)).hexdigest()
-    assert PO.program_sha512(program) == PO.program_sha512(program) and PO.validate(obj).ok and PO.verify(obj, program).ok
-    assert PO.build(program, [(1, [0, 1], [1, 0]), (0, [0, 0], [1])]) == obj  # Calls and committed gates in canonical order
+    assert PO.validate(obj).ok and PO.verify(obj, program).ok
+    assert PO.build(program, [(1, [0, 1]), (0, [0, 0])]) == obj              # Calls in canonical order
+
+
+def test_every_activation_of_a_specialization_shares_one_cut():
+    top = bind(CompositeDefinition("TTwice", 1, (), lambda S: ((("a", Array(3, F32)), ("b", Array(3, F32))), Tuple(F32, F32)),
+                                   lambda B, S, a, b: tuple_of(B.call(Max3, a), B.call(Max3, b)), register=False))
+    P = Program(top)
+    obj = PO.build(P, [(0, [0, 0]), (1, [0, 0])])
+    assert len(obj["cuts"]) == 1 and obj["calls"][0]["cut"] == obj["calls"][1]["cut"] and PO.verify(obj, P).ok
+    U = PO.Units(obj)
+    assert U.population == 2 and U.locate(1)[:3] == (1, 1, 0) and U.locate(0)[3] == U.locate(1)[3]
+
+
+def test_units_are_derived_by_call_then_owner(program):
+    obj = _good(program)
+    U = PO.Units(obj)
+    assert U.population == 3
+    assert [U.locate(i)[1:3] for i in range(3)] == [(0, 0), (1, 0), (1, 1)]
+    assert U.locate(2)[3] == obj["cuts"][obj["calls"][1]["cut"]]["classes"][1] == PO.unit_class("TPair_v1", 1)
+    with pytest.raises(IndexError):
+        U.locate(3)
 
 
 def test_a_pinned_digest_vector():
-    obj = {"format": "verity/partition/v1", "program": "0" * 128,
-           "calls": [{"call": 0, "owner": [0, 0, 1], "committed": [1, 2]}],
-           "units": [{"call": 0, "unit": 0, "class": "a" * 128}, {"call": 0, "unit": 1, "class": "b" * 128}]}
-    assert PO.validate(obj).ok
-    assert PO.canonical(obj) == (b'{"calls":[{"call":0,"committed":[1,2],"owner":[0,0,1]}],"format":"verity/partition/v1","program":"'
-                                 + b"0" * 128 + b'","units":[{"call":0,"class":"' + b"a" * 128 + b'","unit":0},{"call":0,"class":"'
-                                 + b"b" * 128 + b'","unit":1}]}')
+    cut = {"owner": [0, 0, 1], "classes": ["a" * 128, "b" * 128]}
+    key = PO.cut_key(cut)
+    obj = {"format": "verity/partition/v1", "program": "0" * 128, "cuts": {key: cut}, "calls": [{"call": 0, "cut": key}, {"call": 3, "cut": key}]}
+    assert PO.validate(obj).ok and PO.Units(obj).population == 4
+    assert key == ("83cbe8589bf05a4d3321ba7501291785ef171796fe1150bd14594f6b85f34ec1"
+                   "a80d16775d1050f6d09b3672cb772031383c065fe75bdc7551c89a612ce786db")
+    assert PO.digest(obj) == ("7273d670c5b9e73fe5439a2ad7c68f0159ba5b0de1a00af499ee364830874ebc"
+                              "53202037d99679b569c6551e39f51a3ac3e9be57a408c9c9e7dce233d3f41b4b")
     assert PO.digest(obj) == hashlib.sha512(b"verity/partition/v1\x00" + PO.canonical(obj)).hexdigest()
 
 
+def _cut(o):
+    return next(iter(o["cuts"].values()))
+
+
 @pytest.mark.parametrize("edit,code", [
-    (lambda o: o.update(reads=[]), "keys"),                                     # a derived property is never stored
+    (lambda o: o.update(units=[]), "keys"),                                     # a derived property is never stored
     (lambda o: o.update(format="verity/partition/v0"), "format"),
     (lambda o: o.update(program="ab"), "program-digest"),
     (lambda o: o["calls"].reverse(), "calls-order"),
-    (lambda o: o["calls"][1].update(owner=[0, 2]), "owner-values"),
-    (lambda o: o["calls"][1].update(committed=[1, 0]), "committed"),
-    (lambda o: o["calls"][0].update(committed=[2]), "committed"),
-    (lambda o: o["units"].reverse(), "units"),
-    (lambda o: o["units"].pop(), "units"),
-    (lambda o: o["units"][0].update(**{"class": "x"}), "unit-class"),
+    (lambda o: _cut(o).update(owner=[0, 2]), "owner-values"),
+    (lambda o: _cut(o).update(owner=[1, 1]), "cut-key"),                        # an edited cut no longer matches its key
+    (lambda o: o["calls"][0].update(cut="0" * 128), "call-cut"),
+    (lambda o: o["cuts"].update({"f" * 128: {"owner": [0], "classes": ["c" * 128]}}), "cut-unused"),
+    (lambda o: _cut(o).update(committed=[1]), "cut-keys"),                      # the committed set is derived, never stored
     (lambda o: o["calls"][0].update(widths=[32]), "call-keys"),
+    (lambda o: _cut(o).update(reads=[]), "cut-keys"),
 ])
 def test_the_object_form_is_checked(program, edit, code):
     obj = copy.deepcopy(_good(program))
@@ -98,19 +125,31 @@ def test_the_object_form_is_checked(program, edit, code):
     assert not v.ok and code in v.codes, v.codes
 
 
+@pytest.mark.parametrize("cut,code", [({"owner": [0, 1], "classes": ["a" * 128]}, "classes"),
+                                      ({"owner": [0, 0], "classes": ["x"]}, "classes"),
+                                      ({"owner": [1, 1], "classes": ["a" * 128]}, "owner-values")])
+def test_a_cuts_own_form_is_checked(cut, code):
+    key = PO.cut_key(cut)
+    v = PO.validate({"format": "verity/partition/v1", "program": "0" * 128, "cuts": {key: cut}, "calls": [{"call": 0, "cut": key}]})
+    assert not v.ok and code in v.codes, v.codes
+
+
 def test_the_object_is_checked_against_the_program(program):
     obj = _good(program)
     other = copy.deepcopy(obj)
     other["program"] = "f" * 128
     assert PO.verify(other, program).codes == ("program",)
-    wide = PO.build(program, [(0, [0, 0], [1]), (1, [0, 0], [0, 1])])        # Pair as one unit: 64 bits over two gates
+    wide = PO.build(program, [(0, [0, 0]), (1, [0, 0])])                    # Pair as one unit: 64 bits over two gates
     (f,) = PO.verify(wide, program).detail["cut"]["gates"]
     assert f["call"] == 1 and f["codes"] == ["unit-too-wide"]
     assert PO.verify(wide, program, limits=None).ok
-    uncommitted = PO.build(program, [(0, [0, 0], [1]), (1, [0, 1], [1])])     # s is read by the other unit and returned, not committed
-    (f,) = PO.verify(uncommitted, program).detail["cut"]["gates"]
-    assert {"read-uncommitted", "output-uncommitted"} <= set(f["codes"])
-    short = PO.build(program, [(0, [0], [0])])
+    assert cut.derived_committed(cut.CallGraph(Pair), [0, 1]) == [0, 1] and cut.derived_committed(cut.CallGraph(Max3), [0, 0]) == [1]
+    assert PO.verify(obj, program, served={1: [0, 1]}).ok                     # serving commits exactly the derived set
+    (f,) = PO.verify(obj, program, served={1: [1]}).detail["cut"]["gates"]  # s is read by the other unit and returned, not served
+    assert f["call"] == 1 and {"read-uncommitted", "output-uncommitted"} <= set(f["codes"])
+    (f,) = PO.verify(obj, program, served={0: [0, 1]}).detail["cut"]["gates"]  # a value no other unit reads, served anyway
+    assert f["call"] == 0 and f["codes"] == ["committed-unread"]
+    short = PO.build(program, [(0, [0])])
     assert PO.verify(short, program).detail["cut"]["gates"][0]["codes"] == ["owner-length"]
     stray = copy.deepcopy(obj)
     stray["calls"][1]["call"] = 7
@@ -118,6 +157,5 @@ def test_the_object_is_checked_against_the_program(program):
 
 
 def test_classes_come_from_the_backend_when_given(program):
-    obj = PO.build(program, [(0, [0, 0], [1]), (1, [0, 1], [0, 1])], classes=lambda call, unit: hashlib.sha512(f"{call}/{unit}".encode()).hexdigest())
-    assert obj["units"][2]["class"] == hashlib.sha512(b"1/1").hexdigest() and PO.verify(obj, program).ok
-    assert _good(program)["units"][0]["class"] == PO.unit_class("TMax3_v1", 0)
+    obj = PO.build(program, [(0, [0, 0]), (1, [0, 1])], classes=lambda call, unit: hashlib.sha512(f"{call}/{unit}".encode()).hexdigest())
+    assert PO.Units(obj).locate(2)[3] == hashlib.sha512(b"1/1").hexdigest() and PO.verify(obj, program).ok
