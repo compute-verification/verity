@@ -1105,8 +1105,20 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
   `⟨c0, c1⟩` is `embed c0 + embed c1 · u`, the soundness model's `Arith.ofLimbs`) and `u_root` (`u² + u + x⁻¹ = 0`).
 - **1d, assembly, first lemma** (`FlockLevel3/Assembly.lean`): `eqTable_get`: `eqTable r` has `2^|r|` entries and entry
   `b` is `Π_j (r_j if bit j of b, else 1 + r_j)`, the soundness model's `eqAt`.
-- Planned: packing and `lo` for the seam; the rest of the assembly (the fold equals the extension of `I ⊗ A_0 + Δ`, the
-  region values, Δ's copies); the lowering checkers.
+- **The soundness lane's `Arith.Correct`, every field** (`ArithFacts`, `Pinned`, `Nodes`, `NovelBasis`), for
+  `F = GF128`, `K = GF256` and the executable's functions:
+  - `card_F`, `card_K`, the characteristics;
+  - packing (`unpack_pack`, `pack_unpack`, `unpack_add`), with bit `v` as the coefficient of `x^v`;
+  - `pinned_indep`, with an inverse bit matrix checked by the kernel on the executable's `eqTable pinned`, and
+    `pinned_ne_one`;
+  - `nodes`: `lagS`/`lagΛ` are the Lagrange weights on `φ8(0…63)` and its coset, and `combW` recovers `Pcomb` (φ8 is
+    additive, and the barycentric denominators are `den 6`, `den 7` by translation);
+  - `omega_injective` (`d ≤ 64`), `xhat_poly` (`L ≤ 40`: the subspace polynomials, their normalisers checked nonzero),
+    `ofLimbs_bijective`, `lo_balanced`.
+- **1d, the fold, first lemmas** (`Fold.lean`): `slot_factor`, so a slot's in-block tensor is its local tensor times
+  `eq(ρ_hi, q)`, which is the reason `Stmt.fold` folds each slot type once; and `foldT_get`, so the sparse fold is `Xᵀe`.
+- Planned: the lookup slots' `foldB`, then the fold theorem itself (`Stmt.fold` is `α·A_0ᵀe + B_0ᵀe` for the statement's
+  `A_0`, `B_0` with Δ); the region values; the lowering checkers.
 
 ## 18. Test vectors
 

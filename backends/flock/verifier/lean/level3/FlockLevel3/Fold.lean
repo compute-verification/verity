@@ -106,4 +106,63 @@ theorem slot_factor (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl :
   rw [e2, e3]
   ring
 
+/-! ### The sparse fold `Xᵀe` -/
+
+theorem modify_get! (acc : Array F128) (j c : ℕ) (f : F128 → F128) (hc : c < acc.size) :
+    (acc.modify j f)[c]! = if j = c then f acc[c]! else acc[c]! := by
+  rw [getElem!_pos _ c (by simpa using hc), Array.getElem_modify, getElem!_pos acc c hc]
+
+theorem F128.isZero_iff (a : F128) (h : a.isZero = true) : a = 0 := by
+  cases a with | mk lo hi =>
+  simp only [F128.isZero, Bool.and_eq_true, beq_iff_eq] at h
+  rw [h.1, h.2]; rfl
+
+theorem foldRow_get (m : Sparse) (i : ℕ) (ei : F128) : ∀ (fuel t : ℕ) (acc : Array F128) (c : ℕ), c < acc.size →
+    GF128.of (m.foldRow i ei fuel t acc)[c]! =
+      GF128.of acc[c]! + ∑ s ∈ Finset.range fuel, if m.col i (t + s) = c then GF128.of ei else 0 := by
+  intro fuel
+  induction fuel with
+  | zero => intro t acc c _; simp [Sparse.foldRow]
+  | succ fuel ih =>
+    intro t acc c hc
+    simp only [Sparse.foldRow]
+    rw [ih (t + 1) _ c (by simpa using hc), modify_get! acc _ c _ hc, Finset.sum_range_succ']
+    simp only [add_zero, show ∀ s, t + 1 + s = t + (s + 1) from fun s => by omega]
+    split_ifs <;> simp [of_add] <;> ring
+
+theorem foldRow_size (m : Sparse) (i : ℕ) (ei : F128) : ∀ (fuel t : ℕ) (acc : Array F128),
+    (m.foldRow i ei fuel t acc).size = acc.size := by
+  intro fuel; induction fuel with
+  | zero => intro t acc; rfl
+  | succ fuel ih => intro t acc; simp only [Sparse.foldRow]; rw [ih]; simp
+
+theorem foldRows_get (m : Sparse) (e : Array F128) : ∀ (fuel i : ℕ) (acc : Array F128) (c : ℕ), c < acc.size →
+    GF128.of (m.foldRows e fuel i acc)[c]! = GF128.of acc[c]! +
+      ∑ k ∈ Finset.range fuel, ∑ s ∈ Finset.range m.len[i + k]!,
+        if m.col (i + k) s = c then GF128.of e[i + k]! else 0 := by
+  intro fuel
+  induction fuel with
+  | zero => intro i acc c _; simp [Sparse.foldRows]
+  | succ fuel ih =>
+    intro i acc c hc
+    simp only [Sparse.foldRows]
+    have hsz : c < (if e[i]!.isZero then acc else m.foldRow i e[i]! m.len[i]! 0 acc).size := by
+      split_ifs <;> simp [foldRow_size, hc]
+    rw [ih (i + 1) _ c hsz, Finset.sum_range_succ']
+    simp only [show ∀ k, i + 1 + k = i + (k + 1) from fun k => by omega, add_zero]
+    split_ifs with hz
+    · have h0 : GF128.of e[i]! = 0 := by rw [F128.isZero_iff _ hz, GF128.zero_eq]
+      simp only [h0, ite_self, Finset.sum_const_zero, add_zero]
+    · rw [foldRow_get m i e[i]! _ 0 acc c hc]
+      simp only [zero_add]
+      ring
+
+/-- **The sparse fold.** `(Xᵀe)[c] = Σ_i Σ_{t : col(i, t) = c} e[i]` for every column `c`. -/
+theorem foldT_get (m : Sparse) (e : Array F128) (c : ℕ) (hc : c < m.width) :
+    GF128.of (m.foldT e)[c]! = ∑ i ∈ Finset.range (min m.rows e.size), ∑ t ∈ Finset.range m.len[i]!,
+      if m.col i t = c then GF128.of e[i]! else 0 := by
+  rw [Sparse.foldT, foldRows_get m e _ 0 _ c (by simpa using hc)]
+  simp only [zero_add]
+  rw [getElem!_pos _ c (by simpa using hc), Array.getElem_replicate, ← GF128.zero_eq, zero_add]
+
 end FlockLevel3

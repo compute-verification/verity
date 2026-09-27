@@ -38,3 +38,4 @@ import FlockLevel3
 #print axioms FlockLevel3.xhat_poly
 #print axioms FlockLevel3.eqAt_split
 #print axioms FlockLevel3.slot_factor
+#print axioms FlockLevel3.foldT_get
