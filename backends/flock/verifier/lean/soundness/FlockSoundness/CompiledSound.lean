@@ -468,19 +468,22 @@ theorem compiled_le_bad (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : 
   linarith
 
 open Classical in
-/-- A bad leaf, cap by cap (`bad_split` as indicators). -/
-theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
+/-- A bad leaf, cap by cap (`bad_split` as indicators). The bad event requires acceptance, so the
+level-0 term counts only accepted runs. -/
+theorem bad_pointwise_acc (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
     (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (b : OutC F D)
     (hR : TopRel H E sch C₀ cap₀ i a b) :
     ind (fun out : OutC F D => out.accepted = true ∧ ¬ (AgreeRep 0 C₀ i.1 out.pend.1.reqs out.opens ∧
       AgreeRep 1 C₀ i.2 out.pend.2.reqs out.opens)) b ≤
     ind (SelfClash H E sch) b +
-      ind (fun b => ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b +
+      ind (fun b : OutC F D => b.accepted = true ∧
+        ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b +
       ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 sch.levels.length,
         ind (fun b => ∃ t d, Lock.getPair (getRep 0) (getRep 1) i (slotOf r ℓ) = some (t, d) ∧
           ∃ p, Rewinding.Off (opR H E sch r ℓ d) (rowT _ _ t) b p) b := by
   have hS := ind_nonneg (SelfClash H E sch) b
-  have h0 := ind_nonneg (fun b => ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b
+  have h0 := ind_nonneg (fun b : OutC F D => b.accepted = true ∧
+    ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b
   have hsum : 0 ≤ ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 sch.levels.length,
       ind (fun b => ∃ t d, Lock.getPair (getRep 0) (getRep 1) i (slotOf r ℓ) = some (t, d) ∧
         ∃ p, Rewinding.Off (opR H E sch r ℓ d) (rowT _ _ t) b p) b :=
@@ -491,7 +494,8 @@ theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : 
     rcases bad_split H E sch C₀ cap₀ i a b hR hB.1 hB.2 with hc | ho | ⟨r, hr, ℓ, hℓ, t, d, hget, p, hp⟩
     · have : ind (SelfClash H E sch) b = 1 := if_pos hc
       linarith
-    · have : ind (fun b => ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b = 1 := if_pos ho
+    · have : ind (fun b : OutC F D => b.accepted = true ∧
+          ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b = 1 := if_pos ⟨hB.1, ho⟩
       linarith
     · have h1 : ind (fun b => ∃ t d, Lock.getPair (getRep 0) (getRep 1) i (slotOf r ℓ) = some (t, d) ∧
           ∃ p, Rewinding.Off (opR H E sch r ℓ d) (rowT _ _ t) b p) b = 1 := if_pos ⟨t, d, hget, p, hp⟩
@@ -506,6 +510,23 @@ theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : 
       linarith
   · rw [ind, if_neg hB]
     linarith
+
+open Classical in
+/-- A bad leaf, cap by cap (`bad_split` as indicators). -/
+theorem bad_pointwise (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule)
+    (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (b : OutC F D)
+    (hR : TopRel H E sch C₀ cap₀ i a b) :
+    ind (fun out : OutC F D => out.accepted = true ∧ ¬ (AgreeRep 0 C₀ i.1 out.pend.1.reqs out.opens ∧
+      AgreeRep 1 C₀ i.2 out.pend.2.reqs out.opens)) b ≤
+    ind (SelfClash H E sch) b +
+      ind (fun b => ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) b +
+      ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 sch.levels.length,
+        ind (fun b => ∃ t d, Lock.getPair (getRep 0) (getRep 1) i (slotOf r ℓ) = some (t, d) ∧
+          ∃ p, Rewinding.Off (opR H E sch r ℓ d) (rowT _ _ t) b p) b := by
+  have h := bad_pointwise_acc H E sch C₀ cap₀ i a b hR
+  have h0 := ind_mono (fun (b : OutC F D)
+    (h : b.accepted = true ∧ ∃ p, Rewinding.Off (op₀ H E sch cap₀) (rowT _ _ C₀) b p) => h.2) b
+  linarith
 
 open Classical in
 /-- **The bad runs, cap by cap**: rewinding at the level-0 cap (`expect_bad_le`) and at every

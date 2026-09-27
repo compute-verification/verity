@@ -142,6 +142,15 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.orcSess_value_le
 #print axioms FlockSoundness.session_sound_of_table
 #print axioms FlockSoundness.session_knowledge_sound
+-- the expected-time extractor: accepted reruns, the accepted-only deviation, and the relative
+-- missing term
+#print axioms FlockSoundness.bad_pointwise_acc
+#print axioms FlockSoundness.session_sound_of_table_acc
+#print axioms FlockSoundness.bad_pointwise_of
+#print axioms FlockSoundness.Extract.expectN_prod_mul_sum
+#print axioms FlockSoundness.Extract.expectAcc_off_le
+#print axioms FlockSoundness.Extract.joint_acc_le
+#print axioms FlockSoundness.session_knowledge_sound_acc
 -- several tables in one batched session: each table's place in it, its knowledge bound in the
 -- product form, and the cover of its failure and link events
 #print axioms FlockSoundness.sessAfterB_gamesB
@@ -247,3 +256,29 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Law.stratified_escape_floor
 #print axioms FlockSoundness.Audit.audit_whole_stratum
 #print axioms FlockSoundness.Audit.extraction_audit_whole_stratum
+-- the batched audit with the expected-time extractor: reruns in which the session accepts, the
+-- relative knowledge bound, and the analysis whose cover absorbs it
+#print axioms FlockSoundness.joint_le_accB
+#print axioms FlockSoundness.one_le_fail_add_accB
+#print axioms FlockSoundness.Audit.Partition.analysisBE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_knowledgeSoundE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_countE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawnE
+-- the link theorem: the extractor's waits, the link finder with its success and cost, and δ_link
+-- under expected-time collision resistance for the plurality value layer
+#print axioms FlockSoundness.Game.expect_bind
+#print axioms FlockSoundness.Game.expect_runsG
+#print axioms FlockSoundness.Extract.expectN_find
+#print axioms FlockSoundness.Extract.expectN_firsts
+#print axioms FlockSoundness.Extract.expectN_waitCost
+#print axioms FlockSoundness.Extract.expectAcc_le_waits
+#print axioms FlockSoundness.LinkFinder.expect_succ
+#print axioms FlockSoundness.LinkFinder.succ_ge
+#print axioms FlockSoundness.LinkFinder.expect_finderCost_le
+#print axioms FlockSoundness.LinkFinder.link_mass_le
+#print axioms FlockSoundness.Audit.Partition.outC_spec
+#print axioms FlockSoundness.Audit.Partition.expect_cT_le
+#print axioms FlockSoundness.Audit.Partition.trial_mass_le
+#print axioms FlockSoundness.Audit.Partition.ideal_mass_le
+#print axioms FlockSoundness.Audit.Partition.linkEv_le_psi
+#print axioms FlockSoundness.Audit.Partition.flock_batched_linkSoundE

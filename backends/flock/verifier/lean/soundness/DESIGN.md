@@ -171,7 +171,8 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
   - The analysis is below and in `note:20260927T0705Z-draft-link-term`; the Lean plan is
     `note:20260927T1510Z-draft-expected-time-link-plan`.
-- **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
+- **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
+  It is classical only (§9).
 
 **The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
 `ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
@@ -222,19 +223,25 @@ strict time.
   - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
     function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
     two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
-  - **The link finder** picks one of the $N_s$ strings uniformly and runs an extraction. If that recovered the string,
-    it runs extractions until one recovers it again, $1/r$ of them in expectation. That is $2(1+k)\,t$ evaluations in
-    expectation (Wald), so $\delta_{\rm link}\le2N_s(1+k)\,t/2^{256}$, plus one extraction's worth for two drawn
-    units that read one string differently.
+  - **The link finder** for one commit string draws a unit set that reads it and runs an extraction. Two drawn units
+    that open the string differently are already a collision. If one value was read, it runs extractions on such
+    draws until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
+    $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a draw reads it gives
+    $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
   - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot N_s(8N_0/e)/2^{256}$ up to lower-order
     terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 24 bits below.
-  - **Half of it,** $4N_0/e$, would come from a value layer drawn from a sequence of auxiliary extractions (the first
-    recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by averaging
-    over that sequence. The record keeps $8N_0/e$, the form the Lean plan proves.
-  - **The status.** On paper; the Lean plan is `note:20260927T1510Z-draft-expected-time-link-plan`.
+  - **A one-bit refinement, for later:** $4N_0/e$, from a value layer drawn from a sequence of auxiliary extractions
+    (the first recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by
+    averaging over that sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
+  - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
+    wires to commit strings (`ValueBinding`, from the `hm96` layout):
+    $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
+    and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
+  - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
+    sets that read its target. This is the record with room to spare: $t\cdot2^{-209.4}$ for audit B, against $2^{-205.1}$.
 - **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
   linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
   $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's
@@ -573,5 +580,5 @@ If real concurrency is ever needed:
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
-  - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the link
-    theorem lands. Expected-time collision resistance is decided (§3), and its extractor replaces the fixed `Kr` reruns.
+  - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
+    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).

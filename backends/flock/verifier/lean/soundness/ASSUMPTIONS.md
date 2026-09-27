@@ -110,9 +110,12 @@ link term per audit.
   - For each table `j`, `joint_le_B'` bounds `Pr[the session accepts] · Pr[table j's extraction fails]` by table `j`'s
     `ε_c⁻ + K·Adv₀ + N₀/(eK)` in the session (`ksBoundB`).
   - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
-- **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link theorem (`δ_link`,
-  DESIGN.md §3). The first two need the SHA-512 leaf layout in the model, as does the link theorem's binding
-  hypothesis. Under A2 (§3) `δ_link` is `t·N_s(8N₀/e)/2^256` per audit, which dominates the audit's hash term.
+- **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
+  `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
+- **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): under A2 and `ValueBinding` (named), `δ_link` is
+  at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`. It dominates the audit's hash term.
+- **Not yet:** the canonical HM96 values and `registered_weights`. Both need the SHA-512 leaf layout in the model,
+  which also discharges `ValueBinding`.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
   statement links that root, or Halevi–Micali binding gives a SHA-512 collision. So
   `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
@@ -142,7 +145,7 @@ link term per audit.
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
-| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems proved; `registered_weights` and the link theorem (A2) **to write** (DESIGN.md §3); required for sampled audits (§7) |
+| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` **to write**; required for sampled audits (§7) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean` (§1.5) | the generic step proved; the placement and L1 remain |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
@@ -237,7 +240,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 ## 3. Named assumptions (taken without proof)
 
 There are two. Each is a `Prop` (`Assumptions.BCHKS25Thm46`, `Assumptions.SHA512ExpectedTimeCR`), and the theorems
-that use one take it as a hypothesis (`hMCA`; A2's user, the link theorem, is planned). §1.5 names one more, L1, about
+that use one take it as a hypothesis (`hMCA`; `hCR` in the link theorem). §1.5 names one more, L1, about
 the lowering. The development declares no `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can
 never make Lean prove something false.
 
@@ -406,10 +409,8 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Knowledge soundness, the rest** (§1.3). The table theorems are proved. Remaining:
-   - the link theorem under A2 (DESIGN.md §3; `note:20260927T1510Z-draft-expected-time-link-plan`), which the
-     sampled-audit composition needs;
-   - the canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout in the model.
+1. **Knowledge soundness, the rest** (§1.3). The table theorems and the link theorem are proved. Remaining: the
+   canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout (it discharges `ValueBinding`).
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
@@ -435,7 +436,7 @@ to its committed inputs (`Partition.Correct`). Every bound holds for every prove
 | Hypothesis | Term | Meaning | To be discharged by |
 |---|---|---|---|
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
-| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | the link theorem under A2, to write (DESIGN.md §3) |
+| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-195.4`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
@@ -564,8 +565,8 @@ the link makes the readings agree.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem under A2 (flock-soundness, planned), for an analysis whose extractor reruns until `k` reruns accept, in place of `Kr` reruns |
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it) |
 | `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, §1.5), given the statement builder's `Placement` (level 3) and L1 |
 
-**Not yet:** the serving-tree term when the leaf layer is not registered; `LinkSound` itself; `Placement` for the
+**Not yet:** the serving-tree term when the leaf layer is not registered; `ValueBinding` and `Placement` for the
 executable's statements.
