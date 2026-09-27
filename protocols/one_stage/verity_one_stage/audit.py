@@ -48,8 +48,9 @@ def wrong_units_bound(p: IntegrityProfile) -> float:
 
 
 def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
-                      sessions: Sequence[str], verdict: str | None) -> dict[str, Any]:
-    """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verifier of record's."""
+                      sessions: Sequence[str], verdict: str | list[str] | None) -> dict[str, Any]:
+    """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verifier of record's (a list
+    when the drawn units were proved in several sessions)."""
     return {"format": PROFILE, "protocol": registration["protocol"], "program": registration["program"],
             "query": registration["query"], "partition": registration["partition"], "population": registration["population"],
             "registration": registration_digest(registration), "scheme": registration["scheme"],
@@ -79,8 +80,9 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     if accepted:
         p = profile(registration, draw, delta)
         rec["profile"] = p.to_json()
+        of_record = [v.get("digest") for v in ran.values() if v.get("of_record")]
         rec["integrity_profile"] = integrity_profile(registration, receipt, draw, sessions,
-                                                     next((v.get("digest") for v in ran.values() if v.get("of_record")), None))
+                                                     of_record[0] if len(of_record) == 1 else (of_record or None))
         rec["wrong_units"] = {"delta": delta, "bound": wrong_units_bound(p), "of": registration["population"],
                               "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
     return rec

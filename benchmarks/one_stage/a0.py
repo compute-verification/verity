@@ -97,12 +97,12 @@ def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
     return out
 
 
-def stand_in_ports(s: InputSet, meta: dict, n: int) -> dict[str, dict]:
+def stand_in_ports(name: str, content_digest: str, meta: dict, n: int) -> dict[str, dict]:
     """The verifier's own derivation of the stand-in's domains: M0's frame domains bound to the set, the range, the port
     and its schema."""
     out = {}
     for p, (schema, count) in ports(meta, n).items():
-        b = identity_digest(STAND_IN_BINDING, {"set": s.name, "content_digest": s.content_digest, "lo": 0, "hi": n, "port": p,
+        b = identity_digest(STAND_IN_BINDING, {"set": name, "content_digest": content_digest, "lo": 0, "hi": n, "port": p,
                                                "schema": schema})
         out[p] = {"leaves": count, "domain": CommitmentDomain(bytes.fromhex(b), -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
     return out
@@ -247,7 +247,7 @@ def main() -> int:
 
     # 3. registration, before any draw; the verifier holds its own public file to it
     fv = header["frame_v3"]
-    want = stand_in_ports(s, st["meta"], n)
+    want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
     leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
     rec = R.record(program, query, law, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
