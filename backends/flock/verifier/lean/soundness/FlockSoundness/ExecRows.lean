@@ -204,7 +204,7 @@ theorem parse_checkOrder {lines : Array String} {net : Net} (h : Net.parse lines
   obtain ⟨constPos, -, h⟩ := except_bind_ok h
   obtain ⟨ig, -, h⟩ := except_bind_ok h
   obtain ⟨og, -, h⟩ := except_bind_ok h
-  replace h := ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok h)))
+  replace h := ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok (ite_throw_ok h))))
   obtain ⟨s, -, h⟩ := except_bind_ok h
   obtain ⟨u, -, h⟩ := except_bind_ok h
   replace h := ite_throw_ok h
