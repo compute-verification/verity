@@ -508,11 +508,12 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
            out_split: Sequence[int] | None = None) -> Layout:
     """``flock-ir-unit/v2``: the input port groups first (``in_split``: the port indices where a new group starts), each
     group's bits consecutive in a power-of-two number of 128-bit words aligned to that size, unused bits forced zero; the
-    live ANDs in creation order; one row ``(L + z_j) * 1 = z_j`` per assertion; then the output port groups as copy rows, laid
+    live ANDs and table reads in creation order (a read ``C.lookup`` as its plain rows, :class:`_Read`); one row
+    ``(L + z_j) * 1 = z_j`` per assertion; then the output port groups as copy rows, laid
     out the same way; the constant-one column last. A forced-zero row has empty A and B. So each group is one aligned
     subcube of the unit's columns (one region claim)."""
     live = C.live()
-    assert all(C.kind[v] in ("in", "and") for v in live), "hints are not laid out yet"
+    assert all(C.kind[v] in ("in", "and", "lookup") for v in live), "hints are not laid out yet"
     col: dict[int, int] = {}
     rows_a: list = []
     rows_b: list = []
@@ -543,11 +544,24 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
                 rows_b.append([len(rows_b)])
         close_group(c, words)
         in_groups.append((c, words, bits))
-    ands = [v for v in range(len(C.kind)) if v in live and C.kind[v] == "and"]
-    for v in ands:
-        col[v] = len(rows_a)
-        rows_a.append(None)
-        rows_b.append(None)
+    ands = []
+    reads: dict[int, _Read] = {}
+    value_bit = {C.data[v]: v for v in live if C.kind[v] == "lookup"}
+    for v in range(len(C.kind)):
+        if v not in live or C.kind[v] == "in":
+            continue
+        if C.kind[v] == "and":
+            ands.append(v)
+            col[v] = len(rows_a)
+            rows_a.append(None)
+            rows_b.append(None)
+            continue
+        g, j = C.data[v]
+        if g not in reads:
+            reads[g] = r = _Read(C, g, sorted(jj for (gg, jj) in value_bit if gg == g), len(rows_a))
+            rows_a.extend([None] * r.rows)
+            rows_b.extend([None] * r.rows)
+        col[v] = reads[g].out_col[j]
 
     def form(Lf: L):
         s = [col[v] for v in Lf.s]
@@ -558,6 +572,8 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     for v in ands:
         a, b = C.data[v]
         rows_a[col[v]], rows_b[col[v]] = form(a), form(b)
+    for r in reads.values():
+        r.fill(rows_a, rows_b, form)
     for _, Lf in C.asserts:
         j = len(rows_a)
         rows_a.append(form(Lf) + [j])
@@ -577,18 +593,97 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     rows_b.append([const])
 
     def fix(r):
+        if isinstance(r, np.ndarray):
+            return r
         par: dict[int, int] = {}
         for c in r:
             c = const if c == "C" else c
             par[c] = par.get(c, 0) ^ 1
         return sorted(c for c, p in par.items() if p)
 
-    rows_a = [fix(r) for r in rows_a]
-    rows_b = [fix(r) for r in rows_b]
+    for rows in (rows_a, rows_b):
+        for i, r in enumerate(rows):
+            rows[i] = fix(r)
     lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
-    lay.counts = {"ands": len(ands), "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
-                  "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b))}
+    read_rows = sum(r.rows for r in reads.values())
+    lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
+                  "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)), "reads": len(reads), "read_rows": read_rows,
+                  "read_nnz_a": sum(r.nnz_a for r in reads.values())}
     return lay
+
+
+#: a read's low index bits by index width: the lookup slot's split (``circuit.LOOKUP_LO``), so an inline read is its rows
+READ_LO = {24: 14, 23: 13}
+
+
+def _decode_count(n: int) -> int:
+    return 0 if n <= 1 else (1 << n) + _decode_count(n // 2) + _decode_count(n - n // 2)
+
+
+class _Read:
+    """A table read ``out = table[idx]`` laid out inline as plain rows of the unit (the one-hot construction of
+    :func:`fp.lookup`): the low and high index halves decode to one-hot minterms (each an AND of two half-minterms, recursively),
+    row ``(j, h)`` is ``hi_h AND (XOR of the low minterms l with bit j of table[h * 2^lo + l] set)`` (omitted when that XOR is
+    empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows. Every row
+    reads earlier rows, the index forms or the constant, so the index fixes every row."""
+
+    def __init__(self, C: Circuit, g: int, bits: Sequence[int], at: int):
+        from . import gf2
+
+        self.table, self.idx, _width = C.lookups[g]
+        n = len(self.idx)
+        self.lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
+        self.hi = n - self.lo
+        assert self.lo >= 2 and self.hi >= 2, "a read's index halves are decoded to rows"
+        words = np.asarray(gf2.table(self.table), dtype=np.uint32)
+        assert len(words) == 1 << n
+        self.bits = list(bits)
+        self.at = at
+        self.lo_first = at + _decode_count(self.lo) - (1 << self.lo)
+        self.hi_first = at + _decode_count(self.lo) + _decode_count(self.hi) - (1 << self.hi)
+        p = at + _decode_count(self.lo) + _decode_count(self.hi)
+        seg = words.reshape(1 << self.hi, 1 << self.lo)
+        self.products: list[list[tuple[int, np.ndarray]]] = []
+        self.nnz_a = 0
+        for j in self.bits:
+            mask = ((seg >> np.uint32(j)) & np.uint32(1)).astype(bool)
+            per = []
+            for h in range(1 << self.hi):
+                ls = np.flatnonzero(mask[h])
+                if len(ls):
+                    per.append((h, (self.lo_first + ls).astype(np.int32)))
+                    self.nnz_a += len(ls)
+            self.products.append(per)
+        n_prod = sum(len(per) for per in self.products)
+        self.out_col = {j: p + n_prod + t for t, j in enumerate(self.bits)}
+        self.rows = _decode_count(self.lo) + _decode_count(self.hi) + n_prod + len(self.bits)
+
+    def fill(self, rows_a: list, rows_b: list, form: Callable) -> None:
+        at = [self.at]
+
+        def emit(a, b) -> int:
+            c = at[0]
+            rows_a[c], rows_b[c] = a, b
+            at[0] += 1
+            return c
+
+        def decode(fs: list) -> list:
+            if len(fs) == 1:
+                return [fs[0] + ["C"], fs[0]]
+            h = len(fs) // 2
+            lo, hi = decode(fs[:h]), decode(fs[h:])
+            return [[emit(list(lo[i & ((1 << h) - 1)]), list(hi[i >> h]))] for i in range(1 << len(fs))]
+
+        idx = [form(f) for f in self.idx]
+        lo_m = decode(idx[:self.lo])
+        hi_m = decode(idx[self.lo:])
+        assert lo_m[0] == [self.lo_first] and hi_m[0] == [self.hi_first]
+        prod_cols = []
+        for per in self.products:
+            prod_cols.append([emit(a, [self.hi_first + h]) for h, a in per])
+        for j, cols in zip(self.bits, prod_cols):
+            assert emit(cols, ["C"]) == self.out_col[j]
+        assert at[0] == self.at + self.rows
 
 
 def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
@@ -603,12 +698,16 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
             head += [c, words, len(bits), *bits]
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
-        lines.append(" ".join(map(str, [len(a), *a, len(b), *b])))
+        lines.append(" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)])))
     if leaves is not None:
         lines.append("LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")))
     if cut is not None:
         lines.append("CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines) + "\n"
+
+
+def _cols_of(r) -> list:
+    return r.tolist() if isinstance(r, np.ndarray) else r
 
 
 def digest(text: str) -> str:
@@ -661,7 +760,7 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
 
     def ev(r):
         s = 0
-        for k in r:
+        for k in _cols_of(r):
             s ^= z[k]
         return s
 
