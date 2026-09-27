@@ -13,7 +13,8 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
    (`separable`: no scan node, every node reads only parameters, the body returns every leaf each node produces) is its nodes'
    members' cuts, in node then member order.  Any other body is `cut_word(CallGraph(fn), X)`.
 3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
-   * operands: the gate's operand ids; a gate with more than `layout.WIDE_FAN_IN` (4096) operands is *wide*: its operands are
+   * operands: the gate's operand ids (one inside the Call must come before the gate, or the Call is refused as not topological);
+     a gate with more than `layout.WIDE_FAN_IN` (4096) operands is *wide*: its operands are
      enumerated per argument (`_wide_operands`), skipping an argument that is a whole parameter of the Call; an operand outside the
      Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
    * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
@@ -152,6 +153,8 @@ class CallGraph:
             mine = []
             for o in it:
                 if 0 <= o - lo < n:
+                    if o - lo >= j:
+                        raise ValueError(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)")
                     mine.append(o - lo)
                 else:
                     ext = True

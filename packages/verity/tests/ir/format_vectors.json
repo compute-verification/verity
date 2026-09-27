@@ -1164,23 +1164,27 @@
   ],
   [
    "a reference space other than p / n",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['g', 0, 0, 1]} name no leaf of a parameter or an earlier node"
+   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['g', 0, 0, 1]} name no leaf of a parameter or a node"
   ],
   [
    "a leaf past its collection",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 0, 8, 1]} name no leaf of a parameter or an earlier node"
+   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 0, 8, 1]} name no leaf of a parameter or a node"
   ],
   [
-   "a node reading a later node",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 5, 0, 1]} name no leaf of a parameter or an earlier node"
+   "a node that does not exist",
+   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 13, 0, 1]} name no leaf of a parameter or a node"
+  ],
+  [
+   "a leaf past a later node's declared output",
+   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 9, 1, 1]} name no leaf of a parameter or a node"
   ],
   [
    "a strided pattern past its collection",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 10: references {'strided': ['n', 0, 0, 2, 1, 7, 4]} name no leaf of a parameter or an earlier node"
+   "ValueError: definition 'Root[TProg_v1]_v1' node 10: references {'strided': ['n', 0, 0, 2, 1, 7, 4]} name no leaf of a parameter or a node"
   ],
   [
    "a boolean leaf",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'explicit': [['n', 0, True]]} name no leaf of a parameter or an earlier node"
+   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'explicit': [['n', 0, True]]} name no leaf of a parameter or a node"
   ],
   [
    "an argument type unlike the callee's parameter",
@@ -2311,6 +2315,17 @@
     36
    ]
   ]
+ },
+ "forward_reference": {
+  "root_gate_11_operands": [
+   0,
+   39
+  ],
+  "call_gate_0_operands": [
+   12,
+   1
+  ],
+  "q_word": "TPair_v1: gate 0 reads gate 1, not before it (the layout is not topological)"
  },
  "wiring": [
   "Bf16ToF32_v1",

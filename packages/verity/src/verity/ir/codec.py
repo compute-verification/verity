@@ -496,10 +496,10 @@ class DecodedProgram:
         return self.root.gates
 
 
-def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int], int | None]) -> Refs:
+def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
     """v0: `refs_from_json`. v1: also resolves `{"alias": [k, a]}` to the reference sequence node `k` passed as
     argument `a` (already decoded — aliases point backwards), splicing a concatenation's alias parts in flat so
-    the decoded representation does not depend on how the writer nested it.  Every part read is `_checked_refs`."""
+    the decoded representation does not depend on how the writer nested it.  Given `leaves`, every part read is `_checked_refs`."""
     if schema == SCHEMA_V0:
         return _checked_refs(refs_from_json(j), leaves)
     if "alias" in j:
@@ -524,9 +524,12 @@ def _nat(x: Any) -> bool:
     return _int(x) and x >= 0
 
 
-def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None]) -> Refs:
-    """`r`, if every reference in it names an existing leaf: of a parameter of the body (`p`) or of an earlier node's output (`n`;
-    the body's `ret` may name any node).  `leaves(space, idx)` is that collection's leaf count, None if there is none."""
+def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> Refs:
+    """`r`, if every reference in it names an existing leaf: of a parameter of the body (`p`) or of a node's output (`n`).  A node
+    naming itself or a later node decodes (checkers name that defect); the canonical layout assumes it does not (PROTOCOL.md §6).
+    `leaves(space, idx)` is that collection's leaf count, None if there is none."""
+    if leaves is None:
+        return r
     if isinstance(r, Concat):
         for p in r.parts:
             _checked_refs(p, leaves)
@@ -549,7 +552,7 @@ def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None]) -> Refs:
         n = leaves(s, i) if s in ("p", "n") and _nat(i) else None
         ok = ok and n is not None and 0 <= lo and hi < n
     if not ok:
-        raise ValueError(f"references {r.to_json()} name no leaf of a parameter or an earlier node")
+        raise ValueError(f"references {r.to_json()} name no leaf of a parameter or a node")
     return r
 
 
@@ -652,11 +655,12 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         ret_type = _type(b["ret_type"])
         B = Builder(params, ret_type)
         nodes = B.nodes
+        outs = [arg_type(nd["out"]) for nd in b["nodes"]]           # each node's declared output, checked when the node is built
 
         def leaves(space: str, idx: int) -> int | None:
             if space == "p":
                 return params[idx][1].leaves if idx < len(params) else None
-            return nodes[idx].out.leaves if idx < len(nodes) else None
+            return outs[idx].leaves if idx < len(outs) else None
 
         for nd in b["nodes"]:
             k = len(nodes)

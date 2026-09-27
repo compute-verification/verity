@@ -156,7 +156,9 @@ Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x
 ~~~
 
 A node has exactly the keys of its form. Its argument sequences are body-scoped (§3): `p` names the body's parameters and `n`
-names nodes before it. The body's `ret` may name any node.
+the body's nodes. Writers name only nodes before the reading node (`defs.Builder` cannot do otherwise), and the canonical layout
+relies on it (§6). A descriptor whose node names itself or a later node still decodes, so that checkers can name the defect;
+`Q_word` refuses it (§8). The body's `ret` may name any node.
 
 - **primitive**: the callee is a primitive; the arguments are its parameters, in order; `out` is its return type.
 - **call**: the callee is a composite; likewise, with `out` its `ret_type`.
@@ -207,9 +209,8 @@ have):
 - a batch whose axes are not null or naturals or whose `n` is not a natural; a scan whose `n` or `n_xs` is not a natural, or
   whose `n_xs` is not below its number of arguments;
 - a table index outside its table, negative indices included;
-- a reference that names no leaf: a space other than `p` and `n`, a parameter or node that does not exist or does not come
-  before the reading node, a leaf outside its collection (for a strided sequence, the extremes of its pattern), or a
-  non-integer field;
+- a reference that names no leaf: a space other than `p` and `n`, a parameter or node that does not exist, a leaf outside its
+  collection (a node's is its declared `out`; for a strided sequence, the extremes of its pattern), or a non-integer field;
 - an alias that does not name an argument of an earlier node;
 - a sequence whose length is not its type's leaf count;
 - a node whose arguments do not type-check against its callee as in §4.4, or whose declared `out` is not the type §4.4
@@ -267,6 +268,9 @@ Gates are numbered by laying bodies out in node order, recursively.
 - **A gate's operands** are its primitive's arguments resolved (§7) in the gate's activation: for a primitive node, every
   reference of every argument in order; for member m of a batch of a primitive, per argument in order, member m's references
   (§3). Order and repeats are kept. Input gates and constants have none.
+- **Topological order.** When every node names only earlier nodes (§4.4), every gate's operands are gates before it: a callee's
+  gates precede the node reading its outputs, a scan iteration reads the iteration before it, and a parameter resolves into the
+  parent before the activation. A reader that relies on this checks it (§8).
 
 Vectors: `layout.nodes` (each root node: index, form, callee, members, gates, offset), `layout.offsets` (every composite's
 offsets), `layout.gates` (every gate: index, primitive, operands, activation path), `layout.root_outputs`,
@@ -307,7 +311,8 @@ above, on the descriptor vector.
 `Q_word` v1 (`verity.ir.cut`, `partition_object`) reads a Program through §1–§7 and adds these conventions. They are pinned:
 changing any of them is a new version of the query.
 
-- **Calls**: the root's non-Input nodes (§5.2), each of form `call` or `primitive`; other forms are refused.
+- **Calls**: the root's non-Input nodes (§5.2), each of form `call` or `primitive`; other forms are refused. A Call in which a
+  gate reads itself or a later gate of the Call is refused as not topological (`cut.CallGraph`, §6).
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
   (primitives without parameters) their gates are structure: computed in no unit, readable by any, never committed. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
@@ -322,6 +327,7 @@ changing any of them is a new version of the query.
 
   This is v1 behaviour, not a property of the circuit, and should go when the query is next revised.
 
-Vectors: `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
+Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39; a Call whose gate reads a
+later gate of the Call decodes and is refused); `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
 beside the same Call over a 4-leaf primitive (the narrow Call has the recompute pair `[2, 1]` and 5 inputs; the wide one has
 none and 1).

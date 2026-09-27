@@ -308,7 +308,8 @@ REJECT = [
     ("a type index past the table", lambda d: _node(d, 3).update(out=len(d["types"])), "types index"),
     ("a reference space other than p / n", lambda d: _node(d, 3)["args"][0].update(refs={"affine": ["g", 0, 0, 1]}), "name no leaf"),
     ("a leaf past its collection", lambda d: _node(d, 3)["args"][0].update(refs={"affine": ["n", 0, 8, 1]}), "name no leaf"),
-    ("a node reading a later node", lambda d: _node(d, 3)["args"][0].update(refs={"affine": ["n", 5, 0, 1]}), "name no leaf"),
+    ("a node that does not exist", lambda d: _node(d, 3)["args"][0].update(refs={"affine": ["n", 13, 0, 1]}), "name no leaf"),
+    ("a leaf past a later node's declared output", lambda d: _node(d, 3)["args"][0].update(refs={"affine": ["n", 9, 1, 1]}), "name no leaf"),
     ("a strided pattern past its collection", lambda d: _node(d, 10)["args"][0]["refs"].update(strided=["n", 0, 0, 2, 1, 7, 4]), "name no leaf"),
     ("a boolean leaf", lambda d: _node(d, 3)["args"][0].update(refs={"explicit": [["n", 0, True]]}), "name no leaf"),
     ("an argument type unlike the callee's parameter",
@@ -417,6 +418,7 @@ def build() -> dict:
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
                     "input_gates": program.input_gates, "calls": [[k, fn.id] for k, fn in PO.calls(D)]},
         "layout": _layout(D),
+        "forward_reference": _forward(desc),
         "wiring": sorted(cut.WIRING),
         "wide": {
             "wide_fan_in": WIDE_FAN_IN,
@@ -429,6 +431,22 @@ def build() -> dict:
 
 def _root_nodes(D):
     return D.root.body.nodes
+
+
+def _forward(desc: dict) -> dict:
+    """A body whose node reads a later node decodes (checkers name the defect); `Q_word` refuses a Call whose gate reads a later gate."""
+    d = json.loads(_canon(desc))
+    _node(d, 3)["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}               # root node 3 reads node 9: two Calls, out of order
+    root_gates = codec.decode_program(d, REG).circuit.gate(11).operands
+    d = json.loads(_canon(desc))
+    d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}   # inside TPair: s reads s + a
+    D = codec.decode_program(d, REG)
+    try:
+        cut.CallGraph(D.defs["TPair_v1"])
+        refused = None
+    except ValueError as e:
+        refused = str(e)
+    return {"root_gate_11_operands": list(root_gates), "call_gate_0_operands": list(D.circuit.gate(11).operands), "q_word": refused}
 
 
 def _identity(t_json):
@@ -576,6 +594,12 @@ def test_the_gate_table(live):
 
 def test_scope_resolution(live):
     assert live["layout"]["resolve"] == VECTORS["layout"]["resolve"]
+
+
+def test_a_forward_reference_decodes_and_q_word_refuses_it(live):
+    assert live["forward_reference"] == VECTORS["forward_reference"]
+    f = VECTORS["forward_reference"]
+    assert f["root_gate_11_operands"] == [0, 39] and f["call_gate_0_operands"] == [12, 1] and "not topological" in f["q_word"]
 
 
 # -- 8. Q_word v1 inputs: wiring, wide gates ------------------------------------------------------------------------------------
