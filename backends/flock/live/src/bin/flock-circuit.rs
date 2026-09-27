@@ -202,6 +202,18 @@ fn check_coin_seed(commit: &[F128], hello: &str, verdict: &Value, coins: &[Vec<F
 
 fn server(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Server {
     let s = Server::new(config(st, inst), Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() }));
+    let file = arg("--draw-file", "");
+    if !file.is_empty() {
+        // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
+        // registered population when the drawn statement is built)
+        let draw: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap_or_else(|e| refuse(format!("--draw-file: {e}"))))
+            .unwrap_or_else(|e| refuse(format!("--draw-file: {e}")));
+        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
+        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        s.cfg.draw_law = None;
+        s.cfg.draw_given = Some(draw);
+        return s;
+    }
     let law = arg("--draw", "");
     if law.is_empty() {
         return s;
@@ -582,6 +594,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("coin_seed_record_replays", true, false),
     ("record_replays_offline", true, false),
     ("unit_draw_session", true, false),
+    ("unit_draw_from_file", true, false),
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
 ];
@@ -750,6 +763,18 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let r2 = Composite::parse(&meta_tail, Some(&arg("--tables", "tables"))).err();
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
+    }
+    if name == "unit_draw_from_file" {
+        // the verifier's own draw (units 0 and the last), served at Register: the session proves exactly those units
+        let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
+        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 });
+        srv.cfg.draw_law = None;
+        srv.cfg.draw_given = Some(draw.clone());
+        let s = Arc::new(Mutex::new(srv));
+        let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
+        let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        let pass = v["accepted"] == true && rec["unit_draw"] == draw;
+        return json!({"case": name, "gpu": gpu, "accepted": v["accepted"], "pass": pass, "unit_draw": rec["unit_draw"], "why": v["why"]});
     }
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
         // the verifier draws one unit of the registered population after Register; the prover proves the drawn statement

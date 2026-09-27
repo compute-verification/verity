@@ -875,12 +875,14 @@ pub struct SessionConfig {
     pub unit_draw: Option<Value>,
     /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
     pub draw_law: Option<(unit_draw::Law, u64)>,
+    /// Or serve this draw, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
+    pub draw_given: Option<Value>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None }
     }
 
     /// The record's digest of `b`.
@@ -1209,8 +1211,12 @@ impl Server {
                 if self.hello.is_some() || self.cfg.unit_draw.is_some() {
                     return self.refuse("U: the units are drawn once, after registration and before Hello".into());
                 }
-                let Some((law, population)) = self.cfg.draw_law else { return Resp::Draw("null".into()) };
-                let draw = match unit_draw::draw(law, population) {
+                let drawn = match (&self.cfg.draw_given, self.cfg.draw_law) {
+                    (Some(d), _) => unit_draw::check(d).map(|_| d.clone()),
+                    (None, Some((law, population))) => unit_draw::draw(law, population),
+                    (None, None) => return Resp::Draw("null".into()),
+                };
+                let draw = match drawn {
                     Ok(d) => d,
                     Err(e) => return self.refuse(format!("U: {e}")),
                 };
