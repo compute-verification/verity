@@ -237,6 +237,22 @@ def test_lowering_is_the_pinned_one(template):
         assert mod.frame_lowering(sub).sha256 == mod.FRAME_PINS[param]
 
 
+@pytest.mark.parametrize("template", sorted(LOWERED))
+def test_pinned_rows_read_earlier_columns(template):
+    """What the soundness package's `Rows` needs beyond the parser's checks (`soundness/ASSUMPTIONS.md` §1.5): every computed
+    row reads only earlier columns or the constant, and never an input padding column (`A = B = 0`, forced zero)."""
+    mod = REG.module(template)
+    sub = TM.subcircuit(template, **LOWERED[template])
+    lows = [mod.lowering(sub)] + ([mod.frame_lowering(sub)] if template == "silu-mul" else [])
+    for low in lows:
+        lay = low.layout
+        n_in = lay.in_words * IL.WORD
+        padding = {c for c in range(n_in) if not lay.rows_a[c] and not lay.rows_b[c]}
+        bad = [(r, c) for r in range(n_in, lay.const) for c in lay.rows_a[r] + lay.rows_b[r]
+               if not ((c < r and c not in padding) or c == lay.const)]
+        assert lay.const + 1 == lay.useful and not bad, (low.name, bad[:5])
+
+
 def test_the_pin_covers_the_leaf_maps():
     """IR6: the netlist's LEAVES line places every unit on its instance's words (flat input and output leaves, each port's
     [leaves, bits]); another arrangement of the same unit is another pin with the same rows."""
@@ -587,7 +603,7 @@ def test_frame_staging_carries_the_cut_words(tmp_path):
 def test_non_gemm_results_carry_no_gemm_target():
     from verity_numerical.bench import contract
 
-    base = dict(domain="finite", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+    base = dict(domain="total", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
                 security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}}, software={"backend": {"name": "b", "commit": None},
                 "toolchain": {}}, preprocessing="none", retention="retained", instances=None)
     ok = contract.fingerprint(profile=None, K=None, subcircuit="rope-head/d64/neox-bf16", **base)
@@ -747,3 +763,20 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     outs, _ = C.evaluate(vals, len(cases))
     got = [sum(((outs["d"][i] >> t) & 1) << i for i in range(32)) for t in range(len(cases))]
     assert got == [P.evaluate(c[0], *c[1], *c[2]) & 0xFFFFFFFF for c in cases]
+
+
+def test_a_cells_domain_is_the_one_its_statement_proves():
+    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
+    An IR lowering asserts nothing, so every encoding is proven to give the IR's output: ``total``.  A pure unit asserts its
+    operands (and accumulator) finite: ``finite-only``, unless it is a total unit."""
+    from types import SimpleNamespace
+
+    from verity_flock import lowering as FL
+
+    low = REG.module("silu-mul").frame_lowering(TM.subcircuit("silu-mul", I=8192))
+    assert not low.circuit.asserts and low.domain == "total"
+    assert IL.Lowering.domain.fget(SimpleNamespace(circuit=SimpleNamespace(asserts=[("x not finite", 0)]))) == "finite-only"
+    for relation, pipe in FL.PIPES.items():
+        assert pipe.domain == ("finite-only" if FL._layout(pipe)[0].asserts else "total"), relation
+    assert {p.domain for p in FL.PIPES.values()} == {"finite-only"}
+    assert FL.Pipe("t", None, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16", total=True).domain == "total"

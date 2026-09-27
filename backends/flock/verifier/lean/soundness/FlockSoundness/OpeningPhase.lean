@@ -491,24 +491,24 @@ theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
 /-! ## The phase -/
 
 open Classical in
-/-- **The opening phase** (§12), for a list of at most `L` codewords near the committed table:
-from a doomed start (every such codeword falsifies some claim), the opening ends undoomed with
-probability at most `L · (7·n + 1)/|F|`. -/
-theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
-    (h7 : 7 ≤ S.m) (C : Oracle F) (claims : List (Claim F S.m))
-    (hdoom : ∀ M ∈ closeMsgs A sch C, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
-    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
-    value (fun o => ¬ DOp A S sch C o) (opening A h7 claims) ≤
+/-- **The opening phase** (§12), for a list `W` of at most `L` messages: from a doomed start (every
+message of `W` falsifies some claim), the opening ends undoomed with probability at most
+`L · (7·n + 1)/|F|`. -/
+theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (h7 : 7 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (claims : List (Claim F S.m))
+    (hdoom : ∀ M ∈ W, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
+    value (fun o => ¬ DOpW S sch W o) (opening A h7 claims) ≤
       L * (((7 * claims.length + 1 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
   classical
-  set s := Finset.univ.filter fun M => M ∈ closeMsgs A sch C
-  calc value (fun o => ¬ DOp A S sch C o) (opening A h7 claims)
+  set s := Finset.univ.filter fun M => M ∈ W
+  calc value (fun o => ¬ DOpW S sch W o) (opening A h7 claims)
       ≤ value (fun o => ∃ M ∈ s, EM S sch M o) (opening A h7 claims) := by
         refine value_mono (fun o h => ?_) _
         cases o with
         | none => exact absurd trivial h
         | some op =>
-          simp only [DOp, not_forall, not_not] at h
+          simp only [DOpW, not_forall, not_not] at h
           obtain ⟨M, hM, hsum⟩ := h
           exact ⟨M, by simp [s, hM], op, rfl, hsum⟩
     _ ≤ ∑ M ∈ s, value (EM S sch M) (opening A h7 claims) := value_exists_finset_le _ _ _
@@ -519,5 +519,17 @@ theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (
         rw [Finset.sum_const, nsmul_eq_mul]
     _ ≤ L * (((7 * claims.length + 1 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
         gcongr
+
+open Classical in
+/-- **The opening phase** for the codewords near the committed table: `opening_phase_of_list` at
+`closeMsgs`. -/
+theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+    (h7 : 7 ≤ S.m) (C : Oracle F) (claims : List (Claim F S.m))
+    (hdoom : ∀ M ∈ closeMsgs A sch C, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
+    (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :
+    value (fun o => ¬ DOp A S sch C o) (opening A h7 claims) ≤
+      L * (((7 * claims.length + 1 : ℕ) : ℝ≥0∞) / Fintype.card F) := by
+  simp only [dOp_eq]
+  exact opening_phase_of_list A hA S sch h7 _ claims hdoom L hL
 
 end FlockSoundness

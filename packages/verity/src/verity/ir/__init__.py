@@ -25,7 +25,7 @@ over calls, `call` / `batch` / `scan` / `bind`, the canonical layout (function-b
 call, batch members and scan iterations in structural order, cached gate counts and offsets — gate `i` is
 located by division, never by expansion), root-scoped value references, regions, the query language
 (`/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`), an explicit-expansion evaluator, and a
-JSON descriptor codec with one unambiguous (deterministic, not yet byte-canonical) encoding.
+JSON descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
 """
 
 from .types import Value, Array, Tuple, Record, Type, leaves_of  # noqa: F401
