@@ -458,4 +458,210 @@ def lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (in
                   stC.reqs) _ _ _ (by rw [h.rel.levels]) s q sF qF (fun o ho => h1.sq o ho)))
         (lockFold A r i (AgreeRep r C₀ i stC.reqs) lv.lanes st.s st.q stC.s stC.q h.rel.sq)
 
+theorem RecRel.reject (r : ℕ) (C₀ : Oracle F) (sch : Schedule) (i : IRep F D) :
+    RecRel r C₀ sch i false (PendL.reject : PendL F D) :=
+  ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by simp [PendL.reject] at h⟩
+
+/-! ## Ligerito, a rep, a table -/
+
+/-- **Ligerito in lockstep**, for a schedule of at least two levels whose level 0 folds `k0`
+lanes. -/
+def lockLig (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (ext : ℕ) (hk0 : l₀.lanes = k0) (T : F) (b : ℕ → F) (C₀ : Oracle F) :
+    Lock (Oracle F) (Cap D) (getRep r) (RecRel r C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (fun _ => none)
+      (ligerito A ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T b C₀)
+      (ligeritoC A r ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T b) :=
+  .coin (Fin (m - 7) → F) fun z₀ => .send F fun y₀ => .coin F fun β₀ => .send (K × K) fun msg =>
+    Lock.bind (g := foldRounds A k0 (A.embed T + A.embed β₀ * A.embed y₀)
+        (fromMsg msg (A.embed T + A.embed β₀ * A.embed y₀)))
+      (g' := foldRoundsC A k0 (fun _ => A.embed T + A.embed β₀ * A.embed y₀)
+        (fun _ => fromMsg msg (A.embed T + A.embed β₀ * A.embed y₀)))
+      (R := FoldRel (fun _ => True) k0 (fun _ => none))
+      (fun i' x y hxy => by
+        rcases x with ⟨initial, x₂⟩
+        rcases x₂ with ⟨s, q⟩
+        rcases y with ⟨initial', y₂⟩
+        rcases y₂ with ⟨sF, qF⟩
+        obtain ⟨hi, hch, hlen, hsq⟩ := hxy
+        simp only at hch hlen hsq
+        subst i'
+        subst hch
+        exact .table (slotOf r 1) (fun t d => Function.update (fun _ => none : IRep F D) 1 (some (t, d)))
+          (by rw [getRep_slot r hr _ _ le_rfl])
+          (fun t d => by rw [getRep_slot r hr _ _ le_rfl]; simp)
+          (fun t d s hs => getRep_update_ne r hr _ _ _ s hs)
+          fun C₁ cap₁ =>
+            Lock.bind (g := twoOod A (m - 7 - k0 + 1) 0 s q)
+              (g' := twoOodC A (m - 7 - k0 + 1) 0 sF qF)
+              (R := OodRel (fun _ => True) (Function.update (fun _ => none : IRep F D) 1 (some (C₁, cap₁))))
+              (fun i₂ x y hxy => by
+                rcases x with ⟨s2, x₂⟩
+                rcases x₂ with ⟨q2, oods⟩
+                rcases y with ⟨sF2, y₂⟩
+                rcases y₂ with ⟨qF2, oodsC⟩
+                obtain ⟨hi2, hoods, hsq2⟩ := hxy
+                simp only at hoods hsq2
+                subst i₂
+                subst hoods
+                have h2 : StRel r C₀ (Function.update (fun _ => none : IRep F D) 1 (some (C₁, cap₁)))
+                    (⟨s2, q2, m - 7 - k0 + 1, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], C₀, l₀⟩ :
+                      LigState F K)
+                    (⟨sF2, qF2, m - 7 - k0 + 1, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], 0, [], [],
+                      l₀⟩ : LigStateC F K D) :=
+                  ⟨rfl, rfl, rfl, rfl, by simp [tabAt], fun o _ => hsq2 o trivial⟩
+                exact Lock.bind
+                  (g := queryAndBatch A l₀ C₀ initial 0
+                    ⟨s2, q2, m - 7 - k0 + 1, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], C₀, l₀⟩ true)
+                  (g' := queryAndBatchC A r l₀ initial 0
+                    ⟨sF2, qF2, m - 7 - k0 + 1, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], 0, [], [], l₀⟩
+                    true)
+                  (R := QueryRel r C₀ l₀ initial
+                    ⟨sF2, qF2, m - 7 - k0 + 1, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], 0, [], [], l₀⟩
+                    (Function.update (fun _ => none : IRep F D) 1 (some (C₁, cap₁))))
+                  (fun i₃ st3 stC3 hq => by
+                    obtain ⟨hi3, hq'⟩ := hq
+                    subst i₃
+                    exact lockRec A r hr (m - 7) b initial ext C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+                      (l₁ :: rest) _ { st3 with prev := C₁, prevLevel := l₁ }
+                      { stC3 with level := 1, caps := [cap₁], prevLevel := l₁ } (by
+                      obtain ⟨hrel, hlev, hcaps, -, pos, hreqs, hposlen, hposlt⟩ := hq'
+                      simp only at hlev hcaps hreqs
+                      refine ⟨⟨hrel.levels, hrel.oods, hrel.cons, rfl, by simp [tabAt], hrel.sq⟩,
+                        rfl, ?_, ?_, ?_, rfl, ?_⟩
+                      · simp [hreqs]
+                      · intro req hreq
+                        simp only [hreqs, List.nil_append, List.mem_singleton] at hreq
+                        subst hreq
+                        exact ⟨hposlen, hposlt, by simp [hlen, hk0], rfl⟩
+                      · intro ℓ hℓ
+                        dsimp only at hℓ
+                        rw [Function.update_of_ne (by omega)]
+                      · intro ℓ hℓ1 hℓ2
+                        dsimp only at hℓ2
+                        obtain rfl : ℓ = 1 := by omega
+                        exact ⟨C₁, cap₁, by simp, rfl⟩))
+                  (lockQuery A r C₀ _ l₀ initial 0 0 rfl _ _ h2 true))
+              (lockTwoOod A r _ (fun _ => True) _ 0 0 rfl s q sF qF fun o _ => hsq o trivial))
+      (lockFold A r (fun _ => none) (fun _ => True) k0 _ _ _ _ fun _ _ => ⟨rfl, rfl⟩)
+
+/-- **A rep in lockstep**: the PIOP phases are the same games; Ligerito is `lockLig`. -/
+def lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (C₀ : Oracle F)
+    (extra : List (Claim F S.m)) :
+    Lock (Oracle F) (Cap D) (getRep r) (RecRel r C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (fun _ => none)
+      (rep A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm C₀ extra)
+      (repC A r S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm extra) :=
+  Lock.bind (R := fun i' a b => i' = (fun _ => none) ∧ a = b)
+    (fun i₁ zc zc' hzc => by
+      obtain ⟨hi, rfl⟩ := hzc
+      subst i₁
+      match zc with
+      | none => exact .ret (RecRel.reject r C₀ _ _)
+      | some zc =>
+        exact Lock.bind (R := fun i' a b => i' = (fun _ => none) ∧ a = b)
+          (fun i₂ ab ab' hab => by
+            obtain ⟨hi, rfl⟩ := hab
+            subst i₂
+            match ab with
+            | none => exact .ret (RecRel.reject r C₀ _ _)
+            | some ab =>
+              exact Lock.bind (R := fun i' a b => i' = (fun _ => none) ∧ a = b)
+                (fun i₃ op op' hop => by
+                  obtain ⟨hi, rfl⟩ := hop
+                  subst i₃
+                  match op with
+                  | none => exact .ret (RecRel.reject r C₀ _ _)
+                  | some op => exact lockLig A r hr m k0 l₀ l₁ rest ext hk0 op.T op.b C₀)
+                (Lock.same (opening A (by omega) (ab :: cClaim A zc :: extra))))
+          (Lock.same (lincheck A S zc)))
+    (Lock.same (zerocheck A S.m))
+
+theorem disjoint_reps : Lock.Disjoint (getRep 0 : IRep F D → ℕ → Option (Oracle F × Cap D))
+    (getRep 1) where
+  left i₁ i₂ s h := by
+    unfold getRep at h ⊢
+    by_cases hs : s % 2 = 0 ∧ 2 ≤ s
+    · rw [if_neg fun h2 => by omega]
+    · rw [if_neg hs] at h; simp at h
+  right i₁ i₂ s h := by
+    unfold getRep at h ⊢
+    by_cases hs : s % 2 = 1 ∧ 2 ≤ s
+    · rw [if_neg fun h2 => by omega]
+    · rw [if_neg hs] at h; simp at h
+
+/-- The requests' structure a rep's leaf records. -/
+def RecStruct (sch : Schedule) (i : IRep F D) (p : PendL F D) : Prop :=
+  p.reqs.map Req.level = List.range p.reqs.length ∧ (∀ req ∈ p.reqs, ReqShape sch req) ∧
+    ∀ ℓ, 1 ≤ ℓ → ℓ < p.reqs.length → ∃ t d, i ℓ = some (t, d) ∧ p.caps[ℓ - 1]? = some d
+
+/-- The oracle table's continuation after the level-0 table `C₀`, with the dummy last message. -/
+def tableOrc (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (C₀ : Oracle F) : Game (Bool × Oracle F) :=
+  Game.coin (Fin 2 → Fin mPts → F) fun pts =>
+    (interleave (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))
+      (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))).bind
+      fun acc => Game.send (Opens F D) fun _ => Game.ret (acc.1 && acc.2, C₀)
+
+theorem withDummy_table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+    (ptLocal mPts : ℕ) :
+    Lock.withDummy (Opens F D) (table A S sch hm ptLocal mPts) =
+      Game.send (Oracle F) (tableOrc (D := D) A S sch hm ptLocal mPts) := by
+  refine congrArg (Game.send (Oracle F)) (funext fun C₀ =>
+    congrArg (@Game.coin _ (Fin 2 → Fin mPts → F) _ _) (funext fun pts => ?_))
+  simp only [Game.bind_ret, Game.bind_eq, Game.pure_eq, Game.bind_assoc]
+
+open Classical in
+/-- The compiled table's continuation after the level-0 cap. -/
+noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D) :
+    Game (OutC F D) :=
+  Game.coin (Fin 2 → Fin mPts → F) fun pts =>
+    (interleave (repC A 0 S sch hm (extraClaims S ptLocal mPts pts))
+      (repC A 1 S sch hm (extraClaims S ptLocal mPts pts))).bind
+      fun pend => Game.send (Opens F D) fun o => Game.ret
+        ⟨pend.1.verdict o && pend.2.verdict o &&
+          decide (OpensOK H E cap₀ 0 pend.1 o ∧ OpensOK H E cap₀ 1 pend.2 o), cap₀, pend, o⟩
+
+theorem tableC_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
+    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+    tableC A H E S sch hm ptLocal mPts = Game.send (Cap D) (tableCmp A H E S sch hm ptLocal mPts) :=
+  rfl
+
+/-- **The table's leaf relation** below the level-0 cap. -/
+def TopRel (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch : Schedule) (C₀ : Oracle F)
+    (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (out : OutC F D) : Prop :=
+  a.2 = C₀ ∧ out.cap₀ = cap₀ ∧
+    (out.accepted = true → AgreeRep 0 C₀ i.1 out.pend.1.reqs out.opens →
+      AgreeRep 1 C₀ i.2 out.pend.2.reqs out.opens → a.1 = true) ∧
+    (out.accepted = true →
+      OpensOK H E cap₀ 0 out.pend.1 out.opens ∧ OpensOK H E cap₀ 1 out.pend.2 out.opens) ∧
+    RecStruct sch i.1 out.pend.1 ∧ RecStruct sch i.2 out.pend.2
+
+instance : Inhabited (Oracle F) := ⟨fun _ _ => 0⟩
+
+/-- **The table in lockstep** below the level-0 cap: the link points, both reps interleaved, the
+openings. -/
+noncomputable def lockTable [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
+    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
+    (cap₀ : Cap D) :
+    Lock (Oracle F) (Cap D) (Lock.getPair (getRep 0) (getRep 1))
+      (TopRel H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ C₀ cap₀) ((fun _ => none), (fun _ => none))
+      (tableOrc (D := D) A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts C₀)
+      (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts cap₀) :=
+  .coin (Fin 2 → Fin mPts → F) fun pts =>
+    Lock.bind (R := Lock.RPair (RecRel 0 C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
+        (RecRel 1 C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
+      (fun i acc pend h => .send (Opens F D) fun o => .ret (by
+        obtain ⟨⟨hv₀, hs₀⟩, ⟨hv₁, hs₁⟩⟩ := h
+        refine ⟨rfl, rfl, fun hacc ha₀ ha₁ => ?_, fun hacc => ?_, hs₀, hs₁⟩
+        · simp only [Bool.and_eq_true, decide_eq_true_eq] at hacc
+          rw [← hv₀ o ha₀, ← hv₁ o ha₁]
+          simp [hacc.1.1, hacc.1.2]
+        · simp only [Bool.and_eq_true, decide_eq_true_eq] at hacc
+          exact hacc.2))
+      (Lock.interleaveLock disjoint_reps
+        (lockRep A 0 (by norm_num) S m k0 l₀ l₁ rest ext hk0 hm C₀ (extraClaims S ptLocal mPts pts))
+        (lockRep A 1 (by norm_num) S m k0 l₀ l₁ rest ext hk0 hm C₀ (extraClaims S ptLocal mPts pts)))
+
 end FlockSoundness

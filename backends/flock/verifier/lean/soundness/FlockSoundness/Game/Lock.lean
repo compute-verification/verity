@@ -171,8 +171,8 @@ def map {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} (f : α →
   bind (fun i a b hr => .ret (h i a b hr)) L
 
 /-- The same game on both sides, with no table nodes. -/
-def same {i : I} : (g : Game α) → Lock T D get (fun _ a b => a = b) i g g
-  | .ret _ => .ret rfl
+def same {i : I} : (g : Game α) → Lock T D get (fun i' a b => i' = i ∧ a = b) i g g
+  | .ret _ => .ret ⟨rfl, rfl⟩
   | @Game.coin _ C _ _ k => .coin C fun c => same (k c)
   | .send M k => .send M fun m => same (k m)
 
