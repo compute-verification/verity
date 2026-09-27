@@ -54,7 +54,10 @@ def wrong_units_bound(p: IntegrityProfile) -> float:
     For one level drawn `Subset(k)` over n units it is computed directly: rho(m) = ln C(n, k) - ln C(n - m, k) is convex
     with rho(0) = 0, so the linear relaxation's optimum lies between the largest m with rho(m) <= ln(1/delta) and the next,
     found by bisection with exact integer binomials (the generic `worst_case` tries every pair of m, and its float
-    `accept(m)` underflows, so it can't serve a population of 10^5).  Otherwise it is `worst_case`."""
+    `accept(m)` underflows, so it can't serve a population of 10^5).  Otherwise it is `worst_case`.
+
+    TEMPORARY, until #135 (core's exact rho and linear `worst_case`) merges: then this whole function is
+    `p.worst_case(lambda m: float(m))`; `test_the_wrong_unit_bound_matches_worst_case_and_scales` must pass unchanged."""
     law = next(iter(p.draws.values()))
     if len(p.levels) != 1 or not isinstance(law, Subset):
         return p.worst_case(lambda m: float(m))
