@@ -94,6 +94,11 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
     [--expect mutants.json]... --out DIR --sessions DIR...
 ~~~
 
+`--jobs J` runs `J` verifier processes at once: each public file's sessions are dealt into chunks of four or more, one Lean
+and one upstream process per chunk, and the verdicts are reassembled, so every output is the same as with `--jobs 1`. `ci.py
+--session-jobs K` shares `K` such processes among all the sets it runs (by default the cores, and the available memory at 8
+GB a process). Set 8 on a 4-core VM: 156 s with one process, 62 s with four.
+
 It writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict, on any
 session. At `eb90718f` (RoPE, 4 instances; `vectors.json` set 8, `art:c49cb61e`; recorded run `r20260927-060508-66c0`,
 result `art:294b6cf1`), 25 of 25 sessions agree:
