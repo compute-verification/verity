@@ -3,6 +3,7 @@ PROTOCOL.md §5: the session record (`flock-live-session/v1`) and the session ch
 -/
 import Lean.Data.Json
 import Flock.Transcript
+import Flock.Draw
 
 namespace Flock
 
@@ -27,6 +28,9 @@ structure SessionSpec where
   points : Nat := 2
   /-- the statement's coin server retains every round's bytes: each round must carry them (§6.2) -/
   retainRounds : Bool := false
+  /-- the statement's unit draw (the public header's `unit_draw`, §7.3) and its instance count -/
+  unitDraw : Option Json := none
+  instances : Nat := 0
   deriving Inhabited
 
 structure Session where
@@ -91,6 +95,8 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
+  -- U1–U3 (§7.3)
+  Draw.check (j.getObjVal? "unit_draw").toOption spec.unitDraw spec.instances
   let t := spec.table
   -- S5
   let rootB ← unhex (← str (← fld l "root_b") t)
