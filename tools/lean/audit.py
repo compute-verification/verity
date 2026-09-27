@@ -42,7 +42,8 @@ A record holds the statement, not the proof, so a pin may be recorded on a `sorr
 axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, and prints what
 changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
 weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
-handoff; `--update` records them, it does not approve them.  `--all` first runs the controls (`controls`): a
+handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but prints differently
+(same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
 check once a violation is added.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
@@ -367,14 +368,21 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
+REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
+
+
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
     """What a statement reviewer reads for an `--update`: each changed pin's signature before and after, and each changed
-    definition a pin reads, with the pins that read it and its source as it is now."""
+    definition a pin reads, with the pins that read it and its source as it is now.  A pin whose statement is the same but
+    prints differently (a toolchain's printer, notation) gets one line."""
     out = []
     op, np = old.get("pins", {}), new.get("pins", {})
     for name in sorted(set(op) | set(np)):
         a, b = op.get(name) or {}, np.get(name) or {}
         if a == b:
+            continue
+        if a and b and a.get("type_hash") == b.get("type_hash") and a.get("assumptions") == b.get("assumptions"):
+            out.append(f"pin {name}: {REPRINTED}")
             continue
         out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}")
         out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
@@ -399,6 +407,11 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
                 text = src.read_text().splitlines()[span[0] - 1:span[1]]
                 out += [f"  now ({os.path.relpath(src)}:{span[0]}-{span[1]}):", *(f"    {s}" for s in text)]
     return out
+
+
+def statement_changes(notes: list[str]) -> list[str]:
+    """The lines of a review a named statement reviewer must read: all but the pins that only print differently."""
+    return [n for n in notes if not n.endswith(REPRINTED)]
 
 
 def killed(rc: int) -> bool:
@@ -567,9 +580,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         notes = review(policy, new, facts, module_files(pkg))
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
+        must = statement_changes(notes)
+        rep["statement_changes"] = bool(must)
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
-            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in notes)
-            if notes else ""))
+            f"; {len(notes) - len(must)} pinned statements only print differently" if len(notes) > len(must) else "") + (
+            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
+            if must else ""))
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "pins": new.get("pins", {}), "reads": new.get("reads", {}),
             "failures": fails}
@@ -730,7 +746,7 @@ def main(argv: list[str]) -> int:
             print("  " + f.replace("\n", "\n    "), flush=True)
         if rep["failures"]:
             failed.append(str(pkg))
-    if changed := [r["package"] for r in reports if r.get("review")]:
+    if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: pinned statements or the definitions they read changed in {', '.join(changed)}: the merge handoff must "
               f"name the statement reviewer who read the changes above (review.txt in each package's reports)", flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,

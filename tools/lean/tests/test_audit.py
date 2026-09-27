@@ -118,7 +118,11 @@ def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
     assert text[:5] == ["pin P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
                         "    P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n"]
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
+    assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
+    reprinted = dict(new["pins"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
+    text = A.review(new, dict(new, pins={"P.t": reprinted}), now, {})
+    assert text == [f"pin P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():

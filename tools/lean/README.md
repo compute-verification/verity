@@ -96,7 +96,9 @@ and the replay pass it: only the pins see it, and only a person can judge it. (A
 a Merkle binding theorem vacuous for unsalted schemes; the pins flagged it and review caught it.) `--update` records the
 change and prints what the reviewer reads: each changed pin's signature before and after, and each changed definition a
 pin reads, with the pins that read it and its source now (also in `review.txt` among the reports). The merge handoff
-names the reviewer and the pins they read.
+names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
+and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
+reviewer.
 
 ## Using it from another repository
 
