@@ -43,7 +43,7 @@ def result(*, candidate: str = "A-GKR", target=FIRST, gpu: str = A100, proof_cla
     if instances == "frozen":
         instances = copy.deepcopy(T.FROZEN_INSTANCES[target.name])
     fp = contract.fingerprint(
-        profile=target.name, domain="finite", K=T.K, B=T.B, proof_class=proof_class, authentication="excluded",
+        profile=target.name, domain="finite-only", K=T.K, B=T.B, proof_class=proof_class, authentication="excluded",
         zk_mode="none" if proof_class not in contract.ZK_CLASSES else "coin-commitment",
         security=security or {"target": -128, "achieved_log2": -128.3, "field": "BabyBear"},
         hardware={"gpu": {"name": gpu, "driver": "570.211.01", "cuda": "12.8"}, "cpu": {"model": "test cpu"}},
