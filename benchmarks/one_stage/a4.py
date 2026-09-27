@@ -241,7 +241,7 @@ def main() -> int:
     p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(a.k)], out / "draw.log")
     union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
-    served_units, proved, instances, verdicts, statement, sessions, counts = [], [], 0, {}, {}, [], {}
+    served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     for m in members:
         local = sorted(u - m["base"] for u in union_draw["units"] if m["base"] <= u < m["base"] + m["n"])
         counts[m["tid"]] = len(local)
@@ -255,6 +255,7 @@ def main() -> int:
         draw_t = (record or {}).get("unit_draw") or {}
         v = D.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         served_units += [m["base"] + u for u in draw_t.get("units", [])]
+        session_roots.update({f"{m['tid']}/{p}": r for p, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(m["header"], live or {})
         instances += (live or {}).get("instances", 0)
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -270,7 +271,8 @@ def main() -> int:
                                "lean_verify_s": verdicts[f"lean-verify/m{m['k']}"].get("verify_s"),
                                "lean_partition": verdicts[f"lean-verify/m{m['k']}"].get("partition")}
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-    result = audit.audit_record(rec, receipt, union_draw, law, sorted(proved), instances, statement, verdicts, a.delta, sessions=sessions)
+    result = audit.audit_record(rec, receipt, union_draw, law, sorted(proved), instances, statement, verdicts, a.delta, sessions=sessions,
+                                served=sorted(served_units), session_roots=session_roots)
     result["draw_counts"] = counts
     result["served_is_lean_draw"] = sorted(served_units) == sorted(union_draw["units"])
     result["checks_before_draw"] = checks
@@ -288,6 +290,9 @@ def main() -> int:
         kept = proved[1:]
         v = D.check_proved(union_draw, kept, len(kept))
         neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    neg.update(a0.audit_negatives(result, law, a.delta, session_roots, served=sorted(served_units)))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
