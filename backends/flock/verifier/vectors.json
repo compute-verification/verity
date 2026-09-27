@@ -4179,12 +4179,13 @@
     ],
     "forgeries": "art:c49cb61e/rope-head/extra",
     "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
-    "agreement": "25/25 (local, 2026-09-27T06:00Z)"
+    "agreement": "r20260927-060508-66c0 (result art:294b6cf1, run files art:2b8201f1): 25/25"
    }
   ],
   "recorded_runs": [
    "r20260926-232948-22a9: sets 0-3, 217/217 (result art:ab9fa582)",
-   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)"
+   "r20260927-012244-342d: sets 0-7, 412/412, seed 20260927 (result art:a59f3cb2, run record art:d5ca1e5c)",
+   "r20260927-060508-66c0: set 8 (eb90718f), 25/25 (result art:294b6cf1)"
   ]
  }
 }

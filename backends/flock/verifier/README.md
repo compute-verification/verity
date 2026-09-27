@@ -90,7 +90,8 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
 ~~~
 
 It writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict, on any
-session. At `eb90718f` (RoPE, 4 instances), 25 of 25 sessions agree:
+session. At `eb90718f` (RoPE, 4 instances; `vectors.json` set 8, `art:c49cb61e`; recorded run `r20260927-060508-66c0`,
+result `art:294b6cf1`), 25 of 25 sessions agree:
 - the CPU selftest's 19 recorded cases (`selftest --record-dir`, `selftest_records.py`);
 - its two draw cases (a drawn session, and one that ignores the draw);
 - the honest vector;
