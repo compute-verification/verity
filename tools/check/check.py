@@ -37,6 +37,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import tempfile
@@ -124,6 +125,28 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
             ("lean-agreement", agreement, ROOT)]
 
 
+def memory_gb() -> int:
+    """The memory this process may use: the cgroup limit when there is one (a pod's /proc/meminfo is the host's), else
+    MemAvailable."""
+    try:
+        m = Path("/sys/fs/cgroup/memory.max").read_text().strip()
+        if m != "max":
+            return int(m) >> 30
+    except (OSError, ValueError):
+        pass
+    for line in open("/proc/meminfo"):
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) >> 20
+    return 0
+
+
+def session_jobs() -> int:
+    """`ci.py --session-jobs`: its own default counts the host's CPUs and memory inside a container, so check passes what this
+    process may use, at ci.py's `GB_PER_PROCESS` per verifier process."""
+    m = re.search(r"^GB_PER_PROCESS = (\d+)", (FLOCK_VERIFIER / "ci.py").read_text(), re.M)
+    return max(1, min(cores(), memory_gb() // int(m.group(1) if m else 8)))
+
+
 def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin, and run `ci.py` on every replayable set."""
     import tarfile
@@ -148,6 +171,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_VERIFIER / "lean" / ".lake" / "build" / "bin" / "flock-verify"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
+            "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
     return subprocess.run(argv, cwd=ROOT).returncode
 
