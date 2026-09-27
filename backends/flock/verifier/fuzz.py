@@ -1,6 +1,6 @@
 """Fuzzing for the agreement check (PROTOCOL.md §17.1 item 2): random single mutations of an honest session.
 
-    python fuzz.py SESSION_DIR OUT_DIR --seed S --n N
+    python fuzz.py SESSION_DIR OUT_DIR --seed S --n N [--upstream-checks link_sigma]
 
 Each case edits one thing, chosen with `random.Random(seed)`:
 - `proof-byte`: a bit of one rep's proof file, with its `proof_sha256` updated (so S17 passes) and nothing else. The
@@ -11,7 +11,7 @@ Each case edits one thing, chosen with `random.Random(seed)`:
   leave the verdict unchanged; the verifiers must only agree.
 - `digest`: one bit of one round's `msg_sha256`. Must be rejected (R2).
 - `record`: one bit of `root_b`, `sigma`, a link point, `y`, `link_sha256` or a proof's `sha256`. Must be rejected (a
-  flipped `sigma` by the Lean verifier only: intended divergence D3, upstream accepts).
+  flipped `sigma` by the Lean verifier only, divergence D3, unless `--upstream-checks link_sigma`: PR #83 from b3baabd8).
 
 Writes OUT_DIR/<case>/ and OUT_DIR/fuzz.json (the `--expect` form of `agree.py`; cases without an expectation are omitted).
 Use a fixed seed per CI run and a rolling seed for nightly runs.
@@ -38,6 +38,7 @@ def main():
     ap.add_argument("out", type=Path)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--n", type=int, default=40)
+    ap.add_argument("--upstream-checks", default="", help="comma-separated checks upstream's from_record makes: link_sigma")
     a = ap.parse_args()
     rng = random.Random(a.seed)
     base = json.loads((a.src / "session.json").read_text())
@@ -82,8 +83,10 @@ def main():
                 l["root_b"][table] = flip_hex(l["root_b"][table], rng.randrange(256))
             elif which == "sigma":
                 l["sigma"] = flip_hex(l["sigma"], rng.randrange(256))
-                # D3: upstream's from_record ignores link.sigma (Σ is bound by Hello and root_F); S4 rejects it here
-                want = {"accepted": False, "why": "S4", "upstream_accepted": True}
+                # D3 before PR #83 b3baabd8: upstream's from_record ignored link.sigma (Σ is bound by Hello and root_F)
+                want = {"accepted": False, "why": "S4"}
+                if "link_sigma" not in a.upstream_checks.split(","):
+                    want["upstream_accepted"] = True
             elif which == "point":
                 p = rng.randrange(len(l["points"]))
                 j = rng.randrange(len(l["points"][p]))

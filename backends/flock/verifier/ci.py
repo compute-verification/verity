@@ -47,23 +47,32 @@ def run_set(i, s, a, ups, store):
     st = s["statement"]
     circuit, public, comp = fetch(st["circuit"], store), fetch(st["public"], store), fetch(st["comp"], store)
     tables = fetch(st["tables"], store) if "tables" in st else None
-    vectors = fetch(s["sessions"][0]["dir"].rsplit("/", 1)[0], store)
-    honest = vectors / "honest"
-    py(HERE / "redigest.py", honest, w / "mutants")
-    py(HERE / "redigest.py", "--retain", honest, w / "retained")
-    py(HERE / "fuzz.py", honest, w / "fuzz", "--seed", a.seed, "--n", a.fuzz)
-    expect = w / "expect.json"
-    expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
-    sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
-    sessions += sorted(str(p) for p in (w / "mutants").iterdir() if p.is_dir())
-    sessions += [str(w / "retained" / "retained"), str(w / "retained" / "retained-edited")]
-    sessions += sorted(str(p) for p in (w / "fuzz").iterdir() if p.is_dir())
+    checks = ",".join(s.get("upstream_checks", [])) or "none"
+    sessions, expects = [], []
+    if "sessions" in s:
+        vectors = fetch(s["sessions"][0]["dir"].rsplit("/", 1)[0], store)
+        honest = vectors / "honest"
+        py(HERE / "redigest.py", honest, w / "mutants")
+        py(HERE / "redigest.py", "--retain", honest, w / "retained", "--upstream-checks", checks)
+        py(HERE / "fuzz.py", honest, w / "fuzz", "--seed", a.seed, "--n", a.fuzz, "--upstream-checks", checks)
+        expect = w / "expect.json"
+        expect.write_text(json.dumps([{"name": x["dir"].rsplit("/", 1)[1], "expect": x["expect"]} for x in s["sessions"]]))
+        expects = [w / "mutants" / "mutants.json", w / "fuzz" / "fuzz.json", w / "retained" / "retained.json", expect]
+        sessions = [str(vectors / x["dir"].rsplit("/", 1)[1]) for x in s["sessions"]]
+        sessions += sorted(str(p) for p in (w / "mutants").iterdir() if p.is_dir())
+        sessions += [str(w / "retained" / n) for n in ("retained", "retained-edited")]
+        if "retained_bytes" in checks.split(","):
+            sessions.append(str(w / "retained" / "retained-not-digest"))
+        sessions += sorted(str(p) for p in (w / "fuzz").iterdir() if p.is_dir())
     if "forgeries" in s:
         f = fetch(s["forgeries"], store)
         sessions += sorted(str(p) for p in f.iterdir() if p.is_dir())
+    for k, rd in enumerate(s.get("selftest", [])):
+        d = w / "selftest" / str(k)
+        py(HERE / "selftest_records.py", fetch(rd, store), d)
+        sessions += sorted(str(p) for p in d.iterdir() if p.is_dir())
     cmd = [sys.executable, HERE / "agree.py", "--lean", a.lean, "--upstream", up, "--statement", s["lean_statement"],
-           "--circuit", circuit, "--comp", comp, "--public", public, "--expect", w / "mutants" / "mutants.json",
-           "--expect", w / "fuzz" / "fuzz.json", "--expect", w / "retained" / "retained.json", "--expect", expect,
+           "--circuit", circuit, "--comp", comp, "--public", public, *(x for e in expects for x in ("--expect", e)),
            "--out", w / "agree", "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
@@ -107,7 +116,8 @@ def main():
             w = a.work / f"set{r['set']}"
             shutil.copytree(w / "agree", out / f"set{r['set']}", dirs_exist_ok=True)
             for f in ("mutants/mutants.json", "fuzz/fuzz.json", "retained/retained.json", "expect.json"):
-                shutil.copy(w / f, out / f"set{r['set']}" / Path(f).name)
+                if (w / f).exists():
+                    shutil.copy(w / f, out / f"set{r['set']}" / Path(f).name)
         (out / "sets.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
         ran = [r for r in results if "skipped" not in r]
         doc = {

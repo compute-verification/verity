@@ -16,13 +16,19 @@ T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/flock" "$T/live" "$T/store"
 (cd "$FLOCK" && tar --exclude=./target --exclude=./crates/flock-live -cf - .) | tar -xf - -C "$T/flock"
-# PR #83 commit : vectors patch : the commit of this branch whose patch fits it
-for spec in 9294e161:netlist-vectors.patch:HEAD 19c7269a:circuit-vectors.patch:9605a77d fd02e847:circuit-vectors.patch:HEAD; do
+# PR #83 commit : vectors patch : the commit of this branch whose patch fits it. A version whose Flock needs its own patch
+# (SHA-512 Merkle trees) ships it as live/<commit>/flock.patch with the crate's features in live/<commit>/features.
+for spec in 9294e161:netlist-vectors.patch:HEAD 19c7269a:circuit-vectors.patch:9605a77d fd02e847:circuit-vectors.patch:a2c4e9fd \
+    631567f7:circuit-vectors.patch:HEAD; do
   IFS=: read -r c p at <<<"$spec"
   git -C "$REPO" worktree add -q --detach "$T/wt-$c" "$c"
   git -C "$REPO" show "$at:backends/flock/verifier/$p" > "$T/$c.patch"
   git -C "$T/wt-$c" apply "$T/$c.patch"
   cp -r "$T/wt-$c/backends/flock/live" "$T/live/$c"
+  if [ -f "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" ]; then
+    cp "$T/wt-$c/backends/flock/flock-sha512-b684b12.patch" "$T/live/$c/flock.patch"
+    echo sha512 > "$T/live/$c/features"
+  fi
   git -C "$REPO" worktree remove --force "$T/wt-$c"
 done
 python3 - "$HERE/vectors.json" "$T/store" <<'EOF'

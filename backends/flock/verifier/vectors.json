@@ -4024,6 +4024,140 @@
     "agreement": "art:f1fd1488 (27/27)",
     "forgeries": "art:7a526bff",
     "forgeries_note": "15 selftest forgeries incl. the tail cases (private cut word, swapped tail); Lean and upstream agree 15/15"
+   },
+   {
+    "tags": "verity/flock-circuit (SHA-512 statement)",
+    "pr83": "631567f7",
+    "generator": "circuit-vectors.patch (631567f7; Flock with flock-sha512-b684b12.patch, flock-live --features seed-injection,sha512)",
+    "statement": {
+     "circuit": "art:448785dc/circuit.txt",
+     "public": "art:448785dc/pub-8.bin",
+     "comp": "art:04259cdd",
+     "circuit_sha256": "40c49c34daefeaed7b187c68e6c5c2d9442b9b64eae5781c9542691a72e1345e",
+     "statement_digest": "70ac90dd300a2be32b4f5761f7e4f1cd3327f7ad237ae3cdfa579e8481168a32",
+     "sigma": "26e563ca8c9576ac467172267ffb0cab1d6d57868df5e74ce83eb3298271b394",
+     "detail": "RoPE, 8 instances, m 23; SHA-512 Merkle trees (64-byte digests), coin-commit/sha512, retained round bytes"
+    },
+    "sessions": [
+     {
+      "dir": "art:82c73709/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:82c73709/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      }
+     }
+    ],
+    "upstream_checks": [
+     "link_sigma",
+     "retained_bytes"
+    ],
+    "mutants": {
+     "tool": "redigest.py art:82c73709/honest OUT; redigest.py --retain art:82c73709/honest OUT --upstream-checks link_sigma,retained_bytes",
+     "cases": "as in the first set; the proofs' 64-byte digests are read off PcsParams.merkle_hash; retained-not-digest is rejected by both (no divergence at 631567f7)"
+    },
+    "lean_statement": "verity/flock-circuit",
+    "forgeries": "art:2fb50856",
+    "forgeries_note": "14 selftest forgeries that run a session, expectations in each case.json; cross_session_replay_both_reps is now caught at R2 by the retained bytes (both verifiers)",
+    "fuzz": {
+     "tool": "fuzz.py art:82c73709/honest OUT --seed S --n N --upstream-checks link_sigma,retained_bytes"
+    }
+   },
+   {
+    "tags": "verity/flock-circuit (SHA-512 statement)",
+    "pr83": "631567f7",
+    "generator": "circuit-vectors.patch (631567f7; Flock with flock-sha512-b684b12.patch, flock-live --features seed-injection,sha512) (vectors --tables)",
+    "statement": {
+     "circuit": "art:394cfa17/circuit.txt",
+     "public": "art:394cfa17/pub-2.bin",
+     "comp": "art:04259cdd",
+     "tables": "art:925d6833",
+     "circuit_sha256": "7bffce49ebf31c84128ac85d5e5157489162f7a4609c78cc2f12ab245d3bc465",
+     "statement_digest": "c3de76b2240c6255e41f2758acaee7ff3b7fdd2d0efbaff0b3b162fdaaea2248",
+     "sigma": "0703049a3a295cc0b52b9865aa1b090055ff8353f1b5faa740ff4c885128acf8",
+     "detail": "rmsnorm-triton n128 (the synthetic set of set 3): lookup slots rcp and sqrt, 3 tail stages; k_log 21, m 24"
+    },
+    "sessions": [
+     {
+      "dir": "art:24aba3a2/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:24aba3a2/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      }
+     }
+    ],
+    "upstream_checks": [
+     "link_sigma",
+     "retained_bytes"
+    ],
+    "mutants": {
+     "tool": "as in the previous set, on art:24aba3a2/honest"
+    },
+    "lean_statement": "verity/flock-circuit",
+    "forgeries": "art:d13d622c",
+    "forgeries_note": "15 selftest forgeries; relabelled_circuit and tail_swapped_circuit_refused need two RMSNorm statements in memory and were OOM-killed on a 15 GB VM (not an abort): M0 recorded them (next set)"
+   },
+   {
+    "tags": "verity/flock-circuit (SHA-512 statement)",
+    "pr83": "631567f7",
+    "generator": "flock-circuit selftest --record-dir (PR #83 631567f7, unpatched), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:1100e385/rope-head/stage/circuit.txt",
+     "public": "art:1100e385/rope-head/stage/pub-2.bin",
+     "circuit_sha256": "40c49c34daefeaed7b187c68e6c5c2d9442b9b64eae5781c9542691a72e1345e",
+     "statement_digest": "7a18e3cb409e649c2becf615607a187abd8033c789ee2304563dac30443de8a2",
+     "sigma": "8f83f5ea27274438d6b3ad447ca06a2c21f57b1d185b5fa676de96f61a65efc1",
+     "comp": "art:04259cdd",
+     "detail": "RoPE d64, 2 heads: every selftest case, CPU and GPU provers (M0, r20260927-001758-21e8)"
+    },
+    "upstream_checks": [
+     "link_sigma",
+     "retained_bytes"
+    ],
+    "lean_statement": "verity/flock-circuit",
+    "selftest": [
+     "art:1100e385/rope-head/records-cpu",
+     "art:1100e385/rope-head/records-gpu"
+    ],
+    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)"
+   },
+   {
+    "tags": "verity/flock-circuit (SHA-512 statement)",
+    "pr83": "631567f7",
+    "generator": "flock-circuit selftest --record-dir (PR #83 631567f7, unpatched), converted by selftest_records.py",
+    "statement": {
+     "circuit": "art:1100e385/rmst128/stage/circuit.txt",
+     "public": "art:1100e385/rmst128/stage/pub-2.bin",
+     "circuit_sha256": "89b4cd65f63481f7e9790c479458fd96cc51b2a192db9e58259fa7d467b114f4",
+     "statement_digest": "2416c708c2a8bf4459c311126c698ba927fa5e5988bb0bacc08699fe1abe7062",
+     "sigma": "36e75b17fa8c7acaa0c7362e2661062ebb7336eb593ab3e5dd79769c5df0bd7d",
+     "comp": "art:04259cdd",
+     "detail": "Triton RMSNorm n128: every selftest case, CPU and GPU provers (M0, r20260927-001758-21e8)",
+     "tables": "art:925d6833"
+    },
+    "upstream_checks": [
+     "link_sigma",
+     "retained_bytes"
+    ],
+    "lean_statement": "verity/flock-circuit",
+    "selftest": [
+     "art:1100e385/rmst128/records-cpu",
+     "art:1100e385/rmst128/records-gpu"
+    ],
+    "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)"
    }
   ]
  }

@@ -6,8 +6,8 @@
 #       --require-result -- bash backends/flock/verifier/ci-pod.sh SEED=20260926 FUZZ=20 JOBS=4
 #
 # ci-bundle.tar.gz (made by `ci-bundle.sh`): flock/ (upstream b684b12 with PR #83's link patches, no live crate), live/<commit>/
-# (PR #83's live crate at each version the sets use, with that version's vectors patch applied), store/<art id prefix>/ (every
-# stored input the sets name). The pod needs no credentials: its inputs are shipped, its outputs go through the run's custody.
+# (PR #83's live crate at each version the sets use, with that version's vectors patch applied; `flock.patch` and `features`
+# when that version's Flock needs its own patch), store/<art id prefix>/ (every stored input the sets name). The pod needs no credentials: its inputs are shipped, its outputs go through the run's custody.
 set -euo pipefail
 for kv in "$@"; do export "CI_$kv"; done
 SRC=$(pwd)
@@ -29,7 +29,11 @@ for c in $(ls "$W/live"); do
   cp -r "$W/live/$c" "$W/flock/crates/flock-live"
   bin=flock-circuit
   [ -f "$W/flock/crates/flock-live/src/bin/flock-netlist.rs" ] && bin=flock-netlist
-  (cd "$W/flock" && cargo build --release -q -p flock-live --bin "$bin" -j "$(nproc)")
+  feat=()
+  [ -f "$W/live/$c/features" ] && feat=(--features "$(cat "$W/live/$c/features")")
+  [ -f "$W/live/$c/flock.patch" ] && (cd "$W/flock" && patch -s -p1 < "$W/live/$c/flock.patch")
+  (cd "$W/flock" && cargo build --release -q -p flock-live --bin "$bin" "${feat[@]}" -j "$(nproc)")
+  [ -f "$W/live/$c/flock.patch" ] && (cd "$W/flock" && patch -s -R -p1 < "$W/live/$c/flock.patch")
   cp "$W/flock/target/release/$bin" "$W/upstream-$c"
   UPS+=(--upstream "$c=$W/upstream-$c")
   echo "built upstream $c ($bin)"

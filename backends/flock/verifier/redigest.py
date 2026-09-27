@@ -7,12 +7,14 @@ transcript, keeping every coin. The record is then what a prover that sent the e
 against the same coins, and only the check the edit breaks can reject it.
 
     python redigest.py SESSION_DIR OUT_DIR       # SESSION_DIR: session.json, <t>.rep0.bin, <t>.rep1.bin
-    python redigest.py --retain SESSION_DIR OUT_DIR
+    python redigest.py --retain SESSION_DIR OUT_DIR [--upstream-checks retained_bytes]
 
 Writes OUT_DIR/<name>/ per mutant and OUT_DIR/mutants.json: name, rep, edit, and the verdict both verifiers must reach
 (`expect`: accept or reject, and the Lean verifier's reason prefix). `--retain` writes the session with every round's
 framed bytes retained (`rounds[k].msg`, hex; the coin server's retained round bytes) and two negatives: rep 0's first
-round bytes edited with its digest rebuilt (the replay's exact comparison rejects), and edited without it (S12 rejects).
+round bytes edited with its digest rebuilt (the replay's exact comparison rejects), and edited without it (S12 rejects;
+upstream accepts it, divergence D4, unless `--upstream-checks retained_bytes`: PR #83 from 4bceebef checks the bytes
+against the digest).
 """
 import hashlib, json, shutil, struct, sys
 from pathlib import Path
@@ -23,14 +25,14 @@ import transcript_check as tc  # noqa: E402
 
 def layout(b):
     """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field."""
-    r, off = tc.R(b), {}
+    r, off = tc.R(b, tc.digest_width(b)), {}
 
     def at(key, n):
         off.setdefault(key, []).append(r.i)
         r.take(n)
 
     def f(key): at(key, 16)
-    def h(key): at(key, 32)
+    def h(key): at(key, r.hlen)
     def u(key): at(key, 8)
 
     def vec(fn):
@@ -111,7 +113,7 @@ class Retain(tc.T):
         return [tc.coin(h) for h in rec["coins"]]
 
 
-def retain(src, out):
+def retain(src, out, checks=()):
     src, out = Path(src), Path(out)
     rec = json.loads((src / "session.json").read_text())
     table = rec["config"]["tables"][0]["name"]
@@ -139,7 +141,8 @@ def retain(src, out):
     write("retained-not-digest", bad2)
     manifest = [{"name": "retained", "rep": 0, "expect": ACCEPT},
                 {"name": "retained-edited", "rep": 0, "expect": reject("R2: round 0: the proof's messages are not the bytes")},
-                {"name": "retained-not-digest", "rep": 0, "expect": {**reject("S12:"), "upstream_accepted": True}}]
+                {"name": "retained-not-digest", "rep": 0,
+                 "expect": reject("S12:") if "retained_bytes" in checks else {**reject("S12:"), "upstream_accepted": True}}]
     (out / "retained.json").write_text(json.dumps(manifest, indent=1))
     print(f"retained-bytes sessions in {out}")
 
@@ -152,6 +155,8 @@ class Redigest(tc.T):
         c, s.pending = s.pending, b""
         rec = s.rounds[s.k]
         rec["msg_sha256"], rec["msg_len"] = hashlib.sha256(c).hexdigest(), len(c)
+        if "msg" in rec:
+            rec["msg"] = c.hex()
         s.k += 1
         return [tc.coin(h) for h in rec["coins"]]
 
@@ -226,6 +231,6 @@ def main(src, out):
 
 if __name__ == "__main__":
     if sys.argv[1] == "--retain":
-        retain(*sys.argv[2:4])
+        retain(*sys.argv[2:4], checks=sys.argv[5].split(",") if sys.argv[4:5] == ["--upstream-checks"] else [])
     else:
         main(*sys.argv[1:3])

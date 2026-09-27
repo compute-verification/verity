@@ -83,9 +83,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
-    let record ← IO.FS.readFile (dir ++ "/session.json")
-    let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
-    let verdict := do verify (← setup) record proofs
+    let files ← try
+        let record ← IO.FS.readFile (dir ++ "/session.json")
+        let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
+        pure (Except.ok (record, proofs))
+      catch e => pure (Except.error s!"session files: {e}")
+    let verdict := do let (record, proofs) ← files; verify (← setup) record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)]

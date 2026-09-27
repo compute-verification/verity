@@ -11,7 +11,7 @@ Vectors: vectors.json (fetch a session with `research data fetch <record> --path
 import hashlib, json, math, struct, sys
 
 class R:
-    def __init__(s, b): s.b, s.i = b, 0
+    def __init__(s, b, hlen=32): s.b, s.i, s.hlen = b, 0, hlen
     def take(s, n):
         if s.i + n > len(s.b): raise ValueError("short")
         v = s.b[s.i:s.i + n]; s.i += n; return v
@@ -23,7 +23,7 @@ class R:
         n = s.u64()
         if n > cap: raise ValueError(f"length {n}")
         return [f() for _ in range(n)]
-    def h32(s): return s.take(32)
+    def h32(s): return s.take(s.hlen)
 
 MOD = (1 << 128) | 0x87
 
@@ -70,8 +70,24 @@ class T:
     def vec(s, n): return s.squeeze(2, n)
 
 
+HASH_KIND_WIDTH = {0: 32, 2: 64}  # PcsParams.merkle_hash: Sha256 = 0, Sha512 = 2 (Blake3 = 1 is not a Merkle kind here)
+
+
+def digest_width(b):
+    """The Merkle digest width, read off the commitment: the one whose `PcsParams.merkle_hash` names it."""
+    for h in (32, 64):
+        try:
+            r = R(b, h)
+            r.vec(r.h32); r.u64(); r.u64(); r.u64(); r.u32(); t = r.u8(); r.u64() if t else None
+            if HASH_KIND_WIDTH.get(r.u32()) == h:
+                return h
+        except ValueError:
+            pass
+    raise ValueError("no Merkle digest width fits the commitment")
+
+
 def decode(b):
-    r = R(b)
+    r = R(b, digest_width(b))
     cap = r.vec(r.h32); m = r.u64(); r.u64(); k0 = r.u64(); r.u32(); t = r.u8(); r.u64() if t else None; r.u32()
     pair = lambda: (r.f128(), r.f128())
     zc = dict(ab=r.vec(r.f128), c=r.vec(r.f128), rounds=r.vec(pair), fa=r.f128(), fb=r.f128(), fc=r.f128(), nonces=r.vec(r.u64))

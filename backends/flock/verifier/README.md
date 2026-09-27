@@ -58,7 +58,9 @@ every coin. Only the check the edit breaks can then reject. `OUT_DIR/mutants.jso
 
 The vectors patch of each version applies to its PR #83 commit (`git apply` in a checkout):
 - `netlist-vectors.patch`, for `9294e161`, patches `flock-netlist`;
-- `circuit-vectors.patch`, for `fd02e847`, patches `flock-circuit` (its `19c7269a` version is in commit 9605a77d).
+- `circuit-vectors.patch`, for `631567f7` (the SHA-512 statement: build Flock with PR #83's `flock-sha512-b684b12.patch` and
+  `flock-live` with `--features sha512`), patches `flock-circuit`. Its `fd02e847` version is in commit a2c4e9fd and its
+  `19c7269a` version in 9605a77d.
 
 Each patch adds three subcommands:
 - `vectors` records the honest and R-BREAK sessions through a loopback transport;
