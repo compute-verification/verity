@@ -59,6 +59,22 @@ def test_the_query_refuses_what_it_does_not_describe():
         P.units(Program(bind(other)), q)
 
 
+XOR3 = bind(CompositeDefinition("OneStageTestTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
+
+
+def test_several_templates_one_population():
+    prog = P.mixed_population_program([(PAIR, 3), (XOR3, 5)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    assert P.ranges(prog, q) == [(PAIR.id, 0, 3), (XOR3.id, 3, 5)] and P.units(prog, q) == 8
+    assert P.units(prog, P.template_instances_query([XOR3.id, PAIR.id])) == 8
+    for bad in (P.template_instances_query([PAIR.id]), P.template_instances_query([PAIR.id, XOR3.id, "Other_v1"]),
+                P.template_instances_query([PAIR.id, PAIR.id, XOR3.id]), P.template_instance_query(PAIR.id)):
+        with pytest.raises(P.QueryRefused):
+            P.units(prog, bad)
+    assert P.digest(P.partition(prog, q)) != P.digest(P.partition(P.mixed_population_program([(PAIR, 3), (XOR3, 4)]), q))
+
+
 def test_partition_digest_is_the_named_query_over_the_program():
     prog, q, _ = _registration(6)
     obj = P.partition(prog, q)
