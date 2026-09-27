@@ -11,9 +11,9 @@ changes the scheme (items 3, 5 and 6), which the Lean model has yet to absorb.
 | 2 | Layer indices | `Fin 2`: 0 lower, 1 top | 1 and 2 | 0 and 1 |
 | 3 | Key tag and salt | `KQ'` carries `Bits 256`; `tagOf` puts a 128-bit salt in bits 0..127, zeros above (segment 0 only) | `(salt, s)` as fields (§1); `tag_s = salt (24 B) ‖ u64(s)` (instantiation) | the instantiation's; for segment 0 with a salt under 2^128 it equals `tagOf` |
 | 4 | Segments | `p3Scheme` is one segment of 220 labels; `n10prime` covers one segment | many segments per `W` | `N` segments, segment-major in `W` and `C`; `N = 1` is Lean's scheme |
-| 5 | `H` | a monolithic random oracle `KQ' → Lab` | a sponge over an ideal permutation `Π` of `m + 512` bits (§2c, instantiation) | pluggable; the default is the sponge. Its header encodes only `npar`, so it is injective on the scheme's queries (`parentsOf`), not on every partial assignment in `KQ'` |
+| 5 | `H` | a monolithic random oracle `KQ' → Lab`; the pilot `p3SpongeModel` (`sponge-dense`) has the XOR sponge over `Π` | a sponge over `Π` of `m + 512` bits (§2c), then an overwrite chain over `Π₂` of `2m + 512` bits (instantiation, 16:45Z) | pluggable; the default is the overwrite chain, and the broken XOR sponge and Miyaguchi–Preneel are kept for attack replay. The header encodes only `npar`, so `H` is injective on the scheme's queries (`parentsOf`), not on every partial assignment in `KQ'` |
 | 6 | `P` | one untweaked ideal permutation `ω.2` | tweakable `P_T`, `T = (tag_s, layer, v)` (instantiation) | `P_T`; the Lean cross-check uses a toy that ignores `T` |
-| 7 | Decode rounds | `decodeW`: key and `P⁻¹` independent, so one round each pass with a monolithic `H` | "key, then `P⁻¹`" (§1) | key and `P⁻¹` side by side; a sponge key takes `npar + 2` rounds |
+| 7 | Decode rounds | `decodeW`: key and `P⁻¹` independent, so one round each pass with a monolithic `H` | "key, then `P⁻¹`" (§1) | key and `P⁻¹` side by side; an overwrite-chain key takes `npar + 1` rounds |
 | 8 | Rounds per level | `n10prime` assumes `ColumnHard G ⌊(D + 1)/2⌋` (2 rounds per level) | `⌊(D − 1)/13⌋ + 1` (§2c); 3 calls per level at worst, `⌊(D − 1)/3⌋ + 1` (instantiation §1) | rounds measured exactly per derivation; `CERTIFIED_ROUNDS = 28` uses the instantiation's rule |
 | 9 | The column game's units | `colRound` charges one game round each for a reverse and for a promotion | — | an oracle adversary pays 1 round for a reverse (with a monolithic `H`) and 0 for a promotion. See below |
 | 10 | Band graph at `k = 0` | `bandGraph n 0` keeps the spine parent `v − 1` | `par(v) = {v − k, …, v − 1}`, empty at `k = 0` | Lean's; the same for `k ≥ 1` |
@@ -33,8 +33,14 @@ monolithic `H`, the reverse costs 1 oracle round and the promotion none, while `
 - At `B(220, 12)` with a monolithic `H` there is a holding that saves 2.29 labels and answers all 220 challenges within
   20 oracle rounds, using 211 `P⁻¹` queries. The game needs 12 rounds for it. That is under the certified `X = 3`, but
   it shows the certificate is needed at 12 game rounds, while `band_twoWay_220_12` is proved at 10 and 11.
-- With the instantiation's sponge, a reverse costs at least `npar + 2` rounds. Whether a gap remains under
-  `⌊(D − 1)/3⌋ + 1` has not been checked.
+- With the instantiation's overwrite chain, a reverse costs at least `npar + 1` rounds, since it needs the top's key.
+  Whether a gap remains under `⌊(D − 1)/3⌋ + 1` has not been checked.
+
+**Item 5, the storage breaks of the earlier `H`.** The pilot proved that the XOR sponge's pre-squeeze states are not
+full-price pebbles once `Π⁻¹` is queryable. With a public first state, one stored state regenerates two labels
+(`dense_two_labels_from_one_state`). The model's B5 freshness step therefore fails for it. `tests/test_pous_two_for_one.py`
+replays that attack, and the Miyaguchi–Preneel pre-image attack on band rows, on real labels, and shows both fail on the
+overwrite chain. A Lean statement for the overwrite chain (the two-permutation model with `Π₂`) is not written yet.
 
 **What the Lean cross-check covers.** Lean evaluated `c1'`, `topLabel'`, `transpose`, `decodeLower`, `tagOf`, the
 decoder, `bandGraph` and `colRound` for `n ≤ 3` (encode) and `n ≤ 6` (game), and the code matches on every value. The
