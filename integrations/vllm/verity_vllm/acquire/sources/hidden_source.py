@@ -60,23 +60,24 @@ def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: 
             and head_dim % 8 == 0 and alibi_slopes is None)
 
 
-def mat_total_words(HB: int, M: int, NB: int, BN: int = 128, D: int = 64) -> int:
-    """Words of the M1 stream (mirror of `Verity_mat_layout(HB, M, NB, BN, D)` / `hidden_stream.StreamLayout`)."""
+def mat_total_words(HB: int, M: int, NB: int, BN: int = 128, D: int = 64, ms: bool = False) -> int:
+    """Words of the M1 stream (mirror of `Verity_mat_layout(HB, M, NB, BN, D)` / `hidden_stream.StreamLayout`); `ms`: a build that also
+    writes the MS class (`verity_tap_src() & 64`), one word per (slab, row, key block) after FIN."""
     N = NB * BN
-    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4
+    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
-def fa2_tap_words_per_seq(h: int, M: int, NB: int, BN: int, D: int) -> int:
+def fa2_tap_words_per_seq(h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
     """[R18 tap, F-r17-23] Words of the padded M1 tap buffer ONE sequence occupies in a multi-sequence launch: its h slabs x the launch's
     row pitch M (= max_seqlen_q) x the six plane widths -- `mat_total_words(HB, M, NB, BN, D) / HB`.  Independent of the sequence's own
     length (the buffer is pitched to the batch maximum); the STAGED bytes are the compacted rows < seqlen_q only (native_collect.cpp p0b)."""
-    return mat_total_words(1, M, NB, BN, D) * h
+    return mat_total_words(1, M, NB, BN, D, ms) * h
 
 
-def fa2_tap_buffer_words(b: int, h: int, M: int, NB: int, BN: int, D: int) -> int:
+def fa2_tap_buffer_words(b: int, h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
     """Padded (whole 64-word chunks) tap buffer of a launch of `b` sequences -- the allocation F-r17-23 named (B64 llama 1024: 6,585,057,280
     words = 26,340,229,120 B = 24.53 GiB; the exact byte count of the r17_0738 OOM)."""
-    return -(-(b * fa2_tap_words_per_seq(h, M, NB, BN, D)) // CHUNK_WORDS) * CHUNK_WORDS
+    return -(-(b * fa2_tap_words_per_seq(h, M, NB, BN, D, ms)) // CHUNK_WORDS) * CHUNK_WORDS
 
 
 def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tuple[int, int]]:
@@ -98,6 +99,12 @@ def tap_row3(ns: Any) -> int:
     """What word 3 of the build's ROW entries holds (`verity_tap_row3`): 0 = never written (builds before the op included), 1 = the guarded
     max (`query.guarded_max`)."""
     return int(ns.verity_tap_row3()) if hasattr(ns, "verity_tap_row3") else 0
+
+
+def tap_ms(src: int) -> bool:
+    """Whether a build with source mask `src` (`verity_tap_src`) writes the MS class after FIN (`hidden_stream.SRC_BITS["MS"]`; the
+    guarded-max builds)."""
+    return bool(int(src) & 64)
 
 
 def stream_name(k: int, HB: int, M: int, NB: int, BN: int, D: int) -> str:
@@ -135,19 +142,36 @@ class HiddenM1Source:
         self.launches_in_step = 0
         self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": 8 if self.v8 else 7, "hdims": [hd for hd in (64, 96, 128, 256) if self.hdims & (1 << (hd // 32))],
-                      "row3": tap_row3(self.ns)}
+                      "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
+        self.ms = self.stats["ms"]
         self.active = False
         self.time_launch = None
 
     def require_row3(self, guarded_max: bool) -> None:
-        """Refuse a build whose ROW word 3 is not the manifest's: the guarded-max policy needs a build that writes the guarded max, any
-        other manifest one that never writes the word (the stream bytes of record)."""
+        """Refuse a build whose ROW word 3 or MS class is not the manifest's: the guarded-max policy needs a build that writes the guarded
+        max and the MS class, any other manifest one that writes neither (the stream bytes of record)."""
         from verity_vllm.query.guarded_max import TAP_ROW3
 
         want = TAP_ROW3 if guarded_max else 0
+        policy = "is under the guarded-max policy" if guarded_max else "has no guarded-max policy"
         if self.stats["row3"] != want:
             raise RuntimeError(f"hidden tap {self.ns_name}: ROW word 3 mode {self.stats['row3']} (verity_tap_row3), the manifest "
-                               f"{'is under the guarded-max policy' if guarded_max else 'has no guarded-max policy'} and needs mode {want}")
+                               f"{policy} and needs mode {want}")
+        if bool(self.stats.get("ms")) != bool(guarded_max):
+            raise RuntimeError(f"hidden tap {self.ns_name}: source mask {self.src} {'writes' if self.stats.get('ms') else 'lacks'} the MS "
+                               f"class (verity_tap_src & 64), the manifest {policy}")
+
+    def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:
+        """The MS class on top of the arena bound's six classes (`native_host.step_bound_bytes`): a build that writes it adds, per token
+        row of a launch, one word per head and key block (at most max_model_len / 64) of every attention layer, and one tensor per
+        sequence and layer on the compacted path."""
+        if not self.ms:
+            return {"per_token_bytes": 0, "per_seq_bytes": 0, "tensors_per_step": 0}
+        cfg = getattr(model, "config", None)
+        heads, layers = int(getattr(cfg, "num_attention_heads", 0) or 0), int(getattr(cfg, "num_hidden_layers", 0) or 0)
+        T = int(envelope.get("max_model_len") or int(envelope.get("max_prompt") or 1) + int(envelope.get("max_new") or 1))
+        return {"per_token_bytes": 4 * layers * heads * -(-T // 64), "per_seq_bytes": 0,
+                "tensors_per_step": layers * max(1, int(envelope.get("batch") or 1))}
 
     def tile(self, head_dim: int, num_splits: int) -> tuple[int, int]:
         """(kBlockN, head_dim) the tap must be armed with for this launch; refuses head dims this build has no kernel for."""
@@ -184,7 +208,7 @@ class HiddenM1Source:
         key = (HB, M, NB, BN, D)
         b = self.bufs.get(key)
         if b is None:
-            words = -(-mat_total_words(HB, M, NB, BN, D) // CHUNK_WORDS) * CHUNK_WORDS
+            words = -(-mat_total_words(HB, M, NB, BN, D, self.ms) // CHUNK_WORDS) * CHUNK_WORDS
             b = self.torch.zeros((words,), dtype=self.torch.int32, device="cuda")
             self.bufs[key] = b
             self.stats["geometries"][str(key if (BN, D) != LEGACY_TILE else (HB, M, NB))] = words * 4
@@ -249,6 +273,7 @@ class HiddenM1Source:
         return [{"class": "fa2_hidden_m1_stream", "how": "bound-as-leaf", "covers_rows": ["R5", "R6", "R7", "R8"],
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
                  "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], **({"row3": "guarded max"} if self.stats["row3"] else {}),
+                 **({"ms": "max * scale per key block"} if self.ms else {}),
                  "evidence": (f"CMT-2 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa2_C.varlen_fwd; stream buffer per launch acquired into the packed step "
                               f"stream (same run root); geometries (HB, M, NB[, kBlockN, head_dim]) {self.stats['geometries']}; tap_skipped "
@@ -317,7 +342,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
         self.launches_in_step = 0
         self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": int(self.ns.verity_tap_layout_version()), "hdims": [hd for hd in (64, 128) if self.hdims & (1 << (hd // 32))],
-                      "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns)}
+                      "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
+        self.ms = self.stats["ms"]
         self.active = False
         self.time_launch = None
 
@@ -343,7 +369,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
         key = (HB, M, NB, BN, D)
         b = self.bufs.get(key)
         if b is None:
-            words = -(-mat_total_words(HB, M, NB, BN, D) // CHUNK_WORDS) * CHUNK_WORDS
+            words = -(-mat_total_words(HB, M, NB, BN, D, self.ms) // CHUNK_WORDS) * CHUNK_WORDS
             b = self.torch.zeros((words,), dtype=self.torch.int32, device="cuda")
             self.bufs[key] = b
             self.stats["geometries"][str(key)] = words * 4
@@ -404,7 +430,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
         return [{"class": "fa3_hidden_m1_stream", "how": "bound-as-leaf", "covers_rows": ["R5", "R6", "R7", "R8"],
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
                  "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], "tiles": dict(self.stats["tiles"]),
-                 **({"row3": "guarded max"} if self.stats["row3"] else {}),
+                 **({"row3": "guarded max"} if self.stats["row3"] else {}), **({"ms": "max * scale per key block"} if self.ms else {}),
                  "evidence": (f"R13 hopper FA3 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa3_C.fwd; stream buffer per launch acquired into the packed step stream "
                               f"(same run root); geometries (HB=b*h_k, M=packed rows, NB, kBlockN, head_dim) {self.stats['geometries']}; tiles {self.stats['tiles']}; "
@@ -425,7 +451,7 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
     """The M1 source matching the tap build at `so_path` (an FA3 v9 build exposes `verity_set_tap_v9`; FA2 v7/v8 builds `verity_set_tap`).
     Refuses a tap of the other attention implementation than the engine's `flash_attn_version` (when given): the FA2 tap loaded under
     FA3 never fires (F-hw-08) -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
-    required-value `manifest`, also refuses a build whose ROW word 3 is not the manifest's (`require_row3`)."""
+    required-value `manifest`, also refuses a build whose ROW word 3 or MS class is not the manifest's (`require_row3`)."""
     import torch
 
     ns = ns or __import__("pathlib").Path(so_path).stem

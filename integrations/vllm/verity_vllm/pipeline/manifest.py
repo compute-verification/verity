@@ -9,10 +9,10 @@
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
 are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `--norm-scales` (opt-in, never the record) adds the norm-scale
-policy (`query.norm_scales`), `--guarded-max` (likewise) the guarded-max policy (`query.guarded_max`: a query-header statement, the
-identities are the record's); `--router-softmax` and `--vocab-range` (opt-in, never the record) add the router-softmax and vocabulary-range
-policies (`query.router_softmax`, `query.vocab_range`).  `--cross-call-check` (opt-in) fails the Build when a value is
-computed in two Calls (`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
+policy (`query.norm_scales`), `--guarded-max` (likewise) the guarded-max policy (`query.guarded_max`: the query header states it, and
+every attention hidden-stream identity gains the MS class); `--router-softmax` and `--vocab-range` (opt-in, never the record) add the
+router-softmax and vocabulary-range policies (`query.router_softmax`, `query.vocab_range`).  `--cross-call-check` (opt-in) fails the Build
+when a value is computed in two Calls (`query.cross_call`).  `compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -97,7 +97,8 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
         acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}}
         word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps) else None, log=log)
     if guarded_max:
-        r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P))
+        r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P), GM.max_scaled_words(P))
+        r.manifest.update(GM.with_ms(r.manifest))
     if cross_call:
         cross_call_check(program_dir, log=log)
     if log:
@@ -152,7 +153,7 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
             raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
     man = compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
     if guarded_max:
-        man["query"] = GM.merged(man["query"], [p["query"] for p in parts.values()])
+        man = GM.with_ms(dict(man, query=GM.merged(man["query"], [p["query"] for p in parts.values()])))
     return man
 
 
@@ -233,7 +234,8 @@ NORM_SCALES_HELP = ("opt-in, never the record: the norm-scale policy (verity_vll
                     "Call row, `<norm module>/norm_scale`; the Commit then needs --norm-tap-so")
 CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
 GUARDED_MAX_HELP = ("opt-in, never the record: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention stream's ROW word 3 "
-                    "carries GuardNegInfZero(m) after a row's first key block; the Commit then needs the guarded-max tap build")
+                    "carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * scale; the Commit then "
+                    "needs the guarded-max tap build")
 
 
 @dataclass(frozen=True, kw_only=True)
