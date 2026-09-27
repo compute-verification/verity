@@ -55,6 +55,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
   enforces it. Developer notes in its `README.md`.
+- `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code. The first is `backends/sp1`; its `README.md` is
   the how-to (build, identity, Python API, tests, recorded pod runs).
@@ -69,6 +70,12 @@ core. Backends must be testable without a frontend or runtime integration.
 uv sync            # workspace root; installs research and verity editable
 uv run pytest      # all tests
 ~~~
+
+## Circuits
+
+Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
+`circuit-check` (`uv run circuit-check <definition|template|row>`; CI runs `tools/circuit_check/tests`, every registered
+one); include its report in the PR. A new Definition needs a small binding in `circuit_check.targets`, which the suite enforces.
 
 ## Working principles
 
