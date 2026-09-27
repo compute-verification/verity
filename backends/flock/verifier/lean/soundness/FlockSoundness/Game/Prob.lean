@@ -65,6 +65,14 @@ theorem prob_and_const (p : α → Prop) (Q : Prop) [Decidable Q] (g : Game α) 
   · simp only [hQ, and_true, ite_true]
   · simp only [hQ, and_false, ite_false, prob_false]
 
+theorem prCoin_false {C : Type} [Fintype C] : prCoin (fun _ : C => False) = 0 := by
+  simp [prCoin, avg]
+
+theorem avg_ite_eq_prCoin {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p] :
+    avg (fun c => if p c then (1 : ℝ≥0∞) else 0) = prCoin p := by
+  unfold prCoin
+  exact congrArg avg (funext fun c => by by_cases h : p c <;> simp [h])
+
 /-- A strategy for the relabelled game is a strategy for the game. -/
 def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
   | .ret _, _ => PUnit.unit

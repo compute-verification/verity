@@ -103,3 +103,24 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.SelfClash.collision
 #print axioms FlockSoundness.op₀_conflict_collision
 #print axioms FlockSoundness.opR_conflict_collision
+-- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
+#print axioms FlockSoundness.Game.prob_or_le
+#print axioms FlockSoundness.Game.prob_map
+#print axioms FlockSoundness.Audit.Law.escape_le_of_mem
+#print axioms FlockSoundness.Audit.Law.subset_escape
+#print axioms FlockSoundness.Audit.Law.subset_miss
+#print axioms FlockSoundness.Audit.Partition.compose
+#print axioms FlockSoundness.Audit.Partition.compose_cone
+#print axioms FlockSoundness.Audit.Partition.correct_congr
+#print axioms FlockSoundness.Audit.Partition.Refines.exists_wrong_fine
+#print axioms FlockSoundness.Audit.Partition.Refines.card_wrong_le
+#print axioms FlockSoundness.Audit.audit_le
+#print axioms FlockSoundness.Audit.audit_profile
+#print axioms FlockSoundness.Audit.audit_count
+#print axioms FlockSoundness.Audit.audit_drawn
+#print axioms FlockSoundness.Audit.Partition.audit_cone
+#print axioms FlockSoundness.Audit.Partition.audit_cone_count
+#print axioms FlockSoundness.Audit.Partition.audit_covered
+#print axioms FlockSoundness.Audit.Partition.oracle_count
+#print axioms FlockSoundness.Audit.Partition.oracle_profile
+#print axioms FlockSoundness.Audit.Partition.oracle_cone
