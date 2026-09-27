@@ -25,7 +25,7 @@ inductive Kind where
   | comp
   | net (i : Nat)
   | mask
-  deriving BEq, Inhabited, Repr
+  deriving BEq, DecidableEq, Inhabited, Repr
 
 inductive Role where
   /-- chunk runs of input port `p`: run slot `q` holds `(vu, chunk)` or nothing (a padding run) -/

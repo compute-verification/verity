@@ -177,53 +177,68 @@ def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=
   let eIn := eqTable rho
   Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
 
+/-- `α·Aᵀe_lo + Bᵀe_lo` on a slot of `2^sl` bits, the product rows' B side read from the table for a lookup slot. -/
+def baseOf (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
+  let fa := a.foldT eLo
+  let fb := match lk with
+    | some t => Lookup.foldB t eLo (b.foldT eLo)
+    | none => b.foldT eLo
+  (Array.range (2 ^ sl)).map fun i => alpha * fa[i]! + fb[i]!
+
+/-- One slot type's fold on its local tensor `e_lo = lw ⊗ eq(ρ[.. sl − 6])`; a mask slot's is `(α + 1)·e_lo`. -/
+def slotBase (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × Nat) : V (Array F128) := do
+  let sl := key.2
+  let eLo := tensor lw (rho.extract 0 (sl - 6))
+  match key.1 with
+  | .comp =>
+    if sl != st.leaf.comp.spec.kLog then throw "lincheck fold: a compression slot of the wrong size"
+    pure (baseOf alpha eLo st.leaf.comp.a st.leaf.comp.b none sl)
+  | .net i =>
+    let net := (st.c.nets.getD i default).2
+    if net.unitLog != sl then throw "lincheck fold: a unit slot of the wrong size"
+    pure (baseOf alpha eLo net.a net.b net.lookup sl)
+  | .mask => pure (eLo.map fun x => (alpha + 1) * x)
+
+/-- Offsets `i, …, i + fuel − 1` of the slot at `at_`: `out[at_ + i] = s · base[i]`. -/
+def placeSlot (s : F128) (base : Array F128) (at_ : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, i, out => placeSlot s base at_ fuel (i + 1) (out.set! (at_ + i) (s * base[i]!))
+
+/-- Slots `k, …, k + fuel − 1` of range `r`, each scaled by `eq(ρ[sl − 6 ..], q)`. -/
+def placeRange (r : Range) (eHi base : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, k, out =>
+    let q := r.pos0 + k
+    placeRange r eHi base fuel (k + 1) (placeSlot eHi[q]! base (q * 2 ^ r.slotLog) (2 ^ r.slotLog) 0 out)
+
+/-- Each range's slots, every slot type folded once (`bases` caches them). -/
+def foldRanges (st : Stmt) (alpha : F128) (lw rho : Array F128) :
+    List Range → Array ((Kind × Nat) × Array F128) → Array F128 → V (Array F128)
+  | [], _, out => pure out
+  | r :: rs, bases, out => do
+    let key := (r.kind, r.slotLog)
+    let (base, bases') ← match bases.find? (fun kb => decide (kb.1 = key)) with
+      | some (_, b) => pure (b, bases)
+      | none => do
+        let b ← st.slotBase alpha lw rho key
+        pure (b, bases.push (key, b))
+    let eHi := eqTable (rho.extract (r.slotLog - 6) rho.size)
+    foldRanges st alpha lw rho rs bases' (placeRange r eHi base r.count 0 out)
+
+/-- Δ's entries: `out[cc] += w(i)` for each `(i, cc)`. -/
+def addDelta (w : Nat → F128) (pairs : List (Nat × Nat)) (out : Array F128) : Array F128 :=
+  pairs.foldl (fun o ic => o.modify ic.2 (· + w ic.1)) out
+
 /-- The lincheck fold (§10, §16.1): `α·A_0ᵀe + B_0ᵀe` for `e = lw ⊗ eq(ρ)`. A slot of `2^sl` bits at position `q` sees
 `e[(q << sl) | c] = e_lo[c] · eq(ρ[sl−6 ..], q)` with `e_lo = lw ⊗ eq(ρ[.. sl−6])`, so each slot type is folded once on
 `e_lo` and scaled per slot; Δ's entries are added on `e`. -/
 def fold (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Array F128) := do
-  let c := st.c
-  let kl := c.kLog
+  let kl := st.c.kLog
   if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
-  let mut out : Array F128 := Array.replicate (2 ^ kl) 0
-  let mut bases : Array ((Kind × Nat) × Array F128) := #[]
-  for r in c.ranges do
-    let sl := r.slotLog
-    let key := (r.kind, sl)
-    let base ← match bases.find? (·.1 == key) with
-      | some (_, b) => pure b
-      | none => do
-        let eLo := tensor lw (rho.extract 0 (sl - 6))
-        let sparse ← match r.kind with
-          | .comp =>
-            if sl != st.leaf.comp.spec.kLog then throw "lincheck fold: a compression slot of the wrong size"
-            pure (some (st.leaf.comp.a, st.leaf.comp.b, none))
-          | .net i =>
-            let net := (c.nets.getD i default).2
-            if net.unitLog != sl then throw "lincheck fold: a unit slot of the wrong size"
-            pure (some (net.a, net.b, net.lookup))
-          | .mask => pure none
-        let b := match sparse with
-          | some (a, b, lk) =>
-            let fa := a.foldT eLo
-            let fb := match lk with
-              | some t => Lookup.foldB t eLo (b.foldT eLo)
-              | none => b.foldT eLo
-            (Array.range (2 ^ sl)).map fun i => alpha * fa[i]! + fb[i]!
-          | none => eLo.map fun x => (alpha + 1) * x
-        bases := bases.push (key, b)
-        pure b
-    let eHi := eqTable (rho.extract (sl - 6) rho.size)
-    for k in [0:r.count] do
-      let q := r.pos0 + k
-      let s := eHi[q]!
-      let at_ := q * 2 ^ sl
-      for i in [0:2 ^ sl] do
-        out := out.set! (at_ + i) (s * base[i]!)
+  let out ← st.foldRanges alpha lw rho st.c.ranges.toList #[] (Array.replicate (2 ^ kl) 0)
   let eIn := eqTable rho
   let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
-  for (i, cc) in st.da do out := out.modify cc (· + alpha * e i)
-  for (i, cc) in st.db do out := out.modify cc (· + e i)
-  return out
+  return addDelta e st.db.toList (addDelta (fun i => alpha * e i) st.da.toList out)
 
 def circuitFold (st : Stmt) : CircuitFold := { kLog := st.c.kLog, pin := st.pin, fold := st.fold }
 
