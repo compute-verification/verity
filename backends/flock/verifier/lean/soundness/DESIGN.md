@@ -225,7 +225,8 @@ strict time.
   - **Half of it,** $4N_0/e$, would come from a value layer drawn from a sequence of auxiliary extractions (the first
     recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by averaging
     over that sequence. The record keeps $8N_0/e$, the form the Lean plan proves.
-  - **The status.** On paper; the Lean plan is `note:20260927T1510Z-draft-expected-time-link-plan`.
+  - **The status.** The extractor and the audit's analysis are proved (`session_knowledge_sound_acc`,
+    `analysisBE`). The link theorem is planned (`note:20260927T1510Z-draft-expected-time-link-plan`).
 - **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
   linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
   $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's

@@ -110,6 +110,8 @@ link term per audit.
   - For each table `j`, `joint_le_B'` bounds `Pr[the session accepts] · Pr[table j's extraction fails]` by table `j`'s
     `ε_c⁻ + K·Adv₀ + N₀/(eK)` in the session (`ksBoundB`).
   - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
+- **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
+  `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
 - **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link theorem (`δ_link`,
   DESIGN.md §3). The first two need the SHA-512 leaf layout in the model, as does the link theorem's binding
   hypothesis. Under A2 (§3) `δ_link` is `t·N_s(8N₀/e)/2^256.5` per audit, which dominates the audit's hash term.
@@ -554,7 +556,7 @@ the link makes the readings agree.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem under A2 (flock-soundness, planned), for an analysis whose extractor reruns until `k` reruns accept, in place of `Kr` reruns |
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem under A2 (flock-soundness, planned), for an analysis whose extractor reruns until `k` reruns accept, in place of `Kr` reruns |
 | `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, §1.5), given the statement builder's `Placement` (level 3) and L1 |
 
 **Not yet:** the serving-tree term when the leaf layer is not registered; `LinkSound` itself; `Placement` for the
