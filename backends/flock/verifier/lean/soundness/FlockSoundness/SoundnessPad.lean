@@ -1,4 +1,3 @@
-import FlockSoundness.PiopList
 import FlockSoundness.LigeritoPadSound
 import FlockSoundness.Soundness
 import FlockSoundness.Accounting.PaddedNumbers
@@ -13,7 +12,8 @@ lanes within the padded radius of the committed table packs a witness satisfying
 
 It is `table_sound` with the padded level 0, for any padding `t` and extra lanes per rep `e`:
 * the phases before Ligerito pay their union bounds over the padded code's witnesses (`padWits`,
-  at most `padListBound` of them), through `PiopList`;
+  at most `padListBound` of them), through the phases' list forms
+  (`zerocheck_phase_of_list` and its three siblings);
 * Ligerito is `ligeritoPad_sound` for each rep's list, which the rep's families' witness lanes
   send into `padWits` (`padWit_mem_padWits`).
 -/
