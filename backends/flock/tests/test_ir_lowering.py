@@ -545,7 +545,7 @@ def test_frame_staging_carries_the_cut_words(tmp_path):
 def test_non_gemm_results_carry_no_gemm_target():
     from verity_numerical.bench import contract
 
-    base = dict(domain="finite", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
+    base = dict(domain="total", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
                 security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}}, software={"backend": {"name": "b", "commit": None},
                 "toolchain": {}}, preprocessing="none", retention="retained", instances=None)
     ok = contract.fingerprint(profile=None, K=None, subcircuit="rope-head/d64/neox-bf16", **base)
@@ -705,3 +705,20 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     outs, _ = C.evaluate(vals, len(cases))
     got = [sum(((outs["d"][i] >> t) & 1) << i for i in range(32)) for t in range(len(cases))]
     assert got == [P.evaluate(c[0], *c[1], *c[2]) & 0xFFFFFFFF for c in cases]
+
+
+def test_a_cells_domain_is_the_one_its_statement_proves():
+    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
+    An IR lowering asserts nothing, so every encoding is proven to give the IR's output: ``total``.  A pure unit asserts its
+    operands (and accumulator) finite: ``finite-only``, unless it is a total unit."""
+    from types import SimpleNamespace
+
+    from verity_flock import lowering as FL
+
+    low = REG.module("silu-mul").frame_lowering(TM.subcircuit("silu-mul", I=8192))
+    assert not low.circuit.asserts and low.domain == "total"
+    assert IL.Lowering.domain.fget(SimpleNamespace(circuit=SimpleNamespace(asserts=[("x not finite", 0)]))) == "finite-only"
+    for relation, pipe in FL.PIPES.items():
+        assert pipe.domain == ("finite-only" if FL._layout(pipe)[0].asserts else "total"), relation
+    assert {p.domain for p in FL.PIPES.values()} == {"finite-only"}
+    assert FL.Pipe("t", None, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16", total=True).domain == "total"
