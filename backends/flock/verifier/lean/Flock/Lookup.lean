@@ -12,12 +12,23 @@ import Flock.Net
 
 namespace Flock
 
-/-- The pinned MUFU tables: name, SHA-256 of the raw `u32` LE file, word count. -/
-def MUFU_TABLES : List (String × String × Nat) :=
-  [("rsq", "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246", 2 ^ 24),
-   ("sqrt", "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f", 2 ^ 24),
-   ("rcp", "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55", 2 ^ 23),
-   ("ex2", "b2a42c4a626469c986e33e43f16f41bde9d84de94347cd9ceaa1bd68d36bcdf0", 2 ^ 23)]
+/-- A pinned MUFU table: the raw `u32` LE file's SHA-512 (its bytes' check and archive key) and SHA-256 (the digest the
+circuit's META names), and its word count. -/
+structure MufuTable where
+  name : String
+  sha256 : String
+  sha512 : String
+  words : Nat
+
+def MUFU_TABLES : List MufuTable :=
+  [⟨"rsq", "218fc04d271773269367dedf4cff9ff719081b1218c3d67d248d8d6126040246",
+     "39f7b912bc25b913618d926725a18974af9eb246f6f36ce06ef63ffdb293d80bc222623c6d182d2c23e16f5ada2b8db9e7e6a53b3e42046763f7794ac3cef378", 2 ^ 24⟩,
+   ⟨"sqrt", "4e017678de306e0be8bed66193c2ebf09e9c60a9600cad56cd05bb7b6c3f266f",
+     "33d076106efaa955e6452200d45651a799628e76d1d1cc682168f464a03100b937bee08533761d9fa8f8a114cee2a32d322888d5f08fd320bfeb17805a5c2536", 2 ^ 24⟩,
+   ⟨"rcp", "c408381446132e07fa5581e930dc33fb790bea7ec4276ef3621e322df2492a55",
+     "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc", 2 ^ 23⟩,
+   ⟨"ex2", "b2a42c4a626469c986e33e43f16f41bde9d84de94347cd9ceaa1bd68d36bcdf0",
+     "5cb768c1725369ad905e725437463729d5b6054ca9adc498e755247e2ba848b510e3325e1c3fecad1242832aca5fa0afd463b16002a7f34050a7b377ed107877", 2 ^ 23⟩]
 
 namespace Lookup
 
@@ -78,6 +89,8 @@ def build (name : String) (table : ByteArray) (n lo bits : Nat) : V Net := do
   let useful := bd.a.size
   let unitLog := max 7 (log2ceil useful)
   if loM.size != nlo || nh != 2 ^ (n - lo) then throw s!"lookup {name}: decoder shape"
+  -- the product rows' B side, read from the table, is the low decoder's minterms, which precede them
+  Net.checkOrder s!"lookup {name}" 128 konst (fix bd.a) (fix bd.b)
   let a ← Sparse.ofRows (fix bd.a) (2 ^ unitLog)
   let b ← Sparse.ofRows (fix bd.b) (2 ^ unitLog)
   return { name, useful, constPos := konst, inGroups := #[⟨0, 1, #[n]⟩], outGroups := #[⟨out0 / 128, 1, #[bits]⟩],

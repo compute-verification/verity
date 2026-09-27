@@ -97,3 +97,153 @@ def test_unit_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(LEAN.parent / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _stream_uniform(n, stream, pos):
+    """`verity.randomness`'s exact reduction on a raw stream: (value, next position), or None when it runs out."""
+    from verity.randomness import uniform_from_words
+    w = (n.bit_length() + 64 + 7) // 8
+    at = [pos]
+
+    def words():
+        while at[0] + w <= len(stream):
+            x = int.from_bytes(stream[at[0]:at[0] + w], "big")
+            at[0] += w
+            yield x
+    try:
+        return uniform_from_words(n, words(), 8 * w), at[0]
+    except AssertionError:
+        return None
+
+
+def _ref_subset(k, n, stream):
+    swapped, pos = {}, 0
+    for i in range(k):
+        r = _stream_uniform(n - i, stream, pos)
+        if r is None:
+            return None
+        j, pos = i + r[0], r[1]
+        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+    return sorted(swapped.get(i, i) for i in range(k))
+
+
+def _ref_bernoulli(a, b, n, stream):
+    if a == 0:
+        return []
+    if a == b:
+        return list(range(n))
+    out, pos = [], 0
+    for u in range(n):
+        r = _stream_uniform(b, stream, pos)
+        if r is None:
+            return None
+        if r[0] < a:
+            out.append(u)
+        pos = r[1]
+    return out
+
+
+def _lean_draw(args):
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_unit_draw_samplers_are_the_exact_reduction():
+    import random
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    rng = random.Random(20260927)
+    for case in range(40):
+        n = rng.choice([1, 2, 3, 7, 100, 1000, 2 ** 20 + 3, 2 ** 40 - 1])
+        k = rng.randint(0, min(n, 12))
+        stream = bytearray(rng.randbytes(rng.choice([8, 64, 400])))
+        if case % 4 == 0 and len(stream) >= 16:
+            stream[:16] = b"\xff" * 16  # a first word above the largest multiple of n: rejected
+        want = _ref_subset(k, n, bytes(stream))
+        assert _lean_draw(["--population", str(n), "--k", str(k), "--stream", stream.hex()]) == want, (n, k, case)
+        a, b = sorted(rng.sample(range(0, 9), 2)) if case % 5 else (0, 3)
+        b = max(b, 1)
+        want = _ref_bernoulli(a, b, n % 50 + 1, bytes(stream))
+        assert _lean_draw(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
+    units = _lean_draw(["--population", "1000", "--k", "10"])
+    assert len(set(units)) == 10 and units == sorted(units) and all(0 <= u < 1000 for u in units)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_unit_draw_check(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    d = {"law": "subset", "population": 100, "k": 3, "units": [4, 17, 90]}
+    bern = {"law": "bernoulli", "population": 10, "p": "1/2", "units": [0, 3, 9]}
+    cases = [
+        ({"record": None, "statement": None, "instances": 5}, ""),
+        ({"record": d, "statement": d, "instances": 3}, ""),
+        ({"record": bern, "statement": bern, "instances": 3}, ""),
+        ({"record": d, "statement": None, "instances": 3}, "U1: the record keeps"),
+        ({"record": None, "statement": d, "instances": 3}, "U1: the statement carries"),
+        ({"record": d, "statement": {**d, "units": [4, 17, 91]}, "instances": 3}, "U1: the record's unit draw is not"),
+        ({"record": d, "statement": d, "instances": 4}, "U3:"),
+        ({"record": {**d, "units": [17, 4, 90]}, "statement": {**d, "units": [17, 4, 90]}, "instances": 3}, "U2: the drawn units"),
+        ({"record": {**d, "units": [4, 17, 100]}, "statement": {**d, "units": [4, 17, 100]}, "instances": 3}, "U2: the drawn units"),
+        ({"record": {**d, "k": 4}, "statement": {**d, "k": 4}, "instances": 3}, "U2: a subset draw of the wrong size"),
+        ({"record": {**d, "seed": "x"}, "statement": {**d, "seed": "x"}, "instances": 3}, "U2: unit_draw's keys"),
+        ({"record": {**bern, "p": "3/2"}, "statement": {**bern, "p": "3/2"}, "instances": 3}, "U2: unit_draw.p is not a probability"),
+        ({"record": {**bern, "p": "0/2"}, "statement": {**bern, "p": "0/2"}, "instances": 3}, "U2: a p = 0 draw"),
+        ({"record": {**d, "law": "beacon"}, "statement": {**d, "law": "beacon"}, "instances": 3}, "U2: unit_draw.law"),
+    ]
+    f = tmp_path / "cases.json"
+    f.write_text(json.dumps([c for c, _ in cases]))
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f)], capture_output=True, text=True, check=True)
+    got = [json.loads(line[10:]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK ")]
+    assert len(got) == len(cases)
+    for (case, want), g in zip(cases, got):
+        assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
+
+
+def _template_vectors():
+    try:
+        import verity
+    except ImportError:
+        return None
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
+def test_template_queries_agree_with_the_vectors(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
+def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
+    """A `flock-ir-unit/v2` expanded circuit: one input group of 2 bits (rows 2..127 input padding), one output group."""
+    return "\n".join([f"flock-ir-unit/v2 tiny {len(rows)} {len(rows) - 1} {ins} {outs}"] + rows) + "\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_net_parser_refuses_rows_out_of_order(tmp_path):
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
+    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    groups must fit their words, and input groups the input rows."""
+    base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
+
+    def edit(r, row):
+        return base[:r] + [row] + base[r + 1:]
+
+    cases = {
+        "ok": (_net(base), None),
+        "later": (_net(edit(128, "1 129 1 1")), "row 128 reads column 129, not an earlier one"),
+        "itself": (_net(edit(128, "1 128 1 1")), "row 128 reads column 128, not an earlier one"),
+        "padding": (_net(edit(128, "1 5 1 1")), "row 128 reads column 5, an input padding column"),
+        "padding-b": (_net(edit(129, "2 128 1 1 7")), "row 129 reads column 7, an input padding column"),
+        "overrun": (_net(base, ins="1 0 1 1 200"), "a port group's ports overrun its words"),
+    }
+    for name, (text, _) in cases.items():
+        (tmp_path / f"{name}.net").write_text(text)
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
+                         capture_output=True, text=True).stdout
+    got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
+    for name, (_, why) in cases.items():
+        assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
