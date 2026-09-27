@@ -60,9 +60,13 @@ def _bf16_add(nan):
 
 
 def _f32_div(C, a, b):
-    if not all(w.is_const() for w in b):
-        raise NotImplementedError("F32Div by a non-constant divisor has no piece yet")
-    return fp.f32_div_const(C, a, sum(w.c << i for i, w in enumerate(b)))
+    """``F32Div_v1``: a multiply by the exact reciprocal for a constant power-of-two divisor, else the divider."""
+    if all(w.is_const() for w in b):
+        k = sum(w.c << i for i, w in enumerate(b))
+        e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
+        if not m and 1 <= e <= 253:
+            return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)), ir_nan=True)
+    return fp.f32_div(C, a, b, ir_nan=True)
 
 
 #: primitive id -> piece(C, *operand words) -> output word
@@ -363,6 +367,9 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
 TC_PRIM = "AmpereBF16TcDot16_v1"
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.tc.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
+#: the FP8 step -> fp.tc_dot_e4m3's (groups, W, F): verity.ml.tc.total_fp8 HOPPER_E4M3_WGMMA_K32 (a GEMM's FP8 coordinate is walked,
+#: not unit-lowered)
+TC_STEPS_FP8 = {"HopperE4m3QgmmaDot32_v1": ((32,), 14, -139)}
 
 
 def tc_units(target, prim: str = TC_PRIM) -> Units:

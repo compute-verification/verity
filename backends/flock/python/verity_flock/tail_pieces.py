@@ -397,6 +397,62 @@ def bit_at(C, word, i):
     return [C.AND(_ult_const(C, i, W), cur[0])]
 
 
+# --- the other rows' scalars: FA3's inverse sum, the greedy argmax, the FP8 linear's quantizer, the MoE router ---------------
+
+def fa3_inv_sum(C, s):
+    """``Fa3InvSum_v1``: ``(sum == 0 || sum != sum) ? 0 : MUFU.RCP(sum)``."""
+    zero = OR(C, NOT(or_reduce(C, s[:31])), _is_nan(C, s))
+    return [C.AND(NOT(zero), b) for b in mufu_rcp(C, s)]
+
+
+def bf16_gt(C, a, b):
+    """``Bf16GtStrict_v1``: a > b on bf16 values (NaN false, +0 == -0)."""
+    _, mag_gt = sub(C, b[:15], a[:15], 15)
+    _, mag_lt = sub(C, a[:15], b[:15], 15)
+    both_zero = NOT(OR(C, or_reduce(C, a[:15]), or_reduce(C, b[:15])))
+    sa, sb = a[15], b[15]
+    gt = C.AND(C.AND(NOT(sa), NOT(sb)), mag_gt) ^ C.AND(C.AND(NOT(sa), sb), NOT(both_zero)) ^ C.AND(C.AND(sa, sb), mag_lt)
+    nan_a = C.AND(and_reduce(C, a[7:15]), or_reduce(C, a[:7]))
+    nan_b = C.AND(and_reduce(C, b[7:15]), or_reduce(C, b[:7]))
+    return [C.AND(C.AND(gt, NOT(nan_a)), NOT(nan_b))]
+
+
+def _fmaxmin(C, a, b, want_max: bool):
+    """PTX ``max.f32`` / ``min.f32``: a NaN operand yields the other, two NaNs 0x7FFFFFFF; ``max(+0, -0) = +0``,
+    ``min(+0, -0) = -0``."""
+    na, nb = _is_nan(C, a), _is_nan(C, b)
+    r = mux(C, f32_gt(C, b, a)[0] if want_max else f32_gt(C, a, b)[0], b, a)
+    both_zero = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
+    zs = C.AND(a[31], b[31]) if want_max else OR(C, a[31], b[31])
+    r = mux(C, both_zero, [ZERO] * 31 + [zs], r)
+    r = mux(C, na, b, mux(C, nb, a, r))
+    return mux(C, C.AND(na, nb), _c32(0x7FFFFFFF), r)
+
+
+def f32_sat(C, a):
+    """``F32Sat_v1`` (``cvt.sat.f32.f32``): clamp to [+0, 1]; NaN and every negative word (-0 included) give +0."""
+    r = mux(C, NOT(_ult_const(C, a[:31], ONE_F)), _c32(ONE_F), a)
+    keep = NOT(OR(C, a[31], _is_nan(C, a)))
+    return [C.AND(keep, x) for x in r[:31]] + [ZERO]
+
+
+def f32_to_e4m3_sat(C, x):
+    """``F32ToE4m3Sat_v1`` (``cvt.rn.satfinite.e4m3x2.f32``): RN-even onto the E4M3 grid (three fraction bits from 2^-6, steps of
+    2^-9 below), ±448 (0x7E) past it and for the infinities, 0x7F for NaN."""
+    s, e, m, e_max, e_zero, m_nz = _fields(C, x)
+    sig = m + [NOT(e_zero)]
+    normal = NOT(_ult_const(C, e, 121))                       # |x| >= 2^-6
+    amt = mux(C, normal, const_bits(19, 5),
+              mux(C, _ult_const(C, e, 116), const_bits(24, 5), sub(C, const_bits(140, 8), e, 8)[0][:5]))
+    y, sticky = fp.shr_sticky(C, sig, amt)                    # the kept bits and a guard bit
+    n = add(C, y[1:5] + [ZERO], [C.AND(y[0], OR(C, sticky, y[1]))], width=5)
+    base = [C.AND(normal, b) for b in sub(C, e, const_bits(121, 8), 8)[0][:4]]
+    enc = add(C, [ZERO] * 3 + base, n, width=8)
+    sat = OR(C, NOT(_ult_const(C, e, 136)), NOT(_ult_const(C, enc, 0x7F)))
+    out = mux(C, sat, const_bits(0x7E, 7), enc[:7]) + [s]
+    return mux(C, C.AND(e_max, m_nz), const_bits(0x7F, 8), out)
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -422,6 +478,21 @@ PIECES = {
     "F32Eq_v1": f32_eq,
     "BitNot_v1": lambda C, a: [NOT(a[0])],
     "BitOr_v1": lambda C, a, b: [OR(C, a[0], b[0])],
+    "Fa3InvSum_v1": fa3_inv_sum,
+    "Bf16GtStrict_v1": bf16_gt,
+    "SelectBf16_v1": lambda C, s, a, b: mux(C, s[0], a, b),
+    "F32Fabs_v1": lambda C, a: list(a[:31]) + [ZERO],
+    "F32Neg_v1": lambda C, a: fp.f32_neg(a),
+    "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
+    "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
+    "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
+    "F32Sub_v1": fp.f32_sub,
+    "F32FmaRm_v1": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True),
+    "F32Sat_v1": f32_sat,
+    "F32BitsShl23_v1": lambda C, a: [ZERO] * 23 + list(a[:9]),
+    "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],
+    "I32Eq_v1": lambda C, a, b: [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])],
+    "HopperE4m3QgmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:])),
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at}
