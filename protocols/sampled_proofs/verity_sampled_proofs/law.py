@@ -18,10 +18,11 @@ from fractions import Fraction
 from typing import Any
 
 from verity.randomness import Key, Part, derive
-from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+from verity.proofs.profile import Bernoulli, IntegrityProfile
 
 REPLAY, CHECK = "replay", "check"
-"""The profile's level names for the replay units and the verification units checked inside them."""
+"""The level names: the replay units (the profile's only level), and the verification units checked inside them (the
+second draw's)."""
 
 RU_DOMAIN = "verity/sampled-proofs/ru-sample/v1"
 VU_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
@@ -63,12 +64,21 @@ class TwoStageLaw:
             raise KeyError(f"the law has no stage for replay-unit class {cls!r}") from None
 
     def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, **facts: Any) -> IntegrityProfile:
-        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs: level
-        `REPLAY` drawn `Bernoulli(p)`, level `CHECK` drawn `Subset(k)`.  `facts` are the exhaustively checked fields
-        (`programs`, `prescribed`, `linked`, `covered`) and `drawn` ({`REPLAY`: RUs, `CHECK`: VUs} checked)."""
+        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs.
+
+        It is over the RUs, the only level committed before the first draw.  The interiors are committed after the RU
+        draw, so the prover picks how many VUs of a drawn RU are wrong after seeing it, and one is always enough; a
+        count of wrong VUs per RU is not a claim this lifecycle supports (`docs/audit-protocols.md` §3.3, pitfall 6).
+        A wrong RU is caught only when it is selected and a wrong VU is among the `k` checked, so it escapes with
+        probability at most 1 - p * k / n_v, independently across RUs: one level `REPLAY` drawn
+        `Bernoulli(p * k / n_v)` (`k = n_v` when every VU is checked).  It counts wrong RUs; a consumer reading work
+        in VUs charges `n_v` per wrong RU.  `facts` are the exhaustively checked fields (`programs`, `prescribed`,
+        `linked`, `covered`) and `drawn` ({`REPLAY`: RUs selected})."""
+        if n_v < 1:
+            raise ValueError("an RU holds at least one VU")
         stage = self.stage(cls)
-        draws = {REPLAY: Bernoulli(stage.p), CHECK: Subset(stage.checked(n_v))}
-        return IntegrityProfile((REPLAY, CHECK), (n_r, n_v), draws, delta, **facts)
+        rate = Fraction(stage.p) * Fraction(stage.checked(n_v), n_v)
+        return IntegrityProfile((REPLAY,), (n_r,), {REPLAY: Bernoulli(rate)}, delta, **facts)
 
     def to_json(self) -> dict:
         return {name: stage.to_json() for name, stage in sorted(self.stages.items())}
