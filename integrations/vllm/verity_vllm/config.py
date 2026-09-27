@@ -286,6 +286,9 @@ class CommitConfig:
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
                             help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
+    serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
+                                      help="opt in, never the record: the Commit also commits every RoPE head in M0's serving row format "
+                                           "(verity_vllm.commit.serving_rows) over this partition file, fixed before serving")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
                            help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
                                 "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
