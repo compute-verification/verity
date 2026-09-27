@@ -509,3 +509,66 @@ If real concurrency is ever needed:
   - **Lean.** About 3,000–5,000 lines on top of the Goldreich–Kahan simulator. Pass–Tseng–Venkitasubramaniam's
     simplified analysis is the one to formalize.
   - Exactly one verifier does not simplify it.
+
+## 12. The audit layer: the integrity profile
+
+`docs/audit-protocols.md` §4 is the plan. This section records how the Lean follows it and where it departs.
+
+### 12.1 Why strategies, not `value`
+
+The plan states `SessionSound` with `value`, the optimal prover's success. `table_sound_exec` bounds `prob … σ` for every
+strategy instead. The two differ: `value` can exceed every strategy's `prob` when some branch has no strategy at all (a
+`send` of an empty type), so a strategy-level bound does not give a `value` bound. The audit theorems therefore take
+per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`: `prob_mono`, `prob_or_le`, `prob_map`). A
+randomized prover is a mixture of deterministic ones, so nothing is lost.
+
+### 12.2 Knowledge soundness and the link term, not soundness
+
+Halevi–Micali leaves open to essentially any value, so "the committed values" exist only through extraction (§3,
+ASSUMPTIONS.md §7). The one-stage theorem is abstract over an `Analysis`:
+
+- the committed transcript, a function of the prover's state at registration;
+- for each drawn unit and session state, two failure events: extraction fails (`ksFail`), or it succeeds and disagrees with
+  the committed transcript on the unit's wires (`linkFail`);
+- `cover`: a wrong unit fails one way or the other.
+
+For a partition, `cover` is proved (`Partition.analysis`): an extracted opening that satisfies the unit and agrees with
+`X` on its committed inputs and outputs makes the unit correct in `X` (`correct_congr`).
+
+**The proof** of `audit_le` has three cases. Fix the prover's registration `R` and state `τ`, and so `X`. For each draw
+`S`:
+
+- if `S` misses `wrong(X)`, bound by the indicator of the event;
+- otherwise pick a wrong drawn unit, a function of `(R, τ, S)` fixed before the session's first coin, and apply `cover`.
+
+Averaging over `S` gives the sampling term plus the two hypotheses' averages. This is lifetime-soundness §3's first-hit
+charge. The hypotheses quantify over every such picking rule, the weakest uniform form that the composition uses.
+
+**The oracle layer is a special case** (`Partition.oracle`): the registration is the transcript and extraction returns
+it, so `ksFail` is "the unit is wrong", `SessionSound` gives `KnowledgeSound`, and the link term is zero.
+
+### 12.3 Transcripts and partitions
+
+- **Transcripts are total** (`Fin C.N → Bool`); only committed entries are read. The plan's subtype
+  `P.committed → Bool` would need transport at every restriction. With total transcripts, a coarse transcript is the fine
+  one, and variant (a)'s coarse bound is one inequality (`Refines.card_wrong_le`).
+- **The committed set is derived:** inputs, outputs, and every gate a gate of another unit reads (`Partition.committed`).
+- **One evaluator.** `Circuit.run` evaluates with some gates fixed. The circuit's evaluation fixes the inputs, and a
+  unit's local evaluation fixes every gate outside the unit to the transcript. `compose`, `compose_cone`, `correct_congr`
+  and `Refines.localEval_eq` are strong inductions over gate indices, using only `topo`.
+
+### 12.4 Two-stage and the laws
+
+- **The second-stage coins** are drawn for every coarse unit, `∀ u, (L₂ u).Ω`, and only the drawn units' coordinates are
+  used. That has the same distribution on what matters as coins for the drawn units only, and it avoids types that
+  depend on the draw.
+- **The effective escape** takes, inside each drawn wrong coarse unit, the largest miss probability of a fine unit in it.
+  The prover chooses the interior after the first draw, so it chooses which fine unit is wrong. The fine units' draws in
+  different coarse units are independent (`prCoin_pi_forall`).
+- **Minimax** (`subset_minimax`) follows the plan's argument. First, averaging `escape B` over uniform `K`-sets gives
+  `E[C(n − |S|, K)]/C(n, K)` for any law (`avg_escape_subsets`). Second, Jensen's step uses the supporting line of
+  `s ↦ C(n − s, K)` at `k`, in `ℕ` (`choose_support`, from falling drops by Pascal's rule), rather than convexity over
+  `ℝ`, where `C(n − s, K)` is not convex.
+- **To write:** the (b2) closed form with a Bernoulli first stage, and tightness on NOT chains (the plan's `notChains`).
+  Also the two counterexamples: the `m`-dependent reading of `TwoStageLaw.profile`, and fine values chosen after the fine
+  draw.

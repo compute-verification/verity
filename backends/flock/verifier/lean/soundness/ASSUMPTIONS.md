@@ -292,3 +292,65 @@ The weights are committed once and every later proof opens that root. The analys
    honest-verifier ZK lemma, then single-rewind simulation of one batched session.
 4. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
+
+## 9. The audit layer (`Audit/`)
+
+The sampled audit's guarantee, the integrity profile of `docs/audit-protocols.md` §2, over any Boolean circuit, any
+partition, any draw law, and any per-unit proof system. The derivations and the deviations from that plan are in
+DESIGN.md §12. Everything here is proved; the per-unit proof system enters only through named hypotheses.
+
+**The model.** The prover registers `R` (its roots); the verifier draws units from its own randomness after registration;
+one batched session proves the drawn units (`audit`). The **committed transcript** `X` is an analysis function of the
+prover's state at registration (its registration and its session strategy for every draw), so the draw is independent of
+its wrong units; nobody computes it. A unit is **wrong** in `X` when its committed outputs differ from its gates applied
+to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy (`Game.prob … σ`), the form
+`table_sound_exec` takes.
+
+**Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`):
+
+| Hypothesis | Term | Meaning | To be discharged by |
+|---|---|---|---|
+| `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (§1.3), after Jensen over the prover's states |
+| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | the link theorem, to write (flock-soundness review of the extraction analysis, §4d) |
+| `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (§1.3); zero at the oracle layer (`RejectsBadInputs`) |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | `table_sound_exec`, projected from the batched session to the first wrong drawn unit's table (to write) |
+
+Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
+before the session's first coin, not bounds state by state.
+
+**Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the draw misses $B$:
+
+- `audit_le`: $\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset] +
+  \varepsilon_{ks} + \delta_{link}$ for every event $E$ on the committed transcript and the draw;
+- `audit_profile`: $\Pr[\text{accept} \wedge \mathrm{wrong}(X) \in \mathcal B] \le \sup_{B \in \mathcal B} e_L(B) +
+  \varepsilon_{ks} + \delta_{link}$;
+- `audit_count`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks} + \delta_{link}$;
+- `audit_drawn`: drawn units are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
+  the draw;
+- `Partition.audit_cone`: for committed wires $T$ fixed before the draw, $\Pr[\text{accept} \wedge X_T \ne
+  \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
+- `Partition.audit_cone_count`: at least $j$ wrong units in a cone;
+- `Partition.audit_covered`: a cone inside the draw, for wires chosen even after the draw: $\varepsilon_{ks} +
+  \delta_{link} + \delta_{in}$;
+- `Partition.oracle_count`, `oracle_profile`, `oracle_cone`: the same at the oracle layer, from `SessionSound ε`, with
+  $\delta_{link} = \delta_{in} = 0$.
+
+**Theorems, laws** (`Audit/Law.lean`): `subset_escape`, the uniform $k$-subset's escape
+$\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_minimax`, **uniform is
+optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$.
+
+**Theorems, two-stage** (`Audit/TwoStage.lean`):
+
+- `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective escape
+  $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
+  $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
+- `effEscape_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
+- `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
+- `Partition.Refines.exists_wrong_fine`: a wrong coarse unit has a wrong fine unit under every interior, the lemma
+  behind (b).
+
+**Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
+evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
+
+**Not yet:** the (b2) closed form, tightness, and the two insecurity counterexamples (DESIGN.md §12.4); the Flock
+instantiation of `SessionSound`, which needs the batched session's projection to one table.
