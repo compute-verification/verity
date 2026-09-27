@@ -436,3 +436,18 @@ def test_the_co_resident_pair_is_still_refused():
     a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"}, bridge)
     assert any("share boot_id k" in x for x in a["problems"]) and any("host bridge" in x for x in a["problems"])
     assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
+
+
+def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):
+    from verity_numerical.bench import placement as PL
+    monkeypatch.delenv("RUNPOD_POD_ID", raising=False)
+    env = tmp_path / "environ"
+    env.write_bytes(b"PATH=/bin\0RUNPOD_POD_ID=abc123\0")
+    real = PL.Path
+
+    def fake(p, *a):
+        return real(env) if str(p) == "/proc/1/environ" else real(p, *a)
+    monkeypatch.setattr(PL, "Path", fake)
+    assert PL._pod_env("RUNPOD_POD_ID") == "abc123"
+    monkeypatch.setenv("RUNPOD_POD_ID", "fromenv")
+    assert PL._pod_env("RUNPOD_POD_ID") == "fromenv"
