@@ -1162,6 +1162,104 @@ pub struct Stmt {
     pub identity: Value,
 }
 
+/// The strongly connected components of the per-VU slot graph (`(net, slot)`, an edge from each wire's source slot to its
+/// destination slot, the rows' circuits left out), sources first, each as its levels.
+fn slot_components(c: &Composite, wires: &[&Wire]) -> Vec<Vec<Vec<(usize, usize)>>> {
+    let nodes: Vec<(usize, usize)> = (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net)
+        .flat_map(|n| (0..c.per_vu[n]).map(move |s| (n, s))).collect();
+    let id: BTreeMap<(usize, usize), usize> = nodes.iter().enumerate().map(|(i, &x)| (x, i)).collect();
+    let mut adj = vec![Vec::new(); nodes.len()];
+    for w in wires {
+        if let (Some(&a), Some(&b)) = (id.get(&(w.src.0, w.src.1)), id.get(&(w.dst.0, w.dst.1))) {
+            adj[a].push(b);
+        }
+    }
+    // Tarjan, iterative: components come out sinks first
+    let (n, mut index, mut next) = (nodes.len(), vec![usize::MAX; nodes.len()], 0);
+    let (mut low, mut on, mut stack, mut comps) = (vec![0; n], vec![false; n], Vec::new(), Vec::new());
+    for root in 0..n {
+        if index[root] != usize::MAX {
+            continue;
+        }
+        let mut call: Vec<(usize, usize)> = vec![(root, 0)];
+        while let Some(&mut (v, ref mut e)) = call.last_mut() {
+            if *e == 0 && index[v] == usize::MAX {
+                (index[v], low[v]) = (next, next);
+                next += 1;
+                stack.push(v);
+                on[v] = true;
+            }
+            if let Some(&u) = adj[v].get(*e) {
+                *e += 1;
+                if index[u] == usize::MAX {
+                    call.push((u, 0));
+                } else if on[u] {
+                    low[v] = low[v].min(index[u]);
+                }
+                continue;
+            }
+            call.pop();
+            if let Some(&(p, _)) = call.last() {
+                low[p] = low[p].min(low[v]);
+            }
+            if low[v] == index[v] {
+                let mut comp = Vec::new();
+                while let Some(x) = stack.pop() {
+                    on[x] = false;
+                    comp.push(x);
+                    if x == v {
+                        break;
+                    }
+                }
+                comps.push(comp);
+            }
+        }
+    }
+    comps.reverse();
+    // inside a component, its slots in dependency order, by level: the reverse postorder of a depth-first walk over its own
+    // edges, a slot's level one past its forward predecessors' (a cycle's closing wires, backward in that order, are left for a
+    // second sweep); a level's slots have no edge between them and are evaluated together
+    comps.into_iter().map(|mut comp| {
+        comp.sort_unstable();
+        let inside: std::collections::BTreeSet<usize> = comp.iter().copied().collect();
+        let (mut seen, mut post) = (std::collections::BTreeSet::new(), Vec::with_capacity(comp.len()));
+        for &r in &comp {
+            if !seen.insert(r) {
+                continue;
+            }
+            let mut walk: Vec<(usize, usize)> = vec![(r, 0)];
+            while let Some(&mut (v, ref mut e)) = walk.last_mut() {
+                if let Some(&u) = adj[v].get(*e) {
+                    *e += 1;
+                    if inside.contains(&u) && seen.insert(u) {
+                        walk.push((u, 0));
+                    }
+                    continue;
+                }
+                post.push(v);
+                walk.pop();
+            }
+        }
+        post.reverse();
+        let pos: BTreeMap<usize, usize> = post.iter().enumerate().map(|(i, &v)| (v, i)).collect();
+        let mut level: BTreeMap<usize, usize> = BTreeMap::new();
+        for &v in &post {
+            let l = *level.entry(v).or_insert(0);
+            for &u in &adj[v] {
+                if pos.get(&u).is_some_and(|&p| p > pos[&v]) {
+                    let e = level.entry(u).or_insert(0);
+                    *e = (*e).max(l + 1);
+                }
+            }
+        }
+        let mut levels: Vec<Vec<(usize, usize)>> = vec![Vec::new(); level.values().max().map_or(0, |m| m + 1)];
+        for &v in &post {
+            levels[level[&v]].push(nodes[v]);
+        }
+        levels
+    }).collect()
+}
+
 fn bit(w: &F128, t: usize) -> u64 {
     (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1
 }
@@ -1435,61 +1533,70 @@ impl Stmt {
         if wires.is_empty() {
             return ins;
         }
-        // slot by slot: a round re-evaluates only the slots whose inputs changed (a chain of units, GEMM's accumulator, costs one
-        // pass rather than one round of every slot per link)
-        let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
-        let mut dirty: Vec<Vec<bool>> = (0..c.nets.len()).map(|n| vec![!row_net(n); ins[n].len()]).collect();
+        // the slots in the per-VU wire graph's strongly connected components, sources first: a chain of units (GEMM's
+        // accumulator, attention's steps) evaluates each slot once; a cycle (a unit that reads its own tail between its two
+        // passes) re-evaluates, inside its component, only the slots whose inputs changed
+        let mut outs: Vec<Vec<Vec<F128>>> = (0..c.nets.len()).map(|n| vec![Vec::new(); ins[n].len()]).collect();
         let fixed = unit_outs.is_some();
         if let Some(u) = unit_outs {
             outs[c.unit_net] = u;
-            dirty[c.unit_net].iter_mut().for_each(|d| *d = false);
         }
         let cap = ins.iter().map(|x| x.len()).sum::<usize>() + 64;
-        for _round in 0..cap {
-            for n in 0..c.nets.len() {
-                if fixed && n == c.unit_net {
-                    continue;
-                }
-                let todo: Vec<usize> = (0..ins[n].len()).filter(|&x| dirty[n][x]).collect();
-                if todo.is_empty() {
-                    continue;
-                }
-                let sub: Vec<Vec<F128>> = todo.iter().map(|&x| ins[n][x].clone()).collect();
-                let got = self.eval_outputs(n, net_of(n), &sub);
-                if outs[n].is_empty() {
-                    outs[n] = vec![Vec::new(); ins[n].len()];
-                }
-                for (&x, o) in todo.iter().zip(got) {
-                    outs[n][x] = o;
-                    dirty[n][x] = false;
-                }
+        for levels in slot_components(c, &wires) {
+            let comp: std::collections::BTreeSet<(usize, usize)> = levels.iter().flatten().copied().collect();
+            let from = |n: usize, s: usize| wires.iter().copied().filter(move |w| (w.src.0, w.src.1) == (n, s));
+            if comp.iter().all(|&(n, s)| from(n, s).next().is_none()) {
+                continue;
             }
-            let mut changed = false;
-            for w in &wires {
-                let (dn, sn) = (w.dst.0, w.src.0);
-                let (dcol, width) = port_cols(&net_of(dn).in_groups)[w.dst.2];
-                let scol = port_cols(&net_of(sn).out_groups)[w.src.2].0 - net_of(sn).out_cols[0] * WORD;
-                for b in 0..nb {
-                    for g in 0..c.g {
-                        let xs = b * count(sn) + g * c.per_vu[sn] + w.src.1;
-                        let xd = b * count(dn) + g * c.per_vu[dn] + w.dst.1;
-                        for t in 0..width {
-                            let v = bit(&outs[sn][xs][(scol + t) / WORD], (scol + t) % WORD);
-                            let d = &mut ins[dn][xd][(dcol + t) / WORD];
-                            if bit(d, (dcol + t) % WORD) != v {
-                                flip_bit(d, (dcol + t) % WORD);
-                                changed = true;
-                                dirty[dn][xd] = true;
+            let instances = |n: usize, s: usize| (0..nb).flat_map(move |b| (0..c.g).map(move |g| b * count(n) + g * c.per_vu[n] + s));
+            let mut dirty: std::collections::BTreeSet<(usize, usize)> = comp.iter().flat_map(|&(n, s)| instances(n, s).map(move |x| (n, x))).collect();
+            // Gauss-Seidel over the component's levels: a level's new outputs reach the slots it feeds before they are evaluated,
+            // so a chain settles in one sweep and a cycle's closing wires in one more
+            for sweep in 0.. {
+                if dirty.is_empty() {
+                    break;
+                }
+                assert!(sweep < cap, "the slots' wires did not converge (a cycle through a slot's own output?)");
+                for level in &levels {
+                    let pending = &dirty;
+                    let todo: Vec<(usize, usize, usize)> = level.iter()
+                        .flat_map(|&(n, s)| instances(n, s).filter(move |x| pending.contains(&(n, *x))).map(move |x| (n, s, x))).collect();
+                    for &(n, _, x) in &todo {
+                        dirty.remove(&(n, x));
+                    }
+                    for n in todo.iter().map(|t| t.0).collect::<std::collections::BTreeSet<_>>() {
+                        if fixed && n == c.unit_net {
+                            continue;
+                        }
+                        let xs: Vec<usize> = todo.iter().filter(|t| t.0 == n).map(|t| t.2).collect();
+                        let sub: Vec<Vec<F128>> = xs.iter().map(|&x| ins[n][x].clone()).collect();
+                        for (&x, o) in xs.iter().zip(self.eval_outputs(n, net_of(n), &sub)) {
+                            outs[n][x] = o;
+                        }
+                    }
+                    for &(n, s, xs) in &todo {
+                        for w in from(n, s) {
+                            let dn = w.dst.0;
+                            let (dcol, width) = port_cols(&net_of(dn).in_groups)[w.dst.2];
+                            let scol = port_cols(&net_of(n).out_groups)[w.src.2].0 - net_of(n).out_cols[0] * WORD;
+                            let (b, g) = (xs / count(n), xs % count(n) / c.per_vu[n]);
+                            let xd = b * count(dn) + g * c.per_vu[dn] + w.dst.1;
+                            for t in 0..width {
+                                let v = bit(&outs[n][xs][(scol + t) / WORD], (scol + t) % WORD);
+                                let d = &mut ins[dn][xd][(dcol + t) / WORD];
+                                if bit(d, (dcol + t) % WORD) != v {
+                                    flip_bit(d, (dcol + t) % WORD);
+                                    if comp.contains(&(dn, w.dst.1)) {
+                                        dirty.insert((dn, xd));
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-            if !changed {
-                return ins;
-            }
         }
-        panic!("the slots' wires did not converge in 64 rounds (a cycle through a slot's own output?)")
+        ins
     }
 
     /// `(z, a, b, z_lincheck)`: every block's compressions (`comps(b)`), every slot of every circuit from its input words `ins`
