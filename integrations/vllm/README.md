@@ -80,7 +80,8 @@ required, name a model.
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  The norm-scale
 tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so are the guarded-max tap (`GUARDED_MAX_TAP=1`,
 `query/guarded_max.py`: the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` / `pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write
-`GuardNegInfZero(m)` into word 3 of the stream's ROW entry), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
+`GuardNegInfZero(m)` into word 3 of the stream's ROW entry, and each key block's `max * scale` into the MS class appended after
+FIN (`VERITY_MAT_SRC=123`), which lengthens every stream identity of the manifest), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
 router's committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a
 TP rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change).
 Never: decide what is required; never a model-name list.

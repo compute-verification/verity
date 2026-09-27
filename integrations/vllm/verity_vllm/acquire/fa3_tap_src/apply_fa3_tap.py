@@ -8,9 +8,12 @@ Idempotent text patches (each guarded by a marker), all under `#if VERITY_TAP ==
 the pinned kernel up to the (unused) trailing `vt` parameter:
  1. copies verity_tap_params.h / verity_tap_fa3.h into hopper/;
  2. softmax.h: `Softmax` gains `tap_sum, tap_inv_sum`, stashed in `finalize` (the FA3 epilogue overwrites row_sum with the lse);
+ 2b. softmax.h, only with `VERITY_MAT_SRC & 64` (the MS class): `Softmax::tap_max_scaled`, kept by `scale_apply_exp2_ms` (the pinned
+    `scale_apply_exp2`'s arithmetic, plus each row's `max_scaled`, the register its exp2 FMAs read), which online_softmax then calls;
  3. mainloop_fwd_sm90_tma_gmma_ws.hpp: Arguments/Params gain a trailing `Verity_tap vt`; `mma()`'s IntraWGOverlap path (the only
     schedule of the bf16 hdim 64/128 tiles) materialises S (after masking), P + row state (after online_softmax), rP (after the bf16
     convert), acc_o after each P.V wgmma completes (plane index = the block whose P.V it was) and the epilogue after finalize;
+ 3b. the same P site stores `tap_max_scaled` into the MS class (`VERITY_FA3_MS`, only with `VERITY_MAT_SRC & 64`);
  4. flash_fwd_launch_template.h: arms the tap from g_verity_tap only when the selected kernel is exactly the declared tile
     (kBlockN == BN, kHeadDim == D), PackGQA, !Split/local/softcap/appendKV/Qv/FP8, and the declared caps cover the launch; else
     g_verity_tap_skipped++ and nothing is written;
@@ -61,6 +64,44 @@ patch(os.path.join(hop, "softmax.h"), [
      "                sum *= sum_scale;\n            }\n            row_sum(mi) = (sum == 0.f || sum != sum) ? -INFINITY : row_max(mi) * (softmax_scale_log2 * float(M_LN2)) + __logf(sum);\n"
      "        }\n        return scores_scale;\n    };\n\n    __forceinline__ __device__ TensorT finalize_aux(", 1),
 ], "tap_inv_sum")
+
+# 2b. softmax.h, the MS class (compiled only with VERITY_MAT_SRC & 64): `Softmax::tap_max_scaled` and `scale_apply_exp2_ms`, the pinned
+# `scale_apply_exp2` with the same arithmetic that also keeps each row's max_scaled (the register its exp2 FMAs read); online_softmax calls
+# it only under the bit
+MS_ON = "#if defined(VERITY_MAT_SRC) && (VERITY_MAT_SRC & 64)\n"
+patch(os.path.join(hop, "softmax.h"), [
+    ("    TensorT row_max, row_sum;\n",
+     "    TensorT row_max, row_sum;\n" + MS_ON + "    TensorT tap_max_scaled;   // [verity MS] each row's max * scale this block's exp2 FMAs read\n#endif\n", 1),
+    ("template <int kNRows, int Max_offset=0>\nstruct Softmax {\n", MS_ON + r'''// [verity MS] scale_apply_exp2 with the same arithmetic that also keeps each row's max_scaled, the register its exp2 FMAs read, in `ms`
+template <bool Scale_max=true, bool Check_inf=true, int Max_offset=0,
+        typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
+__forceinline__ __device__ void scale_apply_exp2_ms(Tensor<Engine0, Layout0> &tensor, Tensor<Engine1, Layout1> const &max, const float scale,
+                                                    Tensor<Engine2, Layout2> &ms) {
+    static constexpr float max_offset = float(Max_offset);
+    static_assert(Layout0::rank == 2, "Only support 2D Tensor");
+    static_assert(Layout1::rank == 1, "Only support 1D Tensor");
+    CUTE_STATIC_ASSERT_V(size<0>(max) == size<0>(tensor));
+    #pragma unroll
+    for (int mi = 0; mi < size<0>(tensor); ++mi) {
+        const float max_scaled = Check_inf
+            ? (max(mi) == -INFINITY ? 0.f : (!Scale_max ? max(mi) : max(mi) * scale) - max_offset)
+            : (!Scale_max ? max(mi) : max(mi) * scale) - max_offset;
+        ms(mi) = max_scaled;
+        #pragma unroll
+        for (int ni = 0; ni < size<1>(tensor); ++ni)  {
+            tensor(mi, ni) = exp2f(tensor(mi, ni) * scale - max_scaled);
+        }
+    }
+}
+#endif
+
+template <int kNRows, int Max_offset=0>
+struct Softmax {
+''', 1),
+    ("        flash::template scale_apply_exp2</*Scale_max=*/true, Check_inf, Max_offset>(scores, row_max, softmax_scale_log2);\n",
+     MS_ON + "        flash::template scale_apply_exp2_ms</*Scale_max=*/true, Check_inf, Max_offset>(scores, row_max, softmax_scale_log2, tap_max_scaled);\n"
+     "#else\n        flash::template scale_apply_exp2</*Scale_max=*/true, Check_inf, Max_offset>(scores, row_max, softmax_scale_log2);\n#endif\n", 1),
+], "scale_apply_exp2_ms")
 
 # 3. mainloop
 ml = os.path.join(hop, "mainloop_fwd_sm90_tma_gmma_ws.hpp")
@@ -132,6 +173,16 @@ if "Verity_mat_ctx_sm90" not in s:
     print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: patched")
 else:
     print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: already patched")
+
+# 3b. mainloop, the MS class: VERITY_FA3_P also stores softmax.tap_max_scaled (VERITY_MAT_SRC & 64)
+patch(ml, [
+    ("        if constexpr (VERITY_MAT_SRC & 8) { vmat.rowstat(softmax.row_max, sc_, softmax.row_sum, (nb), vt_step); } \\\n        vt_step++; )\n",
+     "        if constexpr (VERITY_MAT_SRC & 8) { vmat.rowstat(softmax.row_max, sc_, softmax.row_sum, (nb), vt_step); } \\\n"
+     "        VERITY_FA3_MS(nb) \\\n        vt_step++; )\n", 1),
+    ("  #define VERITY_FA3_FIN() VERITY_MAT(if constexpr (VERITY_MAT_SRC & 32) { vmat.fin(softmax.tap_sum, softmax.tap_inv_sum, softmax.row_max, softmax.row_sum); })\n",
+     "  #define VERITY_FA3_FIN() VERITY_MAT(if constexpr (VERITY_MAT_SRC & 32) { vmat.fin(softmax.tap_sum, softmax.tap_inv_sum, softmax.row_max, softmax.row_sum); })\n"
+     "  #if (VERITY_MAT_SRC & 64)\n  #define VERITY_FA3_MS(nb) vmat.ms(softmax.tap_max_scaled, (nb));\n  #else\n  #define VERITY_FA3_MS(nb)\n  #endif\n", 1),
+], "VERITY_FA3_MS")
 
 # 4. launch template
 patch(os.path.join(hop, "flash_fwd_launch_template.h"), [
