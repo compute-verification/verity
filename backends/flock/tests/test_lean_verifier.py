@@ -232,6 +232,29 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+def _qword_vector_file():
+    try:
+        import verity
+        from verity.ir.codec import decode_program  # noqa: F401
+    except ImportError:
+        return None
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "qword_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
+                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+def test_qword_cuts_agree_with_core_verify(tmp_path):
+    """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
+    `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
+    assert r["cut_refusals"] == 3 and r["cuts"] == 50, r
+
+
 def _qword_vectors():
     try:
         import verity.ir.partition_object  # noqa: F401

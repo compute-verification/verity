@@ -519,7 +519,8 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
 
 /-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
 (`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
-template. The width rule on each Call's cut is the partition checker's, not checked here. -/
+template; and every Call's cut holds the partition invariant and the width rule on its whole graph (`Extract.checkCalls`, as
+`partition_object.verify` checks them). -/
 def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let ps := (q.getObjVal? "params").toOption.getD Json.null
@@ -532,8 +533,11 @@ def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices :
     | .ok cs => pure cs
     | .error e => throw s!"partition: {e}"
   let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  let checked ← Extract.checkCalls P calls X W
+  if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
+    throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
   match Extract.claimedUnits P calls t indices with
-  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); the width rule on each Call's cut is not checked here"
+  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule"
   | .error e => throw s!"partition: {e}"
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding

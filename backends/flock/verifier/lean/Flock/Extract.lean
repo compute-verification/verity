@@ -119,13 +119,18 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
     if !free[x]! && !external[x]! && !os.isEmpty && os.all (fun o => o ≥ 0 && const[o.toNat]!) then
       const := const.set! x true
       free := free.set! x true
-  -- recomputes: one token per value; a structure value by its key, a computing value by its first gate
+  -- recomputes: one token per value; a structure value by its key, a computing value by its first gate. A computing
+  -- value's key is its primitive and its operands' tokens; the first gates are held by the key's hash, and a gate matches
+  -- one only when their keys are equal (recomputed from its operands), so the tokens are exact.
   let mut tok : Array Int := Array.mkEmpty n
   let mut sKeys : Std.HashMap (Array Int) Int := {}
-  let mut cKeys : Std.HashMap (Array Int) Nat := {}
+  let mut cFirst : Std.HashMap UInt64 Nat := {}
+  let mut cMore : Std.HashMap UInt64 (Array Nat) := {}
   let mut dup : Array (Nat × Nat) := #[]
   for x in [0:n] do
-    let key := (opsOf x).foldl (fun acc o => acc.push (if o < 0 then o else tok[o.toNat]!)) #[(prim[x]! : Int)]
+    let keyOf := fun (t : Array Int) (y : Nat) =>
+      (opsOf y).foldl (fun acc o => acc.push (if o < 0 then o else t[o.toNat]!)) #[(prim[y]! : Int)]
+    let key := keyOf tok x
     if free[x]! then
       match sKeys[key]? with
       | some t => tok := tok.push t
@@ -133,12 +138,18 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
         sKeys := sKeys.insert key x
         tok := tok.push x
     else if wide[x]! then tok := tok.push x
-    else match cKeys[key]? with
+    else
+      let h := hash key
+      let firsts := match cFirst[h]? with
+        | some f => #[f] ++ cMore.getD h #[]
+        | none => #[]
+      match firsts.find? (fun f => keyOf tok f == key) with
       | some f =>
         dup := dup.push (x, f)
         tok := tok.push tok[f]!
       | none =>
-        cKeys := cKeys.insert key x
+        if firsts.isEmpty then cFirst := cFirst.insert h x
+        else cMore := cMore.insert h ((cMore.getD h #[]).push x)
         tok := tok.push x
   -- reads through structure: a structure gate's sources are its operands, structure replaced by its sources
   let mut srcs : Array (Array Int) := Array.replicate n #[]
@@ -163,7 +174,8 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
       for u in us do
         if seen.contains u then continue
         seen := seen.insert u
-        if u < 0 then inputReads := inputReads.push ((-1 - u).toNat, idx[x]!)
+        if u < 0 then
+          if full then inputReads := inputReads.push ((-1 - u).toNat, idx[x]!)
         else
           src := src.push idx[u.toNat]!
           dst := dst.push idx[x]!
@@ -247,6 +259,39 @@ def evaluate (P : Prog) (X : Nat) : V (Array (Nat × Nat × Qword.DCut)) := do
     memo := memo'
     out := out.push (k, node.fn, c)
   return out
+
+/-- One Definition's cut against its whole Call graph: `check_cut`'s failing codes and too-wide units `(unit, ob, og)`. -/
+structure CutCheck where
+  codes : List String
+  wide : Array (Nat × Nat × Nat)
+  /-- the graph's computing gates and recomputed pairs, the derived committed set's size, the widest unit boundary and the
+  boundary gates in all -/
+  stats : Array Nat := #[]
+  deriving Inhabited
+
+def CutCheck.toJson (r : CutCheck) : Json :=
+  Json.mkObj [("codes", Lean.toJson r.codes.toArray),
+    ("wide", Json.arr ((r.wide.extract 0 64).map fun (u, b, c) => Lean.toJson #[u, b, c])), ("stats", Lean.toJson r.stats)]
+
+/-- `partition_object._verify_calls` without served commits: each Definition's cut, once, checked on its Call's whole graph
+(`check_cut` with the derived committed set and the width rule `(X, W, 0)`), in first-Call order. The graph is built without
+its input table: with the derived committed set, the Call's parameters (input gates) can fail none of the invariant's
+clauses, since every read of one and every returned one is committed, and their count cancels from the gate count. -/
+def checkCalls (P : Prog) (calls : Array (Nat × Nat × Qword.DCut)) (X W : Nat) : V (Array (Nat × CutCheck)) := do
+  let mut done : Array (Nat × CutCheck) := #[]
+  for (_, d, c) in calls do
+    if done.any (·.1 == d) then continue
+    let gr ← graph P d (full := false)
+    let (codes, wide) := Partition.checkCut gr.g c.owner none (some (X, W, 0))
+    let stats := if c.owner.size != gr.g.n then #[] else
+      let (ob, og) := Partition.boundaryWidths gr.g c.owner
+      #[gr.g.n, gr.g.recomputed.size, (Partition.derivedCommitted gr.g c.owner).size, ob.foldl max 0, og.foldl (· + ·) 0]
+    done := done.push (d, { codes, wide, stats })
+  return done
+
+/-- `verify`'s `cut`: every Call whose Definition's cut fails, in Call order, with that cut's codes. -/
+def cutFailures (calls : Array (Nat × Nat × Qword.DCut)) (checked : Array (Nat × CutCheck)) : Array (Nat × CutCheck) :=
+  calls.filterMap fun (k, d, _) => (checked.find? (·.1 == d)).bind fun (_, r) => if r.codes.isEmpty then none else some (k, r)
 
 /-- The claimed units of a Flock statement over template `t`, against the Program's evaluated units: each index lies in the
 population and is one whole activation of `t`: the innermost Definition on its `locate` path is `t` (by descriptor id),

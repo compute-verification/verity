@@ -444,14 +444,17 @@ def graphJson (gr : Extract.Graph) : Lean.Json :=
 
 private def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
-/-- `qword-program DESCRIPTOR [X] [--digests]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
+/-- `qword-program DESCRIPTOR [X [W]] [--digests] [--cuts]`: `Q_word` v1 on the program (`Flock.Program`, `Flock.Extract`, `Flock.Qword`):
 the program's SHA-512, the population and per Call its units. In full: per Call its owners, derived committed set and graph,
 and every unit's `locate`. With `--digests`: per Definition a Call names, its units and the SHA-512 of its owners, and of
 its graph for a flat cut. One `QWORDPROGRAM` line. -/
 def qwordProgramCmd (args : List String) : IO UInt32 := do
   let path := args.headD ""
-  let X := ((args.drop 1).find? (·.all Char.isDigit)).bind String.toNat? |>.getD 16
+  let nums := ((args.drop 1).takeWhile (·.all Char.isDigit)).filterMap String.toNat?
+  let X := nums.headD 16
+  let W := (nums.drop 1).headD 32
   let digests := args.contains "--digests"
+  let cuts := args.contains "--cuts"
   let bytes ← try IO.FS.readBinFile path catch _ => pure ByteArray.empty
   let res : V Lean.Json := do
     let P ← Program.decode bytes
@@ -470,6 +473,13 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
     let base := [("program_sha512", Lean.Json.str (hexOf P.sha512)), ("population", Lean.toJson units.population),
       ("calls", Lean.Json.arr (calls.map fun (k, d, c) => Lean.Json.arr #[Lean.toJson k, Lean.Json.str (P.defs[d]!).key,
         Lean.toJson c.units]))]
+    -- `--cuts`: every Definition's cut checked on its Call's whole graph (`partition_object.verify`'s `cut`)
+    let cutJson : List (String × Lean.Json) ← if !cuts then pure [] else do
+      let checked ← Extract.checkCalls P calls X W
+      pure [("cuts", Lean.Json.mkObj (checked.toList.map fun (d, r) => ((P.defs[d]!).key, r.toJson))),
+        ("cut", Lean.Json.arr ((Extract.cutFailures calls checked).map fun (k, r) =>
+          Lean.Json.arr #[Lean.toJson k, Lean.toJson r.codes.toArray]))]
+    let base := base ++ cutJson
     if digests then
       let mut defs : Array (String × Lean.Json) := #[]
       for (_, d, c) in calls do
