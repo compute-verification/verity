@@ -27,84 +27,88 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
 /-- The level's evaluation points, as an embedding. -/
-def domainEmb (A : Arith F K) (hA : A.Correct) (d : ℕ) : Fin (2 ^ d) ↪ F :=
-  ⟨fun q => A.omega q.val, fun q q' h => Fin.ext (hA.omega_injective d q.isLt q'.isLt h)⟩
+def domainEmb (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ F :=
+  ⟨fun q => A.omega q.val, fun q q' h => Fin.ext (hA.omega_injective d hd q.isLt q'.isLt h)⟩
 
-theorem domainEmb_apply (A : Arith F K) (hA : A.Correct) (d : ℕ) (q : Fin (2 ^ d)) :
-    domainEmb A hA d q = A.omega q.val := rfl
+theorem domainEmb_apply (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) (q : Fin (2 ^ d)) :
+    domainEmb A hA d hd q = A.omega q.val := rfl
 
 /-- A table read position first: an interleaved word. -/
 def tr {lanes d : ℕ} (T : Table F lanes d) : Fin (2 ^ d) → Fin (2 ^ lanes) → F := fun q ℓ => T ℓ q
 
 /-- The novel-basis polynomials of `Arith.Correct.xhat_poly`. -/
-noncomputable def xP (A : Arith F K) (hA : A.Correct) (L : ℕ) : Fin (2 ^ L) → Polynomial F :=
-  (hA.xhat_poly L).choose
+noncomputable def xP (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) :
+    Fin (2 ^ L) → Polynomial F :=
+  (hA.xhat_poly L hL).choose
 
-theorem xP_natDegree (A : Arith F K) (hA : A.Correct) (L : ℕ) (c : Fin (2 ^ L)) :
-    (xP A hA L c).natDegree < 2 ^ L := (hA.xhat_poly L).choose_spec.1 c
+theorem xP_natDegree (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (c : Fin (2 ^ L)) :
+    (xP A hA L hL c).natDegree < 2 ^ L := (hA.xhat_poly L hL).choose_spec.1 c
 
-theorem xP_linearIndependent (A : Arith F K) (hA : A.Correct) (L : ℕ) :
-    LinearIndependent F (xP A hA L) := (hA.xhat_poly L).choose_spec.2.1
+theorem xP_linearIndependent (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) :
+    LinearIndependent F (xP A hA L hL) := (hA.xhat_poly L hL).choose_spec.2.1
 
-theorem xP_eval (A : Arith F K) (hA : A.Correct) (L : ℕ) (c : Fin (2 ^ L)) (ω : F) :
-    A.Xhat c.val L ω = (xP A hA L c).eval ω := (hA.xhat_poly L).choose_spec.2.2 c ω
+theorem xP_eval (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (c : Fin (2 ^ L)) (ω : F) :
+    A.Xhat c.val L ω = (xP A hA L hL c).eval ω := (hA.xhat_poly L hL).choose_spec.2.2 c ω
 
 /-- The polynomial of one message row. -/
-noncomputable def rowPoly (A : Arith F K) (hA : A.Correct) {L : ℕ} (row : Fin (2 ^ L) → F) :
-    Polynomial F :=
-  ∑ c, Polynomial.C (row c) * xP A hA L c
+noncomputable def rowPoly (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40)
+    (row : Fin (2 ^ L) → F) : Polynomial F :=
+  ∑ c, Polynomial.C (row c) * xP A hA L hL c
 
-theorem rowPoly_eval (A : Arith F K) (hA : A.Correct) {L : ℕ} (row : Fin (2 ^ L) → F) (q : ℕ) :
-    (rowPoly A hA row).eval (A.omega q) = A.encodeAt L row q := by
+theorem rowPoly_eval (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40) (row : Fin (2 ^ L) → F)
+    (q : ℕ) : (rowPoly A hA hL row).eval (A.omega q) = A.encodeAt L row q := by
   simp only [rowPoly, Polynomial.eval_finset_sum, Polynomial.eval_mul, Polynomial.eval_C,
-    Arith.encodeAt, xP_eval A hA]
+    Arith.encodeAt, xP_eval A hA L hL]
 
-theorem rowPoly_natDegree (A : Arith F K) (hA : A.Correct) {L : ℕ} (row : Fin (2 ^ L) → F) :
-    (rowPoly A hA row).natDegree < 2 ^ L := by
-  have h : (rowPoly A hA row).natDegree ≤ 2 ^ L - 1 := by
+theorem rowPoly_natDegree (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40)
+    (row : Fin (2 ^ L) → F) : (rowPoly A hA hL row).natDegree < 2 ^ L := by
+  have h : (rowPoly A hA hL row).natDegree ≤ 2 ^ L - 1 := by
     refine Polynomial.natDegree_sum_le_of_forall_le _ _ fun c _ => ?_
     refine (Polynomial.natDegree_C_mul_le _ _).trans ?_
-    have := xP_natDegree A hA L c
+    have := xP_natDegree A hA L hL c
     omega
   have : 0 < 2 ^ L := Nat.two_pow_pos L
   omega
 
 /-- An encoded message is an interleaved Reed–Solomon codeword on the level's points. -/
 theorem tr_encode_mem (A : Arith F K) (hA : A.Correct) {lanes cols : ℕ} (d : ℕ)
-    (M : Message F lanes cols) :
-    tr (encode A d M) ∈ ReedSolomon.Interleaved.irsCode (domainEmb A hA d)
+    (hcols : cols ≤ 40) (hd : d ≤ 64) (M : Message F lanes cols) :
+    tr (encode A d M) ∈ ReedSolomon.Interleaved.irsCode (domainEmb A hA d hd)
       (2 ^ lanes * 2 ^ cols) (2 ^ lanes) := by
   rw [ReedSolomon.Interleaved.irsCode, Nat.mul_div_cancel_left _ (Nat.two_pow_pos lanes)]
   refine (Code.mem_moduleInterleavedCode_iff _ _ _ _ _ _).2 fun ℓ => ?_
-  refine ReedSolomon.mem_code_of_polynomial_of_natDegree_lt_of_eval (rowPoly A hA (M ℓ))
-    (rowPoly_natDegree A hA (M ℓ)) fun q => ?_
-  change A.encodeAt cols (M ℓ) q.val = Polynomial.eval (domainEmb A hA d q) (rowPoly A hA (M ℓ))
-  rw [domainEmb_apply, rowPoly_eval A hA]
+  refine ReedSolomon.mem_code_of_polynomial_of_natDegree_lt_of_eval (rowPoly A hA hcols (M ℓ))
+    (rowPoly_natDegree A hA hcols (M ℓ)) fun q => ?_
+  change A.encodeAt cols (M ℓ) q.val =
+    Polynomial.eval (domainEmb A hA d hd q) (rowPoly A hA hcols (M ℓ))
+  rw [domainEmb_apply, rowPoly_eval A hA hcols]
 
 /-- Encoding is injective once the code has at least as many positions as coefficients. -/
-theorem encode_injective (A : Arith F K) (hA : A.Correct) {lanes cols d : ℕ} (hcd : cols ≤ d) :
+theorem encode_injective (A : Arith F K) (hA : A.Correct) {lanes cols d : ℕ} (hcd : cols ≤ d)
+    (hcols : cols ≤ 40) (hd : d ≤ 64) :
     Function.Injective (fun M : Message F lanes cols => tr (encode A d M)) := by
   intro M M' h
   funext ℓ c
   -- the two row polynomials agree on the `2^d` distinct points
-  have hzero : rowPoly A hA (M ℓ) - rowPoly A hA (M' ℓ) = 0 := by
-    refine Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero _ (domainEmb A hA d).injective
-      (fun q => ?_) ?_
+  have hzero : rowPoly A hA hcols (M ℓ) - rowPoly A hA hcols (M' ℓ) = 0 := by
+    refine Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero _
+      (domainEmb A hA d hd).injective (fun q => ?_) ?_
     · have := congrFun (congrFun h q) ℓ
       simp only [tr, encode] at this
-      rw [domainEmb_apply, Polynomial.eval_sub, rowPoly_eval A hA, rowPoly_eval A hA, this, sub_self]
+      rw [domainEmb_apply, Polynomial.eval_sub, rowPoly_eval A hA hcols, rowPoly_eval A hA hcols,
+        this, sub_self]
     · refine (Polynomial.natDegree_sub_le _ _).trans_lt ?_
       rw [Fintype.card_fin]
-      have h1 := rowPoly_natDegree A hA (M ℓ)
-      have h2 := rowPoly_natDegree A hA (M' ℓ)
+      have h1 := rowPoly_natDegree A hA hcols (M ℓ)
+      have h2 := rowPoly_natDegree A hA hcols (M' ℓ)
       have h3 : 2 ^ cols ≤ 2 ^ d := Nat.pow_le_pow_right (by norm_num) hcd
       omega
   -- so their coefficient vectors agree, by linear independence
-  have hsum : ∑ c', (M ℓ c' - M' ℓ c') • xP A hA cols c' = 0 := by
+  have hsum : ∑ c', (M ℓ c' - M' ℓ c') • xP A hA cols hcols c' = 0 := by
     rw [← hzero]
     simp only [rowPoly, ← Finset.sum_sub_distrib, sub_smul, Polynomial.smul_eq_C_mul, ← sub_mul,
       Polynomial.C_sub]
-  have := Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA cols) _ hsum c
+  have := Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA cols hcols) _ hsum c
   exact sub_eq_zero.1 this
 
 /-- Closeness of tables is relative block Hamming distance. -/
@@ -175,7 +179,7 @@ open Classical in
 /-- **The list size at any level.** At most `listBound l = 25·2^r` messages with `2^lanes` lanes
 encode within `l`'s radius of any table: ArkLib's Johnson bound for `l`'s interleaved
 Reed–Solomon code, `1/(2ηρ)`. -/
-theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ)
+theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (hl : l.Fits) (lanes : ℕ)
     (T : Table F lanes l.logLen) :
     (Finset.univ.filter fun M : Message F lanes l.logCols =>
       Close l.radius T (encode A l.logLen M)).card ≤ l.listBound := by
@@ -183,13 +187,13 @@ theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ)
   have hdc : l.logLen = l.logCols + l.logInvRate := rfl
   have : NeZero (2 ^ lanes) := ⟨pow_ne_zero _ two_ne_zero⟩
   have : NeZero (2 ^ l.logLen) := ⟨pow_ne_zero _ two_ne_zero⟩
-  set code := ReedSolomon.Interleaved.irsCode (domainEmb A hA l.logLen) (2 ^ lanes * 2 ^ l.logCols)
-    (2 ^ lanes) with hcode
+  set code := ReedSolomon.Interleaved.irsCode (domainEmb A hA l.logLen hl.2)
+    (2 ^ lanes * 2 ^ l.logCols) (2 ^ lanes) with hcode
   set y := tr T
   set S := Finset.univ.filter fun M : Message F lanes l.logCols =>
     Close l.radius T (encode A l.logLen M)
   have hinj : Function.Injective (fun M : Message F lanes l.logCols => tr (encode A l.logLen M)) :=
-    encode_injective A hA (by omega)
+    encode_injective A hA (by omega) hl.1 hl.2
   have hsub : ((S.image fun M => tr (encode A l.logLen M) : Finset _) : Set _) ⊆
       Code.closeCodewordsRel (code : Set (Fin (2 ^ l.logLen) → Fin (2 ^ lanes) → F)) y l.radius := by
     intro w hw
@@ -197,7 +201,7 @@ theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ)
     obtain ⟨M, hM, rfl⟩ := hw
     simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hM
     exact Code.mem_closeCodewordsRel_iff.2
-      ⟨tr_encode_mem A hA l.logLen M, relHammingDist_tr_le _ _ _ hM⟩
+      ⟨tr_encode_mem A hA l.logLen hl.1 hl.2 M, relHammingDist_tr_le _ _ _ hM⟩
   have hcardS : (S.card : ℕ∞) ≤
       Code.Lambda (code : Set (Fin (2 ^ l.logLen) → Fin (2 ^ lanes) → F)) l.radius := by
     rw [← Finset.card_image_of_injective S hinj, ← Set.encard_coe_eq_coe_finsetCard]
@@ -212,7 +216,8 @@ theorem card_close_le (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ)
     rw [pow_add, inv_pow]
     have : (2 : ℝ) ^ l.logCols ≠ 0 := pow_ne_zero _ two_ne_zero
     field_simp
-  have hJ := CodingTheory.irs_lambda_le_johnson_mds (domainEmb A hA l.logLen) (2 ^ lanes * 2 ^ l.logCols)
+  have hJ := CodingTheory.irs_lambda_le_johnson_mds (domainEmb A hA l.logLen hl.2)
+    (2 ^ lanes * 2 ^ l.logCols)
     (2 ^ lanes) hks eta (by unfold eta; norm_num)
   simp only at hJ
   rw [← hcode, hrate] at hJ
@@ -236,6 +241,8 @@ theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m :
   have hbound : sch.listBound₀ = sch.level₀.listBound := by
     simp [Schedule.listBound₀, hlev, hL]
   rw [hbound]
-  exact card_close_le A hA sch.level₀ sch.k0 (asTable sch C)
+  exact card_close_le A hA sch.level₀
+    (hL ▸ fast100_levels_fit m sch hsch l0 (by rw [hlev]; exact List.mem_cons_self))
+    sch.k0 (asTable sch C)
 
 end FlockSoundness

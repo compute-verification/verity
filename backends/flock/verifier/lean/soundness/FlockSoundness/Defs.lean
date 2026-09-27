@@ -43,16 +43,42 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   pinned_indep : ∀ c : Fin 128 → ZMod 2,
     (∑ b : Fin 128, ((c b).val : F) * eqAt A.pinned b.val) = 0 → c = 0
   pinned_ne_one : ∀ i, A.pinned i ≠ 1
-  /-- The level codes are Reed–Solomon codes (§13.1): distinct domain points, and the novel
-  basis spans the polynomials of degree below `2^L`. -/
-  omega_injective : ∀ d, Set.InjOn A.omega {q | q < 2 ^ d}
-  xhat_poly : ∀ L, ∃ P : Fin (2 ^ L) → Polynomial F, (∀ c, (P c).natDegree < 2 ^ L) ∧
+  /-- The level codes are Reed–Solomon codes (§13.1): distinct domain points (`ω_q` is the low
+  word of `q`, so up to `2^64` of them), and the novel basis spans the polynomials of degree below
+  `2^L` (for `L ≤ 40`, the range the executable's normalisers are checked on). Every `fast100`
+  level fits (`fast100_levels_fit`). -/
+  omega_injective : ∀ d ≤ 64, Set.InjOn A.omega {q | q < 2 ^ d}
+  xhat_poly : ∀ L ≤ 40, ∃ P : Fin (2 ^ L) → Polynomial F, (∀ c, (P c).natDegree < 2 ^ L) ∧
     LinearIndependent F P ∧ ∀ (c : Fin (2 ^ L)) ω, A.Xhat c.val L ω = (P c).eval ω
   /-- `K = F ⊕ F·u` (§2.4): a `K` coin is two `F` limbs (`drawK`, §13.2). -/
   ofLimbs_bijective : Function.Bijective fun w : F × F => A.ofLimbs w.1 w.2
   /-- Query coins give uniform positions (§13.5): the low `b ≤ 64` bits of `lo` are balanced. -/
   lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
     (Finset.univ.filter fun w : F => A.lo w % 2 ^ b = t).card = Fintype.card F / 2 ^ b
+
+/-- A level in the range of `Arith.Correct`'s code facts: at most `2^40` message columns and
+`2^64` positions. -/
+def Accounting.Level.Fits (l : Level) : Prop := l.logCols ≤ 40 ∧ l.logLen ≤ 64
+
+instance (l : Level) : Decidable l.Fits := by unfold Accounting.Level.Fits; infer_instance
+
+/-- Every `fast100` level fits. -/
+theorem fast100_levels_fit : ∀ m s, fast100 m = some s → ∀ l ∈ s.levels, l.Fits := by
+  intro m s h
+  have hm : ∀ m', fast100 m' ≠ none → 22 ≤ m' ∧ m' ≤ 35 := by
+    intro m' hm'
+    by_contra hc
+    apply hm'
+    unfold fast100
+    split <;> simp_all
+  obtain ⟨h1, h2⟩ := hm m (by simp [h])
+  have key : ∀ m', 22 ≤ m' → m' ≤ 35 → ∀ s', fast100 m' = some s' →
+      (s'.levels.all fun l => decide l.Fits) = true := by
+    intro m' h1' h2' s' hs'
+    interval_cases m' <;> (simp only [fast100, Option.some.injEq] at hs'; subst hs'; decide +kernel)
+  intro l hl
+  have := List.all_eq_true.1 (key m h1 h2 s h) l hl
+  simpa using this
 
 /-- The skip nodes (§9): 64 distinct points on which `lagS` are the Lagrange weights. -/
 theorem Model.Arith.Correct.lagS_interp {A : Arith F K} (hA : A.Correct) :

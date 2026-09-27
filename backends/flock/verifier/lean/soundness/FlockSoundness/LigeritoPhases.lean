@@ -35,11 +35,12 @@ structure PreFold (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K) (
 
 /-- After level `l`'s folds by `ch` (the last entry of `st.levels`, or `initial` at level 0). -/
 structure PostFold (A : Arith F K) (hA : A.Correct) (n : ℕ) (b : ℕ → F) (initial : List K)
-    (l : Level) (lanes : ℕ) (C : Oracle F) (ch : List K) (st : LigState F K) : Prop where
+    (l : Level) (hf : l.Fits) (lanes : ℕ) (C : Oracle F) (ch : List K) (st : LigState F K) :
+    Prop where
   sum : st.q.eval 0 + st.q.eval 1 = st.s
   len : ch.length = lanes
   ok : PostOK initial st.levels st.oods st.cons l.logCols
-  mca : MCAGood (codeK A hA l) l.radius lanes ch (rowsK A lanes l.logLen C)
+  mca : MCAGood (codeK A hA l hf) l.radius lanes ch (rowsK A lanes l.logLen C)
   doom : ∀ M ∈ closeL A l.radius lanes l.logCols l.logLen C,
     st.s ≠ ∑ x ∈ Finset.range (2 ^ l.logCols),
       foldMsg A ch M x * resAt A n b initial st.levels st.oods st.cons l.logCols x
@@ -90,22 +91,22 @@ theorem mcaA_nonneg (l : Level) (hl : l.Ok) : 0 ≤ l.mcaA := (mcaA_bounds l hl.
 every fold of the level's list and no round was an MCA event, except with probability
 `foldError`. -/
 theorem phaseB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct) (n : ℕ)
-    (b : ℕ → F) (initial : List K) (l : Level) (hl : l.Ok) (C : Oracle F) (e : ℕ)
+    (b : ℕ → F) (initial : List K) (l : Level) (hl : l.Ok) (hf : l.Fits) (C : Oracle F) (e : ℕ)
     (st : LigState F K) (hpre : PreFold A n b initial l C e st) (hlanes : 1 ≤ l.lanes) :
-    value (fun out : List K × K × Quad K => ¬ PostFold A hA n b initial l l.lanes C out.1
+    value (fun out : List K × K × Quad K => ¬ PostFold A hA n b initial l hf l.lanes C out.1
         { st with s := out.2.1, q := out.2.2, levels := st.levels ++ [out.1] })
       (foldRounds A l.lanes st.s st.q) ≤ ENNReal.ofReal (l.foldError l.listBound) := by
   classical
   haveI : CharP K 2 := hA.charTwoK
   set S := closeL A l.radius l.lanes l.logCols l.logLen C
-  have hS : S.card ≤ l.listBound := card_close_le A hA l l.lanes (tbl l.lanes l.logLen C)
+  have hS : S.card ≤ l.listBound := card_close_le A hA l hf l.lanes (tbl l.lanes l.logLen C)
   set u : Message F l.lanes l.logCols → ℕ → K := fun M y => A.embed (flat M y)
   set v := preW A n b initial st.levels st.oods st.cons e
   have hdim : e + 1 = l.lanes + l.logCols := hpre.dim
-  have himp : ∀ out : List K × K × Quad K, ¬ PostFold A hA n b initial l l.lanes C out.1
+  have himp : ∀ out : List K × K × Quad K, ¬ PostFold A hA n b initial l hf l.lanes C out.1
       { st with s := out.2.1, q := out.2.2, levels := st.levels ++ [out.1] } →
       (out.1.length ≠ l.lanes ∨ out.2.2.eval 0 + out.2.2.eval 1 ≠ out.2.1) ∨
-        (¬ MCAGood (codeK A hA l) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C) ∨
+        (¬ MCAGood (codeK A hA l hf) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C) ∨
           ∃ M ∈ S, out.2.1 = ∑ y ∈ Finset.range (2 ^ l.logCols),
             foldLoL out.1 (u M) y * foldLoL out.1 v y) := by
     intro out hno
@@ -127,21 +128,21 @@ theorem phaseB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct
         (Finset.mem_range.1 hy)]
       rfl
   have hmcaε : ∀ U : Fin 2 → Fin (2 ^ l.logLen) → K,
-      prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l) γ U l.radius) ≤
-        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le hMCA A hA l hl
+      prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤
+        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le hMCA A hA l hl hf
   have hsumε := value_foldRounds_sum_le A hA S u v l.lanes l.logCols st.s st.q hpre.sum
     (fun M hM => by rw [← hdim]; exact hpre.doom M hM)
   calc value _ (foldRounds A l.lanes st.s st.q)
       ≤ value (fun out : List K × K × Quad K =>
           (out.1.length ≠ l.lanes ∨ out.2.2.eval 0 + out.2.2.eval 1 ≠ out.2.1) ∨
-            (¬ MCAGood (codeK A hA l) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C) ∨
+            (¬ MCAGood (codeK A hA l hf) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C) ∨
               ∃ M ∈ S, out.2.1 = ∑ y ∈ Finset.range (2 ^ l.logCols),
                 foldLoL out.1 (u M) y * foldLoL out.1 v y)) (foldRounds A l.lanes st.s st.q) :=
         value_mono himp _
     _ ≤ (value (fun out : List K × K × Quad K => out.1.length ≠ l.lanes) _ +
           value (fun out : List K × K × Quad K => out.2.2.eval 0 + out.2.2.eval 1 ≠ out.2.1) _) +
         (value (fun out : List K × K × Quad K =>
-            ¬ MCAGood (codeK A hA l) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C)) _ +
+            ¬ MCAGood (codeK A hA l hf) l.radius l.lanes out.1 (rowsK A l.lanes l.logLen C)) _ +
           value (fun out : List K × K × Quad K => ∃ M ∈ S, out.2.1 =
             ∑ y ∈ Finset.range (2 ^ l.logCols), foldLoL out.1 (u M) y * foldLoL out.1 v y) _) :=
         (value_or_le _ _ _).trans (add_le_add (value_or_le _ _ _) (value_or_le _ _ _))
@@ -149,7 +150,7 @@ theorem phaseB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct
           ((2 * l.lanes * S.card : ℕ) : ℝ≥0∞) / Fintype.card K) :=
         add_le_add (add_le_add (value_foldRounds_length A hA _ _ _).le
           (value_foldRounds_sum_invariant A hA _ _ _ hpre.sum).le)
-          (add_le_add (value_foldRounds_mca_le A hA (codeK A hA l) l.radius _ hmcaε l.lanes _ _ _)
+          (add_le_add (value_foldRounds_mca_le A hA (codeK A hA l hf) l.radius _ hmcaε l.lanes _ _ _)
             hsumε)
     _ ≤ ENNReal.ofReal (l.foldError l.listBound) := by
         rw [zero_add, zero_add, add_comm]

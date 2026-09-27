@@ -69,17 +69,19 @@ theorem foldMsg_eq (A : Arith F K) {lanes cols : ℕ} (ch : List K) (hch : ch.le
 
 /-! ## The novel basis spans; `K` polynomials split into limbs -/
 
-theorem xP_span (A : Arith F K) (hA : A.Correct) (L : ℕ) (P : F[X]) (hP : P.natDegree < 2 ^ L) :
-    ∃ m : Fin (2 ^ L) → F, ∑ c, Polynomial.C (m c) * xP A hA L c = P := by
+theorem xP_span (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (P : F[X])
+    (hP : P.natDegree < 2 ^ L) :
+    ∃ m : Fin (2 ^ L) → F, ∑ c, Polynomial.C (m c) * xP A hA L hL c = P := by
   classical
   haveI : Nonempty (Fin (2 ^ L)) := ⟨⟨0, Nat.two_pow_pos L⟩⟩
   have hdeg : ∀ p : F[X], p.natDegree < 2 ^ L → p ∈ Polynomial.degreeLT F (2 ^ L) := fun p hp =>
     Polynomial.mem_degreeLT.2 (lt_of_le_of_lt Polynomial.degree_le_natDegree
       (WithBot.coe_lt_coe.2 hp))
-  let b : Fin (2 ^ L) → Polynomial.degreeLT F (2 ^ L) := fun c => ⟨xP A hA L c,
-    hdeg _ (xP_natDegree A hA L c)⟩
+  let b : Fin (2 ^ L) → Polynomial.degreeLT F (2 ^ L) := fun c => ⟨xP A hA L hL c,
+    hdeg _ (xP_natDegree A hA L hL c)⟩
   have hli : LinearIndependent F b :=
-    LinearIndependent.of_comp (Polynomial.degreeLT F (2 ^ L)).subtype (xP_linearIndependent A hA L)
+    LinearIndependent.of_comp (Polynomial.degreeLT F (2 ^ L)).subtype
+      (xP_linearIndependent A hA L hL)
   have hcard : Fintype.card (Fin (2 ^ L)) = Module.finrank F (Polynomial.degreeLT F (2 ^ L)) := by
     rw [Fintype.card_fin, (Polynomial.degreeLTEquiv F (2 ^ L)).finrank_eq, Module.finrank_fin_fun]
   have hspan := hli.span_eq_top_of_card_eq_finrank hcard
@@ -141,16 +143,17 @@ theorem poly_limbs (A : Arith F K) (hA : A.Correct) (P : K[X]) :
 
 /-! ## The `K` encoding -/
 
-theorem encK_mem (A : Arith F K) (hA : A.Correct) (l : Level) (G : ℕ → K) :
-    (fun q : Fin (2 ^ l.logLen) => encK A l.logCols G q.val) ∈ codeK A hA l := by
+theorem encK_mem (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (G : ℕ → K) :
+    (fun q : Fin (2 ^ l.logLen) => encK A l.logCols G q.val) ∈ codeK A hA l hf := by
   refine ReedSolomon.mem_code_of_polynomial_of_natDegree_lt_of_eval
-    (∑ x : Fin (2 ^ l.logCols), Polynomial.C (G x) * (xP A hA l.logCols x).map A.embed) ?_ fun q => ?_
+    (∑ x : Fin (2 ^ l.logCols), Polynomial.C (G x) * (xP A hA l.logCols hf.1 x).map A.embed) ?_
+    fun q => ?_
   · have h : (∑ x : Fin (2 ^ l.logCols), Polynomial.C (G x) *
-        (xP A hA l.logCols x).map A.embed).natDegree ≤ 2 ^ l.logCols - 1 := by
+        (xP A hA l.logCols hf.1 x).map A.embed).natDegree ≤ 2 ^ l.logCols - 1 := by
       refine Polynomial.natDegree_sum_le_of_forall_le _ _ fun x _ => ?_
       refine (Polynomial.natDegree_C_mul_le _ _).trans ?_
       rw [Polynomial.natDegree_map]
-      have := xP_natDegree A hA l.logCols x
+      have := xP_natDegree A hA l.logCols hf.1 x
       omega
     have : 0 < 2 ^ l.logCols := Nat.two_pow_pos _
     omega
@@ -158,7 +161,7 @@ theorem encK_mem (A : Arith F K) (hA : A.Correct) (l : Level) (G : ℕ → K) :
       domainEmb_apply, Polynomial.eval_finset_sum, Polynomial.eval_mul, Polynomial.eval_C,
       Polynomial.eval_map_apply]
     rw [← Fin.sum_univ_eq_sum_range (fun x => G x * A.embed (A.Xhat x l.logCols (A.omega q.val)))]
-    exact Finset.sum_congr rfl fun x _ => by rw [xP_eval A hA]
+    exact Finset.sum_congr rfl fun x _ => by rw [xP_eval A hA l.logCols hf.1]
 
 theorem card_gt_of_agree (l : Level) (T : Finset (Fin (2 ^ l.logLen)))
     (hT : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius)) :
@@ -183,7 +186,7 @@ theorem card_gt_of_agree (l : Level) (T : Finset (Fin (2 ^ l.logLen)))
   exact_mod_cast this
 
 /-- **The `K` encoding is injective** on more than `2^cols` positions. -/
-theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (a : ℕ → K)
+theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (a : ℕ → K)
     (T : Finset (Fin (2 ^ l.logLen))) (hT : 2 ^ l.logCols ≤ T.card)
     (h : ∀ q ∈ T, encK A l.logCols a q.val = 0) : ∀ x < 2 ^ l.logCols, a x = 0 := by
   classical
@@ -205,18 +208,18 @@ theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (a : ℕ → K
     exact ofLimbs_inj A hA h0
   have hzero : ∀ b : Fin (2 ^ l.logCols) → F, (∀ q ∈ T, A.encodeAt l.logCols b q.val = 0) → b = 0 := by
     intro b hb
-    have hp : rowPoly A hA b = 0 := by
-      refine Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero' (rowPoly A hA b)
+    have hp : rowPoly A hA hf.1 b = 0 := by
+      refine Polynomial.eq_zero_of_natDegree_lt_card_of_eval_eq_zero' (rowPoly A hA hf.1 b)
         (T.image fun q => A.omega q.val) (fun ω hω => ?_) ?_
       · obtain ⟨q, hq, rfl⟩ := Finset.mem_image.1 hω
-        rw [rowPoly_eval A hA]; exact hb q hq
+        rw [rowPoly_eval A hA hf.1]; exact hb q hq
       · rw [Finset.card_image_of_injOn fun q _ q' _ hqq' =>
-          Fin.ext (hA.omega_injective l.logLen q.isLt q'.isLt hqq')]
-        exact lt_of_lt_of_le (rowPoly_natDegree A hA b) hT
-    have hsum : ∑ c, b c • xP A hA l.logCols c = 0 := by
+          Fin.ext (hA.omega_injective l.logLen hf.2 q.isLt q'.isLt hqq')]
+        exact lt_of_lt_of_le (rowPoly_natDegree A hA hf.1 b) hT
+    have hsum : ∑ c, b c • xP A hA l.logCols hf.1 c = 0 := by
       rw [← hp]; simp only [rowPoly, Polynomial.smul_eq_C_mul]
     funext c
-    exact Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA l.logCols) _ hsum c
+    exact Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA l.logCols hf.1) _ hsum c
   intro x hx
   have e0 := congrFun (hzero a₀ fun q hq => (henc q hq).1) ⟨x, hx⟩
   have e1 := congrFun (hzero a₁ fun q hq => (henc q hq).2) ⟨x, hx⟩
@@ -229,9 +232,9 @@ theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (a : ℕ → K
 /-- **Decoding a fold.** If the folds of a level's table by `ch` were no MCA event and the fold
 agrees with the encoding of `G` on a set `T` of at least `(1 − γ)·2^d` positions, then `G` is the
 fold of a message in the level's list. -/
-theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ) (C : Oracle F)
-    (ch : List K) (hch : ch.length = lanes)
-    (hgood : MCAGood (codeK A hA l) l.radius lanes ch (rowsK A lanes l.logLen C))
+theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes : ℕ)
+    (C : Oracle F) (ch : List K) (hch : ch.length = lanes)
+    (hgood : MCAGood (codeK A hA l hf) l.radius lanes ch (rowsK A lanes l.logLen C))
     (G : ℕ → K) (T : Finset (Fin (2 ^ l.logLen)))
     (hT : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius))
     (hag : ∀ q ∈ T, foldColumn A ch (fun ℓ => C ℓ q.val) = encK A l.logCols G q.val) :
@@ -246,8 +249,8 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ) (C : O
       ← Fin.sum_univ_eq_sum_range (fun ℓ => eqList ch ℓ * A.embed (C ℓ q.val))]
     rfl
   -- every row agrees with a `K` codeword on `T`
-  have hrows := rowsAgreeOn_of_foldAll (codeK A hA l) l.radius lanes ch _ hgood T hT
-    ⟨_, encK_mem A hA l G, fun q hq => by rw [hfold q, hag q hq]⟩
+  have hrows := rowsAgreeOn_of_foldAll (codeK A hA l hf) l.radius lanes ch _ hgood T hT
+    ⟨_, encK_mem A hA l hf G, fun q hq => by rw [hfold q, hag q hq]⟩
   -- which is an `F` codeword there
   have hmsg : ∀ ℓ : Fin (2 ^ lanes), ∃ m : Fin (2 ^ l.logCols) → F,
       ∀ q ∈ T, A.encodeAt l.logCols m q.val = C ℓ q.val := by
@@ -256,14 +259,14 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ) (C : O
     haveI : NeZero (2 ^ l.logCols) := ⟨(Nat.two_pow_pos _).ne'⟩
     obtain ⟨P, hPdeg, hPc⟩ := ReedSolomon.mem_code_iff_eval_of_ne_zero.1 hc
     obtain ⟨P₀, P₁, hP₀, hPl⟩ := poly_limbs A hA P
-    obtain ⟨m, hm⟩ := xP_span A hA l.logCols P₀ (lt_of_le_of_lt hP₀ hPdeg)
+    obtain ⟨m, hm⟩ := xP_span A hA l.logCols hf.1 P₀ (lt_of_le_of_lt hP₀ hPdeg)
     refine ⟨m, fun q hq => ?_⟩
     have h1 := hcT q hq
     rw [← hPc q] at h1
     simp only [domainK, Function.Embedding.trans_apply, Function.Embedding.coeFn_mk,
       domainEmb_apply] at h1
     rw [hPl, rowsK, ← ofLimbs_embed] at h1
-    rw [← rowPoly_eval A hA, rowPoly, hm]
+    rw [← rowPoly_eval A hA hf.1, rowPoly, hm]
     exact (ofLimbs_inj A hA h1).1
   choose m hm using hmsg
   let M : Message F lanes l.logCols := fun ℓ x => m ℓ x
@@ -297,6 +300,6 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (lanes : ℕ) (C : O
     unfold encK
     exact sub_self _
   intro x hx
-  exact sub_eq_zero.1 (encK_eq_zero A hA l _ T (card_gt_of_agree l T hT).le hdiff x hx)
+  exact sub_eq_zero.1 (encK_eq_zero A hA l hf _ T (card_gt_of_agree l T hT).le hdiff x hx)
 
 end FlockSoundness

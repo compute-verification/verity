@@ -22,13 +22,13 @@ open scoped ENNReal NNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
 /-- A level's evaluation points `ω_q`, in `K`. -/
-def domainK (A : Arith F K) (hA : A.Correct) (d : ℕ) : Fin (2 ^ d) ↪ K :=
-  (domainEmb A hA d).trans ⟨A.embed, A.embed.injective⟩
+def domainK (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ K :=
+  (domainEmb A hA d hd).trans ⟨A.embed, A.embed.injective⟩
 
 /-- A level's Reed–Solomon code over `K`: the code its folds live in. -/
-noncomputable def codeK (A : Arith F K) (hA : A.Correct) (l : Level) :
+noncomputable def codeK (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) :
     Submodule K (Fin (2 ^ l.logLen) → K) :=
-  ReedSolomon.code (domainK A hA l.logLen) (2 ^ l.logCols)
+  ReedSolomon.code (domainK A hA l.logLen hf.2) (2 ^ l.logCols)
 
 theorem rate_le_half (l : Level) (hl : l.Ok) : l.rate ≤ 1 / 2 := by
   unfold Level.rate
@@ -68,13 +68,13 @@ theorem radius_lt_johnson (l : Level) (hl : l.Ok) :
 words the prover fixes, the MCA event of the level's code over `K` at the level's radius has
 probability at most `mcaA / 2^256`. -/
 theorem prCoin_level_mca_le (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct)
-    (l : Level) (hl : l.Ok) (U : Fin 2 → Fin (2 ^ l.logLen) → K) :
-    prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l) γ U l.radius) ≤
+    (l : Level) (hl : l.Ok) (hf : l.Fits) (U : Fin 2 → Fin (2 ^ l.logLen) → K) :
+    prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤
       ENNReal.ofReal (l.mcaA / qK) := by
   have hr := radius_pos l hl
   have hk : 1 < 2 ^ l.logCols := Nat.one_lt_two_pow (by have := hl.2.2; omega)
   have hJ := radius_lt_johnson l hl
-  have h := prCoin_mca_le hMCA (domainK A hA l.logLen) (2 ^ l.logCols) l.radius.toNNReal hk
+  have h := prCoin_mca_le hMCA (domainK A hA l.logLen hf.2) (2 ^ l.logCols) l.radius.toNNReal hk
     (Real.toNNReal_pos.2 hr)
     (by rw [Fintype.card_fin, Real.coe_toNNReal _ hr.le]; push_cast; exact hJ) U
   rw [Real.coe_toNNReal _ hr.le] at h
