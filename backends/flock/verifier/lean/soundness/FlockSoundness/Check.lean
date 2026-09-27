@@ -9,8 +9,8 @@ The proved results must depend only on Lean's three standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`). Named assumptions (`Assumptions.BCHKS25Thm46`) are hypotheses
 of the theorems that use them, never `axiom` declarations, so they cannot appear here.
 
-`rep_sound` and `table_sound` still show `sorryAx`, from three phase lemmas of `RepSound` (zerocheck,
-lincheck, Ligerito) and `link_sound`; that disappears when they are proved.
+`rep_sound` and `table_sound` still show `sorryAx`, from two phase lemmas of `RepSound` (zerocheck,
+Ligerito) and `link_sound`; that disappears when they are proved.
 -/
 
 -- the interaction model and the repetition theorem
@@ -33,8 +33,10 @@ lincheck, Ligerito) and `link_sound`; that disappears when they are proved.
 #print axioms FlockSoundness.Rewinding.prBad_le
 #print axioms FlockSoundness.Compiled.compile_step
 #print axioms FlockSoundness.Compiled.compile_step_prefix
--- the list size (ArkLib's Johnson bound) and the opening phase
+-- the list size (ArkLib's Johnson bound), the lincheck and opening phases
 #print axioms FlockSoundness.closeMsgs_card_le
+#print axioms FlockSoundness.lincheck_phase_of_card
+#print axioms FlockSoundness.lincheck_phase
 #print axioms FlockSoundness.opening_phase_of_card
 #print axioms FlockSoundness.opening_phase
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and

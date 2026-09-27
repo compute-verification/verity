@@ -42,6 +42,8 @@ structure Statement where
   m : ℕ
   kLog : ℕ
   hk : kLog ≤ m
+  /-- `k_skip = 6 ≤ k_log`: the skip index is address bits 0–5 of every block (§9, §10). -/
+  hk6 : 6 ≤ kLog
   pin : Fin (2 ^ kLog)
   A₀ : Matrix (Fin (2 ^ kLog)) (Fin (2 ^ kLog)) (ZMod 2)
   B₀ : Matrix (Fin (2 ^ kLog)) (Fin (2 ^ kLog)) (ZMod 2)

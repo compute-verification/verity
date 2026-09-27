@@ -2,6 +2,7 @@ import FlockSoundness.Defs
 import FlockSoundness.Rounds
 import FlockSoundness.OpeningPhase
 import FlockSoundness.ListSize
+import FlockSoundness.LincheckPhase
 
 /-!
 # One rep is sound
@@ -62,7 +63,12 @@ theorem εLig_nonneg (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) : 0 ≤ εLi
   have := ligeritoError_nonneg s.levels hs
   positivity
 
-/-! ## The four phases (to prove) -/
+theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ≥0∞) / 2 ^ 128 := by
+  unfold qF
+  rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
+    ENNReal.ofReal_ofNat]
+
+/-! ## The four phases -/
 
 /-- **Zerocheck.** From a doomed start, the zerocheck ends doomed except with probability `εZc`.
 *Status: to prove.* The eq-reduction of each nonzero Boolean row (degree `m − 13`, the pinned
@@ -76,26 +82,29 @@ theorem zerocheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : 
       ENNReal.ofReal (εZc sch (S.shape mPts)) := by
   sorry
 
-/-- **Lincheck.** *Status: to prove.* `α` and `β` (degree 1 each; `β` catches a pin whose
-extension is not 1), the `k_log − 6` rounds (`Rounds.lincheckRound_sound`), the skip coin `r'`
-(degree 63); every term times the list bound. -/
+/-- **Lincheck.** `α` and `β` (degree 1 each; `β` catches a pin whose extension is not 1), the
+`k_log − 6` rounds (`Rounds.lincheckRound_sound`), the skip coin `r'` (degree 63); every term
+times the list bound. Proved in `LincheckPhase` for any list size (`lincheck_phase_of_card`),
+with `closeMsgs_card_le`. -/
 theorem lincheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (mPts : ℕ) (C : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcOut F S.m) (hzc : DZc A S sch C extra (some zc)) :
     value (fun o => ¬ DLc A S sch C extra zc o) (lincheck A S zc) ≤
       ENNReal.ofReal (εLc sch (S.shape mPts)) := by
-  sorry
+  classical
+  refine (lincheck_phase_of_card A hA S sch C extra zc hzc _
+    (closeMsgs_card_le A hA sch S.m hsch C)).trans (le_of_eq ?_)
+  rw [hA.card_F, εLc, ofReal_nat_div_qF]
+  simp only [Statement.shape]
+  push_cast
+  rw [mul_div_assoc]
+  norm_num
 
 /-! ## The opening phase
 
 Every phase pays a union bound over the list of codewords near the committed table, whose size is
 `closeMsgs_card_le` (`ListSize`: ArkLib's Johnson bound for the level-0 interleaved Reed–Solomon
 code). -/
-
-theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ≥0∞) / 2 ^ 128 := by
-  unfold qF
-  rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
-    ENNReal.ofReal_ofNat]
 
 /-- **Opening.** Per claim, a wrong message survives its seven coins `r''` with probability at
 most `7/|F|` (the injective recombination over GF(2) of paper Appendix B), and the batch `γ`

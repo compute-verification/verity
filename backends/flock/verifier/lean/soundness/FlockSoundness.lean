@@ -21,3 +21,4 @@ import FlockSoundness.Rewinding
 import FlockSoundness.Compiled
 import FlockSoundness.OpeningPhase
 import FlockSoundness.ListSize
+import FlockSoundness.LincheckPhase
