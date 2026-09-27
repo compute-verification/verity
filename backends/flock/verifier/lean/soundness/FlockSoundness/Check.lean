@@ -53,6 +53,9 @@ when it is proved.
 #print axioms FlockSoundness.rowsAgreeOn_of_foldAll
 #print axioms FlockSoundness.foldAllRows_eq_sum
 #print axioms FlockSoundness.value_foldRounds_mca_le
+#print axioms FlockSoundness.prCoin_level_mca_le
+-- out-of-domain binding
+#print axioms FlockSoundness.value_twoOod_collide_le
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound
