@@ -869,6 +869,10 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
                 fold_grinding_nonces: Vec::new(),
                 claim_batch_grinding_nonces,
                 consistency_batch_grinding_nonces,
+                #[cfg(feature = "sha512")]
+                zk_level0: None,
+                #[cfg(feature = "sha512")]
+                zk_record: None,
             },
         },
     };

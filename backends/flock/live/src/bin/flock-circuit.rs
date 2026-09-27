@@ -20,7 +20,7 @@ use std::{
 
 use flock_core::{
     merkle::HashKind,
-    pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}, verify_opening_batch_ligerito_mixed_with_grinding},
+    pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}, verify_opening_batch_ligerito_mixed_with_grinding_zk},
     proof::{R1csProofLigerito, bind_statement},
     verifier::verify_ligerito_extra,
 };
@@ -31,7 +31,7 @@ use flock_live::{
     zk_veil::{self as zkv, InnerProof, Layout},
     *,
 };
-use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
+use flock_prover::{pcs::Commitment, prover::{prove_fast_ligerito_from_witness_extra, prove_fast_ligerito_from_witness_extra_zk}};
 #[cfg(feature = "gpu")]
 use flock_live::gpu_circuit::HostSlot;
 use serde_json::{Value, json};
@@ -77,6 +77,30 @@ fn is_zk(st: &Stmt) -> bool {
     st.identity["hooks"]["zk"] == true
 }
 
+/// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
+fn zk_layout(st: &Stmt) -> Layout {
+    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    Layout::new(st.m, st.c.k_log, lc.ood_samples[0], lc.initial_k)
+}
+
+/// Ligerito level 0's padding per lane: both reps' queries plus 64 (any of those positions of a lane are then uniform).
+fn zk_t_pad(m: usize) -> usize {
+    let lc = params(m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    (2 * lc.queries[0] + 64).min(1 << lc.initial_log_msg_cols)
+}
+
+/// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
+/// the two uniform lanes, from the prover's ChaCha20 streams 6 and 7. `zero`: M1's control (all zero).
+fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
+    use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
+    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let (lanes, l, t) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m));
+    let draw = |rng: &mut flock_live::zk_hooks::ProverRng, stream: u64, i: usize, n: usize| {
+        if zero { vec![F128::ZERO; n] } else { rng.f128s(stream, (i as u64) << 32, n) }
+    };
+    Level0Zk { t_pad: t, extra: [draw(rng, 6, 0, l), draw(rng, 6, 1, l)], pads: (0..lanes).map(|i| draw(rng, 7, i, t)).collect(), tamper }
+}
+
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
 fn zk_identity(c: &Composite) -> Value {
     json!({"zk": true, "stage": "m1-prototype (honest-verifier, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
@@ -87,10 +111,14 @@ fn zk_identity(c: &Composite) -> Value {
            "inner_proof": "one batched <c, h> = t by a masked dot product (tau = <c, mu>, Y = h + beta mu)",
            "ring_switch": format!("non-region s_hat_v hidden by the mask slot's uniform words (2^{} bits per block); the prover refuses coins whose weights do not span",
                                   c.meta["mask_log"].as_u64().unwrap_or(14)),
-           "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far"],
-           "not_yet_masked": ["ligerito: sumcheck messages, recursive openings, final vector, ood values (need the extra lane and per-lane padding)",
-                              "ligerito: level-0 opened rows (need per-lane padding)"]})
+           "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with 2 q_0 + 64 uniform coefficients (c = x); two padded uniform \
+                               lanes folded in after the lane rounds (rho_0, rho_1 F128-independent); the ood value, the lane-round messages and the \
+                               extra lanes' sums padded; T' and ybar sent (uniform)",
+           "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128"],
+           "not_yet_masked": [],
+           "soundness_pending": "level 0's code now has message length L + t_pad in 2L positions; its query count is Fast100's for rate 1/2 (not recomputed)"})
 }
+
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
@@ -162,7 +190,7 @@ impl CircuitVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
-        let lay = Layout::new(st.m, st.c.k_log);
+        let lay = zk_layout(st);
         let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
         catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
             bind_statement(ch, &st.r1cs, &commitment);
@@ -186,11 +214,16 @@ impl CircuitVerifier {
             let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
             let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
             let cfg = pcs.ligerito_verifier_config()?;
-            verify_opening_batch_ligerito_mixed_with_grinding(&commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
-                                                              pcs.opening_grinding(), ch).map_err(|e| format!("opening: {e:?}"))?;
+            let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(&commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
+                                                                           pcs.opening_grinding(), Some(zk_t_pad(st.m)), ch)
+                .map_err(|e| format!("opening: {e:?}"))?
+                .ok_or("zk: the opening has no level-0 record")?;
+            let lg = &proof.pcs_open.ligerito;
+            let t_prime = lg.zk_level0.as_ref().ok_or("zk: level 0's hiding messages are missing")?.t_prime;
             let mut cons = rp.cons;
             cons.push(("ring switch ab", con_ab));
             cons.push(("ring switch c", con_c));
+            cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
             zkv::verify_inner(&inner, &lay, cons, ch)
         }))
         .map_err(|_| "verifier panicked".to_string())?
@@ -414,6 +447,8 @@ struct ZkRep {
     pad_mismatch: bool,
     /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
     t_commit: f64,
+    /// Ligerito level 0's hiding (one per session: both reps open the one level-0 codeword)
+    level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
 }
 
 /// The mask slot's word indices in the packed witness (every block's slot).
@@ -452,13 +487,13 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
         eprintln!("ZKRANK\t{}", json!({"points": all.len(), "mask_words": words.len(), "rank": rank, "need": 128 * all.len(), "s": tr.elapsed().as_secs_f64()}));
         if ok { Ok(()) } else { Err(format!("degenerate coins: the mask slot's weights have rank {rank} < {} over {} claim points", 128 * all.len(), all.len())) }
     }));
-    let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
+    let (mut proof, commitment) = prove_fast_ligerito_from_witness_extra_zk(
         &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
         &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
-        &mut mch,
+        Some(&zk.level0), &mut mch,
     );
     let t_upstream = tp.elapsed().as_secs_f64();
-    let (inner_ch, coins) = mch.finish();
+    let (inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &root, &mut zkv::Tape::new(&coins)).unwrap_or_else(|e| panic!("{e}"));
@@ -472,6 +507,10 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let mut cons = rp.cons;
     cons.push(("ring switch ab", con_ab));
     cons.push(("ring switch c", con_c));
+    let rec = proof.pcs_open.ligerito.zk_record.take().expect("the zk prover records level 0's lane phase");
+    zkv::mask_ligerito(&mut proof.pcs_open.ligerito, &zk.lay, &sent.h);
+    let t_prime = proof.pcs_open.ligerito.zk_level0.as_ref().expect("level 0's hiding messages").t_prime;
+    cons.extend(zkv::ligerito_constraints(&zk.lay, &rec, &zkv::ligerito_exposed(&proof.pcs_open.ligerito, &zk.lay), t_prime).unwrap_or_else(|e| panic!("{e}")));
     let fails = zkv::failing(&cons, &zk.pads.h);
     let mut lch = zkv::Logging { inner: inner_ch.0, coins: Vec::new() };
     let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
@@ -527,7 +566,7 @@ fn simulate_rep(st: &Stmt, lay: &Layout, zc_coins: &[F128], inner_coins: &[F128]
 #[cfg(feature = "seed-injection")]
 fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "32").parse().unwrap();
-    let lay = Layout::new(st.m, st.c.k_log);
+    let lay = zk_layout(st);
     let mut tapes: Option<Vec<(Vec<F128>, Vec<F128>)>> = None;
     let one = |plan: &Plan| -> (Value, Vec<Vec<u8>>) {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
@@ -807,6 +846,8 @@ struct Plan {
     zk_pad_mismatch: bool,
     /// M1's control: zero pads and a zero mask slot (M0's values, in M1's format)
     zk_zero_pads: bool,
+    /// M1: Ligerito level 0's hiding tampered (`Level0Zk::tamper`)
+    zk_l0_tamper: u8,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -913,11 +954,14 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
         let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
         let zk_points = Arc::new(Mutex::new(Vec::new()));
+        let tl0 = Instant::now();
+        let zk_level0 = (is_zk(st) && !plan.gpu).then(|| Arc::new(level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)));
+        let t_level0 = tl0.elapsed().as_secs_f64();
         for rep in 0..2 {
             // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
             let tz0 = Instant::now();
             let zkrep = (is_zk(st) && !plan.gpu).then(|| {
-                let lay = Layout::new(st.m, st.c.k_log);
+                let lay = zk_layout(st);
                 let mut pads = zkv::Pads::draw(&mut prng, &lay, rep);
                 if plan.zk_zero_pads {
                     pads.h.iter_mut().for_each(|x| *x = F128::ZERO);
@@ -925,9 +969,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
                 let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
                 let ic = zkv::InnerCommit::new(&pads, sb);
-                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64() }
+                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64(),
+                        level0: zk_level0.clone().unwrap() }
             });
-            let t_zk_commit = tz0.elapsed().as_secs_f64();
+            let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
@@ -1069,6 +1114,10 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
     ("zk_pads_not_the_committed_ones", false, true),
+    ("zk_level0_folds_another_extra_lane", false, true),
+    ("zk_level0_blinded_claim_forged", false, true),
+    ("zk_level0_ybar_forged", false, true),
+    ("zk_level0_extra_lane_sum_forged", false, true),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -1104,6 +1153,10 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
         "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..h },
+        "zk_level0_folds_another_extra_lane" => Plan { zk_l0_tamper: 1, ..h },
+        "zk_level0_blinded_claim_forged" => Plan { zk_l0_tamper: 2, ..h },
+        "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..h },
+        "zk_level0_extra_lane_sum_forged" => Plan { zk_l0_tamper: 4, ..h },
         _ => h,
     }
 }

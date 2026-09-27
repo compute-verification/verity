@@ -35,6 +35,7 @@ pub mod circuit;
 pub mod pure_block;
 pub mod vllm_block;
 pub mod zk_hooks;
+#[cfg(feature = "sha512")]
 pub mod zk_veil;
 #[cfg(feature = "gpu")]
 pub mod gpu;

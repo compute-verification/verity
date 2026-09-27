@@ -34,7 +34,7 @@ use flock_core::{
     },
     lincheck::LincheckProof,
 };
-use flock_field::F128;
+use flock_field::{F128, F256};
 use flock_transcript::challenger::Challenger;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
@@ -43,6 +43,7 @@ pub const LABEL_ZC: &[u8] = b"flock-zerocheck-v0";
 pub const LABEL_PCS: &[u8] = b"flock-pcs-open-batch-v0";
 pub const LABEL_PADS: &[u8] = b"verity-flock-zk-pads-v0";
 pub const LABEL_INNER: &[u8] = b"verity-flock-zk-inner-v0";
+pub use flock_core::pcs::ligerito::zk::{LABEL_CLOSE as L0_CLOSE, LABEL_OPEN as L0_OPEN};
 pub const K_SKIP: usize = 6;
 pub const SKIP: usize = 1 << K_SKIP;
 const N_INNER: usize = 7;
@@ -59,17 +60,42 @@ pub const STREAM_DOT_MASK: u64 = 5;
 pub const N_CONSTRAINTS: usize = 8;
 
 /// Where each pad sits, per rep. Exposed values first, in proof-field order: zerocheck `round1_ab[64]`, `round1_c[64]`, the
-/// multilinear rounds `(G(1), G(∞))`, `final_a`, `final_b`, `final_c`; lincheck rounds `(q(1), q(∞))`, `z_partial[64]`. Then
-/// the committed auxiliaries: `h_ab = h_a h_b`, the sacrificed triple `x, y, w = x y`.
+/// multilinear rounds `(G(1), G(∞))`, `final_a`, `final_b`, `final_c`; lincheck rounds `(q(1), q(∞))`, `z_partial[64]`;
+/// Ligerito's level 0 (when masked): its OOD values, its `k0` lane-round messages `(u_0, u_2)` (F256: two coordinates each),
+/// the extra lanes' sums `e_0, e_1`. Then the committed auxiliaries: `h_ab = h_a h_b`, the sacrificed triple `x, y, w = x y`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Layout {
     pub n_mlv: usize,
     pub n_lc: usize,
+    /// Ligerito level 0's OOD samples and lane rounds (both 0: Ligerito not masked)
+    pub n_ood0: usize,
+    pub k0: usize,
 }
 
 impl Layout {
-    pub fn new(m: usize, k_log: usize) -> Self {
-        Layout { n_mlv: m - K_SKIP, n_lc: k_log - K_SKIP }
+    pub fn new(m: usize, k_log: usize, n_ood0: usize, k0: usize) -> Self {
+        Layout { n_mlv: m - K_SKIP, n_lc: k_log - K_SKIP, n_ood0, k0 }
+    }
+    pub fn ligerito(&self) -> bool {
+        self.k0 > 0
+    }
+    fn lg0(&self) -> usize {
+        self.zp(SKIP)
+    }
+    /// Level 0's OOD value `i`.
+    pub fn lg_ood(&self, i: usize) -> usize {
+        self.lg0() + i
+    }
+    /// Lane round `j`'s message coordinate `t` (`u_0.c0, u_0.c1, u_2.c0, u_2.c1`).
+    pub fn lg_msg(&self, j: usize, t: usize) -> usize {
+        self.lg0() + self.n_ood0 + 4 * j + t
+    }
+    /// Extra lane `i`'s sum, coordinate `c`.
+    pub fn lg_e(&self, i: usize, c: usize) -> usize {
+        self.lg0() + self.n_ood0 + 4 * self.k0 + 2 * i + c
+    }
+    fn n_lig(&self) -> usize {
+        if self.ligerito() { self.n_ood0 + 4 * self.k0 + 4 } else { 0 }
     }
     pub fn r1ab(&self, i: usize) -> usize {
         i
@@ -96,7 +122,7 @@ impl Layout {
         self.lc(self.n_lc, 0) + i
     }
     pub fn hab(&self) -> usize {
-        self.zp(SKIP)
+        self.zp(SKIP) + self.n_lig()
     }
     pub fn tx(&self) -> usize {
         self.hab() + 1
@@ -114,7 +140,8 @@ impl Layout {
     pub fn len(&self) -> usize {
         self.tw() + 1
     }
-    /// The pads in the order the prover absorbs the values they mask (`final_c` is never absorbed).
+    /// The pads in the order the prover absorbs the values they mask (`final_c` is never absorbed): the algebraic phase's,
+    /// then level 0's (absorbed between `zk::LABEL_OPEN` and `zk::LABEL_CLOSE`).
     pub fn absorbed(&self) -> Vec<usize> {
         let mut v: Vec<usize> = (0..SKIP).map(|i| self.r1ab(i)).collect();
         v.extend((0..SKIP).map(|i| self.r1c(i)));
@@ -126,13 +153,24 @@ impl Layout {
             v.extend([self.lc(j, 0), self.lc(j, 1)]);
         }
         v.extend((0..SKIP).map(|i| self.zp(i)));
+        if self.ligerito() {
+            v.extend((0..self.n_ood0).map(|i| self.lg_ood(i)));
+            v.extend((0..self.k0).flat_map(|j| (0..4).map(move |t| (j, t))).map(|(j, t)| self.lg_msg(j, t)));
+            v.extend([self.lg_e(0, 0), self.lg_e(0, 1), self.lg_e(1, 0), self.lg_e(1, 1)]);
+        }
         v
+    }
+    /// How many of [`Self::absorbed`] belong to the algebraic phase.
+    pub fn piop_absorbed(&self) -> usize {
+        self.absorbed().len() - self.n_lig()
     }
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::json!({"n_mlv": self.n_mlv, "n_lc": self.n_lc, "len": self.len(), "exposed": self.exposed(),
             "zerocheck": {"round1_ab": [self.r1ab(0), self.r1ab(SKIP - 1)], "round1_c": [self.r1c(0), self.r1c(SKIP - 1)],
                           "multilinear": [self.ml(0, 0), self.ml(self.n_mlv - 1, 1)], "final_a": self.fa(), "final_b": self.fb(), "final_c": self.fc()},
             "lincheck": {"rounds": [self.lc(0, 0), self.lc(self.n_lc - 1, 1)], "z_partial": [self.zp(0), self.zp(SKIP - 1)]},
+            "ligerito_level0": if self.ligerito() { serde_json::json!({"ood": [self.lg_ood(0), self.n_ood0], "lane_messages": [self.lg_msg(0, 0), self.lg_msg(self.k0 - 1, 3)],
+                                                   "e": [self.lg_e(0, 0), self.lg_e(1, 1)]}) } else { serde_json::Value::Null },
             "aux": {"h_ab": self.hab(), "x": self.tx(), "y": self.ty(), "w": self.tw()}})
     }
 }
@@ -213,12 +251,18 @@ impl Lin {
 pub struct Masking<C: Challenger> {
     pub inner: C,
     order: Vec<usize>,
+    n_piop: usize,
+    lig: bool,
     h: Vec<F128>,
     at: usize,
     on: bool,
     done: bool,
+    done_l0: bool,
     root: [u8; 64],
     pub coins: Vec<F128>,
+    /// level 0's coins (between `zk::LABEL_OPEN` and `zk::LABEL_CLOSE`)
+    pub coins_l0: Vec<F128>,
+    l0: bool,
     /// Called at the opening's label with the phase's coins, before any opening message is absorbed: the prover's refusal
     /// point for degenerate coins (`Err` stops the proof there).
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
@@ -226,11 +270,13 @@ pub struct Masking<C: Challenger> {
 
 impl<C: Challenger> Masking<C> {
     pub fn new(inner: C, lay: &Layout, pads: &Pads, root: [u8; 64]) -> Self {
-        Masking { inner, order: lay.absorbed(), h: pads.h.clone(), at: 0, on: false, done: false, root, coins: Vec::new(), at_open: None }
+        Masking { inner, order: lay.absorbed(), n_piop: lay.piop_absorbed(), lig: lay.ligerito(), h: pads.h.clone(), at: 0, on: false, done: false,
+                  done_l0: false, root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None }
     }
-    pub fn finish(self) -> (C, Vec<F128>) {
-        assert!(self.done && self.at == self.order.len(), "masking: the algebraic phase absorbed {} of {} values", self.at, self.order.len());
-        (self.inner, self.coins)
+    pub fn finish(self) -> (C, Vec<F128>, Vec<F128>) {
+        assert!(self.done && (self.done_l0 || !self.lig) && self.at == self.order.len(),
+                "masking: {} of {} values absorbed masked", self.at, self.order.len());
+        (self.inner, self.coins, self.coins_l0)
     }
     fn pad(&mut self, v: F128) -> F128 {
         let i = *self.order.get(self.at).expect("masking: more absorbed values than the layout's");
@@ -244,18 +290,28 @@ impl<C: Challenger> Challenger for Masking<C> {
         if label == LABEL_PCS && self.on {
             self.on = false;
             self.done = true;
-            assert_eq!(self.at, self.order.len(), "masking: the opening began before every exposed value was absorbed");
+            assert_eq!(self.at, self.n_piop, "masking: the opening began before every exposed value was absorbed");
             if let Some(f) = self.at_open.as_mut()
                 && let Err(e) = f(&self.coins)
             {
                 panic!("PROVER-STOPPED: {e}");
             }
         }
+        if label == L0_CLOSE && self.l0 {
+            self.l0 = false;
+            self.on = false;
+            self.done_l0 = true;
+            assert_eq!(self.at, self.order.len(), "masking: level 0's exposed values are not the layout's");
+        }
         self.inner.observe_label(label);
         if label == LABEL_ZC && !self.done {
             self.on = true;
             self.inner.observe_label(LABEL_PADS);
             self.inner.observe_bytes(&self.root);
+        }
+        if label == L0_OPEN && self.done && self.lig && !self.done_l0 {
+            self.on = true;
+            self.l0 = true;
         }
     }
     fn observe_f128(&mut self, v: F128) {
@@ -271,20 +327,24 @@ impl<C: Challenger> Challenger for Masking<C> {
     }
     fn sample_f128(&mut self) -> F128 {
         let x = self.inner.sample_f128();
-        if self.on {
+        if self.l0 {
+            self.coins_l0.push(x);
+        } else if self.on {
             self.coins.push(x);
         }
         x
     }
     fn sample_f128_vec(&mut self, n: usize) -> Vec<F128> {
         let x = self.inner.sample_f128_vec(n);
-        if self.on {
+        if self.l0 {
+            self.coins_l0.extend_from_slice(&x);
+        } else if self.on {
             self.coins.extend_from_slice(&x);
         }
         x
     }
+    /// Live coins need no grinding: the inner challenger absorbs a nonce as bytes (never masked).
     fn grind_pow(&mut self, bits: u32) -> u64 {
-        assert!(!self.on || bits == 0, "masking: grinding inside the masked phase (Fast100 disables it)");
         self.inner.grind_pow(bits)
     }
     fn verify_pow(&mut self, nonce: u64, bits: u32) -> bool {
@@ -292,8 +352,8 @@ impl<C: Challenger> Challenger for Masking<C> {
     }
     fn fork_from_seed(&self, seed: [F128; 2], label: &'static [u8]) -> Self {
         assert!(!self.on, "masking: a fork inside the masked phase");
-        Masking { inner: self.inner.fork_from_seed(seed, label), order: Vec::new(), h: Vec::new(), at: 0, on: false, done: true,
-                  root: self.root, coins: Vec::new(), at_open: None }
+        Masking { inner: self.inner.fork_from_seed(seed, label), order: Vec::new(), n_piop: 0, lig: false, h: Vec::new(), at: 0, on: false,
+                  done: true, done_l0: true, root: self.root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None }
     }
 }
 
@@ -411,6 +471,85 @@ pub fn mask_proof(zc: &ZerocheckProof, lc: &LincheckProof, lay: &Layout, h: &[F1
         r.1 += h[lay.lc(j, 1)];
     }
     (z, l)
+}
+
+/// Ligerito level 0's exposed fields masked in the proof (the values [`Masking`] sent between `L0_OPEN` and `L0_CLOSE`).
+pub fn mask_ligerito(lp: &mut flock_core::pcs::ligerito::LigeritoProof, lay: &Layout, h: &[F128]) {
+    if !lay.ligerito() {
+        return;
+    }
+    for i in 0..lay.n_ood0 {
+        lp.ood_values[i] += h[lay.lg_ood(i)];
+    }
+    for j in 0..lay.k0 {
+        let m = &mut lp.sumcheck_transcript_f256[j];
+        m.u_0 = m.u_0 + F256::new(h[lay.lg_msg(j, 0)], h[lay.lg_msg(j, 1)]);
+        m.u_2 = m.u_2 + F256::new(h[lay.lg_msg(j, 2)], h[lay.lg_msg(j, 3)]);
+    }
+    let z = lp.zk_level0.as_mut().expect("a masked level 0 carries its hiding messages");
+    for i in 0..2 {
+        z.e[i] = z.e[i] + F256::new(h[lay.lg_e(i, 0)], h[lay.lg_e(i, 1)]);
+    }
+}
+
+/// Level 0's exposed values as sent (a proof's masked fields), in [`Layout`] order from `lg_ood(0)`.
+pub fn ligerito_exposed(lp: &flock_core::pcs::ligerito::LigeritoProof, lay: &Layout) -> Vec<F128> {
+    let mut v: Vec<F128> = lp.ood_values[..lay.n_ood0].to_vec();
+    for m in &lp.sumcheck_transcript_f256[..lay.k0] {
+        v.extend(m.u_0.coordinates());
+        v.extend(m.u_2.coordinates());
+    }
+    if let Some(z) = &lp.zk_level0 {
+        v.extend(z.e.iter().flat_map(|e| e.coordinates()));
+    }
+    v
+}
+
+/// An affine form over F256: two coordinate forms (`x = x_0 + x_1 U`).
+pub type Lin2 = [Lin; 2];
+
+fn l2_masked(v: F256, i: [usize; 2], s: usize) -> Lin2 {
+    [Lin::masked(v.c0, i[0], s), Lin::masked(v.c1, i[1], s)]
+}
+
+fn l2_konst(v: F256, s: usize) -> Lin2 {
+    [Lin::konst(v.c0, s), Lin::konst(v.c1, s)]
+}
+
+fn l2_add(a: &Lin2, b: &Lin2) -> Lin2 {
+    [a[0].add(&b[0]), a[1].add(&b[1])]
+}
+
+/// `k · x` for a public F256 `k`: `x_0 k + x_1 (k U)`, coordinate by coordinate.
+fn l2_scale(x: &Lin2, k: F256) -> Lin2 {
+    let (m0, m1) = (k, k * F256::new(F128::ZERO, F128::ONE));
+    [x[0].scale(m0.c0).add(&x[1].scale(m1.c0)), x[0].scale(m0.c1).add(&x[1].scale(m1.c1))]
+}
+
+/// Level 0's lane phase as constraints (upstream's `recursive_verifier_with_basis_succinct` up to the blinded claim): the
+/// claim `target + Σ β_i y_i` through the `k0` lane rounds' quadratics `u_0 + r (claim + u_2) + r² u_2`, then
+/// `claim + ρ_0 e_0 + ρ_1 e_1 = T'`. `sent`: the proof's masked level-0 fields (`ligerito_exposed` order).
+pub fn ligerito_constraints(lay: &Layout, rec: &flock_core::pcs::ligerito::zk::Level0ZkRecord, sent: &[F128], t_prime: F256)
+    -> Result<Vec<(&'static str, Lin)>, String> {
+    let s = lay.len();
+    if sent.len() != lay.n_ood0 + 4 * lay.k0 + 4 || rec.ood.len() != lay.n_ood0 || rec.challenges.len() != lay.k0 {
+        return Err("zk: level 0's record is not the layout's".into());
+    }
+    let mut claim0 = Lin::konst(rec.target, s);
+    for (i, &(beta, _)) in rec.ood.iter().enumerate() {
+        claim0 = claim0.add(&Lin::masked(sent[i], lay.lg_ood(i), s).scale(beta));
+    }
+    let mut claim: Lin2 = [claim0, Lin::konst(F128::ZERO, s)];
+    let at = |k: usize| sent[lay.n_ood0 + k];
+    for (j, &r) in rec.challenges.iter().enumerate() {
+        let u0 = l2_masked(F256::new(at(4 * j), at(4 * j + 1)), [lay.lg_msg(j, 0), lay.lg_msg(j, 1)], s);
+        let u2 = l2_masked(F256::new(at(4 * j + 2), at(4 * j + 3)), [lay.lg_msg(j, 2), lay.lg_msg(j, 3)], s);
+        claim = l2_add(&l2_add(&u0, &l2_scale(&l2_add(&claim, &u2), r)), &l2_scale(&u2, r * r));
+    }
+    let e = |i: usize| l2_masked(F256::new(at(4 * lay.k0 + 2 * i), at(4 * lay.k0 + 2 * i + 1)), [lay.lg_e(i, 0), lay.lg_e(i, 1)], s);
+    let lhs = l2_add(&l2_add(&claim, &l2_scale(&e(0), rec.rho[0])), &l2_add(&l2_scale(&e(1), rec.rho[1]), &l2_konst(t_prime, s)));
+    let [c0, c1] = lhs;
+    Ok(vec![("ligerito lane phase (c0)", c0), ("ligerito lane phase (c1)", c1)])
 }
 
 // --- the verifier's replay ---------------------------------------------------------------------------------------------
