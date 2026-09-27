@@ -5,8 +5,9 @@
     circuit-check path/to/build_request_LP3_T2                      a served row's request Program
     circuit-check --all                                             every registered Definition and template (the suite's set)
 
-Exit status 1 when any check fails (failures are named in the summary), 0 otherwise; redundant and dead gates are warnings
-with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
+Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
+on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
+warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
 """
 from __future__ import annotations
 
@@ -87,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
     ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
                     "(default: when its family is a Call of a served Program)")
+    ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -97,15 +99,27 @@ def main(argv: list[str] | None = None) -> int:
               log=None if a.quiet else lambda s: print(s, flush=True))
     if a.update_pins:
         update_pins(rep)
-    if a.out:
-        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     s = rep["summary"]
-    for name in s["failure_names"]:
+    stale = []
+    if a.all:
+        from .known import stale as stale_known
+
+        stale = stale_known(f for t in rep["targets"] if t["kind"] == "definition" for f in t.get("failures", []))
+        s["stale_known"] = stale
+    for name in s["new_failures"]:
         print(f"FAIL {name}")
+    for name in s["known_failures"]:
+        print(f"known {name}")
+    for k in stale:
+        print(f"FAIL circuit_check.known lists {k}, which no longer fails: drop it")
     for k, w in s["warnings"].items():
         print(f"warn {k}: {w['total']} over {w['definitions']} target(s)")
-    print(f"circuit-check: {len(rep['targets'])} target(s), {s['failures']} failure(s)" + (f", report {a.out}" if a.out else ""))
-    return 1 if s["failures"] or (a.fail_on_warnings and s["warnings"]) else 0
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    print(f"circuit-check: {len(rep['targets'])} target(s), {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known"
+          + (f", report {a.out}" if a.out else ""))
+    failed = bool(s["new_failures"] or stale or (a.strict and s["known_failures"]) or (a.fail_on_warnings and s["warnings"]))
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

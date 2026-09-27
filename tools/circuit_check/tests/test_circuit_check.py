@@ -1,9 +1,10 @@
 """circuit-check over every registered Definition and subcircuit template, a served row's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
-A failure is a correctness or invariant violation.  The ones `main` already has are listed in `KNOWN` with their cause; a test
-whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one is fixed, so
-the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
+A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
+cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
+is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
+The per-target tests are marked `circuit_suite`: `check` deselects them and runs `circuit-check --all`, the same checks.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import numpy as np
 import pytest
 
 from circuit_check import checks as CK
+from circuit_check import known as KN
 from circuit_check import targets as TG
 from circuit_check import vectors as VX
 
@@ -26,39 +28,7 @@ PINS = CK.load_pins()
 SUITE = TG.suite()
 TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
-#: pieces of the C-Flock lowering that differ from their IR primitive, and why; a Definition lowered through one inherits it
-KNOWN_PIECES = {
-    "F32Add_v1": "NaN payloads: the piece returns the canonical NaN 0x7FC00000, the IR primitive the quieted operand NaN "
-                 "(0xFFC00000 + 0xFFC00000 = 0xFFC00000, 0x7F800001 -> 0x7FC00001); backends/flock/tests/test_ir_lowering.py "
-                 "compares NaNs as a class",
-    "F32Mul_v1": "NaN payloads, as F32Add_v1",
-}
-_TOPP = ("the top-p keep word raises unless its committed `splits` operand is one of (1, 2, 4, 8, 16, 32) "
-         "(verity_vllm.program.registry.sampling.topp_mask_word): partial on a committed, private value")
-#: other failures main has, by "<check>/<code> <Definition family>", and why
-KNOWN: dict[str, str] = {
-    "correspondence/reference-not-total TopPMaskWordx16_v1": _TOPP,
-    "correspondence/reference-not-total TopPMaskWordx64_v1": _TOPP,
-    "correspondence/reference-not-total TopPMask_v1": _TOPP,
-    "correspondence/reference-not-total GumbelTopPTokenSelect_v1": _TOPP,
-    "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
-        "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
-        "word.unit_rule partitions the batch's members one by one and does not see it",
-    "partition/committed-unread DeriveRefBf16ToF32_v1": "a Call that is only wiring (Bf16ToF32 per element): its outputs are its "
-        "inputs rearranged, so the cut commits inputs no unit reads (verity.ir.partition.validate_unit_cut counts a returned "
-        "wiring value as no read)",
-}
-
-
-def _known(f: dict) -> str | None:
-    key = f"{f['check']}/{f['code']} {f['definition'].split('{')[0]}"
-    if key in KNOWN:
-        return KNOWN[key]
-    if f["code"] == "lowering-mismatch":
-        causes = [f["definition"]] if f["definition"] in KNOWN_PIECES else f.get("causes") or []
-        if causes and all(c in KNOWN_PIECES for c in causes):
-            return "; ".join(f"{c}: {KNOWN_PIECES[c]}" for c in causes)
-    return None
+_known = KN.known
 
 
 def _clean(entry: dict) -> None:
@@ -95,6 +65,7 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
 
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
+@pytest.mark.circuit_suite
 @pytest.mark.parametrize("fid", sorted(SUITE))
 def test_definition(fid, results):
     e = CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)
@@ -102,6 +73,7 @@ def test_definition(fid, results):
     _clean(e)
 
 
+@pytest.mark.circuit_suite
 @pytest.mark.parametrize("label", sorted(TEMPLATES))
 def test_template(label, results):
     sub, sts = TEMPLATES[label]
@@ -139,13 +111,11 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
         [f["name"] for f in r["failures"]]
 
 
+@pytest.mark.circuit_suite
 def test_known_failures_are_current():
-    """Each `KNOWN` entry and each `KNOWN_PIECES` piece still fails somewhere: a fixed one is dropped from the list."""
+    """Each known entry still fails somewhere: a fixed one is dropped from `circuit_check.known`."""
     fails = [f for fid in sorted(SUITE) for f in CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
-    keys = {f"{f['check']}/{f['code']} {f['definition'].split('{')[0]}" for f in fails}
-    assert set(KNOWN) <= keys, sorted(set(KNOWN) - keys)
-    pieces = {f["definition"] for f in fails if f["code"] == "lowering-mismatch"}
-    assert set(KNOWN_PIECES) <= pieces, sorted(set(KNOWN_PIECES) - pieces)
+    assert not KN.stale(fails), KN.stale(fails)
 
 
 # --- the vectors ----------------------------------------------------------------------------------------------------------------
@@ -301,5 +271,7 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     r = json.loads(out.read_text())
     assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["Bf16ToF32_v1", "RoPEHead_v1{D=8}"]
     assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
-    assert cli.main(["F32Add_v1", "-q"]) == 1
-    assert "FAIL correspondence/lowering-mismatch F32Add_v1 [c-flock]" in capsys.readouterr().out
+    capsys.readouterr()
+    assert cli.main(["F32Add_v1", "-q"]) == 0                                    # a known failure: named, not failing
+    assert "known correspondence/lowering-mismatch F32Add_v1 [c-flock]" in capsys.readouterr().out
+    assert cli.main(["F32Add_v1", "-q", "--strict"]) == 1

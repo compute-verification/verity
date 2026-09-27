@@ -671,8 +671,10 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
 # --- reports ------------------------------------------------------------------------------------------------------------------
 
 def summarize(entries: Iterable[dict]) -> dict:
-    """Totals over entries: failures by name, warnings' counts by check and by Definition (a finding two entries share, such as a
-    template's Definition checked on its own too, once)."""
+    """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
+    warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
+    too, once)."""
+    from .known import known
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
     for e in entries:
@@ -685,7 +687,9 @@ def summarize(entries: Iterable[dict]) -> dict:
         k = f"{w['check']}/{w['code']}"
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
-    return {"ok": not fails, "failures": len(fails), "failure_names": [f["name"] for f in fails],
+    new = [f["name"] for f in fails if known(f) is None]
+    return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
+            "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
 
