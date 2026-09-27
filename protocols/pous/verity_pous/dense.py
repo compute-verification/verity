@@ -76,8 +76,9 @@ class DenseParams:
 
     @property
     def challenges(self) -> int:
-        """`k = 106` for 1% (`docs/scheme-choice-e2e.md`)."""
-        return 106
+        """`k = 111` for 1%: `chain_meets_64` (POUS `lean/submissions/sponge-dense/ChainEPF.lean`) over the overwrite
+        chain, given `ChainExPostFacto`; the random-oracle `dense_meets_64` needs only 106."""
+        return 111
 
     @property
     def certified_rounds(self) -> int:
@@ -105,8 +106,9 @@ class DenseParams:
 
 SECURE_FIRST = DenseParams(512, 524_288)
 """The secure-first point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls
-of at least 483 µs with `k = 106`: the point `dense_meets_64` certifies (POUS `lean/submissions/dense/DenseReCert.lean`,
-`docs/scheme-choice-e2e.md`)."""
+of at least 483 µs with `k = 111`: the point `chain_meets_64` certifies for this `H` (POUS
+`lean/submissions/sponge-dense/ChainEPF.lean`, given `ChainExPostFacto`) and `dense_meets_64` for a random oracle
+(`lean/submissions/dense/DenseReCert.lean`, `k = 106`)."""
 
 
 def dom(t: int, i: int) -> int:

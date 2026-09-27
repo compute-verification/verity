@@ -18,7 +18,9 @@ The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set o
 
 `dense.SECURE_FIRST` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
-`k = 106` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. Segment `s` is exactly
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. The 111 is what
+`chain_meets_64` (POUS `lean/submissions/sponge-dense/ChainEPF.lean`) certifies for this overwrite-chain `H`, given
+`ChainExPostFacto`; a random-oracle `H` needs only 106 (`dense_meets_64`). Segment `s` is exactly
 `chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
 
 ~~~text
@@ -86,7 +88,7 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`, `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)`, `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (dense: 106 and 483 µs) |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (dense: 111 and 483 µs) |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -197,8 +199,8 @@ Done in the random-oracle model (POUS `lean/submissions/dense/DenseReCert.lean`)
 `SECURE_FIRST`'s point (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), which covers the code's
 per-segment `tag_s` domains (`domainSep_equiv`). Pending:
 
-- `ChainExPostFacto`, which carries them from the random oracle to the overwrite chain (`sponge-dense`,
-  `DISCREPANCIES.md` D5).
+- `ChainExPostFacto`, the hypothesis of `chain_meets_64`, which carries the certificate from the random oracle to the
+  overwrite chain at `k = 111` (`sponge-dense/ChainEPF.lean`, `DISCREPANCIES.md` D5).
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at

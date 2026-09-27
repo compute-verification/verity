@@ -27,7 +27,7 @@ C = [params.codec.encode_segment(params, prims, salt, s, g) for s, g in enumerat
 vk = setup.verifier_key(params, prims, segs, commitment, salt, encoded=C)            # the verifier's own encoding
 blocks = [b for seg in C for b in seg]
 w1 = decode_tensor(layout, prims, salt, "w1", blocks.__getitem__)      # decode one tensor
-v = audit.TimedVerifier(vk, audit.challenge_key(audit_secret, vk))     # k = 106, Δ = 0.5 ms (+ rtt_allowance_ns)
+v = audit.TimedVerifier(vk, audit.challenge_key(audit_secret, vk))     # k = 111, Δ = 0.5 ms (+ rtt_allowance_ns)
 result = audit.run_timed(v, blocks.__getitem__)
 ~~~
 

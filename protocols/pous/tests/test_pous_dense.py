@@ -76,7 +76,7 @@ def test_costs():
 def test_secure_first_parameters():
     p = dense.SECURE_FIRST
     assert (p.blocks_per_segment, p.m, p.segment_bytes) == (512, 524_288, 1 << 25), "dense_meets_64's point"
-    assert (p.challenges, p.certified_rounds, p.call_ns) == (106, 5, 483_000) and p.codec is dense.DENSE
+    assert (p.challenges, p.certified_rounds, p.call_ns) == (111, 5, 483_000) and p.codec is dense.DENSE
     assert dense.reference(p).h.pi2.width == 2 * 524_288 + 512
     assert list(p.parents(3)) == [0, 1, 2]
     assert dense.dom(5, 7) == 5 | (7 << 256)
@@ -101,7 +101,7 @@ def test_end_to_end_with_the_parameters_codec():
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
     timed = TimedVerifier(vk, key)
-    assert timed.k == 106
+    assert timed.k == 111
     assert run_timed(timed, blocks.__getitem__).accepted
     wrong = run_timed(TimedVerifier(vk, key, k=5), lambda i: blocks[(i + 1) % len(blocks)])
     assert not wrong.accepted
@@ -109,7 +109,7 @@ def test_end_to_end_with_the_parameters_codec():
 
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))
     result = simulate(vk, HonestResponder(enc), prims, key)
-    assert result.accepted and len(result.answers) == 106
+    assert result.accepted and len(result.answers) == 111
 
 
 def test_rejects():

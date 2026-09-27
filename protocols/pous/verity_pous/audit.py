@@ -41,7 +41,7 @@ CALL_NS = 242_000
 (`docs/p3-instantiation.md` §3)."""
 
 CHALLENGES = 132
-"""P3's `k` for 1% at §2c's point (`γ = 0.0183`); parameters with a `challenges` attribute (the dense scheme's 106)
+"""P3's `k` for 1% at §2c's point (`γ = 0.0183`); parameters with a `challenges` attribute (the dense scheme's 111)
 override it."""
 
 CERTIFIED_ROUNDS = 28
