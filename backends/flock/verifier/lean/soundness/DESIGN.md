@@ -238,10 +238,10 @@ strict time.
     averaging over that sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
   - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
-    $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256.5}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
+    $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
   - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
-    sets that read its target. This is the record with room to spare: $t\cdot2^{-209.9}$ for audit B, against $2^{-205.6}$.
+    sets that read its target. This is the record with room to spare: $t\cdot2^{-209.4}$ for audit B, against $2^{-205.1}$.
 - **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
   linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
   $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's
