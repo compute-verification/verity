@@ -6,7 +6,8 @@ drawn units are proved. The two-stage protocol (replay, then a second draw) is `
 ## Lifecycle
 
 1. **Serving commits** the values the partition's units read and write, and sends the roots.
-2. **Registration** (`registration.record`): the scheme, the roots and their leaf counts, the partition `{program, query}`
+2. **Registration** (`registration.record`): the scheme and the commitment's source (`served` or `stand-in`), the roots
+   with their leaf counts and domains, the partition `{program, query}`
    and its digest, and the population the query derives, written before any draw. The verifier checks it against its own
    copy of the program and query (`registration.check`) and holds its own public file to it (`registration.matches_public`).
 3. **The draw**: the verifier samples units from the operating system's randomness under its law (`subset:K` or
@@ -28,7 +29,7 @@ canonical order, with no width rule. It is a demo query for single-template runs
 ## Not here yet
 
 - The serving path's own commitment: run A0 uses a stand-in, a fresh commitment to values captured from serving, and the
-  registration says so (`commitment.stand_in`).
+  registration says so (`commitment.source.kind = "stand-in"`).
 - The Lean verifier of record on M0's current statement format, and the partition and program bound inside the statement.
 - The protocol's security statement and its proof in Lean.
 

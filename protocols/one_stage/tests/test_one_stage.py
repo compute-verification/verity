@@ -18,12 +18,15 @@ PAIR = bind(CompositeDefinition("OneStageTestPair", 0, (), lambda S: ((("x", Arr
                                 lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
 ROOTS = {"x": "ab" * 64, "out": "cd" * 64}
 LEAVES = {"x": 6, "out": 6}
+DOMAINS = {"x": "01" * 64, "out": "02" * 64}
+SERVED = {"kind": "served", "row": 101}
 
 
-def _registration(n: int = 6, **kw):
+def _registration(n: int = 6, source=SERVED):
     prog = P.population_program(PAIR, n)
     q = P.template_instance_query(PAIR.id)
-    return prog, q, R.record("frame-v3-sha512/hm96-sha512", ROOTS, LEAVES, prog, q, registered_utc="2026-09-27T05:40:00Z", **kw)
+    return prog, q, R.record("frame-v3-sha512/hm96-sha512", ROOTS, LEAVES, DOMAINS, prog, q, source,
+                             registered_utc="2026-09-27T05:40:00Z")
 
 
 def test_the_query_makes_each_instance_one_unit():
@@ -57,7 +60,8 @@ def test_registration_is_checked_by_content():
     assert R.check(rec, prog, q).ok
     assert R.digest(rec) == R.digest(dict(rec)) and len(R.digest(rec)) == 128
     for key, value, code in (("population", 7, "population"), ("partition_digest", "0" * 128, "partition-digest"),
-                             ("leaves", {"x": 6}, "leaves"), ("format", "x", "format")):
+                             ("leaves", {"x": 6}, "leaves"), ("domains", {"x": "01" * 64}, "domains"), ("format", "x", "format"),
+                             ("commitment", {"scheme": "s", "source": {"kind": "guess"}}, "commitment")):
         assert code in R.check({**rec, key: value}, prog, q).codes
     assert "partition" in R.check(rec, P.population_program(PAIR, 5), q).codes
     assert "keys" in R.check({**rec, "extra": 1}, prog, q).codes
@@ -65,14 +69,17 @@ def test_registration_is_checked_by_content():
 
 def test_registration_holds_the_public_file():
     _, _, rec = _registration(6)
-    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", ROOTS, 6).ok
-    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", {**ROOTS, "x": "ef" * 64}, 6).codes == ("roots",)
-    assert R.matches_public(rec, "frame-v3/blake3", ROOTS, 5).codes == ("scheme", "population")
+    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", ROOTS, DOMAINS, 6).ok
+    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", {**ROOTS, "x": "ef" * 64}, DOMAINS, 6).codes == ("roots",)
+    assert R.matches_public(rec, "frame-v3-sha512/hm96-sha512", ROOTS, {**DOMAINS, "out": "03" * 64}, 6).codes == ("domains",)
+    assert R.matches_public(rec, "frame-v3/blake3", ROOTS, DOMAINS, 5).codes == ("scheme", "population")
 
 
-def test_stand_in_is_recorded():
-    _, _, rec = _registration(6, stand_in={"of": "vllm-v1 run root", "root": "7a" * 32})
-    assert rec["commitment"]["stand_in"]["of"] == "vllm-v1 run root"
+def test_the_source_says_served_or_stand_in():
+    _, _, rec = _registration(6, source={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})
+    assert rec["commitment"]["source"]["kind"] == "stand-in"
+    prog, q, served = _registration(6)
+    assert served["commitment"]["source"]["kind"] == "served" and R.check(served, prog, q).ok
 
 
 def test_draw_checks():

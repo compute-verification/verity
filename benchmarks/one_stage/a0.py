@@ -72,7 +72,7 @@ def leaves(meta: dict, n: int) -> dict[str, int]:
 
 def stand_in(set_dir: str) -> dict:
     prov = json.loads((Path(set_dir) / "manifest.json").read_text()).get("provenance", {})
-    return {"of": "vllm-v1 commitment of a served run", "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
+    return {"kind": "stand-in", "of": "vllm-v1 commitment of a served run", "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
             "run_root": prov.get("run_root"), "model": prov.get("model"), "program_digests": prov.get("program_digests"),
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
@@ -176,10 +176,11 @@ def main() -> int:
                                    "ok": st["meta"]["program_digests"].get(template.id) == head_digest}
 
     # 3. registration, before any draw; the verifier holds its own public file to it
-    rec = R.record(header["scheme"], header["frame_v3"]["roots"], leaves(st["meta"], n), program, query, stand_in=stand_in(a.set))
+    fv = header["frame_v3"]
+    rec = R.record(header["scheme"], fv["roots"], leaves(st["meta"], n), fv["domain_ids"], program, query, stand_in(a.set))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": R.check(rec, program, query).to_json(),
-              "public": R.matches_public(rec, header["scheme"], header["frame_v3"]["roots"], header["instances"]).to_json()}
+              "public": R.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
     summary["registration_digest"] = R.digest(rec)
     summary["partition_digest"] = rec["partition_digest"]
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
@@ -204,8 +205,11 @@ def main() -> int:
     # negatives: each must be refused
     neg: dict[str, dict] = {}
     other = dict(rec, roots={**rec["roots"], next(iter(rec["roots"])): "00" * 64})
-    v = R.matches_public(other, header["scheme"], header["frame_v3"]["roots"], header["instances"])
+    v = R.matches_public(other, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"])
     neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], next(iter(rec["roots"])): "00" * 64},
+                         header["instances"])
+    neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = R.check(rec, P.population_program(template, n - 1), query)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
@@ -233,8 +237,9 @@ def main() -> int:
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True)
     theader = public_header(tst["dir"], tn)
     tprog = P.population_program(template, tn)
-    trec = R.record(theader["scheme"], theader["frame_v3"]["roots"], leaves(tst["meta"], tn), tprog, query,
-                    stand_in={"of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"})
+    tfv = theader["frame_v3"]
+    trec = R.record(theader["scheme"], tfv["roots"], leaves(tst["meta"], tn), tfv["domain_ids"], tprog, query,
+                    {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"})
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
     tres = audit_session(trec, tprog, query, theader, D.parse_law("subset:2"), trecord, tlive, a.lean, out / "session-tampered", a.delta)
     neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None,
