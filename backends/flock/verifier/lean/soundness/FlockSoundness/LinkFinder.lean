@@ -19,7 +19,7 @@ With `p v` the probability that a trial reads exactly `v`, `s` that it reads two
 Its cost stops at the first further trial that reads anything, so it is at most twice a trial's in
 expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expected-time collision
 resistance for the finder (`Assumptions.SHA512ExpectedTimeCR`), and when every success outputs a
-collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256.5 + 1/(eM)` (`link_mass_le`).
+collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
 -/
 
 namespace FlockSoundness
@@ -304,7 +304,7 @@ theorem expect_finderCost_le (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e) (M : ℕ) 
 
 /-- **The link mass under expected-time collision resistance.** If every success of the finder
 outputs a collision of `Hc`, and the finder obeys the generic bound, then
-`s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256.5 + 1/(eM)` for the plurality `Xv`. -/
+`s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` for the plurality `Xv`. -/
 theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
     (out : τ × List τ → Option (List UInt8 × List UInt8)) (c : τ → ℝ) (hc : ∀ e, 0 ≤ c e)
     (M : ℕ) (hM : 1 ≤ M)
@@ -313,7 +313,7 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
       (finderCost rd c))
     {Xv : Val} (hX : ∀ v, pRd T sT rd v ≤ pRd T sT rd Xv) :
     sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) ≤
-      2 * expect c T sT / 2 ^ (256.5 : ℝ) + 1 / (Real.exp 1 * M) := by
+      2 * expect c T sT / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
   have h1 := succ_ge T sT rd hX M hM
   have h2 : expect (ind (Succ rd)) (finderG T M) (finderStrat T sT M) ≤
       (prob (fun x => ∃ a b, out x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b) (finderG T M)
@@ -323,8 +323,8 @@ theorem link_mass_le {Dh : Type} (Hc : List UInt8 → Dh)
   have h3 := hCR
   unfold Assumptions.SHA512ExpectedTimeCR at h3
   have h4 := expect_finderCost_le T sT rd c hc M
-  have h5 : expect (finderCost rd c) (finderG T M) (finderStrat T sT M) / 2 ^ (256.5 : ℝ) ≤
-      2 * expect c T sT / 2 ^ (256.5 : ℝ) :=
+  have h5 : expect (finderCost rd c) (finderG T M) (finderStrat T sT M) / 2 ^ (256 : ℝ) ≤
+      2 * expect c T sT / 2 ^ (256 : ℝ) :=
     div_le_div_of_nonneg_right h4 (by positivity)
   linarith
 
