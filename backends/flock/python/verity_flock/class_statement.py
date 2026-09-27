@@ -15,9 +15,10 @@ M0's statement proves a template's identical units with every instance's input r
   record can name, binds the SHA-512 of its description under the tag ``verity/flock/experimental-owners``).
 
 This is a synthetic layout: one row per unit instance, not the scheme's layout rule over the partition (which is not specified
-yet), and M0's statement publishes the declared outputs, where a partition's unit outputs are committed values.  A class whose unit
-reads a pinned table (a MUFU read) waits for M0's read placement, a lookup slot per read: its gates can't be inlined into the unit
-(154-309 M XOR terms per read), and are reported as such.  `distinct_calls` builds a served row's workload from its program graph:
+yet), and M0's statement publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
+Boolean circuit, with no slot type other than M0's row slots: a class whose unit reads a pinned table (a MUFU read) waits for the
+inline plain-gate lowering of the read the M0 lane is measuring (the naive one-hot circuit is 154-309 M XOR terms per read), and is
+reported as such.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -342,8 +343,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
         elif "lookup" in cc.circuit.kind:
             rec["ands"] = cc.counts["ands"]
-            rec["broke"] = {"at": "statement", "why": "table reads in the unit: waiting for M0's read placement (a lookup slot per read, PR "
-                                                       "stacked on #83); inlining a read's gates would put 154-309 M XOR terms in the unit",
+            rec["broke"] = {"at": "statement", "why": "table reads in the unit: waiting for the M0 lane's inline plain-gate lowering of a read "
+                                                       "(no slot types; the naive one-hot circuit is 154-309 M XOR terms per read)",
                             "table_reads": len(cc.circuit.lookups), "tables": sorted({t for t, _i, _w in cc.circuit.lookups})}
         elif cc.counts["ands"] > a.max_ands:
             rec["broke"] = {"at": "size", "why": f"{cc.counts['ands']} ANDs > --max-ands {a.max_ands}"}
