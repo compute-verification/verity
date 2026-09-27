@@ -96,6 +96,19 @@ theorem leafE_mono (plur : Chooser T D β) {F F' : I → β → ℝ} (h : ∀ i 
   | _, _, _, .send _ L, σ' => leafE_mono plur h (L σ'.1) σ'.2
   | _, _, _, .table _ _ _ _ _ L, σ' => leafE_mono plur h _ σ'.2
 
+/-- Monotonicity where the leaf relation holds. -/
+theorem leafE_mono_rel (plur : Chooser T D β) {F F' : I → β → ℝ}
+    (h : ∀ i a b, R i a b → F i b ≤ F' i b) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
+      leafE plur F L σ' ≤ leafE plur F' L σ'
+  | _, _, _, @Lock.ret _ _ _ _ _ _ _ i a b hr, _ => h i a b hr
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ' => by
+      simp only [leafE]
+      exact div_le_div_of_nonneg_right
+        (Finset.sum_le_sum fun c _ => leafE_mono_rel plur h (L c) (σ' c)) (Nat.cast_nonneg _)
+  | _, _, _, .send _ L, σ' => leafE_mono_rel plur h (L σ'.1) σ'.2
+  | _, _, _, .table _ _ _ _ _ L, σ' => leafE_mono_rel plur h _ σ'.2
+
 theorem leafE_add (plur : Chooser T D β) (F F' : I → β → ℝ) :
     ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
       leafE plur (fun i b => F i b + F' i b) L σ' = leafE plur F L σ' + leafE plur F' L σ'

@@ -84,3 +84,16 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.table_sound
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
+-- the compiled theorem (§1.2): the lockstep coupling with the plurality prover, rewinding at every
+-- cap, and binding: every counted conflict and every self-clash is a SHA-512 collision
+#print axioms FlockSoundness.Rewinding.expect_bad_le
+#print axioms FlockSoundness.Game.Lock.expect_le_coupled
+#print axioms FlockSoundness.Game.Lock.leafE_off_le
+#print axioms FlockSoundness.lockTable
+#print axioms FlockSoundness.bad_split
+#print axioms FlockSoundness.compiled_le_bad
+#print axioms FlockSoundness.bad_le
+#print axioms FlockSoundness.table_sound_compiled
+#print axioms FlockSoundness.SelfClash.collision
+#print axioms FlockSoundness.op₀_conflict_collision
+#print axioms FlockSoundness.opR_conflict_collision
