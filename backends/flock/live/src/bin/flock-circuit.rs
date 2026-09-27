@@ -133,10 +133,11 @@ fn zk_identity(c: &Composite) -> Value {
            "inner_proof": "one batched <c, h> = t by a masked dot product (tau = <c, mu>, Y = h + beta mu)",
            "ring_switch": format!("non-region s_hat_v hidden by the mask slot's uniform words (2^{} bits per block); the prover refuses coins whose weights do not span",
                                   c.meta["mask_log"].as_u64().unwrap_or(14)),
-           "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with 2 q_0 + 64 uniform coefficients (c = x); two padded uniform \
-                               lanes folded in after the lane rounds (rho_0, rho_1 F128-independent); the ood value, the lane-round messages and the \
-                               extra lanes' sums padded; T' and ybar sent (uniform)",
-           "ligerito_level0_queries": "the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100, rho' = (L + 2 q_0 + 64) / 2L",
+           "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with t_pad = 2 q_0 uniform coefficients (c = x); four padded \
+                               uniform lanes, rep r folding its own pair 2r, 2r + 1 after its lane rounds (rho_0, rho_1 F128-independent); the ood \
+                               value, the lane-round messages and the pair's sums padded; T' and ybar sent (uniform)",
+           "ligerito_level0_queries": "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
+                                       rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24",
            "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128"],
            "not_yet_masked": []})
 }
