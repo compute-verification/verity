@@ -57,7 +57,7 @@ def _derived(weight_only_calls: str | None, weights: tuple[torch.Tensor, torch.T
 
 
 def _specs(rep) -> list[str]:
-    return [_spec_id(n.fn) for n in rep.program.fn.body.nodes]
+    return [n.fn.id for n in rep.program.fn.body.nodes]
 
 
 def _rows(rep) -> dict:
