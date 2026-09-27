@@ -37,6 +37,33 @@ pub struct Template {
 }
 
 impl Template {
+    /// A `flock-ir-unit/v2` netlist as a template: its input words' rows are the inputs.
+    pub fn from_net(net: &crate::ir_block::IrUnitNet) -> Self {
+        Template { k_log: net.unit_log, n_in: net.in_words * 128, const_pos: net.const_pos, useful: net.useful, a: net.a.clone(), b: net.b.clone() }
+    }
+
+    /// `c = a · b` in GF(2^128) mod `x^128 + x^7 + x^2 + x + 1`, schoolbook: inputs `a` (rows 0..127) and `b` (128..255), the
+    /// constant at 256, every product `a_i b_j` (16,384 ANDs), then `c` (128 rows from 16,896) as the reduced XOR of its products.
+    pub fn gf128_mul() -> Self {
+        let (prod0, out0) = (512, 512 + 128 * 128);
+        let k = 1 << 15;
+        let (mut a, mut b) = (vec![Vec::new(); k], vec![Vec::new(); k]);
+        let mut terms = vec![Vec::new(); 128];
+        for i in 0..128 {
+            for j in 0..128 {
+                let r = prod0 + 128 * i + j;
+                (a[r], b[r]) = (vec![i], vec![128 + j]);
+                for d in gf128_reduce(i + j) {
+                    terms[d].push(r);
+                }
+            }
+        }
+        for (d, t) in terms.into_iter().enumerate() {
+            (a[out0 + d], b[out0 + d]) = (t, vec![256]);
+        }
+        Template { k_log: 15, n_in: 256, const_pos: 256, useful: out0 + 128, a, b }
+    }
+
     /// `(z, A z, B z)` of one block from its input bits.
     pub fn eval(&self, inputs: &[bool]) -> (Vec<bool>, Vec<bool>, Vec<bool>) {
         let k = 1 << self.k_log;
@@ -83,6 +110,21 @@ impl Template {
     }
 }
 
+/// The coefficients `x^d` reduces to mod `x^128 + x^7 + x^2 + x + 1` (each once: XOR parity).
+fn gf128_reduce(d: usize) -> Vec<usize> {
+    let mut v = vec![false; 256];
+    v[d] = true;
+    for e in (128..256).rev() {
+        if v[e] {
+            v[e] = false;
+            for t in [7, 2, 1, 0] {
+                v[e - 128 + t] ^= true;
+            }
+        }
+    }
+    (0..128).filter(|&i| v[i]).collect()
+}
+
 /// A sub-cube of a table's local index: `fixed` bits and ordered `free` bits over `0..k_log + b` (its blocks' `2^b`); the local
 /// block bits past `b` (the union's capacity `ν`) are zero.
 #[derive(Clone, Debug)]
@@ -108,6 +150,8 @@ pub struct Tables {
     pub nu: usize,
     circuits: Vec<SparseMatrixCircuit<'static>>,
     rels: Vec<Relation>,
+    /// seconds in the glue sumcheck: the last proof's (prover), the last verification's (verifier)
+    pub glue_s: std::cell::Cell<(f64, f64)>,
 }
 
 fn leak<T>(x: T) -> &'static T {
@@ -127,7 +171,7 @@ impl Tables {
             let tt = t.table_type();
             SparseMatrixCircuit::new(leak(tt.a_0), leak(tt.b_0)).with_const_pin(Some(t.const_pos))
         }).collect();
-        let mut s = Tables { templates, counts, glue, registry, nu, circuits, rels: Vec::new() };
+        let mut s = Tables { templates, counts, glue, registry, nu, circuits, rels: Vec::new(), glue_s: Default::default() };
         let m = s.registry.m_total();
         let mut dsts = std::collections::BTreeSet::new();
         let mut rels = Vec::new();
@@ -245,9 +289,11 @@ impl Tables {
         let m = self.registry.m_total();
         let mut gp = None;
         let (proof, commitment, _) = prove_fast_ligerito_union_glued(&self.union(), &self.params(profile), slots, &mut |_cm: &Commitment, z: &[F128], ch: &mut Ch| {
+            let t = std::time::Instant::now();
             let mut z = z.to_vec();
             alter(&mut z);
             let (p, rho) = glue::prove_packed(&self.rels, m, &z, ch);
+            self.glue_s.set((t.elapsed().as_secs_f64(), self.glue_s.get().1));
             let claim = LinkClaim { point: rho, value: p.value };
             gp = Some(p);
             vec![claim]
@@ -260,7 +306,10 @@ impl Tables {
         let circs: Vec<&dyn LincheckCircuit> = self.circuits.iter().map(|c| c as &dyn LincheckCircuit).collect();
         let m = self.registry.m_total();
         verify_ligerito_union_glued(&self.union(), &circs, commitment, proof, &self.params(profile), &mut |_cm: &Commitment, ch: &mut Ch| {
-            glue::verify(&self.rels, m, gp, ch).map(|(point, value)| vec![LinkClaim { point, value }])
+            let t = std::time::Instant::now();
+            let got = glue::verify(&self.rels, m, gp, ch).map(|(point, value)| vec![LinkClaim { point, value }]);
+            self.glue_s.set((self.glue_s.get().0, t.elapsed().as_secs_f64()));
+            got
         }, ch).map(|_| ())
     }
 }
@@ -315,6 +364,69 @@ mod tests {
     fn run(st: &Tables, ins: &[Vec<Vec<bool>>]) -> Result<(), FlockVerifyError> {
         let (cm, proof, gp) = st.prove(ins, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-test"));
         st.verify(&cm, &proof, &gp, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-test"))
+    }
+
+    #[test]
+    fn gf128_multiplier_matches_carryless_multiplication() {
+        let t = Template::gf128_mul();
+        // bit i is x^i's coefficient: shift-and-add, reducing x^128 to x^7 + x^2 + x + 1 as it goes
+        let mul = |mut a: u128, b: u128| -> u128 {
+            let mut c = 0u128;
+            for i in 0..128 {
+                if b >> i & 1 == 1 {
+                    c ^= a;
+                }
+                a = (a << 1) ^ if a >> 127 == 1 { 0x87 } else { 0 };
+            }
+            c
+        };
+        let mut s = 0x9e3779b97f4a7c15u64;
+        let mut next = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s as u128 };
+        for _ in 0..4 {
+            let (a, b) = (next() | next() << 64, next() | next() << 64);
+            let ins: Vec<bool> = (0..256).map(|i| if i < 128 { a >> i & 1 == 1 } else { b >> (i - 128) & 1 == 1 }).collect();
+            let z = t.eval(&ins).0;
+            let c = (0..128).fold(0u128, |c, d| c | (z[512 + 16384 + d] as u128) << d);
+            assert_eq!(c, mul(a, b));
+        }
+    }
+
+    /// private-recursion's two-table demo: SHA-512 compressions (the composite circuit's `sha512x3` slot, three chained
+    /// compressions per block) feeding a table of GF(2^128) multipliers, `a` and `b` two of the compressions' output words, glued
+    /// in `FC_GLUE_SPLIT` relations; prints the prover's and verifier's glue time against the rest. `FC_SHA512_CIRCUIT`: a
+    /// staged `circuit.txt`.
+    #[test]
+    #[ignore]
+    fn sha512_feeding_gf128_multipliers() {
+        let Ok(path) = std::env::var("FC_SHA512_CIRCUIT") else { return };
+        let split: usize = std::env::var("FC_GLUE_SPLIT").ok().and_then(|x| x.parse().ok()).unwrap_or(1);
+        let text = std::fs::read_to_string(path).unwrap();
+        let c = crate::circuit::Composite::parse(&text, None).unwrap();
+        let sha = Template::from_net(&c.nets[c.sha_net].1);
+        let out = c.nets[c.sha_net].1.out_groups.last().unwrap().col;
+        let (k, blocks) = (sha.k_log, 8);
+        let rows = |t: usize, kk: usize, base: usize, width: usize| TableRegion {
+            table: t,
+            fixed: (width.trailing_zeros() as usize..kk).map(|l| (l, base >> l & 1 == 1)).collect(),
+            free: (0..width.trailing_zeros() as usize).chain(kk..kk + 3).collect(),
+        };
+        let w = 128 / split;
+        let glue: Vec<Glue> = (0..2).flat_map(|h| (0..split).map(move |q| (h, q)))
+            .map(|(h, q)| Glue { dst: rows(1, 15, 128 * h + w * q, w), src: rows(0, k, 128 * (out + h) + w * q, w), map: Map::Id }).collect();
+        let st = Tables::new(vec![sha.clone(), Template::gf128_mul()], vec![blocks, blocks], glue).unwrap();
+        let mut s = 0x2545f4914f6cdd1du64;
+        let sha_in: Vec<Vec<bool>> = (0..blocks).map(|_| (0..sha.n_in).map(|_| { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s & 1 == 1 }).collect()).collect();
+        let mul_in: Vec<Vec<bool>> = sha_in.iter().map(|x| sha.eval(x).0[128 * out..128 * out + 256].to_vec()).collect();
+        let ins = vec![sha_in, mul_in];
+        let t = std::time::Instant::now();
+        let (cm, proof, gp) = st.prove(&ins, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-demo"));
+        let prove_s = t.elapsed().as_secs_f64();
+        let t = std::time::Instant::now();
+        st.verify(&cm, &proof, &gp, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-demo")).unwrap();
+        let verify_s = t.elapsed().as_secs_f64();
+        let (gp_s, gv_s) = st.glue_s.get();
+        println!("DEMO relations={} M={} dense_m={} prove_s={prove_s:.3} glue_prove_s={gp_s:.3} verify_s={verify_s:.4} glue_verify_s={gv_s:.5}",
+                 st.rels.len(), st.registry.m_total(), st.union().dense_m());
     }
 
     #[test]
