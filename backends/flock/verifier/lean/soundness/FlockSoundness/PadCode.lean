@@ -13,7 +13,7 @@ file gives that code what `ListSize`, `LigeritoLevels` and `LigeritoDecode` give
   ArkLib's `ReedSolomon.code` and is injective, and a `K` codeword that agrees with an `F` row on
   `T` is an `F` encoding there (`exists_encAt_of_agree`);
 * a `K` combination of the `k` monomials that vanishes on `k` positions is zero (`encKAt_eq_zero`);
-* at most `⌊25·2^d/k⌋` row families encode within `1 − √(k/2^d) − η` of a table
+* at most `⌊100·2^d/k⌋` row families encode within `1 − √(k/2^d) − η` of a table
   (`card_closeRows_le`, ArkLib's Johnson bound);
 * `prCoin_mca_le` bounds its MCA events by `padMcaA / 2^256` (`prCoin_pad_mca_le`).
 -/
@@ -181,12 +181,12 @@ theorem encAt_injective (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k �
 
 include hA in
 open Classical in
-/-- **The list size.** At most `⌊25·2^d/k⌋` families of `s` rows encode within `1 − √(k/2^d) − η`
+/-- **The list size.** At most `⌊100·2^d/k⌋` families of `s` rows encode within `1 − √(k/2^d) − η`
 of any table: ArkLib's Johnson bound for the interleaved `RS[2^d, k]`. -/
 theorem card_closeRows_le (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k ≤ 2 ^ d) (hk0 : 0 < k)
     {s : ℕ} (hs : 0 < s) (T : Fin s → Fin (2 ^ d) → F) :
     (Finset.univ.filter fun R : Fin s → Fin k → F =>
-      CloseRows A d k (1 - Real.sqrt ((k : ℝ) / 2 ^ d) - Accounting.eta) T R).card ≤ 25 * 2 ^ d / k := by
+      CloseRows A d k (1 - Real.sqrt ((k : ℝ) / 2 ^ d) - Accounting.eta) T R).card ≤ 100 * 2 ^ d / k := by
   have : NeZero s := ⟨by omega⟩
   have : NeZero (2 ^ d) := ⟨pow_ne_zero _ two_ne_zero⟩
   set γ := 1 - Real.sqrt ((k : ℝ) / 2 ^ d) - Accounting.eta with hγ
@@ -248,19 +248,19 @@ theorem card_closeRows_le (d k : ℕ) (hd : d ≤ 40) (hd64 : d ≤ 64) (hk : k 
     (by unfold Accounting.eta; norm_num)
   simp only at hJ
   rw [← hcode, hrate] at hJ
-  have hval : 1 / (2 * Accounting.eta * ((k : ℝ) / 2 ^ d)) = 25 * 2 ^ d / k := by
+  have hval : 1 / (2 * Accounting.eta * ((k : ℝ) / 2 ^ d)) = 100 * 2 ^ d / k := by
     unfold Accounting.eta
     have : (k : ℝ) ≠ 0 := by exact_mod_cast hk0.ne'
     field_simp
     ring
   rw [hval] at hJ
-  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ENNReal.ofReal (25 * 2 ^ d / k) :=
+  have h1 : ((S.card : ℕ∞) : ℝ≥0∞) ≤ ENNReal.ofReal (100 * 2 ^ d / k) :=
     (ENat.toENNReal_le.2 hcardS).trans hJ
-  have h2 : (S.card : ℝ) ≤ 25 * 2 ^ d / k := by
-    have hnn : (0 : ℝ) ≤ 25 * 2 ^ d / k := by positivity
-    have h1' : ((S.card : ℕ) : ℝ≥0∞) ≤ ENNReal.ofReal (25 * 2 ^ d / k) := by simpa using h1
+  have h2 : (S.card : ℝ) ≤ 100 * 2 ^ d / k := by
+    have hnn : (0 : ℝ) ≤ 100 * 2 ^ d / k := by positivity
+    have h1' : ((S.card : ℕ) : ℝ≥0∞) ≤ ENNReal.ofReal (100 * 2 ^ d / k) := by simpa using h1
     simpa using ENNReal.toReal_le_of_le_ofReal hnn h1'
-  have h3 : (S.card : ℝ) * k ≤ 25 * 2 ^ d := by
+  have h3 : (S.card : ℝ) * k ≤ 100 * 2 ^ d := by
     have hkpos : (0 : ℝ) < k := by exact_mod_cast hk0
     rwa [le_div_iff₀ hkpos] at h2
   rw [Nat.le_div_iff_mul_le hk0]

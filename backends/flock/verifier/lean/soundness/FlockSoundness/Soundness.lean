@@ -9,8 +9,8 @@ import FlockSoundness.LinkSound
 of the committed table packs a witness satisfying the statement, is at most
 `tableError (fast100 m) shape`.
 
-**`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-195.5` for
-`22 ≤ m ≤ 33` and `2^-195.4` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
+**`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-205` for
+`22 ≤ m ≤ 33` and `2^-205` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
 
 This is the interactive-oracle layer, a16z's security stage 1a (`DESIGN.md` §7): the
 committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with live coins) adds
@@ -113,13 +113,13 @@ theorem table_sound (A : Arith F K) (hA : A.Correct)
   (prob_le_value _ _ σ).trans (table_value_sound A hA S sch hsch hm ptLocal mPts hlay)
 
 /-- **The theorem with the numbers.** `fast100` run twice on one root with live coins: at most
-`2^-195.5` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
+`2^-205` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
 theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
     (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
-      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.5 : ℝ))) :=
+      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   (table_sound A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
@@ -129,7 +129,7 @@ theorem table_sound_fast100_34_35 (A : Arith F K)
     (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
-      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
+      (table A S sch (by omega) ptLocal mPts) σ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   (table_sound A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_34_35 hm1 hm2 hsch _ hshape))
 

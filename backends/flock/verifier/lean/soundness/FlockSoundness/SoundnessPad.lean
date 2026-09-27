@@ -314,7 +314,7 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 27 →
 /-- **The table theorem at M1's values** (#123 at `8d621454`, `backends/flock/live/PROTOCOL.md` §7
 item 6): `m = 25, 26, 27`, level-0 query counts `277, 242, 229`, padding `t = 2q₀`, a pair of extra
 lanes per rep. For every prover strategy, the verifier accepts a table while the committed values
-do not satisfy the statement with probability at most `2^-196.5`, for every statement shape in
+do not satisfy the statement with probability at most `2^-205`, for every statement shape in
 range. -/
 theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 27) (c₀ : F) (ptLocal mPts : ℕ)
@@ -322,7 +322,7 @@ theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     (σ : Strategy (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule S.m) (m1Pad S.m) c₀ out.2)
       (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts) σ ≤
-      ENNReal.ofReal ((2 : ℝ) ^ (-(196.5 : ℝ))) :=
+      ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   (table_sound_pad A hA S (m1Schedule S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m S.m hm1 hm2)
     (by omega) (m1Pad S.m) (m1_padOK S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
     (m1_rep_nonneg S.m hm1 hm2 _) σ).trans
