@@ -72,12 +72,16 @@ a = copy.deepcopy(r); s = next(x for x in a["streams"] if x["rounds"] and x["rou
 a = copy.deepcopy(r); m = a["streams"][0]["rounds"][0]["msg"]; a["streams"][0]["rounds"][0]["msg"] = ("1" if m[0] == "0" else "0") + m[1:]; w("retained_round_bytes_changed", a)
 a = copy.deepcopy(r); a["link"]["sigma"] = lo(a["link"]["sigma"]); w("link_sigma_changed", a)
 a = copy.deepcopy(r); p = a["link"]["points"][0]; p[0] = lo(p[0]); w("link_point_changed", a)
-a = copy.deepcopy(r); a["config"]["require_link"] = False; w("require_link_false", a)
+a = copy.deepcopy(r); a["link"] = None; w("link_exchange_removed", a)
+a = copy.deepcopy(r); a["config"]["require_link"] = False; w("record_config_require_link_false", a)
 PY
-for c in coin_seed_changed mid_coin_changed retained_round_bytes_changed link_sigma_changed link_point_changed require_link_false; do
+for c in coin_seed_changed mid_coin_changed retained_round_bytes_changed link_sigma_changed link_point_changed link_exchange_removed; do
   neg $c $T/$c.json $ses/circuit.rep0.bin $ses/circuit.rep1.bin; done
+# info (not judged): the record's own config block is not trusted; from_record replays under the verifier's configuration
+line=$(rp $inst $T/record_config_require_link_false.json $ses/circuit.rep0.bin $ses/circuit.rep1.bin)
+echo "{\"neg\": \"record_config_require_link_false\", \"result\": \"info: $(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected) (the replay uses its own config)\"}" | tee -a $O/negatives.jsonl
 o=$(ls $W/p*/instances-s*.bin | grep -v "$inst" | head -1); [ -n "$o" ] && neg other_point_public_file $ses/session.json $ses/circuit.rep0.bin $ses/circuit.rep1.bin $o
 python3 -c "import sys;t=open(sys.argv[1]).read().splitlines(True);i=len(t)//2;t[i]=t[i].replace('1','2',1) if '1' in t[i] else t[i]+' ';open(sys.argv[2],'w').write(''.join(t))" $W/circuit.txt $T/circuit-other.txt
 neg circuit_not_the_pinned_one $ses/session.json $ses/circuit.rep0.bin $ses/circuit.rep1.bin $inst $T/circuit-other.txt
-echo "NEGATIVES $(grep -c '"result": "rejected"' $O/negatives.jsonl) of $(wc -l < $O/negatives.jsonl) rejected; total bad $bad" | tee -a $O/summary.txt
+echo "NEGATIVES $(grep -c '"result": "rejected"' $O/negatives.jsonl) of $(grep -vc '"result": "info' $O/negatives.jsonl) rejected (+1 info); total bad $bad" | tee -a $O/summary.txt
 [ $bad = 0 ]
