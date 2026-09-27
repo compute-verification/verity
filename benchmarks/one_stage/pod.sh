@@ -5,6 +5,7 @@
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
 #      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128)
+#      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out; W=/workspace/one-stage; mkdir -p $O $W/bin
@@ -40,7 +41,12 @@ sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 M0PATH=$W/m0/packages/verity/src:$W/m0/backends/numerical/python:$W/m0/backends/flock/python:$W/m0/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/integrations/vllm:$REPO/protocols/one_stage
-if [ "${RUN:-a0}" = a3 ]; then
+if [ "${RUN:-a0}" = a2 ]; then
+  mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
+  SERVED=$(dirname $(find $W/served -name registration.json | head -1))
+  $W/py/bin/python benchmarks/one_stage/a2.py --served $SERVED --template-set $SET --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
+    --lean $W/bin/flock-verify --out $O/a2 --k ${K:-256} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a2.log | cut -c1-4000
+elif [ "${RUN:-a0}" = a3 ]; then
   $W/py/bin/python benchmarks/one_stage/a3.py --sets $W/set --m0-pythonpath $M0PATH --bin $W/bin/flock-circuit \
     --lean $W/bin/flock-verify --out $O/a3 --layer ${LAYER:-0} --k ${K:-128} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a3.log | cut -c1-4000
 else
