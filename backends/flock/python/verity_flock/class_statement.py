@@ -16,9 +16,9 @@ M0's statement proves a template's identical units with every instance's input r
 
 This is a synthetic layout: one row per unit instance, not the scheme's layout rule over the partition (which is not specified
 yet), and M0's statement publishes the declared outputs, where a partition's unit outputs are committed values.  Every class is one plain
-Boolean circuit, with no slot type other than M0's row slots: a class whose unit reads a pinned table (a MUFU read) waits for the
-inline plain-gate lowering of the read the M0 lane is measuring (the naive one-hot circuit is 154-309 M XOR terms per read), and is
-reported as such.  `distinct_calls` builds a served row's workload from its program graph:
+Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
+rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
+record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -27,9 +27,11 @@ import argparse
 import hashlib
 import json
 import os
+import resource
 import subprocess
 import sys
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,6 +49,8 @@ from . import ir_lower as IL
 from . import partition_units as PU
 
 BLOCK_WORDS = 64
+#: the selftest cases run on a read-bearing class (each re-parses its 1-3 GB circuit): the honest session, and the two witness tamperings
+READ_CASES = ("honest", "unit_internal_bit_flipped", "unit_input_differs_from_its_message_bits")
 EXPERIMENTAL = "verity/flock/experimental-owners"
 
 
@@ -235,21 +239,23 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     n = len(rows)
     FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows={"in": rows}, outs={"out": outs})
     meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"n": n, "table_reads": {t: c for t, c in meta.get("per_vu", {}).items() if t.startswith("lookup:")}, "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
+    return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
             "ands": low.layout.counts["ands"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"],
             "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
-def prove(binary: str, d: Path, n: int, port: int, selftest: bool = False, timeout: int = 3600) -> dict:
+def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600) -> dict:
     """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
-        r = subprocess.run([binary, "selftest", "--instances", str(inst), "--circuit", str(circ)], capture_output=True, text=True,
-                           timeout=timeout)
+        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)]
+        r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True, timeout=timeout)
         lines = [ln for ln in r.stdout.splitlines() if ln.startswith(("SELFTEST", "NEG"))]
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("NEG")]
-        head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), {})
-        return {"all_pass": head.get("all_pass"), "cases": len(neg), "failed": [c.get("case") for c in neg if c.get("pass") is not True]}
+        head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
+        failed = [c.get("case") for c in neg if c.get("pass") is not True]
+        all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed}
     pin = FC.digest(circ.read_text())
     srv = subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / "sessions"), "--instances", str(pub),
                             "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress"],
@@ -259,17 +265,35 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool = False, timeo
             if "SERVING" in (d / "serve.log").read_text():
                 break
             time.sleep(0.2)
-        r = subprocess.run([binary, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(inst), "--circuit", str(circ),
-                            "--runs", "1"], capture_output=True, text=True, timeout=timeout)
+        with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
+            timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
+            pr = subprocess.Popen(timer + [binary, "prove", "--verifier", f"127.0.0.1:{port}", "--instances", str(inst), "--circuit", str(circ),
+                                           "--runs", "1"], stdout=fo, stderr=fe)
+            pr.wait()
+        prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
+        verifier_gb = _vm_hwm(srv.pid)
     finally:
         srv.kill()
         srv.wait()
-    live = [json.loads(ln[5:]) for ln in r.stdout.splitlines() if ln.startswith("LIVE")]
+    out, err = (d / "prove.out").read_text(), (d / "prove.err").read_text()
+    live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
     if not live:
-        return {"accepted": False, "why": (r.stderr or r.stdout)[-400:]}
+        return {"accepted": False, "why": (err or out)[-400:]}
     v = live[-1]
     return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
-                                  "witness_s", "prove_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "statement_digest")}
+                                  "witness_s", "prove_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "statement_digest")} | \
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb}
+
+
+def _vm_hwm(pid: int) -> float | None:
+    """A live process's peak resident memory (VmHWM), GB."""
+    try:
+        for ln in open(f"/proc/{pid}/status"):
+            if ln.startswith("VmHWM:"):
+                return round(int(ln.split()[1]) / 2**20, 2)
+    except OSError:
+        return None
+    return None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -289,6 +313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "Nth provable class and on each flat Definition's largest (0: never)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
+    ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     a = ap.parse_args(argv)
@@ -316,7 +341,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    results = out / "results.jsonl"
+    results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
     if calls is not None:
@@ -341,11 +366,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         cc = PU.lower_class(units.activation(cl.definition), cl.representative)
         if cc.circuit is None:
             rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
-        elif "lookup" in cc.circuit.kind:
-            rec["ands"] = cc.counts["ands"]
-            rec["broke"] = {"at": "statement", "why": "table reads in the unit: waiting for the M0 lane's inline plain-gate lowering of a read "
-                                                       "(no slot types; the naive one-hot circuit is 154-309 M XOR terms per read)",
-                            "table_reads": len(cc.circuit.lookups), "tables": sorted({t for t, _i, _w in cc.circuit.lookups})}
         elif cc.counts["ands"] > a.max_ands:
             rec["broke"] = {"at": "size", "why": f"{cc.counts['ands']} ANDs > --max-ands {a.max_ands}"}
             rec["ands"] = cc.counts["ands"]
@@ -354,11 +374,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lanes_ = PU.lanes(units.activation(cl.definition), [cl.representative], key, a.n)[(cl.representative.definition, cl.representative.unit)]
                 d = out / s[:16]
                 rec["ands"] = cc.counts["ands"]
+                rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
                 rec["stage"] = stage(units, a.partition, s, cl, lanes_, d, salt_key)
+                rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
                 rec["stage_s"] = round(time.time() - t0, 3)
-                rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port)
+                if not a.selftest_only:
+                    rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port)
                 if a.selftest and (len(done) % a.selftest == 0 or s == largest.get(cl.definition.id)):
-                    rec["selftest"] = prove(a.binary, d, rec["stage"]["n"], a.port, selftest=True)
+                    if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
+                        runs = [prove(a.binary, d, rec["stage"]["n"], a.port, selftest=c) for c in READ_CASES]
+                        rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
+                                           "failed": [c for c, x in zip(READ_CASES, runs) if not x["all_pass"]], "subset": list(READ_CASES)}
+                    else:
+                        rec["selftest"] = prove(a.binary, d, rec["stage"]["n"], a.port, selftest=True)
                 for f in d.glob("*.bin"):
                     f.unlink()
             except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
