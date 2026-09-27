@@ -282,3 +282,10 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.ideal_mass_le
 #print axioms FlockSoundness.Audit.Partition.linkEv_le_psi
 #print axioms FlockSoundness.Audit.Partition.flock_batched_linkSoundE
+-- the compiled-layer audit with δ_link discharged: the link theorem composed into the count and drawn-unit bounds
+#print axioms FlockSoundness.Audit.Partition.linkBoundE
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count_linked
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_linked
+#print axioms FlockSoundness.Audit.Partition.placeDecoder
+#print axioms FlockSoundness.Audit.Partition.flock_batched_count_placed
+#print axioms FlockSoundness.Audit.Partition.flock_batched_drawn_placed
