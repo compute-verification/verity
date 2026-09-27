@@ -295,9 +295,9 @@ def fa3_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int) -
     return HB, M, NB, BN, f"g{HB}x{M}x{NB}x{BN}x{D}"
 
 
-def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int) -> int:
+def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
     N = NB * BN
-    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4
+    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
 def load_program(program_dir: str) -> dict[str, Any]:

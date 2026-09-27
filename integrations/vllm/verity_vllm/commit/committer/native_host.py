@@ -2268,10 +2268,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             sn = getattr(s, "short_name", "")
             tn = type(s).__name__
             if sn == "hidden_m1_fa3" or tn.endswith("FA3"):
-                return FP.LayoutPolicy(backend="fa3", compact=False)
+                return FP.LayoutPolicy(backend="fa3", compact=False, ms=bool(getattr(s, "ms", False)))
             if sn == "hidden_m1" or tn.endswith("HiddenM1Source"):
                 w = getattr(s, "_w", None)
-                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False)
+                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False, ms=bool(getattr(s, "ms", False)))
         return FP.LayoutPolicy()
 
     def _step_sequences(self, step: int, metas: list) -> Any:

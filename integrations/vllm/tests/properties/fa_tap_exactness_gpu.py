@@ -9,7 +9,8 @@ arguments, which library code may not do yet (lints P3, P9, P6).
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so --out DIR          # FA2 (L40S)
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so --out DIR      # FA3 (H100)
 
-A guarded-max build (`verity_tap_row3() == 1`) is checked against the record of the default build on the same GPU, `--baseline`:
+A guarded-max build (`verity_tap_row3() == 1`, and its MS class with `verity_tap_src() & 64`) is checked against the record of the
+default build on the same GPU, `--baseline`:
 
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so --baseline DIR/fa_tap_exactness.json --out DIR_G
 """
@@ -28,8 +29,9 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.properties.fa_tap_exactness import (FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_row3, expected_written,
-                                                geometry, masked_digest, negative_ok, negatives, seal, verify_record, visited_rows)
+from verity_vllm.properties.fa_tap_exactness import (FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_ms, check_row3,
+                                                expected_written, geometry, masked_digest, negative_ok, negatives, scale_log2_bits, seal,
+                                                verify_record, visited_rows)
 from verity_vllm.commit.hidden_stream import StreamLayout
 
 
@@ -136,8 +138,8 @@ def _armed(src, args: tuple, buf, decl: dict[str, int], tag: int) -> tuple[tuple
 
 
 def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, baseline: dict[tuple[str, int], str] | None = None) -> dict[str, Any]:
-    """One case at head dim `D`; a guarded-max build (`src.stats["row3"]`) also checks ROW word 3 and compares the rest of the stream with
-    the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`)."""
+    """One case at head dim `D`; a guarded-max build (`src.stats["row3"]`) also checks ROW word 3 and compares the rest of the six classes
+    with the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`); a build with the MS class (`src.ms`) checks it."""
     import torch
 
     geo = geometry(fa_version, c, D)
@@ -147,7 +149,7 @@ def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, basel
            **{k: geo[k] for k in ("HB", "M", "NB", "BN", "kBM", "swapped")}}
     t = _inputs(c, D, seed)
     args = _vllm_args(fa_version, c, t)
-    layout = StreamLayout(geo["HB"], geo["M"], geo["NB"], geo["BN"], D)
+    layout = StreamLayout(geo["HB"], geo["M"], geo["NB"], geo["BN"], D, ms=src.ms)
     buf = torch.full((layout.padded_words(),), FILL, dtype=torch.int32, device="cuda")
     out_i, lse_i = _call(src.orig_op, args)
     (out_t, lse_t), skipped = _armed(src, args, buf, {k: geo[k] for k in ("HB", "M", "NB", "BN", "D")}, 7)
@@ -164,6 +166,8 @@ def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, basel
         mine = (baseline or {}).get((c["name"], D))
         rec["row3"] = {**check_row3(words, layout, visited_rows(c, geo)),
                        "stream_eq_baseline": None if mine is None else mine == rec["stream_sha256_masked"]}
+    if src.ms:
+        rec["ms"] = check_ms(words, layout, visited_rows(c, geo), scale_log2_bits(c, D))
     rec["ok"] = case_ok(rec)
     return rec
 
@@ -175,8 +179,8 @@ def check_negative(src, fa_version: int, c: dict[str, Any], D: int, decl: dict[s
     rec = {"case": c["name"], "D": D, "why": why, "declared": decl, "kernel": {k: geo[k] for k in ("HB", "M", "NB", "BN", "D")}}
     t = _inputs(c, D, seed)
     args = _vllm_args(fa_version, c, t)
-    words = max(StreamLayout(decl["HB"], decl["M"], decl["NB"], decl["BN"], decl["D"]).padded_words(),
-                StreamLayout(geo["HB"], geo["M"], geo["NB"], geo["BN"], D).padded_words())
+    words = max(StreamLayout(decl["HB"], decl["M"], decl["NB"], decl["BN"], decl["D"], ms=src.ms).padded_words(),
+                StreamLayout(geo["HB"], geo["M"], geo["NB"], geo["BN"], D, ms=src.ms).padded_words())
     buf = torch.full((words,), FILL, dtype=torch.int32, device="cuda")
     out_i, _ = _call(src.orig_op, args)
     (out_w, _), skipped = _armed(src, args, buf, decl, 9)
@@ -240,12 +244,14 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, 
         for i, c in enumerate(cases(fa_version, quick)):
             rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base)
             doc["cases"].append(rec)
-            g = rec.get("row3")
+            g, ms = rec.get("row3"), rec.get("ms")
             print(f"[fa-tap] fa{fa_version} hd{D} {c['name']:30s} " + (rec.get("error") or
                   f"tile {rec['kBM']}x{rec['BN']} HB={rec['HB']} M={rec['M']} NB={rec['NB']} skipped={rec['skipped']} "
                   f"==installed {rec['out_lse_eq_installed']} ==untapped {rec['out_lse_eq_untapped']} spill={rec['spill_outside_layout']} "
                   f"unwritten={rec['expected_but_unwritten']}" + (f" row3 guards={g['guard_words']} !=guard {g['guard_mismatch']} first!=0 "
-                  f"{g['first_block_nonzero']} !=ir {g['ir_mismatch']}/{g['ir_sampled']} ==baseline {g['stream_eq_baseline']}" if g else ""))
+                  f"{g['first_block_nonzero']} !=ir {g['ir_mismatch']}/{g['ir_sampled']} ==baseline {g['stream_eq_baseline']}" if g else "")
+                  + (f" ms words={ms['ms_words']} !=ir-twin {ms['ms_mismatch']} (row_max -inf {ms['ms_mismatch_neg_inf_max']}) !=ir "
+                     f"{ms['ir_mismatch']}/{ms['ir_sampled']}" if ms else ""))
                   + f" -> {'OK' if rec['ok'] else 'FAIL'}", flush=True)
         for j, (c, decl, why) in enumerate(negatives(fa_version, D)):
             rec = _guarded(check_negative, {"case": c["name"], "D": D, "why": why}, src, fa_version, c, D, decl, why, 7 * D + j)
@@ -268,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hdims", default=None, help="comma list of head dims (default: every head dim the build compiles)")
     ap.add_argument("--quick", action="store_true", help=f"only the cases {', '.join(QUICK)}")
     ap.add_argument("--baseline", metavar="RECORD", default=None,
-                    help="a guarded-max build: the default build's record on this GPU, whose streams (but ROW word 3) it must equal")
+                    help="a guarded-max build: the default build's record on this GPU, whose six classes (but ROW word 3) it must equal")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
