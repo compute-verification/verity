@@ -40,9 +40,10 @@ for s in v["replayable"]["sets"]:
     for k, x in s["statement"].items():
         if isinstance(x, str) and x.startswith("art:"):
             arts.add(x.split("/", 1)[0])
-    arts |= {x["dir"].split("/", 1)[0] for x in s["sessions"]}
+    arts |= {x["dir"].split("/", 1)[0] for x in s.get("sessions", [])}
     if "forgeries" in s:
         arts.add(s["forgeries"].split("/", 1)[0])
+    arts |= {x.split("/", 1)[0] for x in s.get("selftest", [])}
 for a in sorted(arts):
     subprocess.run([sys.executable, "-m", "research", "data", "fetch", a, "--to", str(store / a.split(":", 1)[1])], check=True,
                    capture_output=True)
