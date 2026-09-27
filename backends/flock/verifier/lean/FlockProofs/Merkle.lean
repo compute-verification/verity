@@ -7,10 +7,13 @@ import Flock.Merkle
 
 namespace Flock
 
-/-- A collision of a Merkle scheme's hash. -/
+/-- A collision of a Merkle scheme's hash: two different node inputs with one node, or two different rows with one leaf under
+some salts. The rows must differ: the salts are the prover's (`opened_salts`), and an unsalted scheme's leaf ignores its salt,
+so one row under two salts is no collision. For `hm96-sha512/v1`, two rows with one leaf reduce to a SHA-512 collision: of
+the outer hash, of the salt digest `c`, or of the row hash `x`. -/
 def MerkleScheme.Collision (ms : MerkleScheme) : Prop :=
   (∃ a b a' b' : ByteArray, (a, b) ≠ (a', b') ∧ ms.node a b = ms.node a' b') ∨
-  (∃ (r r' : Array F128) (y y' : ByteArray), (r, y) ≠ (r', y') ∧ ms.leaf r y = ms.leaf r' y')
+  (∃ (r r' : Array F128) (y y' : ByteArray), r ≠ r' ∧ ms.leaf r y = ms.leaf r' y')
 
 /-- Climbing from two different digests to one digest along paths of one length is a node collision. -/
 theorem climb_binding (ms : MerkleScheme) :
@@ -48,7 +51,7 @@ theorem opens_binding (ms : MerkleScheme) (cap : Array ByteArray) (c d lanes pos
   simp only [opens, Bool.and_eq_true, decide_eq_true_eq] at h1 h2
   have heq : climb ms (ms.leaf r1 y1) pos s1 = climb ms (ms.leaf r2 y2) pos s2 := h1.2.trans h2.2.symm
   by_cases hl : ms.leaf r1 y1 = ms.leaf r2 y2
-  · exact Or.inr ⟨r1, r2, y1, y2, fun hh => hr (Prod.mk.inj hh).1, hl⟩
+  · exact Or.inr ⟨r1, r2, y1, y2, hr, hl⟩
   · exact climb_binding ms s1 s2 _ _ pos (by rw [h1.1.1.2, h2.1.1.2]) hl heq
 
 /-- An accepted Merkle check opens every query. -/
