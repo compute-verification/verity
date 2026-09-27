@@ -73,6 +73,14 @@ PIECES = [
     ("F2fpBf16_v1", (32,), 16, lambda C, a: IL.PIECES["F2fpBf16_v1"](C, a), P.F2fpBf16.evaluate),
     ("F32ToBf16Rn_v1", (32,), 16, lambda C, a: IL.PIECES["F32ToBf16Rn_v1"](C, a), P.F32ToBf16Rn.evaluate),
 ]
+from verity_flock.boolean_export import prims as _registered  # noqa: E402
+
+#: the tail primitives (tail_pieces): attention's softmax, the norms' row scalars, the sampler lane's F32 ops
+TAIL = {"F32AddFtz_v1": 2, "F32SubFtz_v1": 2, "F32MulFtz_v1": 2, "F32FmaFtz_v1": 3, "F32FmaSubFtz_v1": 3, "F32Max_v1": 2,
+        "GuardNegInfZero_v1": 1, "MufuEx2Ftz_v1": 1, "MufuRcpFtz_v1": 1, "Fa2InvSum_v1": 1, "RsqrtApprox_v1": 1,
+        "MufuSqrtFtz_v1": 1, "DivFullRcp_v1": 1, "DivFullScaleA_v1": 2, "F32GtStrict_v1": 2}
+PIECES += [(name, (32,) * k, 1 if name == "F32GtStrict_v1" else 32, IL.PIECES[name], _registered()[name].evaluate)
+           for name, k in TAIL.items()]
 
 
 @pytest.mark.parametrize("name,widths,out,piece,ref", PIECES, ids=[p[0] for p in PIECES])
@@ -89,6 +97,29 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
     got = run_piece(piece, widths, out, vecs)
     bad = [(v, g) for v, g in zip(vecs, got) if g != ref(*v)]
     assert bad == []                                  # exact bits: a NaN's sign and payload too
+
+
+@pytest.mark.parametrize("name", ["MufuEx2Ftz_v1", "MufuRcpFtz_v1", "Fa2InvSum_v1", "RsqrtApprox_v1", "MufuSqrtFtz_v1",
+                                  "DivFullRcp_v1"])
+def test_mufu_pieces_match_on_every_exponent(name):
+    """Each MUFU piece (a table read inside exponent logic) against its primitive on every exponent, both signs, the
+    mantissa's edges and random mantissas; the reads come from the pinned tables."""
+    rng = random.Random(5)
+    vecs = [[(s << 31) | (e << 23) | (rng.getrandbits(23) if k > 2 else [0, 1, 0x7FFFFF][k])] for e in range(256) for s in (0, 1)
+            for k in range(24)]
+    from verity_flock.boolean_export import prims
+    ref = prims()[name].evaluate
+    assert [g for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
+def test_a_lookup_is_never_laid_out():
+    """A table read is a lookup, which a Flock unit's expanded circuit does not express: the layout refuses it."""
+    C = gf2.Circuit()
+    x = C.input("in0", 32)
+    C.output("out0", IL.PIECES["MufuRcpFtz_v1"](C, x))
+    assert C.counts()["lookups"] == 1
+    with pytest.raises(AssertionError):
+        IL.layout(C, ["in0"], ["out0"])
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])

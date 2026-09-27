@@ -34,6 +34,16 @@ class L:
 ZERO = L()
 ONE = L(frozenset(), 1)
 
+#: lookup table name -> loader of its words (an int sequence); registered by the modules whose pieces read them
+TABLES: dict = {}
+_TABLE_WORDS: dict = {}
+
+
+def table(name: str):
+    if name not in _TABLE_WORDS:
+        _TABLE_WORDS[name] = TABLES[name]()
+    return _TABLE_WORDS[name]
+
 
 def const(b):
     return ONE if b else ZERO
@@ -43,8 +53,9 @@ class Circuit:
     """``cse``: an AND of two forms already ANDed (in either order) reuses that bit instead of committing a new one."""
 
     def __init__(self, cse: bool = False):
-        self.kind = []  # per committed bit: 'in' | 'and' | 'hint'
-        self.data = []  # 'in': name; 'and': (a, b); 'hint': (fn, deps)
+        self.kind = []  # per committed bit: 'in' | 'and' | 'hint' | 'lookup'
+        self.data = []  # 'in': name; 'and': (a, b); 'hint': (fn, deps); 'lookup': (lookup index, bit)
+        self.lookups = []  # (table name, index forms LSB first, width): value = table[index], its low `width` bits
         self.cse = {} if cse else None
         self.inputs = {}
         self.outputs = {}
@@ -79,6 +90,13 @@ class Circuit:
             w = self.cse[key] = self._new("and", (a, b))
         return w
 
+    def lookup(self, table_name, idx, width):
+        """``table[idx]``'s low ``width`` bits as committed bits: a table read (no ANDs here; a Flock statement proves it with a
+        lookup slot)."""
+        g = len(self.lookups)
+        self.lookups.append((table_name, list(idx), width))
+        return [self._new("lookup", (g, j)) for j in range(width)]
+
     def assert_zero(self, name, a):
         if a.is_const():
             assert a.c == 0, f"assertion {name} is constant 1"
@@ -109,6 +127,9 @@ class Circuit:
                 a, b = self.data[v]
                 stack.extend(a.s)
                 stack.extend(b.s)
+            elif self.kind[v] == "lookup":
+                for f in self.lookups[self.data[v][0]][1]:
+                    stack.extend(f.s)
         return seen
 
     def phase_counts(self):
@@ -126,10 +147,27 @@ class Circuit:
         nnz = sum(len(self.data[v][0].s) + len(self.data[v][1].s) for v in live if self.kind[v] == "and")
         # outputs that are not already a single committed bit need one copy row each (IO slot materialisation)
         n_out_copy = sum(1 for bits in self.outputs.values() for w in bits if not (len(w.s) == 1 and w.c == 0))
+        n_lookups = len({self.data[v][0] for v in live if self.kind[v] == "lookup"})
         return {"inputs": n_in, "ands": n_and, "output_copies": n_out_copy, "asserts": len(self.asserts),
-                "committed": n_in + n_and + n_out_copy, "nnz_AB": nnz}
+                "committed": n_in + n_and + n_out_copy, "nnz_AB": nnz, "lookups": n_lookups}
 
     # --- bit-sliced evaluation ----------------------------------------------------------------------------------
+    def lookup_values(self, g, index_bits, T):
+        """Lookup g's value bits (T-bit ints) from its index bits (T-bit ints), by reading the table per vector."""
+        import numpy as np
+
+        name, _idx, width = self.lookups[g]
+        nb = (T + 7) // 8
+
+        def unpack(x):
+            return np.unpackbits(np.frombuffer(x.to_bytes(nb, "little"), dtype=np.uint8), bitorder="little")[:T].astype(np.int64)
+
+        idx = np.zeros(T, dtype=np.int64)
+        for b, x in enumerate(index_bits):
+            idx |= unpack(x) << b
+        words = np.asarray(table(name), dtype=np.int64)[idx]
+        return [int.from_bytes(np.packbits(((words >> j) & 1).astype(np.uint8), bitorder="little").tobytes(), "little") for j in range(width)]
+
     def evaluate(self, input_values, T):
         """input_values: name -> list of T-bit ints (one per input bit). Returns (outputs, assertion_fail_mask)."""
         mask = (1 << T) - 1
@@ -146,10 +184,16 @@ class Circuit:
                 x ^= val[v]
             return x
 
+        looked: dict = {}
         for v, k in enumerate(self.kind):
             if k == "and":
                 a, b = self.data[v]
                 val[v] = ev(a) & ev(b)
+            elif k == "lookup":
+                g, j = self.data[v]
+                if g not in looked:
+                    looked[g] = self.lookup_values(g, [ev(f) for f in self.lookups[g][1]], T)
+                val[v] = looked[g][j]
         outs = {name: [ev(w) for w in bits] for name, bits in self.outputs.items()}
         fail = 0
         for _, w in self.asserts:

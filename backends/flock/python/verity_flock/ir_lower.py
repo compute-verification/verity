@@ -20,6 +20,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from . import fp
+from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
 
@@ -82,6 +83,7 @@ PIECES: dict[str, Callable] = {
     # verity.ml.tc.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
+PIECES.update(tail_pieces.PIECES)
 
 
 class NoPiece(NotImplementedError):

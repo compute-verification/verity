@@ -34,10 +34,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import fp
 from . import ir_frame as IF
 from . import ir_lower as IL
-from .gf2 import NOT, OR, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from .gf2 import NOT, Circuit, mux, or_reduce, sub
 
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
@@ -74,66 +73,9 @@ def lane_ports(v: int) -> tuple[list[int], list[int]]:
             [lane_word(v, n) for n in OUT_PORTS[:1]] + [lane_word(v, n) for n in ("best", "best_i", "i_next")])
 
 
-# --- pieces: the IR primitives with numpy's float32 semantics, NaN payloads included ------------------------------------------
+# --- pieces: ir_lower's (the lane's F32 ops, compare, selects and integer add are tail_pieces', NaN payloads included) --------
 
-def f32_mul(C, a, b):
-    """``np.float32(a) * np.float32(b)`` (``F32Mul_v1``), NaN payloads included."""
-    return fp.f32_mul(C, a, b, ir_nan=True)
-
-
-def f32_add(C, a, b):
-    """``np.float32(a) + np.float32(b)`` (NaN payloads included); IEEE zero signs."""
-    return fp.f32_add(C, a, b, ir_nan=True)
-
-
-def ftz(C, w):
-    """A subnormal word flushed to its signed zero."""
-    e_nz = or_reduce(C, w[23:31])
-    return [C.AND(e_nz, m) for m in w[:23]] + list(w[23:])
-
-
-def f32_add_ftz(C, a, b):
-    """``F32AddFtz_v1``: ftz(RN(ftz(a) + ftz(b)))."""
-    return ftz(C, f32_add(C, ftz(C, a), ftz(C, b)))
-
-
-def _is_nan(C, w):
-    return C.AND(and_reduce(C, w[23:31]), or_reduce(C, w[:23]))
-
-
-def f32_gt(C, a, b):
-    """``F32GtStrict_v1``: a > b on f32 values (NaN false, +0 == -0)."""
-    _, mag_gt = sub(C, b[:31], a[:31], 31)
-    _, mag_lt = sub(C, a[:31], b[:31], 31)
-    both_zero = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
-    sa, sb = a[31], b[31]
-    gt = C.AND(C.AND(NOT(sa), NOT(sb)), mag_gt) ^ C.AND(C.AND(NOT(sa), sb), NOT(both_zero)) ^ C.AND(C.AND(sa, sb), mag_lt)
-    return [C.AND(C.AND(gt, NOT(_is_nan(C, a))), NOT(_is_nan(C, b)))]
-
-
-def _ult_const(C, w, k: int):
-    """``w < k`` for an unsigned word and a constant."""
-    return sub(C, w, const_bits(k, len(w)), len(w))[1]
-
-
-def div_full_scale_a(C, a, b):
-    """``DivFullScaleA_v1``: ``a * 0.25`` when ``|b| > 2^126``, ``a * 2^24`` when ``|b| < 2^-126``, else a (NaN b: a)."""
-    mag = b[:31]
-    big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
-    small = _ult_const(C, mag, 0x00800000)
-    return mux(C, big, f32_mul(C, a, fp.f32_const(0x3E800000)), mux(C, small, f32_mul(C, a, fp.f32_const(0x4B800000)), list(a)))
-
-
-PIECES = {
-    **IL.PIECES,
-    "F32Mul_v1": f32_mul,
-    "F32AddFtz_v1": f32_add_ftz,
-    "F32GtStrict_v1": f32_gt,
-    "DivFullScaleA_v1": div_full_scale_a,
-    "SelectF32_v1": lambda C, s, a, b: mux(C, s[0], a, b),
-    "SelectI32_v1": lambda C, s, a, b: mux(C, s[0], a, b),
-    "I32Add_v1": lambda C, a, b: add(C, a, b, width=32),
-}
+PIECES = IL.PIECES
 
 
 # --- the lane unit, lowered from the IR composites ------------------------------------------------------------------------------
