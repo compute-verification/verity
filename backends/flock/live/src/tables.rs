@@ -158,6 +158,76 @@ fn leak<T>(x: T) -> &'static T {
     Box::leak(Box::new(x))
 }
 
+pub const FORMAT: &str = "flock-tables";
+pub const STATEMENT: &str = "verity/flock-tables";
+
+/// A `flock-tables` file: `flock-tables <name>`, a `META` JSON line, then `CIRCUIT <name> <lines>` sections (`flock-ir-unit/v2`
+/// expanded circuits, as in a `flock-circuit` file). META:
+///
+/// ~~~text
+/// {"format": "flock-tables", "statement": "verity/flock-tables",
+///  "tables": [{"name": str, "circuit": CIRCUIT name, "blocks": n}, ...],          // the union's slot order: k_log descending
+///  "glue": [{"dst": REGION, "src": REGION, "map": "id" | {"perm": [...]} | {"broadcast": [...]}}, ...]}
+/// REGION = {"table": name, "fixed": {"<bit>": 0 | 1, ...}, "free": [bit, ...]}   // table-local bits: in-block 0..k, block k..k+b
+/// ~~~
+///
+/// Returns the statement and the file's SHA-512 (its pin).
+pub fn parse(text: &str) -> Result<(Tables, [u8; 64]), String> {
+    use sha2::{Digest, Sha512};
+    use serde_json::Value;
+    let pin: [u8; 64] = Sha512::digest(text.as_bytes()).into();
+    let mut lines = text.split_inclusive('\n');
+    lines.next().and_then(|h| h.trim_end().strip_prefix("flock-tables ")).ok_or("not a flock-tables file")?;
+    let meta: Value = serde_json::from_str(lines.next().and_then(|l| l.trim_end().strip_prefix("META ")).ok_or("no META line")?)
+        .map_err(|e| format!("META: {e}"))?;
+    if meta["format"] != FORMAT || meta["statement"] != STATEMENT {
+        return Err("META: not verity/flock-tables".into());
+    }
+    let mut circuits = std::collections::BTreeMap::new();
+    while let Some(l) = lines.next() {
+        let h: Vec<&str> = l.split_whitespace().collect();
+        if h.len() != 3 || h[0] != "CIRCUIT" {
+            return Err(format!("tables: expected a CIRCUIT line, found {:?}", l.chars().take(40).collect::<String>()));
+        }
+        let n: usize = h[2].parse().map_err(|_| "CIRCUIT line count")?;
+        let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
+        let net = std::panic::catch_unwind(|| crate::ir_block::IrUnitNet::parse(&body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 circuit", h[1]))?;
+        if circuits.insert(h[1].to_string(), net).is_some() {
+            return Err(format!("CIRCUIT {} twice", h[1]));
+        }
+    }
+    let tabs = meta["tables"].as_array().ok_or("META: tables")?;
+    let names: Vec<&str> = tabs.iter().map(|t| t["name"].as_str().unwrap_or("")).collect();
+    let (mut templates, mut counts) = (Vec::new(), Vec::new());
+    for t in tabs {
+        let c = t["circuit"].as_str().and_then(|c| circuits.get(c)).ok_or("META: a table's circuit is not a CIRCUIT section")?;
+        templates.push(Template::from_net(c));
+        counts.push(t["blocks"].as_u64().filter(|&n| n > 0).ok_or("META: a table's blocks")? as usize);
+    }
+    let region = |r: &Value| -> Result<TableRegion, String> {
+        let table = names.iter().position(|&n| Some(n) == r["table"].as_str()).ok_or("glue: no such table")?;
+        let fixed = r["fixed"].as_object().ok_or("glue: fixed")?.iter()
+            .map(|(k, v)| Ok((k.parse::<usize>().map_err(|_| "glue: a fixed bit")?, v.as_u64().filter(|&b| b < 2).ok_or("glue: a fixed value")? == 1)))
+            .collect::<Result<Vec<_>, String>>()?;
+        let free = r["free"].as_array().ok_or("glue: free")?.iter().map(|b| b.as_u64().map(|b| b as usize).ok_or("glue: a free bit"))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(TableRegion { table, fixed, free })
+    };
+    let list = |v: &Value| -> Result<Vec<usize>, String> {
+        v.as_array().ok_or("glue: a map's list")?.iter().map(|x| x.as_u64().map(|x| x as usize).ok_or_else(|| "glue: a map entry".to_string())).collect()
+    };
+    let glue = meta["glue"].as_array().ok_or("META: glue")?.iter().map(|g| {
+        let map = match &g["map"] {
+            Value::String(s) if s == "id" => Map::Id,
+            m if m.get("perm").is_some() => Map::Perm(list(&m["perm"])?),
+            m if m.get("broadcast").is_some() => Map::Broadcast(list(&m["broadcast"])?),
+            _ => return Err("glue: a map is id, perm or broadcast".to_string()),
+        };
+        Ok(Glue { dst: region(&g["dst"])?, src: region(&g["src"])?, map })
+    }).collect::<Result<Vec<_>, String>>()?;
+    Ok((Tables::new(templates, counts, glue)?, pin))
+}
+
 impl Tables {
     /// Load-time checks: slot order, counts within the capacity, every region inside its table, every destination an input
     /// row, no destination twice, and the relations well formed.
@@ -364,6 +434,49 @@ mod tests {
     fn run(st: &Tables, ins: &[Vec<Vec<bool>>]) -> Result<(), FlockVerifyError> {
         let (cm, proof, gp) = st.prove(ins, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-test"));
         st.verify(&cm, &proof, &gp, LigeritoProfile::Fast100, &mut FsChallenger::new(b"tables-test"))
+    }
+
+    /// A `flock-ir-unit/v2` text: 32 input bits (word 0), 32 output bits at word 1 (row `128 + j` = `x_j AND x_{j+s}`), filler
+    /// gates to `2^16` rows, the constant last.
+    fn net_text(name: &str, s: usize) -> String {
+        let useful = 1 << K;
+        let c = useful - 1;
+        let mut t = format!("flock-ir-unit/v2 {name} {useful} {c} 1 0 1 1 32 1 1 1 1 32\n");
+        for i in 0..useful {
+            let row = if i < 32 || i == c {
+                format!("1 {i} 1 {i}")
+            } else if (128..160).contains(&i) {
+                format!("1 {} 1 {}", i - 128, (i - 128 + s) % 32)
+            } else if i >= 160 {
+                format!("1 {} 1 {}", i - 1, i - 2)
+            } else {
+                "0 0".to_string()
+            };
+            t.push_str(&row);
+            t.push('\n');
+        }
+        t
+    }
+
+    #[test]
+    fn a_tables_file_parses_proves_and_pins() {
+        let (p, q) = (net_text("producer", 1), net_text("consumer", 3));
+        let region = |t: &str, base: usize| serde_json::json!({"table": t, "fixed": (5..K).map(|l| (l.to_string(), serde_json::json!(base >> l & 1))).collect::<serde_json::Map<_, _>>(),
+                                                          "free": (0..5).chain(K..K + 6).collect::<Vec<_>>()});
+        let meta = serde_json::json!({"format": FORMAT, "statement": STATEMENT,
+            "tables": [{"name": "p", "circuit": "producer", "blocks": BLOCKS}, {"name": "c", "circuit": "consumer", "blocks": BLOCKS}],
+            "glue": [{"dst": region("c", 0), "src": region("p", 128), "map": "id"}]});
+        let text = format!("flock-tables demo\nMETA {meta}\nCIRCUIT producer {}\n{p}CIRCUIT consumer {}\n{q}", p.lines().count(), q.lines().count());
+        let (st, pin) = parse(&text).unwrap();
+        assert_eq!(pin.len(), 64);
+        let mut s = 0x9e3779b97f4a7c15u64;
+        let ins_p: Vec<Vec<bool>> = (0..BLOCKS).map(|_| (0..128).map(|i| i < 32 && { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s & 1 == 1 }).collect()).collect();
+        let ins_c: Vec<Vec<bool>> = ins_p.iter().map(|x| { let z = st.templates[0].eval(x).0; (0..128).map(|i| i < 32 && z[128 + i]).collect() }).collect();
+        run(&st, &[ins_p, ins_c]).unwrap();
+        let other = text.replace("\"map\":\"id\"", "\"map\":{\"broadcast\":[0,1,2,3,4,5,6,7,8,9,10]}");
+        assert_ne!(parse(&other).unwrap().1, pin, "an edited descriptor is another pin");
+        let into_output = text.replace(&serde_json::to_string(&region("c", 0)).unwrap(), &serde_json::to_string(&region("c", 128)).unwrap());
+        assert!(parse(&into_output).err().unwrap().contains("not an input row"));
     }
 
     #[test]
