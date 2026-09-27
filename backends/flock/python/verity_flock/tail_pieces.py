@@ -527,13 +527,23 @@ def i32_le(C, a, b):
     return [NOT(sub(C, b[:31] + [NOT(b[31])], a[:31] + [NOT(a[31])], 32)[1])]
 
 
-def gather_bf16(C, tok, *col):
-    """``GatherBf16x{V}_v1``: ``col[tok]`` for ``0 <= tok < V``, else 0x7FFF: a multiplexer tree over the candidates by tok's low
-    bits (a candidate without a partner passes up, since selecting the missing one means tok >= V), then the range select."""
+def _gather(C, tok, col, fill: int):
+    """``col[tok]`` for ``0 <= tok < V``, else ``fill``: a multiplexer tree over the candidates by tok's low bits (a candidate
+    without a partner passes up, since selecting the missing one means tok >= V), then the range select."""
     cur = [list(c) for c in col]
     for b in range(max(1, (len(col) - 1).bit_length())):
         cur = [mux(C, tok[b], cur[i + 1], cur[i]) if i + 1 < len(cur) else cur[i] for i in range(0, len(cur), 2)]
-    return mux(C, _ult_const(C, tok, len(col)), cur[0], const_bits(0x7FFF, 16))
+    return mux(C, _ult_const(C, tok, len(col)), cur[0], const_bits(fill, len(cur[0])))
+
+
+def gather_bf16(C, tok, *col):
+    """``GatherBf16x{V}_v1``: out of range, 0x7FFF."""
+    return _gather(C, tok, col, 0x7FFF)
+
+
+def gather_f32(C, tok, *col):
+    """``GatherF32x{V}_v1``: out of range, 0x7FC00000."""
+    return _gather(C, tok, col, 0x7FC00000)
 
 
 # --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
@@ -613,4 +623,4 @@ PIECES = {
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
 #: primitive families whose id carries a width: pattern -> piece
-FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16}
+FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}
