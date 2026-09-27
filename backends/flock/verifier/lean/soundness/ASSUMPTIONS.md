@@ -29,16 +29,22 @@ at most `tableError(fast100 m, shape)`:
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
 
-### 1.2 Compiled soundness (`table_sound_compiled`, to write)
+### 1.2 Compiled soundness (`table_sound_compiled`)
 
 This is the protocol as run, in the adopted variant: SHA-512 Merkle caps, openings at the end of the proof, and the coin
-server keeping each round's bytes. For every classical prover `P*`, whose committed table `T*(P*)` is its plurality
-table (at each level-0 position, the column `P*` opens there most often over the coins):
+server keeping each round's bytes (`Model/Compiled.lean`: the openings are the table's last message, after both reps'
+coins, and every path is checked against its level's cap). For every classical prover `P*`, whose committed table
+`T*(P*)` is its plurality table (`C0star`: at each level-0 position, the row `P*` opens there most often over the coins
+after its level-0 cap):
 
 > Pr[accepted, and no codeword within the level-0 proximity radius of `T*(P*)` packs a satisfying witness]
-> ≤ `tableError` + `Σ_ℓ √(N_ℓ·Q_ℓ·Adv_ℓ)` + `Adv_×`.
+> ≤ `tableError` + `√(N_0·2Q_0·Adv_0)` + `Σ_{rep, ℓ ≥ 1} √(N_ℓ·Q_ℓ·Adv_{rep,ℓ})` + `Adv_×`.
 
-- **`Adv_ℓ` and `Adv_×`** are the success probabilities of explicit SHA-512 collision finders (DESIGN.md §2).
+- **`Adv_0` and `Adv_{rep,ℓ}`** are the success probabilities of explicit collision finders (`adv₀`, `advR`; DESIGN.md
+  §2). Each runs `P*` to a cap and continues it twice, and every pair it counts is a SHA-512 collision
+  (`op₀_conflict_collision`, `opR_conflict_collision`). Level 0 is opened by both reps, hence `2Q_0`.
+- **`Adv_×`** is the probability that one run opens a position two ways, both verifying under one cap. Every such run
+  is a collision (`SelfClash.collision`).
 - **Under the generic bound** this is at most `2^-195.5 + t·2^{17.3−256} + t²/2^511` for a prover making `t` hash
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
@@ -82,7 +88,7 @@ link term per audit.
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
-| The compiled table theorem (§1.2) | 1c, interactive | `table_sound_compiled` | **to write**: the compiled game (openings at the end of the proof) and the coupling (DESIGN.md §2) |
+| The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `registered_weights` | **to write**, after `table_sound_compiled` (DESIGN.md §3); required for sampled audits (§7) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
@@ -276,19 +282,12 @@ The weights are committed once and every later proof opens that root. The analys
 
 1. **`Arith.Correct`** for the GHASH instance. Lane `flock-verifier` proved every field for the executable's functions,
    in the field shapes of `Defs.lean`. What remains is to build the instance here, once both branches are on `main`.
-2. **Stages 1b and 1c (interactive), the compiled theorem** (§1.2). Merkle binding, the rewinding lemma and the
-   compilation steps are proved. Remaining:
-   - the compiled game: Ligerito with caps in place of oracles and query answers deferred to the end of the proof;
-   - the coupling between a compiled run and the oracle-model run of the plurality prover `P̃` on the same coins;
-   - `table_sound_compiled` from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound.
-
-   Session binding needs nothing, since the server keeps the round bytes.
-3. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
+2. **Knowledge soundness** (§1.3): `table_knowledge_sound`, then `registered_weights`. It is needed for claims about
    registered data and for recursion's outer proof, and it is required for the sampled-audit composition, with the link
    term (DESIGN.md §3).
-4. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
+3. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
-5. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
+4. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
    honest-verifier ZK lemma, then single-rewind simulation of one batched session.
-6. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
+5. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
