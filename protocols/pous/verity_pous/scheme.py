@@ -6,17 +6,21 @@ Per segment `s` with tag `t = tag(salt, s)`, over the band graph `G`:
     c²_v = P_(t,1,v)(transpose(c¹)_v ⊕ H(t, 1, v, c²_par(v)))     (Lean `c2'`, `topLabel'`)
 
 `C` is `c²` of every segment.  The decoder is Lean's `decodeW`: key every top label and invert `P` (the keys' rounds and
-one inverse round, side by side), transpose back, then the same for the lower labels.  Segments decode independently,
-so `decode_segment` recovers one segment of `W` from its own `n` blocks.  Every function here is a `Prog`, answered and
-measured by `oracle.run`.
+one inverse round, side by side), transpose back, then the same for the lower labels.
+
+Segments encode and decode independently.  `encode_segment` and `decode_segment` work on one segment's bytes, and
+`P3` is them as a `codec.Codec`; `encode` and `decode` run them segment by segment, so no integer is wider than a label.
+The `*_prog` functions are the same computations as oracle programs, answered and measured by `oracle.run`, on labels
+of any bit width.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from .labels import from_bytes, salt_value, tag, to_bytes, transpose, w_labels, w_value
+from .codec import Codec, encode_segments
+from .labels import salt_value, tag, to_bytes, transpose, w_labels, w_value
 from .oracle import PinvQuery, PQuery, Prog, Tweak, parallel, run
 from .params import SALT_BITS, Params
 from .primitives import KeyDerivation, Primitives, key_program, key_query
@@ -34,7 +38,8 @@ class Encoding:
         return to_bytes(self.blocks[i], self.params.m)
 
 
-def encode_segment(params: Params, h: KeyDerivation, t: int, w: Sequence[int]) -> Prog[tuple[list[int], list[int]]]:
+def encode_segment_prog(params: Params, h: KeyDerivation, t: int,
+                        w: Sequence[int]) -> Prog[tuple[list[int], list[int]]]:
     """One segment's lower and top labels, node by node."""
     c1: list[int] = []
     for v in range(params.n):
@@ -72,7 +77,8 @@ def decode_segment_prog(params: Params, h: KeyDerivation, t: int, c2: Sequence[i
 def encode_prog(params: Params, h: KeyDerivation, w: int, salt: int) -> Prog[list[tuple[list[int], list[int]]]]:
     """Every segment's `(c¹, c²)`, the segments in parallel."""
     segments = w_labels(params, w)
-    return (yield from parallel(encode_segment(params, h, tag(salt, s), segments[s]) for s in range(params.segments)))
+    return (yield from parallel(encode_segment_prog(params, h, tag(salt, s), segments[s])
+                                for s in range(params.segments)))
 
 
 def decode_prog(params: Params, h: KeyDerivation, salt: int, blocks: Sequence[int]) -> Prog[int]:
@@ -90,24 +96,48 @@ def _check_salt(salt: bytes) -> int:
     return salt_value(salt)
 
 
-def encode(params: Params, prims: Primitives, w: bytes, salt: bytes) -> Encoding:
-    """`Enc(W, salt) = C`.  Deterministic and public given `W`, the salt and the primitives, so the server and the
-    verifier compute the same `C` (`setup`)."""
-    layers, _ = run(encode_prog(params, prims.h, from_bytes(w, params.w_bits), _check_salt(salt)), prims)
-    return Encoding(params, salt, tuple(label for _, c2 in layers for label in c2))
+def _label_bytes(params: Params) -> int:
+    if params.m % 8:
+        raise ValueError("the byte API needs whole-byte labels; use the *_prog functions for other widths")
+    return params.m // 8
 
 
-def decode(params: Params, prims: Primitives, salt: bytes, blocks: Sequence[bytes]) -> bytes:
-    """`Dec(pp, C) = W`, bit-exact."""
-    values = [from_bytes(block, params.m) for block in blocks]
-    w, _ = run(decode_prog(params, prims.h, _check_salt(salt), values), prims)
-    return to_bytes(w, params.w_bits)
+def encode_segment(params: Params, prims: Primitives, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
+    """Segment `s` of `C`: its `n` top labels (blocks `s * n .. s * n + n - 1`) from its `segment_bytes` of `W`."""
+    mb = _label_bytes(params)
+    if not 0 <= s < params.segments or len(w_seg) != params.segment_bytes:
+        raise ValueError(f"segment {s} of W is {params.segment_bytes} bytes")
+    labels = [int.from_bytes(w_seg[u * mb:(u + 1) * mb], "little") for u in range(params.n)]
+    (_, c2), _ = run(encode_segment_prog(params, prims.h, tag(_check_salt(salt), s), labels), prims)
+    return [c.to_bytes(mb, "little") for c in c2]
 
 
 def decode_segment(params: Params, prims: Primitives, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
     """Segment `s` of `W` (`params.segment_bytes` bytes) from its `n` blocks `s * n .. s * n + n - 1`."""
-    if not 0 <= s < params.segments or len(blocks) != params.n:
-        raise ValueError(f"segment {s} needs its {params.n} blocks")
-    values = [from_bytes(block, params.m) for block in blocks]
+    mb = _label_bytes(params)
+    if not 0 <= s < params.segments or len(blocks) != params.n or any(len(b) != mb for b in blocks):
+        raise ValueError(f"segment {s} needs its {params.n} blocks of {mb} bytes")
+    values = [int.from_bytes(b, "little") for b in blocks]
     lowers, _ = run(decode_segment_prog(params, prims.h, tag(_check_salt(salt), s), values), prims)
-    return to_bytes(w_value(params.with_segments(1), [lowers]), params.n * params.m)
+    return b"".join(x.to_bytes(mb, "little") for x in lowers)
+
+
+P3 = Codec("p3/v1", encode_segment, decode_segment)
+"""The two-layer scheme as a codec."""
+
+
+def encode(params: Params, prims: Primitives, w: bytes | Iterable[bytes], salt: bytes) -> Encoding:
+    """`Enc(W, salt) = C`, segment by segment; `w` is `W` or its segments.  Deterministic and public given `W`, the salt
+    and the primitives, so the server and the verifier compute the same `C` (`setup`).  For large `W`, iterate
+    `codec.encode_segments` instead of holding every block."""
+    _check_salt(salt)
+    blocks = [int.from_bytes(b, "little") for seg in encode_segments(P3, params, prims, w, salt) for b in seg]
+    return Encoding(params, salt, tuple(blocks))
+
+
+def decode(params: Params, prims: Primitives, salt: bytes, blocks: Sequence[bytes]) -> bytes:
+    """`Dec(pp, C) = W`, bit-exact, segment by segment."""
+    n = params.n
+    if len(blocks) != params.blocks:
+        raise ValueError(f"expected {params.blocks} blocks, got {len(blocks)}")
+    return b"".join(decode_segment(params, prims, salt, s, blocks[s * n:(s + 1) * n]) for s in range(params.segments))

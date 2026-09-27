@@ -43,6 +43,11 @@ class Params:
         return self.n * self.wc
 
     @property
+    def blocks_per_segment(self) -> int:
+        """`n`: one block per top label (`codec.Geometry`)."""
+        return self.n
+
+    @property
     def blocks(self) -> int:
         """`B`: the number of codeword blocks, one top label each."""
         return self.segments * self.n

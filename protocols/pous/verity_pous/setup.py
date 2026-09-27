@@ -8,26 +8,38 @@
 
 P3's encoder is deterministic and public given `W`, the salt and the primitives, so the server running it changes
 nothing in the timed game; a server-chosen or predictable salt would break the model's "`W` before coins" order.
+Everything here takes `W` whole or as its segments, and works one segment at a time.
 """
 
 from __future__ import annotations
 
-from verity.commitments.identity import canonical_json_bytes, tagged_sha256
+import hashlib
+from collections.abc import Iterable, Sequence
+
+from verity.commitments.identity import canonical_json_bytes
 from verity.randomness import derive
 
-from .params import SALT_BITS, Params
-from .primitives import Primitives
-from .scheme import Encoding, encode
+from .codec import Codec, Geometry, encode_segments, split
+from .params import SALT_BITS
+from .scheme import P3, Encoding
 from .verifier import VerifierKey, tree
 
 COMMIT_TAG = "verity-pous/w-commitment/v1"
 SALT_DOMAIN = "verity/pous/salt/v1"
+_TAGGED_SHA256 = b"veritor/tagged-sha256/v1\0"
 
 
-def commit(params: Params, w: bytes) -> bytes:
-    """The server's commitment to `W` under `params`: SHA-256 over the parameters' manifest, then `W`."""
+def commit(params: Geometry, w: bytes | Iterable[bytes]) -> bytes:
+    """The server's commitment to `W` under `params`: `verity.commitments.identity.tagged_sha256(COMMIT_TAG, u64(len
+    manifest) || manifest || W)`, streamed over `W`'s segments."""
     manifest = canonical_json_bytes(params.manifest())
-    return bytes.fromhex(tagged_sha256(COMMIT_TAG, len(manifest).to_bytes(8, "big") + manifest + w))
+    tag = COMMIT_TAG.encode("utf-8")
+    h = hashlib.sha256(_TAGGED_SHA256 + len(tag).to_bytes(4, "big") + tag
+                       + (8 + len(manifest) + params.w_bytes).to_bytes(8, "big")
+                       + len(manifest).to_bytes(8, "big") + manifest)
+    for seg in split(params, w):
+        h.update(seg)
+    return h.digest()
 
 
 def draw_salt(source: bytes, commitment: bytes) -> bytes:
@@ -35,11 +47,15 @@ def draw_salt(source: bytes, commitment: bytes) -> bytes:
     return derive(source, SALT_DOMAIN, {"w": commitment}).stream("salt", SALT_BITS // 8)
 
 
-def verifier_key(params: Params, prims: Primitives, w: bytes, commitment: bytes, salt: bytes) -> VerifierKey:
-    """`vk` from the verifier's own encoding of the committed `W`."""
+def verifier_key(params: Geometry, prims, w: bytes | Sequence[bytes], commitment: bytes, salt: bytes,
+                 encoded: Iterable[Sequence[bytes]] | None = None, codec: Codec = P3) -> VerifierKey:
+    """`vk` from the verifier's own encoding of the committed `W`: whole, or a sequence of its segments (read twice,
+    for the commitment and to encode).  Pass `encoded`, the verifier's own per-segment `encode_segment` results (for
+    example from a process pool), to skip encoding here."""
     if commit(params, w) != commitment:
         raise ValueError("W does not match the server's commitment")
-    return VerifierKey.build(encode(params, prims, w, salt))
+    segments = encoded if encoded is not None else encode_segments(codec, params, prims, w, salt)
+    return VerifierKey.from_segments(params, salt, segments)
 
 
 def server_root(encoding: Encoding) -> bytes:

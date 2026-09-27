@@ -12,24 +12,39 @@ collision resistance, a single-stage property.  Lean's audit compares each answe
 
 The verifier builds `vk` from its own encoding (`setup.verifier_key`) and keeps every leaf digest (0.05% of `C` at
 64 KB), so it checks an answer alone; `root` is the 32-byte key a root-only verifier keeps, checking an answer with the
-server's audit path.
+server's audit path.  `VerifierKey.from_segments` and `from_leaves` build it one segment at a time, without `C`.  Only
+the geometry (`codec.Geometry`) is read, so the same `vk` serves any codec.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from .codec import Geometry
 from .labels import salt_value, tag
-from .params import Params
 from .scheme import Encoding
 
 
-def leaf_hash(params: Params, salt: bytes, i: int, block: bytes) -> bytes:
-    s, v = divmod(i, params.n)
-    t = tag(salt_value(salt), s).to_bytes(32, "little")
-    return hashlib.sha256(b"\x00" + t + v.to_bytes(2, "little") + block).digest()
+def leaf_hash(params: Geometry, salt: bytes, i: int, block: bytes | Iterable[bytes]) -> bytes:
+    """Leaf `i`'s digest; `block` is the block or its bytes in chunks, in order."""
+    s, v = divmod(i, params.blocks_per_segment)
+    h = hashlib.sha256(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little"))
+    if isinstance(block, (bytes, bytearray, memoryview)):
+        h.update(block)
+    else:
+        for chunk in block:
+            h.update(chunk)
+    return h.digest()
+
+
+def segment_leaves(params: Geometry, salt: bytes, s: int, blocks: Sequence[bytes]) -> list[bytes]:
+    """The leaf digests of segment `s`'s blocks."""
+    n = params.blocks_per_segment
+    if len(blocks) != n:
+        raise ValueError(f"segment {s} has {n} blocks")
+    return [leaf_hash(params, salt, s * n + v, b) for v, b in enumerate(blocks)]
 
 
 def node_hash(left: bytes, right: bytes) -> bytes:
@@ -108,7 +123,7 @@ def tree(encoding: Encoding) -> MerkleTree:
 class VerifierKey:
     """`vk`: the root, and the leaf digests a verifier that computed its own encoding keeps."""
 
-    params: Params
+    params: Geometry
     salt: bytes
     root: bytes
     leaves: tuple[bytes, ...]
@@ -118,12 +133,28 @@ class VerifierKey:
         t = tree(encoding)
         return cls(encoding.params, encoding.salt, t.root, t.leaves)
 
+    @classmethod
+    def from_leaves(cls, params: Geometry, salt: bytes, leaves: Sequence[bytes]) -> VerifierKey:
+        """`vk` from every leaf digest, in block order; the root is recomputed."""
+        leaves = tuple(leaves)
+        if len(leaves) != params.blocks or any(type(x) is not bytes or len(x) != 32 for x in leaves):
+            raise ValueError(f"expected {params.blocks} 32-byte leaf digests")
+        return cls(params, salt, MerkleTree(leaves).root, leaves)
+
+    @classmethod
+    def from_segments(cls, params: Geometry, salt: bytes, segments: Iterable[Sequence[bytes]]) -> VerifierKey:
+        """`vk` from each segment's blocks in order (a codec's `encode_segment` results), one segment at a time."""
+        leaves: list[bytes] = []
+        for s, blocks in enumerate(segments):
+            leaves += segment_leaves(params, salt, s, blocks)
+        return cls.from_leaves(params, salt, leaves)
+
     def check(self, i: int, block: bytes) -> bool:
         """The answer to challenge `i` is block `i`."""
-        return (type(block) is bytes and len(block) == self.params.m // 8
+        return (type(block) is bytes and len(block) == self.params.block_bytes
                 and leaf_hash(self.params, self.salt, i, block) == self.leaves[i])
 
     def check_path(self, i: int, block: bytes, path: Sequence[bytes]) -> bool:
         """Root-only check: `block` with the server's audit `path` is block `i` under `root`."""
-        return (type(block) is bytes and len(block) == self.params.m // 8
+        return (type(block) is bytes and len(block) == self.params.block_bytes
                 and verify_path(self.root, self.params.blocks, i, leaf_hash(self.params, self.salt, i, block), path))

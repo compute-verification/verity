@@ -83,7 +83,8 @@ class HonestResponder:
 
 @dataclass(frozen=True, slots=True)
 class Answer:
-    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`TimedVerifier`)."""
+    """One answer: its index, verdict, and either its oracle cost (`simulate`) or its latency (`TimedVerifier`), with
+    the responder's own `report` (for example its device and server nanoseconds) beside it."""
 
     j: int
     index: int
@@ -91,6 +92,7 @@ class Answer:
     on_time: bool
     cost: Cost | None = None
     elapsed_ns: int | None = None
+    report: object = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,12 +123,12 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
     """The audit in the oracle model: rounds are the clock, `rounds` per answer if given, else
     `deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns)`."""
     budget = deadline_rounds(deadline_ns, rtt_allowance_ns, call_ns) if rounds is None else rounds
-    m = vk.params.m
+    m, mb = vk.params.m, vk.params.block_bytes
     answers = []
     for j in range(k):
         i = key.uniform(vk.params.blocks, j)
         value, cost = run(responder.answer(j, i), prims)
-        correct = type(value) is int and 0 <= value < 1 << m and vk.check(i, value.to_bytes((m + 7) // 8, "little"))
+        correct = type(value) is int and 0 <= value < 1 << m and vk.check(i, value.to_bytes(mb, "little"))
         a = Answer(j, i, correct, cost.depth <= budget and cost.work <= work, cost=cost)
         if on_answer is not None:
             on_answer(a)
@@ -176,7 +178,7 @@ class TimedVerifier:
         self._open = (i, self.clock())
         return i
 
-    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None) -> Answer:
+    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> Answer:
         stop = self.clock()
         if self._open is None:
             raise RuntimeError("no challenge is open")
@@ -184,7 +186,7 @@ class TimedVerifier:
         self._open = None
         elapsed = stop - start
         correct = self.vk.check_path(i, block, path or ()) if self.root_only else self.vk.check(i, block)
-        a = Answer(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed)
+        a = Answer(len(self.answers), i, correct, elapsed <= self.limit_ns, elapsed_ns=elapsed, report=report)
         self.answers.append(a)
         if self.on_answer is not None:
             self.on_answer(a)
@@ -194,12 +196,13 @@ class TimedVerifier:
         return AuditResult(tuple(self.answers))
 
 
-def run_timed(verifier: TimedVerifier, respond: Callable[[int], bytes],
+def run_timed(verifier: TimedVerifier, respond: Callable[[int], bytes | tuple[bytes, object]],
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
-    """Drive `verifier` against `respond(index) -> block` (and `path(index)` for a root-only verifier) until all `k`
-    are answered."""
+    """Drive `verifier` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
+    `(block, report)` to keep the responder's own record in the `Answer`; `path(index)` serves a root-only verifier."""
     while not verifier.done:
         i = verifier.challenge()
-        block = respond(i)
-        verifier.respond(block, path(i) if path is not None else None)
+        out = respond(i)
+        block, report = out if isinstance(out, tuple) else (out, None)
+        verifier.respond(block, path(i) if path is not None else None, report)
     return verifier.result()

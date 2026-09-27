@@ -1,7 +1,8 @@
-"""Tensors in `W`: a model's tensors laid out in order and zero-padded to whole segments, and per-tensor decode.
+"""Tensors in `W`: a model's tensors laid out and zero-padded to whole segments, and per-tensor decode.
 
-Tensors are packed back to back, or each from a segment boundary with `align=True`.  A tensor decodes from the
-segments it overlaps and nothing else, since segments decode independently.
+`Layout.of` packs tensors back to back in the order given, or each from a segment boundary with `align=True`;
+`Layout.of_ranges` takes byte ranges already fixed, such as a safetensors data section.  A tensor decodes from the
+segments it overlaps and nothing else, since segments decode independently, with any codec.
 """
 
 from __future__ import annotations
@@ -9,9 +10,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from .params import Params
+from .codec import Codec, Geometry
 from .primitives import Primitives
-from .scheme import decode_segment
+from .scheme import P3
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,11 +26,11 @@ class Placement:
 class Layout:
     """`params` has as many segments as `W` needs; `tensors` are their byte ranges in `W`, in order."""
 
-    params: Params
+    params: Geometry
     tensors: tuple[Placement, ...]
 
     @classmethod
-    def of(cls, base: Params, sizes: Iterable[tuple[str, int]], align: bool = False) -> Layout:
+    def of(cls, base: Geometry, sizes: Iterable[tuple[str, int]], align: bool = False) -> Layout:
         seg = base.segment_bytes
         placements, at, names = [], 0, set()
         for name, size in sizes:
@@ -44,6 +45,23 @@ class Layout:
             at += size
         return cls(base.with_segments(max(1, -(-at // seg))), tuple(placements))
 
+    @classmethod
+    def of_ranges(cls, base: Geometry, ranges: Iterable[tuple[str, int, int]]) -> Layout:
+        """The layout with each tensor at `(name, offset, size)` as given: distinct names, disjoint ranges.  `W` ends at
+        the last range, padded to whole segments; bytes between ranges are zero in `pack`."""
+        placements = sorted((Placement(name, offset, size) for name, offset, size in ranges), key=lambda p: p.offset)
+        names, end = set(), 0
+        for p in placements:
+            if type(p.name) is not str or p.name in names:
+                raise ValueError(f"tensor names must be distinct strings: {p.name!r}")
+            if type(p.offset) is not int or type(p.size) is not int or p.offset < 0 or p.size < 0:
+                raise ValueError(f"tensor {p.name!r} needs a nonnegative offset and size")
+            if p.size and p.offset < end:
+                raise ValueError(f"tensor {p.name!r} overlaps the one before it")
+            names.add(p.name)
+            end = max(end, p.offset + p.size)
+        return cls(base.with_segments(max(1, -(-end // base.segment_bytes))), tuple(placements))
+
     def placement(self, name: str) -> Placement:
         for p in self.tensors:
             if p.name == name:
@@ -57,8 +75,8 @@ class Layout:
 
     def blocks(self, name: str) -> range:
         """The blocks `decode_tensor` reads for tensor `name`."""
-        segs = self.segments(name)
-        return range(segs.start * self.params.n, segs.stop * self.params.n)
+        segs, n = self.segments(name), self.params.blocks_per_segment
+        return range(segs.start * n, segs.stop * n)
 
     def pack(self, data: Mapping[str, bytes]) -> bytes:
         """`W`: every tensor's bytes at its place, zeros elsewhere."""
@@ -79,11 +97,11 @@ class Layout:
         return {"params": self.params.manifest(), "tensors": [[p.name, p.offset, p.size] for p in self.tensors]}
 
 
-def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes]) -> bytes:
+def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes],
+                  codec: Codec = P3) -> bytes:
     """Tensor `name` from the blocks of the segments it overlaps; `block(i)` returns block `i` of `C`."""
     params, p = layout.params, layout.placement(name)
-    segs = layout.segments(name)
-    data = b"".join(decode_segment(params, prims, salt, s, [block(s * params.n + v) for v in range(params.n)])
-                    for s in segs)
+    segs, n = layout.segments(name), params.blocks_per_segment
+    data = b"".join(codec.decode_segment(params, prims, salt, s, [block(s * n + v) for v in range(n)]) for s in segs)
     start = p.offset - segs.start * params.segment_bytes if p.size else 0
     return data[start:start + p.size]
