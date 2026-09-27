@@ -49,7 +49,7 @@ class Options:
     ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word query;
     Definitions over ``partition_max_gates`` are not partitioned, over ``lower_max_gates`` IR gates or about ``lower_max_ands``
     ANDs (the piece pins' estimate) not lowered whole;
-    ``lane_budget`` bounds instances x units when a template's units are evaluated."""
+    ``input_budget`` bounds instances x input leaves, ``lane_budget`` instances x units when a template's units are evaluated."""
 
     vectors: int = 64
     min_vectors: int = 4
@@ -61,6 +61,7 @@ class Options:
     partition_max_gates: int = 1_000_000
     lower_max_gates: int = 256
     lower_max_ands: int = 60_000
+    input_budget: int = 1 << 22
     lane_budget: int = 1 << 16
     dead_ids: int = 1 << 17
 
@@ -103,7 +104,10 @@ def _gates(t: Any) -> int:
 
 
 def _n_vectors(t: Any, opts: Options) -> int:
-    return max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
+    params, _ = signature_of(t)
+    leaves = sum(pt.leaves for pt in params)
+    n = max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
+    return max(1, min(n, opts.input_budget // max(1, leaves)))
 
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
@@ -226,12 +230,12 @@ def _counts_against_pin(kind: str, key: str, got: dict, pins: dict, F: Findings,
     pinned = pins.get(kind, {}).get(key)
     rec = {"pin": key, "counts": got, "pinned": pinned}
     if pinned is None:
-        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pinned counts", counts=got)
+        F.warn("lowering", "unpinned", definition, 1, f"[{key}]: no pinned counts", pins=kind, pin=key, counts=got)
         rec["status"] = "unpinned"
     elif any(pinned.get(k) != v for k, v in got.items() if k in pinned):
         diff = {k: [pinned.get(k), v] for k, v in got.items() if pinned.get(k) != v}
-        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {a} -> {b}" for k, (a, b) in diff.items()), pin=key,
-               counts=got, pinned=pinned)
+        F.fail("lowering", "pin-mismatch", definition, f"[{key}]: " + ", ".join(f"{k} {a} -> {b}" for k, (a, b) in diff.items()), pins=kind,
+               pin=key, counts=got, pinned=pinned)
         rec["status"] = "mismatch"
     else:
         rec["status"] = "ok"
@@ -345,18 +349,21 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
 
 # --- the IR circuit: redundant gates, dead gates, the partition ---------------------------------------------------------------
 
-def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tuple | None = None) -> dict:
-    """Values computed twice inside one unit (`word.Graph.recomputed`, the pairs `word.units` keeps in one unit), by where."""
+def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tuple | None = None, within_units: bool = True) -> dict:
+    """Values computed twice (`word.Graph.recomputed`: same primitive, same operands by value), by where: inside one unit of a
+    Call's cut (``within_units``; across units they are recomputes, a partition failure), or anywhere in a Definition that is
+    not a Call itself."""
     n = int(rule.get("redundant_gates") or 0)
-    rec: dict[str, Any] = {"count": n}
+    rec: dict[str, Any] = {"count": n, "scope": "unit" if within_units else "definition"}
     if n and graph is not None:
         G, R = graph
         own = R["owner"]
         where = Counter(_where(G.prim_names[int(G.prim[a])], G.scope_names[int(G.scope[a])])
-                        for a, b in G.recomputed if own[a] == own[b])
+                        for a, b in G.recomputed if own[a] == own[b] or not within_units)
         rec["where"] = dict(where.most_common())
     if n:
-        F.warn("redundant-gates", "ir", fn.id, n, "values computed again inside their own unit", where=rec.get("where", {}))
+        F.warn("redundant-gates", "ir", fn.id, n, "values computed again inside their own " + ("unit" if within_units else "Definition"),
+               where=rec.get("where", {}))
     return rec
 
 
@@ -378,12 +385,15 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
     return rec
 
 
-def partition(fn: Any, opts: Options, F: Findings, memo: dict) -> tuple[dict, dict]:
-    """`Q_word_v1` on one Call of ``fn`` (its record and the word's unit rule): every violation fails by name."""
+def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True) -> tuple[dict, dict]:
+    """`Q_word_v1` on one Call of ``fn`` (its record and the word's unit rule).  Where the invariant applies (``fn`` is a Call of a
+    served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
+    are partitioned inside the Call that contains it."""
     from verity_vllm.query import word as W
 
+    P = F if applies else Findings()
     rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates)
-    rec: dict[str, Any] = {"query": rule["query"], "units_per_call": rule["units_per_call"], "by_kind": rule["by_kind"],
+    rec: dict[str, Any] = {"applies": applies, "query": rule["query"], "units_per_call": rule["units_per_call"], "by_kind": rule["by_kind"],
                            "committed_interior_words": rule["committed_interior_words"], "max_out_bits": rule["max_out_bits"],
                            "free_gates": rule.get("free_gates")}
     for v in rule["violations"]:
@@ -391,13 +401,13 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict) -> tuple[dict, di
         if v["class"] == "cut":
             for code in v["codes"]:
                 det = v["detail"].get(code, {})
-                F.fail("partition", code, d, f"({det.get('n', '?')} gate(s))" if isinstance(det, dict) else "",
+                P.fail("partition", code, d, f"({det.get('n', '?')} gate(s))" if isinstance(det, dict) else "",
                        gates=det.get("gates") if isinstance(det, dict) else det)
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
         else:
-            F.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
+            P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
     rec.setdefault("checked", True)
     if fn.gates <= opts.partition_max_gates:
@@ -406,30 +416,37 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict) -> tuple[dict, di
         G = W.Graph(fn)
         R = W.units(G, opts.X, opts.W, opts.extras)
         cut = R["cut"]
-        seen = {f["code"] for f in F.failures if f["check"] == "partition" and f["definition"] == fn.id}
+        seen = {f["code"] for f in P.failures if f["check"] == "partition" and f["definition"] == fn.id}
         for code in cut.codes:
             det = cut.detail.get(code, {})
             if code not in seen:
-                F.fail("partition", code, fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
-        rule = dict(rule, redundant_gates=cut.detail["redundant_gates"])
+                P.fail("partition", code, fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
+        rule = dict(rule, redundant_gates=cut.detail["redundant_gates"] if applies else len(G.recomputed))
         rec["whole"] = {"units": len(R["kinds"]), "redundant_gates": cut.detail["redundant_gates"], "codes": list(cut.codes)}
         rec["_graph"] = (G, R)
+    if not applies:
+        rec["isolated"] = [f["name"] for f in P.failures]
     return rec, rule
 
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
 def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = None, pins: dict | None = None,
-                     lower_whole: bool = True) -> dict:
+                     lower_whole: bool = True, as_call: bool | None = None) -> dict:
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
     warnings.  ``memo`` shares the word query's unit rules and the entries across calls; ``lower_whole=False`` leaves the
-    Boolean lowering to a template's units."""
+    Boolean lowering to a template's units; ``as_call`` says whether the partition invariant applies (default: its family is a
+    Call of a served Program, `circuit_check.targets.call_families`)."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     t = resolve(fn)
     done = memo.setdefault("entries", {})
-    if (t.id, lower_whole) in done:
-        return done[(t.id, lower_whole)]
+    if as_call is None:
+        from .targets import call_families, family
+
+        as_call = family(t) in call_families()
+    if (t.id, lower_whole, as_call) in done:
+        return done[(t.id, lower_whole, as_call)]
     F = Findings()
     kind = "reference" if isinstance(t, ScalarReference) else "primitive" if isinstance(t, PrimitiveDefinition) else "composite"
     entry: dict[str, Any] = {"definition": t.id, "form": kind, "gates": None if kind == "reference" else _gates(t)}
@@ -440,17 +457,17 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     corr["realizations"].append({"via": "c-flock:ir_lower", **low})
     entry["correspondence"] = corr
     if kind == "composite":
-        part, rule = partition(t, opts, F, memo.setdefault("word", {}))
+        part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call)
         graph = part.pop("_graph", None)
         entry["partition"] = part
-        entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph) if part["checked"] else {"checked": False}
+        entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph, within_units=as_call) if part["checked"] else {"checked": False}
         entry["dead_gates"] = dead_gates(t, opts, F)
     elif kind == "primitive":
-        entry["partition"] = {"checked": True, "units_per_call": 1 if t.params else 0}
+        entry["partition"] = {"applies": as_call, "checked": True, "units_per_call": 1 if t.params else 0}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
     entry["failures"], entry["warnings"] = F.failures, F.warnings
-    done[(t.id, lower_whole)] = entry
+    done[(t.id, lower_whole, as_call)] = entry
     return entry
 
 
@@ -477,7 +494,7 @@ def _export_counts(C: Any, root: Any, name: str) -> dict:
 
     with tempfile.TemporaryDirectory() as d:
         reg = BE.Registry(Path(d))
-        rid = reg.analyse(C, root, name, "proof-unit", list_root=True)
+        rid = reg.analyse(C, root, name, "proof-unit")
         node = reg.nodes[rid]
         return {"and": node["and"], "xor": node["xor"], "not": node["not"], "subcircuit_types": len(reg.nodes),
                 "gate_lists_verified": reg.verified, "wiring_differs": reg.wiring_differs}
@@ -493,9 +510,12 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
     tid = sub.template.id
     mod = reg.module(tid)
     if tid == "gemm-coordinate":
-        dot = next((n.fn.id for n in d.body.nodes if n.fn.id in IL.TC_STEPS), None) if hasattr(d, "body") else None
+        steps = sorted({g.prim.id for g in standalone_call(d)[1] if g.prim.id.endswith(("Dot16_v1", "Dot16_v2", "Dot32_v1"))}) \
+            if hasattr(d, "body") else []
+        dot = next((p for p in steps if p in IL.TC_STEPS), None)
         if dot is None:
-            return {"lowered": False, "reason": f"{sub.id}: no tensor-core k-step C-Flock lowers (verity_flock.ir_lower.TC_STEPS)"}
+            return {"lowered": False, "reason": f"{sub.id}: its tensor-core step {', '.join(steps) or '(a silicon reference)'} is not one "
+                    f"C-Flock lowers ({', '.join(sorted(IL.TC_STEPS))})"}
         name = f"gemm-coordinate/{dot}/tc-step"
         low = IL.lowering(d, name, unit_fn=lambda t: IL.tc_units(t, dot))
     elif mod is None or not callable(getattr(mod, "lowering", None)):
@@ -573,14 +593,14 @@ def check_subcircuit(sub: Any, opts: Options = Options(), *, instance_statics: S
     out: dict[str, Any] = {"subcircuit": sub.id, "template": sub.template.id, "params": dict(sub.params), "definitions": [], "lowering": []}
     for st in instance_statics:
         d = sub.definition(**st)
-        e = check_definition(d, opts, memo=memo, pins=pins, lower_whole=False)
+        e = check_definition(d, opts, memo=memo, pins=pins, lower_whole=False, as_call=True)
         out["definitions"].append(e)
         F.failures += e["failures"]
         F.warnings += e["warnings"]
         tgt = sub.target(**st)
         eq = target_equivalence(tgt, d, opts, F)
         if eq is not None:
-            out.setdefault("target", []).append(eq)
+            out.setdefault("target_equivalence", []).append(eq)
         low = template_lowering(sub, st, d, opts, F, pins)
         out["lowering"].append(dict(instance_statics=st, **low))
     out["failures"], out["warnings"] = F.failures, F.warnings
@@ -629,8 +649,7 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
         except (KeyError, TypeError, ValueError, AttributeError) as e:
             F.fail("row", "unresolved", g["definition"], f"{type(e).__name__}: {str(e)[:160]}")
             continue
-        e = check_definition(fn, opts, memo=memo, pins=pins)
-        e["calls"] = calls[g["definition"]]
+        e = dict(check_definition(fn, opts, memo=memo, pins=pins, as_call=True), calls=calls[g["definition"]])
         out["definitions"].append(e)
         F.failures += e["failures"]
         F.warnings += [dict(w, calls=e["calls"]) for w in e["warnings"]]

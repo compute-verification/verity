@@ -104,14 +104,16 @@ def subcircuit(spec: str) -> tuple[Any, list[dict]]:
         params = dict(t.example)
         params.update({k: _value(v) for k, v in _split(rest).items()} if rest else {})
         sub = t.bind(**params)
+        return sub, instance_statics(sub, params)
     return sub, instance_statics(sub)
 
 
-def instance_statics(sub: Any) -> list[dict]:
-    """``attention-head``: the key counts at the ends of its range (``T = lo:hi``); every other template: none."""
+def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
+    """``attention-head``: the key counts at the ends of its range (``T = lo:hi`` of ``params``, else the template's example);
+    every other template: none."""
     if sub.template.id != "attention-head":
         return [{}]
-    lo, _, hi = str(sub.params.get("T") or sub.template.example["T"]).partition(":")
+    lo, _, hi = str((params or {}).get("T") or sub.template.example["T"]).partition(":")
     return [{"T": t} for t in sorted({int(lo), int(hi or lo)})]
 
 
@@ -134,7 +136,8 @@ TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
 #: FP8's per-token quantization reads whole 256-thread blocks: every reduction length is at least 256
 TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V": 16, "QKV": 512, "GU": 512}
 
-#: small parameters per template: the workload ones where C-Flock pins its unit circuit, else small
+#: the parameters each template is checked at: the workload ones where C-Flock pins its unit circuit, else small (a template's
+#: example is its served size)
 TEMPLATE_PARAMS = {
     "gemm-coordinate": [{"K": 64, "semantics": "sm80.mma.m16n8k16.bf16"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k16.bf16"},
                         {"K": 64, "semantics": "sm89.mma.m16n8k32.e4m3"}, {"K": 64, "semantics": "sm90.wgmma.m64n8k32.e4m3"},
@@ -144,6 +147,12 @@ TEMPLATE_PARAMS = {
     "rmsnorm-fused-cuda": [{"N": 2048, "EPS": 1e-05}],
     "rmsnorm-triton": [{"N": 2048, "EPS": 1e-05}],
     "silu-mul": [{"I": 8192}],
+    "gumbel-top-p-token-select": [{"V": 64}],
+    "token-select-greedy": [{"V": 64}],
+    "embedding-row": [{"V": 64, "H": 16}],
+    "moe-expert-coordinate": [{"E": 4, "K": 64}],
+    "moe-expert-coordinate-weighted": [{"E": 4, "K": 64}],
+    "scaled-mm-fp8-block-coordinate": [{"K": 256, "G": 128}],
 }
 
 
@@ -156,7 +165,7 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
     for tid, t in sorted(TM.TEMPLATES.items()):
         for params in TEMPLATE_PARAMS.get(tid, [dict(t.example)]):
             sub = t.bind(**params)
-            out.append((sub.id, sub, instance_statics(sub)))
+            out.append((sub.id, sub, instance_statics(sub, params)))
     return out
 
 
@@ -225,22 +234,61 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 ROOT_ERRORS: list[tuple[str, str]] = []
 
 
-def _vocabulary_roots() -> list[Any]:
-    """The frontend vocabularies' kinds at small statics (the reference kinds, the dense elementwise kinds)."""
+def _vocabulary_bindings() -> list[tuple[str, Any]]:
+    """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics: (label, the bound
+    Definition, or the error)."""
     from verity_vllm.program.frontend.rules import vocab as V
+    from verity_vllm.program.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
-             "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul"}
+             "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16}
+    wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
+    vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
+    kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
+    kinds += [(f"dense/{k}", make) for k, make in V._dense_kinds()[0].items()]
     out = []
-    for dt in ("bf16", "f32"):
-        for name, make in V.REFERENCE_CPU_F32.kinds.items():
-            args = make.__code__.co_varnames[:make.__code__.co_argcount]
-            out.append(make(**{a: (dt if a == "DT" else small[a]) for a in args}))
-    kinds, _notes = V._dense_kinds()
-    for name, make in kinds.items():
+    for label, make in kinds:
         args = make.__code__.co_varnames[:make.__code__.co_argcount]
-        out.append(make(**{a: small[a] for a in args}))
+        for dt in (("bf16", "f32") if "DT" in args else (None,)):
+            fn, err = None, None
+            for table in (small, wide):
+                try:
+                    fn = make(**{a: (dt if a == "DT" else table[a]) for a in args})
+                    _ = getattr(fn, "gates", None)
+                    break
+                except Exception as e:  # noqa: BLE001  (retried with the wide table, then named)
+                    err = f"{type(e).__name__}: {str(e)[:160]}"
+            out.append((label, fn if fn is not None else err))
     return out
+
+
+def _vocabulary_roots() -> list[Any]:
+    out = []
+    for label, fn in _vocabulary_bindings():
+        if isinstance(fn, str):
+            ROOT_ERRORS.append((label, fn))
+        else:
+            out.append(fn)
+    return out
+
+
+_CALLS: set[str] = set()
+
+
+def call_families() -> set[str]:
+    """The Definition families a served Program calls, where the partition invariant applies: the replay's row families
+    (`verity_vllm.program.kernels.rows.ROWS`), every frontend vocabulary kind, and every template's Definition.  Any other
+    Definition's gates are partitioned inside the Call that contains them."""
+    if not _CALLS:
+        load_registries()
+        from verity_vllm.program.kernels import rows
+
+        _CALLS.update(rows.ROWS)
+        _CALLS.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
+        for _label, sub, sts in templates():
+            _CALLS.update(family(sub.definition(**st)) for st in sts)
+    return _CALLS
 
 
 def catalog() -> list[Any]:
@@ -254,8 +302,8 @@ def catalog() -> list[Any]:
             roots.append(d)
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
-    roots += _core_roots() + _kernel_roots() + _vocabulary_roots()
     ROOT_ERRORS.clear()
+    roots += _core_roots() + _kernel_roots() + _vocabulary_roots()
     for label, make in _model_roots():
         try:
             fn = make()
@@ -315,5 +363,5 @@ def suite() -> dict[str, Any]:
     return select(reachable(catalog()))
 
 
-__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "catalog", "definition", "family", "instance_statics", "kind_of",
+__all__ = ["MAX_GATES", "REGISTERED", "ROOT_ERRORS", "TEMPLATE_PARAMS", "TINY", "call_families", "catalog", "definition", "family", "instance_statics", "kind_of",
            "load_registries", "reachable", "select", "subcircuit", "suite", "templates"]

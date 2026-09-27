@@ -43,25 +43,25 @@ def edges(w: int) -> tuple[int, ...]:
     return tuple(dict.fromkeys(FLOATS.get(w, ()) + integer_edges(w)))
 
 
-def _near_one(rng: np.random.Generator, w: int) -> int:
-    e_bits, bias = _NEAR_ONE[w]
-    m_bits = w - 1 - e_bits
-    e = bias + int(rng.integers(-8, 9))
-    return (int(rng.integers(0, 2)) << (w - 1)) | (e << m_bits) | int(rng.integers(0, 1 << m_bits))
-
-
-def _word(rng: np.random.Generator, w: int) -> int:
-    r = rng.random()
-    if r < 0.25:
-        ws = edges(w)
-        return ws[int(rng.integers(0, len(ws)))]
-    if r < 0.5 and w in _NEAR_ONE:
-        return _near_one(rng, w)
-    return int.from_bytes(rng.bytes((w + 7) // 8), "little") & ((1 << w) - 1)
+def _random(rng: np.random.Generator, w: int, shape: tuple[int, int]) -> np.ndarray:
+    """Random words of width ``w <= 64``: an edge word (1 in 4), a float near 1.0 (1 in 4, where the width is a float), else uniform."""
+    ew = np.array(edges(w), dtype=np.uint64)
+    mask = np.uint64((1 << w) - 1)
+    uni = rng.integers(0, np.iinfo(np.uint64).max, size=shape, dtype=np.uint64, endpoint=True) & mask
+    r = rng.random(shape)
+    out = np.where(r < 0.25, ew[rng.integers(0, len(ew), size=shape)], uni)
+    if w in _NEAR_ONE:
+        e_bits, bias = _NEAR_ONE[w]
+        m_bits = w - 1 - e_bits
+        near = ((rng.integers(0, 2, size=shape, dtype=np.uint64) << np.uint64(w - 1))
+                | ((bias + rng.integers(-8, 9, size=shape)).astype(np.uint64) << np.uint64(m_bits))
+                | rng.integers(0, 1 << m_bits, size=shape, dtype=np.uint64))
+        out = np.where((r >= 0.25) & (r < 0.5), near, out)
+    return out
 
 
 def edge_count(params: Sequence[Type]) -> int:
-    return max((len(edges(w)) for pt in params for w in pt.leaf_widths()), default=0)
+    return max((len(edges(w)) for pt in params for w in set(pt.leaf_widths())), default=0)
 
 
 def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
@@ -71,16 +71,21 @@ def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
     E = min(n, edge_count(params))
     out = []
     for pt in params:
-        widths = pt.leaf_widths()
-        rows = []
-        for j in range(n):
-            if j < E:
-                rows.append([edges(w)[j % len(edges(w))] for w in widths])
-            else:
-                rows.append([_word(rng, w) for w in widths])
+        widths = np.asarray(pt.leaf_widths())
         dt = type_dtype(pt)
-        a = np.array(rows, dtype=object if dt.kind == "O" else dt).reshape((n, *type_shape(pt)))
-        out.append(a)
+        a = np.zeros((n, len(widths)), dtype=np.uint64 if dt.kind != "O" else object)
+        for w in sorted(set(widths.tolist())):
+            cols = np.flatnonzero(widths == w)
+            ew = edges(w)
+            if dt.kind == "O" or w > 64:
+                for j in range(n):
+                    for c in cols:
+                        a[j, c] = ew[j % len(ew)] if j < E else int.from_bytes(rng.bytes((w + 7) // 8), "little") & ((1 << w) - 1)
+                continue
+            a[:E, cols] = np.array([ew[j % len(ew)] for j in range(E)], dtype=np.uint64)[:, None]
+            if n > E:
+                a[E:, cols] = _random(rng, w, (n - E, len(cols)))
+        out.append((a if dt.kind == "O" else a.astype(dt)).reshape((n, *type_shape(pt))))
     return out
 
 

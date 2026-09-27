@@ -31,13 +31,27 @@ KNOWN_PIECES = {
     "F32Add_v1": "NaN payloads: the piece returns the canonical NaN 0x7FC00000, the IR primitive the quieted operand NaN "
                  "(0xFFC00000 + 0xFFC00000 = 0xFFC00000, 0x7F800001 -> 0x7FC00001); backends/flock/tests/test_ir_lowering.py "
                  "compares NaNs as a class",
+    "F32Mul_v1": "NaN payloads, as F32Add_v1",
 }
-#: other failures main has, by "<check>/<code> <definition>", and why
-KNOWN: dict[str, str] = {}
+_TOPP = ("the top-p keep word raises unless its committed `splits` operand is one of (1, 2, 4, 8, 16, 32) "
+         "(verity_vllm.program.registry.sampling.topp_mask_word): partial on a committed, private value")
+#: other failures main has, by "<check>/<code> <Definition family>", and why
+KNOWN: dict[str, str] = {
+    "correspondence/reference-not-total TopPMaskWordx16_v1": _TOPP,
+    "correspondence/reference-not-total TopPMaskWordx64_v1": _TOPP,
+    "correspondence/reference-not-total TopPMask_v1": _TOPP,
+    "correspondence/reference-not-total GumbelTopPTokenSelect_v1": _TOPP,
+    "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
+        "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
+        "word.unit_rule partitions the batch's members one by one and does not see it",
+    "partition/committed-unread DeriveRefBf16ToF32_v1": "a Call that is only wiring (Bf16ToF32 per element): its outputs are its "
+        "inputs rearranged, so the cut commits inputs no unit reads (verity.ir.partition.validate_unit_cut counts a returned "
+        "wiring value as no read)",
+}
 
 
 def _known(f: dict) -> str | None:
-    key = f"{f['check']}/{f['code']} {f['definition']}"
+    key = f"{f['check']}/{f['code']} {f['definition'].split('{')[0]}"
     if key in KNOWN:
         return KNOWN[key]
     if f["code"] == "lowering-mismatch":
@@ -73,12 +87,18 @@ def test_every_template_is_checked():
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
 
+def test_the_partition_applies_to_the_calls_of_served_programs():
+    calls = TG.call_families()
+    assert {"Gemm_v1", "RMSNormTriton_v1", "Attention_v3", "TokenSelect_v1", "GumbelTopPTokenSelect_v1", "RoPEHead_v1"} <= calls
+    assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
+
+
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("fid", sorted(SUITE))
 def test_definition(fid, results):
     e = CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)
-    results.append({"kind": "definition", "target": fid, **e})
+    results.append({**e, "kind": "definition", "target": fid})
     _clean(e)
 
 
@@ -86,7 +106,7 @@ def test_definition(fid, results):
 def test_template(label, results):
     sub, sts = TEMPLATES[label]
     r = CK.check_subcircuit(sub, OPTS, instance_statics=sts, memo=MEMO, pins=PINS)
-    results.append({"kind": "template", "target": label, **r})
+    results.append({**r, "kind": "template", "target": label})
     assert all(low["lowered"] or low.get("reason") for low in r["lowering"])
     _clean(r)
 
@@ -106,7 +126,7 @@ def _request_program(tmp_path: Path, **kw) -> Path:
 
 def test_row(tmp_path, results):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
-    results.append({"kind": "row", "target": "synthetic request Program", **r})
+    results.append({**r, "kind": "row", "target": "synthetic request Program"})
     assert r["calls"] == 42 and len(r["definitions"]) >= 8
     _clean(r)
 
@@ -122,7 +142,7 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
 def test_known_failures_are_current():
     """Each `KNOWN` entry and each `KNOWN_PIECES` piece still fails somewhere: a fixed one is dropped from the list."""
     fails = [f for fid in sorted(SUITE) for f in CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
-    keys = {f"{f['check']}/{f['code']} {f['definition']}" for f in fails}
+    keys = {f"{f['check']}/{f['code']} {f['definition'].split('{')[0]}" for f in fails}
     assert set(KNOWN) <= keys, sorted(set(KNOWN) - keys)
     pieces = {f["definition"] for f in fails if f["code"] == "lowering-mismatch"}
     assert set(KNOWN_PIECES) <= pieces, sorted(set(KNOWN_PIECES) - pieces)
@@ -165,7 +185,7 @@ def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
-    e = CK.check_definition(fn, OPTS)
+    e = CK.check_definition(fn, OPTS, as_call=True)
     (w,) = [w for w in e["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"]
     assert w["count"] == 1 and w["where"] == {"F32Add_v1 @ CircuitCheckRedundant_v1": 1}
     assert not [f for f in e["failures"] if f["check"] == "partition"]
@@ -180,8 +200,11 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
-    e = CK.check_definition(fn, OPTS)
+    e = CK.check_definition(fn, OPTS, as_call=True)
     assert "partition/gate-recomputed CircuitCheckRecompute_v1 (1 gate(s))" in [f["name"] for f in e["failures"]]
+    inner = CK.check_definition(fn, OPTS, as_call=False)                 # not a Call: its copies are redundant gates, not a failure
+    assert not [f for f in inner["failures"] if f["check"] == "partition"] and inner["partition"]["isolated"]
+    assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
@@ -204,7 +227,7 @@ def test_a_unit_wider_than_the_word_fails_the_width_rule():
     wide = PrimitiveDefinition("CircuitCheckWide", 1, (("a", Value(32)), ("b", Value(32))), Value(64), lambda a, b: (a << 32) | b,
                                register=False)
     fn = _composite("CircuitCheckWidth", ((("a", Value(32)), ("b", Value(32))), Value(64)), lambda B, S, a, b: B.call(wide, a, b))
-    names = [f["name"] for f in CK.check_definition(fn, OPTS)["failures"]]
+    names = [f["name"] for f in CK.check_definition(fn, OPTS, as_call=True)["failures"]]
     assert any(n.startswith("partition/width CircuitCheckWidth_v1 output:CircuitCheckWide_v1") for n in names), names
 
 

@@ -24,7 +24,7 @@ def _options(a: argparse.Namespace) -> CK.Options:
     return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras)
 
 
-def run(specs: list[str], opts: CK.Options, *, everything: bool = False, log=print) -> dict:
+def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print) -> dict:
     TG.load_registries()
     memo: dict = {}
     pins = CK.load_pins()
@@ -37,7 +37,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, log=pri
         except Exception as e:  # noqa: BLE001  (a target the checks cannot run on is a failure by name, not a crash)
             r = {"failures": [{"check": "circuit-check", "code": "error", "definition": label,
                                "name": f"circuit-check/error {label}: {type(e).__name__}: {str(e)[:200]}"}], "warnings": []}
-        r = {"kind": kind, "target": label, "seconds": round(time.time() - t0, 3), **r}
+        r = {**r, "kind": kind, "target": label, "seconds": round(time.time() - t0, 3)}
         out.append(r)
         if log:
             log(f"{'FAIL' if r['failures'] else 'ok  '} {kind:10s} {label[:90]}  failures={len(r['failures'])} warnings={len(r['warnings'])}"
@@ -58,7 +58,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, log=pri
                 return CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo, pins=pins)
             one("template", s, tpl)
         else:
-            one("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo, pins=pins))
+            one("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo, pins=pins, as_call=as_call))
     return CK.report(out, opts)
 
 
@@ -68,9 +68,7 @@ def update_pins(rep: dict) -> dict:
     for t in rep["targets"]:
         for f in t.get("failures", []) + t.get("warnings", []):
             if f["check"] == "lowering" and f["code"] in ("unpinned", "pin-mismatch"):
-                key = f.get("pin") or f["definition"]
-                kind = "pieces" if "." not in key and "/" not in key else "units"
-                pins.setdefault(kind, {})[key] = f["counts"]
+                pins.setdefault(f["pins"], {})[f["pin"]] = f["counts"]
     for kind in pins:
         pins[kind] = dict(sorted(pins[kind].items()))
     CK.PINS.write_text(json.dumps(pins, indent=1, sort_keys=True) + "\n")
@@ -87,13 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
+    ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
+                    "(default: when its family is a Call of a served Program)")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
     ap.add_argument("-q", "--quiet", action="store_true")
     a = ap.parse_args(argv)
     if not a.targets and not a.all:
         ap.error("give a target or --all")
-    rep = run(a.targets, _options(a), everything=a.all, log=None if a.quiet else lambda s: print(s, flush=True))
+    rep = run(a.targets, _options(a), everything=a.all, as_call=True if a.as_call else None,
+              log=None if a.quiet else lambda s: print(s, flush=True))
     if a.update_pins:
         update_pins(rep)
     if a.out:
