@@ -132,20 +132,18 @@ end F256
 /-- `φ8(α) = g`, a root of `X^8 + X^4 + X^3 + X + 1` in F (§2.2). -/
 def phi8Gen : F128 := ⟨0x6b8330483c2e9849, 0x0dcb364640a222fe⟩
 
+/-- `g^i`. -/
+def phi8Pow : Nat → F128
+  | 0 => F128.one
+  | i + 1 => phi8Pow i * phi8Gen
+
+/-- `Σ_{i < n} bit_i(v) · g^i`. -/
+def phi8Sum (v : Nat) : Nat → F128
+  | 0 => F128.zero
+  | i + 1 => if v.testBit i then phi8Sum v i + phi8Pow i else phi8Sum v i
+
 /-- `φ8(v) = Σ bit_i(v) · g^i` for bytes `v` (§2.2), tabulated. -/
-def phi8Table : Array F128 := Id.run do
-  let mut pows : Array F128 := #[]
-  let mut p := F128.one
-  for _ in [0:8] do
-    pows := pows.push p
-    p := p * phi8Gen
-  let mut t : Array F128 := Array.mkEmpty 256
-  for v in [0:256] do
-    let mut acc := F128.zero
-    for i in [0:8] do
-      if (v >>> i) % 2 == 1 then acc := acc + pows.getD i 0
-    t := t.push acc
-  return t
+def phi8Table : Array F128 := Array.ofFn (n := 256) fun v => phi8Sum v.val 8
 
 @[inline] def phi8 (v : Nat) : F128 := phi8Table.getD (v % 256) 0
 

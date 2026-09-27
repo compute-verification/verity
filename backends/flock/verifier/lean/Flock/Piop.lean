@@ -35,6 +35,17 @@ def lagrange (nodes : Array F128) (denInv : F128) (z : F128) : Array F128 :=
 /-- `L_s(ζ)` over `S = φ8({0…63})`. -/
 def skipWeights (z : F128) : Array F128 := lagrange nodesS den6Inv z
 
+/-- The weights of `Pcomb(z)` (§9.2): zero on `S`; the indicator at a node of `Λ`; else
+`Z_{S∪Λ}(z) · den_7⁻¹ · (z + φ8(64+i))⁻¹`. -/
+def combWeights (z : F128) : Array F128 :=
+  match nodesS.findIdx? (· == z), nodesL.findIdx? (· == z) with
+  | some _, _ => (Array.range 64).map fun _ => 0
+  | none, some i => (Array.range 64).map fun j => if j == i then 1 else 0
+  | none, none =>
+    let zall := (nodesS ++ nodesL).foldl (fun acc n => acc * (z + n)) 1
+    let c := zall * den7Inv
+    (Array.range 64).map fun i => c * (z + nodesL[i]!).inv
+
 def dot (a b : Array F128) : F128 := Id.run do
   let mut acc : F128 := 0
   for i in [0:min a.size b.size] do acc := acc + a[i]! * b[i]!
@@ -73,14 +84,7 @@ def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : Zeroc
   let pc := dot (lagrange nodesL den6Inv z) p.round1c
   check (pc == p.finalC) "zerocheck: CEvalMismatch"
   let comb := (Array.range 64).map fun i => p.round1ab[i]! + p.round1c[i]!
-  let pcomb : F128 :=
-    match nodesS.findIdx? (· == z), nodesL.findIdx? (· == z) with
-    | some _, _ => 0
-    | none, some i => comb[i]!
-    | none, none =>
-      let zall := (nodesS ++ nodesL).foldl (fun acc n => acc * (z + n)) 1
-      let c := zall * den7Inv
-      (Array.range 64).foldl (fun acc i => acc + c * (z + nodesL[i]!).inv * comb[i]!) 0
+  let pcomb := dot (combWeights z) comb
   let mut claim := pcomb + pc
   let mut rho : Array F128 := #[]
   for i in [0:m - 6] do
