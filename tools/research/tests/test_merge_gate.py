@@ -83,3 +83,32 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
     assert merge_main(["feat"]) == 1 and "main has moved past" in capsys.readouterr().err
     _git(main, "checkout", "-q", "-b", "other")
     assert merge_main(["feat", "--dry-run"]) == 1 and "not main" in capsys.readouterr().err
+
+
+def _branch(main: Path, name: str, path: str) -> None:
+    _git(main, "checkout", "-q", "-b", name, "main")
+    (main / path).write_text(name + "\n")
+    _git(main, "add", path)
+    _git(main, "commit", "-q", "-m", name)
+    _git(main, "checkout", "-q", "main")
+
+
+def test_a_train_lands_what_it_checked_and_bisects_to_the_breaking_ref(tmp_path, monkeypatch, capsys):
+    """A B C, where B adds the file the check refuses: the candidate fails, the prefixes are checked (A passes, A+B fails), B is
+    named and main fast-forwards to the checked A prefix; then A C (without B) lands whole on one check."""
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    main, _feat, _tip = _repos(tmp_path)
+    for name, path in (("A", "a.txt"), ("B", "BAD"), ("C", "c.txt")):
+        _branch(main, name, path)
+    monkeypatch.chdir(main)
+    before = _git(main, "rev-parse", "HEAD")
+    cmd = ["--tool", "mytools.decl_check:T", "--command", "sh -c 'test ! -e BAD'"]
+    assert merge_main(["--train", "A", "B", "C", *cmd]) == 1
+    out = capsys.readouterr().out
+    assert "train A B C: B breaks it; main fast-forwarded to" in out and out.count("recorded as") == 3
+    assert _git(main, "rev-parse", "HEAD^1") == before and (main / "a.txt").exists() and not (main / "BAD").exists()
+    assert "Train:" in _git(main, "log", "-1", "--format=%B")
+    assert merge_main(["--train", "C", *cmd]) == 0
+    out = capsys.readouterr().out
+    assert out.count("recorded as") == 1 and "`check` passed; main fast-forwarded" in out and (main / "c.txt").exists()
+    assert not _git(main, "worktree", "list").count("research-train")
