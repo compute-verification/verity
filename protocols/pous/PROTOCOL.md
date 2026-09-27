@@ -194,10 +194,11 @@ the timed audit and the simulator with the dense codec as default.
 ## Not here yet
 
 Done in the random-oracle model (POUS `lean/submissions/dense/DenseReCert.lean`): the dense re-certificate at
-`SECURE_FIRST`'s point (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB). Pending:
+`SECURE_FIRST`'s point (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), which covers the code's
+per-segment `tag_s` domains (`domainSep_equiv`). Pending:
 
-- `ChainExPostFacto`, which carries them from the random oracle to the overwrite chain (`sponge-dense`), with the
-  multi-segment lemma's global block index aligned to the code's per-segment `tag_s` (`DISCREPANCIES.md` D2, D5).
+- `ChainExPostFacto`, which carries them from the random oracle to the overwrite chain (`sponge-dense`,
+  `DISCREPANCIES.md` D5).
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at
