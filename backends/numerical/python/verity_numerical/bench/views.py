@@ -1479,7 +1479,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         if _latest(c.labels, "omitted"):
             V.omitted_of[c.art] = _latest(c.labels, "omitted")
-        dom = _latest(c.labels, "domain") or {"finite": "finite-only", "total": "total"}.get(str(c.meta["workload_fingerprint"].get("domain")))
+        fp_dom = contract.identity(c.meta["workload_fingerprint"])["domain"]
+        dom = _latest(c.labels, "domain") or (fp_dom if fp_dom in contract.DOMAINS else None)
         if dom:
             V.domain_of[c.art] = str(dom)
         if c.key_class:
