@@ -82,4 +82,77 @@ theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 →
   | nil => simp
   | cons R rs ih => simp [List.flatMap_cons, ih]; ring
 
+/-! ## The witness's A-side and B-side, and the pin's extension -/
+
+theorem Model.Statement.block_index_lt (S : Statement) (a : Fin (2 ^ S.m)) :
+    a.val / 2 ^ S.kLog < 2 ^ S.nbl := by
+  have h : 2 ^ S.m = 2 ^ S.nbl * 2 ^ S.kLog := by rw [← pow_add, Nat.sub_add_cancel S.hk]
+  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← h]
+  exact a.isLt
+
+/-- The A-side bits: `(A·z)` at address `a = o·2^k_log + i` is `(A₀·z_o)_i`. -/
+def aVec (S : Statement) (z : Witness S.m) : Witness S.m := fun a =>
+  (S.A₀.mulVec (S.block z ⟨a.val / 2 ^ S.kLog, S.block_index_lt a⟩))
+    ⟨a.val % 2 ^ S.kLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+
+/-- The B-side bits. -/
+def bVec (S : Statement) (z : Witness S.m) : Witness S.m := fun a =>
+  (S.B₀.mulVec (S.block z ⟨a.val / 2 ^ S.kLog, S.block_index_lt a⟩))
+    ⟨a.val % 2 ^ S.kLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+
+/-- The pin column's multilinear extension over the blocks. The lincheck's constant-wire coin
+`β` checks that it is 1 at `ρ_out` (§10, A8). -/
+def pinMLE (S : Statement) (z : Witness S.m) (ρOut : Fin S.nbl → F) : F :=
+  ∑ o : Fin (2 ^ S.nbl), eqAt ρOut o.val * ((S.block z o S.pin).val : F)
+
+/-- `ρ_out`: the zerocheck's challenges for the block bits (address bits `k_log … m−1`). -/
+def Model.ZcOut.ρOut (S : Statement) (zc : ZcOut F S.m) : Fin S.nbl → F := fun j =>
+  if h : S.kLog - 6 + j.val < S.m - 6 then zc.ρ ⟨S.kLog - 6 + j.val, h⟩ else 0
+
+/-! ## The codewords near the committed table -/
+
+/-- Messages whose encodings are within the level-0 radius of the committed table. -/
+def closeMsgs (A : Arith F K) (sch : Schedule) (C : Oracle F) :
+    Set (Message F sch.k0 sch.level₀.logCols) :=
+  {M | Close sch.level₀.radius (asTable sch C) (encode A sch.level₀.logLen M)}
+
+/-- The witness a message packs. -/
+def wit (A : Arith F K) (S : Statement) (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols) :
+    Witness S.m :=
+  witnessOf A S.m sch.k0 sch.level₀.logCols M
+
+/-- The packed table entry `f(y)` of a message (§12.1, §13.1: `t[c·2^k₀ + ℓ] = M[ℓ][c]`). -/
+def packedAt (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols) (y : ℕ) : F :=
+  if h : y / 2 ^ sch.k0 < 2 ^ sch.level₀.logCols then
+    M ⟨y % 2 ^ sch.k0, Nat.mod_lt _ (Nat.two_pow_pos _)⟩ ⟨y / 2 ^ sch.k0, h⟩
+  else 0
+
+/-! ## Doomed states between the phases -/
+
+/-- Doomed after the zerocheck. -/
+def DZc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (extra : List (Claim F S.m)) : Option (ZcOut F S.m) → Prop
+  | none => True
+  | some zc => ∀ M ∈ closeMsgs A sch C,
+      ¬ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S (wit A S sch M))
+          ∧ (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S (wit A S sch M))
+          ∧ (cClaim A zc).Holds (wit A S sch M)
+          ∧ pinMLE S (wit A S sch M) (zc.ρOut S) = 1
+          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
+
+/-- Doomed after the lincheck. -/
+def DLc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+    (extra : List (Claim F S.m)) (zc : ZcOut F S.m) : Option (Claim F S.m) → Prop
+  | none => True
+  | some ab => ∀ M ∈ closeMsgs A sch C,
+      ¬ (ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
+          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
+
+/-- Doomed after the opening: no codeword near the committed table has the batched value. -/
+def DOp (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) :
+    Option (OpenOut F) → Prop
+  | none => True
+  | some op => ∀ M ∈ closeMsgs A sch C,
+      (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) ≠ op.T
+
 end FlockSoundness

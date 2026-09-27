@@ -1,5 +1,6 @@
 import FlockSoundness.Defs
 import FlockSoundness.Rounds
+import FlockSoundness.OpeningPhase
 
 /-!
 # One rep is sound
@@ -24,81 +25,9 @@ rounds, `Game.prCoin_mvEval_eq_zero_le` for the vector coins.
 namespace FlockSoundness
 
 open Game Model Accounting
+open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-! ## The witness's A-side and B-side, and the pin's extension -/
-
-theorem Model.Statement.block_index_lt (S : Statement) (a : Fin (2 ^ S.m)) :
-    a.val / 2 ^ S.kLog < 2 ^ S.nbl := by
-  have h : 2 ^ S.m = 2 ^ S.nbl * 2 ^ S.kLog := by rw [← pow_add, Nat.sub_add_cancel S.hk]
-  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← h]
-  exact a.isLt
-
-/-- The A-side bits: `(A·z)` at address `a = o·2^k_log + i` is `(A₀·z_o)_i`. -/
-def aVec (S : Statement) (z : Witness S.m) : Witness S.m := fun a =>
-  (S.A₀.mulVec (S.block z ⟨a.val / 2 ^ S.kLog, S.block_index_lt a⟩))
-    ⟨a.val % 2 ^ S.kLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
-
-/-- The B-side bits. -/
-def bVec (S : Statement) (z : Witness S.m) : Witness S.m := fun a =>
-  (S.B₀.mulVec (S.block z ⟨a.val / 2 ^ S.kLog, S.block_index_lt a⟩))
-    ⟨a.val % 2 ^ S.kLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
-
-/-- The pin column's multilinear extension over the blocks. The lincheck's constant-wire coin
-`β` checks that it is 1 at `ρ_out` (§10, A8). -/
-def pinMLE (S : Statement) (z : Witness S.m) (ρOut : Fin S.nbl → F) : F :=
-  ∑ o : Fin (2 ^ S.nbl), eqAt ρOut o.val * ((S.block z o S.pin).val : F)
-
-/-- `ρ_out`: the zerocheck's challenges for the block bits (address bits `k_log … m−1`). -/
-def Model.ZcOut.ρOut (S : Statement) (zc : ZcOut F S.m) : Fin S.nbl → F := fun j =>
-  if h : S.kLog - 6 + j.val < S.m - 6 then zc.ρ ⟨S.kLog - 6 + j.val, h⟩ else 0
-
-/-! ## The codewords near the committed table -/
-
-/-- Messages whose encodings are within the level-0 radius of the committed table. -/
-def closeMsgs (A : Arith F K) (sch : Schedule) (C : Oracle F) :
-    Set (Message F sch.k0 sch.level₀.logCols) :=
-  {M | Close sch.level₀.radius (asTable sch C) (encode A sch.level₀.logLen M)}
-
-/-- The witness a message packs. -/
-def wit (A : Arith F K) (S : Statement) (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols) :
-    Witness S.m :=
-  witnessOf A S.m sch.k0 sch.level₀.logCols M
-
-/-- The packed table entry `f(y)` of a message (§12.1, §13.1: `t[c·2^k₀ + ℓ] = M[ℓ][c]`). -/
-def packedAt (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols) (y : ℕ) : F :=
-  if h : y / 2 ^ sch.k0 < 2 ^ sch.level₀.logCols then
-    M ⟨y % 2 ^ sch.k0, Nat.mod_lt _ (Nat.two_pow_pos _)⟩ ⟨y / 2 ^ sch.k0, h⟩
-  else 0
-
-/-! ## Doomed states between the phases -/
-
-/-- Doomed after the zerocheck. -/
-def DZc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
-    (extra : List (Claim F S.m)) : Option (ZcOut F S.m) → Prop
-  | none => True
-  | some zc => ∀ M ∈ closeMsgs A sch C,
-      ¬ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S (wit A S sch M))
-          ∧ (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S (wit A S sch M))
-          ∧ (cClaim A zc).Holds (wit A S sch M)
-          ∧ pinMLE S (wit A S sch M) (zc.ρOut S) = 1
-          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
-
-/-- Doomed after the lincheck. -/
-def DLc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
-    (extra : List (Claim F S.m)) (zc : ZcOut F S.m) : Option (Claim F S.m) → Prop
-  | none => True
-  | some ab => ∀ M ∈ closeMsgs A sch C,
-      ¬ (ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
-          ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
-
-/-- Doomed after the opening: no codeword near the committed table has the batched value. -/
-def DOp (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) :
-    Option (OpenOut F) → Prop
-  | none => True
-  | some op => ∀ M ∈ closeMsgs A sch C,
-      (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) ≠ op.T
 
 /-! ## The error of each phase -/
 
@@ -156,16 +85,48 @@ theorem lincheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
       ENNReal.ofReal (εLc sch (S.shape mPts)) := by
   sorry
 
-/-- **Opening.** *Status: to prove.* Per claim, a wrong `s_k` survives `r''_k` with probability
-at most `7/|F|` (the injective recombination over GF(2) of paper Appendix B), and the batch
-`γ` keeps a false claim false except with probability `1/|F|`; times the list bound. -/
+/-! ## The list size (shared by every phase) -/
+
+open Classical in
+/-- **The list size.** At most `listBound₀` messages encode within the level-0 radius of any table
+(`25·2^r` at rate `2^-r`: ArkLib's Johnson bound `irs_lambda_le_johnson_mds` for the level-0
+interleaved Reed–Solomon code, `1/(2ηρ)`). *Status: to prove*, once `Model.encode` is identified
+with ArkLib's interleaved code through `Arith.Correct.xhat_poly`. -/
+theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
+    (hsch : fast100 m = some sch) (C : Oracle F) :
+    (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ sch.listBound₀ := by
+  sorry
+
+theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ≥0∞) / 2 ^ 128 := by
+  unfold qF
+  rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
+    ENNReal.ofReal_ofNat]
+
+/-- **Opening.** Per claim, a wrong message survives its seven coins `r''` with probability at
+most `7/|F|` (the injective recombination over GF(2) of paper Appendix B), and the batch `γ`
+keeps a false claim false except with probability `1/|F|`; times the list bound. Proved in
+`OpeningPhase` for any list size (`opening_phase_of_card`), from the list size above. -/
 theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (h7 : 7 ≤ S.m) (mPts : ℕ) (C : Oracle F)
     (extra : List (Claim F S.m)) (hextra : extra.length = 2 * S.regions.length)
     (zc : ZcOut F S.m) (ab : Claim F S.m) (hab : DLc A S sch C extra zc (some ab)) :
     value (fun o => ¬ DOp A S sch C o) (opening A h7 (ab :: cClaim A zc :: extra)) ≤
       ENNReal.ofReal (εOp sch (S.shape mPts)) := by
-  sorry
+  classical
+  have hdoom : ∀ M ∈ closeMsgs A sch C, ∃ c ∈ ab :: cClaim A zc :: extra,
+      ¬ c.Holds (wit A S sch M) := by
+    intro M hM
+    by_contra hall
+    push Not at hall
+    exact hab M hM ⟨hall ab (by simp), hall _ (by simp), fun e he => hall e (by simp [he])⟩
+  have hlen : (ab :: cClaim A zc :: extra).length = (S.shape mPts).nClaims := by
+    simp [Stmt.nClaims, Statement.shape, hextra]; ring
+  refine (opening_phase_of_card A hA S sch h7 C _ hdoom _
+    (closeMsgs_card_le A hA sch S.m hsch C)).trans (le_of_eq ?_)
+  rw [hlen, hA.card_F, εOp, ofReal_nat_div_qF]
+  push_cast
+  rw [mul_div_assoc]
+  norm_num
 
 /-- **Ligerito.** *Status: to prove.* Level by level: the folds (sumcheck `2L/|K|` per round,
 `Rounds.sumRound_sound` over `K`; mutual correlated agreement from BCHKS25 Theorem 4.6, with the

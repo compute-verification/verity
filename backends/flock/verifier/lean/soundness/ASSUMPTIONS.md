@@ -64,7 +64,9 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
-| Phase lemmas: zerocheck, lincheck, opening, Ligerito | 1a | `zerocheck_phase`, `lincheck_phase`, `opening_phase`, `ligerito_phase` | **to prove** |
+| Opening phase: ring switching (seven coins per claim) and the batch, for any list size | 1a | `opening_phase_of_card` (`OpeningPhase.lean`) | proved; `opening_phase` follows from the list-size lemma |
+| The list size: at most `L₀` codewords near the committed table (ArkLib's Johnson bound) | 1a | `closeMsgs_card_le` | **to prove** |
+| Phase lemmas: zerocheck, lincheck, Ligerito | 1a | `zerocheck_phase`, `lincheck_phase`, `ligerito_phase` | **to prove** |
 | The link points reduce region checks to opened claims | 1a | `link_sound` | **to prove** |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
@@ -77,8 +79,8 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until the phase lemmas and
-`link_sound` are proved.
+`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until the three remaining
+phase lemmas, the list-size lemma and `link_sound` are proved.
 
 ## 2. The model
 
@@ -250,15 +252,14 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Stage 1a, the phase lemmas of `rep_sound`.** The composition and the round lemmas are done. Their shared first
-   piece is the list size: at most `L₀` codewords near the committed table. It follows from ArkLib's
-   `irs_lambda_le_johnson_mds` once `Model.encode` is identified with ArkLib's interleaved Reed–Solomon code
-   (`Arith.Correct.xhat_poly`). The phases:
-   - zerocheck;
-   - lincheck (including the pin);
-   - the opening (ring switching);
-   - Ligerito, level by level (fold, bind, query, batch; MCA commutes with list decoding from A1);
-   - the final check.
+1. **Stage 1a, the phase lemmas of `rep_sound`.** The composition, the round lemmas and the opening phase are done.
+   - **The shared list size** (`closeMsgs_card_le`): at most `L₀` codewords near the committed table. It follows from
+     ArkLib's `irs_lambda_le_johnson_mds` once `Model.encode` is identified with ArkLib's interleaved Reed–Solomon code
+     (`Arith.Correct.xhat_poly`).
+   - **Zerocheck.**
+   - **Lincheck,** including the pin.
+   - **Ligerito,** level by level (fold, bind, query, batch; MCA commutes with list decoding from A1), and the final
+     check.
 
    Each phase is a doomed-state transition bounded by the matching `Accounting` term. `Game.value_bind_le` chains them.
 2. **Stage 1a, `link_sound`**: Schwartz–Zippel on each region's multilinear difference, at two independent points.
