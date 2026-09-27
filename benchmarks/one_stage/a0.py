@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -208,8 +209,8 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                  "roots": (live or {}).get("roots"), "coin_commitment": ((record or {}).get("coin_seed") or {}).get("commitment"),
                  "roots_are_registered": (live or {}).get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
     verdicts = {
-        "m0-verifier": {"accepted": verifier.get("accepted") is True and statement["roots_are_registered"],
-                        "why": verifier.get("why"), "tool": "flock-circuit serve (M0, PR #83 eb90718f)"},
+        "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
+                        "tool": "flock-circuit serve (M0, PR #83)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
                             "tool": "flock-verify draw-test (PR #113 9d0d53df)"},
         "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive (PR #118)"},
@@ -218,7 +219,54 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
     sessions = [sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))]
     return audit.audit_record(rec, receipt, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1),
-                              statement, verdicts, delta, sessions=sessions)
+                              statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
+
+
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
+    """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier of record
+    not run or absent, a session root that isn't the registered one, and, when the sessions were handed the verifier's
+    draw (`served`), a served share that isn't it."""
+    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
+                proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
+
+    def decide(**change) -> dict:
+        r = audit.audit_record(**{**base, **change})
+        return {"refused": not r["accepted"] and r["profile"] is None, "failed": [k for k, c in r["checks"].items() if not c["ok"]]}
+
+    vs = base["verdicts"]
+    port = next(iter(session_roots), None)
+    neg = {"verifier-of-record-did-not-run (C2)": decide(verdicts={k: {**v, "accepted": None} if v.get("of_record") else v
+                                                                   for k, v in vs.items()}),
+           "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
+           "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
+    if served is not None:
+        drawn = set(served)
+        other = next(u for u in range(result["registration"]["population"]) if u not in drawn)
+        neg["served-share-not-the-verifier's-draw (C1)"] = decide(served=sorted(served)[1:] + [other])
+    return neg
+
+
+def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check) -> dict:
+    """A public file whose body is altered (its last output word's high byte flipped) and whose leaf-layer digest is updated
+    to match, so the registration passes R1-R6 and only the verifier of record, recomputing the roots from the file, can
+    refuse it. `check(record, leaf_layer)` is the verifier's registration check."""
+    stage = out / "stage"
+    shutil.rmtree(out, ignore_errors=True)
+    (stage / "tables").mkdir(parents=True)
+    os.link(st["dir"] / "circuit.txt", stage / "circuit.txt")
+    for f in (st["dir"] / "tables").glob("*"):
+        if f.is_file():
+            os.link(f, stage / "tables" / f.name)
+    shutil.copytree(session_dir / "sessions", out / "sessions", copy_function=os.link)
+    body = bytearray((st["dir"] / f"pub-{n}.bin").read_bytes())
+    body[-1] ^= 1
+    (stage / f"pub-{n}.bin").write_bytes(bytes(body))
+    digest = hashlib.sha512(bytes(body)).hexdigest()
+    registration = check(dict(rec, leaf_layer=digest), digest)
+    lean_v = lean_verify(lean, dict(st, dir=stage), n, out)
+    return {"refused": registration.ok and lean_v["accepted"] is False, "registration_passes": registration.ok,
+            "lean": lean_v.get("why")}
 
 
 def main() -> int:
@@ -233,8 +281,11 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
+    ap.add_argument("--statement", default=STATEMENT_ID,
+                    help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
     a = ap.parse_args()
     a.lean_verify = a.lean_verify or a.lean
+    globals()["STATEMENT_ID"] = a.statement
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     s = InputSet.open(a.set)
@@ -316,6 +367,13 @@ def main() -> int:
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = R.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, leaf_layer=None), program, query, law, SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if "registration" in result:
+        neg.update(audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
+    neg["public-body-altered-leaf-layer-updated (Lean roots)"] = altered_public(
+        a.lean_verify, st, n, out / "session", out / "neg-public-body", rec,
+        lambda r, digest: R.check(r, program, query, law, SCHEME, want, leaf_layer=digest))
     if a.bind:
         other_part = P.digest(P.partition(P.population_program(template, n - 1), query))
         b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])

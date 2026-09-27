@@ -77,7 +77,9 @@ def main() -> int:
                     help="the served files bind the pre-canonical partition object {program, query: {name, version, template, "
                          "width_rule}}; check them against it")
     ap.add_argument("--unbound-m0-pythonpath", default=None, help="M0's tree for the unbound circuit (default --m0-pythonpath)")
+    ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
     a = ap.parse_args()
+    a0.STATEMENT_ID = a.statement
     out, served = Path(a.out), Path(a.served)
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
@@ -165,6 +167,10 @@ def main() -> int:
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
     v = D.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if "registration" in result:
+        neg.update(a0.audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units", "checks")}

@@ -75,7 +75,9 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7521)
     ap.add_argument("--draw-file", action="store_true", help="serve each template its share of the verifier's Lean draw (M0 --draw-file)")
+    ap.add_argument("--statement", default=a0.STATEMENT_ID, help="the Lean verifier's statement name")
     a = ap.parse_args()
+    a0.STATEMENT_ID = a.statement
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     root = Path(a.sets)
@@ -146,7 +148,7 @@ def main() -> int:
     split = lean_split(a.lean, n, a.k, out)
     counts = {m["name"]: sum(1 for u in split["units"] if m["base"] <= u < m["base"] + m["n"]) for m in members}
     (out / "split.json").write_text(json.dumps({"lean_draw": split, "counts": counts}, indent=1))
-    union_units, proved, instances, verdicts, statement, sessions = [], [], 0, {}, {}, []
+    union_units, proved, instances, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
     for j, m in enumerate(members):
         k_t = counts[m["name"]]
         if k_t == 0:
@@ -164,6 +166,7 @@ def main() -> int:
         draw_t = (record or {}).get("unit_draw") or {}
         v = D.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": k_t})
         union_units += [m["base"] + u for u in draw_t.get("units", [])]
+        session_roots.update({f"{m['name']}/{p}": r for p, r in ((live or {}).get("roots") or {}).items()})
         proved += [m["base"] + u for u in a0.proved_units(m["header"], live or {})]
         instances += (live or {}).get("instances", 0)
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -179,7 +182,10 @@ def main() -> int:
         statement[m["name"]]["timing"]["lean_verify_s"] = verdicts[f"lean-verify/{m['name']}"].get("verify_s")
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
-    result = audit.audit_record(rec, receipt, union, law, sorted(proved), instances, statement, verdicts, a.delta, sessions=sessions)
+    # with --draw-file the audited draw is the verifier's Lean draw, and every session must have served exactly its share
+    audited, served = (split, sorted(union_units)) if a.draw_file else (union, None)
+    result = audit.audit_record(rec, receipt, audited, law, sorted(proved), instances, statement, verdicts, a.delta,
+                                sessions=sessions, served=served, session_roots=session_roots)
     result["split"] = {"counts": counts, "lean_draw_sha512": hashlib.sha512(canonical_json(split)).hexdigest(),
                        "served_is_lean_draw": sorted(union_units) == sorted(split["units"]),
                        "rule": ("each template served its share of the verifier's Lean draw (--draw-file)" if a.draw_file else
@@ -208,6 +214,9 @@ def main() -> int:
         moved[0] = next(u for u in range(n) if u not in union["units"])
         v = D.check_proved(union, sorted(moved), instances)
         neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = R.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    neg.update(a0.audit_negatives(result, law, a.delta, session_roots, served=served))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units")}
