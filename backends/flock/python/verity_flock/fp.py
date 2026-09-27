@@ -120,11 +120,12 @@ def f32_const(value: int):
     return const_bits(value & 0xFFFFFFFF, 32)
 
 
-def round_f32(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True):
+def round_f32(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True, rz: bool = False):
     """The f32 word nearest (ties to even) to ``(-1)^sign * M * 2^(E - 127 - (len(M) - 1))`` with ``E = E_b - off``: ``E`` is the
     exponent field the value would have if M's top bit were the hidden bit. ``E_b`` is unsigned (``len(E_b)`` bits wide
     enough for ``E_b + 1``). M = 0 gives the zero of sign ``zero_sign``. Overflow gives infinity. ``underflow=False`` promises
-    ``E >= 1`` (no right shift into the subnormal range is ever needed), which drops that shifter."""
+    ``E >= 1`` (no right shift into the subnormal range is ever needed), which drops that shifter. ``rz``: round toward zero
+    instead (overflow then saturates at the largest finite word)."""
     n = len(M)
     P = ceil_pow2(max(n, 32))
     Mp = [ZERO] * (P - n) + list(M)
@@ -147,12 +148,15 @@ def round_f32(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True):
     sig = y[P - 24:]
     guard = y[P - 25]
     sticky = OR(C, or_reduce(C, y[:P - 25]), st)
-    rnd = C.AND(guard, OR(C, sticky, sig[0]))
+    rnd = ZERO if rz else C.AND(guard, OR(C, sticky, sig[0]))
     ex = add(C, X, [sig[23]], width=EW)                                    # the exponent field before rounding
     _, lt255 = sub(C, ex, const_bits(255, EW), EW)
     ovf = NOT(lt255)
     word = add(C, sig[:23] + ex[:8], [rnd], width=31)
-    word = [C.AND(NOT(ovf), b) for b in word[:23]] + [OR(C, ovf, b) for b in word[23:31]]
+    if rz:
+        word = [OR(C, ovf, b) for b in word[:23]] + [C.AND(NOT(ovf), word[23])] + [OR(C, ovf, b) for b in word[24:31]]
+    else:
+        word = [C.AND(NOT(ovf), b) for b in word[:23]] + [OR(C, ovf, b) for b in word[23:31]]
     word = [C.AND(NOT(az), b) for b in word]
     return word + [mux(C, az, [zero_sign], [sign])[0]]
 
@@ -187,7 +191,7 @@ def f32_mul(C, a, b, ir_nan: bool = False):
     return specials(C, r, nan, OR(C, A.inf, B.inf), s)
 
 
-def f32_add(C, a, b, ir_nan: bool = False):
+def f32_add(C, a, b, ir_nan: bool = False, rz: bool = False):
     """``RN(a + b)`` (FADD, no ftz); IEEE zero signs: ``x + (-x) = +0``, ``(-0) + (-0) = -0``; a NaN result canonical, or with
     ``ir_nan`` the IR primitive's (:func:`ir_specials`)."""
     A, B = unpack(C, a), unpack(C, b)
@@ -203,7 +207,7 @@ def f32_add(C, a, b, ir_nan: bool = False):
     xs = [ZERO] * 3 + gx
     sb = sx ^ sy
     S = add(C, xs + [ZERO], [v ^ sb for v in ys] + [sb], cin=sb, width=28)
-    r = round_f32(C, sx, ex + [ZERO], -1, S, C.AND(A.s, B.s), underflow=False)
+    r = round_f32(C, sx, ex + [ZERO], -1, S, C.AND(A.s, B.s), underflow=False, rz=rz)
     if ir_nan:
         invalid = C.AND(C.AND(A.inf, B.inf), A.s ^ B.s)
         return ir_specials(C, r, a, b, A, B, invalid, OR(C, A.inf, B.inf), mux(C, A.inf, [A.s], [B.s])[0])

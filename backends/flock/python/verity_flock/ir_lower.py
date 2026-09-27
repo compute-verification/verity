@@ -20,6 +20,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from . import fp
+from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
 
@@ -82,6 +83,38 @@ PIECES: dict[str, Callable] = {
     # verity.ml.tc.models.HOPPER_BF16_WGMMA_K16: one group of 16, 26-bit adder, exponent floor -133 (the same total rules)
     "HopperBF16WgmmaDot16_v1": lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
 }
+PIECES.update(tail_pieces.PIECES)
+
+
+class _Pieces(dict):
+    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``);
+    ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+
+    wrap = None
+
+    def _resolve(self, key):
+        import re
+
+        for pat, fn in tail_pieces.FAMILIES.items():
+            if isinstance(key, str) and re.fullmatch(pat, key):
+                self[key] = self.wrap(key, fn) if self.wrap else fn
+                return self[key]
+        return None
+
+    def __missing__(self, key):
+        fn = self._resolve(key)
+        if fn is None:
+            raise KeyError(key)
+        return fn
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key) or self._resolve(key) is not None
+
+    def get(self, key, default=None):
+        return self[key] if key in self else default
+
+
+PIECES = _Pieces(PIECES)
 
 
 class NoPiece(NotImplementedError):
