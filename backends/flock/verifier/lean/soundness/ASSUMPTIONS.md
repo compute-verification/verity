@@ -94,6 +94,17 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     (§14) and round digests (§6), following upstream. Daniel adopted SHA-512 trees and kept round bytes on
     2026-09-26 (DESIGN.md §1). The spec, upstream's Rust verifier used for cross-validation, and the provers must
     follow.
+- **Sessions: batched and serialized** (Daniel, 2026-09-27; DESIGN.md §11.1). There is exactly one verifier.
+  - **Batching.** A session carries every table from a time window, proved in parallel by many GPUs or datacenters.
+    Sessions are serialized, and no other interactive protocol with the verifier runs alongside one.
+  - **Before the first coin:** every table's statement and level-0 root, and the verifier's single coin commitment. That
+    commitment is a SHA-512 Merkle root over Halevi–Micali commitments to every coin, per (table, repetition, round), so
+    each table's stream is a subtree and each repetition's coins are independent.
+  - **Each round:** the verifier opens a table's coins, with their paths, only after that table's bytes for the round are
+    recorded. Every prover machine checks each opening against the root before answering.
+  - **The coin server** runs one instance per datacenter, all opening the one commitment.
+  - **Soundness per session** is the union bound over its tables, `Σ tableError`, since each table's bound holds for
+    every prover strategy.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
   commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
   not to one witness. The list has at most 50 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with η = 0.02).
@@ -193,18 +204,22 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 
 ## 6. Zero knowledge (planned; not yet proved)
 
-The masked protocol and the reference prover are in DESIGN.md §6; the analysis of concurrent sessions is DESIGN.md §11.
+The masked protocol and the reference prover are in DESIGN.md §6, and the session model in DESIGN.md §11.
 
-**The target** (Daniel, 2026-09-26): zero knowledge against a malicious verifier, including many concurrent sessions. The
-verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
+The verifier is malicious (two nations checking each other), so honest-verifier zero knowledge is not an acceptable
 fallback anywhere.
 
-- **The lemma it rests on:** special honest-verifier ZK of masked Flock. That is a simulator, from the public statement
-  alone, for every fixed coin sequence: VEIL's notion, and the first zero-knowledge theorem to prove.
-- **Keeping a malicious verifier from choosing coins adaptively, across concurrent sessions.** DESIGN.md §11.1
-  recommends batching: serialized sessions, each carrying every table from a time window and proved in parallel, with
-  one step-0 coin commitment. It needs a single-rewind Goldreich–Kahan simulator, collision resistance only, and no
-  setup. Prabhakaran–Rosen–Sahai is costed there as the fallback. **Decision, with Daniel.**
+**The theorem** (to prove): single-rewind simulation of one batched session (§2). For every malicious verifier with
+auxiliary input, a Goldreich–Kahan simulator produces a view indistinguishable from the verifier's view of one batched
+session, from the tables' public statements alone. It makes one extraction run (an honest prover on a dummy witness),
+one rewind to just after the coin commitment, and runs in expected polynomial time.
+
+- **It rests on** special honest-verifier ZK of masked Flock: a simulator for every fixed coin sequence, which is VEIL's
+  notion and the first zero-knowledge lemma to prove. The simulations of a session's tables compose, because their
+  masks are independent.
+- **Serialized sessions** then compose sequentially (Goldreich–Oren 1994).
+- **Reserve, if concurrency is ever needed:** a single registered verifier key, or a Prabhakaran–Rosen–Sahai preamble
+  (DESIGN.md §11.2).
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
@@ -212,8 +227,8 @@ fallback anywhere.
   from the operating system and ChaCha; their quality is trusted.
 - **Leaf hiding.** Halevi–Micali leaves are statistically hiding (`N·2^-256` for N leaves with a fresh key, §7) and
   binding under collision resistance of their hash, SHA-512 in the adopted variant.
-- **Binding of the verifier's coin commitments** (HM96, per round, at step 0), under collision resistance of their hash.
-  Against quantum verifiers it needs a wider, collapse-binding commitment (DESIGN.md §9).
+- **Binding of the verifier's coin commitment** (§2: a SHA-512 Merkle root over Halevi–Micali coin commitments), under
+  SHA-512 collision resistance. Against quantum verifiers it needs a collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
   AHIV22 Lemma 4.15 condition). This is to be proved, not assumed.
 
@@ -228,9 +243,8 @@ The weights are committed once and every later proof opens that root. The analys
   weights.
 - **Hiding** is fixed by the leaf count, not by the number of proofs. **Design change:** draw the root's key at
   commitment, and never reuse salts.
-- **Zero knowledge** must hold against a malicious verifier (§6). DESIGN.md §11.1 recommends serialized sessions that
-  each batch a time window's tables, so throughput comes from parallel proving rather than concurrency. **Decision,
-  with Daniel.**
+- **Zero knowledge** holds per batched, serialized session (§2, §6). Throughput comes from proving in parallel inside
+  a session, not from concurrency.
 - **Statement leakage** accumulates over sessions. **Policy needed:** which predicates are public, and how many.
 - **Linkability** is intended, and it needs knowledge soundness (§1.3).
 
@@ -261,6 +275,6 @@ The weights are committed once and every later proof opens that root. The analys
 6. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 7. **Stages 1e and 3, zero knowledge and the reference prover** (§6), after M1's masking spec: first the special
-   honest-verifier ZK lemma, then the malicious-verifier layer DESIGN.md §11 settles on.
+   honest-verifier ZK lemma, then single-rewind simulation of one batched session.
 8. **Stage 1d, the lowering theorem**, which belongs to level 3 in another lane. Stage 1e then glues everything into
    one theorem from the verifier's acceptance to "the committed values satisfy the named circuit".
