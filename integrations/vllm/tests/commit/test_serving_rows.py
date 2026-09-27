@@ -158,3 +158,27 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
     with pytest.raises(ValueError, match="ports"):
         SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1", "rope-head/d64")
+
+
+def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(tmp_path):
+    rng = np.random.default_rng(7)
+    tables = {"x": rng.integers(0, 1 << 16, size=(3, 64), dtype=np.uint16), "w": rng.integers(0, 1 << 16, size=(5, 64), dtype=np.uint16)}
+    tables["x"][2] = tables["x"][0]                                   # a repeated row stays its own table row
+    j = np.arange(3 * 5)
+    refs = np.stack([j // 5, j % 5], axis=1)
+    y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
+    m = SR.Member("GemmCoordinate_v2{K=64}", (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
+    w = SR.Window(PARTITION, "cd" * 64, 15, "r-g", (m,))
+    c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
+    assert c.domains[m.port("x")].count == 3 and c.domains[m.port("w")].count == 5 and c.domains[m.port("y")].count == 15
+    assert c.roots == reference(c)
+    assert c.bc[m.port("x")][:128] != c.bc[m.port("x")][256:]       # fresh salt per table row
+    assert c.public_body(0) == c.bc[m.port("x")] + c.bc[m.port("w")] + refs.astype("<u4").tobytes() + y.astype("<u2").tobytes()
+    assert c.private_body(0) == tables["x"].astype("<u2").tobytes() + tables["w"].astype("<u2").tobytes() + c.salts[m.port("x")] + c.salts[m.port("w")]
+    with pytest.raises(ValueError, match="refs"):
+        SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
+    SR.write(c, tmp_path / "w", {"row": 101, "run": "r-g"}, SR.index_doc((m,), [[]], "r-g"))
+    meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1]], "out_ports": [["y", 1]], "vus_per_block": 4, "units_per_vu": 1}
+    got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0", "gemm/k64")
+    head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
+    assert head["shared_rows"] == {"x": 3, "w": 5} and head["instances"] == 15

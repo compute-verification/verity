@@ -8,6 +8,10 @@ Members come from the partition's query, in its order (``Q_template_instances``'
 ``Q_template_instance``'s one ``template``), each named by its descriptor id:
 
   ``RoPEHead_v1{D=64}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (64 words each)
+  ``GemmCoordinate_v2{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
+                                   ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
+                                   the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (:func:`grid`); the tables
+                                   are fixed by the layout, never by the values, so repeated rows stay separate table rows
   any other ``<Family>{...}``      every row of that family, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -33,6 +37,7 @@ from verity_vllm.commit import serving_rows as CS
 from verity_vllm.query.manifest import format as RM
 
 ROPE, ROPE_FAMILY, D = "RoPEHead_v1", "RoPE_v1", 64
+GEMM, GEMM_FAMILY, GRID = "GemmCoordinate", "Gemm_v1", "verity/one-stage/gemm-grid/v0"
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
@@ -72,8 +77,8 @@ def _family(template: str) -> str:
     name = template.split("{", 1)[0]
     if name == ROPE:
         return ROPE_FAMILY
-    if name.startswith("GemmCoordinate"):
-        raise NotImplementedError(f"{template}: GEMM coordinates are committed as shared rows (P6), not by this reader yet")
+    if name.startswith(GEMM):
+        return GEMM_FAMILY
     return name
 
 
@@ -81,6 +86,8 @@ def _statics_match(template: str, statics: dict[str, Any]) -> bool:
     """The row's integer statics, as ``NAME=value``, all appear in the descriptor id (RoPE: only ``D``)."""
     if template.startswith(ROPE):
         return f"D={statics.get('D')}" in template
+    if template.startswith(GEMM):
+        return f"K={statics.get('K')}," in template or f"K={statics.get('K')}}}" in template
     return all(f"{k}={v}" in template for k, v in statics.items() if isinstance(v, int))
 
 
@@ -100,10 +107,12 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             d = pi.describe(r)
             if d is None or (scope and not d["op_path"].startswith(scope)):
                 continue
-            k = fams.index(f)
-            if not _statics_match(tmpls[k], d["statics"]):
-                raise ValueError(f"row {i} ({r['spec']}) is not an instance of {tmpls[k]}")
-            out[k].append((str(rid), pi, r, d))
+            ks = [k for k, g in enumerate(fams) if g == f and _statics_match(tmpls[k], d["statics"])]
+            if not ks:
+                if f == GEMM_FAMILY:
+                    continue                                   # a GEMM of another K than the population's
+                raise ValueError(f"row {i} ({r['spec']}) is not an instance of {tmpls[fams.index(f)]}")
+            out[ks[0]].append((str(rid), pi, r, d))
     for t, rows in zip(tmpls, out, strict=True):
         if not rows:
             raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else ""))
@@ -118,6 +127,11 @@ def members(tmpls: Sequence[str], rows: Sequence[list[tuple[str, Any, dict, dict
         if t.startswith(ROPE):
             n = sum(int(x[3]["statics"]["NHEADS"]) for x in rs)
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
+        elif t.startswith(GEMM):
+            K, groups = int(d["statics"]["K"]), grid(rs)
+            rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
+            m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
+                          tables=(("x", rx), ("w", rw)))
         else:
             groups = tuple((f"in{g}", sum(int(sl[3]) - int(sl[2]) for sl in grp)) for g, grp in enumerate(r["args"]))
             m = CS.Member(t, groups, tuple((f"out.{mm[0]}", int(mm[1])) for mm in d["members"]), len(rs), base)
@@ -130,6 +144,8 @@ def read(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weig
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
     index entries."""
+    if m.template.startswith(GEMM):
+        return _read_gemm(m, rows, store, weights, arrivals)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     entries: list[list[Any]] = []
     lo = m.base
@@ -158,6 +174,54 @@ def read(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weig
                         ",".join(str(mm[0]) for mm in d["members"]), int(d["row"]), int(r["i"])])
         lo += nh
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
+    return data, entries
+
+
+def grid(rows: list[tuple[str, Any, dict, dict]]) -> list[dict[str, Any]]:
+    """``verity/one-stage/gemm-grid/v0``'s groups: one per GEMM site (op_path) in order of first appearance, each
+    ``{name, tokens, columns, x_base, w_base, rows}``; instance ``i`` of a group, ``j = i - base``, is token ``j div columns`` and
+    column ``j mod columns``, and reads ``x`` row ``x_base + j div columns`` and ``w`` row ``w_base + j mod columns``."""
+    by: dict[str, list] = {}
+    for x in rows:
+        by.setdefault(x[3]["op_path"], []).append(x)
+    out, xb, wb = [], 0, 0
+    for op, rs in by.items():
+        cols = int(rs[0][3]["statics"]["N"])
+        out.append({"name": op, "tokens": len(rs), "columns": cols, "x_base": xb, "w_base": wb, "rows": rs})
+        xb += len(rs)
+        wb += cols
+    return out
+
+
+def _read_gemm(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable,
+               arrivals: dict[str, int] | None) -> tuple[dict[str, Any], list[list[Any]]]:
+    """A GEMM member as shared rows: the ``x`` table (every token's input row, group by group), the ``w`` table (every weight row
+    ``W[c, :]``, read once per group), ``y`` (every output word, instance-major) and the refs of the grid rule."""
+    K = dict(m.rows)["x"]
+    xs, ws, ys, refs, entries = [], [], [], [], []
+    lo = m.base
+    for g in grid(rows):
+        T, N = g["tokens"], g["columns"]
+        rid0, pi0, r0, _d0 = g["rows"][0]
+        ws.append(np.asarray(_operand(pi0, store, weights, rid0, int((arrivals or {}).get(rid0, 0)), r0["args"][1]), dtype=np.uint16).reshape(N, K))
+        for rid, pi, r, d in g["rows"]:
+            if r["args"][1] != r0["args"][1]:
+                raise ValueError(f"row {r['i']}: {g['name']} reads another weight slice than its group's first row")
+            arrive = int((arrivals or {}).get(rid, 0))
+            xs.append(np.asarray(_operand(pi, store, weights, rid, arrive, r["args"][0]), dtype=np.uint16).reshape(1, K))
+            (member, width, _dt), = d["members"]
+            w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
+            if w is None:
+                raise LookupError(f"row {r['i']} output {member}: {why}")
+            ys.append(np.asarray(w, dtype=np.uint16).reshape(-1))
+            layer = _LAYER.search(d["op_path"])
+            entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
+                            int(d["row"]), int(r["i"])])
+            lo += N
+        j = np.arange(T * N, dtype=np.int64)
+        refs.append(np.stack([g["x_base"] + j // N, g["w_base"] + j % N], axis=1))
+    data = {"rows": {"x": np.concatenate(xs), "w": np.concatenate(ws)}, "outs": {"y": np.concatenate(ys).reshape(-1, 1)},
+            "refs": np.concatenate(refs)}
     return data, entries
 
 

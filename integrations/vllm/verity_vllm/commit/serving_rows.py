@@ -32,7 +32,7 @@ import multiprocessing
 import os
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -201,6 +201,7 @@ class Member:
     outs: tuple[tuple[str, int], ...]
     n: int
     base: int = 0
+    tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
 
     def port(self, name: str) -> str:
         """The name a root, its domain and the registration use: ``<descriptor id>/<port>``."""
@@ -240,18 +241,24 @@ class Committed:
     rows: dict[str, np.ndarray]        # per row port: (n, words) u16 (private)
     outs: dict[str, np.ndarray]        # per output port: (n, words) u16
     seconds: dict[str, Any]
+    refs: dict[int, np.ndarray] = field(default_factory=dict)   # per shared-row member k: (n, row ports) table refs
 
     def public_body(self, k: int) -> bytes:
         """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (ports in order), then its
         output words (output ports in order), instance-major."""
         m = self.window.members[k]
+        outs = np.ascontiguousarray(np.concatenate([self.outs[m.port(p)] for p, _ in m.outs], axis=1)).astype("<u2").tobytes()
+        if m.tables:                     # M0's shared-row body: every table row's b || c (port-major), refs (u32, instance-major)
+            return b"".join(self.bc[m.port(p)] for p, _ in m.rows) + np.ascontiguousarray(self.refs[k]).astype("<u4").tobytes() + outs
         bc = np.concatenate([np.frombuffer(self.bc[m.port(p)], dtype=np.uint8).reshape(m.n, BC_BYTES) for p, _ in m.rows], axis=1)
-        outs = np.concatenate([self.outs[m.port(p)] for p, _ in m.outs], axis=1)
-        return bc.tobytes() + np.ascontiguousarray(outs).astype("<u2").tobytes()
+        return bc.tobytes() + outs
 
     def private_body(self, k: int) -> bytes:
         """Member ``k``'s prover body: every instance's rows (ports in order), then every salt (instance-major, ports in order)."""
         m = self.window.members[k]
+        if m.tables:                     # the tables' rows, then their salts, port-major
+            return b"".join(np.ascontiguousarray(self.rows[m.port(p)]).astype("<u2").tobytes() for p, _ in m.rows) + \
+                b"".join(self.salts[m.port(p)] for p, _ in m.rows)
         rows = np.concatenate([self.rows[m.port(p)] for p, _ in m.rows], axis=1).astype("<u2").tobytes()
         ys = np.concatenate([np.frombuffer(self.salts[m.port(p)], dtype=np.uint8).reshape(m.n, SALT_BYTES) for p, _ in m.rows], axis=1)
         return rows + ys.tobytes()
@@ -314,16 +321,24 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
         raise ValueError(f"{sum(m.n for m in ms)} units in {len(ms)} members; the registered population is {window.population}")
-    rows, outs = {}, {}
-    for m, dk in zip(ms, data, strict=True):
+    rows, outs, refs = {}, {}, {}
+    for k, (m, dk) in enumerate(zip(ms, data, strict=True)):
+        count = dict(m.tables)
         for kind, ports, into in (("rows", m.rows, rows), ("outs", m.outs, outs)):
             if set(dk[kind]) != {p for p, _ in ports}:
                 raise ValueError(f"{m.template}: {kind} {sorted(dk[kind])} are not {[p for p, _ in ports]}")
             for p, words in ports:
                 a = np.asarray(dk[kind][p], dtype=np.uint16)
-                if a.shape != (m.n, words) or (kind == "rows" and (2 * words) % 128):
-                    raise ValueError(f"{m.port(p)}: {a.shape} is not {m.n} x {words}" + (" words of whole SHA-512 blocks" if kind == "rows" else ""))
+                want = (count.get(p, m.n) if kind == "rows" else m.n, words)
+                if a.shape != want or (kind == "rows" and (2 * words) % 128):
+                    raise ValueError(f"{m.port(p)}: {a.shape} is not {want[0]} x {words}" + (" words of whole SHA-512 blocks" if kind == "rows" else ""))
                 into[m.port(p)] = a
+        if m.tables:
+            r = np.asarray(dk["refs"], dtype=np.int64)
+            bound = np.array([count[p] for p, _ in m.rows])
+            if r.shape != (m.n, len(m.rows)) or (r < 0).any() or (r >= bound).any():
+                raise ValueError(f"{m.template}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
+            refs[k] = r.astype(np.uint32)
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
@@ -333,7 +348,7 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     roots, bc = commit_ports(domains, rows, outs, ys, workers=workers, chunk=chunk)
     t1 = time.perf_counter()
     return Committed(window, roots, domains, bc, ys, rows, outs, {"salts_s": round(t_salt - t0, 3), "commit_s": round(t1 - t_salt, 3),
-                                                                   "total_s": round(t1 - t0, 3), "workers": workers})
+                                                                   "total_s": round(t1 - t0, 3), "workers": workers}, refs)
 
 
 # --- the files ----------------------------------------------------------------------------------------------------------
@@ -381,7 +396,8 @@ def write(c: Committed, out_dir: str | Path, source: dict[str, Any], index: dict
         with os.fdopen(fd, "wb") as f:
             f.write(c.private_body(k))
         members.append({"k": k, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.rows],
-                        "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k), "public_sha512": hashlib.sha512(pub).hexdigest()})
+                        "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k), "public_sha512": hashlib.sha512(pub).hexdigest(),
+                        **({"shared_rows": dict(m.tables)} if m.tables else {})})
     win = {"schema": "verity-vllm/serving-rows/v1", "scheme": SCHEME, "population": c.window.population, "members": members,
            "domain_tag": DOMAIN_TAG, "registration_sha512": registration_digest(rec), "index_sha512": hashlib.sha512(ib).hexdigest(),
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
@@ -413,6 +429,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit_text: str, out_dir
     head = {"format": M0_FORMAT, "statement": M0_STATEMENT, "scheme": SCHEME, "set": f"served/{rec['commitment']['source']['run']}/m{k}",
             "subcircuit": subcircuit, "content_digest": win["index_sha512"], "range": [0, n], "instances": n,
             "circuit_sha512": hashlib.sha512(circuit_text.encode()).hexdigest(), "units": units, "frame_v3": mem["frame_v3"], "rows": True}
+    if mem.get("shared_rows"):
+        head["shared_rows"] = mem["shared_rows"]
     o.mkdir(parents=True, exist_ok=True)
     pub = (d / f"m{k}-public.bin").read_bytes()
     (o / f"m{k}-pub-{n}.bin").write_bytes(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + pub)
