@@ -20,14 +20,15 @@ use std::{
 
 use flock_core::{
     merkle::HashKind,
-    pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}},
-    proof::R1csProofLigerito,
+    pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}, verify_opening_batch_ligerito_mixed_with_grinding},
+    proof::{R1csProofLigerito, bind_statement},
     verifier::verify_ligerito_extra,
 };
 use flock_field::F128;
 use flock_live::{
     circuit::*,
     zk_hooks::{Hooks, NoMask, ProverSeed},
+    zk_veil::{self as zkv, InnerProof, Layout},
     *,
 };
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra};
@@ -67,8 +68,33 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
     PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: MERKLE }
 }
 
+/// `--zk`: M1's masked protocol (`flock_live::zk_veil`), pinned in the identity (both sides must agree).
+fn zk_mode() -> bool {
+    flag("--zk")
+}
+
+fn is_zk(st: &Stmt) -> bool {
+    st.identity["hooks"]["zk"] == true
+}
+
+/// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
+fn zk_identity(c: &Composite) -> Value {
+    json!({"zk": true, "stage": "m1-prototype (honest-verifier, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
+           "pads": "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin",
+           "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
+                                      zkv::K_PAD, 1 << zkv::INNER_LOG_INV_RATE, zkv::Q),
+           "product": "h_ab = h_a h_b committed; sacrificed against a committed triple (x, y, x y)",
+           "inner_proof": "one batched <c, h> = t by a masked dot product (tau = <c, mu>, Y = h + beta mu)",
+           "ring_switch": format!("non-region s_hat_v hidden by the mask slot's uniform words (2^{} bits per block); the prover refuses coins whose weights do not span",
+                                  c.meta["mask_log"].as_u64().unwrap_or(14)),
+           "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far"],
+           "not_yet_masked": ["ligerito: sumcheck messages, recursive openings, final vector, ood values (need the extra lane and per-lane padding)",
+                              "ligerito: level-0 opened rows (need per-lane padding)"]})
+}
+
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
+    let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
     json!({"statement": STATEMENT, "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
@@ -79,7 +105,7 @@ fn identity(c: &Composite) -> Value {
                       "statement_digest": "sha256", "sigma": "sha256", "coin_commitment": "sha512",
                       "coin_derivation": "sha256 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
-           "hooks": NoMask::new(ProverSeed::from_os()).identity()})
+           "hooks": hooks})
 }
 
 /// Σ = SHA-512(SIGMA_TAG ‖ the circuit's SHA-512 ‖ the statement digest ‖ the public digest).
@@ -103,6 +129,9 @@ impl StatementVerifier for CircuitVerifier {
     }
 
     fn verify(&self, _t: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+        if is_zk(&self.st) {
+            return self.verify_zk(proof, ch, link);
+        }
         let st = &self.st;
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         let pcs = params(st.m, LigeritoProfile::Fast100);
@@ -116,6 +145,56 @@ impl StatementVerifier for CircuitVerifier {
         catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
             .map_err(|_| "verifier panicked".to_string())?
             .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
+        Ok(merkle_digest_bytes(&commitment.cap).to_vec())
+    }
+}
+
+impl CircuitVerifier {
+    /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
+    /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
+    fn verify_zk(&self, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+        let st = &self.st;
+        let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        let pcs = params(st.m, LigeritoProfile::Fast100);
+        if commitment.params != pcs {
+            return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
+        }
+        if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
+            return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
+        }
+        let lay = Layout::new(st.m, st.c.k_log);
+        let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
+        catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
+            bind_statement(ch, &st.r1cs, &commitment);
+            let rp = zkv::replay(&st.r1cs, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, &root, ch)?;
+            let extra = st.extra_claims(link.points, &self.inst);
+            let rs = &proof.pcs_open.ring_switches;
+            if rs.len() != 2 + extra.len() {
+                return Err("zk: the opening's ring switches are not one per claim".into());
+            }
+            let (cc_ab, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
+            let (cc_c, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
+            let (pab, pc) = (zkv::point_parts(&rp.ab_point), zkv::point_parts(&rp.c_point));
+            let mut values = vec![cc_ab, cc_c];
+            let mut skips = vec![pab.0, pc.0];
+            let mut xs = vec![pab.1, pc.1];
+            for e in &extra {
+                values.push(e.value);
+                skips.push(e.skip_weights.clone());
+                xs.push(e.x_full.clone());
+            }
+            let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
+            let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
+            let cfg = pcs.ligerito_verifier_config()?;
+            verify_opening_batch_ligerito_mixed_with_grinding(&commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
+                                                              pcs.opening_grinding(), ch).map_err(|e| format!("opening: {e:?}"))?;
+            let mut cons = rp.cons;
+            cons.push(("ring switch ab", con_ab));
+            cons.push(("ring switch c", con_c));
+            zkv::verify_inner(&inner, &lay, cons, ch)
+        }))
+        .map_err(|_| "verifier panicked".to_string())?
+        .map_err(|e| e.chars().take(200).collect::<String>())?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
@@ -292,6 +371,112 @@ fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: 
     (bincode::serialize(&(commitment, proof)).unwrap(), json!({"t.prove": tp.elapsed().as_secs_f64()}))
 }
 
+/// A borrowed challenger (the masking wrapper owns its inner challenger; upstream's single-table path never forks).
+struct ByRef<'a, C: flock_transcript::challenger::Challenger>(&'a mut C);
+
+impl<C: flock_transcript::challenger::Challenger> flock_transcript::challenger::Challenger for ByRef<'_, C> {
+    fn observe_label(&mut self, l: &[u8]) {
+        self.0.observe_label(l)
+    }
+    fn observe_f128(&mut self, v: F128) {
+        self.0.observe_f128(v)
+    }
+    fn observe_f128_slice(&mut self, v: &[F128]) {
+        self.0.observe_f128_slice(v)
+    }
+    fn observe_bytes(&mut self, b: &[u8]) {
+        self.0.observe_bytes(b)
+    }
+    fn sample_f128(&mut self) -> F128 {
+        self.0.sample_f128()
+    }
+    fn sample_f128_vec(&mut self, n: usize) -> Vec<F128> {
+        self.0.sample_f128_vec(n)
+    }
+    fn grind_pow(&mut self, bits: u32) -> u64 {
+        self.0.grind_pow(bits)
+    }
+    fn verify_pow(&mut self, nonce: u64, bits: u32) -> bool {
+        self.0.verify_pow(nonce, bits)
+    }
+    fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
+        unreachable!("the single-table prove path does not fork")
+    }
+}
+
+/// One rep's masking state (M1): the pads, their commitment, and the claim points of the reps so far (the rank check).
+struct ZkRep {
+    lay: Layout,
+    pads: zkv::Pads,
+    ic: zkv::InnerCommit,
+    points: Arc<Mutex<Vec<Vec<F128>>>>,
+    /// a dishonest prover: absorb and send values masked with pads other than the committed ones
+    pad_mismatch: bool,
+}
+
+/// The mask slot's word indices in the packed witness (every block's slot).
+fn mask_words(st: &Stmt) -> Vec<usize> {
+    let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
+    let (w0, n) = (r.start() >> 7, 1usize << (r.slot_log - 7));
+    (0..st.blocks()).flat_map(|b| (0..n).map(move |j| (b << (st.c.k_log - 7)) + w0 + j)).collect()
+}
+
+/// The two z-claims' word coordinates (`x_outer[1..]` of the opening's claim point) for the phase's coins: the replay on a
+/// zero proof of the right shape (the points depend on the coins alone).
+fn claim_word_points(st: &Stmt, lay: &Layout, coins: &[F128]) -> Result<[Vec<F128>; 2], String> {
+    use flock_core::{lincheck::LincheckProof, zerocheck::ZerocheckProof};
+    let zc = ZerocheckProof { round1_ab: vec![F128::ZERO; zkv::SKIP], round1_c: vec![F128::ZERO; zkv::SKIP], multilinear_rounds: vec![(F128::ZERO, F128::ZERO); lay.n_mlv],
+                              final_a_eval: F128::ZERO, final_b_eval: F128::ZERO, final_c_eval: F128::ZERO, grinding_nonces: vec![] };
+    let lc = LincheckProof { rounds: vec![(F128::ZERO, F128::ZERO); lay.n_lc], z_partial: vec![F128::ZERO; zkv::SKIP], matrix_evals: vec![], grinding_nonces: vec![] };
+    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, lay, &[0; 64], &mut zkv::Tape::new(coins))?;
+    Ok([zkv::point_parts(&rp.ab_point).1[1..].to_vec(), zkv::point_parts(&rp.c_point).1[1..].to_vec()])
+}
+
+/// M1's CPU prover: upstream's prover under the masking challenger, the masked proof, the constraints replayed from the
+/// logged coins, and the inner proof on the rep's stream after the opening.
+fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep) -> (Vec<u8>, Value) {
+    #[allow(irrefutable_let_patterns)]
+    let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1 proves on the CPU from a host witness") };
+    let tp = Instant::now();
+    let root = zk.ic.root();
+    let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![] };
+    if zk.pad_mismatch {
+        sent.h[zk.lay.ml(0, 0)] += F128::ONE;
+    }
+    let mut mch = zkv::Masking::new(ByRef(ch), &zk.lay, &sent, root);
+    let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
+    mch.at_open = Some(Box::new(move |coins: &[F128]| {
+        let tr = Instant::now();
+        let mut all = pts.lock().unwrap_or_else(PoisonError::into_inner);
+        all.extend(claim_word_points(&st2, &lay, coins)?);
+        let (rank, ok) = zkv::mask_rank_ok(&all, &words);
+        eprintln!("ZKRANK\t{}", json!({"points": all.len(), "mask_words": words.len(), "rank": rank, "need": 128 * all.len(), "s": tr.elapsed().as_secs_f64()}));
+        if ok { Ok(()) } else { Err(format!("degenerate coins: the mask slot's weights have rank {rank} < {} over {} claim points", 128 * all.len(), all.len())) }
+    }));
+    let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
+        &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
+        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
+        &mut mch,
+    );
+    let t_upstream = tp.elapsed().as_secs_f64();
+    let (inner_ch, coins) = mch.finish();
+    let tz = Instant::now();
+    let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
+    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &root, &mut zkv::Tape::new(&coins)).unwrap_or_else(|e| panic!("{e}"));
+    let rs = &proof.pcs_open.ring_switches;
+    let (_, con_ab) = zkv::ring_switch_constraint(&rp.ab_point, &rs[0].s_hat_v, &rp.ab_value);
+    let (_, con_c) = zkv::ring_switch_constraint(&rp.c_point, &rs[1].s_hat_v, &rp.c_value);
+    let mut cons = rp.cons;
+    cons.push(("ring switch ab", con_ab));
+    cons.push(("ring switch c", con_c));
+    let fails = zkv::failing(&cons, &zk.pads.h);
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, inner_ch.0).unwrap_or_else(|e| panic!("{e}"));
+    let t_zk = tz.elapsed().as_secs_f64();
+    let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
+    (bincode::serialize(&(commitment, masked, inner)).unwrap(),
+     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "constraints_failing_on_pads": fails}))
+}
+
 #[cfg(feature = "gpu")]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
              salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
@@ -345,6 +530,8 @@ struct Plan {
     /// send each rep's proof with one byte of its first opened hm96 salt flipped
     salt_flip: bool,
     substitute: Option<Vec<Vec<u8>>>,
+    /// M1: mask the sent values with pads other than the committed ones
+    zk_pad_mismatch: bool,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -380,7 +567,8 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
         w
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
-    let random = plan.mask_random;
+    // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v)
+    let random = plan.mask_random || is_zk(st);
     let hooks = Arc::new(Mutex::new(NoMask::new(seed)));
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
         let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
@@ -448,7 +636,18 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         let salts = Arc::new(Mutex::new(flock_live::zk_hooks::LeafSalts::for_seed(&seed)));
         #[cfg(feature = "sha512")]
         let level0 = (!plan.gpu).then(|| Arc::new(salts.lock().unwrap_or_else(PoisonError::into_inner).expand(0, params(st.m, lig).n_leaves())));
+        let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
+        let zk_points = Arc::new(Mutex::new(Vec::new()));
         for rep in 0..2 {
+            // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
+            let zkrep = (is_zk(st) && !plan.gpu).then(|| {
+                let lay = Layout::new(st.m, st.c.k_log);
+                let pads = zkv::Pads::draw(&mut prng, &lay, rep);
+                let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+                let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
+                let ic = zkv::InnerCommit::new(&pads, sb);
+                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch }
+            });
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
@@ -493,7 +692,13 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 }));
             }
             let proved = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts) } else { prove_cpu(st, wt, lig, &mut hook, &mut lch) }
+                if plan.gpu {
+                    prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts)
+                } else if let Some(z) = &zkrep {
+                    prove_cpu_zk(st, wt, lig, &mut hook, &mut lch, z)
+                } else {
+                    prove_cpu(st, wt, lig, &mut hook, &mut lch)
+                }
             }));
             #[cfg(feature = "sha512")]
             if level0.is_some() {
@@ -583,13 +788,21 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_draw_session", true, false),
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
+    ("zk_pads_not_the_committed_ones", false, true),
 ];
+
+/// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
+const NOT_ZK: &[&str] = &["relabelled_circuit_refused_at_load", "verifier_evaluated_tail_refused", "leaf_salts_from_prover_seed_refused",
+                          "device_salts_match_host", "leaf_key_witness_refused", "tail_swapped_circuit_refused", "mask_cells_random",
+                          "opened_salt_altered"];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
     let multi_block = st.c.ports.iter().any(|p| p.comps > 1);
     let cut = st.c.wires.iter().any(|w| w.dst.0 != st.c.sha_net && w.dst.0 != st.c.hm_net);
     (name == "chaining_value_forged" && !multi_block)
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
+        || (is_zk(st) && NOT_ZK.contains(&name))
+        || (!is_zk(st) && name.starts_with("zk_"))
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -610,6 +823,7 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "reps_differ_prover_stops" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { fast: true, ..h },
         "opened_salt_altered" => Plan { salt_flip: true, ..h },
+        "zk_pads_not_the_committed_ones" => Plan { zk_pad_mismatch: true, ..h },
         _ => h,
     }
 }
@@ -1037,6 +1251,9 @@ fn main() {
         return;
     }
     let tb = Instant::now();
+    if zk_mode() && flag("--gpu") {
+        refuse("M1's masked protocol (--zk) is CPU-only".into());
+    }
     let c = load_composite(&arg("--circuit", "circuit.txt"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
