@@ -88,11 +88,12 @@ def fields(rows_by_kind, classes, reps):
         equal = zk_stats.equal_across_reps(a, reps) & ~fixed
         allowed = zk_stats.level0_shared(rows_by_kind, cls, a["real"].shape[1])
         shared, reused = equal & allowed, equal & ~allowed
-        a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
+        repeated = zk_stats.repeated_positions(rows_by_kind, cls, a["real"].shape[1]) & ~fixed
+        a = {k: v[:, ~(fixed | shared | repeated)] for k, v in a.items()}
         tab = np.array([zk_stats.byte_hist(a["real"]), zk_stats.byte_hist(a["sim"])])
         tab = tab[:, tab.sum(axis=0) > 0]
         row = {"values_per_view": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
-               "reused_across_reps": int(reused.sum()),
+               "reused_across_reps": int(reused.sum()), "repeated_positions": int(repeated.sum()),
                "bytes_real_vs_sim": float(stats.chi2_contingency(tab)[1])}
         for k in ("real", "sim"):
             row[f"bits_{k}"] = zk_stats.bits_p(a[k])

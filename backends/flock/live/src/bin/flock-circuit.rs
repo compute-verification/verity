@@ -1435,6 +1435,8 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                     if let Ok((_, rec)) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[rep])) {
                         row["lig_rows0_q"] = json!(rec.queries0[..4]);
                     }
+                    let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+                    row["inner_open_q"] = json!(zkv::query_positions(&flat[rep][flat[rep].len() - zkv::Q..], n));
                 }
                 println!("ZKVIEWP\t{row}");
             }
