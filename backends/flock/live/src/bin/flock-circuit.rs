@@ -1126,6 +1126,31 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest --instances FILE --circuit FILE [--pin SHA256] ..."),
+        "replay" => {
+            // G2 from files: the verifier's session record and the two proof files, re-verified under this machine's own public
+            // file and pinned circuit (Server::from_record + finish), with the step-0 coin derivation replayed from the record
+            if pin.is_empty() {
+                refuse("replay needs --pin (the pinned circuit's SHA-512)".into());
+            }
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--session", "session.json")).expect("record")).expect("record JSON");
+            let map = arg("--proofs", "").split(',').enumerate()
+                .map(|(r, f)| ((TABLE.to_string(), r), std::fs::read(f).unwrap_or_else(|e| refuse(format!("{f}: {e}")))))
+                .collect::<BTreeMap<_, _>>();
+            let coins = flock_live::replay_coin_seed(&rec);
+            let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
+            let out = match (Server::from_record(config(&st, &inst), v, &rec, map).map(|mut s| s.finish()), coins) {
+                (Ok(vd), Ok(n)) if vd["accepted"] == true => json!({"accepted": true, "coin_requests": n, "statement": st.c.name,
+                    "circuit_sha512": hex(&st.c.sha512), "sigma": hex(&sigma(&st, &inst)), "public_sha512": hex(&inst.public_sha512),
+                    "rounds": vd["rounds"], "verify_s": vd["verify_s"]}),
+                (Ok(vd), Ok(_)) => json!({"accepted": false, "why": vd["why"]}),
+                (Ok(_), Err(e)) => json!({"accepted": false, "why": format!("step 0: {e}")}),
+                (Err(e), _) => json!({"accepted": false, "why": e}),
+            };
+            println!("REPLAY\t{out}");
+            if out["accepted"] != true {
+                std::process::exit(1);
+            }
+        }
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|replay --instances FILE --circuit FILE [--pin SHA256] ..."),
     }
 }
