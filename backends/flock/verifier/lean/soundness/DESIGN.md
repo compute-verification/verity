@@ -569,6 +569,11 @@ it, so `ksFail` is "the unit is wrong", `SessionSound` gives `KnowledgeSound`, a
   `E[C(n − |S|, K)]/C(n, K)` for any law (`avg_escape_subsets`). Second, Jensen's step uses the supporting line of
   `s ↦ C(n − s, K)` at `k`, in `ℕ` (`choose_support`, from falling drops by Pascal's rule), rather than convexity over
   `ℝ`, where `C(n − s, K)` is not convex.
-- **To write:** the (b2) closed form with a Bernoulli first stage, and tightness on NOT chains (the plan's `notChains`).
-  Also the two counterexamples: the `m`-dependent reading of `TwoStageLaw.profile`, and fine values chosen after the fine
-  draw.
+- **Tightness and the counterexamples** (`Audit/Examples.lean`) hold for any first-stage law, not only the plan's
+  Bernoulli. The dishonest prover registers every chain's output wrong and commits an honest interior. Each wrong
+  chain's only wrong fine unit is then its last gate, which a uniform `k₂`-subset misses with probability
+  `C(nv − 1, k₂)/C(nv, k₂)`. The dilution counterexample compares with `L₁.miss K`: the `m`-dependent reading at
+  `m = nv` gives each wrong chain the escape `1 − p` for Bernoulli(`p`), which is `L₁`'s own escape. So that reading is
+  one-stage over the coarse partition with `L₁`, and the prover beats it whenever the first stage draws something and
+  the second leaves a gate undrawn.
+- **To write:** the Bernoulli first stage's closed form for (b2).

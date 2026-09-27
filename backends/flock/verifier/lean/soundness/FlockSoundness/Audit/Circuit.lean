@@ -144,6 +144,11 @@ theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ (C.op h).args) (hne : 
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inr (Or.inr ⟨h, hg, hne⟩)
 
+theorem mem_committed_of_output {g : Fin C.N} (hg : g ∈ C.outputs) : g ∈ P.committed := by
+  classical
+  simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact Or.inr (Or.inl hg)
+
 theorem mem_committed_of_input {g : Fin C.N} (hg : (C.op g).isInput = true) : g ∈ P.committed := by
   classical
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]

@@ -352,5 +352,17 @@ optimal**: no law that proves $k$ units on average has a smaller count curve, at
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
 
-**Not yet:** the (b2) closed form, tightness, and the two insecurity counterexamples (DESIGN.md §12.4); the Flock
+**Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
+fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in the second stage and an ideal session):
+
+- `two_stage_b_tight`: for every first-stage law, a prover whose chains are all wrong is accepted with probability
+  exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with $q = inom{n_v - 1}{k_2}/inom{n_v}{k_2} = 1 -
+  k_2/n_v$;
+- `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first draws anything, that exceeds
+  $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
+  `TwoStageLaw.profile` at $m = n_v$) would give. Nested sampling dilutes;
+- `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a wrong chain is accepted
+  with probability 1.
+
+**Not yet:** the Bernoulli first stage's closed form $\prod_{u \in B}(1 - p\,k_2/n_v(u))$ for (b2); the Flock
 instantiation of `SessionSound`, which needs the batched session's projection to one table.

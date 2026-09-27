@@ -135,3 +135,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.twoStage_full_profile
 #print axioms FlockSoundness.Audit.Partition.two_stage_a_coarse
 #print axioms FlockSoundness.Audit.Partition.Refines.analysis₂
+-- tightness and insecurity on NOT chains
+#print axioms FlockSoundness.Audit.NotChains.effEscape_chains
+#print axioms FlockSoundness.Audit.NotChains.prob_σT
+#print axioms FlockSoundness.Audit.NotChains.two_stage_b_tight
+#print axioms FlockSoundness.Audit.NotChains.naive_two_level_unsound
+#print axioms FlockSoundness.Audit.NotChains.late_interior_insecure
