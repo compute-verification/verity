@@ -3,7 +3,8 @@
 
 The responder is native (`pous_native.Responder`): a C++ thread that answers each challenge by copying the block from `C` in device
 memory on its own highest-priority, non-blocking stream into pinned host memory and sending it, so no Python, GIL or serving-stream
-ordering sits on the answer's path.
+ordering sits on the answer's path; it polls its socket and the copy's completion instead of sleeping, on its own core (`cpu`) when
+given.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ class PousWorkerExtension:
 
         return quant.current_store().info()
 
-    def pous_start_responder(self, host: str = "127.0.0.1", port: int = 0) -> int:
+    def pous_start_responder(self, host: str = "127.0.0.1", port: int = 0, cpu: int = -1) -> int:
         import torch
 
         from verity_vllm.engine.pous import native, quant
@@ -29,7 +30,7 @@ class PousWorkerExtension:
         if getattr(self, "_pous_responder", None) is not None:
             return self._pous_responder.port()
         responder = native.ext().Responder(store.c.data_ptr(), store.blocks, store.c.shape[-1], torch.cuda.current_device(),
-                                            host, int(port))
+                                            host, int(port), int(cpu))
         responder.start()
         self._pous_responder = responder
         return responder.port()

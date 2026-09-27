@@ -76,17 +76,22 @@ class LiveResponder:
     def __init__(self, host: str, port: int, block_bytes: int) -> None:
         self.sock = socket.create_connection((host, port))
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.setblocking(False)
         self.buf = bytearray(HEADER + block_bytes)
         self.view = memoryview(self.buf)
         self.log: list[dict[str, Any]] = []
 
     def roundtrip(self, op: int, arg: int) -> float:
+        """One request and its whole answer; the socket is polled, so the verifier never sleeps waiting for it."""
         want = len(self.buf)
         t0 = time.perf_counter_ns()
-        self.sock.sendall(struct.pack("<QQ", op, arg))
+        self.sock.send(struct.pack("<QQ", op, arg))
         got = 0
         while got < want:
-            n = self.sock.recv_into(self.view[got:], want - got)
+            try:
+                n = self.sock.recv_into(self.view[got:], want - got)
+            except BlockingIOError:
+                continue
             if n == 0:
                 raise ConnectionError("responder closed the connection")
             got += n
@@ -101,9 +106,21 @@ class LiveResponder:
 
     def close(self) -> None:
         try:
+            self.sock.setblocking(True)
             self.sock.sendall(struct.pack("<QQ", OP_CLOSE, 0))
         finally:
             self.sock.close()
+
+
+def cgroup_cpu() -> dict[str, int]:
+    """The container's CPU throttling counters (cgroup v2 `cpu.stat`), empty where there are none: a throttled period stalls every
+    thread of the pod, the responder's and the verifier's included."""
+    try:
+        with open("/sys/fs/cgroup/cpu.stat") as f:
+            stat = dict(line.split() for line in f if line.strip())
+    except OSError:
+        return {}
+    return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
 def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
@@ -126,6 +143,7 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
     gc.freeze()
     gc.disable()
     r = LiveResponder(host, port, vk.params.block_bytes)
+    cpu_before = cgroup_cpu()
     try:
         rtt = calibrate(r, pings)
         allowance_ns = int(rtt[allowance] * 1e9)
@@ -143,6 +161,7 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
              for q in ("p50", "p99.9", "max")}
     return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "allowance": allowance, "rtt_allowance_ns": allowance_ns,
             "limit_ns": limit, "k": k, "audits_accepted_under_allowance": under,
+            "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},
             "audit_of_record": {"accepted": first.accepted, "correct": sum(a.correct for a in first.answers),
                                 "on_time": sum(a.on_time for a in first.answers),
                                 "elapsed_max_ns": max(a.elapsed_ns for a in first.answers)},

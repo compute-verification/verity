@@ -139,6 +139,9 @@ def cmd_plain(a) -> None:
 def cmd_serve(a) -> None:
     from verity_pous.verifier import MerkleTree
 
+    reserved = {c for c in (a.responder_cpu, a.verifier_cpu) if c is not None}
+    if reserved:
+        os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - reserved)
     out = Path(a.out)
     spec = {"safetensors": checkpoint_file(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
             "drop_source": os.urandom(32).hex(), "layers_per_decode": a.layers_per_decode}
@@ -153,7 +156,7 @@ def cmd_serve(a) -> None:
     raw = llm.collective_rpc("pous_leaves")[0]
     (out / f"leaves-{a.tag}.bin").write_bytes(raw)
     doc["root"] = MerkleTree([raw[i:i + 32] for i in range(0, len(raw), 32)]).root.hex()
-    port = llm.collective_rpc("pous_start_responder", args=("127.0.0.1", 0))[0]
+    port = llm.collective_rpc("pous_start_responder", args=("127.0.0.1", 0, -1 if a.responder_cpu is None else a.responder_cpu))[0]
     _write(out / f"ready-{a.tag}.json", {"port": port, "pid": os.getpid(), "root": doc["root"]})
     stop = out / f"stop-{a.tag}"
     loops = []
@@ -204,8 +207,12 @@ def _base(a) -> list[str]:
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
     common = [*_base(a), "--tag", tag]
+    cpus = []
+    for flag, cpu in (("--verifier-cpu", a.verifier_cpu), ("--responder-cpu", a.responder_cpu)):
+        if cpu is not None:
+            cpus += [flag, str(cpu)]
     srv = _sub(["serve", *common, "--max-tokens", str(a.max_tokens), "--load-tokens", str(a.load_tokens),
-                "--layers-per-decode", str(a.layers_per_decode), *extra], out / f"serve-{tag}.log")
+                "--layers-per-decode", str(a.layers_per_decode), *cpus, *extra], out / f"serve-{tag}.log")
     t0 = time.time()
     while not (out / f"ready-{tag}.json").exists():
         if srv.poll() is not None or time.time() - t0 > a.timeout:
@@ -328,6 +335,8 @@ class _Common:
     workers: int = option("--workers", type=int, default=64, help="processes of the verifier's reference encoding")
     timeout: float = option("--timeout", type=float, default=3600.0, help="seconds a server may take to become ready")
     verifier_cpu: int | None = option("--verifier-cpu", type=int, default=None, help="pin the timed audit to this core")
+    responder_cpu: int | None = option("--responder-cpu", type=int, default=None,
+                                       help="pin the native responder to this core; the server's other threads avoid it and the verifier's")
     layers_per_decode: int = option("--layers-per-decode", type=int, default=1,
                                     help="transformer layers decoded together at their first use in a forward pass")
     result: str | None = option("--result", default=None, help="also write the research result.json here (e2e)")

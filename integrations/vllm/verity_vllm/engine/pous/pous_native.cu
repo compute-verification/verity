@@ -6,6 +6,9 @@
 #include <cuda_runtime.h>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
@@ -13,6 +16,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -199,13 +203,17 @@ void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inv
 // Response = u64 status (0 ok, 1 index out of range, 2 CUDA error), u64 device_ns (copy start to end event), u64 server_ns
 // (request received to response ready), then `block_bytes` payload bytes.
 
-static bool read_all(int fd, void* buf, size_t n) {
+// The connection is non-blocking and polled: the thread never sleeps on the socket, so no wake-up sits on the answer's path.
+static bool read_all(int fd, void* buf, size_t n, const std::atomic<bool>& running) {
   auto* p = static_cast<uint8_t*>(buf);
   while (n) {
-    ssize_t r = ::recv(fd, p, n, 0);
-    if (r <= 0) return false;
-    p += r;
-    n -= (size_t)r;
+    ssize_t r = ::recv(fd, p, n, MSG_DONTWAIT);
+    if (r > 0) {
+      p += r;
+      n -= (size_t)r;
+    } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || !running.load(std::memory_order_relaxed)) {
+      return false;
+    }
   }
   return true;
 }
@@ -213,19 +221,22 @@ static bool read_all(int fd, void* buf, size_t n) {
 static bool write_all(int fd, const void* buf, size_t n) {
   auto* p = static_cast<const uint8_t*>(buf);
   while (n) {
-    ssize_t r = ::send(fd, p, n, MSG_NOSIGNAL);
-    if (r <= 0) return false;
-    p += r;
-    n -= (size_t)r;
+    ssize_t r = ::send(fd, p, n, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (r > 0) {
+      p += r;
+      n -= (size_t)r;
+    } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+      return false;
+    }
   }
   return true;
 }
 
 class Responder {
  public:
-  Responder(int64_t base, int64_t blocks, int64_t block_bytes, int device, std::string host, int port)
+  Responder(int64_t base, int64_t blocks, int64_t block_bytes, int device, std::string host, int port, int cpu)
       : base_(reinterpret_cast<const uint8_t*>(base)), blocks_(blocks), block_bytes_(block_bytes), device_(device),
-        host_(std::move(host)), port_(port) {}
+        host_(std::move(host)), port_(port), cpu_(cpu) {}
   ~Responder() { stop(); }
 
   int start() {
@@ -263,6 +274,12 @@ class Responder {
 
  private:
   void serve() {
+    if (cpu_ >= 0) {
+      cpu_set_t set;
+      CPU_ZERO(&set);
+      CPU_SET(cpu_, &set);
+      pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    }
     cudaSetDevice(device_);
     int least = 0, greatest = 0;
     cudaDeviceGetStreamPriorityRange(&least, &greatest);
@@ -279,9 +296,10 @@ class Responder {
       if (fd < 0) continue;
       int one = 1;
       ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+      ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
       conn_fd_.store(fd);
       uint64_t req[2];
-      while (running_.load() && read_all(fd, req, sizeof(req))) {
+      while (running_.load() && read_all(fd, req, sizeof(req), running_)) {
         auto t0 = std::chrono::steady_clock::now();
         uint64_t* head = reinterpret_cast<uint64_t*>(host);
         uint8_t* payload = host + 24;
@@ -296,7 +314,10 @@ class Responder {
             cudaMemcpyAsync(payload, base_ + (size_t)req[1] * (size_t)block_bytes_, (size_t)block_bytes_,
                             cudaMemcpyDeviceToHost, stream);
             cudaEventRecord(ev1, stream);
-            if (cudaEventSynchronize(ev1) != cudaSuccess) {
+            cudaError_t st;
+            while ((st = cudaEventQuery(ev1)) == cudaErrorNotReady) {
+            }
+            if (st != cudaSuccess) {
               head[0] = 2;
             } else {
               float ms = 0.f;
@@ -325,6 +346,7 @@ class Responder {
   int device_;
   std::string host_;
   int port_;
+  int cpu_;
   int listen_fd_ = -1;
   std::atomic<int> conn_fd_{-1};
   std::atomic<bool> running_{false};
@@ -336,7 +358,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
   m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak");
   pybind11::class_<Responder>(m, "Responder")
-      .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int>())
+      .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int, int>())
       .def("start", &Responder::start)
       .def("stop", &Responder::stop)
       .def("answered", &Responder::answered)
