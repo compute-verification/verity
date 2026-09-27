@@ -99,6 +99,33 @@ def test_permutations_and_keys_match_the_reference(ext):
 
 
 @needs_cuda
+def test_overwrite_chain_keys_match_the_spec(ext, monkeypatch):
+    """`docs/p3-instantiation.md` §1's overwrite chain over the reference's own `FeistelPi` of 2m + 512 bits: h_0 is the header
+    zero-filled to m + 64 B, then (r, h) <- Pi2(B || h) for the parents newest first and the pad block, and the key is r."""
+    from verity_pous.primitives import CAPACITY_BITS, FeistelPi, WideSponge
+
+    from verity_vllm.engine.pous import codec
+
+    monkeypatch.setattr(codec, "MODE", "overwrite")
+    pi2 = FeistelPi(2 * P.m + CAPACITY_BITS)
+    g = torch.Generator().manual_seed(4)
+    salt = bytes(range(3, 3 + codec.SALT_BYTES))
+    labels = torch.randint(0, 256, (1, P.n, M), dtype=torch.uint8, generator=g).cuda()
+    host = [bytes(r) for r in labels[0].cpu().tolist()]
+    vs = torch.tensor([0, 5, 13], device="cuda")
+    got = _rows(codec.keys(codec.segment_tags(salt, [2], "cuda")[[0, 0, 0]], 0, vs, labels, torch.zeros(3, dtype=torch.long,
+                                                                                                        device="cuda")))
+    t = tag(salt_value(salt), 2)
+    for r, v in enumerate(vs.tolist()):
+        npar = min(v, P.k)
+        h = WideSponge.header(t, 0, v, npar).ljust(M + CAPACITY_BITS // 8, b"\0")
+        for block in [host[v - j] for j in range(1, npar + 1)] + [b"\x01" + bytes(M - 2) + b"\x80"]:
+            out = to_bytes(pi2.forward(from_bytes(block + h, pi2.width)), pi2.width)
+            key, h = out[:M], out[M:]
+        assert got[r] == key, v
+
+
+@needs_cuda
 def test_segment_encode_matches_the_reference_and_decodes(ext):
     from verity_vllm.engine.pous import codec
 

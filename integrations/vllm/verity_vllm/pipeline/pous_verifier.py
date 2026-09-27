@@ -11,6 +11,7 @@ the same responder thread): its maximum over the calibration, so an honest serve
 """
 from __future__ import annotations
 
+import gc
 import os
 import socket
 import struct
@@ -133,6 +134,7 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
         rtt_after = calibrate(r, pings)
     finally:
         r.close()
+        gc.enable()
     answers = [a for _, res in results for a in res.answers]
     limit, first = results[0]
     return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "rtt_allowance_ns": allowance_ns,
