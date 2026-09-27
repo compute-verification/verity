@@ -478,6 +478,59 @@ def GumbelTopPTokenSelect(B, S, logits, top_p, seed, pos, temp, splits):
     return B.call(bind(GumbelSelectF32, V=S.V), masked, seed, pos, temp)
 
 
+# ---------------------------------------------------------------------------------------------------------
+# the same two selects with `temp == 0` computed once and read by both halves (opt-in: nothing binds them until the re-baseline).
+# `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1` compute it in `TemperatureScale_v1` (the early return) and again in
+# `GumbelSelectF32_v1` (noise or not): one value computed twice inside the sampler's one unit, 1 redundant gate per Call.
+# ---------------------------------------------------------------------------------------------------------
+
+
+@composite("TemperatureScaleGivenGreedy", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)), ("temp", F32), ("greedy", BIT)), Array(S.V, F32)),
+           conformance="exact-model-tested")
+def TemperatureScaleGivenGreedy(B, S, logits, temp, greedy):
+    """`TemperatureScale_v1{V}` with `greedy` = (temp == 0) read, not computed: the early return is greedy | (temp == 1)."""
+    rcp = B.call(P.DivFullRcp, temp)
+    skip = B.call(BitOr, greedy, B.call(F32Eq, temp, B.call(const(32, ONE_BITS))))
+    return B.batch(TemperatureLane, logits, temp, rcp, skip, axes=(0, None, None, None))
+
+
+@composite("GumbelSelectF32GivenGreedy", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("seed", I64), ("pos", I64), ("greedy", BIT)), I32),
+           conformance="exact-model-tested")
+def GumbelSelectF32GivenGreedy(B, S, logits, seed, pos, greedy):
+    """`GumbelSelectF32_v1{V}` with `greedy` = (temp == 0) read, not computed: noise iff not greedy."""
+    key = B.call(GumbelStreamKey, seed, pos)
+    noisy = B.call(BitNot, greedy)
+    zero = B.call(const(32, 0))
+    y0 = B.call(P.SelectF32, noisy, B.call(P.F32AddFtz, logits[0], B.call(GumbelNoiseLane, key, zero)), logits[0])
+    init = tuple_of(y0, zero, B.call(const(32, 1)))
+    step = B.scan(GumbelSelectStep, init, xs=(logits[1:S.V],), shared=(key, noisy))
+    return step[0][1]
+
+
+@composite("GumbelTokenSelectSharedGreedy", 1, ["V"],
+           lambda S: ((("logits", Array(S.V, BF16)), ("seed", I64), ("pos", I64), ("temp", F32)), I32), conformance="exact-model-tested")
+def GumbelTokenSelectSharedGreedy(B, S, logits, seed, pos, temp):
+    """`GumbelTokenSelect_v1{V}`'s function and signature, `temp == 0` computed once."""
+    greedy = B.call(F32Eq, temp, B.call(const(32, 0)))
+    scaled = B.call(bind(TemperatureScaleGivenGreedy, V=S.V), logits, temp, greedy)
+    return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), scaled, seed, pos, greedy)
+
+
+@composite("GumbelTopPTokenSelectSharedGreedy", 1, ["V"],
+           lambda S: ((("logits", Array(S.V, BF16)), ("top_p", F32), ("seed", I64), ("pos", I64), ("temp", F32), ("splits", I32)), I32),
+           conformance="exact-model-tested")
+def GumbelTopPTokenSelectSharedGreedy(B, S, logits, top_p, seed, pos, temp, splits):
+    """`GumbelTopPTokenSelect_v1{V}`'s function and signature, `temp == 0` computed once."""
+    greedy = B.call(F32Eq, temp, B.call(const(32, 0)))
+    scaled = B.call(bind(TemperatureScaleGivenGreedy, V=S.V), logits, temp, greedy)
+    masked = B.call(bind(TopPMask, V=S.V), scaled, top_p, splits)
+    return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), masked, seed, pos, greedy)
+
+
+#: each restated select by the Definition it restates (the re-baseline binds these instead)
+SHARED_GREEDY = {"GumbelTokenSelect_v1": GumbelTokenSelectSharedGreedy, "GumbelTopPTokenSelect_v1": GumbelTopPTokenSelectSharedGreedy}
+
+
 def f32_bits(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
 

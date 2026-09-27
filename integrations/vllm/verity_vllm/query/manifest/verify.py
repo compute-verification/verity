@@ -36,17 +36,18 @@ def _load(p: str) -> Any:
 
 def rebuild(*, program: str | None = None, workload: str | None = None, fixture: str | None = None, programs_root: str | None = None,
             workload_digest: str | None = None, rank: int = 0, ranks: int = 1, profile: str | None = None, norm_scales: bool = False,
-            guarded_max: bool = False, log=None) -> dict[str, Any]:
+            guarded_max: bool = False, taps: tuple[str, ...] = (), log=None) -> dict[str, Any]:
     """The manifest of this Program x workload by the query path (`manifest.build` at B=1, `manifest.build_global` at B>=2), under the
-    norm-scale / guarded-max policies when the caller's row runs them (the policies are the caller's, never read off the manifest checked)."""
+    norm-scale / guarded-max policies and the tap policies when the caller's row runs them (`norm_scales`, `guarded_max`, `taps`; the policies
+    are the caller's, never read off the manifest checked)."""
     from verity_vllm.pipeline import manifest
     if program:
         wl = _load(workload) if workload else None
         return manifest.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, norm_scales=norm_scales, guarded_max=guarded_max,
-                              log=log)
+                              taps=taps, log=log)
     if fixture and programs_root:
         return manifest.build_global(_load(fixture), programs_root, workload_digest=workload_digest, rank=rank, ranks=ranks, profile=profile,
-                                     norm_scales=norm_scales, guarded_max=guarded_max, log=log)
+                                     norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, log=log)
     raise SystemExit("manifest_verify: give --program [--workload] (B=1) or --fixture --programs-root [--workload-digest] (B>=2)")
 
 
@@ -101,14 +102,20 @@ class Options:
                                help="rebuild under the norm-scale policy (the row runs NORM_TAP=1; opt-in, never the record)")
     guarded_max: bool = option("--guarded-max", default=False, action="store_true",
                                help="rebuild under the guarded-max policy (the row runs GUARDED_MAX_TAP=1; opt-in, never the record)")
+    router_softmax: bool = option("--router-softmax", default=False, action="store_true",
+                                  help="rebuild under the router-softmax policy (the row runs ROUTER_TAP=1; opt-in, never the record)")
+    vocab_range: bool = option("--vocab-range", default=False, action="store_true",
+                               help="rebuild under the vocabulary-range policy (the row runs VOCAB_TAP=1; opt-in, never the record)")
     out: str | None = option("--out", default=None, help="write the verification record (json)")
 
 
 def main(a: Options) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     used = _load(a.manifest)
+    from verity_vllm.pipeline.manifest import taps_of
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
-                      rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales, guarded_max=a.guarded_max, log=log)
+                      rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales, guarded_max=a.guarded_max,
+                      taps=taps_of(a.router_softmax, a.vocab_range), log=log)
     rec = verify(used, rebuilt, manifest_path=a.manifest)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
