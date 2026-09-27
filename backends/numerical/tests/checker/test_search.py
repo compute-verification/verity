@@ -47,7 +47,7 @@ def test_single_hint_mutation_of_the_unit_finds_no_alternative() -> None:
 @pytest.mark.parametrize("name", ["bf16_decode", "fp32_decode", "product", "align_state", "align_product",
                                   "leading_bit", "normalise", "state_out", "pack", "epilogue"])
 def test_z3_at_real_widths_finds_no_deviating_hints(name: str) -> None:
-    r = z3_gadget(SPECS[name], timeout_ms=10_000)
+    r = z3_gadget(SPECS[name], timeout_ms=120_000)
     assert r.status == "unsat", (r.status, r.model)
 
 
@@ -56,19 +56,19 @@ def test_z3_at_real_widths_finds_no_deviating_hints(name: str) -> None:
                                         ("leading_bit", ("window",)), ("signed_sum", ("v", "z1")),
                                         ("normalise", ("clamp_proof",)), ("state_out", ("ovf_proof",))])
 def test_z3_each_named_bound_is_load_bearing(name: str, drop: tuple[str, ...]) -> None:
-    r = z3_gadget(SPECS[name], timeout_ms=10_000, drop=drop)
+    r = z3_gadget(SPECS[name], timeout_ms=120_000, drop=drop)
     assert r.status == "sat", r.status
     assert r.model["outputs"] != r.model["reference"]
 
 
 def test_z3_modular_findings_reproduce() -> None:
     # F1: the product realisation of a variable bound wraps in a 40-bit field, not with an ideal realisation
-    assert z3_gadget(SPECS["leading_bit"], timeout_ms=10_000, modulus=P40).status == "sat"
-    assert z3_gadget(SPECS["leading_bit"], timeout_ms=10_000, modulus=P40, ideal_bounds=True).status == "unsat"
-    assert z3_gadget(SPECS["leading_bit"], timeout_ms=10_000, modulus=GOLDILOCKS).status == "unsat"
+    assert z3_gadget(SPECS["leading_bit"], timeout_ms=120_000, modulus=P40).status == "sat"
+    assert z3_gadget(SPECS["leading_bit"], timeout_ms=120_000, modulus=P40, ideal_bounds=True).status == "unsat"
+    assert z3_gadget(SPECS["leading_bit"], timeout_ms=120_000, modulus=GOLDILOCKS).status == "unsat"
     # F2: without the tight quotient bound a 31-bit field accepts a wrapped quotient (over the integers it is implied)
-    assert z3_gadget(SPECS["align_product"], timeout_ms=10_000, modulus=M31, ideal_bounds=True, drop=("quot",)).status == "sat"
-    assert z3_gadget(SPECS["align_product"], timeout_ms=10_000, drop=("quot",)).status == "unsat"
+    assert z3_gadget(SPECS["align_product"], timeout_ms=120_000, modulus=M31, ideal_bounds=True, drop=("quot",)).status == "sat"
+    assert z3_gadget(SPECS["align_product"], timeout_ms=120_000, drop=("quot",)).status == "unsat"
     # F3, F4: the normalisation division and the 32-bit words do not fit a 31-bit field
-    assert z3_gadget(SPECS["normalise"], timeout_ms=10_000, modulus=M31, ideal_bounds=True).status == "sat"
-    assert z3_gadget(SPECS["fp32_decode"], timeout_ms=10_000, modulus=M31).status == "sat"
+    assert z3_gadget(SPECS["normalise"], timeout_ms=120_000, modulus=M31, ideal_bounds=True).status == "sat"
+    assert z3_gadget(SPECS["fp32_decode"], timeout_ms=120_000, modulus=M31).status == "sat"

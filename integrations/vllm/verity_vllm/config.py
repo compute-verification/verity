@@ -286,13 +286,16 @@ class CommitConfig:
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
                             help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
+    serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
+                                      help="opt in, never the record: the Commit also commits every RoPE head in M0's serving row format "
+                                           "(verity_vllm.commit.serving_rows) over this partition file, fixed before serving")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
                            help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
                                 "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="0",
                                   help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
-                                       "first key block (verity_vllm.query.guarded_max), written by the guarded-max FA2/FA3 tap build; the "
-                                       "manifest's query header and the run root then differ from the record")
+                                       "first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written by the "
+                                       "guarded-max FA2/FA3 tap build; the manifest and the run root then differ from the record")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
                              help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
                                   "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "
