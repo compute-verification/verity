@@ -250,24 +250,29 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16}
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]
     kinds += [(f"dense/{k}", make) for k, make in V._dense_kinds()[0].items()]
     out = []
     for label, make in kinds:
-        args = make.__code__.co_varnames[:make.__code__.co_argcount]
+        code = make.__code__
+        args = code.co_varnames[:code.co_argcount]
+        required = args[:len(args) - len(make.__defaults__ or ())]
+        optional = tuple(a for a in args[len(required):] if a in small)   # a defaulted static is bound both ways
         for dt in (("bf16", "f32") if "DT" in args else (None,)):
-            fn, err = None, None
-            for table in (small, wide):
-                try:
-                    fn = make(**{a: (dt if a == "DT" else table[a]) for a in args})
-                    _ = getattr(fn, "gates", None)
-                    break
-                except Exception as e:  # noqa: BLE001  (retried with the wide table, then named)
-                    err = f"{type(e).__name__}: {str(e)[:160]}"
-            out.append((label, fn if fn is not None else err))
+            variants = [(required, "")] + ([(required + optional, "+" + "+".join(optional))] if optional else [])
+            for names, suffix in variants:
+                fn, err = None, None
+                for table in (small, wide):
+                    try:
+                        fn = make(**{a: (dt if a == "DT" else table[a]) for a in names})
+                        _ = getattr(fn, "gates", None)
+                        break
+                    except Exception as e:  # noqa: BLE001  (retried with the wide table, then named)
+                        err = f"{type(e).__name__}: {str(e)[:160]}"
+                out.append((label + suffix, fn if fn is not None else err))
     return out
 
 

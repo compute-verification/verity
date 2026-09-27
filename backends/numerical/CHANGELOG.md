@@ -1,5 +1,13 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-27: the placement probe finds the pod id in an ssh-started job
+
+- `bench.placement.probe` reads `RUNPOD_POD_ID`, `RUNPOD_PUBLIC_IP` and `RUNPOD_DC_ID` from the container's init process
+  (`/proc/1/environ`) when the job's own environment lacks them. A job started over ssh does not inherit the container's
+  `RUNPOD_*`, so its `placement.json` had a null pod id, and the shared-NAT re-check at `register` refused every such cell
+  (flock-backend, 852816d6). Only those three keys are read. The job's own environment wins, and an unreadable file leaves
+  the value unrecorded, as before.
+
 ## 2026-09-26: bench.cell accepts a shared datacenter NAT IP, given full machine-identity proof
 
 - `bench.placement.assess` treats a public IP shared by the prover and verifier (a datacenter's egress NAT) as separate machines only

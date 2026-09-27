@@ -21,7 +21,7 @@
 # on L40S -- the arch the R13 exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
 # to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build),
 # FA2_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa2_matReqG.so` in $FA2/build/matReqG: the same tree with VERITY_ROW_GUARD=1, ROW
-# word 3 = GuardNegInfZero(row_max) after a row's first key block; the default build never writes word 3).
+# word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
@@ -32,7 +32,7 @@ FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa2_tap_src
 ROW_GUARD=${FA2_TAP_ROW_GUARD:-0}; NAME=verity_fa2_matReq; BUILD=matReq; DEFS="VERITY_TAP=3,VERITY_MAT_SRC=59"
-[ "$ROW_GUARD" = "1" ] && { NAME=verity_fa2_matReqG; BUILD=matReqG; DEFS="$DEFS,VERITY_ROW_GUARD=1"; }
+[ "$ROW_GUARD" = "1" ] && { NAME=verity_fa2_matReqG; BUILD=matReqG; DEFS="VERITY_TAP=3,VERITY_MAT_SRC=123,VERITY_ROW_GUARD=1"; }
 fail() { echo "FA2-TAP-FAIL $*"; exit 1; }
 log() { echo "[fa2_tap] $(date -u +%FT%TZ) $*"; }
 [ -x "$PY" ] || fail "no venv python at $PY"
@@ -109,7 +109,7 @@ for op in ("varlen_fwd", "verity_set_tap", "verity_set_tap_v8", "verity_set_tap_
     assert hasattr(ns, op), f"missing op {op}"
 mode, src, have, ver = int(ns.verity_tap_mode()), int(ns.verity_tap_src()), int(ns.verity_tap_hdims()), int(ns.verity_tap_layout_version())
 row3 = int(ns.verity_tap_row3())
-assert mode == 3 and src == 59, (mode, src)
+assert mode == 3 and src == (123 if row_guard else 59), (mode, src, row_guard)
 assert have & need == need, f"hdims mask {have} lacks {need}"
 assert ver == 8, ver
 assert row3 == row_guard, f"verity_tap_row3() = {row3}, the build asked for {row_guard}"

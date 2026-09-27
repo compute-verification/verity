@@ -139,14 +139,29 @@ def tcp_rtt(target: str, n: int = RTT_CONNECTS, timeout: float = 5.0) -> dict[st
     return out
 
 
+def _pod_env(key: str) -> str | None:
+    """A RunPod container variable: the process environment, else the container's init process (``/proc/1/environ``), since a
+    job started over ssh does not inherit the container's ``RUNPOD_*`` environment."""
+    if os.environ.get(key):
+        return os.environ[key]
+    try:
+        for item in Path("/proc/1/environ").read_bytes().split(b"\0"):
+            k, sep, v = item.partition(b"=")
+            if sep and k.decode(errors="replace") == key:
+                return v.decode(errors="replace") or None
+    except OSError:
+        return None
+    return None
+
+
 def probe(peer: str | None = None, rtt: str | None = None) -> dict[str, Any]:
     """This machine's identity as seen from inside its container, the link to ``peer`` and, with ``rtt`` (HOST:PORT on the peer's
     route), the TCP-connect round trip to it."""
-    ident = {"pod_id": os.environ.get("RUNPOD_POD_ID"), "public_ip": os.environ.get("RUNPOD_PUBLIC_IP"),
+    ident = {"pod_id": _pod_env("RUNPOD_POD_ID"), "public_ip": _pod_env("RUNPOD_PUBLIC_IP"),
              "product_uuid": _read("/sys/class/dmi/id/product_uuid"), "boot_id": _read("/proc/sys/kernel/random/boot_id"),
              "cpu_model": _cpu_model(), "hypervisor": _hypervisor_flag(), "sys_vendor": _read("/sys/class/dmi/id/sys_vendor"),
              "product_name": _read("/sys/class/dmi/id/product_name"), "hostname": socket.gethostname(),
-             "datacenter": os.environ.get("RUNPOD_DC_ID")}
+             "datacenter": _pod_env("RUNPOD_DC_ID")}
     if peer:
         ident["link"] = link_to(peer)
         if rtt:
