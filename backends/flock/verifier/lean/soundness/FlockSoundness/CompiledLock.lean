@@ -219,14 +219,18 @@ def ReqShape (sch : Schedule) (req : Req) : Prop :=
     req.lanes = (sch.levels.getD req.level default).lanes ∧
     req.depth = pathLen (sch.levels.getD req.level default)
 
-/-- **A rep's leaf relation**: on agreeing openings the pending verdict is the oracle's; the
-requests are one per level, in order, of their level's shape; the recorded caps are the fixed
-ones. -/
+/-- The requests' structure a rep's leaf records: one per level of the schedule, in order, of
+the level's shape, against the fixed caps. -/
+def RecStruct (sch : Schedule) (i : IRep F D) (p : PendL F D) : Prop :=
+  p.reqs.map Req.level = List.range p.reqs.length ∧ (∀ req ∈ p.reqs, ReqShape sch req) ∧
+    (∀ ℓ, 1 ≤ ℓ → ℓ < p.reqs.length → ∃ t d, i ℓ = some (t, d) ∧ p.caps[ℓ - 1]? = some d) ∧
+    p.reqs.length ≤ sch.levels.length
+
+/-- **A rep's leaf relation**: on agreeing openings the pending verdict is the oracle's, and the
+requests have their structure. -/
 def RecRel (r : ℕ) (C₀ : Oracle F) (sch : Schedule) (i : IRep F D) (v : Bool) (p : PendL F D) :
     Prop :=
-  (∀ o, AgreeRep r C₀ i p.reqs o → p.verdict o = v) ∧
-    p.reqs.map Req.level = List.range p.reqs.length ∧ (∀ req ∈ p.reqs, ReqShape sch req) ∧
-    ∀ ℓ, 1 ≤ ℓ → ℓ < p.reqs.length → ∃ t d, i ℓ = some (t, d) ∧ p.caps[ℓ - 1]? = some d
+  (∀ o, AgreeRep r C₀ i p.reqs o → p.verdict o = v) ∧ RecStruct sch i p
 
 /-- The recursion's invariant when it is called on level `stC.level`. -/
 structure RecInv (r : ℕ) (C₀ : Oracle F) (sch : Schedule) (levs : List Level) (i : IRep F D)
@@ -299,7 +303,7 @@ def lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (in
         Lock (Oracle F) (Cap D) (getRep r) (RecRel r C₀ sch) i
           (recursiveRounds A n b initial ext levs st) (recursiveRoundsC A r n b initial ext levs stC)
   | [], _, _, _, _ => .ret ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by
-      simp [PendL.reject] at h⟩
+      simp [PendL.reject] at h, by simp [PendL.reject]⟩
   | [lv], i, st, stC, h =>
       Lock.bind (g := foldRounds A lv.lanes st.s st.q) (g' := foldRoundsC A lv.lanes stC.s stC.q)
         (fun i' x y hxy => by
@@ -329,7 +333,7 @@ def lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (in
                 simp only at hlev hcaps hreqs
                 have hlv := getD_of_drop h.levs
                 have hlenR := reqs_length h.reqs
-                refine ⟨fun o ho => ?_, ?_, ?_, ?_⟩
+                refine ⟨fun o ho => ?_, ?_, ?_, ?_, ?_⟩
                 · simp only
                   rw [(hrel.sq o ho).1, hrel.levels, hrel.oods, hrel.cons]
                 · rw [hreqs, List.map_append, h.reqs, List.length_append, hlenR]
@@ -348,7 +352,13 @@ def lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (in
                   rw [hreqs, List.length_append, hlenR] at hℓ2
                   show ∃ t d, _ ∧ stC3.caps[ℓ - 1]? = some d
                   rw [hcaps]
-                  exact h.capsRec ℓ hℓ1 (by simp at hℓ2; omega)))
+                  exact h.capsRec ℓ hℓ1 (by simp at hℓ2; omega)
+                · have hd := congrArg List.length h.levs
+                  rw [List.length_drop] at hd
+                  show stC3.reqs.length ≤ _
+                  rw [hreqs, List.length_append, hlenR]
+                  simp only [List.length_singleton, List.length_cons, List.length_nil] at hd ⊢
+                  omega))
               (lockQuery A r C₀ i lv ch (st.levels ++ [ch]).length (stC.levels ++ [ch]).length
                 (by rw [h.rel.levels]) _ _ h1 false))
         (lockFold A r i (AgreeRep r C₀ i stC.reqs) lv.lanes st.s st.q stC.s stC.q h.rel.sq)
@@ -460,7 +470,8 @@ def lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (in
 
 theorem RecRel.reject (r : ℕ) (C₀ : Oracle F) (sch : Schedule) (i : IRep F D) :
     RecRel r C₀ sch i false (PendL.reject : PendL F D) :=
-  ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by simp [PendL.reject] at h⟩
+  ⟨fun _ _ => rfl, rfl, by simp [PendL.reject], fun ℓ _ h => by simp [PendL.reject] at h,
+    by simp [PendL.reject]⟩
 
 /-! ## Ligerito, a rep, a table -/
 
@@ -588,11 +599,6 @@ theorem disjoint_reps : Lock.Disjoint (getRep 0 : IRep F D → ℕ → Option (O
     by_cases hs : s % 2 = 1 ∧ 2 ≤ s
     · rw [if_neg fun h2 => by omega]
     · rw [if_neg hs] at h; simp at h
-
-/-- The requests' structure a rep's leaf records. -/
-def RecStruct (sch : Schedule) (i : IRep F D) (p : PendL F D) : Prop :=
-  p.reqs.map Req.level = List.range p.reqs.length ∧ (∀ req ∈ p.reqs, ReqShape sch req) ∧
-    ∀ ℓ, 1 ≤ ℓ → ℓ < p.reqs.length → ∃ t d, i ℓ = some (t, d) ∧ p.caps[ℓ - 1]? = some d
 
 /-- The oracle table's continuation after the level-0 table `C₀`, with the dummy last message. -/
 def tableOrc (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
