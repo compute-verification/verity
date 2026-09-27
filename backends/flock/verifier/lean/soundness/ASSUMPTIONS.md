@@ -155,6 +155,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - `Rows.ofNet`: the audit's `Rows` for a parsed net, whose computed rows are `net.a.row` and `net.b.row`.
 
     `test_pinned_rows_read_earlier_columns` stays as a check on the pinned files.
+  - **An instance's rows** (`Rows.stack`): a template instance is its VU's `upv` unit slots, so its `Rows` are `upv`
+    copies of the net's, stacked in `Rows`' order. Each copy's constant is a computed row reading the shared constant,
+    and precedes the copy's rows, which read it as their net rows read their slot's constant.
+  - **Placing an instance** (`placement_stack`): `Placement` for the stacked rows at `stackPlace` (copy `u` at slot
+    base `base u`, the shared constant at the pin) follows from three facts about the level-0 matrices: at each copy's
+    computed rows they are the net's rows shifted to the slot, and each copy's constant row and the pin's own row read
+    the pin. Those facts are what the verifier's matrices (L3-A's `placedA`/`placedB`) and Δ give, next.
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the transcript decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:

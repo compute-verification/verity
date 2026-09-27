@@ -234,3 +234,10 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Rows.ofNet
 #print axioms FlockSoundness.Rows.ofNet_a
 #print axioms FlockSoundness.Rows.ofNet_b
+-- an instance's rows (its unit slots stacked) and their placement from three facts about the level-0 matrices
+#print axioms FlockSoundness.Rows.stack
+#print axioms FlockSoundness.Rows.stackRow_topo
+#print axioms FlockSoundness.stackPlace
+#print axioms FlockSoundness.stackPlace_stackCol
+#print axioms FlockSoundness.stackPlace_comp
+#print axioms FlockSoundness.placement_stack
