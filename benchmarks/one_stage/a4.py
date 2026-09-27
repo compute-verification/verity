@@ -39,8 +39,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ir.codec import canonical_json, encode_program, program_digest  # noqa: E402
-from verity.ir.program import Program  # noqa: E402
+from verity.ir.codec import canonical_json, encode_program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity_one_stage import audit, draw as D, partition as P, registration as R  # noqa: E402
 
@@ -89,13 +88,6 @@ def check_shared_rows(pub: Path, header: dict, meta: dict, n: int, row_map: dict
     ok["refs"] = bool(ok["shared_rows"]) and refs.shape == (n, len(ports)) and bool(
         (refs == want[:, [("x", "w").index(p) for p in ports]]).all())
     return ok
-
-
-def template_program_ok(meta: dict, defn) -> bool:
-    """META's one `program_digests` entry is this template's: keyed by its descriptor id (or, before M0 re-keyed it, its
-    display id), valued core's `program_digest` of its Program."""
-    pd = meta.get("program_digests", {})
-    return len(pd) == 1 and next(iter(pd)) in (P.template_id(defn), defn.id) and next(iter(pd.values())) == program_digest(Program(defn))
 
 
 def rekey(m: dict, pd: str, part: dict, a, out: Path) -> dict:
@@ -210,7 +202,7 @@ def main() -> int:
               "program": meta.get("program_sha512") == part["program"],
               "indices": header["units"]["indices"] == list(range(m["base"], m["base"] + m["n"])),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m["n"],
-              "template_program": template_program_ok(meta, m["defn"])}
+              "template_program": a0.template_program_ok(meta, m["defn"])}
         if m["row_map"]:
             ok.update(check_shared_rows(st_dir / f"pub-{m['n']}.bin", header, meta, m["n"], m["row_map"]))
         else:
