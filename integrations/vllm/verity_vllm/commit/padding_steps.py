@@ -140,10 +140,10 @@ def member_plane_identity(shared: dict[str, Any], rid: str, engine_step: int, ar
         if hb * n_seq != int(g["HB"]):
             raise ValueError(f"{shared.get('op_path')} at engine step {engine_step}: launch HB {g['HB']} is not a multiple of n_seq {n_seq}")
         geo = {"HB": hb, "M": int(g["M"]), "NB": int(g["NB"]), "BN": int(g["BN"]), "D": int(g["D"]), "n_seq": 1,
-               "seqlen_k": g.get("seqlen_k"), "rows": (int(g["rows"]) // n_seq) if g.get("rows") is not None else None}
+               "seqlen_k": g.get("seqlen_k"), "rows": (int(g["rows"]) // n_seq) if g.get("rows") is not None else None, **({"ms": True} if g.get("ms") else {})}
         src = "launch-share"
     if geo is not None:
-        words = mat_total_words(int(geo["HB"]), int(geo["M"]), int(geo["NB"]), int(geo["BN"]), int(geo["D"]))
+        words = mat_total_words(int(geo["HB"]), int(geo["M"]), int(geo["NB"]), int(geo["BN"]), int(geo["D"]), bool(geo.get("ms")))
         gname = f"g{geo['HB']}x{geo['M']}x{geo['NB']}" + ("" if (int(geo["BN"]), int(geo["D"])) == (128, 64) else f"x{geo['BN']}x{geo['D']}")
     else:
         lo, hi = shared["element_range"]
