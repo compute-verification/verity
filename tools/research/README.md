@@ -78,7 +78,14 @@ research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = mac
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
+research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate (merge.py)
 ~~~
+
+`research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
+(refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
+and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
+The merge commit carries a `Check: <attempt id>` trailer. The tool is the repository's (`tools/check`); `research` only reads
+its attempts.
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

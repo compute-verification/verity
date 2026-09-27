@@ -1509,6 +1509,25 @@ def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalSto
     assert fp_domain in backend["domains"]
 
 
+def test_a_cell_lists_every_interaction_attempt_and_a_linked_attempt_is_never_the_cell(store: LocalStore) -> None:
+    """red-team-flock-3's IX1 (2026-09-27, policy): a refused interaction attempt stays in the store, labelled
+    ``interaction_attempt_of`` its cell, and the cell lists every attempt with its deviation.  A linked attempt is never a cell, even
+    when it passes the check and is faster (no first-pass-wins)."""
+    cell = committed(store, t_total=0.4, commit=0.6, interaction=LIVE)
+    by = ("interaction_attempt_of", cell[:12], "red-team-flock-3", "2026-09-27T05:15:00Z")
+    refused = committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "net.wait_seconds": 1.115 * 0.503 - 0.4}, labels=[by])
+    faster = committed(store, t_total=0.3, commit=0.6, interaction=LIVE, labels=[by])
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"].artifact == cell
+    assert {r["artifact"]: [k for k, _ in r["codes"]] for r in views.rejected if r["artifact"] in (refused, faster)} == {refused: ["D"], faster: ["D"]}
+    site = V.render_entities(views, rendered_at="2026-09-27T05:30:00Z", commit="abc")
+    got = next(r for r in site["results"] if r["artifact"] == cell)["interaction_attempts"]
+    assert [(a["artifact"], a["counted"]) for a in got] == [(cell, True), *sorted([(refused, False), (faster, False)])]
+    dev = {a["artifact"]: a["deviation"] for a in got}
+    assert dev[cell] == pytest.approx(0, abs=1e-6) and dev[refused] == pytest.approx(0.115, abs=1e-6)
+    assert V.interaction_problem(V.interaction(store.get_manifest(refused).meta)) is not None
+
+
 def test_table1_flags_the_frozen_backend_families_not_actively_developed(store: LocalStore) -> None:
     """Daniel, 2026-09-26: A-GKR, B-Ligero and SP1 stay in the tables, flagged not actively developed; Flock is the active family."""
     committed(store, t_total=0.4)

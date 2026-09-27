@@ -2251,7 +2251,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                              "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
                 # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
                 "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
-                             "policy": dict(self._plane_policy().__dict__) if decls else None,
+                             "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,
                              "classes_declared": (sorted(Counter(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha")
                                                                  for d in decls).items()) if decls else None)},
                 "violations": violations[:5], "violations_n": len(violations)}
@@ -2268,10 +2268,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             sn = getattr(s, "short_name", "")
             tn = type(s).__name__
             if sn == "hidden_m1_fa3" or tn.endswith("FA3"):
-                return FP.LayoutPolicy(backend="fa3", compact=False)
+                return FP.LayoutPolicy(backend="fa3", compact=False, ms=bool(getattr(s, "ms", False)))
             if sn == "hidden_m1" or tn.endswith("HiddenM1Source"):
                 w = getattr(s, "_w", None)
-                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False)
+                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False, ms=bool(getattr(s, "ms", False)))
         return FP.LayoutPolicy()
 
     def _step_sequences(self, step: int, metas: list) -> Any:

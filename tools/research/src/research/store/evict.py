@@ -174,6 +174,7 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
                     big.append((p.relative_to(rd).as_posix(), st.st_size))
         if not big:
             continue
+        big.sort(key=lambda t: (-t[1], t[0]))                      # largest first, not the filesystem's listing order
         if now - newest < quiet_s:
             say(f"{run}: touched {int((now - newest) / 60)} min ago, skipping")
             continue
