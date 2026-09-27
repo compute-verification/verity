@@ -38,7 +38,9 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "tp_rank_partials",                 # [R15 tp TP-04]
             "sampler_seed",                     # [R15 stoch] additive: only Programs with a stochastic selector emit it  [rel int-3: union, manbind M-0247 T3]
             "sampler_splits",                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
-            "norm_scales")                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
+            "norm_scales",                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
+            "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
+            "vocab_range")                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
@@ -295,9 +297,9 @@ def fa3_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int) -
     return HB, M, NB, BN, f"g{HB}x{M}x{NB}x{BN}x{D}"
 
 
-def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int) -> int:
+def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
     N = NB * BN
-    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4
+    return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
 def load_program(program_dir: str) -> dict[str, Any]:

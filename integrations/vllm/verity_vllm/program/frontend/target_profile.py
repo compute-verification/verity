@@ -105,6 +105,11 @@ class TargetProfile:
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
                            population is reported as what it is (R17-45 (1): no forced #Q correspondence).  A dense model ignores the
                            field (no MoE block to construct).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
+    fa3_construction    -> HOW FA3's attention rows are constructed (a Program static, declared-and-bound, never attested).
+                           `"guard-every-block"` (the default when None) binds `Attention_v2`, whose blocks all guard a running max of -inf;
+                           `"check-inf-per-iteration"` binds `Attention_v4` (`registry.fa3_check_inf`), which guards only the kernel's
+                           `Check_inf` iterations (the first and the causal-masked ones) as FA3's mainloop does.  Opt-in until the
+                           re-baseline epoch; only an effective FA3 target reads it.  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -139,6 +144,8 @@ class TargetProfile:
     async_scheduling: bool | None = None
     #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read", MOE-01; see the doc); never attested
     moe_construction: str | None = None
+    #: FA3's attention construction (None = "guard-every-block", `Attention_v2`; see the doc)
+    fa3_construction: str | None = None
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -160,6 +167,12 @@ class TargetProfile:
                                                                  "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
                                                  "population": "indexed-read's; the router commits its softmax once (2E+2 values per token), not the rounds' masked scores"}}
     DEFAULT_MOE_CONSTRUCTION = "indexed-read"
+    #: the registered FA3 attention constructions: value -> the attention Definition every FA3 row binds
+    FA3_CONSTRUCTIONS = {"guard-every-block": {"definition": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}",
+                                               "rule": "every block guards a running max of -inf (AttnBlock_v2)"},
+                         "check-inf-per-iteration": {"definition": "Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}",
+                                                     "rule": "block b guards iff b >= the tile's n_block_min_causal_local_mask (AttnBlock_v4{CHECK})"}}
+    DEFAULT_FA3_CONSTRUCTION = "guard-every-block"
 
     #: [R17-1] the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
     #: config/vllm.py:1273-1322): True unless the model is a pooling runner, a speculative method other than EAGLE/MTP/draft-model/
@@ -201,6 +214,9 @@ class TargetProfile:
             # [R17-42] one spelling per construction; "MOE-01" / "fixed-slot" / booleans are not accepted (no coercion, no alias)
             raise ValueError(f"moe_construction must be None ({self.DEFAULT_MOE_CONSTRUCTION}) or one of {sorted(self.MOE_CONSTRUCTIONS)}; "
                              f"got {self.moe_construction!r}")
+        if self.fa3_construction is not None and self.fa3_construction not in self.FA3_CONSTRUCTIONS:
+            raise ValueError(f"fa3_construction must be None ({self.DEFAULT_FA3_CONSTRUCTION}) or one of {sorted(self.FA3_CONSTRUCTIONS)}; "
+                             f"got {self.fa3_construction!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -208,6 +224,10 @@ class TargetProfile:
         Program static, declared-and-bound (`moe_construction_declaration()` is what GP-01 writes; the frontend's MoE rules read it through
         `vllm_bindings.active_target_profile()` and each family applies only under its own construction) -- never attested by a record."""
         return self.moe_construction if self.moe_construction is not None else self.DEFAULT_MOE_CONSTRUCTION
+
+    def effective_fa3_construction(self) -> str:
+        """The construction FA3's attention rows are built with: the declared knob, else `guard-every-block` (`Attention_v2`)."""
+        return self.fa3_construction if self.fa3_construction is not None else self.DEFAULT_FA3_CONSTRUCTION
 
     def moe_construction_declaration(self) -> dict:
         """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
@@ -331,6 +351,8 @@ class TargetProfile:
             d.pop("async_scheduling", None)   # [R17-1] absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
         if d.get("moe_construction") is None:
             d.pop("moe_construction", None)   # [R17-42] absent = indexed-read (MOE-01); every earlier profile digest unchanged
+        if d.get("fa3_construction") is None:
+            d.pop("fa3_construction", None)   # absent = guard-every-block (Attention_v2); every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

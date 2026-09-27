@@ -323,13 +323,23 @@ def manifest_engine(path: str) -> str:
     return q.get("engine") if isinstance(q, dict) else ""
 
 
-def manifest_norm_scales(path: str) -> bool:
-    """Whether a manifest was built under the norm-scale policy (`query.norm_scales`); False when unreadable."""
-    from verity_vllm.query.norm_scales import policy_of
+#: the opt-in taps a row runs (never the record): (CommitConfig field, manifest build / verify flag, the query header key its policy writes)
+TAP_POLICIES = (("norm_tap", "--norm-scales", "norm_scales"), ("router_tap", "--router-softmax", "router_softmax"),
+                ("vocab_tap", "--vocab-range", "vocab_range"))
+
+
+def tap_policy_flags(ck: Any) -> list[str]:
+    """The manifest build / verify flags of the taps the row's CommitConfig turns on (NORM_TAP, ROUTER_TAP, VOCAB_TAP = 1)."""
+    return [flag for field, flag, _key in TAP_POLICIES if getattr(ck, field, "0") == "1"]
+
+
+def manifest_missing_policies(path: str, ck: Any) -> list[str]:
+    """The policies the row runs that a manifest was not built under (every one when it is unreadable)."""
     try:
-        return policy_of(json.load(open(path)))
-    except (OSError, ValueError):
-        return False
+        q = json.load(open(path)).get("query")
+    except (OSError, ValueError, AttributeError):
+        q = None
+    return [key for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and not (isinstance(q, dict) and isinstance(q.get(key), dict))]
 
 
 def manifest_guarded_max(path: str) -> bool:

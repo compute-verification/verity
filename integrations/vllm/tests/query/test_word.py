@@ -29,6 +29,17 @@ def test_query_id_and_parse():
     assert W.parse("16") == (16, 32, 0) and W.parse("16/32+2") == (16, 32, 2) and W.parse("8/8") == (8, 8, 0)
 
 
+def test_max_scaled_is_not_in_the_fa_stream():
+    # ROW word 2 is the kernel's visit index (vt_step): max * scale needs the MS plane
+    for scope in ("AttnBlock_v3{D=64,NVIS=64,FIRST=False,BN=128}", "AttnBlockSoftcap_v1{D=256,NVIS=64,FIRST=False,BN=64,CAP=50.0}"):
+        assert W.committed_today(scope, "F32MulFtz_v1") is None
+        assert W.tap_kernel(scope, "F32MulFtz_v1") == "FA2 / FA3 tap build (MS plane, `max_scaled`)"
+        assert W.committed_today(scope, "F32Max_v1") == "ROW row_max"
+        assert W.committed_today(scope, "GuardNegInfZero_v1") is None                           # opt-in taps stay new taps (norm scales, router)
+        assert W.tap_kernel(scope, "GuardNegInfZero_v1") == "FA2 / FA3 tap build (ROW word 3, opt-in `GUARDED_MAX_TAP=1`, #95)"
+    assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}", "F32MulFtz_v1") == "vLLM batch-invariant Triton _rms_norm_kernel"
+
+
 @pytest.mark.parametrize("fam,statics", [("RMSNormTriton_v1", {"N": 2048, "EPS": 1e-05}), ("Gemm_v1", {"K": 64, "N": 8}),
                                          ("Attention_v3", {"T": 21, "NH": 4, "KVH": 2, "D": 64, "BN": 128}), ("TokenSelect_v1", {"V": 8})])
 def test_every_computation_gate_is_certified_by_one_unit(fam, statics):
@@ -209,3 +220,16 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
     assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
     assert R["kinds"] == ["output"] and R["cut"].ok and R["cut"].detail["redundant_gates"] == 1
+
+
+def test_a_call_that_only_rearranges_bits_returns_its_inputs():
+    # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.types import Array
+    from verity_vllm.program.registry import prims as P
+    f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
+                                 lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
+    G = W.Graph(f)
+    R = W.units(G, 16, 32)
+    assert G.n == 0 and len(G.returned_inputs) == 8 and R["cut"].ok, R["cut"].codes
+    assert W.unit_rule(f)["violations"] == []
