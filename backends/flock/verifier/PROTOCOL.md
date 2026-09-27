@@ -1101,8 +1101,12 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
   - `Q_irreducible`: `Y^2 + Y + x⁻¹` is irreducible over GF128, because the trace of `x⁻¹` is 1 (computed the same way) and
     the trace vanishes on every `y^2 + y`. So `GF256 := F256` is a `Field` whose `+` and `*` are the executable's three-
     product ladder (`GF256.mul_eq`), and `F256.xinv` is `x⁻¹` (`GF128.xinv_mul_x`).
-- Planned: the correspondences the soundness lane's `Arith` needs (the embedding `F → K`, `u`, packing, `lo`), the assembly
-  lemmas, and the lowering checkers.
+- **The seam** (`FlockLevel3/Seam.lean`): `embed : GF128 →+* GF256` (`c ↦ ⟨c, 0⟩`), `u = ⟨0, 1⟩`, `ofLimbs` (an executable
+  `⟨c0, c1⟩` is `embed c0 + embed c1 · u`, the soundness model's `Arith.ofLimbs`) and `u_root` (`u² + u + x⁻¹ = 0`).
+- **1d, assembly, first lemma** (`FlockLevel3/Assembly.lean`): `eqTable_get`: `eqTable r` has `2^|r|` entries and entry
+  `b` is `Π_j (r_j if bit j of b, else 1 + r_j)`, the soundness model's `eqAt`.
+- Planned: packing and `lo` for the seam; the rest of the assembly (the fold equals the extension of `I ⊗ A_0 + Δ`, the
+  region values, Δ's copies); the lowering checkers.
 
 ## 18. Test vectors
 
