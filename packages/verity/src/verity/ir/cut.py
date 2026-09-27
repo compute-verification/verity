@@ -6,15 +6,18 @@ The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any 
 `verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
 specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
+0. **Applicability.**  Q_word v1 applies to a program whose root body's nodes other than its Input nodes are each of form `call` or
+   `primitive`, and whose Calls are topological (step 3).  Otherwise the query is inapplicable: `evaluate` raises `QueryInapplicable`
+   and `verify` refuses with `query-inapplicable` (where, and why).
 1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
-   `L..L+gates-1`.  Activations of one Definition share its cut.
+   `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.
 2. **Evaluate(fn, X).**  A primitive is one unit, or none when it has no parameters or its id is in `WIRING`.  A separable body
    (`separable`: no scan node, every node reads only parameters, the body returns every leaf each node produces) is its nodes'
    members' cuts, in node then member order.  Any other body is `cut_word(CallGraph(fn), X)`.
 3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
-   * operands: the gate's operand ids (one inside the Call must come before the gate, or the Call is refused as not topological);
-     a gate with more than `layout.WIDE_FAN_IN` (4096) operands is *wide*: its operands are
+   * operands: the gate's operand ids (one inside the Call must come before the gate, or the query is inapplicable: the Call is not
+     topological); a gate with more than `WIDE_FAN_IN` (4096) operands is *wide*: its operands are
      enumerated per argument (`_wide_operands`), skipping an argument that is a whole parameter of the Call; an operand outside the
      Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
    * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
@@ -26,8 +29,8 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
    * reads through structure: a structure gate's sources are its operands with every structure operand replaced by its sources;
      the computing gates, compacted in layout order, read each distinct source of their operands once, in operand order (an input:
      `input_reads`; a gate: an edge `src -> dst`);
-   * outputs: each returned leaf in `body.ret` order, resolved inside the Call: a computing gate, or a structure gate's computing
-     sources (ascending) -- its input sources are `returned_inputs`.
+   * outputs: each returned leaf in `body.ret` order (a primitive Call: its gate), resolved inside the Call: a computing gate, or a
+     structure gate's computing sources (ascending) -- its input sources are `returned_inputs`.
 4. **cut_word(graph, X).**  (i) `targets`: the returned computing gates, first occurrence in return order, packed greedily into runs
    of at most X declared bits (a wider gate is a run alone); each run is an *output* unit and heads its gates.  (ii) Repeat: every
    gate starts at its head's unit or -1; backward (`g = n-1..0`) a gate without a head takes the unit its consumers agree on
@@ -43,6 +46,13 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
    standing for the input unit); the width rule counts **bits**: with ob the summed declared widths and og the number of a unit's
    boundary gates (read by another unit, or returned), a unit passes when ob <= X, or og == 1 and ob <= W; code `unit-too-wide`.
    What serving commits, when given, is held to the derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`).
+
+**Constants of the version.**  `WIRING` and `WIDE_FAN_IN` are part of Q_word v1, like the algorithm: changing either is a new version.
+`tests/ir/qword_vectors.json` pins both as data, beside vectors for every step above and a seeded random corpus.
+
+**Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
+case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
+included, to check the cut on it.
 """
 from __future__ import annotations
 
@@ -50,7 +60,7 @@ from array import array
 from collections import Counter
 from typing import Any, Iterable, Iterator, Sequence
 
-from .layout import WIDE_FAN_IN, resolve
+from .layout import resolve
 from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
 from .refs import Affine
 
@@ -58,8 +68,19 @@ from .refs import Affine
 #: computed in no unit, may be read by any, and is never committed
 WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
+#: a gate with more operands than this is *wide* (step 3); Q_word v1's own threshold, not the layout's lazy-operand one
+WIDE_FAN_IN = 4096
+
 #: `Q_word_v1`'s width parameters (X, W, EXTRAS): at most X bits out of a unit, or exactly one value of at most W bits
 WIDTH_RULE = (16, 32, 0)
+
+
+class QueryInapplicable(ValueError):
+    """The query does not apply to the program (step 0); `detail` says where."""
+
+    def __init__(self, message: str, detail: dict) -> None:
+        super().__init__(message)
+        self.detail = detail
 
 
 def call_scope(fn: Any) -> tuple[Any, Any]:
@@ -154,7 +175,8 @@ class CallGraph:
             for o in it:
                 if 0 <= o - lo < n:
                     if o - lo >= j:
-                        raise ValueError(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)")
+                        raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",
+                                                {"definition": fn.id, "gate": j, "reads": o - lo, "why": "not topological"})
                     mine.append(o - lo)
                 else:
                     ext = True
@@ -221,7 +243,7 @@ class CallGraph:
         self.src, self.dst = src, dst
         outs: list[int] = []
         returned_inputs: set[int] = set()
-        for g in (resolve(call, r) - lo for r in fn.body.ret):
+        for g in ([0] if not hasattr(fn, "body") else (resolve(call, r) - lo for r in fn.body.ret)):
             if 0 <= g < n:
                 for u in (srcs[g] if free[g] else (g,)):
                     if u >= 0:
@@ -468,5 +490,5 @@ def evaluate_definition(fn: Any, X: int, memo: dict | None = None, wiring: froze
     return r
 
 
-__all__ = ["WIRING", "WIDTH_RULE", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
+__all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "QueryInapplicable", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
            "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition"]

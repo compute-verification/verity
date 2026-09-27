@@ -50,7 +50,9 @@ descriptor without `annotations`:
 - `program_digest`: hex SHA-256 of those bytes, the Build's program digest;
 - `partition_object.program_sha512`: hex SHA-512 of the same bytes, the `program` field of `verity/partition/v1`.
 
-`annotations` never enter a digest and carry no meaning in this format.
+`annotations` never enter a digest and carry no meaning in this format. The program digests carry no domain prefix (the partition
+object's digests do). Adding one is deferred to the re-baseline, where the IR's identity digests move anyway: the A2 roots served on
+2026-09-27 already bind the current digest.
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
 refusal), `program_digest_sha256`, `program_sha512`.
@@ -311,12 +313,13 @@ above, on the descriptor vector.
 `Q_word` v1 (`verity.ir.cut`, `partition_object`) reads a Program through §1–§7 and adds these conventions. They are pinned:
 changing any of them is a new version of the query.
 
-- **Calls**: the root's non-Input nodes (§5.2), each of form `call` or `primitive`; other forms are refused. A Call in which a
-  gate reads itself or a later gate of the Call is refused as not topological (`cut.CallGraph`, §6).
+- **Applicability**: the Calls are the root's non-Input nodes (§5.2), each of form `call` or `primitive`, and no gate of a Call
+  reads itself or a later gate of the Call (§6). Otherwise the query is inapplicable: `evaluate` raises `cut.QueryInapplicable`
+  and `partition_object.verify` refuses with `query-inapplicable`.
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
   (primitives without parameters) their gates are structure: computed in no unit, readable by any, never committed. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
-- **Wide gates**: a gate whose primitive has more than `layout.WIDE_FAN_IN` = 4096 parameter leaves, so more than 4096
+- **Wide gates**: a gate whose primitive has more than `cut.WIDE_FAN_IN` = 4096 parameter leaves, so more than 4096
   operands. The layout's operands are the same for every gate (the reference returns a lazy sequence for a wide gate, with the
   same elements). In a Call's graph (`cut.CallGraph`) a wide gate:
   - is external, as a gate reading outside the Call;
@@ -325,7 +328,11 @@ changing any of them is a new version of the query.
   - takes its own recompute token, so it is never a recompute of an earlier gate and no later gate is a recompute of it;
   - is never folded into a constant.
 
-  This is v1 behaviour, not a property of the circuit, and should go when the query is next revised.
+  This is v1 behaviour, not a property of the circuit, and should go when the query is next revised. `cut.WIDE_FAN_IN` is the
+  query's own constant, not the layout's lazy-operand threshold (`layout.WIDE_FAN_IN`, which has no effect on operands).
+
+`WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/ir/qword_vectors.json`, with vectors for every step of the algorithm, every
+refusal and a seeded random corpus.
 
 Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39; a Call whose gate reads a
 later gate of the Call decodes and is refused); `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph

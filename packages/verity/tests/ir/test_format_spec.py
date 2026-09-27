@@ -16,7 +16,7 @@ import pytest
 
 from verity.ir import codec, cut, partition_object as PO
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.ir.layout import WIDE_FAN_IN, resolve
+from verity.ir.layout import resolve
 from verity.ir.parts import n_members
 from verity.ir.program import INPUT_ID, Program, is_input
 from verity.ir.refs import Affine, Coll, Concat, array_of, refs_from_json, strided_view, tuple_of
@@ -40,7 +40,7 @@ TWiden = _prim("TWiden16", [("a", V16)], V32)
 TSum2 = _prim("TSum2", [("x", Array(2, V32))], V32)
 TSum4 = _prim("TSum4", [("x", Array(4, V32))], V32)
 TSum6 = _prim("TSum6", [("x", Array(6, V32))], V32)
-TWide = _prim("TWide", [("x", Array(WIDE_FAN_IN, V32)), ("a", V32)], V32)
+TWide = _prim("TWide", [("x", Array(cut.WIDE_FAN_IN, V32)), ("a", V32)], V32)
 TNarrow = _prim("TNarrow", [("x", Array(4, V32)), ("a", V32)], V32)
 REG = Registry()
 for _p in (TAdd, TWiden, TSum2, TSum4, TSum6, TWide, TNarrow):
@@ -102,7 +102,7 @@ def _call_of(prim):
 
 
 WideCall, NarrowCall = _call_of(TWide), _call_of(TNarrow)
-WIDE_PROG = _comp("TWideProg", (), lambda S: ((("x", Array(WIDE_FAN_IN, V32)), ("s", V32)), V32), lambda B, S, x, s: B.call(WideCall, x, s))
+WIDE_PROG = _comp("TWideProg", (), lambda S: ((("x", Array(cut.WIDE_FAN_IN, V32)), ("s", V32)), V32), lambda B, S, x, s: B.call(WideCall, x, s))
 
 
 # -- the spec restated -------------------------------------------------------------------------------------------------------------
@@ -421,7 +421,7 @@ def build() -> dict:
         "forward_reference": _forward(desc),
         "wiring": sorted(cut.WIRING),
         "wide": {
-            "wide_fan_in": WIDE_FAN_IN,
+            "wide_fan_in": cut.WIDE_FAN_IN,
             "descriptor": _canon(wdesc),
             "gates": [[lo + j, wg.gate(lo + j).prim.id, len(wg.gate(lo + j).operands), _runs(wg.gate(lo + j).operands)] for j in range(4)],
             "graph": {"wide": _graph(cut.CallGraph(WideCall)), "narrow": _graph(cut.CallGraph(NarrowCall))},
