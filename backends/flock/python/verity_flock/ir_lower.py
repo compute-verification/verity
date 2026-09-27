@@ -196,7 +196,7 @@ class Units:
         """The unit circuit: inputs ``in0 .. in{k-1}``, outputs ``out0 ..`` (one word per port)."""
         if self.builder is not None:
             return self.builder()
-        C = Circuit()
+        C = Circuit(cse=True)
         ins = [C.input(f"in{j}", w) for j, w in enumerate(self.in_widths)]
         wires = dict(zip(self.arg_gates, ins))
         lower_gates(C, self.gates, wires)
@@ -372,7 +372,7 @@ def tc_units(target, prim: str = TC_PRIM) -> Units:
     outs = [[("cut", kpos[g.index])] for g in tcs]
 
     def builder() -> Circuit:
-        C = Circuit()
+        C = Circuit(cse=True)
         b = [C.input(f"in{j}", 16) for j in range(16)]
         a = [C.input(f"in{16 + j}", 16) for j in range(16)]
         acc = C.input("in32", 32)

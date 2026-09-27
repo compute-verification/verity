@@ -41,7 +41,7 @@ from .gf2 import NOT, OR, Circuit, add, and_reduce, const_bits, mux, or_reduce, 
 
 TEMPLATE = "gumbel-top-p-token-select"
 UNIT = "gumbel-top-p-token-select/fp32/lane"
-PIN = "2038450436f6aa6363ab246a94cda1409627ff05fbde9e7ae4fd5bbdf04a0074"
+PIN = "c9aeca364cb08b68a174fa9811ff505306c6a8f9af7458689ff23e66409cc1b6"
 FORMAT = "flock-ir-sampling/v1"
 STATEMENT = "verity/flock-ir-sampling/v1"
 SCHEME = IF.SCHEME
@@ -164,7 +164,7 @@ def lane_circuit(V: int) -> Circuit:
     """The lane unit: inputs ``in0`` (the bf16 logit) and ``in1 .. in9`` (``IN_PORTS[1:]``, 32 bits each; skip, noisy and kbit
     use bit 0), outputs ``out0 .. out3`` (``OUT_PORTS``)."""
     temp_lane, mask_step, select_step = _composites(V)
-    C = Circuit()
+    C = Circuit(cse=True)
     x = C.input("in0", 16)
     temp, rcp, skip, noisy, kbit, g, best, best_i, i = (C.input(f"in{j}", 32) for j in range(1, 10))
     call, w = _walk(C, temp_lane, [x, temp, rcp, skip[:1]], {})

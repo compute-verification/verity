@@ -865,7 +865,7 @@ class Walker:
             groups, W, F = IL.TC_STEPS[pid]
 
             def build():
-                C = Circuit()
+                C = Circuit(cse=True)
                 b = [C.input(f"in{j}", 16) for j in range(16)]
                 a = [C.input(f"in{16 + j}", 16) for j in range(16)]
                 acc = C.input("in32", 32)
@@ -889,7 +889,7 @@ class Walker:
             ck = ("prim", pid, consts, tuple(widths))
             if ck not in self.cache:
                 def build():
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
@@ -1266,7 +1266,7 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
             ck = (pid, consts, widths)
             if ck not in cache:
                 def build(pid=pid, consts=consts, widths=widths):
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C

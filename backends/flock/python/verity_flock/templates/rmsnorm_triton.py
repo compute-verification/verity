@@ -11,9 +11,9 @@ the 128 threads); otherwise the warps differ. The unit netlist is pinned per (N,
 maps and cut structure (the tail with N and eps, the cut ports) included."""
 TEMPLATE = "rmsnorm-triton"
 UNIT = "rmsnorm-triton/bf16/warp"
-PINS = {(2048, 1e-05): "bb08c42ff4bc602574a24e17d55b1d15dead064e6068d8e20e5ff58c674960e1",
-        (4096, 1e-05): "913b3fc2be684f8a56914fa84dc3202199862eeeff8a485344867a77de859eba",
-        (128, 1e-06): "e083d9f193d918b2966da14c7c41f81eddc4ad55be28e11fb9206ba7ff29ee44"}
+PINS = {(2048, 1e-05): "7400301dd799baf5b46ebf70a25f6e2e7ef13b5f4a2ae821f7acdd3d162f9308",
+        (4096, 1e-05): "e7d3976fe7e959fe55a85818a9ad3796bd5ebd1ae1d5ba9660f491bd92034d2a",
+        (128, 1e-06): "ba1bd0a72fe51f0e1ce8d798aa4e18df55f9e643b1c503873787b14bdc8352b8"}
 
 
 def width(n: int) -> int | None:

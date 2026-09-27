@@ -585,7 +585,7 @@ def test_attention_units_are_tensor_core_steps():
     (T,) = {len(x) // 64 for x in s.port("k")}
     low = IL.lowering(sub.definition(T), f"attention-head/tc-step/t{T}", unit_fn=IL.tc_units)
     U = low.units
-    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9857)
+    assert (T, U.n, len(U.public), low.layout.useful) == (129, 4 * 129 + 64 * 9, 64, 9473)
     assert sum(k == "zero" for u in U.in_src for k, _ in u) == 64 * 15
     assert low.leaves["out"] == [[]] * U.n and low.cut["outputs"] and len(low.cut["outputs"]) == 64
     fin = np.stack([np.concatenate([s.port("q")[i], s.port("k")[i], s.port("v")[i]]).astype(np.uint64) for i in range(s.n)])
