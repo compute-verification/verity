@@ -94,6 +94,12 @@ def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tupl
     return [(g0, min(b, g0 + per)) for g0 in range(0, b, per)]
 
 
+def tap_row3(ns: Any) -> int:
+    """What word 3 of the build's ROW entries holds (`verity_tap_row3`): 0 = never written (builds before the op included), 1 = the guarded
+    max (`query.guarded_max`)."""
+    return int(ns.verity_tap_row3()) if hasattr(ns, "verity_tap_row3") else 0
+
+
 def stream_name(k: int, HB: int, M: int, NB: int, BN: int, D: int) -> str:
     """Identity of launch k's stream in the step layout (the geometry is part of the layout digest).  The hd-64 tile keeps the
     pre-R13 name so hd-64 roots are unchanged; other tiles carry (kBlockN, head_dim) explicitly."""
@@ -128,9 +134,20 @@ class HiddenM1Source:
         self.launch = 0
         self.launches_in_step = 0
         self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
-                      "tap_layout": 8 if self.v8 else 7, "hdims": [hd for hd in (64, 96, 128, 256) if self.hdims & (1 << (hd // 32))]}
+                      "tap_layout": 8 if self.v8 else 7, "hdims": [hd for hd in (64, 96, 128, 256) if self.hdims & (1 << (hd // 32))],
+                      "row3": tap_row3(self.ns)}
         self.active = False
         self.time_launch = None
+
+    def require_row3(self, guarded_max: bool) -> None:
+        """Refuse a build whose ROW word 3 is not the manifest's: the guarded-max policy needs a build that writes the guarded max, any
+        other manifest one that never writes the word (the stream bytes of record)."""
+        from verity_vllm.query.guarded_max import TAP_ROW3
+
+        want = TAP_ROW3 if guarded_max else 0
+        if self.stats["row3"] != want:
+            raise RuntimeError(f"hidden tap {self.ns_name}: ROW word 3 mode {self.stats['row3']} (verity_tap_row3), the manifest "
+                               f"{'is under the guarded-max policy' if guarded_max else 'has no guarded-max policy'} and needs mode {want}")
 
     def tile(self, head_dim: int, num_splits: int) -> tuple[int, int]:
         """(kBlockN, head_dim) the tap must be armed with for this launch; refuses head dims this build has no kernel for."""
@@ -231,7 +248,7 @@ class HiddenM1Source:
     def declaration_classes(self) -> list[dict]:
         return [{"class": "fa2_hidden_m1_stream", "how": "bound-as-leaf", "covers_rows": ["R5", "R6", "R7", "R8"],
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
-                 "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"],
+                 "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], **({"row3": "guarded max"} if self.stats["row3"] else {}),
                  "evidence": (f"CMT-2 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa2_C.varlen_fwd; stream buffer per launch acquired into the packed step "
                               f"stream (same run root); geometries (HB, M, NB[, kBlockN, head_dim]) {self.stats['geometries']}; tap_skipped "
@@ -300,7 +317,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
         self.launches_in_step = 0
         self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": int(self.ns.verity_tap_layout_version()), "hdims": [hd for hd in (64, 128) if self.hdims & (1 << (hd // 32))],
-                      "backend": "fa3", "tiles": {}}
+                      "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns)}
         self.active = False
         self.time_launch = None
 
@@ -387,6 +404,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
         return [{"class": "fa3_hidden_m1_stream", "how": "bound-as-leaf", "covers_rows": ["R5", "R6", "R7", "R8"],
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
                  "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], "tiles": dict(self.stats["tiles"]),
+                 **({"row3": "guarded max"} if self.stats["row3"] else {}),
                  "evidence": (f"R13 hopper FA3 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa3_C.fwd; stream buffer per launch acquired into the packed step stream "
                               f"(same run root); geometries (HB=b*h_k, M=packed rows, NB, kBlockN, head_dim) {self.stats['geometries']}; tiles {self.stats['tiles']}; "
@@ -402,10 +420,12 @@ def hidden_class_for(flash_attn_version: int | None) -> str:
     return "fa2_hidden_m1_stream"
 
 
-def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_attn_version: int | None = None, fa2_cls=None, fa3_cls=None):
+def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_attn_version: int | None = None, fa2_cls=None, fa3_cls=None,
+                       manifest=None):
     """The M1 source matching the tap build at `so_path` (an FA3 v9 build exposes `verity_set_tap_v9`; FA2 v7/v8 builds `verity_set_tap`).
     Refuses a tap of the other attention implementation than the engine's `flash_attn_version` (when given): the FA2 tap loaded under
-    FA3 never fires (F-hw-08) -- that is a configuration error to report at attach time, not a zero to discover at the verdict."""
+    FA3 never fires (F-hw-08) -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
+    required-value `manifest`, also refuses a build whose ROW word 3 is not the manifest's (`require_row3`)."""
     import torch
 
     ns = ns or __import__("pathlib").Path(so_path).stem
@@ -415,4 +435,9 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
         raise RuntimeError(f"hidden tap {so_path} is an {'FA3' if is_fa3 else 'FA2'} build but the engine executes FA{flash_attn_version}: "
                            f"use {'verity_fa3_matReq.so (pod_fa3_tap.sh)' if flash_attn_version == 3 else 'verity_fa2_matReq.so (pod_fa2_tap.sh)'}")
     cls = (fa3_cls or HiddenM1SourceFA3) if is_fa3 else (fa2_cls or HiddenM1Source)     # a committer may supply its native (C++) twins
-    return cls(committer, so_path, ns=ns)
+    src = cls(committer, so_path, ns=ns)
+    if manifest is not None:
+        from verity_vllm.query.guarded_max import policy_of
+
+        src.require_row3(policy_of(manifest))
+    return src
