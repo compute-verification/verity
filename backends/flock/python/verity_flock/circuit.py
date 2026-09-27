@@ -193,10 +193,11 @@ def _wires(low: IL.Lowering, tail) -> list:
         for j, (kind, k) in enumerate(src):
             if kind == "cut":
                 producer[k] = ("unit", u, j)
-    last = len(tail.stages) - 1
-    for j, tag in enumerate(tail.stages[last].outs):
-        if tag[0] == "cut":
-            producer[tag[1]] = (f"stage{last}", 0, j)
+    for si, st in enumerate(tail.stages):
+        for j, tag in enumerate(st.outs):
+            if tag[0] == "cut":
+                producer[tag[1]] = (f"stage{si}", 0, j)
+    public = dict(getattr(U, "public", []))
     local, seen = [], {}
     for j, (table, _) in enumerate(tail.lookups):
         local.append(seen.get(table, 0))
@@ -204,7 +205,7 @@ def _wires(low: IL.Lowering, tail) -> list:
     wires = []
     for u, src in enumerate(U.in_src):
         for j, (kind, k) in enumerate(src):
-            if kind == "cut":
+            if kind == "cut" and k not in public:
                 wires.append(["unit", u, j, *producer[k]])
     for i, st in enumerate(tail.stages):
         prev = tail.stages[i - 1] if i else None

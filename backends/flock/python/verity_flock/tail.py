@@ -296,8 +296,10 @@ class Tail:
     stages: list
     #: per lookup j: (table name, the stage whose ``("index", j)`` output feeds it)
     lookups: list
-    #: cut words the tail computes (read by units), each an output of the last stage
+    #: cut words the tail computes (read by units), each an output of the stage that computes it
     computes: list
+    #: the program slots of the tail's returned outputs (the last stage's ``("ret", i)`` ports), in output order
+    rets: list = field(default_factory=list)
 
 
 def _fold_constant_mufu(prog: list) -> list:
@@ -335,80 +337,92 @@ def forge(prog: list) -> list:
 
 
 def lower_tail(low: IL.Lowering, forged: bool = False) -> Tail:
-    """The cut lowering's tail program as stages: a new stage after every MUFU operation; every value read later is handed on.
-    ``forged``: the program with :func:`forge` applied (a different tail of the same shape)."""
+    """The cut lowering's tail program as stages by MUFU depth: stage s computes every operation whose operands are available
+    after s MUFU levels and the table index of every MUFU operation at that depth; the next stage finishes them from their
+    lookups. A value read later is handed on stage to stage; a cut word a unit reads leaves from the stage that computes it;
+    the tail's returned outputs (attention's head outputs) leave from the last stage as 16-bit ports. ``forged``: the program
+    with :func:`forge` applied (a different tail of the same shape)."""
+    from collections import defaultdict
+
     U = low.units
     prog, slot = IL._tail(low)
     prog = _fold_constant_mufu(forge(prog) if forged else prog)
-    produced_by_units = {k for src in U.out_src for kind, k in src if kind == "cut"}
-    read_by_units = sorted({k for src in U.in_src for kind, k in src if kind == "cut"} - produced_by_units)
-    bounds = [i for i, op in enumerate(prog) if op[1] in MUFU]
-    segs = [(0 if j == 0 else bounds[j - 1] + 1, b + 1) for j, b in enumerate(bounds)] + [(bounds[-1] + 1 if bounds else 0, len(prog))]
-    last_use: dict[int, int] = {}
-    for i, op in enumerate(prog):
-        for s in op[2:] if op[1] != "Const" else []:
-            last_use[s] = i
-    for k in read_by_units:
-        last_use[k] = len(prog)
+    produced = {k for src in U.out_src for kind, k in src if kind == "cut"}
+    public = {k for k, _ in getattr(U, "public", [])}
+    read_by_units = sorted({k for src in U.in_src for kind, k in src if kind == "cut"} - produced - public)
+    rets = [slot[g] for g in U.tail_rets]
+    const: dict[int, int] = {}
+    depth = {k: 0 for k in produced}
+    op_stage: list = []
+    for op in prog:
+        out, prim, args = op[0], op[1], op[2:]
+        if prim == "Const":
+            const[out] = op[2]
+            depth[out] = 0
+            op_stage.append(None)
+            continue
+        d = max((depth[a] for a in args), default=0)
+        op_stage.append(d)
+        depth[out] = d + 1 if prim in MUFU else d
+    n_st = max([depth[r] for r in rets] + [depth[k] for k in read_by_units] + [0]) + 1
+    need: dict[int, int] = defaultdict(lambda: -1)
+    for op, t in zip(prog, op_stage):
+        if t is not None:
+            for a in op[2:]:
+                if a not in const:
+                    need[a] = max(need[a], t)
+    for r in rets:
+        need[r] = max(need[r], n_st - 1)
     stages, lookups = [], []
-    carried: list[int] = []            # slots handed into the current stage (width 32 each)
-    ctx_prev: list = []
-    for si, (lo, hi) in enumerate(segs):
+    carried: list[int] = []
+    pending: list = []
+    for si in range(n_st):
         C = Circuit()
         st = Stage(C)
         val: dict[int, list] = {}
+
+        def take(tag, width):
+            w = C.input(f"in{len(st.ins)}", width)
+            st.ins.append(tag)
+            st.in_widths.append(width)
+            return w
+
         for sl in carried:
-            val[sl] = C.input(f"in{len(st.ins)}", 32)
-            st.ins.append(("pass", sl))
-            st.in_widths.append(32)
-        if si > 0:
-            ctx = [C.input(f"in{len(st.ins) + i}", 32) for i in range(len(ctx_prev))]
-            for i in range(len(ctx_prev)):
-                st.ins.append(("ctx", si - 1, i))
-                st.in_widths.append(32)
-            v = C.input(f"in{len(st.ins)}", VALUE_BITS)
-            st.ins.append(("lookup", len(lookups) - 1))
-            st.in_widths.append(VALUE_BITS)
-            op = prog[lo - 1]
-            val[op[0]] = MUFU[op[1]][1](C, ctx, v)
-        need_cut = sorted({s for op in prog[lo:hi] if op[1] != "Const" for s in op[2:] if s < U.cut.__len__() and s in produced_by_units and s not in val})
-        for k in need_cut:
-            val[k] = C.input(f"in{len(st.ins)}", 32)
-            st.ins.append(("cut", k))
-            st.in_widths.append(32)
-        mufu_ctx = []
-        for op in prog[lo:hi]:
+            val[sl] = take(("pass", sl), 32)
+        for j, prim, out, nctx in pending:
+            ctx = [take(("ctx", j, i), 32) for i in range(nctx)]
+            val[out] = MUFU[prim][1](C, ctx, take(("lookup", j), VALUE_BITS))
+        for k in sorted({a for op, t in zip(prog, op_stage) if t == si for a in op[2:] if a in produced and a not in val}):
+            val[k] = take(("cut", k), 32)
+        word = lambda a: val[a] if a in val else const_bits(const[a], 32)
+        fresh = []
+        for op, t in zip(prog, op_stage):
+            if t != si:
+                continue
             out, prim, args = op[0], op[1], op[2:]
-            if prim == "Const":
-                val[out] = const_bits(args[0], 32)
-                continue
-            words = [val[a] for a in args]
             if prim in MUFU:
-                table, idx, ctx_words = MUFU[prim][0](C, words)
+                table, idx, ctx = MUFU[prim][0](C, [word(a) for a in args])
                 lookups.append((table, si))
-                mufu_ctx = ctx_words
-                continue
-            val[out] = OPS[prim](C, *words)
-        end = hi
-        live = sorted(s for s in val if last_use.get(s, -1) >= end and not (si == len(segs) - 1))
-        outs = []
-        for sl in live:
-            outs.append((("pass", sl), val[sl], 32))
-        if si < len(segs) - 1:
-            for i, w in enumerate(mufu_ctx):
-                outs.append((("ctx", si, i), w, 32))
-            outs.append((("index", len(lookups) - 1), idx, TABLE_BITS[table]))
-        else:
-            for k in read_by_units:
-                outs.append((("cut", k), val[k], 32))
+                fresh.append((len(lookups) - 1, prim, out, idx, ctx, table))
+            else:
+                val[out] = OPS[prim](C, *[word(a) for a in args])
+        last = si == n_st - 1
+        live = [] if last else sorted(sl for sl in val if need[sl] > si)
+        outs = [(("pass", sl), val[sl], 32) for sl in live]
+        for j, prim, out, idx, ctx, table in fresh:
+            outs += [(("ctx", j, i), w, 32) for i, w in enumerate(ctx)]
+            outs.append((("index", j), idx, TABLE_BITS[table]))
+        outs += [(("cut", k), word(k), 32) for k in read_by_units if depth[k] == si]
+        if last:
+            outs += [(("ret", i), word(r)[:16], 16) for i, r in enumerate(rets)]
         for j, (tag, w, width) in enumerate(outs):
             C.output(f"out{j}", list(w) + [ZERO] * (width - len(w)))
             st.outs.append(tag)
             st.out_widths.append(width)
         stages.append(st)
-        carried = [sl for sl in live]
-        ctx_prev = mufu_ctx
-    return Tail(stages, lookups, read_by_units)
+        carried = live
+        pending = [(j, prim, out, len(ctx)) for j, prim, out, idx, ctx, table in fresh]
+    return Tail(stages, lookups, read_by_units, rets)
 
 
 def stage_layout(st: Stage) -> IL.Layout:
