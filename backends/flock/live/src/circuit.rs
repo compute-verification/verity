@@ -171,6 +171,8 @@ pub struct Composite {
     pub out_ports: Vec<usize>,
     /// a unit input that is a row word (attention's public query): `(unit, input port, leaf)`; low 16 bits the message bits
     pub leaf_cuts: Vec<(usize, usize, usize)>,
+    /// `leaf_cuts` by unit: `(input port, leaf)`
+    pub leaf_cuts_of: Vec<Vec<(usize, usize)>>,
     /// the all-zero instance's `b || c` per port
     pub dummy_bc: Vec<[u8; BC_BYTES]>,
     pub dummy_outputs: Vec<u16>,
@@ -443,6 +445,7 @@ impl Composite {
         }
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports,
+            leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
             out_words, g, upv, unit_net, leaves_in, leaves_out, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(),
         };
@@ -1243,6 +1246,14 @@ impl Stmt {
                 if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
             }
             col += unit.in_groups[0].bits[j];
+        }
+        // a leaf cut (a row word read as a cut input): the word in the port's low 16 bits
+        let pc = port_cols(&unit.in_groups);
+        for &(j, leaf) in &c.leaf_cuts_of[u] {
+            let at = i * rb + 2 * leaf;
+            let v = u16::from_le_bytes([rows[at], rows[at + 1]]) as u64;
+            let col = pc[j].0;
+            if col % WORD < 64 { w[col / WORD].lo |= v << (col % WORD) } else { w[col / WORD].hi |= v << (col % WORD - 64) }
         }
         w
     }
