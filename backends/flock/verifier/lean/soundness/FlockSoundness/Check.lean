@@ -180,7 +180,10 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.extraction_audit_le
 #print axioms FlockSoundness.Audit.extraction_audit_count
 #print axioms FlockSoundness.Audit.extraction_audit_drawn
-#print axioms FlockSoundness.Audit.FlockTableC.joint_le
+#print axioms FlockSoundness.Audit.Analysis.toExtraction
+#print axioms FlockSoundness.Audit.Analysis.KnowledgeSound.toExtraction
+#print axioms FlockSoundness.Audit.Analysis.LinkSound.toExtraction
+#print axioms FlockSoundness.Audit.FlockTableC.ksJoint_le
 #print axioms FlockSoundness.Audit.Partition.analysisC
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_knowledgeSound
 #print axioms FlockSoundness.Audit.Partition.flock_compiled_count

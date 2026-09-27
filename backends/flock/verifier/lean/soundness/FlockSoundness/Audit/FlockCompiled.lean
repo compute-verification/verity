@@ -12,16 +12,18 @@ the registration (`plan`). The session is that table (`sessionC`).
 
 **The extractor** of a drawn unit is the table's (`Knowledge.lean`): `Kr` reruns of the prover after
 its level-0 cap, the first verifying opening at each position, then decoding. The analysis
-(`analysisC`) reads it as probabilities over the reruns:
+(`analysisC`) reads it jointly over the fresh run and the reruns, as the table theorem states it:
 
-* extraction fails when the extracted table packs no satisfying witness (`FlockTableC.failProb`);
-* the link fails when it does, but every close message packing a satisfying witness decodes, on the
-  unit's committed wires, to values other than the committed transcript's (`LinkEvent`,
-  `linkProb`). This is the weakest link event: the link theorem need only show that some satisfying
-  candidate agrees with `X`.
+* `ks`: the table accepts and the extracted table packs no satisfying witness within the level-0
+  radius (`FlockTableC.ksJoint`, `table_knowledge_sound_joint`'s left side);
+* `link`: the table accepts, the extracted table is committed, but every close message packing a
+  satisfying witness decodes, on the unit's committed wires, to values other than the committed
+  transcript's (`LinkEvent`, `linkJoint`). This is the weakest link event: the link theorem need
+  only show that some satisfying candidate agrees with `X`.
 
-`cover` follows from **the lowering** (`LoweringSoundC`, named): a message packing a witness that
-satisfies the table's statement decodes to values on which every drawn unit is correct.
+`cover` (`Pr[accept] ≤ ks + link` at a wrong drawn unit, pointwise in the reruns) follows from
+**the lowering** (`LoweringSoundC`, named): a message packing a witness that satisfies the table's
+statement decodes to values on which every drawn unit is correct.
 
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
@@ -68,11 +70,13 @@ abbrev sch : Schedule := ⟨T.m, T.k0, T.l₀ :: T.l₁ :: T.rest, T.ext⟩
 noncomputable abbrev game : Game (OutC 𝔽 D) := tableC execArith H E T.S T.sch T.hm T.ptLocal T.mPts
 
 open Classical in
-/-- **Extraction fails**, as a probability over `Kr` reruns after the level-0 cap: the extractor's
-table packs no satisfying witness within the level-0 radius. -/
-noncomputable def failProb (Kr : ℕ) (σ : Strategy (T.game H E)) : ℝ :=
+/-- **Accept and extraction fails**, jointly over the fresh run and `Kr` reruns after the level-0
+cap: the table accepts, and the extractor's table packs no satisfying witness within the level-0
+radius. This is `table_knowledge_sound_joint`'s left side. -/
+noncomputable def ksJoint (Kr : ℕ) (σ : Strategy (T.game H E)) : ℝ :=
   expectN (tableCmp execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ.1) σ.2 Kr
-    (ind fun bs => ¬ Committed execArith T.S T.sch (extractTable H E T.sch σ.1 bs))
+    (fun bs => expect (ind fun out : OutC 𝔽 D => out.accepted = true ∧
+      ¬ Committed execArith T.S T.sch (extractTable H E T.sch σ.1 bs)) (T.game H E) σ)
 
 /-- `table_knowledge_sound_joint`'s bound for the strategy `σ`. -/
 noncomputable def ksBound [Inhabited D] (Kr : ℕ) (σ : Strategy (T.game H E)) : ℝ :=
@@ -81,39 +85,14 @@ noncomputable def ksBound [Inhabited D] (Kr : ℕ) (σ : Strategy (T.game H E)) 
     2 * (Kr * adv₀ execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ +
       2 ^ T.l₀.logLen / (Real.exp 1 * Kr))
 
-theorem failProb_nonneg (Kr : ℕ) (σ : Strategy (T.game H E)) : 0 ≤ T.failProb H E Kr σ :=
-  expectN_nonneg _ _ (fun _ => ind_nonneg _ _) _
+theorem ksJoint_nonneg (Kr : ℕ) (σ : Strategy (T.game H E)) : 0 ≤ T.ksJoint H E Kr σ :=
+  expectN_nonneg _ _ (fun _ => expect_nonneg (ind_nonneg _) _ _) _
 
-open Classical in
-theorem expect_ind_and_const {α : Type} (p : α → Prop) (Q : Prop) (g : Game α) (s : Strategy g) :
-    expect (ind fun a => p a ∧ Q) g s = expect (ind p) g s * ind (fun _ : Unit => Q) () := by
-  by_cases hQ : Q
-  · have : (ind fun a => p a ∧ Q) = ind p := funext fun a => by simp [ind, hQ]
-    rw [this]
-    simp [ind, hQ]
-  · have : (ind fun a => p a ∧ Q) = fun _ => 0 := funext fun a => by simp [ind, hQ]
-    rw [this, expect_const]
-    simp [ind, hQ]
-
-open Classical in
-/-- **The table, in the audit's product form**: `Pr[accept] · Pr[extraction fails]` is the joint
-probability `table_knowledge_sound_joint` bounds (the fresh run and the reruns are independent). -/
-theorem joint_le [Inhabited D] (hMCA : Assumptions.BCHKS25Thm46) (Kr : ℕ) (hK : 1 ≤ Kr)
-    (σ : Strategy (T.game H E)) :
-    (prob (fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ).toReal * T.failProb H E Kr σ ≤
-      T.ksBound H E Kr σ := by
-  have h := table_knowledge_sound_joint hMCA execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
+/-- **The table**: `table_knowledge_sound_joint`, given BCHKS25 Theorem 4.6. -/
+theorem ksJoint_le [Inhabited D] (hMCA : Assumptions.BCHKS25Thm46) (Kr : ℕ) (hK : 1 ≤ Kr)
+    (σ : Strategy (T.game H E)) : T.ksJoint H E Kr σ ≤ T.ksBound H E Kr σ :=
+  table_knowledge_sound_joint hMCA execArith execArith_correct H E T.S T.m T.k0 T.l₀ T.l₁
     T.rest T.ext T.hsch T.hm T.ptLocal T.mPts T.hlay σ Kr hK
-  refine le_of_eq_of_le ?_ h
-  rw [prob_toReal]
-  calc expect (ind fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ * T.failProb H E Kr σ
-      = expectN (tableCmp execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ.1) σ.2 Kr
-          (fun bs => expect (ind fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ *
-            ind (fun bs => ¬ Committed execArith T.S T.sch (extractTable H E T.sch σ.1 bs)) bs) :=
-        (expectN_const_mul _ _ _ _ _).symm
-    _ = _ := congrArg (expectN (tableCmp execArith H E T.S T.sch T.hm T.ptLocal T.mPts σ.1) σ.2 Kr)
-        (funext fun bs => (expect_ind_and_const (fun out : OutC 𝔽 D => out.accepted = true)
-          (¬ Committed execArith T.S T.sch (extractTable H E T.sch σ.1 bs)) (T.game H E) σ).symm)
 
 end FlockTableC
 
@@ -159,19 +138,27 @@ def LinkEvent (decode : Decoder (C := C) (Reg := Reg) plan) (S : Finset (Fin n))
       ∃ g ∈ P.io u, decode S R M g ≠ Xc g
 
 open Classical in
-/-- **The link fails**, as a probability over the extractor's `Kr` reruns. -/
-noncomputable def linkProb (decode : Decoder (C := C) (Reg := Reg) plan) (Kr : ℕ)
+/-- **Accept and the link fails**, jointly over the fresh run and the extractor's `Kr` reruns. -/
+noncomputable def linkJoint (decode : Decoder (C := C) (Reg := Reg) plan) (Kr : ℕ)
     (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H E plan S R)) (u : Fin n)
     (Xc : Fin C.N → Bool) : ℝ :=
   expectN (tableCmp execArith H E (plan S R).S (plan S R).sch (plan S R).hm (plan S R).ptLocal
       (plan S R).mPts (tabStrat H E plan τ).1) (tabStrat H E plan τ).2 Kr
-    (ind fun bs => P.LinkEvent H E plan decode S R (tabStrat H E plan τ).1 bs u Xc)
+    (fun bs => expect (ind fun out : OutC 𝔽 D => out.accepted = true ∧
+        P.LinkEvent H E plan decode S R (tabStrat H E plan τ).1 bs u Xc)
+      ((plan S R).game H E) (tabStrat H E plan τ))
 
 omit [Inhabited D] in
-theorem linkProb_nonneg (decode : Decoder (C := C) (Reg := Reg) plan) (Kr : ℕ)
+theorem linkJoint_nonneg (decode : Decoder (C := C) (Reg := Reg) plan) (Kr : ℕ)
     (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H E plan S R)) (u : Fin n)
-    (Xc : Fin C.N → Bool) : 0 ≤ P.linkProb H E plan decode Kr S R τ u Xc :=
-  expectN_nonneg _ _ (fun _ => ind_nonneg _ _) _
+    (Xc : Fin C.N → Bool) : 0 ≤ P.linkJoint H E plan decode Kr S R τ u Xc :=
+  expectN_nonneg _ _ (fun _ => expect_nonneg (ind_nonneg _) _ _) _
+
+omit [Inhabited D] in
+theorem prob_sessionC (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H E plan S R)) :
+    prob (· = true) (sessionC H E plan S R) τ =
+      prob (fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) (tabStrat H E plan τ) :=
+  prob_map _ _ _ _
 
 variable {L : Law n}
 
@@ -183,34 +170,48 @@ noncomputable def analysisC (decode : Decoder (C := C) (Reg := Reg) plan)
   Tr := Fin C.N → Bool
   wrong := P.wrong
   committed := Xc
-  ksFail S R τ _ := ENNReal.ofReal ((plan S R).failProb H E Kr (tabStrat H E plan τ))
-  linkFail S R τ u Xt := ENNReal.ofReal (P.linkProb H E plan decode Kr S R τ u Xt)
+  ks S R τ _ := ENNReal.ofReal ((plan S R).ksJoint H E Kr (tabStrat H E plan τ))
+  link S R τ u Xt := ENNReal.ofReal (P.linkJoint H E plan decode Kr S R τ u Xt)
   cover S R τ u Xt hS hu := by
     classical
-    have hpt : ∀ bs : List (OutC 𝔽 D), (1 : ℝ) ≤
-        ind (fun bs => ¬ Committed execArith (plan S R).S (plan S R).sch
-          (extractTable H E (plan S R).sch (tabStrat H E plan τ).1 bs)) bs +
-        ind (fun bs => P.LinkEvent H E plan decode S R (tabStrat H E plan τ).1 bs u Xt) bs := by
-      intro bs
-      by_cases hc : Committed execArith (plan S R).S (plan S R).sch
-          (extractTable H E (plan S R).sch (tabStrat H E plan τ).1 bs)
-      · have hlink : P.LinkEvent H E plan decode S R (tabStrat H E plan τ).1 bs u Xt := by
-          refine ⟨hc, fun M _ hsat => ?_⟩
-          by_contra hno
-          push Not at hno
-          exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm)
-            (hlow S R u hS M hsat))
-        simp [ind, hc, hlink]
-      · have h1 : ind (fun bs => ¬ Committed execArith (plan S R).S (plan S R).sch
-            (extractTable H E (plan S R).sch (tabStrat H E plan τ).1 bs)) bs = 1 := by simp [ind, hc]
-        rw [h1]
-        exact le_add_of_nonneg_right (ind_nonneg _ _)
-    rw [← ENNReal.ofReal_add (FlockTableC.failProb_nonneg H E _ _ _)
-      (P.linkProb_nonneg H E plan decode Kr S R τ u Xt)]
-    refine ENNReal.one_le_ofReal.2 ?_
-    unfold FlockTableC.failProb linkProb
-    calc (1 : ℝ) = expectN _ _ Kr (fun _ => 1) := (expectN_const _ _ 1 Kr).symm
-      _ ≤ _ := expectN_mono _ _ hpt Kr
+    set σ := tabStrat H E plan τ
+    have hpt : ∀ (bs : List (OutC 𝔽 D)) (out : OutC 𝔽 D),
+        ind (fun out : OutC 𝔽 D => out.accepted = true) out ≤
+          ind (fun out : OutC 𝔽 D => out.accepted = true ∧ ¬ Committed execArith (plan S R).S
+            (plan S R).sch (extractTable H E (plan S R).sch σ.1 bs)) out +
+          ind (fun out : OutC 𝔽 D => out.accepted = true ∧
+            P.LinkEvent H E plan decode S R σ.1 bs u Xt) out := by
+      intro bs out
+      by_cases ha : out.accepted = true
+      · by_cases hc : Committed execArith (plan S R).S (plan S R).sch
+            (extractTable H E (plan S R).sch σ.1 bs)
+        · have hlink : P.LinkEvent H E plan decode S R σ.1 bs u Xt := by
+            refine ⟨hc, fun M _ hsat => ?_⟩
+            by_contra hno
+            push Not at hno
+            exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm)
+              (hlow S R u hS M hsat))
+          simp [ind, ha, hc, hlink]
+        · have h1 : ind (fun out : OutC 𝔽 D => out.accepted = true ∧ ¬ Committed execArith
+              (plan S R).S (plan S R).sch (extractTable H E (plan S R).sch σ.1 bs)) out = 1 := by
+            simp [ind, ha, hc]
+          rw [h1, show ind (fun out : OutC 𝔽 D => out.accepted = true) out = 1 by simp [ind, ha]]
+          exact le_add_of_nonneg_right (ind_nonneg _ _)
+      · simp [ind, ha]
+    have hfin : prob (fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) σ ≠ ⊤ :=
+      ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
+    rw [prob_sessionC H E plan S R τ, ← ENNReal.ofReal_toReal hfin,
+      ← ENNReal.ofReal_add (FlockTableC.ksJoint_nonneg H E _ _ _)
+        (P.linkJoint_nonneg H E plan decode Kr S R τ u Xt)]
+    refine ENNReal.ofReal_le_ofReal ?_
+    rw [prob_toReal]
+    unfold FlockTableC.ksJoint linkJoint
+    calc expect (ind fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) σ
+        = expectN _ _ Kr (fun _ =>
+            expect (ind fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) σ) :=
+          (expectN_const _ _ _ Kr).symm
+      _ ≤ _ := expectN_mono _ _ (fun bs => (expect_mono (hpt bs) _ _).trans_eq
+          (expect_add _ _ _ _)) Kr
       _ = _ := expectN_add _ _ _ _ Kr
 
 /-- **The compiled audit's knowledge term**, per prover: `table_knowledge_sound_joint`'s bound for
@@ -232,25 +233,8 @@ theorem flock_compiled_knowledgeSound (hMCA : Assumptions.BCHKS25Thm46)
     (hlow : P.LoweringSoundC plan decode) :
     (P.analysisC H E plan decode Xc Kr hlow).KnowledgeSound (ksAvg H E plan Kr) := by
   intro R τ tgt
-  refine avg_mono fun ω => ?_
-  set T := plan (L.draw ω) R
-  set σ := tabStrat H E plan (τ ω)
-  have hp : prob (· = true) (sessionC H E plan (L.draw ω) R) (τ ω) =
-      prob (fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ :=
-    prob_map _ _ _ _
-  have hfin : prob (fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ ≠ ⊤ :=
-    ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
-  calc prob (· = true) (sessionC H E plan (L.draw ω) R) (τ ω) *
-        atTgt (L.draw ω) (tgt ω) ((P.analysisC H E plan decode Xc Kr hlow).ksFail (L.draw ω) R (τ ω))
-      ≤ prob (fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ *
-          ENNReal.ofReal (T.failProb H E Kr σ) := by
-        rw [hp]
-        exact mul_le_mul' le_rfl (atTgt_le_const (L.draw ω) (tgt ω) (ENNReal.ofReal (T.failProb H E Kr σ)))
-    _ = ENNReal.ofReal ((prob (fun out : OutC 𝔽 D => out.accepted = true) (T.game H E) σ).toReal *
-          T.failProb H E Kr σ) := by
-        rw [ENNReal.ofReal_mul ENNReal.toReal_nonneg, ENNReal.ofReal_toReal hfin]
-    _ ≤ ENNReal.ofReal (T.ksBound H E Kr σ) :=
-        ENNReal.ofReal_le_ofReal (T.joint_le H E hMCA Kr hK σ)
+  exact avg_mono fun ω => (atTgt_le_const _ _ _).trans
+    (ENNReal.ofReal_le_ofReal ((plan (L.draw ω) R).ksJoint_le H E hMCA Kr hK _))
 
 /-- **The compiled Flock audit's count curve**: `δ(K) = miss K + ε_ks(σ) + δ_link(σ)`, with
 `ε_ks` the table theorem's bound averaged over the draw, and `δ_link` named. -/

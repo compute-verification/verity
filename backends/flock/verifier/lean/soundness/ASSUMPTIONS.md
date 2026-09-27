@@ -426,8 +426,10 @@ The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12):
 
 - `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
-  extractor**. Extraction failure and link failure are probabilities over the extractor's runs (`ExtractionAnalysis`),
-  and the named bounds may depend on the prover's state;
+  extractor**. Per drawn unit, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
+  probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
+  on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
+  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
 - `flock_compiled_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit with one table per session and
   the leaf layer registered (the demo's configuration). The knowledge term is `table_knowledge_sound_joint`'s bound
   for the prover's table strategy after each draw, averaged over the draw (`ksAvg`):
@@ -442,6 +444,6 @@ The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 | `ExtractionAnalysis.LinkSound` (`analysisC`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | the link theorem (flock-soundness); removing its square root needs a spec decision: expected-time collision resistance, or the random-oracle column |
 | `Partition.LoweringSoundC` | a message packing a witness that satisfies the table's statement decodes to values on which every drawn unit is correct | the lowering theorem (level 3), with the `hm96` leaf layout (`decode`) |
 
-**Not yet:** sessions of several compiled tables, which need `table_knowledge_sound_joint` for one table inside a
-batched session strategy (flock-soundness); the serving-tree term when the leaf layer is not registered; `LinkSound`
-itself.
+**Not yet:** sessions of several compiled tables, where `ks` for a unit is `session_knowledge_sound` for the one table
+of the plan that unit reads (flock-soundness, not yet merged); the serving-tree term when the leaf layer is not
+registered; `LinkSound` itself.
