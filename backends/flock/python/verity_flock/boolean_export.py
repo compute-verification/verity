@@ -1611,11 +1611,12 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
 
 
 def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
-             spec: str | None = None) -> dict:
+             spec: str | None = None, member: str | None = None) -> dict:
     """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
-    Definition tree (the walker: attention per T, GEMM coordinates, every other template)."""
+    Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
+    instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
-    rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range], sort_keys=True).encode()).hexdigest()[:16]
+    rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range] + ([member] if member else []), sort_keys=True).encode()).hexdigest()[:16]
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
         return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
@@ -1637,6 +1638,9 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
         return dict(base, name=f"{tname}{json.dumps(tp, sort_keys=True)} T∈[{T_range[0]},{T_range[1]}]", kind="template",
                     children=top.get("children", []), children_at=f"T={T_range[1]}", per_key_count=per_t,
                     in_bits=top.get("in_bits"), out_bits=top.get("out_bits"))
+    if member is not None:
+        name = f"{tname}{json.dumps(tp, sort_keys=True)}" if member.startswith("GemmCoordinate") else member
+        return _walked(base, walker, member, name)
     if tname == "GemmCoordinate":
         ids = (walker.store.find("GemmCoordinate_v2", K=str(tp["K"]), DOT=HOPPER_DOT) if tp.get("dot") == "HopperBF16WgmmaDot16_v1"
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
@@ -1660,6 +1664,31 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
         return dict(base, name=f"{tname}{json.dumps(_params(tname, tp), sort_keys=True)}", kind="template", subcircuit=sub.id,
                     children=children, unit=uid, in_bits=ib, out_bits=ob)
     return _walked(base, walker, spec, spec or tname)
+
+
+def _coordinate(store: DefStore, did: str | None) -> tuple[str, int] | None:
+    """(member Definition id, members per Call) when the Definition ``did`` is only batches of one composite Definition (a
+    GEMM's output coordinates, a MoE expert GEMM's, a block-scaled FP8 GEMM's), else None."""
+    d = store.get(did) if did else None
+    if not d or d.get("form") != "composite":
+        return None
+    nodes = d["body"]["nodes"]
+    fns = {n["fn"] for n in nodes}
+    if len(fns) != 1 or any(n["form"] != "batch" for n in nodes):
+        return None
+    (m,) = fns
+    if (store.get(m) or {}).get("form") != "composite":
+        return None
+    return m, sum(n.get("n", 1) for n in nodes)
+
+
+def _node_totals(node: dict, t: dict) -> dict:
+    """A program-graph node's AND / XOR / NOT: its instances times its template's, per T where the T varies."""
+    by_t = node.get("instances_by_T")
+    if by_t:
+        pk = t["per_key_count"]
+        return {k: sum(n * (pk[T].get(k) or 0) for T, n in by_t.items()) for k in ("and", "xor", "not")}
+    return {k: (node.get("instances") or 0) * (t.get(k) or 0) for k in ("and", "xor", "not")}
 
 
 def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
@@ -1699,10 +1728,17 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
     for g in p["groups"]:
         tname, tp = g["template"], g.get("template_params") or {}
         T_range = g.get("varying", {}).get("T") if tname in ("AttentionHead", "AttentionSoftcap_v1") else None
-        key = json.dumps([tname, tp, T_range], sort_keys=True)
+        member = None
+        if not T_range and g.get("instances") and g.get("calls") and g["instances"] != g["calls"]:
+            c = _coordinate(walker.store, g.get("spec"))
+            if c is None or g["instances"] != g["calls"] * c[1]:
+                raise ValueError(f"{g['id']} ({g.get('spec')}): {g['instances']} instances in {g['calls']} Calls, and the Call is "
+                                 f"not a batch of one Definition with that many members")
+            member = c[0]
+        key = json.dumps([tname, tp, T_range, member], sort_keys=True)
         if key not in tpl_cache:
             t0 = time.time()
-            rec = template(reg, tname, tp, T_range, cache, walker, g.get("spec"))
+            rec = template(reg, tname, tp, T_range, cache, walker, g.get("spec"), member)
             if rec["kind"] == "template":
                 rec.update(_totals(reg, rec["children"], walker.defs))
             tpl_cache[key] = rec
@@ -1712,18 +1748,52 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
         node = {"id": f"{row['row']}:{g['id']}", "name": g["module"] or "(request)", "kind": "program-node", "group": g["id"],
                 "definition": g.get("spec") or g.get("definition"), "template": rec["id"], "instances": g.get("instances"),
                 "calls": g.get("calls")}
+        if member:
+            node["instance"] = member
         if T_range:
-            n_t = T_range[1] - T_range[0] + 1
             node["varying"] = {"T": T_range}
-            if g.get("instances") and g["instances"] % n_t == 0:
-                node["instances_per_T"] = g["instances"] // n_t
-                node["instances_per_T_rule"] = "instances / (T range size): the program graph gives the range, not the histogram"
+            vc = g.get("varying_calls") or {}
+            heads, rest = divmod(g["instances"], g["calls"])
+            if rest or sum(vc.values()) != g["calls"]:
+                raise ValueError(f"{g['id']}: the T histogram ({sum(vc.values())} Calls) does not cover its {g['calls']} Calls")
+            node["instances_by_T"] = {str(T): n * heads for T, n in sorted(vc.items(), key=lambda kv: int(kv[0]))}
+        node["totals"] = _node_totals(node, rec)
         node.update(_roles(g, into.get(g["id"], []), tpl, walker.store))
         if cm is not None:
             node.update(_commitment(g, cm, checks))
         nodes.append(node)
+    totals = {k: sum(n["totals"][k] for n in nodes) for k in ("and", "xor", "not")}
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
-            "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
+            "program_graph": Path(pg_path).name, "totals": totals, "nodes": nodes, "edges": p.get("edges", []),
+            "templates": sorted(set(used))}
+
+
+#: a template's node ANDs and its Calls' unit ANDs agree within this; beyond CROSSCHECK_FAIL (a granularity-sized error) the export fails
+CROSSCHECK_AGREE, CROSSCHECK_FAIL = 0.02, 4.0
+
+
+def crosscheck(doc: dict, tpl: dict, records: dict) -> dict:
+    """Per template of a row: the nodes' ANDs (instances x the template's, per T) against the sum of their Calls' units under the
+    no-recompute cut (each unit class's ANDs x its count x the Calls), attention at the T values that have a record."""
+    out: dict = {}
+    for n in doc["nodes"]:
+        t = tpl[n["template"]]
+        e = out.setdefault(t["name"], {"nodes": 0, "units": 0})
+        if "commitment" in n:
+            e["nodes"] += n["totals"]["and"]
+            e["units"] += n["calls"] * sum((u.get("and") or 0) * u["count"] for u in records[n["commitment"]]["units"])
+        elif "commitment_by_T" in n:
+            heads = n["instances"] // n["calls"]
+            for T, rid in n["commitment_by_T"].items():
+                k = n["instances_by_T"].get(str(T), 0)
+                e["nodes"] += k * t["per_key_count"][str(T)]["and"]
+                e["units"] += k // heads * sum((u.get("and") or 0) * u["count"] for u in records[rid]["units"])
+    for e in out.values():
+        r = e["nodes"] / e["units"] if e["units"] else None
+        e["ratio"] = r
+        e["status"] = ("agree" if r is not None and abs(r - 1) <= CROSSCHECK_AGREE else
+                       "differs" if r is not None and 1 / CROSSCHECK_FAIL <= r <= CROSSCHECK_FAIL else "fail" if e["units"] else "no units")
+    return {k: v for k, v in out.items() if v["status"] != "no units"}
 
 
 _CHECKED = {"units_per_call": "units_per_call", "gates": "word_gates", "free_gates": "structure_gates",
@@ -1847,8 +1917,9 @@ def main(argv=None) -> int:
         gc.collect()
         f = out / (doc["row_key"] + ".boolean.json")
         f.write_text(json.dumps(doc, separators=(",", ":")))
+        xc = crosscheck(doc, {r["id"]: r for r in tpl_cache.values()}, cm.records)
         rows.append({"row": doc["row"], "row_key": doc["row_key"], "file": f.name, "bytes": f.stat().st_size, "nodes": len(doc["nodes"]),
-                     "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1)})
+                     "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1), **doc["totals"], "crosscheck": xc})
         print(f"row {doc['row']}: {len(doc['nodes'])} nodes, {len(doc['templates'])} templates, {time.time() - t0:.0f}s", flush=True)
     ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()},
                                 "definitions": walker.defs}, separators=(",", ":")))
@@ -1905,7 +1976,17 @@ def main(argv=None) -> int:
              "not_yet_lowered": nyl}
     if GATHERS == "opening":
         index["commitment_openings"] = {**OPENED, **{f"{k} (its Gather primitives)": v for k, v in OPENED_IN.items()}}
+    fails = [(r["row"], k, v["ratio"]) for r in rows for k, v in r["crosscheck"].items() if v["status"] == "fail"]
+    index["crosscheck"] = {
+        "rule": f"per row and template: the nodes' ANDs against their Calls' units' ANDs under the no-recompute cut; agree within "
+                f"{CROSSCHECK_AGREE:.0%}, differs within x{CROSSCHECK_FAIL:g} (a template lowered as one hash-consed unit counts fewer "
+                f"ANDs than its primitives' pieces one by one), fail beyond (a granularity error: the export refuses)",
+        "agree": sum(v["status"] == "agree" for r in rows for v in r["crosscheck"].values()),
+        "differs": sorted([r["row"], k, round(v["ratio"], 4)] for r in rows for k, v in r["crosscheck"].items() if v["status"] == "differs"),
+        "fail": fails}
     (out / "index.json").write_text(json.dumps(index, indent=1))
+    if fails:
+        raise SystemExit(f"cross-check failed: {fails[:10]}")
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
                       "tag_and_differs": reg.tag_and_differs}))
