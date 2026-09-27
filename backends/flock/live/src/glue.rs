@@ -128,9 +128,36 @@ pub fn check(rels: &[Relation], m: usize) -> Result<(), String> {
     rels.iter().try_for_each(|r| r.check(m))
 }
 
-/// `(γ, u)`, drawn after the commitment (`u` has the widest relation's free-bit count).
+/// SHA-512 of the relations' canonical encoding (every field as u64 LE, a list by its length first): the transcript binds it
+/// before any glue coin.
+pub fn digest(rels: &[Relation]) -> [u8; 64] {
+    use sha2::{Digest, Sha512};
+    let mut h = Sha512::new();
+    let list = |h: &mut Sha512, v: &[usize]| {
+        h.update((v.len() as u64).to_le_bytes());
+        v.iter().for_each(|&x| h.update((x as u64).to_le_bytes()));
+    };
+    h.update(LABEL);
+    h.update((rels.len() as u64).to_le_bytes());
+    for r in rels {
+        for reg in [&r.dst, &r.src] {
+            h.update(reg.mask.to_le_bytes());
+            h.update(reg.fixed.to_le_bytes());
+            list(&mut h, &reg.free);
+        }
+        match &r.map {
+            Map::Id => h.update(0u64.to_le_bytes()),
+            Map::Perm(p) => { h.update(1u64.to_le_bytes()); list(&mut h, p) }
+            Map::Broadcast(k) => { h.update(2u64.to_le_bytes()); list(&mut h, k) }
+        }
+    }
+    h.finalize().into()
+}
+
+/// `(γ, u)`, drawn after the commitment and the relations' digest (`u` has the widest relation's free-bit count).
 fn draw<Ch: Challenger>(rels: &[Relation], ch: &mut Ch) -> (F128, Vec<F128>) {
     ch.observe_label(LABEL);
+    ch.observe_bytes(&digest(rels));
     let gamma = ch.sample_f128();
     let f = rels.iter().map(|r| r.dst.free.len()).max().unwrap_or(0);
     (gamma, (0..f).map(|_| ch.sample_f128()).collect())

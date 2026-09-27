@@ -34,6 +34,8 @@ pub mod lookup;
 pub mod circuit;
 pub mod glue;
 pub mod pure_block;
+#[cfg(feature = "glue")]
+pub mod tables;
 pub mod vllm_block;
 pub mod zk_hooks;
 #[cfg(feature = "gpu")]

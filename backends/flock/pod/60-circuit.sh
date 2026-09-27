@@ -16,10 +16,11 @@ MODE=build GPU=$G SM=$SM bash backends/flock/pod/20-gpu-link.sh > $O/build.log 2
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }
 TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( (Q + PER_ - 1) / PER_ )) ); export RAYON_NUM_THREADS=$TH
-F=/workspace/flock-gpu-link/flock; FEAT="--features sha512"
+F=/workspace/flock-gpu-link/flock; FEAT="--features sha512 --features glue"
 # SHA-512 Merkle trees, leaves and nodes, every Ligerito level (64-byte digests): the Rust side on every build, the device side
 # after the circuit prover is generated (it widens both provers' trees)
-(cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch) || exit 1
+(cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch \
+  && git apply $REPO/backends/flock/flock-glue-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_circuit_patch.py && python3 $REPO/backends/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
