@@ -147,6 +147,16 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.joint_le_B'
 #print axioms FlockSoundness.one_le_fail_add_B
 #print axioms FlockSoundness.one_le_fail_add_B'
+-- the compiled lowering: the audit's circuit is the rows the verifier parses; a satisfied table makes
+-- every placed unit correct, for every template; a program's circuit makes every unit its rows
+#print axioms FlockSoundness.Audit.Partition.IsRowsUnit.correct
+#print axioms FlockSoundness.rowsSat_of_satisfies
+#print axioms FlockSoundness.lowering_sound
+#print axioms FlockSoundness.Placement.one_eq
+#print axioms FlockSoundness.UnitPlace.correct
+#print axioms FlockSoundness.UnitPlace.decode_one
+#print axioms FlockSoundness.Prog.topo
+#print axioms FlockSoundness.Prog.isRowsUnit
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

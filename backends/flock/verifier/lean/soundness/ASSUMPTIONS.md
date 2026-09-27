@@ -141,14 +141,60 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems proved; `registered_weights` and `δ_link` **to write** (DESIGN.md §3); required for sampled audits (§7) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane | not in this lane |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean` (§1.5) | the generic step proved; the placement and L1 remain |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (§9) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-195.4` (§9) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
+| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
+| L1: each template's rows compute its gates (§1.5) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
+
+### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
+
+- **The audit's circuit is the rows the verifier parses** (spec §16.5, `Flock/Net.lean`).
+  - A template's unit is its input columns, its computed rows and its constant (`Rows`).
+  - A computed row is `z_i = (⊕_{c∈a_i} z_c)·(⊕_{c∈b_i} z_c)`, reading earlier columns and the constant. It is one gate
+    of the circuit (`Audit.Op.row`).
+  - A program's circuit (`Prog.circuit`) is its units' rows, with each unit's input columns and constant wired to
+    earlier gates. Every unit is an instance of its template's rows (`Prog.isRowsUnit`).
+  - **A pinned file read as `Rows`.**
+    - Its inputs are its self rows (`A = B = [i]`).
+    - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
+      of `Rows`.
+    - Its computed rows lie between the input region and the constant, its last column.
+  - The parser checks the input rows and the constant. `test_pinned_rows_read_earlier_columns`
+    (`backends/flock/tests/test_ir_lowering.py`) checks the rest on the pinned RoPE and SiLU files: every computed row
+    reads only earlier columns or the constant, and never a padding column.
+- **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
+  are placed in a block. Then the transcript decoded from that block makes the unit correct.
+  - Placed (`Placement`) means two things:
+    - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
+    - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+
+    The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
+  - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
+    share a wire hold it in different columns. The link, not the lowering, makes them agree.
+- **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
+  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (§5).
+- **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
+  the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
+  about the program's Boolean circuit only through L1.
+  - **Evidence today:** the IR comparison tests in `backends/flock/tests/test_ir_lowering.py`, on sampled inputs.
+    - They evaluate the pinned rows against the IR's primitives:
+      - RoPE on 8000 inputs (`test_rope_unit_matches_its_primitives`);
+      - SiLU on every gate word and 8000 more (`test_silu_unit_covers_the_whole_table`);
+      - both on the captured slices (`test_captured_slices`).
+    - They evaluate the pieces the rows are built from, as gate circuits, against the IR's primitives, on 6000 inputs
+      each (`test_pieces_match_the_ir_primitives`, `test_bf16_adds_match_the_ir_primitives`).
+    - A test in the same file mutates one row and checks that the comparison catches it.
+
+    They sample. They don't prove it.
+  - **The path to discharge it:** a verified lowering. That means gadget proofs, with Lean re-deriving the rows from the
+    gate circuit, so that the pinned rows equal the rows Lean derives. This matches the plan of record for V[B], which
+    Lean generates with an equivalence proof.
 
 ## 2. The model
 
@@ -183,14 +229,15 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - Claims that use the committed values elsewhere (registered data, links to other proofs, recursion) need them
     extracted (§1.3).
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
-  column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3), outside
-  this lane.
+  column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
+  step, for every template, is proved here (§1.5). The placement for the executable's statement and L1 remain.
 
 ## 3. Named assumptions (mathematics taken without proof)
 
 There is exactly one. It is a `Prop` (`Assumptions.BCHKS25Thm46`), and the theorems that use it take it as a hypothesis
-(`hMCA`). The development declares no `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never
-make Lean prove something false.
+(`hMCA`). §1.5 names one more hypothesis, L1, which is about the lowering rather than mathematics. The development
+declares no `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something
+false.
 
 **A1. Reed–Solomon mutual correlated agreement up to the Johnson bound** (BCHKS25, ePrint 2025/2055, Theorem 4.6).
 
