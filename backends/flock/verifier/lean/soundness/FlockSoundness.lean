@@ -42,6 +42,7 @@ import FlockSoundness.LigeritoDecode
 import FlockSoundness.LigeritoPhases
 import FlockSoundness.LigeritoMid
 import FlockSoundness.LigeritoPhase
+import FlockSoundness.Instance
 import FlockSoundness.Game.Runs
 import FlockSoundness.CompiledAlign
 import FlockSoundness.Extract
