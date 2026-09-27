@@ -29,3 +29,4 @@ import FlockSoundness.LigeritoQueries
 import FlockSoundness.LigeritoMCA
 import FlockSoundness.LigeritoLevels
 import FlockSoundness.LigeritoOOD
+import FlockSoundness.LigeritoFolds

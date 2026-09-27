@@ -56,6 +56,9 @@ when it is proved.
 #print axioms FlockSoundness.prCoin_level_mca_le
 -- out-of-domain binding
 #print axioms FlockSoundness.value_twoOod_collide_le
+-- a level's folds against a list
+#print axioms FlockSoundness.value_foldRounds_sum_le
+#print axioms FlockSoundness.value_foldRounds_sum_invariant
 -- the link points
 #print axioms FlockSoundness.link_sound_of_card
 #print axioms FlockSoundness.link_sound
