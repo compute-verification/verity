@@ -135,4 +135,48 @@ theorem prob_map (p : β → Prop) (f : α → β) :
       show avg (fun c => prob p ((k c).map f) (s c)) = avg fun c => prob _ (k c) _
       exact congrArg avg (funext fun c => prob_map p f (k c) (s c))
 
+theorem prob_true : ∀ (g : Game α) (s : Strategy g), prob (fun _ => True) g s = 1
+  | .ret _, _ => by simp [prob]
+  | .send _ k, s => prob_true (k s.1) s.2
+  | @Game.coin _ _ _ _ k, s => by
+      rw [prob_coin]
+      exact (congrArg avg (funext fun c => prob_true (k c) (s c))).trans (avg_const 1)
+
+/-- A strategy for `g.bind f`, restricted to `g`. -/
+def Strategy.ofBind (f : α → Game β) : (g : Game α) → Strategy (g.bind f) → Strategy g
+  | .ret _, _ => PUnit.unit
+  | .send _ k, s => ⟨s.1, Strategy.ofBind f (k s.1) s.2⟩
+  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofBind f (k c) (s c)
+
+/-- **Additive composition, for a fixed strategy.** If from every doomed output of `g` the
+continuation succeeds with probability at most `ε₂` whatever the prover does, the composition
+succeeds with at most the probability of leaving the doomed set, plus `ε₂`. -/
+theorem prob_bind_le (f : α → Game β) (p : β → Prop) (D : α → Prop) (ε₂ : ℝ≥0∞)
+    (hf : ∀ a, D a → ∀ t, prob p (f a) t ≤ ε₂) :
+    ∀ (g : Game α) (s : Strategy (g.bind f)),
+      prob p (g.bind f) s ≤ prob (fun a => ¬ D a) g (Strategy.ofBind f g s) + ε₂
+  | .ret a, s => by
+      classical
+      show prob p (f a) s ≤ prob (fun a => ¬ D a) (.ret a) PUnit.unit + ε₂
+      simp only [prob]
+      by_cases hD : D a
+      · simp only [hD, not_true_eq_false, ite_false, zero_add]
+        exact hf a hD s
+      · simp only [hD, not_false_eq_true, ite_true]
+        exact (prob_le_one _ _ _).trans le_self_add
+  | .send _ k, s => prob_bind_le f p D ε₂ hf (k s.1) s.2
+  | @Game.coin _ C _ _ k, s => by
+      show avg (fun c => prob p ((k c).bind f) (s c)) ≤
+        avg (fun c => prob (fun a => ¬ D a) (k c) (Strategy.ofBind f (k c) (s c))) + ε₂
+      rw [← avg_const (C := C) ε₂, ← avg_add]
+      exact avg_mono fun c => prob_bind_le f p D ε₂ hf (k c) (s c)
+
+/-- An event that the continuation settles by the first output alone. -/
+theorem prob_bind_of_const (f : α → Game β) (p : β → Prop) (P : α → Prop)
+    (hf : ∀ a t, prob p (f a) t = prob P (.ret a) PUnit.unit) :
+    ∀ (g : Game α) (s : Strategy (g.bind f)), prob p (g.bind f) s = prob P g (Strategy.ofBind f g s)
+  | .ret a, s => hf a s
+  | .send _ k, s => prob_bind_of_const f p P hf (k s.1) s.2
+  | @Game.coin _ C _ _ k, s => congrArg avg (funext fun c => prob_bind_of_const f p P hf (k c) (s c))
+
 end FlockSoundness.Game

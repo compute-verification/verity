@@ -121,6 +121,8 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.audit_profile
 #print axioms FlockSoundness.Audit.audit_count
 #print axioms FlockSoundness.Audit.audit_drawn
+#print axioms FlockSoundness.Game.prob_bind_le
+#print axioms FlockSoundness.Audit.audits_seq
 #print axioms FlockSoundness.Audit.Partition.audit_cone
 #print axioms FlockSoundness.Audit.Partition.audit_cone_count
 #print axioms FlockSoundness.Audit.Partition.audit_covered

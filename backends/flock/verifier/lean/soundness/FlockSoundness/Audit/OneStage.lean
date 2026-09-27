@@ -192,6 +192,27 @@ theorem audit_drawn (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks
       prCoin_false.le) (zero_le)
   rw [this, zero_add]
 
+/-- **Audits in sequence.** Run `g₁`, then `g₂` from its output. If the first audit fails (`E₁`)
+with probability at most `b₁` for every prover, and the second (`E₂`) with at most `b₂` from every
+history, then either fails with probability at most `b₁ + b₂`. Nesting `g₂` gives the union bound
+over a lifetime of audits, with every term evaluated against a prover that took part in all of them. -/
+theorem audits_seq {α β : Type} (g₁ : Game α) (g₂ : α → Game β) (E₁ : α → Prop) (E₂ : β → Prop)
+    (b₁ b₂ : ℝ≥0∞) (h₁ : ∀ s, prob E₁ g₁ s ≤ b₁) (h₂ : ∀ x s, prob E₂ (g₂ x) s ≤ b₂)
+    (s : Strategy (g₁.bind fun x => (g₂ x).map fun y => (x, y))) :
+    prob (fun o => E₁ o.1 ∨ E₂ o.2) (g₁.bind fun x => (g₂ x).map fun y => (x, y)) s ≤ b₁ + b₂ := by
+  classical
+  refine (prob_or_le _ _ _ _).trans (add_le_add ?_ ?_)
+  · rw [prob_bind_of_const _ _ E₁ fun x t => by
+      rw [prob_map]
+      have := prob_and_const (fun _ => True) (E₁ x) (g₂ x) (Strategy.ofMap _ _ t)
+      simp only [true_and, prob_true] at this
+      rw [this]
+      simp [prob]]
+    exact h₁ _
+  · refine (prob_bind_le _ _ (fun _ => True) b₂ (fun x _ t => by rw [prob_map]; exact h₂ x _) g₁ s).trans ?_
+    rw [(le_antisymm ((prob_mono (q := fun _ => False) (fun _ h => h trivial) _ _).trans
+      (prob_false _ _).le) (zero_le)), zero_add]
+
 /-! ## Over a partition: extraction, anchors and the consumer's cone -/
 
 namespace Partition

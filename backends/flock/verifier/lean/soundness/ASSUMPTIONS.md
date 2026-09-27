@@ -327,6 +327,8 @@ before the session's first coin, not bounds state by state.
 - `audit_count`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks} + \delta_{link}$;
 - `audit_drawn`: drawn units are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
   the draw;
+- `audits_seq`: audits in sequence fail with at most the sum of their bounds, each holding from every history. Nested,
+  this is the lifetime union bound, with every term against a prover that took part in all the audits;
 - `Partition.audit_cone`: for committed wires $T$ fixed before the draw, $\Pr[\text{accept} \wedge X_T \ne
   \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
 - `Partition.audit_cone_count`: at least $j$ wrong units in a cone;
