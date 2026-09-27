@@ -399,12 +399,14 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     });
     let (s2, r2) = (st.clone(), rows.clone());
     let input_flip = plan.input_flip;
+    // unit 1 of block 0, or unit 0 when a block holds one unit (else the case would prove an honest witness)
+    let flip_k = st.c.unit_range().count.min(2) - 1;
     let inputs: Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b, k| {
         let mut w = s2.unit_inputs(Some(&r2), b, k);
         if zero {
             w.iter_mut().for_each(|x| *x = F128::ZERO);
         }
-        if input_flip && b == 0 && k == 1 {
+        if input_flip && b == 0 && k == flip_k {
             w[0].lo ^= 1 << 2;
         }
         w
