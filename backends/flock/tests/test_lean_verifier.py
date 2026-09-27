@@ -216,11 +216,6 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
-    """A `flock-ir-unit/v2` expanded circuit: one input group of 2 bits (rows 2..127 input padding), one output group."""
-    return "\n".join([f"flock-ir-unit/v2 tiny {len(rows)} {len(rows) - 1} {ins} {outs}"] + rows) + "\n"
-
-
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
@@ -285,6 +280,11 @@ def test_merkle_extractor_computes_a_collision(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
     assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
         '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
+
+
+def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
+    """A `flock-ir-unit/v2` expanded circuit: one input group of 2 bits (rows 2..127 input padding), one output group."""
+    return "\n".join([f"flock-ir-unit/v2 tiny {len(rows)} {len(rows) - 1} {ins} {outs}"] + rows) + "\n"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
