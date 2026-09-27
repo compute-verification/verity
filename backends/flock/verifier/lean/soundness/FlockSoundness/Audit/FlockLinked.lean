@@ -12,7 +12,6 @@ $$\Pr[\text{accept} \wedge \text{at least } K \text{ wrong}] \le \mathrm{miss}_L
 What it rests on, all named:
 * A2, expected-time collision resistance of SHA-512 for the link theorem's explicit finders (`hCR`);
 * `ValueBinding`, the binding of wires to registered commit strings, which M0's `hm96-sha512` leaf layout discharges;
-* BCHKS25 Theorem 4.6 (`hMCA`);
 * the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
   placement of #154 and, through the audit circuit's rows, L1).
 
@@ -43,9 +42,9 @@ noncomputable def linkBoundE (k Rw M : ℕ) (ρ t' : ℝ) : ℝ≥0∞ :=
     (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 /-- **The compiled-layer count curve, with `δ_link` discharged**: at the plurality value layer,
-`Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`,
-BCHKS25 Theorem 4.6 and the lowering. -/
-theorem flock_batched_count_linked (hMCA : Assumptions.BCHKS25Thm46) (hlow : P.LoweringSoundB plan tab decode)
+`Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
+and the lowering. -/
+theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
@@ -57,13 +56,13 @@ theorem flock_batched_count_linked (hMCA : Assumptions.BCHKS25Thm46) (hlow : P.L
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_countE H E plan tab hMCA decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
+  P.flock_batched_countE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
-    (P.flock_batched_linkSoundE H E plan tab vb hMCA hlow hk hRw hM hρ hr ht hCR) K σ
+    (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht hCR) K σ
 
 /-- **Drawn units of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
-theorem flock_batched_drawn_linked (hMCA : Assumptions.BCHKS25Thm46) (hlow : P.LoweringSoundB plan tab decode)
+theorem flock_batched_drawn_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
@@ -75,9 +74,9 @@ theorem flock_batched_drawn_linked (hMCA : Assumptions.BCHKS25Thm46) (hlow : P.L
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_drawnE H E plan tab hMCA decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
+  P.flock_batched_drawnE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
-    (P.flock_batched_linkSoundE H E plan tab vb hMCA hlow hk hRw hM hρ hr ht hCR) σ
+    (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht hCR) σ
 
 end Partition
 
@@ -99,8 +98,8 @@ noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabO
 
 /-- **The compiled-layer count curve from the drawn units' places**: `flock_batched_count_linked` with the lowering
 discharged by each drawn unit's place in its table (`UnitPlace`: the row placement and, through the audit circuit's
-rows, L1). What remains named is A2, `ValueBinding`, BCHKS25 Theorem 4.6 and the places. -/
-theorem flock_batched_count_placed (hMCA : Assumptions.BCHKS25Thm46)
+rows, L1). What remains named is A2, `ValueBinding` and the places. -/
+theorem flock_batched_count_placed
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -114,12 +113,12 @@ theorem flock_batched_count_placed (hMCA : Assumptions.BCHKS25Thm46)
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_count_linked H E plan tab vb hMCA (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
+  P.flock_batched_count_linked H E plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
     ht hCR K σ
 
 /-- **Drawn units, from the drawn units' places**: `flock_batched_drawn_linked` with the lowering discharged by
 `UnitPlace`. -/
-theorem flock_batched_drawn_placed (hMCA : Assumptions.BCHKS25Thm46)
+theorem flock_batched_drawn_placed
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -133,7 +132,7 @@ theorem flock_batched_drawn_placed (hMCA : Assumptions.BCHKS25Thm46)
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_drawn_linked H E plan tab vb hMCA (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
+  P.flock_batched_drawn_linked H E plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
     ht hCR σ
 
 end Partition
