@@ -170,6 +170,71 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
     assert X.seal({**_record(), "tap": {"row3": 1}, "baseline": {"digest": "b" * 64}})["ok"] is False    # a case without word 3 checked
 
 
+def _ms_stream(rows, row_max, scale_log2):
+    """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the IR's max_scaled of it."""
+    import numpy as np
+
+    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero, mul_ftz
+
+    layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
+    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    R, o = X._row_plane(w, layout), layout.offsets
+    MS = w[o["MS"]:o["total"]].reshape(1, len(rows), 2)
+    it = iter(row_max)
+    for slab, r, nbm in rows:
+        for b in range(nbm - 1, -1, -1):
+            R[slab, r, b, 0] = m = next(it)
+            MS[slab, r, b] = mul_ftz(guard_neg_inf_zero(np.uint32(m)), np.uint32(scale_log2))[0]
+    return w, layout, MS
+
+
+def test_check_ms_is_the_irs_max_scaled_of_every_visited_block_and_names_a_wrong_word():
+    rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
+    sl2 = X.scale_log2_bits({"softcap": 0.0}, 64)
+    assert sl2 == X.scale_log2_bits({"softcap": 0.0}, 64) != X.scale_log2_bits({"softcap": 50.0}, 64)
+    w, layout, MS = _ms_stream(rows, [0x3F800000, 0x7F800000, 0xFF800000, 0x80000000, 0x7FFFFFFF], sl2)
+    assert MS[0, 1, 0] == 0                                                            # max -inf: the guard's 0, times the scale
+    r = X.check_ms(w, layout, iter(rows), sl2)
+    assert r == {"ms_words": 5, "ms_mismatch": 0, "ms_mismatch_neg_inf_max": 0, "ir_sampled": 5, "ir_mismatch": 0} and X.ms_ok({"ms": r})
+    bad = w.copy()
+    bad[layout.word_index("MS", 0, 1, block=0)] = 0xFF800000                           # -inf * scale, the unguarded product
+    r = X.check_ms(bad, layout, iter(rows), sl2)
+    assert (r["ms_mismatch"], r["ms_mismatch_neg_inf_max"], r["ir_mismatch"]) == (1, 1, 1) and not X.ms_ok({"ms": r})
+    assert r["first_mismatch"] == {"slab": 0, "row": 1, "block": 0, "row_max": 0xFF800000, "ms": 0xFF800000}
+
+
+def test_the_ms_build_writes_its_class_at_every_visited_block_and_the_masked_digest_is_the_six_classes():
+    rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
+    w, layout, _ = _ms_stream(rows, [0x3F800000] * 5, X.scale_log2_bits({"softcap": 0.0}, 64))
+    six = StreamLayout(1, 3, 2, 128, 64)
+    assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(six, 59, iter(rows)).sum() == 5
+    assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(layout, 59, iter(rows)).sum() == 5
+    assert not X.expected_written(layout, 123, iter(rows))[layout.total_words:].any()
+    import numpy as np
+
+    base = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
+    base[:six.total_words] = w[:six.total_words]
+    assert X.masked_digest(w, layout) == X.masked_digest(base, six)
+    base[six.offsets["FIN"]] = 3
+    assert X.masked_digest(w, layout) != X.masked_digest(base, six)
+
+
+def test_a_record_of_a_build_with_the_ms_class_checks_it_in_every_case():
+    ms = {"ms_words": 4, "ms_mismatch": 0, "ms_mismatch_neg_inf_max": 0, "ir_sampled": 4, "ir_mismatch": 0}
+    doc = _guarded_record()
+
+    def sealed(**m):
+        case = dict(doc["cases"][0], ms=dict(ms, **m))
+        case["ok"] = X.case_ok(case)
+        return X.seal({**doc, "cases": [case], "tap": {"row3": 1, "src": 123}})
+
+    assert sealed()["ok"] is True and X.verify_record(sealed()) == []
+    assert sealed(ms_words=0, ir_sampled=0)["ok"] is True
+    for bad in ({"ms_mismatch": 1}, {"ir_mismatch": 1}, {"ir_sampled": 0}):
+        assert sealed(**bad)["ok"] is False
+    assert X.seal({**doc, "tap": {"row3": 1, "src": 123}})["ok"] is False             # a case without the MS class checked
+
+
 def test_the_edge_cases_name_query_tokens_of_their_own_launch():
     for v in (2, 3):
         edge = [c for c in X.cases(v) if c.get("special")]
