@@ -114,6 +114,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Law.subset_minimax
 #print axioms FlockSoundness.Audit.Law.bernoulli_avg_prod
 #print axioms FlockSoundness.Audit.Law.bernoulli_escape
+#print axioms FlockSoundness.Audit.Law.demo_count_590
 #print axioms FlockSoundness.Audit.Partition.compose
 #print axioms FlockSoundness.Audit.Partition.compose_cone
 #print axioms FlockSoundness.Audit.Partition.correct_congr
@@ -137,6 +138,7 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.twoStage_count
 #print axioms FlockSoundness.Audit.effEscape_full
 #print axioms FlockSoundness.Audit.twoStage_full_profile
+#print axioms FlockSoundness.Audit.effEscape_bernoulli_prod
 #print axioms FlockSoundness.Audit.Partition.two_stage_a_coarse
 #print axioms FlockSoundness.Audit.Partition.Refines.analysis₂
 -- tightness and insecurity on NOT chains

@@ -339,7 +339,8 @@ before the session's first coin, not bounds state by state.
 
 **Theorems, laws** (`Audit/Law.lean`): `bernoulli_escape`, a Bernoulli($p$) draw's escape $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's escape
 $\binom{n-|B|}{k}/\binom{n}{k}$; `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_minimax`, **uniform is
-optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$.
+optimal**: no law that proves $k$ units on average has a smaller count curve, at any $K$; `demo_count_590`, the demo's
+point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability at most $2^{-20}$, by exact arithmetic.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
 
@@ -347,6 +348,8 @@ optimal**: no law that proves $k$ units on average has a smaller count curve, at
   $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
   $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
 - `effEscape_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
+- `effEscape_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
+  any second stage, $m_u$ the largest second-stage miss probability inside $u$;
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
 - `Partition.Refines.exists_wrong_fine`: a wrong coarse unit has a wrong fine unit under every interior, the lemma
   behind (b).

@@ -149,6 +149,17 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
     have := (subset n k hk).escape_le_miss (K := K) hB.ge
     rwa [subset_escape, hB] at this
 
+/-- **The demo's curve** (`docs/audit-protocols.md` §0.2): with 1,024 heads and 16 drawn, 590 or
+more wrong heads escape with probability at most `2^-20`. -/
+theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ≥0∞) ^ 20)⁻¹ := by
+  rw [subset_miss _ (by norm_num), ENNReal.div_le_iff (by exact_mod_cast (Nat.choose_pos
+    (by norm_num : 16 ≤ 1024)).ne') (ENNReal.natCast_ne_top _), ← ENNReal.div_eq_inv_mul,
+    ENNReal.le_div_iff_mul_le (Or.inl (by norm_num)) (Or.inl (by norm_num))]
+  have h : (1024 - 590).choose 16 * 2 ^ 20 ≤ (1024).choose 16 := by
+    rw [Nat.choose_eq_descFactorial_div_factorial, Nat.choose_eq_descFactorial_div_factorial]
+    decide +kernel
+  exact_mod_cast h
+
 /-! ## Bernoulli draws -/
 
 /-- Each unit drawn independently with probability `num / den`. -/

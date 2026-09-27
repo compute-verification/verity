@@ -278,6 +278,15 @@ theorem twoStage_full_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks 
   simp only [effEscape_full A.parent hfull] at this
   exact this
 
+/-- **(b2) with a Bernoulli first stage, in general**: each coarse unit of `B` contributes its
+Bernoulli factor at its largest second-stage miss probability, so the nested law is a one-stage
+Bernoulli law thinned unit by unit. -/
+theorem effEscape_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ den)
+    (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc) (B : Finset (Fin nc)) :
+    effEscape (Law.bernoulli nc num den) L₂ parent B =
+      ∏ u ∈ B, Law.bernFactor num den (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) :=
+  Law.bernoulli_avg_prod hnum _ B
+
 /-! ## Over partitions -/
 
 namespace Partition
