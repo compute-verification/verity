@@ -255,26 +255,38 @@ theorem claim_eval_split (S : Statement) (c : Claim F S.m) (p : Fin (S.kLog - 6)
   simp only [hp, hout]
   ring
 
+theorem addr_div (S : Statement) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+    (S.addr o i).val / 2 ^ S.kLog = o.val := by
+  simp only [Statement.addr]
+  rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.two_pow_pos _), Nat.div_eq_of_lt i.isLt,
+    zero_add]
+
+theorem addr_mod (S : Statement) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+    (S.addr o i).val % 2 ^ S.kLog = i.val := by
+  simp only [Statement.addr]
+  rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt i.isLt]
+
+/-- The A-side bit at in-block index `i` of block `o` is `(A₀·z_o)_i`. -/
+theorem aVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+    aVec S z (S.addr o i) = (S.A₀.mulVec (S.block z o)) i := by
+  simp only [aVec]
+  congr 2
+  all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
+
+/-- The B-side bit at in-block index `i` of block `o` is `(B₀·z_o)_i`. -/
+theorem bVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+    bVec S z (S.addr o i) = (S.B₀.mulVec (S.block z o)) i := by
+  simp only [bVec]
+  congr 2
+  all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
+
 /-- The A-side columns are `A₀` applied to the columns. -/
 theorem hcol_aVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Witness S.m)
     (i : Fin (2 ^ S.kLog)) :
     hcol S ρOut (aVec S z) i.val =
       ∑ c : Fin (2 ^ S.kLog), ((S.A₀ i c).val : F) * hcol S ρOut z c.val := by
   simp only [hcol, dif_pos i.isLt, dif_pos (Fin.isLt _)]
-  have hblk : ∀ o : Fin (2 ^ S.nbl),
-      aVec S z (S.addr o i) = (S.A₀.mulVec (S.block z o)) i := by
-    intro o
-    have hdiv : (S.addr o i).val / 2 ^ S.kLog = o.val := by
-      simp only [Statement.addr]
-      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.two_pow_pos _),
-        Nat.div_eq_of_lt i.isLt, zero_add]
-    have hmod : (S.addr o i).val % 2 ^ S.kLog = i.val := by
-      simp only [Statement.addr]
-      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt i.isLt]
-    simp only [aVec]
-    congr 2
-    all_goals first | exact Fin.ext hdiv | exact Fin.ext hmod
-  simp only [hblk, Matrix.mulVec, dotProduct, val_cast_eq, map_sum, map_mul]
+  simp only [aVec_addr, Matrix.mulVec, dotProduct, val_cast_eq, map_sum, map_mul]
   simp only [← val_cast_eq, Finset.mul_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun c _ => Finset.sum_congr rfl fun o _ => ?_
@@ -287,20 +299,7 @@ theorem hcol_bVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Wit
     hcol S ρOut (bVec S z) i.val =
       ∑ c : Fin (2 ^ S.kLog), ((S.B₀ i c).val : F) * hcol S ρOut z c.val := by
   simp only [hcol, dif_pos i.isLt, dif_pos (Fin.isLt _)]
-  have hblk : ∀ o : Fin (2 ^ S.nbl),
-      bVec S z (S.addr o i) = (S.B₀.mulVec (S.block z o)) i := by
-    intro o
-    have hdiv : (S.addr o i).val / 2 ^ S.kLog = o.val := by
-      simp only [Statement.addr]
-      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.two_pow_pos _),
-        Nat.div_eq_of_lt i.isLt, zero_add]
-    have hmod : (S.addr o i).val % 2 ^ S.kLog = i.val := by
-      simp only [Statement.addr]
-      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt i.isLt]
-    simp only [bVec]
-    congr 2
-    all_goals first | exact Fin.ext hdiv | exact Fin.ext hmod
-  simp only [hblk, Matrix.mulVec, dotProduct, val_cast_eq, map_sum, map_mul]
+  simp only [bVec_addr, Matrix.mulVec, dotProduct, val_cast_eq, map_sum, map_mul]
   simp only [← val_cast_eq, Finset.mul_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun c _ => Finset.sum_congr rfl fun o _ => ?_

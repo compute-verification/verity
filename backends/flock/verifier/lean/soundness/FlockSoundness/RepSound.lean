@@ -3,6 +3,7 @@ import FlockSoundness.Rounds
 import FlockSoundness.OpeningPhase
 import FlockSoundness.ListSize
 import FlockSoundness.LincheckPhase
+import FlockSoundness.ZerocheckPhase
 
 /-!
 # One rep is sound
@@ -70,17 +71,31 @@ theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ
 
 /-! ## The four phases -/
 
-/-- **Zerocheck.** From a doomed start, the zerocheck ends doomed except with probability `εZc`.
-*Status: to prove.* The eq-reduction of each nonzero Boolean row (degree `m − 13`, the pinned
-coordinates independent over GF(2)), the skip point (`127/|F|`), the `m − 6` residual rounds
-(`Rounds.residualRound_sound`, which needs every `r_eq ≠ 1`, the exceptional event charged once),
-the pin's extension at `ρ_out` (degree `m − k_log`); every term times the list bound. -/
+/-- **Zerocheck.** From a doomed start, the zerocheck ends doomed except with probability `εZc`:
+the eq-reduction of each nonzero Boolean row (degree `m − 13`, the pinned coordinates independent
+over GF(2)), the skip point (`127/|F|`), the `m − 6` residual rounds (`Rounds.residualRound_sound`,
+which needs every `r_eq ≠ 1`, the exceptional event charged once), the pin's extension at
+`ρ_out` (degree `m − k_log`); every term but the exceptional one times the list bound. Proved in
+`ZerocheckPhase` for any list size (`zerocheck_phase_of_card`), with `closeMsgs_card_le`. -/
 theorem zerocheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (mPts : ℕ) (C : Oracle F)
     (extra : List (Claim F S.m)) (hdoom : RepDoomed A S sch C extra) :
     value (fun o => ¬ DZc A S sch C extra o) (zerocheck A S.m) ≤
       ENNReal.ofReal (εZc sch (S.shape mPts)) := by
-  sorry
+  classical
+  refine (zerocheck_phase_of_card A hA S sch hm C extra hdoom _
+    (closeMsgs_card_le A hA sch S.m hsch C)).trans (le_of_eq ?_)
+  rw [hA.card_F, εZc, ofReal_nat_div_qF, fast100_m S.m sch hsch]
+  simp only [Statement.shape]
+  rw [← mul_div_assoc, ENNReal.div_add_div_same]
+  congr 1
+  have key : S.m - 13 + sch.listBound₀ * (S.m - 13 + 127 + 2 * (S.m - 6) + (S.m - S.kLog)) =
+      (sch.listBound₀ + 1) * (S.m - 13) + sch.listBound₀ * 127 +
+        sch.listBound₀ * (2 * (S.m - 6)) + sch.listBound₀ * (S.m - S.kLog) := by ring
+  · rw [← key]
+    push_cast
+    ring
+  · norm_num
 
 /-- **Lincheck.** `α` and `β` (degree 1 each; `β` catches a pin whose extension is not 1), the
 `k_log − 6` rounds (`Rounds.lincheckRound_sound`), the skip coin `r'` (degree 63); every term

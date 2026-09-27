@@ -64,10 +64,11 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
+| Zerocheck phase: the eq-reduction (pinned coordinates independent over GF(2)), the skip point, the residual rounds, the pin | 1a | `zerocheck_phase` (`RepSound.lean`), `zerocheck_phase_of_card` (`ZerocheckPhase.lean`) | proved |
 | Lincheck phase: `α`, `β`, the rounds, the final check and the skip coin (statements have `k_log ≥ 6`, as `k_skip = 6` requires) | 1a | `lincheck_phase` (`RepSound.lean`), `lincheck_phase_of_card` (`LincheckPhase.lean`) | proved |
 | Opening phase: ring switching (seven coins per claim) and the batch | 1a | `opening_phase` (`RepSound.lean`), `opening_phase_of_card` (`OpeningPhase.lean`) | proved |
 | The list size: at most `L₀` codewords near the committed table (ArkLib's Johnson bound) | 1a | `closeMsgs_card_le` (`ListSize.lean`) | proved |
-| Phase lemmas: zerocheck, Ligerito | 1a | `zerocheck_phase`, `ligerito_phase` | **to prove** |
+| Phase lemma: Ligerito | 1a | `ligerito_phase` | **to prove** |
 | The link points reduce region checks to opened claims | 1a | `link_sound` | **to prove** |
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
@@ -80,8 +81,8 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§6) | planned |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until the two remaining
-phase lemmas and `link_sound` are proved.
+`lake env lean FlockSoundness/Check.lean` to check. `rep_sound` and `table_sound` show `sorryAx` until `ligerito_phase`
+and `link_sound` are proved.
 
 ## 2. The model
 
@@ -195,8 +196,9 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 - **The model against the executable verifier.** Until the refinement theorem (if `Flock.Verify` accepts, the model
   accepts on the decoded proof and record), the theorem is about `Model`. Alignment rests on shared arithmetic
   (`Model.Arith`) and step order; the refinement proofs belong to the level-3 plan.
-- **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights, the packing basis, the
-  Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are hypotheses until proved for
+- **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights on the skip nodes and the
+  output coset, and the `Pcomb` weights on both (one `nodes` fact, so that all three use the same 128 points), the
+  packing basis, the Reed–Solomon novel basis, the pinned constants, and the balance of query coins. They are hypotheses until proved for
   the instance the executable verifier defines. They are to be proved, not trusted.
 - **The theorem statements.** A proof of the wrong statement is worthless. The reviewer's job is §1 of this file,
   `Soundness.lean`, `Model/*` and `Accounting/Bound.lean`.
@@ -253,9 +255,8 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 8. What remains (by a16z stage)
 
-1. **Stage 1a, the phase lemmas of `rep_sound`.** The composition, the round lemmas, the shared list size, the
-   lincheck (with the pin) and the opening phase are done.
-   - **Zerocheck.**
+1. **Stage 1a, the last phase lemma of `rep_sound`.** The composition, the round lemmas, the shared list size, the
+   zerocheck, the lincheck (with the pin) and the opening phase are done.
    - **Ligerito,** level by level (fold, bind, query, batch; MCA commutes with list decoding from A1), and the final
      check.
 

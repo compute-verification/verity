@@ -150,6 +150,18 @@ theorem fast100_levels_ne_nil : ∀ m s, fast100 m = some s → s.levels ≠ [] 
   obtain ⟨h1, h2⟩ := hm m (by simp [h])
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; simp [mk])
 
+/-- A `fast100` schedule is for the statement's `m`. -/
+theorem fast100_m : ∀ m s, fast100 m = some s → s.m = m := by
+  intro m s h
+  have hm : ∀ m', fast100 m' ≠ none → 22 ≤ m' ∧ m' ≤ 35 := by
+    intro m' hm'
+    by_contra hc
+    apply hm'
+    unfold fast100
+    split <;> simp_all
+  obtain ⟨h1, h2⟩ := hm m (by simp [h])
+  interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; rfl)
+
 /-- At rate `2^-r`, `1/(2ηρ) = 25·2^r`. -/
 theorem johnson_value (r : ℕ) : 1 / (2 * eta * (2⁻¹ : ℝ) ^ r) = ((25 * 2 ^ r : ℕ) : ℝ) := by
   unfold eta

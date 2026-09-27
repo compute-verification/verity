@@ -29,12 +29,15 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   unpack_pack : ∀ b, A.unpack (A.pack b) = b
   pack_unpack : ∀ a, A.pack (A.unpack a) = a
   unpack_add : ∀ a a', A.unpack (a + a') = A.unpack a + A.unpack a'
-  /-- The skip nodes (§9): 64 distinct points on which `lagS` are the Lagrange weights. -/
-  lagS_interp : ∃ node : Fin 64 → F, Function.Injective node ∧
-    ∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ s, A.lagS ζ s * p.eval (node s) = p.eval ζ
-  /-- The output coset `Λ`, disjoint from the skip nodes (§9.2). -/
-  lagΛ_interp : ∃ node : Fin 64 → F, Function.Injective node ∧
-    ∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ i, A.lagΛ ζ i * p.eval (node i) = p.eval ζ
+  /-- The skip nodes `S` and the output coset `Λ` (§9): 128 distinct points. `lagS` and `lagΛ`
+  are the Lagrange weights on each, and `combW` evaluates a polynomial of degree below 128 that
+  vanishes on `S` from its values on `Λ` (`Pcomb`, §9.2). -/
+  nodes : ∃ nodeS nodeΛ : Fin 64 → F, Function.Injective nodeS ∧ Function.Injective nodeΛ ∧
+    (∀ s i, nodeS s ≠ nodeΛ i) ∧
+    (∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ s, A.lagS ζ s * p.eval (nodeS s) = p.eval ζ) ∧
+    (∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ i, A.lagΛ ζ i * p.eval (nodeΛ i) = p.eval ζ) ∧
+    (∀ p : Polynomial F, p.natDegree < 128 → (∀ s, p.eval (nodeS s) = 0) →
+      ∀ ζ, ∑ i, A.combW ζ i * p.eval (nodeΛ i) = p.eval ζ)
   /-- The pinned coordinates' 128 equality weights are independent over GF(2), and none is 1
   (§9.2 and the `inv(0) = 0` convention, A5). -/
   pinned_indep : ∀ c : Fin 128 → ZMod 2,
@@ -48,6 +51,13 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   /-- Query coins give uniform positions (§13.5): the low `b ≤ 64` bits of `lo` are balanced. -/
   lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
     (Finset.univ.filter fun w : F => A.lo w % 2 ^ b = t).card = Fintype.card F / 2 ^ b
+
+/-- The skip nodes (§9): 64 distinct points on which `lagS` are the Lagrange weights. -/
+theorem Model.Arith.Correct.lagS_interp {A : Arith F K} (hA : A.Correct) :
+    ∃ node : Fin 64 → F, Function.Injective node ∧
+      ∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ s, A.lagS ζ s * p.eval (node s) = p.eval ζ := by
+  obtain ⟨nS, _, hS, _, _, hlag, _, _⟩ := hA.nodes
+  exact ⟨nS, hS, hlag⟩
 
 /-- Level 0 of a schedule. -/
 def Accounting.Schedule.level₀ (sch : Schedule) : Level := sch.levels.headD default
