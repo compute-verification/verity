@@ -111,9 +111,11 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     | .mask => if r.count != 1 then throw "not one mask slot"
     | .comp => throw "a compression-leaf range in an hm96-sha512 row statement"
     spans := spans.push (r.start, r.start + span)
-  let sorted := spans.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2))
-  for i in [1:sorted.size] do
-    if sorted[i - 1]!.2 > sorted[i]!.1 then throw "two ranges overlap"
+  -- every pair, so that two ranges' disjointness is a direct fact of the loop
+  for i in [0:spans.size] do
+    for j in [i + 1:spans.size] do
+      if spans[i]!.1 < spans[j]!.2 && spans[j]!.1 < spans[i]!.2 then throw "two ranges overlap"
+  if c.unit.lookup.isSome then throw "the unit circuit is a lookup slot"
   let (nSha, _) := rowSlots c.ports
   if c.perVu.getD c.shaNet 0 != nSha || c.perVu.getD c.hmNet 0 != nextPow2 c.ports.size then
     throw "the rows' slots per VU are not the ports' compressions (three per slot) and one hm96 slot per port"
