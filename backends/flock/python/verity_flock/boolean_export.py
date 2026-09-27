@@ -965,7 +965,7 @@ class Walker:
         if not free:
             return None
         return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()),
-                "reason": "ir_lower has no piece for this primitive yet"}
+                "reason": next((r for f, r in NO_PIECE.items() if pid.startswith(f)), "ir_lower has no piece for this primitive yet")}
 
     def walk(self, did: str) -> str:
         rid = "def-" + hashlib.sha256(did.encode()).hexdigest()[:16]
@@ -1318,9 +1318,10 @@ def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> di
 #: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
-NOT_LOWERED = {
-    "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
-}
+NOT_LOWERED: dict[str, str] = {}
+#: primitive families with no piece, and why (anything else: no piece yet)
+NO_PIECE = {"TopPMaskWordx": "the top-p keep word: the whole row's split pipeline, and partial (it raises unless splits is 1, 2, 4, "
+                             "8, 16 or 32: circuit-checks' finding 2, verity PR #100); no Boolean lowering yet"}
 #: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
 OPENED = {
     "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
