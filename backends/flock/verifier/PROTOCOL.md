@@ -272,11 +272,13 @@ bytes for the link points after recording `Commit`. Each 16-byte group is one F1
 `hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
 the round.
 
-### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`)
+### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
 `SHA-256("verity/flock-netlist/coin-commit/v1\0" ‖ nonce ‖ seed)` (as two F128 in the 16-LE-byte encoding, so the 32
-commitment bytes in order), and derives every coin:
+commitment bytes in order), and derives every coin. The SHA-512 statement (`631567f7`) commits with
+`SHA-512("verity/flock-circuit/coin-commit\0" ‖ nonce ‖ seed)`, sent as four F128; the derivation below stays SHA-256 (it is
+a derivation, not a commitment), with the domain `verity/flock-circuit/coins/v1`:
 
 ~~~text
 frame(b bytes)  = 'b' ‖ be64(|b|) ‖ b
@@ -702,10 +704,12 @@ The scheme is a parameter (`Flock.MerkleScheme`), named by the circuit file's `l
 | id | h | leaf | node | `merkle_hash` |
 |---|---|---|---|---|
 | `flock-leaf/sha256-unsalted/v0`, `flock-leaf/sha256-unsalted` | 32 | `SHA-256(e_0 ‖ … ‖ e_{L−1})` | `SHA-256(left ‖ right)` | 0 (`Sha256`) |
-| `flock-leaf/sha512-unsalted` (placeholder) | 64 | `SHA-512(e_0 ‖ … ‖ e_{L−1})` | `SHA-512(left ‖ right)` | 2 (placeholder) |
+| `flock-leaf/sha512-unsalted` (PR #83 from `b3baabd8`) | 64 | `SHA-512(e_0 ‖ … ‖ e_{L−1})` | `SHA-512(left ‖ right)` | 2 (`Sha512`) |
 
-Each element is 16 bytes (§2.1), with no prefix, index or length. The target's hiding leaf is Halevi–Micali on SHA-512.
-It adds each opened row's salt to the opening, in a proof layout PR #83's lane will publish.
+Each element is 16 bytes (§2.1), with no prefix, index or length, and no leaf/node domain separation (Flock's SHA-256
+format, widened). A 64-byte digest is serialized as its 64 bytes (Rust `[[u8; 32]; 2]`), and the transcript observes each
+cap's 64-byte nodes. The target's hiding leaf is `hm96-sha512/v1` (PR #93, pinned in META `leaf_scheme.target`): each opened
+row then carries its 192-byte salt, in a layout PR #83's lane will publish with that change.
 - The commitment is the cap: the `2^c` nodes at depth `c` below the (never formed) root, left to right, with
   `c = ⌊log2 Q⌋` for the level (7 at level 0: 128 hashes, 4096 bytes), clamped to `d`.
 - A level's opening: `opened_rows` in query order (duplicates repeated), and `merkle_proof` = `Q · (d − c)` sibling hashes,
@@ -885,22 +889,26 @@ included. Claims are listed region-major, then point 0 before point 1.
 - Tags are a parameter (`Flock.Tags`): every string below is hashed or matched byte for byte, so each version of PR #83's
   statement is one value. `PT_LOCAL = 24` and `m_pts = 24 + nbl` in both versions.
 
-  | tag | `verity/flock-netlist/v1` (PR #83 at `9294e161`) | `verity/flock-circuit` (PR #83 at `19c7269a`) |
-  |---|---|---|
-  | `TAG`, META `statement` | `verity/flock-netlist/v1` | `verity/flock-circuit` |
-  | file format (line 1, META `format`) | `flock-netlist/v1` | `flock-circuit` |
-  | block keyword | `NET` | `CIRCUIT` |
-  | public file format; circuit hash key | `flock-netlist-inst/v1`; `netlist_sha256` | `flock-circuit-inputs`; `circuit_sha256` |
-  | Σ tag | `verity/flock-netlist/sigma/v1` | `verity/flock-circuit/sigma` |
-  | domain | `flock-netlist-v1/fast100x2/rep` ‖ r | `flock-circuit/fast100x2/rep` ‖ r |
-  | table | `nl` | `circuit` |
-  | Merkle leaf scheme | `flock-leaf/sha256-unsalted/v0` | `flock-leaf/sha256-unsalted` |
-  | `Hello` coin scheme (seed mode) | `coin-commit/sha256/v1` | `coin-commit/sha256` |
-  | identity | `merkle_hash: sha256` | a `hashes` object naming every commitment hash (`row_leaf_in_circuit: blake3-keyed/row/v2`) |
+  | tag | `verity/flock-netlist/v1` (PR #83 at `9294e161`) | `verity/flock-circuit` (PR #83 at `19c7269a`, `fd02e847`) | `verity/flock-circuit` on SHA-512 (PR #83 at `631567f7`) |
+  |---|---|---|---|
+  | `TAG`, META `statement` | `verity/flock-netlist/v1` | `verity/flock-circuit` | as `fd02e847` |
+  | file format (line 1, META `format`) | `flock-netlist/v1` | `flock-circuit` | as `fd02e847` |
+  | block keyword | `NET` | `CIRCUIT` | as `fd02e847` |
+  | public file format; circuit hash key | `flock-netlist-inst/v1`; `netlist_sha256` | `flock-circuit-inputs`; `circuit_sha256` | as `fd02e847` |
+  | Σ tag | `verity/flock-netlist/sigma/v1` | `verity/flock-circuit/sigma` | as `fd02e847` |
+  | domain | `flock-netlist-v1/fast100x2/rep` ‖ r | `flock-circuit/fast100x2/rep` ‖ r | as `fd02e847` |
+  | table | `nl` | `circuit` | `circuit` |
+  | Merkle leaf scheme (§14) | `flock-leaf/sha256-unsalted/v0` | `flock-leaf/sha256-unsalted` | `flock-leaf/sha512-unsalted` |
+  | `Hello` coin scheme (seed mode) | `coin-commit/sha256/v1` | `coin-commit/sha256` | `coin-commit/sha512` |
+  | `Hello` `rounds` | absent | absent | `"bytes retained"`: every round carries `msg` (S12) |
+  | identity | `merkle_hash: sha256` | a `hashes` object naming every commitment hash (`row_leaf_in_circuit: blake3-keyed/row/v2`) | the `hashes` object with `merkle: "sha512 (leaves and nodes, every Ligerito level)"`, `coin_commitment: "sha512"` and the retained-bytes `round_digest` |
 
-  The format is final at `fd02e847`, with the tags of `19c7269a`. From that commit, META `leaf_scheme` is a pinned object: the
-  unsalted id, and a `target` reserving `hm96-sha256/v1` with `DEFAULT_KEY` named by its SHA-256. The verifier compares it
-  in canonical form, and the identity's `leaf_scheme` is that object.
+  The verifier names these `verity/flock-netlist/v1`, `verity/flock-circuit@19c7269a`, `verity/flock-circuit@fd02e847` and
+  `verity/flock-circuit` (the SHA-512 statement). From `fd02e847`, META `leaf_scheme` is a pinned object: the unsalted id, and
+  a `target` reserving the hiding leaf with its pinned key named by a digest (`hm96-sha256/v1` and `key_sha256` at
+  `fd02e847`; `hm96-sha512/v1`, 192-byte salts and `key_sha512` = SHA-512 of `default_key` at `631567f7`, where
+  `default_key = SHA-512("verity/hm96-sha512/key/v1\0" ‖ be32 i)` for `i < 4`, bit 2047 cleared). The verifier compares it in
+  canonical form, and the identity's `leaf_scheme` is that object.
 
 - The in-circuit row leaf is a parameter too (`Flock.RowLeaf`): its slot circuit, its layout check, its share of Δ, its
   regions with their known bytes, and the check of the input roots. Both versions use the keyed-BLAKE3 row leaf
@@ -1007,9 +1015,14 @@ places, and the corpus marks the vectors that exercise them with the upstream ve
   check it.
 - **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
   outside the rep prefixes.
-- **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignores the field; Σ is bound there through `Hello` (S2) and
-  `root_F` (S6). Found by fuzzing (seed 20260926).
-- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignores the retained bytes.
+- **D3:** `link.sigma = Σ` (S4). Upstream's `from_record` ignored the field before PR #83 `b3baabd8`; Σ was bound there
+  through `Hello` (S2) and `root_F` (S6). Found by fuzzing (seed 20260926). Closed upstream at `b3baabd8`.
+- **D4:** retained round bytes hash to the recorded digest (S12, §6.2). Upstream ignored the retained bytes before its
+  server retained them. Closed upstream at `631567f7`, where `from_record` requires `msg` on every round of a statement
+  whose `Hello` says `"rounds": "bytes retained"` and checks its length and digest.
+
+At `631567f7` only D1 and D2 remain; the corpus's `upstream_checks` field names the closed ones per set (`--upstream-checks`
+in `redigest.py` and `fuzz.py`).
 
 Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
 unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
@@ -1060,11 +1073,11 @@ is the article's recursion caveat, applied to the slots of one block.
 | stage | here | level |
 |---|---|---|
 | 1a PIOP soundness | zerocheck with univariate skip, lincheck with the verifier-computed fold, ring switching, and the region claims, for F2 block R1CS | 4a |
-| 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under SHA-256 collision resistance (an explicit collision extractor) | 4a; Merkle 3 |
+| 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under the scheme's collision resistance (SHA-256, or SHA-512 on the target statement; an explicit collision extractor) | 4a; Merkle 3 |
 | 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
 | 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
 | 1e glue | one theorem: `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
-| 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. What remains: the field code is GF(2^128) and K; the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
+| 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. The field code is proved to be GF(2^128) and K (level 3, below). What remains: the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
 | 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
 
 The lowering theorems are proved about a certified checker, over all inputs. The verifier runs that checker on the pinned
@@ -1077,7 +1090,19 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
   positions, whose rows differ at a query, give a node or leaf collision (`climb_binding`, `opens_binding`).
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
-- Planned: the field (with the soundness package's Mathlib), the assembly lemmas, and the lowering checkers.
+- **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its
+  own `CheckAxioms.lean` under the same test):
+  - `F128.poly_mul`, `F128.poly_add`: the executable's product (carry-less multiply, Karatsuba, the GHASH reduction) and sum
+    are polynomial multiplication and addition over GF(2) modulo `G = X^128 + X^7 + X^2 + X + 1`. `toAdj` is a bijection
+    `F128 ≅ GF(2)[X]/(G)` that preserves both.
+  - `G_irreducible`: Rabin's test, with the kernel checking `x^(2^128) = x` and a Bézout witness for `x^(2^64) + x` on the
+    executable's own multiplication (`decide +kernel`, no `native_decide`). So `GF128 := F128` is a `Field` whose `+`, `*`
+    and inverse are the executable's `add`, `mul` and `inv` (`GF128.inv_eq`, including `inv 0 = 0`).
+  - `Q_irreducible`: `Y^2 + Y + x⁻¹` is irreducible over GF128, because the trace of `x⁻¹` is 1 (computed the same way) and
+    the trace vanishes on every `y^2 + y`. So `GF256 := F256` is a `Field` whose `+` and `*` are the executable's three-
+    product ladder (`GF256.mul_eq`), and `F256.xinv` is `x⁻¹` (`GF128.xinv_mul_x`).
+- Planned: the correspondences the soundness lane's `Arith` needs (the embedding `F → K`, `u`, packing, `lo`), the assembly
+  lemmas, and the lowering checkers.
 
 ## 18. Test vectors
 
