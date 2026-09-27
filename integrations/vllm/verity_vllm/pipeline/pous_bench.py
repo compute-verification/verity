@@ -41,6 +41,9 @@ class Options:
     layers_per_decode: int = option("--layers-per-decode", type=int, default=1, help="transformer layers decoded together")
     thread_rows: int = option("--thread-rows", type=int, default=0, help="rows from which a Feistel launch runs a thread per row")
     load_check: bool = option("--no-load-check", action="store_false", default=True, help="skip the load-time bit-exact check")
+    codec: str = option("--codec", default="p3/v1", help="the reference codec served (p3/v1, dense-chain/v1)")
+    unencoded: bool = option("--unencoded", action="store_true", default=False,
+                             help="timing only: serve W itself as C (decode costs the same; outputs are garbage)")
     codec_segments: str = option("--codec-segments", default="", help="codec-only decodes, segments:thread_rows, e.g. 11:0,11:1 (pous)")
     result: str | None = option("--result", default=None, help="also write the research result.json here")
     run_id: str | None = option("--run-id", default=None, help="the research run id result.json names")
@@ -100,25 +103,27 @@ def decode(engine, batch: int, prompt_len: int, n: int, store_info) -> dict[str,
     return {"kind": "decode", "batch": batch, "tokens": batch * n, "seconds": t, "tokens_per_s": batch * n / t, **row}
 
 
-def codec_only(segments: list[tuple[int, int]], build_dir: str) -> list[dict[str, Any]]:
+def codec_only(segments: list[tuple[int, int]], build_dir: str, name: str) -> list[dict[str, Any]]:
     """The GPU decode of `G` random segments at once, for each `(G, thread_rows)`: seconds, and decoded MB/s."""
     import torch
 
-    from verity_vllm.engine.pous import codec, native
+    from verity_vllm.engine.pous import codec, native, twins
 
     native.load(build_dir)
-    decode_fn = codec.twin(codec.REFERENCE)[1]
+    ref, geometry = twins.reference(name)
+    decode_fn = twins.twin(ref)[1]
     rows = []
     for g, thread_rows in segments:
         codec.THREAD_ROWS[0] = thread_rows
-        c = torch.randint(0, 256, (g, codec.N, codec.M), dtype=torch.uint8, device="cuda")
+        c = torch.randint(0, 256, (g, geometry.blocks_per_segment, geometry.block_bytes), dtype=torch.uint8, device="cuda")
         tags = codec.segment_tags(bytes(codec.SALT_BYTES), list(range(g)), c.device)
         torch.cuda.synchronize()
         t0 = time.perf_counter()
         decode_fn(c, tags)
         torch.cuda.synchronize()
         dt = time.perf_counter() - t0
-        rows.append({"segments": g, "thread_rows": thread_rows, "seconds": dt, "decoded_mb_per_s": g * codec.SEGMENT_BYTES / dt / 1e6})
+        rows.append({"segments": g, "thread_rows": thread_rows, "seconds": dt,
+                     "decoded_mb_per_s": g * geometry.segment_bytes / dt / 1e6})
         del c
         torch.cuda.empty_cache()
     return rows
@@ -129,15 +134,17 @@ def main(a: Options) -> int:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc: dict[str, Any] = {"mode": a.mode, "case": a.case, "options": dataclasses.asdict(a)}
+    doc: dict[str, Any] = {"mode": a.mode, "case": a.case, "codec": a.codec, "unencoded": a.unencoded, "options": dataclasses.asdict(a)}
     if a.mode == "pous" and a.codec_segments:
-        doc["codec_only"] = codec_only([tuple(int(y) for y in x.split(":")) for x in a.codec_segments.split(",")], a.build_dir)
+        doc["codec_only"] = codec_only([tuple(int(y) for y in x.split(":")) for x in a.codec_segments.split(",")], a.build_dir,
+                                       a.codec)
     spec = None
     if a.mode == "pous":
         spec = out / "pous-bench.json"
         spec.write_text(json.dumps({"safetensors": pous_run.checkpoint_files(a.case), "build_dir": a.build_dir,
                                     "salt": os.urandom(24).hex(), "drop_fraction": 0.0, "layers_per_decode": a.layers_per_decode,
-                                    "thread_rows": a.thread_rows, "load_check": a.load_check}))
+                                    "thread_rows": a.thread_rows, "load_check": a.load_check, "codec": a.codec,
+                                    "unencoded": a.unencoded}))
     batches = [int(x) for x in a.decode.split(",")]
     t0 = time.perf_counter()
     engine = pous_run.build(a.case, spec, max_num_seqs=max(batches + [32]), engine_args={"max_num_batched_tokens": a.max_batched_tokens})
@@ -159,7 +166,8 @@ def main(a: Options) -> int:
     if a.result:
         Path(a.result).write_text(json.dumps({
             "schema": "research/result/v0.1", "run_id": a.run_id,
-            "workload_fingerprint": {"mode": a.mode, "case": a.case, "prefill": a.prefill, "decode": a.decode},
+            "workload_fingerprint": {"mode": a.mode, "case": a.case, "codec": a.codec, "unencoded": a.unencoded,
+                                     "prefill": a.prefill, "decode": a.decode},
             "validation": {"status": "passed", "checker": "verity-vllm pous-bench", "detail": "every configuration ran",
                            "evidence": [f"bench-{a.mode}.json"]},
             "measurements": [{"name": f"{r['kind']}_{r.get('length', '')}x{r['batch']}_tokens_per_s".replace("_x", "_"),

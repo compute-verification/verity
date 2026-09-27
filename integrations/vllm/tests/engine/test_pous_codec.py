@@ -147,8 +147,10 @@ def test_segment_encode_and_decode_match_the_reference_codec(ext):
     """The GPU twin of `codec.REFERENCE` against its byte-level `encode_segment` / `decode_segment` on segment 5."""
     from verity_vllm.engine.pous import codec
 
+    from verity_vllm.engine.pous import twins
+
     ref = codec.REFERENCE
-    encode, decode = codec.twin(ref)
+    encode, decode = twins.twin(ref)
     params, prims = P.with_segments(6), reference(P)
     g = torch.Generator().manual_seed(3)
     w = torch.randint(0, 256, (1, P.n, M), dtype=torch.uint8, generator=g)
@@ -163,9 +165,34 @@ def test_segment_encode_and_decode_match_the_reference_codec(ext):
 
 def test_the_gpu_twin_is_chosen_by_reference_codec():
     from verity_pous.codec import Codec
+    from verity_pous.dense import DENSE
 
-    from verity_vllm.engine.pous import codec
+    from verity_vllm.engine.pous import codec, dense, twins
 
-    assert codec.REFERENCE is P3 and codec.twin(P3) == (codec.encode, codec.decode)
+    assert codec.REFERENCE is P3 and twins.twin(P3) == (codec.encode, codec.decode)
+    assert twins.twin(DENSE) == (dense.encode, dense.decode) and twins.reference(DENSE.name)[1].block_bytes == 65_536
     with pytest.raises(NotImplementedError):
-        codec.twin(Codec("dense/v1", P3.encode_segment, P3.decode_segment))
+        twins.twin(Codec("other/v1", P3.encode_segment, P3.decode_segment))
+
+
+@needs_cuda
+def test_dense_twin_matches_the_reference_dense_codec(ext):
+    """The dense GPU twin against `verity_pous.dense.DENSE` on short segments (the chain is the same at every length): encode,
+    decode, and decode of arbitrary bytes, at the 64 KiB width."""
+    from verity_pous import dense as ref
+
+    from verity_vllm.engine.pous import codec, dense
+
+    params = ref.DenseParams(6, 65_536 * 8, segments=4)
+    prims = ref.reference(params)
+    g = torch.Generator().manual_seed(5)
+    w = torch.randint(0, 256, (1, 6, 65_536), dtype=torch.uint8, generator=g)
+    salt = bytes(range(11, 11 + codec.SALT_BYTES))
+    tags = codec.segment_tags(salt, [3], "cuda")
+    c = dense.encode(w.cuda(), tags)
+    blocks = ref.DENSE.encode_segment(params, prims, salt, 3, w[0].numpy().tobytes())
+    assert _rows(c[0]) == blocks
+    assert dense.decode(c, tags).cpu().numpy().tobytes() == w[0].numpy().tobytes()
+    junk = torch.randint(0, 256, (1, 6, 65_536), dtype=torch.uint8, generator=g)
+    assert (dense.decode(junk.cuda(), tags).cpu().numpy().tobytes()
+            == ref.DENSE.decode_segment(params, prims, salt, 3, [bytes(r) for r in junk[0].tolist()]))

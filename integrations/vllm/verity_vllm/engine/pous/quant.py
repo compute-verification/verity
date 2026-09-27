@@ -10,7 +10,9 @@ first use in a forward and released after its last; nothing decoded outlives the
 
 The run's settings are the JSON file vLLM passes as `hf_overrides["quantization_config_file"]`: `safetensors` (the checkpoint
 files), `build_dir` (the native build, `native.load`), `salt` (hex, 24 bytes, drawn by the verifier after the checkpoint
-commitment), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), `load_check` (false skips the load-time check), and
+commitment), `codec` (a reference codec name, `twins.reference`; default P3), `unencoded` (timing only: serve `W` itself
+as `C`, whose decode costs the same and yields garbage), `layers_per_decode`, `thread_rows` (`codec.THREAD_ROWS`), `load_check`
+(false skips the load-time check), and
 `drop_fraction` / `drop_source` (the negative control: that fraction of `C`'s blocks, drawn through `verity.randomness` from
 `drop_source`, is zeroed after encoding, and the load-time check is skipped).
 """
@@ -31,7 +33,7 @@ from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
 from vllm.model_executor.layers.vocab_parallel_embedding import UnquantizedEmbeddingMethod, VocabParallelEmbedding
 
-from verity_vllm.engine.pous import codec, layout, native
+from verity_vllm.engine.pous import codec, layout, native, twins
 
 DROP_DOMAIN = "verity/pous-vllm/negative-control-drop/v1"
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32}
@@ -57,8 +59,9 @@ class Store:
 
     def __init__(self, spec: dict[str, Any]) -> None:
         self.spec = spec
-        self.checkpoint = layout.read(spec["safetensors"])
-        self.gpu_encode, self.gpu_decode = codec.twin(codec.REFERENCE)
+        self.reference, base = twins.reference(spec.get("codec") or codec.REFERENCE.name)
+        self.checkpoint = layout.read(spec["safetensors"], base)
+        self.gpu_encode, self.gpu_decode = twins.twin(self.reference)
         codec.THREAD_ROWS[0] = int(spec.get("thread_rows") or 0)
         self.salt = bytes.fromhex(spec["salt"])
         self.device = torch.device("cuda", torch.cuda.current_device())
@@ -79,9 +82,10 @@ class Store:
     def encode(self) -> None:
         t0 = time.perf_counter()
         w = torch.frombuffer(bytearray(self.checkpoint.read_w()), dtype=torch.uint8).to(self.device)
-        w = w.view(self.segments, codec.N, codec.M)
+        params = self.checkpoint.params
+        w = w.view(self.segments, params.blocks_per_segment, params.block_bytes)
         tags = codec.segment_tags(self.salt, list(range(self.segments)), self.device)
-        self.c = self.gpu_encode(w, tags)
+        self.c = w if self.spec.get("unencoded") else self.gpu_encode(w, tags)
         del w
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
@@ -93,7 +97,7 @@ class Store:
             key = derive(bytes.fromhex(self.spec["drop_source"]), DROP_DOMAIN, {"salt": self.salt})
             self.dropped = key.subset(int(round(frac * self.blocks)), self.blocks, ())
             idx = torch.tensor(self.dropped, dtype=torch.long, device=self.device)
-            self.c.view(self.blocks, codec.M)[idx] = 0
+            self.c.view(self.blocks, -1)[idx] = 0
 
     def decode(self, names: list[str]) -> dict[str, torch.Tensor]:
         """The checkpoint tensors `names`, decoded from the segments that hold them (in one batch)."""
@@ -101,18 +105,19 @@ class Store:
         lay = self.checkpoint.layout
         segs = sorted({s for n in names for s in lay.segments(n)})
         w = self.gpu_decode(self.c[torch.tensor(segs, device=self.device)], codec.segment_tags(self.salt, segs, self.device))
-        flat = w.view(len(segs), codec.SEGMENT_BYTES)
+        seg_bytes = self.checkpoint.params.segment_bytes
+        flat = w.view(len(segs), seg_bytes)
         at = {s: i for i, s in enumerate(segs)}
         out = {}
         for n in names:
             p, r = lay.placement(n), lay.segments(n)
-            start = p.offset - r.start * codec.SEGMENT_BYTES
+            start = p.offset - r.start * seg_bytes
             raw = flat[at[r.start]:at[r.start] + len(r)].view(-1)[start:start + p.size]
             out[n] = raw.view(DTYPES[self.checkpoint.dtypes[n]]).view(self.checkpoint.shapes[n])
         torch.cuda.synchronize()
         self.stats["decodes"] += 1
         self.stats["decode_s"] += time.perf_counter() - t0
-        self.stats["decoded_bytes"] += len(segs) * codec.SEGMENT_BYTES
+        self.stats["decoded_bytes"] += len(segs) * seg_bytes
         return out
 
     def group_of(self, prefix: str) -> str:
@@ -161,14 +166,14 @@ class Store:
         return w
 
     def info(self) -> dict[str, Any]:
-        return {"segments": self.segments, "blocks": self.blocks, "block_bytes": codec.M, "codec": codec.REFERENCE.name,
-                "gpu_twin": codec.NAME, "key_mode": codec.MODE,
+        return {"segments": self.segments, "blocks": self.blocks, "block_bytes": self.checkpoint.params.block_bytes,
+                "codec": self.reference.name, "unencoded": bool(self.spec.get("unencoded")), "key_mode": codec.MODE,
                 "w_bytes": self.checkpoint.params.w_bytes, "data_bytes": self.checkpoint.data_bytes, "c_bytes": int(self.c.numel()),
                 "dropped": len(self.dropped), "cached_groups": len(self.cache), **{k: v for k, v in self.stats.items()}}
 
     def leaves(self) -> list[bytes]:
         """The reference's leaf digests (`verity_pous.verifier.leaf_hash`) of every block of `C`."""
-        flat = self.c.view(self.blocks, codec.M)
+        flat = self.c.view(self.blocks, -1)
         params = self.checkpoint.params
         out = []
         for i in range(0, self.blocks, 1024):

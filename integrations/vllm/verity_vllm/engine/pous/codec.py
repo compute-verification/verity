@@ -4,8 +4,8 @@ The operating point is `verity_pous.params.OPERATING_POINT`: a segment is `N` = 
 of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `verity_pous` is the oracle: the verifier's own
 encoding with it must have the server's root, and `tests/engine/test_pous_codec.py` checks each piece against it.
 
-`twin(codec)` is the GPU `(encode, decode)` of a reference `verity_pous.codec.Codec`; `REFERENCE` is the one served.  Only
-`scheme.P3` has a twin today; any other codec (a dense single-layer one) fails closed until its twin is added here.
+This module is the GPU twin of `scheme.P3`; `engine/pous/dense.py` is that of `dense.DENSE`, and `engine/pous/twins.py` maps a
+reference codec to its twin.
 
     tag_s   = salt (24 B) || u64(s)
     Pi, Pi2 = Feistel-10 on M + 64 or 2M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : width / 2]
@@ -194,13 +194,5 @@ def encode(w: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
 
 
 REFERENCE: Codec = P3
-"""The reference codec the server encodes with and the verifier checks against."""
-
-_TWINS = {P3.name: (encode, decode)}
-
-
-def twin(codec: Codec):
-    """The GPU `(encode, decode)` of the reference codec `codec`, on `[G, N, M]` segments and `[G, 32]` tags."""
-    if codec.name not in _TWINS:
-        raise NotImplementedError(f"no GPU twin of the codec {codec.name!r} (have {sorted(_TWINS)})")
-    return _TWINS[codec.name]
+"""The reference codec the server encodes with and the verifier checks against, unless a run names another
+(`twins.reference`)."""
