@@ -19,7 +19,11 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
       (`check_row3`; the IR reference on a sample, special values included, and its vectorised twin on every word);
   (f) the same build's MS class (`verity_tap_src() & 64`): at every visited key block the word is the IR's
       `F32MulFtz_v1(GuardNegInfZero_v1(row_max), scale_log2)` of the ROW entry's row_max, the value the block's exp2 units read
-      (`check_ms`; twin on every word, the reference on a sample).
+      (`check_ms`; twin on every word, the reference on a sample);
+  (g) FA3 under the construction `check-inf-per-iteration` (`registry.fa3_check_inf`, `TargetProfile.fa3_construction`): the MS words
+      against `AttnBlock_v4`'s value -- the running max guarded only at the key blocks the kernel runs with `Check_inf`, the tile's
+      first and causal-masked ones (`masked_from`) -- and every output row against `Attention_v4` evaluated on the launch's inputs
+      (`out_vs_ir`: the twin, and the reference evaluator on rows the twin does not cover).
 
 Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
 -inf everywhere), +inf or NaN throughout (`SPECIAL`).
@@ -51,6 +55,8 @@ RECORD = "fa_tap_exactness.json"
 PAGE = 16
 #: an f32 NaN payload no tap word takes (the kernels write finite, -inf and +0 words)
 FILL = 0x7FC00001
+#: the attention constructions an FA3 record is checked under (`TargetProfile.FA3_CONSTRUCTIONS`); the default is the record's
+CONSTRUCTIONS = ("guard-every-block", "check-inf-per-iteration")
 INSTALLED = {2: ("_vllm_fa2_C", "varlen_fwd"), 3: ("_vllm_fa3_C", "fwd")}
 #: larger than every key length below, so no launch has a key block left of its window (n_block_min stays 0)
 WINDOW = (4095, 0)
@@ -133,6 +139,18 @@ def visited_rows(c: dict[str, Any], geo: dict[str, Any]) -> Iterator[tuple[int, 
                     continue
                 last_q = ((r // kBM + 1) * kBM - 1) // g + 1
                 yield slab, r, max(0, min(blocks, -(-(last_q + sk - sq) // BN)))
+
+
+def masked_from(c: dict[str, Any], geo: dict[str, Any]) -> dict[tuple[int, int], int]:
+    """FA3: (slab, packed row) -> the row's tile's `n_block_min_causal_local_mask` (`fa3_check_inf.fa3_masked_from`), the lowest key block
+    the kernel runs with `Check_inf`: tile `m_block = row // kBM` starts at query row `m_block * kBM // g`, and the blocks at or above
+    `(m_idx_min + sk - sq) // BN` are its first and causal-masked iterations."""
+    BN, kBM, g, out = geo["BN"], geo["kBM"], geo["g"], {}
+    for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
+        for hh in range(geo["h"]):
+            for r in range(sq * g):
+                out[(seq * geo["h"] + hh, r)] = ((r // kBM) * kBM // g + sk - sq) // BN
+    return out
 
 
 def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, int, int]], row3: int = 0) -> np.ndarray:
@@ -229,17 +247,20 @@ def scale_log2_bits(c: dict[str, Any], D: int) -> int:
     return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1._scale_log2_bits(D)
 
 
-def ir_max_scaled(m: int, scale_log2: int) -> int:
-    """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator."""
+def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
+    """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
+    unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
     from verity.evaluation.reference import evaluate
     from verity_vllm.program.registry import prims
 
-    return int(evaluate(prims.F32MulFtz, ir_guard(m), int(scale_log2))[0])
+    return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
 
 
-def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, int, int]], scale_log2: int, ir_sample: int = 64) -> dict[str, Any]:
+def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, int, int]], scale_log2: int, ir_sample: int = 64,
+             masked_from: dict[tuple[int, int], int] | None = None) -> dict[str, Any]:
     """The MS class at every visited (slab, row, block): the IR's `F32MulFtz_v1(GuardNegInfZero_v1(row_max), scale_log2)` of the ROW entry's
-    row_max (word 0, the running max after the block).  All words by the twin, `ir_sample` of them (every distinct special row_max among
+    row_max (word 0, the running max after the block).  With `masked_from` (FA3 under `check-inf-per-iteration`) the guard applies only at
+    blocks >= the row's value, as `AttnBlock_v4{CHECK}`.  All words by the twin, `ir_sample` of them (every distinct special row_max among
     them) by the reference evaluator; mismatches whose row_max is -inf are counted apart."""
     from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero, mul_ftz
 
@@ -248,11 +269,14 @@ def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, 
     MS = w[o["MS"]:o["total"]].reshape(layout.HB, layout.M, layout.NB)
     at = [(slab, r, b) for slab, r, nbm in rows for b in range(nbm)]
     rec: dict[str, Any] = {"ms_words": len(at), "ms_mismatch": 0, "ms_mismatch_neg_inf_max": 0, "ir_sampled": 0, "ir_mismatch": 0}
+    if masked_from is not None:
+        rec["unguarded_words"] = sum(b < masked_from[(slab, r)] for slab, r, b in at)
     if not at:
         return rec
     s, r, b = np.array(at).T
     m, v = R[s, r, b, 0], MS[s, r, b]
-    bad = np.flatnonzero(v != mul_ftz(guard_neg_inf_zero(m), np.uint32(scale_log2)))
+    check = np.ones(len(at), dtype=bool) if masked_from is None else np.array([b_ >= masked_from[(s_, r_)] for s_, r_, b_ in at])
+    bad = np.flatnonzero(v != mul_ftz(np.where(check, guard_neg_inf_zero(m), m), np.uint32(scale_log2)))
     rec["ms_mismatch"], rec["ms_mismatch_neg_inf_max"] = int(bad.size), int(np.count_nonzero(m[bad] == np.uint32(0xFF800000)))
     if bad.size:
         i = int(bad[0])
@@ -261,8 +285,14 @@ def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, 
     pick = np.unique(np.concatenate([special[np.unique(m[special], return_index=True)[1]],
                                      np.linspace(0, m.size - 1, min(ir_sample, m.size)).astype(int)]))
     rec["ir_sampled"] = int(pick.size)
-    rec["ir_mismatch"] = sum(int(v[i]) != ir_max_scaled(int(m[i]), scale_log2) for i in pick)
+    rec["ir_mismatch"] = sum(int(v[i]) != ir_max_scaled(int(m[i]), scale_log2, bool(check[i])) for i in pick)
     return rec
+
+
+def out_ok(e: dict[str, Any]) -> bool:
+    """An FA3 case under `check-inf-per-iteration`: every output row equals `Attention_v4` on the launch's inputs."""
+    r = e.get("out_vs_ir") or {}
+    return r.get("rows", 0) > 0 and r.get("mismatch") == 0 and r.get("unevaluated") == 0
 
 
 def ms_ok(e: dict[str, Any]) -> bool:
@@ -303,7 +333,7 @@ def negatives(fa_version: int, D: int) -> list[tuple[dict[str, Any], dict[str, i
 def case_ok(e: dict[str, Any]) -> bool:
     return (not e.get("error") and e.get("skipped") == 0 and e.get("out_lse_eq_installed") is True and e.get("out_lse_eq_untapped") is True
             and e.get("spill_outside_layout") == 0 and e.get("expected_but_unwritten") == 0 and ("row3" not in e or row3_ok(e))
-            and ("ms" not in e or ms_ok(e)))
+            and ("ms" not in e or ms_ok(e)) and ("out_vs_ir" not in e or out_ok(e)))
 
 
 def negative_ok(e: dict[str, Any]) -> bool:
@@ -316,9 +346,10 @@ def _verdict(doc: dict[str, Any]) -> bool:
     cs, ns = doc.get("cases") or [], doc.get("negatives") or []
     tap = doc.get("tap") or {}
     guarded, ms = bool(tap.get("row3")), bool(int(tap.get("src") or 0) & SRC_BITS["MS"])
+    per_iteration = doc.get("construction", CONSTRUCTIONS[0]) == "check-inf-per-iteration"
     return (bool(cs) and bool(ns) and all(map(case_ok, cs)) and all(map(negative_ok, ns))
             and (not guarded or (bool((doc.get("baseline") or {}).get("digest")) and all("row3" in c for c in cs)))
-            and (not ms or all("ms" in c for c in cs)))
+            and (not ms or all("ms" in c for c in cs)) and (not per_iteration or all("out_vs_ir" in c for c in cs)))
 
 
 def seal(doc: dict[str, Any]) -> dict[str, Any]:

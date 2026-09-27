@@ -235,6 +235,48 @@ def test_a_record_of_a_build_with_the_ms_class_checks_it_in_every_case():
     assert X.seal({**doc, "tap": {"row3": 1, "src": 123}})["ok"] is False             # a case without the MS class checked
 
 
+def test_fa3_masked_from_follows_the_packed_tile():
+    """FA3 hd 128, 130 prefill rows over 130 keys, g = 2: 260 packed rows in 128-row tiles; the tile starting at packed row 256 (query row
+    128) guards key blocks from 1 up, the earlier tiles every block; a decode over 257 keys guards only its first block (2)."""
+    c = X._case("t", 4, 2, [130, 1], [130, 257])
+    geo = X.geometry(3, c, 128)
+    mf = X.masked_from(c, geo)
+    assert (geo["kBM"], geo["BN"], geo["g"]) == (128, 128, 2)
+    assert {mf[(0, r)] for r in range(256)} == {0} and {mf[(0, r)] for r in (256, 259)} == {1} and mf[(2, 0)] == mf[(3, 1)] == 2
+
+
+def test_check_ms_guards_only_the_check_inf_blocks_under_the_per_iteration_construction():
+    import numpy as np
+
+    rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
+    sl2 = X.scale_log2_bits({"softcap": 0.0}, 64)
+    # row 1 visits block 1 with max +inf, then block 0 with -inf; row 2 -0 then NaN
+    w, layout, MS = _ms_stream(rows, [0x3F800000, 0x7F800000, 0xFF800000, 0x80000000, 0x7FFFFFFF], sl2)
+    unguarded = w.copy()
+    unguarded[layout.word_index("MS", 0, 1, block=0)] = 0xFF800000                    # FA3's unmasked iteration: -inf * scale
+    mf = {(0, 0): 0, (0, 1): 1, (0, 2): 1}                                             # block 0 of rows 1 and 2 unguarded
+    r = X.check_ms(unguarded, layout, iter(rows), sl2, masked_from=mf)
+    assert (r["ms_mismatch"], r["ir_mismatch"], r["unguarded_words"]) == (0, 0, 2) and X.ms_ok({"ms": r})
+    assert X.check_ms(w, layout, iter(rows), sl2, masked_from=mf)["ms_mismatch"] == 1   # the guarded value is wrong there
+    assert X.check_ms(unguarded, layout, iter(rows), sl2)["ms_mismatch"] == 1           # and the default construction says so
+
+
+def test_a_per_iteration_record_checks_every_output_row():
+    doc = _guarded_record()
+    ms = {"ms_words": 4, "ms_mismatch": 0, "ms_mismatch_neg_inf_max": 0, "ir_sampled": 4, "ir_mismatch": 0}
+
+    def sealed(**out):
+        case = dict(doc["cases"][0], ms=ms, **({"out_vs_ir": out} if out else {}))
+        case["ok"] = X.case_ok(case)
+        return X.seal({**doc, "cases": [case], "tap": {"row3": 1, "src": 123}, "construction": "check-inf-per-iteration"})
+
+    good = {"rows": 3, "heads": 12, "mismatch": 0, "reference_heads": 2, "unevaluated": 0}
+    assert sealed(**good)["ok"] is True and X.verify_record(sealed(**good)) == []
+    for bad in ({"mismatch": 1}, {"unevaluated": 1}, {"rows": 0}):
+        assert sealed(**dict(good, **bad))["ok"] is False
+    assert sealed()["ok"] is False                                                     # a case without the output check
+
+
 def test_the_edge_cases_name_query_tokens_of_their_own_launch():
     for v in (2, 3):
         edge = [c for c in X.cases(v) if c.get("special")]
