@@ -98,7 +98,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     except (P.QueryRefused, ValueError) as e:
         c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
     else:
-        if rec["law"] != mine:
+        if not D.same_law(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
     if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
         c.fail("window", rec["window"])

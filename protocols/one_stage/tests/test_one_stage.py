@@ -297,6 +297,12 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
     for law in tampered:
         assert _check({**rec, "law": law}, prog, q, law=rule).codes == ("R1-law",), law
     assert _check(rec, prog, q, law=D.parse_law("stratified:3")).codes == ("R1-law",)
+    assert _check({**rec, "law": {**rec["law"], "k": 4.0}}, prog, q, law=rule).codes == ("R1-law",)   # 4.0 is not 4
+    two = D.derive(prog, q, D.parse_law("stratified:2"))                  # k_s = 1, 1
+    rec2 = {**rec, "law": two}
+    assert [s["k"] for s in two["strata"]] == [1, 1] and _check(rec2, prog, q, law=D.parse_law("stratified:2")).ok
+    as_bool = dict(two, strata=[{**two["strata"][0], "k": True}, two["strata"][1]])   # `true` is not 1, as Lean reads it
+    assert _check({**rec, "law": as_bool}, prog, q, law=D.parse_law("stratified:2")).codes == ("R1-law",)
     assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
 
 
@@ -310,6 +316,12 @@ def test_stratified_draw_checks():
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
     assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
     assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's law
+    two = D.derive(prog, q, D.parse_law("stratified:2"))                  # k_s = 1, 1
+    ones = [{**two["strata"][0], "k": True}, two["strata"][1]]           # `true` is not 1, as the Lean verifier reads it
+    assert D.strata_problem(two, 6) is None and D.strata_problem({"k": 2, "strata": ones}, 6) is not None
+    d2 = {"law": "stratified", "population": 6, "k": 2, "strata": ones, "units": [0, 2]}
+    assert D.check_draw(d2, rec, two).codes == ("law", "strata")
+    assert D.check_draw({**good, "strata": [{**s, "k": s["k"] * 1.0} for s in law["strata"]]}, rec, law).codes[0] == "law"
     assert D.check_draw({k: v for k, v in good.items() if k != "strata"}, rec, law).codes == ("keys",)
     bad_strata = [{**law["strata"][0], "units": [[0, 2], [2, 3]]}, law["strata"][1]]   # adjacent ranges not merged
     assert "strata" in D.check_draw({**good, "strata": bad_strata}, rec, law).codes

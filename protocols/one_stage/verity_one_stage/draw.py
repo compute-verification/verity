@@ -24,6 +24,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
+from verity.ir.codec import canonical_json
 from verity.ir.program import Program
 
 from . import partition as P
@@ -78,6 +79,14 @@ def _int(x: Any) -> bool:
     return isinstance(x, int) and not isinstance(x, bool)
 
 
+def same_law(a: Any, b: Any) -> bool:
+    """Two law objects are the same canonical bytes (so `true` is not `1`, as the Lean verifier reads them)."""
+    try:
+        return canonical_json(a) == canonical_json(b)
+    except (TypeError, ValueError):
+        return False
+
+
 def strata_problem(law: Mapping[str, Any], population: int) -> str | None:
     """Why a stratified law object isn't well formed over `population` units, or None: each stratum is exactly
     {template, units, k} with a distinct template; the ranges are ascending, disjoint and non-empty and tile
@@ -99,7 +108,7 @@ def strata_problem(law: Mapping[str, Any], population: int) -> str | None:
             return f"stratum {s['template']!r}: units are non-empty [lo, hi) ranges"
         if any(b[0] <= a[1] for a, b in zip(rs, rs[1:])):
             return f"stratum {s['template']!r}: ranges ascending, disjoint and not adjacent"
-        if s["k"] != stratum_k(k, sum(hi - lo for lo, hi in rs), population):
+        if not _int(s["k"]) or s["k"] != stratum_k(k, sum(hi - lo for lo, hi in rs), population):
             return f"stratum {s['template']!r}: k is not the rule's"
         ranges += rs
     for lo, hi in sorted(ranges):
@@ -121,7 +130,7 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
         c.fail("keys", sorted(set(draw) ^ keys))
         return c.verdict()
     n, units = draw["population"], draw["units"]
-    if law_of(draw) != dict(law):
+    if not same_law(law_of(draw), dict(law)):
         c.fail("law", {"drawn": law_of(draw), "verifier": dict(law)})
     if n != registration["population"]:
         c.fail("population", {"drawn": n, "registered": registration["population"]})
@@ -161,4 +170,4 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     return c.verdict()
 
 
-__all__ = ["check_draw", "check_proved", "derive", "law_of", "parse_law", "strata_problem", "stratum_k"]
+__all__ = ["check_draw", "check_proved", "derive", "law_of", "parse_law", "same_law", "strata_problem", "stratum_k"]
