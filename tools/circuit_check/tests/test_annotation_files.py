@@ -16,7 +16,7 @@ import pytest
 from circuit_check import targets as T
 from verity.ir import annotations as A
 from verity.ir import codec
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ir.program import Program
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -55,8 +55,11 @@ def _calling(fn) -> dict:
     return codec.encode_program(Program(bind(call)))
 
 
-def _owner(fn) -> str:
-    impl = getattr(fn, "evaluate", None) or getattr(fn, "body", None)
+def _owner(stem: str) -> str:
+    """Core's or the vLLM registry's: the module of the registered Definition's body (a specialization's body is built in
+    `verity.ir`), or of a primitive's evaluator."""
+    d = REGISTRY.defs.get(stem)
+    impl = getattr(d, "evaluate", None) or getattr(d, "body", None)
     return "vllm" if getattr(impl, "__module__", "").startswith("verity_vllm") else "core"
 
 
@@ -82,12 +85,17 @@ def test_annotation_file(owner, path, families):
         if not fns:
             problems.append(f"{stem}: no Definition the circuit-check catalog reaches")
             continue
-        if _owner(fns[0]) != owner:
-            problems.append(f"{stem}: written in {owner}'s file, owned by {_owner(fns[0])}")
+        if _owner(stem) != owner:
+            problems.append(f"{stem}: written in {owner}'s file, owned by {_owner(stem)}")
         for fn in fns:
             v = A.validate({"format": A.FORMAT, "entries": mine}, _calling(fn))
             problems += [f"{fn.id}: {x}" for x in v.errors] + [f"{fn.id}: stale {x}" for x in v.stale] + [f"{fn.id}: absent {x}" for x in v.absent]
     # The whole file once more, for what spans Definitions: each (key, field) set once, groups closed.
-    whole = A.validate(ann, _calling(next(iter(families.values()))[0]))
+    some = _calling(next(iter(families.values()))[0])
+    whole = A.validate(ann, some)
     problems += [str(x) for x in whole.errors if x["code"] not in ("unresolved",)]
     assert not problems, "\n".join(problems)
+    # Carrying the file moves no program digest.
+    with_ann = A.attach(some, ann)
+    assert codec.program_digest(with_ann) == codec.program_digest(some)
+    assert PO.program_sha512(with_ann) == PO.program_sha512(some)
