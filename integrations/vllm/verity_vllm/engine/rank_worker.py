@@ -618,13 +618,12 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
         from types import SimpleNamespace
-
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
         facts = _tp_facts(self)
@@ -637,9 +636,7 @@ class TP2CaptureWorkerExtension:
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
         if hidden_so:
             from pathlib import Path as _P
-
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source
-
             src_cls = getattr(com, "hidden_source_cls", HiddenM1Source)
             com.attach_source(src_cls(com, hidden_so, ns=(hidden_ns or _P(hidden_so).stem)))
             res["hidden_source"] = hidden_so
@@ -659,6 +656,8 @@ class TP2CaptureWorkerExtension:
                 res["moe_source"] = None
         except Exception as e:  # noqa: BLE001 -- a model without vLLM's fused_moe modules; the rank reports it and binds no MoE plane
             res["moe_source"] = {"error": repr(e)[:200]}
+        if tap_sources is not None:                   # opt-in, never the record: `acquire.sources.taps.for_ranks`, bound by the TP driver
+            res["tap_sources"] = tap_sources(com, model, required_manifest, rank)
         if tp_partials_omit_rank is not None and int(tp_partials_omit_rank) == rank:
             tp_partials = False          # NEGATIVE (R15 TP-04): THIS rank binds collective outputs only; its manifest partials must go unbound
         if tp_partials:

@@ -25,6 +25,7 @@ ALLOWED_EXTRA = (
     "backends/direct/V2_AIR.md",
     "backends/direct/encode/V2_SHAPE.md",
     "backends/vole/ASSUMPTIONS.md",
+    "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
@@ -66,6 +67,12 @@ OVERSIZE_FIXTURES = {
 
 
 def _tracked() -> list[str]:
+    if not (ROOT / ".git").exists():                # a shipped `git archive` (research run --source): its files are the commit's,
+        out = []                                    # beside what the machine adds (the runner's READY.json, uv's .venv, bytecode)
+        for d, dirs, files in os.walk(ROOT):
+            dirs[:] = [x for x in dirs if x not in (".venv", "__pycache__")]
+            out += [os.path.relpath(os.path.join(d, f), ROOT) for f in files]
+        return sorted(p for p in out if p != "READY.json")
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [p.decode() for p in out.split(b"\0") if p]
 

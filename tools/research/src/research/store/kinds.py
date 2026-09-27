@@ -33,6 +33,7 @@ KINDS: dict[str, str] = {
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
+    "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",

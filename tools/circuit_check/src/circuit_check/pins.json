@@ -1,0 +1,80 @@
+{
+ "pieces": {
+  "AmpereBF16TcDot16_v1": {
+   "and": 8623
+  },
+  "Bf16AddF2fp_v1": {
+   "and": 754
+  },
+  "Bf16Add_v1": {
+   "and": 754
+  },
+  "Bf16ToF32_v1": {
+   "and": 0
+  },
+  "F2fpBf16_v1": {
+   "and": 77
+  },
+  "F32Add_v1": {
+   "and": 823
+  },
+  "F32Fma_v1": {
+   "and": 4498
+  },
+  "F32Mul_v1": {
+   "and": 2406
+  },
+  "F32ToBf16Rn_v1": {
+   "and": 77
+  },
+  "HopperBF16WgmmaDot16_v1": {
+   "and": 8233
+  },
+  "RopeOutAdd_v1": {
+   "and": 2998
+  },
+  "RopeOut_v1": {
+   "and": 2998
+  },
+  "SiluMulBf16_v1": {
+   "and": 2699
+  }
+ },
+ "units": {
+  "attention-head/d64-bn128/sm80-fa2-bf16": {
+   "and": 8623,
+   "not": 1360,
+   "xor": 16009
+  },
+  "gemm-coordinate/k64/sm90-wgmma-bf16": {
+   "and": 8233,
+   "not": 1178,
+   "xor": 15279
+  },
+  "gumbel-top-p-token-select/v64/fp32": {
+   "and": 5099,
+   "not": 1305,
+   "xor": 8723
+  },
+  "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": {
+   "and": 317334,
+   "not": 92003,
+   "xor": 522198
+  },
+  "rmsnorm-triton/n128-eps1e-06/bf16": {
+   "and": 142450,
+   "not": 38663,
+   "xor": 235174
+  },
+  "rope-head/d64/neox-bf16": {
+   "and": 5996,
+   "not": 1733,
+   "xor": 9774
+  },
+  "silu-mul/i8192/bf16": {
+   "and": 2699,
+   "not": 260,
+   "xor": 398400
+  }
+ }
+}

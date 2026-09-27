@@ -18,6 +18,7 @@ verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
 verity_vllm/ops/pod_hidden_gpu.sh
 verity_vllm/ops/pod_norm_tap.sh
+verity_vllm/ops/pod_router_tap.sh
 verity_vllm/ops/stoch_negative_n3.sh
 verity_vllm/ops/stoch_negatives.sh
 **/*_negatives.sh
@@ -32,4 +33,6 @@ verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
 verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
+verity_vllm.properties.router_tap_exactness
+verity_vllm.properties.vocab_range_exactness
 tests/regression/

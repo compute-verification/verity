@@ -293,13 +293,12 @@ def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, sp
     and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
     from verity_vllm.program.registry import sampling as SM
     from verity_vllm.program.registry import sampling_rows as SR
-    from verity_vllm.program.registry import topp_split as TS
 
     logits = np.asarray(logits, dtype=np.uint16).reshape(-1)
     V = len(logits)
     temp_, rcp, skip, noisy = row_scalars(temp)
     scaled = np.asarray(SR.temperature_scale_row(logits, temp_), dtype=np.uint32)
-    keep = np.asarray(TS.topp_keep_row(scaled.view(np.float32), SM._f(int(top_p)), SM._splits_of(int(splits))), dtype=bool).reshape(-1)
+    keep = SM.topp_keep(scaled.view(np.float32), SM._f(int(top_p)), int(splits))
     masked = np.where(keep, scaled, np.uint32(NEG_INF)).astype(np.uint32)
     g = np.asarray(SR.noise_row(SM.stream_key(int(seed), int(pos)), V), dtype=np.uint32)
     y = _add_ftz_rows(masked, g) if noisy else masked
@@ -317,7 +316,6 @@ def native_words(cuts: np.ndarray, top_p: int, seed: int, pos: int, temp: int, s
     words): what :func:`check_native` holds a file's cut words to."""
     from verity_vllm.program.registry import sampling as SM
     from verity_vllm.program.registry import sampling_rows as SR
-    from verity_vllm.program.registry import topp_split as TS
 
     V = (len(cuts) - len(SCALARS) - len(INIT)) // len(LANE)
     lane = np.asarray(cuts[len(SCALARS) + len(INIT):], dtype=np.uint32).reshape(V, len(LANE))
@@ -326,8 +324,7 @@ def native_words(cuts: np.ndarray, top_p: int, seed: int, pos: int, temp: int, s
     out[:4] = row_scalars(temp)
     out[4:7] = 0
     nl = out[len(SCALARS) + len(INIT):].reshape(V, len(LANE))
-    nl[:, LANE.index("kbit")] = np.asarray(TS.topp_keep_row(scaled.view(np.float32), SM._f(int(top_p)), SM._splits_of(int(splits))),
-                                           dtype=bool).reshape(-1)
+    nl[:, LANE.index("kbit")] = SM.topp_keep(scaled.view(np.float32), SM._f(int(top_p)), int(splits))
     nl[:, LANE.index("g")] = SR.noise_row(SM.stream_key(int(seed), int(pos)), V)
     return out
 

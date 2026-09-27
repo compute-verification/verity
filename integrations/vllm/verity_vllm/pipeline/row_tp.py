@@ -177,7 +177,8 @@ class TpRow(Row):
             manr += ["--programs-root", self.rank(r), "--rank", str(r)]
             wds += ["--workload-digest", wd]
         return self.run_tl(stage, to, f"{self.d}/manifest.log",
-                           self.cli("manifest", "build-global", "--fixture", self.wl, *manr, "--ranks", str(self.W), *wds, "--out", f"{self.d}/manifest.json"))
+                           self.cli("manifest", "build-global", "--fixture", self.wl, *manr, "--ranks", str(self.W), *wds, *R.tap_policy_flags(self.ck_),
+                                    "--out", f"{self.d}/manifest.json"))
 
     def build(self) -> None:
         nsh = len(self.shapes)
@@ -301,6 +302,9 @@ class TpRow(Row):
         if not os.path.isfile(self.hidden_so):
             self.verdict("commit", "FAIL", f"hidden .so missing: {self.hidden_so}")
             raise Stop(12)
+        if ck.router_tap == "1" and not os.path.isfile(self.env.router_tap_so):
+            self.verdict("commit", "FAIL", f"ROUTER_TAP=1 and the router tap .so is missing: {self.env.router_tap_so} (ops/pod_router_tap.sh)")
+            raise Stop(12)
         for r in range(self.W):
             if not R.tp_rank_workload_digest(self.bdir, r):
                 self.verdict("commit", "FAIL", f"GP-01 workload digest absent for rank {r}: Build first")
@@ -326,6 +330,10 @@ class TpRow(Row):
                        "--out", f"{d}/commit")
         if self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
+        if ck.router_tap == "1":
+            cmd += ["--router-tap-so", self.env.router_tap_so]
+        if ck.vocab_tap == "1":
+            cmd.append("--vocab-range")
         cmd += (ck.extra_commit_args or "").split()
         rc_k = self.run_tl("commit.tp_commit", to_k, f"{d}/commit.log", cmd)
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")

@@ -45,7 +45,8 @@ import hashlib
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from functools import reduce
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.proofs.query import Policy, RequiredValues, ValueRef, required_values
 from verity_vllm.query.manifest import format as fmt
@@ -69,7 +70,7 @@ SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 STOCHASTIC_SAMPLING_EVENTS = frozenset({"GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v1"})
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
 
 
 def collective_kind(family: str) -> str | None:
@@ -478,8 +479,8 @@ def query_header(profile: str, hidden_family: str, *, return_slots: bool) -> dic
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
                      workload: Mapping[str, Any] | None = None, artifact: Mapping[str, Any] | None = None, program_dir: str | None = None,
-                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None) -> BridgeResult:
-    """The v1-shaped manifest of ONE request Program (B=1 component) under Q_module_body_v1 (+ `norm_scales`: `query.norm_scales.POLICY`)."""
+                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = ()) -> BridgeResult:
+    """The v1-shaped manifest of ONE request Program (B=1 component) under Q_module_body_v1 (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
     hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
@@ -506,12 +507,10 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     sites = collective_sites(pop)
     aliases.update(sites)
     impl = corr.implementation_path
-
     identities: list[dict[str, Any]] = []
     fam_counts: Counter = Counter()
     unmodelled: Counter = Counter()
     residual_counts: Counter = Counter()
-
     def add(family: str, step: int | str, invocation: int, op_path: str, member: str, lo: int, hi: int | None, **extra):
         row = {"family": family, "program_digest": pdig, "request_id": request_id, "step": step, "invocation": invocation,
                "op_path": op_path, "output_member": member, "element_range": [lo, hi], "rank": rank}
@@ -635,6 +634,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for f in alias_faults + pop.tp_faults:
         unmodelled[f] += 1
     scales = norm_scales.kernel_rows(pop, add, impl, aliases) if norm_scales else None     # the norm-scale tap's rows: interior to the kernel norms
+    tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
     q = query_header(profile, hidden_family, return_slots=return_slots)
     if prog_world > 1:
@@ -655,7 +655,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "correspondence": corr.provenance(),                 # which reader gave the owning modules: the runtime-correspondence/v1 record or the v1 annotations
            "workload": {"row_id": sweep.get("row_id"), "batch": sweep.get("batch"), "request_id": request_id, "workload_request_id": workload_request_id,
                         "arrive_step": arrive} if workload else None,
-           "query": norm_scales.header(q, scales) if norm_scales else q, "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
+           "query": reduce(lambda h, ts: ts[0].header(h, ts[1]), tapped, norm_scales.header(q, scales) if norm_scales else q), "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
            "flash_attn_version": fa, "ranks": ranks, "rank": rank,
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),
