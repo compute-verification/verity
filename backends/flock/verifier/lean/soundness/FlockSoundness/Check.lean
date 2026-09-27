@@ -109,6 +109,9 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Law.escape_le_of_mem
 #print axioms FlockSoundness.Audit.Law.subset_escape
 #print axioms FlockSoundness.Audit.Law.subset_miss
+#print axioms FlockSoundness.Audit.Law.avg_escape_subsets
+#print axioms FlockSoundness.Audit.Law.choose_support
+#print axioms FlockSoundness.Audit.Law.subset_minimax
 #print axioms FlockSoundness.Audit.Partition.compose
 #print axioms FlockSoundness.Audit.Partition.compose_cone
 #print axioms FlockSoundness.Audit.Partition.correct_congr

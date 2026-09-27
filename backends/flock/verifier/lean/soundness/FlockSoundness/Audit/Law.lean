@@ -1,4 +1,4 @@
-import FlockSoundness.Game.Basic
+import FlockSoundness.Game.Prob
 import Mathlib.Data.Fintype.Powerset
 import Mathlib.Data.Nat.Choose.Basic
 
@@ -147,6 +147,163 @@ theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
       (by simpa using hK)
     have := (subset n k hk).escape_le_miss (K := K) hB.ge
     rwa [subset_escape, hB] at this
+
+/-! ## The uniform subset is optimal
+
+Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
+law (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
+`drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
+inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
+
+theorem avg_comm {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0∞) :
+    avg (fun c => avg fun d => f c d) = avg fun d => avg fun c => f c d := by
+  unfold avg
+  simp only [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun d _ => Finset.sum_congr rfl fun c _ => by ring
+
+theorem avg_sum {C ι : Type} [Fintype C] (s : Finset ι) (f : ι → C → ℝ≥0∞) :
+    avg (fun c => ∑ i ∈ s, f i c) = ∑ i ∈ s, avg (f i) := by
+  unfold avg
+  simp only [Finset.mul_sum]
+  exact Finset.sum_comm
+
+/-- A law's mean draw size is the sum of its inclusion probabilities. -/
+theorem avg_card (L : Law n) : avg (fun ω => ((L.draw ω).card : ℝ≥0∞)) = ∑ u, L.incl u := by
+  classical
+  have h : ∀ ω, ((L.draw ω).card : ℝ≥0∞) = ∑ u, if u ∈ L.draw ω then (1 : ℝ≥0∞) else 0 := by
+    intro ω
+    rw [Finset.sum_boole, Finset.filter_mem_eq_inter, Finset.univ_inter]
+  simp only [h]
+  rw [avg_sum]
+  exact Finset.sum_congr rfl fun u _ => avg_ite_eq_prCoin _
+
+/-- **Averaging over `K`-sets.** For any law, the escape of a uniformly random `K`-set is the mean
+of `C(n - |S|, K) / C(n, K)` over the draw `S`. -/
+theorem avg_escape_subsets (M : Law n) {K : ℕ} (hK : K ≤ n) :
+    avg (fun B : (subset n K hK).Ω => M.escape B.1) =
+      avg fun ω => (((n - (M.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
+  classical
+  unfold escape prCoin
+  rw [avg_comm]
+  refine congrArg avg (funext fun ω => ?_)
+  rw [← subset_escape hK (M.draw ω)]
+  unfold escape prCoin
+  refine congrArg avg (funext fun B => ?_)
+  by_cases h : Disjoint (M.draw ω) B.1
+  · simp only [subset, h, h.symm, ite_true]
+  · have h' : ¬ Disjoint B.1 (M.draw ω) := fun h' => h h'.symm
+    simp only [subset, h, h', ite_false]
+
+/-- The drop of `s ↦ C(n - s, K)` at `s`. -/
+def drop (n K s : ℕ) : ℕ := (n - s).choose K - (n - (s + 1)).choose K
+
+theorem choose_eq_add_drop (n K s : ℕ) :
+    (n - s).choose K = (n - (s + 1)).choose K + drop n K s := by
+  have : (n - (s + 1)).choose K ≤ (n - s).choose K := Nat.choose_le_choose K (by omega)
+  unfold drop
+  omega
+
+/-- **`s ↦ C(n - s, K)` is convex**: its drops fall. -/
+theorem drop_anti (n K s : ℕ) : drop n K (s + 1) ≤ drop n K s := by
+  rcases K with _ | K
+  · simp [drop]
+  · by_cases hs : s + 1 < n
+    · have h1 : drop n (K + 1) s = (n - (s + 1)).choose K := by
+        unfold drop
+        obtain ⟨m, hm⟩ : ∃ m, n - s = m + 1 := ⟨n - s - 1, by omega⟩
+        rw [hm, show n - (s + 1) = m by omega, Nat.choose_succ_succ']
+        omega
+      have h2 : drop n (K + 1) (s + 1) = (n - (s + 1 + 1)).choose K := by
+        unfold drop
+        obtain ⟨m, hm⟩ : ∃ m, n - (s + 1) = m + 1 := ⟨n - s - 2, by omega⟩
+        rw [hm, show n - (s + 1 + 1) = m by omega, Nat.choose_succ_succ']
+        omega
+      rw [h1, h2]
+      exact Nat.choose_le_choose K (by omega)
+    · have : drop n (K + 1) (s + 1) = 0 := by
+        unfold drop
+        rw [show n - (s + 1) = 0 by omega, show n - (s + 1 + 1) = 0 by omega]
+        simp
+      rw [this]
+      exact Nat.zero_le _
+
+theorem drop_antitone (n K : ℕ) : Antitone (drop n K) :=
+  antitone_nat_of_succ_le (drop_anti n K)
+
+/-- **The supporting line at `k`.** -/
+theorem choose_support (n K k s : ℕ) :
+    (n - k).choose K + k * drop n K k ≤ (n - s).choose K + s * drop n K k := by
+  set D := drop n K k
+  rcases le_total k s with h | h
+  · obtain ⟨t, rfl⟩ := Nat.exists_eq_add_of_le h
+    induction t with
+    | zero => simp
+    | succ t ih =>
+        have e := choose_eq_add_drop n K (k + t)
+        have hd : drop n K (k + t) ≤ D := drop_antitone n K (by omega)
+        have hm : (k + (t + 1)) * D = (k + t) * D + D := by ring
+        rw [show k + (t + 1) = k + t + 1 by omega] at hm ⊢
+        rw [hm]
+        have := ih (by omega)
+        omega
+  · have key : ∀ t j, j + t = k → (n - k).choose K + k * D ≤ (n - j).choose K + j * D := by
+      intro t
+      induction t with
+      | zero => intro j hj; rw [show j = k by omega]
+      | succ t ih =>
+          intro j hj
+          have e := choose_eq_add_drop n K j
+          have hd : D ≤ drop n K j := drop_antitone n K (by omega)
+          have hm : (j + 1) * D = j * D + D := by ring
+          have := ih (j + 1) (by omega)
+          rw [hm] at this
+          omega
+    exact key (k - s) s (by omega)
+
+/-- **Uniform is optimal.** No law that proves `k` units on average has a smaller count curve than
+the uniform `k`-subset, at any `K`. -/
+theorem subset_minimax (L : Law n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.incl u = k) {K : ℕ}
+    (hK : K ≤ n) : (subset n k hk).miss K ≤ L.miss K := by
+  classical
+  set D := drop n K k
+  have hc : (n.choose K : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hK).ne'
+  -- the uniform subset's count curve, read through the averaging identity
+  have hU : (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
+    have h1 : avg (fun B : (subset n K hK).Ω => (subset n k hk).escape B.1) = (subset n k hk).miss K := by
+      rw [subset_miss hk hK]
+      refine (congrArg avg (funext fun B => ?_)).trans (avg_const _)
+      rw [subset_escape, B.2]
+    rw [← h1, avg_escape_subsets]
+    refine (congrArg avg (funext fun ω => ?_)).trans (avg_const _)
+    show _ = (((n - k).choose K : ℕ) : ℝ≥0∞) / _
+    have : ((subset n k hk).draw ω).card = k := ω.2
+    rw [this]
+  -- Jensen at the mean `k`, through the supporting line
+  have hJ : (((n - k).choose K : ℕ) : ℝ≥0∞) ≤ avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) := by
+    have hkD : (k : ℝ≥0∞) * D ≠ ⊤ := ENNReal.mul_ne_top (ENNReal.natCast_ne_top _) (ENNReal.natCast_ne_top _)
+    refine ENNReal.le_of_add_le_add_right hkD ?_
+    calc (((n - k).choose K : ℕ) : ℝ≥0∞) + k * D
+        = avg fun _ : L.Ω => (((n - k).choose K + k * D : ℕ) : ℝ≥0∞) := by
+          rw [avg_const]; push_cast; ring
+      _ ≤ avg fun ω => (((n - (L.draw ω).card).choose K + (L.draw ω).card * D : ℕ) : ℝ≥0∞) :=
+          avg_mono fun ω => by exact_mod_cast choose_support n K k (L.draw ω).card
+      _ = (avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞)) +
+            (avg fun ω => ((L.draw ω).card : ℝ≥0∞)) * D := by
+          push_cast
+          rw [avg_add, avg_mul_const]
+      _ = _ := by rw [avg_card, hmean]
+  -- the average over `K`-sets is at most the maximum
+  have hmax : avg (fun B : (subset n K hK).Ω => L.escape B.1) ≤ L.miss K :=
+    (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
+  calc (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := hU
+    _ ≤ (avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞)) / (n.choose K : ℝ≥0∞) := by
+        gcongr
+    _ = avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
+        simp only [div_eq_mul_inv]
+        rw [avg_mul_const]
+    _ = avg (fun B : (subset n K hK).Ω => L.escape B.1) := (avg_escape_subsets L hK).symm
+    _ ≤ L.miss K := hmax
 
 end Law
 
