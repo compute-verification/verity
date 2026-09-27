@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("torch")                                  # gpu.field is torch arithmetic
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from gpu.transcript import CoinError, LiveTranscript, ReplayTranscript, Transcript, coins_text, parse_coins  # noqa: E402
 

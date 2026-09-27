@@ -81,7 +81,7 @@ def test_replica_map_previous_block_is_history_of_current_entries() -> None:
 def test_replica_map_paths_are_tracked() -> None:
     import subprocess
 
-    tracked = set(subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=True, capture_output=True).stdout.decode().split("\0"))
+    tracked = set(subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=False, capture_output=True).stdout.decode().split("\0"))
     if not tracked - {""}:
         pytest.skip("not a git checkout")
     untracked = [rel for rel in _entries().values() if rel not in tracked and not any(t.startswith(rel.rstrip("/") + "/") for t in tracked)]

@@ -55,7 +55,9 @@ primitive families through `verity.ir.codec.register_lazy_family`), lowering (`f
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).
+VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).  `registry/fa3_check_inf.py` is FA3's
+per-iteration `Check_inf` chain (`Attention_v4`), bound only under `TargetProfile.fa3_construction = "check-inf-per-iteration"` until the
+re-baseline epoch switches the record to it.
 
 **`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
@@ -80,7 +82,8 @@ required, name a model.
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  The norm-scale
 tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so are the guarded-max tap (`GUARDED_MAX_TAP=1`,
 `query/guarded_max.py`: the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` / `pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write
-`GuardNegInfZero(m)` into word 3 of the stream's ROW entry), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
+`GuardNegInfZero(m)` into word 3 of the stream's ROW entry, and each key block's `max * scale` into the MS class appended after
+FIN (`VERITY_MAT_SRC=123`), which lengthens every stream identity of the manifest), the router-softmax tap (`ROUTER_TAP=1`, `query/router_softmax.py`: the ordered
 router's committed softmax per token, from a tapped `topk_softmax`) and the vocabulary-range source (`VOCAB_TAP=1`, `query/vocab_range.py`: a
 TP rank's `tok - START` and range bits per token, from the fused embedding's ids, no kernel change).
 Never: decide what is required; never a model-name list.
