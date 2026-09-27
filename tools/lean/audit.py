@@ -19,7 +19,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`
     policy       the package has no `lean-audit.json` (the message carries a template)
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
-                 toolchain provides differ from the record, which changes only at a bump
+                 toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
@@ -534,9 +534,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     else:
         for d in sorted(set(policy["dependencies"]) | set(deps)):
             if policy["dependencies"].get(d) != deps.get(d):
-                fails.append(f"dependencies: {d}'s built .olean files differ from the record (a different cache or toolchain, "
-                             f"a build that is not reproducible, or tampering); at a bump, run `audit.py --update` and review "
-                             f"it")
+                fails.append(f"dependencies: the .olean files of the modules the package imports from {d} differ from the "
+                             f"record. After a change to the package's imports, or at a bump, run `audit.py --update` (and "
+                             f"review it at a bump); otherwise it is a different cache or toolchain, a build that is not "
+                             f"reproducible, or tampering")
     if replay:
         s = time.monotonic()
         found = work / "replay.json"
@@ -612,6 +613,12 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     if clean:
         fails.append("controls: the clean fixture fails the audit:\n" + "\n".join(clean))
     expect = json.loads((FIXTURES / "violations.json").read_text())
+
+    def beside(failures: list[str]) -> list[str]:
+        """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
+        import changes it (its own test covers that check)."""
+        return [f for f in failures if not f.startswith("dependencies:")]
+
     for name, v in expect.items():
         bad = work / f"bad-{name}"
         shutil.rmtree(bad, ignore_errors=True)
@@ -637,14 +644,14 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                     fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
                 (bad / rel).unlink()
         if v.get("replay_only"):
-            if missed := audit(bad, reports, replay=False)["failures"]:
+            if missed := beside(audit(bad, reports, replay=False)["failures"]):
                 fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
         got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False))["failures"]
         for rel in v.get("not_written", []):
             if (bad / rel).exists():
                 fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
         if v.get("passes"):
-            if got:
+            if beside(got):
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))

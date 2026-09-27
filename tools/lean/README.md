@@ -31,8 +31,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
-  built or not. Lean's `.olean` files are reproducible, so the record holds on any machine and changes only at a bump
-  (seconds);
+  built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
+  imports change (run `--update`) or at a bump; checking it takes seconds;
 - each `layers` rule holds: the modules under a prefix import only the listed prefixes;
 - the pinned theorems say what their records say (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies): a declaration
