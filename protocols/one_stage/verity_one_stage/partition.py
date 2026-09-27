@@ -6,11 +6,12 @@ queries `Q_template_instance` v0 and `Q_template_instances` v0.
 
 * **Digest.** `SHA-512("verity/partition/v1\\0" || canon(object))`, canon = `verity.ir.codec.canonical_json`.
 * **Program.** SHA-512 over the canonical descriptor `codec.program_digest` hashes with SHA-256 (annotations excluded).
-* **`Q_template_instance` v0**, `params = {"template": <Definition id>}`. The root body's nodes other than its `Input` nodes
-  must each be a `call` or a `batch` of that Definition; each call is one unit and each batch member one unit, numbered in
+* **`Q_template_instance` v0**, `params = {"template": <descriptor id>}` (`template_id`: the id the program descriptor
+  lists the Definition under, as core's `verity.ir.partition_object` and the Lean verifier match it). The root body's nodes other than its `Input` nodes
+  must each be a `call` or a `batch` of that Definition (by descriptor id); each call is one unit and each batch member one unit, numbered in
   canonical order (node order, then member). The `Input` gates are the input unit: always checked, never drawn. No width
   rule is applied, so a unit is a whole instance however wide its outputs. The query refuses any other program.
-* **`Q_template_instances` v0**, `params = {"templates": [<Definition id>, ...]}` (distinct). The same over several
+* **`Q_template_instances` v0**, `params = {"templates": [<descriptor id>, ...]}` (distinct). The same over several
   templates: every node is an instance of one of them, every listed template has an instance, and the unit order is
   still canonical node order. `ranges` gives each root node's template and its units' first index and count.
 
@@ -22,6 +23,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Mapping, Sequence
 
+from verity.ir import codec
 from verity.ir.codec import canonical_json, encode_program
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.program import Program
@@ -39,12 +41,21 @@ class QueryRefused(ValueError):
     """The query does not apply to the program."""
 
 
-def template_instance_query(template_id: str) -> dict[str, Any]:
-    return {"name": Q_TEMPLATE_INSTANCE, "version": Q_TEMPLATE_INSTANCE_VERSION, "params": {"template": template_id}}
+_descriptor_id = getattr(codec, "descriptor_id", None) or codec._spec_id
 
 
-def template_instances_query(template_ids: Sequence[str]) -> dict[str, Any]:
-    return {"name": Q_TEMPLATE_INSTANCES, "version": Q_TEMPLATE_INSTANCES_VERSION, "params": {"templates": list(template_ids)}}
+def template_id(template: Any) -> str:
+    """A template as the query names it: its descriptor id (the id the program descriptor lists it under), or that id."""
+    return template if isinstance(template, str) else _descriptor_id(template)
+
+
+def template_instance_query(template: Any) -> dict[str, Any]:
+    return {"name": Q_TEMPLATE_INSTANCE, "version": Q_TEMPLATE_INSTANCE_VERSION, "params": {"template": template_id(template)}}
+
+
+def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
+    return {"name": Q_TEMPLATE_INSTANCES, "version": Q_TEMPLATE_INSTANCES_VERSION,
+            "params": {"templates": [template_id(t) for t in templates]}}
 
 
 def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]]) -> Program:
@@ -121,10 +132,11 @@ def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, i
     for k, node in enumerate(program.root.body.nodes):
         if getattr(node.fn, "family", None) == "Input":
             continue
-        if node.fn.id not in templates or node.form not in ("call", "batch"):
-            raise QueryRefused(f"root node {k} computes {node.fn.id!r} ({node.form}), not an instance of {templates!r}")
+        fid = _descriptor_id(node.fn)
+        if fid not in templates or node.form not in ("call", "batch"):
+            raise QueryRefused(f"root node {k} computes {fid!r} ({node.form}), not an instance of {templates!r}")
         n = node.n if node.form == "batch" else 1
-        out.append((node.fn.id, at, n))
+        out.append((fid, at, n))
         at += n
     missing = set(templates) - {t for t, _, _ in out}
     if missing:
@@ -137,6 +149,6 @@ def units(program: Program, query: Mapping[str, Any]) -> int:
     return sum(n for _, _, n in ranges(program, query))
 
 
-__all__ = ["FORMAT", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCE_VERSION", "Q_TEMPLATE_INSTANCES", "Q_TEMPLATE_INSTANCES_VERSION",
+__all__ = ["template_id", "FORMAT", "Q_TEMPLATE_INSTANCE", "Q_TEMPLATE_INSTANCE_VERSION", "Q_TEMPLATE_INSTANCES", "Q_TEMPLATE_INSTANCES_VERSION",
            "QueryRefused", "digest", "mixed_population_program", "partition", "population_program", "program_sha512", "ranges",
            "template_instance_query", "template_instances_query", "units"]

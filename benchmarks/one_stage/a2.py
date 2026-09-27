@@ -85,10 +85,10 @@ def main() -> int:
     law = D.parse_law(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
-    query = P.template_instance_query(template.id)
+    query = P.template_instance_query(template)
     part = P.partition(program, query)
     if a.legacy_partition:
-        part = {"program": part["program"], "query": {"name": query["name"], "version": query["version"], "template": template.id,
+        part = {"program": part["program"], "query": {"name": query["name"], "version": query["version"], "template": P.template_id(template),
                                                       "width_rule": None}}
     summary: dict = {"n": n, "k": a.k, "delta": a.delta, "source": rec.get("window", {}).get("kind"), "n_from": "registration",
                      "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else "verity/partition/v1"}

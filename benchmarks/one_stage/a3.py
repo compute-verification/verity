@@ -103,11 +103,11 @@ def main() -> int:
 
     # the partition over the verifier's own program
     program = P.mixed_population_program([(m["defn"], m["n"]) for m in members])
-    query = P.template_instances_query([m["defn"].id for m in members])
+    query = P.template_instances_query([m["defn"] for m in members])
     ranges = P.ranges(program, query)
     n = P.units(program, query)
     for m, (tid, base, cnt) in zip(members, ranges):
-        assert tid == m["defn"].id and cnt == m["n"]
+        assert tid == P.template_id(m["defn"]) and cnt == m["n"]
         m["base"] = base
 
     # one registration, before the draw
@@ -193,7 +193,7 @@ def main() -> int:
     fewer = P.mixed_population_program([(m["defn"], m["n"] - (1 if i == 0 else 0)) for i, m in enumerate(members)])
     v = R.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = R.check(rec, program, P.template_instances_query([m["defn"].id for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = R.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-query-drops-a-template"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = D.check_draw({**union, "units": union["units"][:-1] + [n]}, rec, law)
     neg["union-draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}

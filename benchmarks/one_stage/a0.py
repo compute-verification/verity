@@ -239,7 +239,7 @@ def main() -> int:
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
     program = P.population_program(template, n)
-    query = P.template_instance_query(template.id)
+    query = P.template_instance_query(template)
     bind = None
     if a.bind:
         part = P.partition(program, query)
