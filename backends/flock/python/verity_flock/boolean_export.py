@@ -44,8 +44,8 @@ CONST0, CONST1 = -1, -2
 DISPLAY = {
     "bf16_to_f32": "bf16→f32", "f32_to_bf16": "f32→bf16 (round)", "unpack": "unpack f32", "round_f32": "round",
     "specials": "specials (NaN/Inf)", "f32_mul": "f32 multiply", "f32_add": "f32 add", "f32_sub": "f32 subtract",
-    "f32_fma": "f32 fused multiply-add", "f32_div_const": "f32 divide by constant", "f32_neg": "f32 negate",
-    "tc_dot16": "tensor-core k-step (total)", "_tc_operand": "tensor-core operand decode",
+    "f32_fma": "f32 fused multiply-add", "f32_div": "f32 divide", "f32_neg": "f32 negate",
+    "tc_dot16": "tensor-core k-step (total)", "tc_dot_e4m3": "FP8 tensor-core k-step (total)", "_tc_operand": "tensor-core operand decode",
     "_classes": "classify (NaN/Inf)", "_finite_or_zero": "finite stand-in", "decode": "one-hot decode",
     "lookup": "table lookup", "_normalize_sig": "normalize", "shl": "shift left", "shr_sticky": "align (shift right, sticky)",
     "min_u": "min", "neg_if": "conditional negate", "select": "select", "is_zero": "zero test", "add": "integer add",
@@ -204,6 +204,8 @@ def _wrap(name, fn):
             node.label = f"MUFU {a[1]} table read (lookup slot)"
         if name == "tc_dot16":
             node.label = _tc_label(fn, a, k)
+        if name == "tc_dot_e4m3":
+            node.label = "tensor-core k-step (HopperE4m3QgmmaDot32, total)"
         return r
 
     w.__wrapped__ = fn
@@ -941,15 +943,24 @@ class Walker:
     def tc_unit(self, pid: str) -> str:
         key = ("tc", pid)
         if key not in self.cache:
-            groups, W, F = IL.TC_STEPS[pid]
+            if pid in IL.TC_STEPS_FP8:
+                def build():
+                    C = Circuit(cse=True)
+                    acc = C.input("in0", 32)
+                    a = [C.input(f"in{1 + j}", 8) for j in range(32)]
+                    b = [C.input(f"in{33 + j}", 8) for j in range(32)]
+                    C.output("out0", fp.tc_dot_e4m3(C, acc, a, b, *IL.TC_STEPS_FP8[pid]))
+                    return C
+            else:
+                groups, W, F = IL.TC_STEPS[pid]
 
-            def build():
-                C = Circuit(cse=True)
-                b = [C.input(f"in{j}", 16) for j in range(16)]
-                a = [C.input(f"in{16 + j}", 16) for j in range(16)]
-                acc = C.input("in32", 32)
-                C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
-                return C
+                def build():
+                    C = Circuit(cse=True)
+                    b = [C.input(f"in{j}", 16) for j in range(16)]
+                    a = [C.input(f"in{16 + j}", 16) for j in range(16)]
+                    acc = C.input("in32", 32)
+                    C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
+                    return C
             C, root = trace(build)
             self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "tc-step", list_root=True)
             del C, root
@@ -958,7 +969,7 @@ class Walker:
 
     def prim(self, pid: str, consts: tuple):
         """(child entry without count) for primitive ``pid`` with operand constants ``consts`` (None = free)."""
-        if pid in IL.TC_STEPS:
+        if pid in IL.TC_STEPS or pid in IL.TC_STEPS_FP8:
             return {"ref": self.tc_unit(pid)}
         p = prims().get(pid) or _width_prim(pid)
         if p is None:
