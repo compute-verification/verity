@@ -4162,6 +4162,24 @@
     ],
     "selftest_note": "expectations and upstream's live verdicts in each case.json; aborted cases (refused at Hello) replay with empty proof files; output_claim_false and digest_claim_false ran against a false public file the records do not carry, so both verifiers reject them at S2/R7 (their Hello carries that file's \u03a3)",
     "agreement": "r20260927-012244-342d (result art:a59f3cb2): 38/38"
+   },
+   {
+    "tags": "verity/flock-circuit (hm96-sha512 rows, SHA-512 identity and binding digests)",
+    "pr83": "eb90718f",
+    "generator": "flock-circuit selftest --record-dir (PR #83 eb90718f with circuit-vectors-eb90718f.patch, which also records the two draw cases), converted by selftest_records.py; extra/: the patch's honest vector, two draw negatives and a salt mutant",
+    "statement": {
+     "circuit": "art:c49cb61e/rope-head/stage/circuit.txt",
+     "public": "art:c49cb61e/rope-head/stage/pub-4.bin",
+     "circuit_sha512": "c84261e71e7b76c1c169cd4a04a87edf4109947c8fb11d35c39807c37b1c9279530c489d6f5642d3cdc232e8e3871b62ec224ac07b7caa5fe5cbfc7f71519141",
+     "detail": "RoPE d64, 4 instances (population), CPU selftest build (seed_injection: true)"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:c49cb61e/rope-head/records-cpu"
+    ],
+    "forgeries": "art:c49cb61e/rope-head/extra",
+    "selftest_note": "19 selftest cases and the draw cases unit_draw_session (a drawn statement, accepted) and unit_draw_ignored_refused (refused at Hello); extra/: honest_vector, draw_altered and draw_dropped (the record's draw changed or removed: S2), salt_altered (an opened salt flipped, proof_sha512 rebuilt: the Merkle opening)",
+    "agreement": "25/25 (local, 2026-09-27T06:00Z)"
    }
   ],
   "recorded_runs": [
