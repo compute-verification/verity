@@ -441,15 +441,15 @@ Results for RoPE at `m = 25`, 40 real and 40 simulated views per strategy, one V
 | V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | estimation runs | rewinds | failures |
 |---|---|---|---|---|---|---|
 | honest | 40 / 40, all accepted | identical | 40 of 40 | 160 | 40 | 0 |
-| abort | 23 / 25, all accepted | 0.99 | 25 of 40 | 158 | 37 | 0 |
-| adaptive-coins | 24 / 20, all accepted | 0.56 | 20 of 40 | 148 | 33 | 0 |
+| abort | 26 / 22, all accepted | 0.18 | 22 of 40 | 157 | 47 | 0 |
+| adaptive-coins | 23 / 28, all accepted | 0.13 | 28 of 40 | 175 | 52 | 0 |
 | zero-beta | 0 / 0 (all stop at the β round) | identical | 0 of 40 | 0 | 0 | 0 |
-| cap-gated | 22 / 24, all accepted | 0.82 | 24 of 40 | 172 | 41 | 0 |
-| late-gated | 23 / 21, all accepted | 0.82 | 21 of 40 | 160 | 38 | 0 |
+| cap-gated | 22 / 23, all accepted | 1.0 | 23 of 40 | 193 | 55 | 0 |
+| late-gated | 24 / 23, all accepted | 1.0 | 23 of 40 | 176 | 45 | 0 |
 
 Rep 0's online values, the proofs' checked fields (11 classes) and the session relations are indistinguishable real
-against simulated wherever there are enough views, with no value reused across reps (smallest p-value 0.0033, α = 10^-3
-per test). The rewinds are independent trials (`zkgk`, 40 attempts):
+against simulated wherever there are enough views, with no value reused across reps and a column the inner proof opens
+twice counted once (smallest of 363 p-values 0.003, α = 10^-3 per test; as one family, Bonferroni-adjusted p = 1). The rewinds are independent trials (`zkgk`, 40 attempts):
 
 | gated V* | real sessions complete | fresh rewinds complete (p) | rewinds on one reused dummy (p), the defect |
 |---|---|---|---|

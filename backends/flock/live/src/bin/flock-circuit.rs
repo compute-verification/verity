@@ -1436,7 +1436,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "16").parse().unwrap();
     let t: usize = arg("--gk-t", "4").parse().unwrap();
     let eps: u16 = arg("--eps", "4096").parse().unwrap();
-    let tape = [7u8; 32];
+    let tape = [arg("--tape", "7").parse::<u8>().unwrap_or_else(|_| refuse("--tape takes one byte (V*'s tape is that byte repeated)".into())); 32];
     let lay = zk_layout(st);
     let real = |make: &dyn Fn() -> VStar| -> View {
         let v = make();
@@ -1510,7 +1510,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
 fn zkgk(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let attempts: usize = arg("--attempts", "40").parse().unwrap();
     let eps: u16 = arg("--eps", "4096").parse().unwrap();
-    let tape = [7u8; 32];
+    let tape = [arg("--tape", "7").parse::<u8>().unwrap_or_else(|_| refuse("--tape takes one byte (V*'s tape is that byte repeated)".into())); 32];
     let run = |v: VStar, plan: &Plan| -> (View, Vec<Vec<u8>>, Option<bool>) {
         let (view, gate) = (v.view.clone(), v.gate.clone());
         let (_, proofs) = session(st, inst, shared(v), plan, ProverSeed::from_os());
