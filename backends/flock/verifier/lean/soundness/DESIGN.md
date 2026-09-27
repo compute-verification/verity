@@ -176,28 +176,30 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
 
 **The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
 `ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
-assumptions. $N_s$ is the leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
-the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
+assumptions. $Q_s$ is the expected number of commit strings the drawn units read, at most the $N_s$ leaves under the
+serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$ the prover's SHA-512 evaluations. The
+audits are the lifetime doc's A–D.
 
 | Assumption | Knowledge + link | A | B | C | D |
 |---|---|---|---|---|---|
-| **Expected-time collision resistance** (A2, of record) | $t\cdot N_s\,(8N_0/e)/2^{256}$ | $t\cdot2^{-214.7}$ | $t\cdot2^{-205.1}$ | $t\cdot2^{-199.1}$ | $t\cdot2^{-193.4}$ |
+| **Expected-time collision resistance** (A2, of record) | $t\cdot Q_s\,(8N_0/e)/2^{256}$ | $t\cdot2^{-218.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-209.4}$ | $t\cdot2^{-206.4}$ |
 | Strict-time collision resistance (comparison) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
 | Random oracle (comparison; tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
 
 The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which the record doubles (below). The
-strict-time row keeps $\sqrt{q^2/2^{513}}=q/2^{256.5}$, which holds for a budget $q$ fixed in advance.
+strict-time row is the earlier analysis, with $N_s$; it keeps $\sqrt{q^2/2^{513}}=q/2^{256.5}$, which holds for a
+budget $q$ fixed in advance.
 
 The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
 
 | Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
 |---|---|---|---|---|
-| Expected-time (of record) | −141.1 | −125.1 | −105.1 | −95.1 |
+| Expected-time (of record) | −145.4 | −129.4 | −109.4 | −99.4 |
 | Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
 | Random oracle | −383 | −351 | −311 | −291 |
 | $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
 
-At $t=2^{80}$ the audits read −134.7, −125.1, −119.1 and −113.4 of record, and −72.2, −69.8, −68.3 and −66.8 under
+At $t=2^{80}$ the audits read −138.4, −129.4, −129.4 and −126.4 of record, and −72.2, −69.8, −68.3 and −66.8 under
 strict time.
 
 - **Expected-time collision resistance, of record.**
@@ -231,17 +233,18 @@ strict time.
   - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
-  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot N_s(8N_0/e)/2^{256}$ up to lower-order
-    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 24 bits below.
+  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
+    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 19 bits below.
   - **A one-bit refinement, for later:** $4N_0/e$, from a value layer drawn from a sequence of auxiliary extractions
-    (the first recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by
-    averaging over that sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
+    (the first recovery behind each string), with the committed transcript then chosen by averaging over that
+    sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
   - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
     $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
   - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
-    sets that read its target. This is the record with room to spare: $t\cdot2^{-209.4}$ for audit B, against $2^{-205.1}$.
+    sets that read its target. The record counts $Q_s$ (Daniel, Sep 27); with $N_s$ it would be $t\cdot2^{-205.1}$ for
+    audit B.
 - **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
   linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
   $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's

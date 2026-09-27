@@ -274,8 +274,9 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
   because a finder can gamble.
 - **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
   stated for all finders: the link theorem takes it for the finder it builds from the prover.
-- **Where it is used.** Only the link term, `t·N_s(8N₀/e)/2^256` per audit (audit B `t·2^-205.1`, `2^-125.1` at
-  `t = 2^80`). The strict-time `2√(t·2^-221.5)` and the random oracle's `t²/2^511` are comparisons (DESIGN.md §3).
+- **Where it is used.** Only the link term, `t·Q_s(8N₀/e)/2^256` per audit, with `Q_s ≤ N_s` the commit strings
+  the drawn units read (audit B `t·2^-209.4`, `2^-129.4` at `t = 2^80`). The strict-time `2√(t·2^-221.5)` and the
+  random oracle's `t²/2^511` are comparisons (DESIGN.md §3).
   The compiled theorem, `δ_tree` and the knowledge term's conflicts keep strict-time `cr/sha-512` (§4).
 
 **Not assumptions** (proved, or to be proved, from the libraries):
@@ -395,8 +396,8 @@ The weights are committed once and every later proof opens that root. The analys
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a unit is wrong only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
-  - Under A2 that term is `t·N_s(8N₀/e)/2^256` (audit B: 2^-125.1 at `t = 2^80`; strict time 2^-69.8), and it
-    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^65.4` to `2^86.7`, with `N` counting audits.
+  - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; strict time 2^-69.8), and it
+    dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4` to `2^90.4`, with `N` counting audits.
 - **Binding** must hold for the root's whole life. **Design change:** use the SHA-512 leaf and tree scheme, since
   `hm96-sha256/v1` binds only up to `t ≈ 2^64.5`. Rotate on evidence, with a proof that both roots open to the same
   weights.
