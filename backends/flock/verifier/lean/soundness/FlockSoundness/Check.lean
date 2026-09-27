@@ -84,6 +84,12 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.table_sound
 #print axioms FlockSoundness.table_sound_fast100
 #print axioms FlockSoundness.table_sound_fast100_34_35
+-- the executable's arithmetic: `Arith.Correct` from lane flock-verifier's level-3 theorems, so the
+-- theorem for the executable has BCHKS25 Thm 4.6 as its only hypothesis
+#print axioms FlockSoundness.execArith_correct
+#print axioms FlockSoundness.table_sound_exec
+#print axioms FlockSoundness.table_sound_exec_fast100
+#print axioms FlockSoundness.table_sound_exec_fast100_34_35
 -- the compiled theorem (§1.2): the lockstep coupling with the plurality prover, rewinding at every
 -- cap, and binding: every counted conflict and every self-clash is a SHA-512 collision
 #print axioms FlockSoundness.Rewinding.expect_bad_le
