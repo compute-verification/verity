@@ -348,6 +348,23 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 #: each restated GEMM by the Definition it restates (the re-baseline binds these instead)
 SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 
+
+def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
+    """The f32 words a host committer commits as `ScaledMmFp8BlockSharedScale_v1`'s scale products: `F32Mul_v1(x_s[kb], w_s[nb][kb])`
+    for every weight block nb and k block kb, computed by the IR (`evaluate_batch` on `F32Mul_v1`), NaN payloads included.  `x_s` is one
+    token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
+    words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  Not a numpy expression: on two NaN operands numpy's array multiply returns
+    the first operand's NaN, `F32Mul_v1` the second's."""
+    from verity.evaluation import evaluate_batch
+    xs = np.asarray(x_s, dtype=np.uint32)
+    ws = np.asarray(w_s, dtype=np.uint32)
+    if ws.ndim != 2 or xs.ndim not in (1, 2) or xs.shape[-1] != ws.shape[1]:
+        raise ValueError(f"scale_products: x_s {xs.shape} and w_s {ws.shape} are not [.., K/G] and [N/G, K/G]")
+    rows = xs.reshape(-1, 1, ws.shape[1])
+    a, b = np.broadcast_arrays(rows, ws[None, :, :])
+    out = evaluate_batch(P.F32Mul, a.reshape(-1), b.reshape(-1)).astype(np.uint32)
+    return out.reshape(xs.shape[:-1] + ws.shape)
+
 FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate, ScaledMmFp8Block]
 
 
