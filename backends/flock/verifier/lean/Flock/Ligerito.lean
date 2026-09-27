@@ -135,7 +135,7 @@ def oodIntro (p : LigeritoProof) (dim : Nat) (split : Nat) : LM Unit := do
 
 /-- Queries on a level, its consistency coins, its Merkle opening, and the enforced sum `e`. -/
 def queryLevel (ms : MerkleScheme) (p : LigeritoProof) (lv : Level) (cap : Array ByteArray) (rows : Array (Array F128)) (sibs : Array ByteArray)
-    (fold : Array F256) : LM (Array Nat × Array F128 × F256) := do
+    (salts : Array ByteArray) (fold : Array F256) : LM (Array Nat × Array F128 × F256) := do
   let st ← get
   let qnonce ← nonceFrom p.queryNonces st.qn "query"
   let cnonce ← nonceFrom p.consistencyNonces st.cn "consistency"
@@ -145,7 +145,7 @@ def queryLevel (ms : MerkleScheme) (p : LigeritoProof) (lv : Level) (cap : Array
   let pos := positions lv coins
   lift (pow cnonce)
   let alpha ← lift (sampleVec (Nat.log2 (lv.q - 1) + 1))
-  match merkleCheck ms cap lv.cap lv.d pos rows sibs (2 ^ lv.lanes) with
+  match merkleCheck ms cap lv.cap lv.d pos rows sibs salts (2 ^ lv.lanes) with
   | .ok () => pure ()
   | .error e => throw e
   let ea := eqTable alpha
@@ -190,7 +190,7 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
     lift (absorbBytes (cap1.foldl (· ++ ·) ByteArray.empty))
     oodIntro p splitDim 0
     oodIntro p splitDim 0
-    let (pos0, al0, e0) ← queryLevel ms p (lv 0) cap p.initialProof.rows p.initialProof.siblings initCh
+    let (pos0, al0, e0) ← queryLevel ms p (lv 0) cap p.initialProof.rows p.initialProof.siblings p.initialProof.salts initCh
     let m ← nextMsg p
     claimPow p
     let b0 ← lift sample
@@ -214,7 +214,7 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
         oodIntro p splitDim (i + 1)
         oodIntro p splitDim (i + 1)
         let pr := p.recursiveProofs[i]!
-        let (pos, al, e) ← queryLevel ms p (lv (i + 1)) prevCap pr.rows pr.siblings chs
+        let (pos, al, e) ← queryLevel ms p (lv (i + 1)) prevCap pr.rows pr.siblings pr.salts chs
         let mm ← nextMsg p
         claimPow p
         let bb ← lift sample
@@ -227,7 +227,7 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
         if st.msg != p.messages.size then throw "ligerito: leftover sumcheck messages"
         if p.finalProof.yr.size != 2 ^ (ext + 1) then throw "ligerito: |yr|"
         for w in p.finalProof.yr do lift (absorbF w)
-        let (pos, al, e) ← queryLevel ms p (lv R) prevCap p.finalProof.rows p.finalProof.siblings chs
+        let (pos, al, e) ← queryLevel ms p (lv R) prevCap p.finalProof.rows p.finalProof.siblings p.finalProof.salts chs
         claimPow p
         let bb ← lift sample
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }

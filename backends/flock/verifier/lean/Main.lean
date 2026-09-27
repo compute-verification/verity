@@ -57,48 +57,84 @@ def argOf (args : List String) (k : String) : Option String :=
 def readTables (args : List String) : IO (List (String × ByteArray)) := do
   let some dir := argOf args "--tables" | return []
   let mut out := []
-  for (name, _, _) in MUFU_TABLES do
-    let p : System.FilePath := dir ++ s!"/{name}.u32"
-    if ← p.pathExists then out := out ++ [(name, ← IO.FS.readBinFile p)]
+  for t in MUFU_TABLES do
+    let p : System.FilePath := dir ++ s!"/{t.name}.u32"
+    if ← p.pathExists then out := out ++ [(t.name, ← IO.FS.readBinFile p)]
   return out
 
-/-- `ARCHIVE/sha256/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content. The file must hash to its key. -/
 def archiveGet (archive hex : String) : IO (Except String ByteArray) := do
-  if hex.length != 64 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
-    return .error s!"archive: {hex} is not a SHA-256 digest"
-  let p : System.FilePath := archive ++ s!"/sha256/{hex}"
+  if hex.length != 128 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
+    return .error s!"archive: {hex} is not a SHA-512 digest"
+  let p : System.FilePath := archive ++ s!"/sha512/{hex}"
   if !(← p.pathExists) then return .error s!"archive: {hex} is not held"
   let b ← IO.FS.readBinFile p
-  if hexOf (Sha256.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
+  if hexOf (Sha512.hash b) != hex then return .error s!"archive: the object held under {hex} does not hash to it"
   return .ok b
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
-named by `--circuit`, `--public`, `--comp` digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8); without it,
-the files at those paths. -/
+named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (§16.8);
+without it, the files at those paths. -/
 def statementInputs (args : List String) : IO (Except String (ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
-  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | return .error "--circuit, --comp and --public are required"
+  let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
+    | return .error "--circuit and --public are required"
+  let comp := argOf args "--comp"
   match argOf args "--archive" with
-  | none => return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, ← IO.FS.readBinFile comp, ← readTables args)
+  | none =>
+    let cm ← match comp with | some f => IO.FS.readBinFile f | none => pure ByteArray.empty
+    return .ok (← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub, cm, ← readTables args)
   | some dir =>
     let get := fun hex => archiveGet dir hex
     let c ← match ← get circuit with | .ok b => pure b | .error e => return .error s!"circuit: {e}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
-    let cm ← match ← get comp with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
-    -- `Circuit.parse` hashes each table a lookup uses against the digest it is held under here (`MUFU_TABLES`)
+    let cm ← match comp with
+      | none => pure ByteArray.empty
+      | some h => match ← get h with | .ok b => pure b | .error e => return .error s!"compression circuit: {e}"
+    -- `Circuit.parse` hashes each table a lookup uses against its pinned SHA-512, the key it is held under here
     let mut tables := []
-    for (name, sha, _) in MUFU_TABLES do
-      let p : System.FilePath := dir ++ s!"/sha256/{sha}"
-      if ← p.pathExists then tables := tables ++ [(name, ← IO.FS.readBinFile p)]
+    for t in MUFU_TABLES do
+      let p : System.FilePath := dir ++ s!"/sha512/{t.sha512}"
+      if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
     return .ok (c, pb, cm, tables)
 
-/-- `archive-put DIR FILE...`: store each file under `DIR/sha256/<its SHA-256>`, and print the digests. -/
+/-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
+session, is the drawn units' statement over the registered population (§7.3). -/
+def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) : V Stmt :=
+  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition
+  else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+
+/-- `--partition F`: the verifier's own copy of the `verity/partition/v1` object the circuit binds (a path, or with `--archive`
+its SHA-512). -/
+def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) := do
+  let some f := argOf args "--partition" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"partition: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "partition: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return .ok (some j)
+      | .error e => return .error s!"partition: not JSON: {e}"
+
+/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
+def recordDraw (record : String) : Option Lean.Json :=
+  match Lean.Json.parse record with
+  | .ok j => match j.getObjVal? "unit_draw" with
+    | .ok Lean.Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  | .error _ => none
+
+/-- `archive-put DIR FILE...`: store each file under `DIR/sha512/<its SHA-512>`, and print the digests. -/
 def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
-  IO.FS.createDirAll (dir ++ "/sha256")
+  IO.FS.createDirAll (dir ++ "/sha512")
   for path in paths do
     let b ← IO.FS.readBinFile path
-    let hex := hexOf (Sha256.hash b)
-    IO.FS.writeBinFile (dir ++ s!"/sha256/{hex}") b
+    let hex := hexOf (Sha512.hash b)
+    IO.FS.writeBinFile (dir ++ s!"/sha512/{hex}") b
     IO.println s!"{hex}  {path}"
   return 0
 
@@ -107,20 +143,26 @@ tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp`
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
 verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--coins seed|os] --session DIR..."
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
-    | .ok st => pure (Except.ok (Setup.ofCircuit st))
-    | .error e => pure (Except.error s!"setup: {e}")
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition with
+    | .ok st => Except.ok (Setup.ofCircuit st)
+    | .error e => Except.error s!"setup: {e}"
+  let setup := setupOf none
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
+  let mut drawn : Array (String × Except String Setup) := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
@@ -129,7 +171,18 @@ def verifyCmd (args : List String) : IO UInt32 := do
         let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
         pure (Except.ok (record, proofs))
       catch e => pure (Except.error s!"session files: {e}")
-    let verdict := do let (record, proofs) ← files; verify (← setup) record proofs
+    -- a drawn session is verified against the drawn units' statement (Σ covers the draw)
+    let mut st := setup
+    if tags.hm96Rows then
+      if let .ok (record, _) := files then
+        if let some d := recordDraw record then
+          let key := (canon d).toOption.getD ""
+          match drawn.find? (·.1 == key) with
+          | some (_, s) => st := s
+          | none =>
+            st := setupOf (some d)
+            drawn := drawn.push (key, st)
+    let verdict := do let (record, proofs) ← files; verify (← st) record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)]
@@ -139,21 +192,29 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
 def statementCmd (args : List String) : IO UInt32 := do
-  let (some _, some _, some _) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F --comp F --public F [--coins seed|os]"; return 2
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public")
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables : V Stmt) with
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition with
   | .ok st =>
-    let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), ("circuit_sha256", Lean.Json.str (hexOf st.c.sha)),
+    let dk := if tags.hm96Rows then "sha512" else "sha256"
+    let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
       ("statement_digest", Lean.Json.str (hexOf st.digest)), ("sigma", Lean.Json.str (hexOf st.sigma)),
-      ("public_sha256", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
+      (s!"public_{dk}", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
       ("identity", Lean.Json.str ((canon tags.identity).toOption.getD "")),
-      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2))]
+      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2)),
+      ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
+      ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
+      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
@@ -171,7 +232,7 @@ def merkleTest (path : String) : IO UInt32 := do
       let hexes := fun (x : String) => ((x.splitOn ",").map bytesOfHex).toArray
       let row := fun (x : String) => ((x.splitOn ".").filterMap parseHex128).toArray
       let got := merkleCheck ms (hexes cap) (nat c) (nat d) ((pos.splitOn ",").map nat).toArray
-        ((rows.splitOn ",").map row).toArray (hexes sibs) (nat lanes)
+        ((rows.splitOn ",").map row).toArray (hexes sibs) #[] (nat lanes)
       let ok := match got with | .ok () => "1" | .error _ => "0"
       if ok != want then bad := bad + 1
     | _ => bad := bad + 1
@@ -219,6 +280,49 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
+/-- `draw --population N (--k K | --p NUM/DEN) [--stream HEX]`: the unit draw (§7.3), from the operating system's randomness,
+or from the given bytes (a test). Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+def drawCmd (args : List String) : IO UInt32 := do
+  let some pop := (argOf args "--population").bind String.toNat? | IO.eprintln "draw: --population N"; return 2
+  let law ← match argOf args "--k", argOf args "--p" with
+    | some k, none => match k.toNat? with
+      | some k => if k ≤ pop then pure (Draw.Law.subset k) else IO.eprintln "draw: k > population"; return 2
+      | none => IO.eprintln "draw: --k K"; return 2
+    | none, some p => match p.splitOn "/" with
+      | [a, b] => match a.toNat?, b.toNat? with
+        | some a, some b => if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
+        | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+      | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+    | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
+  let d ← match argOf args "--stream" with
+    | none => Draw.drawOS law pop
+    | some hex =>
+      let src ← match unhex hex with | .ok b => pure b | .error e => IO.eprintln s!"draw: {e}"; return 2
+      let r := match law with
+        | .subset k => Draw.subset k pop src
+        | .bernoulli a b => Draw.bernoulli a b pop src
+      match r with
+      | some units => pure { law, population := pop, units : Draw.UnitDraw }
+      | none => IO.eprintln "draw: the stream ran out"; return 1
+  IO.println s!"DRAW {d.toJson.compress}"
+  return 0
+
+/-- `draw-test FILE`: U1–U3 (§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one
+`DRAWCHECK {"ok", "why"}` line per case. -/
+def drawTest (path : String) : IO UInt32 := do
+  let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
+  for c in cases do
+    let side := fun (k : String) => match c.getObjVal? k with
+      | .ok .null => none
+      | .ok v => some v
+      | .error _ => none
+    let n := (c.getObjValAs? Nat "instances").toOption.getD 0
+    let (ok, why) := match Draw.check (side "record") (side "statement") n with
+      | .ok () => (true, "")
+      | .error e => (false, e)
+    IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
+  return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["merkle-test", path] => merkleTest path
@@ -226,6 +330,8 @@ def main (args : List String) : IO UInt32 := do
   | ["hm96-test", path, "sha512"] => hm96Test path Hm96.sha512
   | "unit-cut" :: paths => unitCutCmd paths
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
+  | "draw" :: rest => drawCmd rest
+  | ["draw-test", path] => drawTest path
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
