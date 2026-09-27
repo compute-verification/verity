@@ -1,9 +1,13 @@
 /-
-Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, PROTOCOL.md §2.4) is the ring GF128[Y]/(Y^2 + Y + x⁻¹): an element
+Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, PROTOCOL.md §2.4) is the field GF128[Y]/(Y^2 + Y + x⁻¹): an element
 `c0 + c1·u` is the residue class of `c0 + c1·Y`, and `F256.mul` (three products, `p0 + x⁻¹·p1`, `p2 + p0`) is the quotient
-ring's product. The structure is transported onto the synonym `GF256`, whose `+` and `*` are the executable's.
+ring's product. `Y^2 + Y + x⁻¹` is irreducible because the trace of `x⁻¹` is 1 (Artin–Schreier: the trace vanishes on every
+`y^2 + y`), computed by the kernel with the executable's multiplication. The field is transported onto the synonym `GF256`,
+whose `+` and `*` are the executable's.
 -/
 import FlockLevel3.GF128Field
+import Mathlib.Algebra.Polynomial.SpecificDegree
+import Mathlib.Algebra.CharP.Lemmas
 
 open Polynomial Flock
 
@@ -110,10 +114,83 @@ noncomputable def equivPhi : F256 ≃ AdjoinRoot Q := Equiv.ofBijective phi ⟨p
 
 theorem equivPhi_apply (a : F256) : equivPhi a = phi a := rfl
 
-/-- GF(2^256) with the ring structure of GF128[Y]/(Y^2 + Y + x⁻¹), on the executable's representation. -/
+/-! ### `Y^2 + Y + x⁻¹` is irreducible -/
+
+instance : CharP GF128 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF128.two_eq_zero)
+
+theorem GF128.pow_eq (a : F128) (n : ℕ) : GF128.of a ^ n = equivAdj.symm (toAdj a ^ n) := rfl
+
+theorem GF128.frob_of (a : F128) : GF128.of a ^ (2 ^ (127 + 1)) = GF128.of a := by
+  rw [GF128.pow_eq, frob_all _ root_frob' (toAdj a)]
+  exact equivAdj.symm_apply_apply a
+
+theorem GF128.frob (z : GF128) : z ^ (2 ^ (127 + 1)) = z := GF128.frob_of z
+
+/-- The trace `GF128 → GF(2)`: `T(z) = Σ_{i < 128} z^(2^i)`. -/
+noncomputable def T (z : GF128) : GF128 := ∑ i ∈ Finset.range (127 + 1), z ^ (2 ^ i)
+
+theorem T_add (a b : GF128) : T (a + b) = T a + T b := by
+  simp only [T, add_pow_char_pow, Finset.sum_add_distrib]
+
+theorem T_sq (z : GF128) : T (z ^ 2) = T z := by
+  have h1 := Finset.sum_range_succ' (fun i => z ^ (2 ^ i)) (127 + 1)
+  have h2 := Finset.sum_range_succ (fun i => z ^ (2 ^ i)) (127 + 1)
+  rw [h2, GF128.frob, pow_zero, pow_one] at h1
+  unfold T
+  have : ∀ i, (z ^ 2) ^ (2 ^ i) = z ^ (2 ^ (i + 1)) := fun i => by rw [← pow_mul, pow_succ', mul_comm]
+  simp only [this]
+  exact (add_right_cancel h1).symm
+
+theorem T_zero : T 0 = 0 := by
+  simp [T]
+
+/-- `x0 + x1 + … ` over `k` squarings: `acc + Σ_{i < k} z^(2^i)` with the executable's operations. -/
+def traceGo : ℕ → F128 → F128 → F128
+  | 0, _, acc => acc
+  | k + 1, z, acc => traceGo k (z * z) (acc + z)
+
+theorem traceGo_eq (k : ℕ) : ∀ (z acc : F128),
+    GF128.of (traceGo k z acc) = GF128.of acc + ∑ i ∈ Finset.range k, GF128.of z ^ (2 ^ i) := by
+  induction k with
+  | zero => intro z acc; simp [traceGo]
+  | succ k ih =>
+    intro z acc
+    rw [traceGo, ih, Finset.sum_range_succ', ← GF128.add_eq, ← GF128.mul_eq]
+    have : ∀ i, (GF128.of z * GF128.of z) ^ (2 ^ i) = GF128.of z ^ (2 ^ (i + 1)) := fun i => by
+      rw [← sq, ← pow_mul, pow_succ', mul_comm]
+    simp only [this, pow_zero, pow_one]
+    ring
+
+theorem traceGo_xinv : traceGo (127 + 1) F256.xinv 0 = 1 := by decide +kernel
+
+theorem T_xK : T xK = 1 := by
+  have h := traceGo_eq (127 + 1) F256.xinv 0
+  rw [traceGo_xinv, ← GF128.zero_eq, zero_add, ← GF128.one_eq] at h
+  exact h.symm
+
+theorem Q_no_root (y : K) : ¬ IsRoot Q y := by
+  intro h
+  have h0 : y ^ 2 + y + xK = 0 := by
+    have := h.eq_zero
+    simp only [Q, eval_add, eval_pow, eval_X, eval_C] at this
+    rw [← add_assoc] at this; exact this
+  have := congrArg T h0
+  rw [T_add, T_add, T_sq, T_xK, T_zero] at this
+  have h2 : T y + T y = 0 := by rw [← two_mul, GF128.two_eq_zero, zero_mul]
+  rw [h2, zero_add] at this
+  exact one_ne_zero this
+
+theorem Q_irreducible : Irreducible Q := by
+  apply irreducible_of_degree_le_three_of_not_isRoot _ Q_no_root
+  rw [natDegree_eq_of_degree_eq_some Q_degree]
+  decide
+
+instance : Fact (Irreducible Q) := ⟨Q_irreducible⟩
+
+/-- GF(2^256): the field GF128[Y]/(Y^2 + Y + x⁻¹) on the executable's representation. -/
 def GF256 := F256
 
-noncomputable instance : CommRing GF256 := equivPhi.commRing
+noncomputable instance : Field GF256 := equivPhi.field
 
 namespace GF256
 

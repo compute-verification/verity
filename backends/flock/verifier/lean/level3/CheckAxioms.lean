@@ -16,3 +16,5 @@ import FlockLevel3
 #print axioms FlockLevel3.phi_surjective
 #print axioms FlockLevel3.GF256.add_eq
 #print axioms FlockLevel3.GF256.mul_eq
+#print axioms FlockLevel3.T_xK
+#print axioms FlockLevel3.Q_irreducible
