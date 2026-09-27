@@ -100,9 +100,24 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
 /-- The statement of `tags` from its inputs; an `hm96-sha512/row/v1` statement needs no compression circuit and, for a drawn
 session, is the drawn units' statement over the registered population (§7.3). -/
 def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
-    (draw : Option Lean.Json := none) : V Stmt :=
-  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw
+    (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) : V Stmt :=
+  if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
+
+/-- `--partition F`: the verifier's own copy of the `verity/partition/v1` object the circuit binds (a path, or with `--archive`
+its SHA-512). -/
+def partitionInput (args : List String) : IO (Except String (Option Lean.Json)) := do
+  let some f := argOf args "--partition" | return .ok none
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"partition: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "partition: not UTF-8"
+    | some t => match Lean.Json.parse t with
+      | .ok j => return .ok (some j)
+      | .error e => return .error s!"partition: not JSON: {e}"
 
 /-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
 def recordDraw (record : String) : Option Lean.Json :=
@@ -128,7 +143,7 @@ tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp`
 circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
 verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--coins seed|os] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--coins seed|os] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -139,7 +154,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw with
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition with
     | .ok st => Except.ok (Setup.ofCircuit st)
     | .error e => Except.error s!"setup: {e}"
   let setup := setupOf none
@@ -183,14 +201,20 @@ def statementCmd (args : List String) : IO UInt32 := do
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
-  match buildStmt tags circuitB pubB compB coins tables with
+  let partition ← match ← partitionInput args with
+    | .ok p => pure p
+    | .error e => IO.eprintln e; return 2
+  match buildStmt tags circuitB pubB compB coins tables none partition with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
     let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), (s!"circuit_{dk}", Lean.Json.str (hexOf st.c.sha)),
       ("statement_digest", Lean.Json.str (hexOf st.digest)), ("sigma", Lean.Json.str (hexOf st.sigma)),
       (s!"public_{dk}", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
       ("identity", Lean.Json.str ((canon tags.identity).toOption.getD "")),
-      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2))]
+      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2)),
+      ("class_sha512", Lean.Json.str (hexOf st.c.classSha)),
+      ("program_sha512", (st.c.metaJ.getObjVal? "program_sha512").toOption.getD Lean.Json.null),
+      ("partition", (st.c.metaJ.getObjVal? "partition").toOption.getD Lean.Json.null)]
     IO.println j.compress
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1

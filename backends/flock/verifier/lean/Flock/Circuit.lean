@@ -78,6 +78,10 @@ structure Circuit where
   /-- the `sha512x3` and `hm96` circuits of an `hm96-sha512/row/v1` statement (`Flock.HmRow`) -/
   shaNet : Nat := 0
   hmNet : Nat := 0
+  /-- the class of every instance (PR #83 from `e51e2b86`): SHA-512 of the file without META's bindings; empty before -/
+  classSha : ByteArray := ByteArray.empty
+  /-- META, for its bindings (`program_sha512`, `partition`) -/
+  metaJ : Json := Json.null
   deriving Inhabited
 
 namespace Circuit

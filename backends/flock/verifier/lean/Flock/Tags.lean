@@ -39,6 +39,9 @@ structure Tags where
   /-- PR #83 from `eb90718f`: serving rows are `hm96-sha512/row/v1` leaves proved in the circuit (`Flock.HmRow`), and every
   identity and binding digest is SHA-512 (the circuit pin, the public digest, the statement digest, Σ, the record's) -/
   hm96Rows : Bool := false
+  /-- PR #83 from `e51e2b86`: META binds `program_sha512` and a partition (`verity/partition/v1`, or the provisional unit cover),
+  and the public header's `units` carries every instance's class (`Flock.HmRow.classOf`) -/
+  bindings : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -146,17 +149,28 @@ def identityHm96 (seedInjection : Bool) : Json :=
 
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
-def circuit : Tags :=
+def circuitEb90718f : Tags :=
   { circuit631567f7 with
-    name := "verity/flock-circuit", publicCircuitKey := "circuit_sha512", merkleLeaf := "hm96-sha512/v1",
+    name := "verity/flock-circuit@eb90718f", publicCircuitKey := "circuit_sha512", merkleLeaf := "hm96-sha512/v1",
     identity := identityHm96 false, pinnedLeafScheme := some leafSchemeHm96, hm96Rows := true }
+
+/-- `eb90718f` as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
+def circuitEb90718fSelftest : Tags :=
+  { circuitEb90718f with name := "verity/flock-circuit@eb90718f+seed-injection", identity := identityHm96 true }
+
+/-- `verity/flock-circuit` (PR #83 from `e51e2b86`): `eb90718f`'s statement with the e2e bindings: META `program_sha512` and a
+partition (a `verity/partition/v1` digest the verifier checks against its own copy of the partition object), and each
+instance's class in the public header. -/
+def circuit : Tags :=
+  { circuitEb90718f with name := "verity/flock-circuit", bindings := true }
 
 /-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
 def circuitSelftest : Tags :=
   { circuit with name := "verity/flock-circuit+seed-injection", identity := identityHm96 true }
 
 /-- The versions this verifier knows, by name. -/
-def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuit, circuitSelftest]
+def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
+  circuit, circuitSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

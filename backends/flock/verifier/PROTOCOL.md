@@ -1055,7 +1055,7 @@ lowering theorem, not at run time.
 The target statement (the circuit statement once its leaves move) pins SHA-256 on every commitment path: Halevi–Micali
 serving leaves on SHA-256 hashed in the circuit, SHA-256 Merkle trees, SHA-256 round digests (§2.5).
 
-### 16.10 The hm96-sha512 row statement (PR #83 from `eb90718f`, the default `verity/flock-circuit`)
+### 16.10 The hm96-sha512 row statement (PR #83 from `eb90718f`; with the e2e bindings from `e51e2b86`, the default `verity/flock-circuit`)
 
 M0's format (`note:20260927T0445Z-handoff-from-flock-netlist-format`) changes three things from §16.5: serving rows are
 `hm96-sha512/row/v1` leaves proved in the circuit (no BLAKE3, no `comp.rows`), every identity and binding digest is
@@ -1101,6 +1101,16 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 - **Record.** Every digest is SHA-512 of the same bytes as before under a `_sha512` key: `link.root_f_sha512`,
   `link.root_b_sha512.<t>`, `link.publics_sha512.<t>`, `link_sha512`, `streams[i].root_sha512`, `rounds[k].msg_sha512`,
   `proof_sha512[j] = {stream, sha512, bytes}`. The coin commitment is `coin-commit/sha512`; the derivation stays SHA-256.
+- **The e2e bindings (from `e51e2b86`; the default statement, and `@eb90718f` without them).** META carries
+  `program_sha512` (a SHA-512 hex digest) and `partition = {rule, digest}`, the rule `verity/partition/v1` or the
+  provisional `flock-circuit/unit-cover/v0` and the digest SHA-512 hex. Both are part of the circuit file, so the circuit
+  pin binds them into the statement digest and Σ. The public header's `units` adds `classes`, one per instance: each must be
+  the verifier's own class of the circuit, `SHA-512(head ‖ "\nMETA " ‖ canon(META without partition, program_sha512,
+  program_digests) ‖ "\n" ‖ the file after its META line)`. For a `verity/partition/v1` binding the verifier needs its own copy
+  of the partition object (`--partition`, by path or archive digest): its form is core's `partition_object.validate` (exactly
+  `format`, `program`, `query`; `Q_word` v1 with exactly `X`, `W`, positive integers), its tagged digest
+  `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its `program` must be META's `program_sha512`. The
+  provisional unit cover takes no object.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.

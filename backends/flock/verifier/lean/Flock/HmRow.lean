@@ -21,6 +21,22 @@ def HM_NET : String := "hm96"
 def SCHEME : String := "frame-v3-sha512/hm96-sha512"
 def ROW_SCHEMA : String := "hm96-sha512/row/v1"
 def PER_SLOT : Nat := 3
+/-- META's bindings (what the statement binds about the circuit): a class leaves them out. -/
+def BINDING_KEYS : List String := ["partition", "program_sha512", "program_digests"]
+def PARTITION_V1 : String := "verity/partition/v1"
+def PARTITION_PROVISIONAL : String := "flock-circuit/unit-cover/v0"
+
+def isSha512Hex (s : String) : Bool := s.length == 128 && s.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
+
+/-- The class of the instances a circuit file proves: SHA-512 of the file with META's bindings removed (META re-serialized
+canonically), which a partition can name before it is bound. -/
+def classOf (bytes : ByteArray) (head : String) (mj : Json) : V ByteArray := do
+  let some n1 := findByte bytes 10 | throw "circuit: no META line"
+  let some n2 := findByte bytes 10 (n1 + 1) | throw "circuit: no section after META"
+  let m := match mj with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
+    | j => j
+  return Sha512.hash (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 def SALT_BYTES : Nat := 192
 def BC_BYTES : Nat := 128
 
@@ -179,6 +195,15 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
     throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      classOf bytes head mj
+    else pure ByteArray.empty
   let mut nets : Array (String × Net) := #[]
   let mut at_ := 2
   while at_ < lines.size do
@@ -288,7 +313,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet }
+                       shaNet, hmNet, classSha, metaJ := mj }
   check c tags leafScheme
   return c
 
@@ -360,10 +385,53 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
 
 /-- The header's `units`: the instances' global unit indices (ascending), and per block its units. -/
 def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
-  Json.mkObj [("vus_per_block", Lean.toJson c.g), ("units_per_vu", Lean.toJson c.upv),
+  let base := [("vus_per_block", Lean.toJson c.g), ("units_per_vu", Lean.toJson c.upv),
     ("indices", Json.arr (indices.map fun x => Lean.toJson x)),
     ("blocks", Json.arr ((Array.range ((indices.size + c.g - 1) / c.g)).map fun b =>
       Json.arr ((indices.extract (b * c.g) (b * c.g + c.g)).map fun x => Lean.toJson x)))]
+  -- from `e51e2b86`: every instance's class, the verifier's own computation of it
+  Json.mkObj (if c.classSha.isEmpty then base
+    else base ++ [("classes", Json.arr (Array.replicate indices.size (Json.str (hexOf c.classSha))))])
+
+/-- A `verity/partition/v1` object's form (core's `partition_object.validate`, PR #111): exactly `format`, `program`, `query`; a
+SHA-512 program; the query `Q_word` v1 with exactly its parameters `X`, `W`, each a positive integer. -/
+def checkPartitionObject (obj : Json) : V Unit := do
+  let keys := fun (j : Json) => match j with
+    | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
+    | _ => #[]
+  if keys obj != #["format", "program", "query"] then throw "partition: the object's keys are not format, program, query"
+  if (obj.getObjValAs? String "format").toOption != some PARTITION_V1 then throw s!"partition: not a {PARTITION_V1} object"
+  if !isSha512Hex ((obj.getObjValAs? String "program").toOption.getD "") then throw "partition: program is not a SHA-512 digest"
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  if keys q != #["name", "params", "version"] then throw "partition: the query's keys are not name, version, params"
+  if (q.getObjValAs? String "name").toOption != some "Q_word" || (q.getObjVal? "version").toOption != some (Lean.toJson (1 : Nat)) then
+    throw "partition: the query is not Q_word v1"
+  let ps := (q.getObjVal? "params").toOption.getD Json.null
+  if keys ps != #["W", "X"] then throw "partition: Q_word v1's parameters are not X, W"
+  for k in ["X", "W"] do
+    match (ps.getObjVal? k).toOption with
+    | some (.num n) => if !(n.exponent == 0 && n.mantissa > 0) then throw s!"partition: {k} is not a positive integer"
+    | _ => throw s!"partition: {k} is not a positive integer"
+
+/-- `SHA-512("verity/partition/v1\0" ‖ canon(object))`. -/
+def partitionDigest (obj : Json) : V ByteArray := do
+  return Sha512.hash (PARTITION_V1.toUTF8.push 0 ++ (← canon obj).toUTF8)
+
+/-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
+must be the tagged digest of that object, over META's `program_sha512`; the provisional unit cover takes none. -/
+def checkPartition (c : Circuit) (obj : Option Json) : V Unit := do
+  let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
+  let rule := (part.getObjValAs? String "rule").toOption.getD ""
+  match rule, obj with
+  | "verity/partition/v1", none => throw "partition: the circuit binds a verity/partition/v1 digest; the verifier's partition object is required"
+  | "verity/partition/v1", some o =>
+    checkPartitionObject o
+    if hexOf (← partitionDigest o) != (part.getObjValAs? String "digest").toOption.getD "" then
+      throw "partition: the circuit's partition digest is not the verifier's partition object's"
+    if (o.getObjValAs? String "program").toOption != (c.metaJ.getObjValAs? String "program_sha512").toOption then
+      throw "partition: the partition object is over another program than META's program_sha512"
+  | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
+  | _, none => pure ()
 
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
@@ -392,6 +460,10 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let outputs := (Array.range (n * nOut)).map fun i => (body.get! (o + 2 * i)).toNat + 256 * (body.get! (o + 2 * i + 1)).toNat
   let units ← J.get header "units" pctx
   let indices ← (← J.arr units "indices" pctx).mapM (J.asNat · "a unit index")
+  if !c.classSha.isEmpty then
+    let classes ← (← J.arr units "classes" pctx).mapM (J.asStr · "a class")
+    if classes.size != n || classes.any (· != hexOf c.classSha) then
+      throw s!"header: an instance's class is not this circuit's class {(hexOf c.classSha).take 16}…"
   if indices.size != n || (List.range indices.size).any (fun i => i > 0 && indices[i - 1]! ≥ indices[i]!)
       || (← canon units) != (← canon (unitsEntry c indices)) then
     throw "header: the instances' unit indices are not ascending, one per instance, blocks of vus_per_block"
@@ -477,8 +549,10 @@ end HmRow
 /-- `setup` for an `hm96-sha512/row/v1` statement: the circuit, the population's public file and, for a drawn session, the
 drawn units' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
-    (draw : Option Json := none) : V Stmt := do
+    (draw : Option Json := none) (partition : Option Json := none) : V Stmt := do
   let c ← HmRow.parse tags circuitFile tables
+  if tags.bindings then HmRow.checkPartition c partition
+  else if partition.isSome then throw s!"{tags.name}: the statement binds no partition"
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   let pop ← HmRow.loadPublic tags c publicFile
   let pub ← match draw with

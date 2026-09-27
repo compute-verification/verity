@@ -25,9 +25,11 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
 ~~~
 
 `ID` names a version:
-- `verity/flock-circuit`: PR #83 from `eb90718f`, the default. It needs no `--comp`, and it pins `seed_injection: false`,
-  as a proving build does.
+- `verity/flock-circuit`: PR #83 from `e51e2b86`, the default. It needs no `--comp`, and it pins `seed_injection: false`,
+  as a proving build does. A circuit that binds a `verity/partition/v1` digest needs `--partition F`, the verifier's own
+  copy of the partition object (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as M0's selftest build pins it, for its recorded cases.
+- `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
 
 A session whose record carries a `unit_draw` is verified against the drawn units' statement, which the verifier derives

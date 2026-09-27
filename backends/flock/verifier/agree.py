@@ -1,6 +1,6 @@
 """The agreement check (PROTOCOL.md §17.1): the Lean verifier and upstream's Rust verifier on the same sessions.
 
-    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] --public F \
+    python agree.py --lean BIN --upstream BIN [--statement ID] --circuit F [--comp F] [--partition F] --public F \
         [--tables DIR] [--expect FILE]... --out DIR --sessions DIR...
 
 `--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
@@ -78,6 +78,8 @@ def lean_run(a, public, sessions):
            "--public", archived(a, public)]
     if a.comp:
         cmd += ["--comp", archived(a, a.comp)]
+    if a.partition:
+        cmd += ["--partition", archived(a, a.partition)]
     if a.coins:
         cmd += ["--coins", a.coins]
     p = subprocess.run(cmd + ["--session", *sessions], capture_output=True, text=True)
@@ -115,6 +117,7 @@ def main():
     for k in ("--lean", "--upstream", "--circuit", "--public"):
         ap.add_argument(k, required=True)
     ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
+    ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
