@@ -962,7 +962,10 @@ included. Claims are listed region-major, then point 0 before point 1.
     earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
     So every column a row reads is below `useful`.
   - Each port group's ports fit its words, and each input group lies within the input rows.
-  - Upstream's composite verifier checks neither, and every circuit of sets 0–15 meets both. `flock-verify net-check`
+  - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
+    port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
+    unit's constant free.
+  - Upstream's composite verifier checks none of these, and every circuit of sets 0–15 meets them all. `flock-verify net-check`
     parses one expanded circuit.
   - Lookup slots (META `lookups`, in key order after the expanded circuits, each named `lookup:<table>`) are built from
     SHA-256-pinned tables (`rsq, sqrt, rcp, ex2`) as two-level one-hot circuits.
@@ -1087,6 +1090,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   aligned to its power-of-two span.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
+- **The pin** is the constant column of the first slot of the first range that is not the mask (`HmRow.pin`). That range
+  must have a slot: with none, the pin's row would be empty, or, in a packed range, could fall inside another range's rows.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the
   midstate) and the hm96 slot's `pad` bits (the padding block), each bit from the pin (1) or the unit range's first slot's
   forced-zero row (0); every unit's leaf bit `t` of the u16 word at row byte `B` from the message bit of byte `B + t/8`,

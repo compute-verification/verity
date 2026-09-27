@@ -356,7 +356,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
 def pin (c : Circuit) : V Nat :=
   match c.ranges.find? (·.kind != Kind.mask) with
   | some r => match r.kind with
-    | .net i => pure (r.start + (c.nets.getD i default).2.constPos)
+    | .net i => if r.count == 0 then throw "circuit: the pin's range has no slot"
+      else pure (r.start + (c.nets.getD i default).2.constPos)
     | _ => throw "no pin"
   | none => throw "circuit: no range with a constant"
 
