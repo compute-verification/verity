@@ -412,6 +412,8 @@ struct ZkRep {
     points: Arc<Mutex<Vec<Vec<F128>>>>,
     /// a dishonest prover: absorb and send values masked with pads other than the committed ones
     pad_mismatch: bool,
+    /// seconds to draw the pads and build their commitment (counted in the rep's prove time)
+    t_commit: f64,
 }
 
 /// The mask slot's word indices in the packed witness (every block's slot).
@@ -460,6 +462,7 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &root, &mut zkv::Tape::new(&coins)).unwrap_or_else(|e| panic!("{e}"));
+    let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
     assert!(wp[0] == zkv::point_parts(&rp.ab_point).1[1..] && wp[1] == zkv::point_parts(&rp.c_point).1[1..],
             "the rank check's claim points are not the replay's");
@@ -475,7 +478,8 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
     (bincode::serialize(&(commitment, masked, inner)).unwrap(),
-     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "constraints_failing_on_pads": fails,
+     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "t.zk_replay": t_replay,
+            "t.zk_pads_commit": zk.t_commit, "constraints_failing_on_pads": fails,
             "zk_coins": f128s_hex(&coins), "zk_inner_coins": f128s_hex(&lch.coins)}))
 }
 
@@ -729,7 +733,11 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
-    let out = json!({"statement": STATEMENT, "unit": st.c.name, "instances": st.n,
+    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().unwrap();
+    let ligerito = json!({"m": st.m, "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
+        "recursive_log_msg_cols": lc.recursive_log_msg_cols, "log_inv_rates": lc.log_inv_rates, "queries": lc.queries, "ood_samples": lc.ood_samples,
+        "grinding_bits": lc.grinding_bits});
+    let out = json!({"statement": STATEMENT, "unit": st.c.name, "instances": st.n, "ligerito": ligerito,
         "classes": total.iter().map(|(k, (n, b))| (k.to_string(), json!({"items": n, "bytes": b}))).collect::<serde_json::Map<_, _>>(),
         "masked_values": n_masked, "masked_all_differ_from_control": all_differ, "region_claims": n_region, "region_s_hat_v_is_public": region_public,
         "unattributed_bytes": unattributed, "clear": clear, "checks_pass": all_differ && region_public && unattributed == 0,
@@ -907,6 +915,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         let zk_points = Arc::new(Mutex::new(Vec::new()));
         for rep in 0..2 {
             // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
+            let tz0 = Instant::now();
             let zkrep = (is_zk(st) && !plan.gpu).then(|| {
                 let lay = Layout::new(st.m, st.c.k_log);
                 let mut pads = zkv::Pads::draw(&mut prng, &lay, rep);
@@ -916,8 +925,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
                 let sb = { let mut g = salts.lock().unwrap_or_else(PoisonError::into_inner); let id = g.next_id(); g.expand(id, n) };
                 let ic = zkv::InnerCommit::new(&pads, sb);
-                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch }
+                ZkRep { lay, pads, ic, points: zk_points.clone(), pad_mismatch: plan.zk_pad_mismatch, t_commit: tz0.elapsed().as_secs_f64() }
             });
+            let t_zk_commit = tz0.elapsed().as_secs_f64();
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
             let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
@@ -975,7 +985,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                 flock_merkle::hm96::end();
             }
             let (p, bk) = proved.map_err(|e| stop_why.clone().unwrap_or_else(|| panic_msg(e)))?;
-            prove_s.push(tp.elapsed().as_secs_f64());
+            prove_s.push(tp.elapsed().as_secs_f64() + t_zk_commit);
             buckets.push(bk);
             proofs.push(p);
         }
