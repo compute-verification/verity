@@ -153,7 +153,7 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   - With `K = 2^21.6/(ε − ε_c⁻)`, failure is at most `1/4 + (t·2^-244.7/(ε − ε_c⁻))²`. The hash term is squared, so
     `κ = ε_c⁻ + t·2^-243.7`.
   - The product form the audit consumes needs no condition on `ε`:
-    `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint`). Rerun list by rerun
+    `Pr[accepted ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)` (`table_knowledge_sound_joint_tight`). Rerun list by rerun
     list, `ε·1[fails] ≤ ε_c⁻ + mass`, so no Markov step enters. At `K = √(N₀/(e·Adv₀))` this is
     `ε_c⁻ + t·2^-244.7`, which is `2^-164.7` at `t = 2^80` above `ε_c⁻`.
   - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of

@@ -77,8 +77,9 @@ link term per audit.
   - It rests on `table_sound_compiled_of_table`: for any level-0 table `T`,
     `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ + Pr[a run opens a level-0 position off T]`. The reps' cap terms do not
     depend on `T` (`advRT_eq`).
-- **`table_knowledge_sound_joint`,** the form the audit consumes:
-  `Pr[a fresh run accepts ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)`, for every `ε`. At
+- **`table_knowledge_sound_joint_tight`,** the form the audit consumes:
+  `Pr[a fresh run accepts ∧ extraction fails] ≤ ε_c⁻ + K·Adv₀ + N₀/(eK)`, for every `ε`
+  (`table_knowledge_sound_joint` states it with `2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))`). At
   `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
 - **`session_knowledge_sound`** (`Session.lean`) is the same form for one table inside a batched session.
   - The session is the protocol's (PROTOCOL.md §5). `Commit` carries every level-0 cap before any coin, the link
