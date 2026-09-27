@@ -10,10 +10,10 @@ primitive over the same operands, constants by value, an input leaf by its Progr
      gates again.  Calls that read no Program input (constants, or values computed from them) are structure, as in `word`.
   2. Operand subsets.  A gate's support is the set of its Call's operands it depends on (`analyze`).  Two Calls of one spec
      whose operands in `b` read the same runs compute every gate of support `b` twice.
-  3. Gates.  Any other gate computed in two Calls depends only on operands both Calls read, so its support lies in the
-     operands whose leaves another Call also reads (`shared`).  Those candidate gates are pre-filtered by primitive (the
-     lowest gate of a recomputed value reads only inputs, and two Calls must both hold one of the same primitive over common
-     leaves), then hashed gate by gate with their input leaves' Program identities.
+  3. Gates.  Any other gate computed in two Calls depends only on leaves both Calls read, so its support lies in the
+     operands whose leaves another Call also reads (`shared`), and the other Call reads a leaf of every operand in it and holds
+     a candidate of its primitive (`_partners`).  Those Calls' candidate gates are hashed gate by gate with their input leaves'
+     Program identities.
 
 Each level is exact about what it reports; `unrefined` names what level 3 did not expand (a non-`call` form, a long operand,
 or `max_gates`).  `check_program` returns the report and, when `strict`, raises `RecomputeViolation` naming every Definition.
@@ -42,7 +42,7 @@ CHECK_ID = "cross-call/v1"
 LONG_OPERAND = 64
 
 #: level 3 expands at most this many gates in all
-MAX_GATES = 20_000_000
+MAX_GATES = 200_000_000
 
 _SPACE = {"p": 0, "n": 1}
 
@@ -384,8 +384,8 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
 
     # pass 2: levels 2 and 3 over the stored Calls
     seen2: dict[bytes, int] = {}
-    index3: dict[tuple[int, int, str], list[tuple[int, int, int]]] = defaultdict(list)
-    cand: dict[int, int] = {}                                  # Call -> the mask of its candidate operands
+    readers: dict[tuple[int, int], list[tuple[int, int, int]]] = defaultdict(list)
+    cmasks: dict[int, list[tuple[int, frozenset[str]]]] = {}  # Call -> its candidate supports, with their primitives
     unrefined: Counter = Counter()
     for c in calls.values():
         if c.form != "call":
@@ -405,7 +405,7 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
         masks = [b for b in sup.gates if b & ~(shared | long_ops) == 0]
         if not masks:
             continue
-        rest = 0
+        mine: list[tuple[int, frozenset[str]]] = []
         for b in masks:
             if b != full:
                 key = _digest(c.spec, b, b"".join((op if isinstance(op, bytes) else _runs_bytes(op)) + b"|"
@@ -420,18 +420,14 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
                 continue
             if b & ~shared:
                 continue
-            rest |= b
-            for k, op in enumerate(c.ops):
-                if b >> k & 1:
-                    for run in op:
-                        if ranges.shared(run):
-                            for prim in sup.prims[b]:
-                                index3[(run[0], run[1], prim)].append((run[2], run[3], c.i))
-        if rest:
-            cand[c.i] = rest
+            mine.append((b, sup.prims[b]))
+        if mine:
+            cmasks[c.i] = mine
+            for run in {run for b, _ in mine for k, op in enumerate(c.ops) if b >> k & 1 for run in op}:
+                readers[(run[0], run[1])].append((run[2], run[3], c.i))
 
-    # level 3: Calls holding a candidate of one primitive over common leaves, hashed gate by gate
-    pairs = _overlapping(index3)
+    # level 3: Calls holding a candidate over leaves another such Call also reads, operand by operand, hashed gate by gate
+    pairs = _partners(calls, cmasks, readers)
     refined = {"calls": len(pairs), "gates": 0}
     if pairs:
         budget = sum(gates_of(calls[ci].spec) for ci in pairs)
@@ -441,7 +437,7 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
             owner: dict[int, tuple[int, int]] = {}
             for ci in sorted(pairs):
                 c = calls[ci]
-                toks = _tokens(fn_of(c.spec), c.ops, cand[ci], ci)
+                toks = _tokens(fn_of(c.spec), c.ops, pairs[ci], ci, memo)
                 refined["gates"] += len(toks)
                 dup = 0
                 for t, j in toks:
@@ -468,28 +464,64 @@ def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str
     return res
 
 
-def _overlapping(index3: dict[Any, list[tuple[int, int, int]]]) -> set[int]:
-    """The Calls whose (lo, hi) ranges in one list overlap a range of another Call in it."""
-    out: set[int] = set()
-    for lst in index3.values():
-        if len({x[2] for x in lst}) < 2:
-            continue
+def _partners(calls: dict[int, "_Call"], cmasks: dict[int, list[tuple[int, frozenset[str]]]],
+              readers: dict[tuple[int, int], list[tuple[int, int, int]]]) -> dict[int, int]:
+    """Call -> the supports to hash: a candidate support `b` of Call c counts when another candidate Call reads a leaf of every
+    operand in `b` and holds a candidate of one of its primitives (a gate over `b` can recur only in a Call reading its leaves)."""
+    idx = {}
+    for key, lst in readers.items():
         lst.sort()
-        active: list[tuple[int, int]] = []
-        for lo, hi, ci in lst:
-            active = [x for x in active if x[0] > lo]
-            others = {w for _, w in active if w != ci}
-            if others:
-                out.update(others)
-                out.add(ci)
-            active.append((hi, ci))
+        idx[key] = (lst, [x[0] for x in lst], max(x[1] - x[0] for x in lst))
+
+    def overlapping(run: tuple[int, int, int, int]) -> set[int]:
+        e = idx.get((run[0], run[1]))
+        if e is None:
+            return set()
+        lst, los, span = e
+        return {c for lo, hi, c in lst[bisect.bisect_left(los, run[2] - span + 1):bisect.bisect_left(los, run[3])] if hi > run[2]}
+
+    def reads(c: int, runs: list[tuple[int, int, int, int]]) -> bool:
+        return any(r[0] == q[0] and r[1] == q[1] and r[2] < q[3] and q[2] < r[3]
+                   for op in calls[c].ops if not isinstance(op, bytes) for r in op for q in runs)
+
+    out: dict[int, int] = {}
+    for ci, masks in cmasks.items():
+        ops = calls[ci].ops
+        for b, prims in masks:
+            ks = sorted((k for k in range(len(ops)) if b >> k & 1), key=lambda k: sum(len(idx[(r[0], r[1])][0]) for r in ops[k]))
+            part = set().union(*(overlapping(r) for r in ops[ks[0]])) - {ci}
+            for k in ks[1:]:
+                part = {p for p in part if reads(p, ops[k])}
+            part = {p for p in part if any(prims & pp for _, pp in cmasks[p])}
+            if part:
+                out[ci] = out.get(ci, 0) | b
+                for p in part:
+                    out[p] = out.get(p, 0) | sum({bb for bb, pp in cmasks[p] if prims & pp})
     return out
 
 
-def _tokens(fn: Any, ops: list[Any], allowed: int, call: int) -> list[tuple[int, int]]:
+def _structure(fn: Any, memo: dict) -> tuple[list[tuple[str, tuple[int, ...], bool]], list[int]]:
+    """`fn`'s gates once per Definition: (primitive, operands -- a gate by index, an input leaf o as -1 - o, a wide gate's none --,
+    computation gate), and the parameters' leaf bounds."""
+    key = ("structure", fn.id)
+    got = memo.get(key)
+    if got is None:
+        c, _call, lo, n, bounds = _gates(fn)
+        gates = []
+        for j in range(n):
+            g = c.gate(lo + j)
+            o_ = g.operands
+            wide = len(o_) > WIDE_FAN_IN
+            ops = () if wide else tuple(o - lo if lo <= o < lo + n else -1 - o for o in o_)
+            gates.append((g.prim.id if not wide else "", ops, bool(g.prim.params) and g.prim.id not in W.WIRING))
+        got = memo[key] = (gates, bounds)
+    return got
+
+
+def _tokens(fn: Any, ops: list[Any], allowed: int, call: int, memo: dict | None = None) -> list[tuple[int, int]]:
     """(token, gate) for each computation gate of `fn` whose support lies in `allowed`, in one Call whose operands read `ops`:
     equal tokens, the same value (input leaves by Program identity; other inputs unique to the Call)."""
-    c, cl, lo, n, bounds = _gates(fn)
+    gates, bounds = _structure(fn, {} if memo is None else memo)
     starts = [0] + bounds[:-1]
 
     def leaf(o: int) -> int:
@@ -503,27 +535,26 @@ def _tokens(fn: Any, ops: list[Any], allowed: int, call: int) -> list[tuple[int,
             j -= b - a
         return hash(("u", call, o))
 
+    n = len(gates)
     tok = [0] * n
     sup = [0] * n
     out: list[tuple[int, int]] = []
-    for j in range(n):
-        gate = c.gate(lo + j)
-        o_ = gate.operands
-        if len(o_) > WIDE_FAN_IN:
-            tok[j] = hash(("u", call, lo + j))
+    for j, (prim, o_, computing) in enumerate(gates):
+        if not prim:
+            tok[j] = hash(("u", call, j))
             sup[j] = -1
             continue
         m, parts = 0, []
         for o in o_:
-            if lo <= o < lo + n:
-                m |= sup[o - lo] if sup[o - lo] >= 0 else -1
-                parts.append(tok[o - lo])
+            if o >= 0:
+                m |= sup[o] if sup[o] >= 0 else -1
+                parts.append(tok[o])
             else:
-                m |= 1 << bisect.bisect_right(bounds, o)
-                parts.append(leaf(o))
+                m |= 1 << bisect.bisect_right(bounds, -1 - o)
+                parts.append(leaf(-1 - o))
         sup[j] = m
-        tok[j] = hash((gate.prim.id, tuple(parts)))
-        if m > 0 and m & ~allowed == 0 and gate.prim.params and gate.prim.id not in W.WIRING:
+        tok[j] = hash((prim, tuple(parts)))
+        if computing and m > 0 and m & ~allowed == 0:
             out.append((tok[j], j))
     return out
 
