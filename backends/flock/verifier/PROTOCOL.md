@@ -1085,11 +1085,10 @@ graphs (7000 agree).
     `(X, W)` (the failing Calls, their codes and too-wide units), 19 of the 50 refused for their cuts;
   - #101's cuts (`--cuts`) against core's `check_cut` at `X = 16`, `W = 32` and `16`, per Definition: the codes, the
     too-wide units, and the graph's computing gates, recomputed pairs, committed set, widest boundary and boundary gates.
-    - 13 of the 16 Definitions agree. At `W = 16`, `Attention`, `GumbelTopPTokenSelect` and both RMSNorms fail the width
-      rule, with the same units.
-    - The three largest `Gemm`s (1.05M, 2.1M and 16.5M gates) exceed core's memory at 14.5 GB, so only Lean checks them.
-      Their statistics are the two compared `Gemm`s' per coordinate (129 gates at `K = 2048`, one committed 16-bit output,
-      no recompute), and they hold at both widths;
+    - All 16 Definitions agree. At `W = 16`, `Attention`, `GumbelTopPTokenSelect` and both RMSNorms fail the width rule,
+      with the same units.
+    - The three largest `Gemm`s (1.05M, 2.1M and 16.5M gates) exceed 15 GB in core, so core checked them on a 256 GB pod
+      (run `r20260927-201750-7e04`). The LM-head took 35 min and 208 GB in core; Lean takes 100 s and 9 GB;
   - a real #101 descriptor (the Llama-3.2-1B step Build, `art:a4ea1a18`): all 167 Calls' units, and every Definition's
     owners and flat graph by SHA-512, in 14.5 s.
 
