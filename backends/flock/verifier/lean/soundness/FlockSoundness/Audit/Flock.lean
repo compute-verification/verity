@@ -1,4 +1,5 @@
 import FlockSoundness.Audit.OneStage
+import FlockSoundness.Audit.TwoStage
 import FlockSoundness.Instance
 
 /-!
@@ -19,7 +20,9 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_inputs_sound`: the input unit, an always-proved table, likewise (`InputsLoweringSound`);
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
   `δ(K) = miss K + 2^-195.4`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-195.4`;
-* `flock_oracle_drawn`, `flock_oracle_cone`: drawn units, and a consumer's value through its cone.
+* `flock_oracle_drawn`, `flock_oracle_cone`: drawn units, and a consumer's value through its cone;
+* `flock_two_stage_sound`, `flock_two_stage_full_profile`: two-stage (b1) on Flock, one-stage over
+  the coarse partition plus `2^-195.4`.
 
 The only other hypothesis is BCHKS25 Theorem 4.6 (`Assumptions.BCHKS25Thm46`). This is the only
 file of `Audit/` that imports the Flock theorems.
@@ -191,6 +194,37 @@ theorem flock_oracle_cone (hMCA : Assumptions.BCHKS25Thm46)
       (⨆ u ∈ P.cone T, (1 - L.incl u)) + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) +
         ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
   P.oracle_cone (P.flock_session_sound hMCA plan hlow) (flock_inputs_sound hMCA plan hin) T σ
+
+/-! ### Two stages -/
+
+variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc}
+
+/-- **Flock's batched session at the fine level is `SessionSound₂` at `2^-195.4`**, given the fine
+partition's lowering: the tables are planned from the fine transcript, the coarse registration
+with the interior filled in. -/
+theorem flock_two_stage_sound (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockTable) (hlow : Pf.LoweringSound plan)
+    {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)) :
+    SessionSound₂ Pf Pc ext (fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I)))
+      (ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ)))) := by
+  intro S R S₁ I v hv hw τ
+  obtain ⟨T, hT, hno⟩ := hlow S _ v hv hw
+  exact flockSession_le hMCA plan S _ hT hno τ
+
+/-- **Two-stage (b1) on Flock is one-stage over the coarse partition**: when the second stage
+proves every fine unit of each drawn coarse unit,
+`Pr[accept ∧ wrong_c(R) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} e_{L₁}(B) + 2^-195.4`. -/
+theorem flock_two_stage_full_profile (r : Refines Pf Pc) (hMCA : Assumptions.BCHKS25Thm46)
+    (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockTable) (hlow : Pf.LoweringSound plan)
+    {L₁ : Law nc} {L₂ : Fin nc → Law nf} (hfull : ∀ u ω v, r.parent v = u → v ∈ (L₂ u).draw ω)
+    {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
+    (𝓑 : Finset (Fin nc) → Prop)
+    (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int
+      (fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I))))) :
+    prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ)))
+        (twoStage L₁ L₂ _ Int fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I))) σ ≤
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + ENNReal.ofReal ((2 : ℝ) ^ (-(195.4 : ℝ))) :=
+  r.oracle₂_full_profile (flock_two_stage_sound hMCA plan hlow ext) hfull 𝓑 σ
 
 end Partition
 

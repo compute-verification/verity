@@ -144,6 +144,8 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.effEscape_bernoulli_prod
 #print axioms FlockSoundness.Audit.Partition.two_stage_a_coarse
 #print axioms FlockSoundness.Audit.Partition.Refines.analysis₂
+#print axioms FlockSoundness.Audit.Partition.Refines.oracle₂_profile
+#print axioms FlockSoundness.Audit.Partition.Refines.oracle₂_full_profile
 -- tightness and insecurity on NOT chains
 #print axioms FlockSoundness.Audit.NotChains.effEscape_chains
 #print axioms FlockSoundness.Audit.NotChains.prob_σT
@@ -161,3 +163,5 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_count_subset
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_drawn
 #print axioms FlockSoundness.Audit.Partition.flock_oracle_cone
+#print axioms FlockSoundness.Audit.Partition.flock_two_stage_sound
+#print axioms FlockSoundness.Audit.Partition.flock_two_stage_full_profile

@@ -349,6 +349,84 @@ noncomputable def Refines.analysis₂ (r : Refines Pf Pc)
       exact Pf.mem_wrong.1 hv (Pf.correct_congr (fun g hg => (hno g hg).symm) hc)
     · exact Or.inl fun Y hY hc => h ⟨Y, hY, hc⟩
 
+/-! ### The oracle layer
+
+The prover sends the coarse transcript, then the interior, as tables are sent at the oracle layer.
+The fine transcript is `extend R I`, extraction returns it, and the link term is zero. -/
+
+/-- **Any per-unit proof system at the fine level** (named hypothesis): if a drawn fine unit is
+wrong in the fine transcript, the session accepts with probability at most `ε`. -/
+def SessionSound₂ (Pf : Partition C nf) (Pc : Partition C nc) {Int : Finset (Fin nc) → Type}
+    (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
+    (session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool)
+    (ε : ℝ≥0∞) : Prop :=
+  ∀ S R S₁ I v, v ∈ S → v ∈ Pf.wrong (extend (Pc := Pc) R (ext S₁ I)) →
+    ∀ τ : Strategy (session S R S₁ I), prob (· = true) (session S R S₁ I) τ ≤ ε
+
+/-- The oracle-layer two-stage analysis: the registration is the coarse transcript, and the
+interior `I` fills in the fine one through `ext`. -/
+noncomputable def Refines.oracle₂ (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
+    {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
+    (session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) :
+    Analysis₂ L₁ L₂ (Fin C.N → Bool) Int session :=
+  r.analysis₂ (fun R _ => R) (fun _ ω₁ I _ => ext (L₁.draw ω₁) I)
+    (fun _ R S₁ I _ _ => some (extend (Pc := Pc) R (ext S₁ I)))
+
+theorem Refines.oracle₂_knowledgeSound (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
+    {Int : Finset (Fin nc) → Type} {ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)}
+    {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
+    {ε : ℝ≥0∞} (hs : SessionSound₂ Pf Pc ext session ε) :
+    (r.oracle₂ (L₁ := L₁) (L₂ := L₂) ext session).KnowledgeSound ε := by
+  classical
+  intro R c tgt
+  refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const _).le).trans (avg_const _).le
+  rw [prob_and_const]
+  split_ifs with h
+  · obtain ⟨v, -, hv, hw⟩ := h
+    refine hs _ R _ _ v hv (Pf.mem_wrong.2 ?_) _
+    exact hw _ rfl
+  · exact zero_le
+
+theorem Refines.oracle₂_linkSound (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
+    {Int : Finset (Fin nc) → Type} {ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)}
+    {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool} :
+    (r.oracle₂ (L₁ := L₁) (L₂ := L₂) ext session).LinkSound 0 := by
+  intro R c tgt
+  refine le_of_eq ((congrArg avg (funext fun ω₁ => (congrArg avg (funext fun ω₂ => ?_)).trans
+    (avg_const 0))).trans (avg_const 0))
+  refine le_antisymm ((prob_mono (q := fun _ => False) (fun ok h => ?_) _ _).trans
+    (prob_false _ _).le) (zero_le)
+  obtain ⟨-, v, -, -, Y, hY, -, g, -, hne⟩ := h
+  obtain rfl := Option.some.inj hY
+  exact hne rfl
+
+/-- **The two-stage profile at the oracle layer**, variant (b), from a sound fine-level session:
+`Pr[accept ∧ wrong_c(R) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} e_eff(B) + ε`. -/
+theorem Refines.oracle₂_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
+    {Int : Finset (Fin nc) → Type} {ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)}
+    {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
+    {ε : ℝ≥0∞} (hs : SessionSound₂ Pf Pc ext session ε) (𝓑 : Finset (Fin nc) → Prop)
+    (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int session)) :
+    prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effEscape L₁ L₂ r.parent B) + ε := by
+  have := twoStage_profile (r.oracle₂ ext session) (r.oracle₂_knowledgeSound hs) r.oracle₂_linkSound
+    𝓑 σ
+  rwa [add_zero] at this
+
+/-- **(b1) at the oracle layer is one-stage over the coarse partition**:
+`Pr[accept ∧ wrong_c(R) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} e_{L₁}(B) + ε`. -/
+theorem Refines.oracle₂_full_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fin nc → Law nf}
+    {Int : Finset (Fin nc) → Type} {ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)}
+    {session : Finset (Fin nf) → (Fin C.N → Bool) → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
+    {ε : ℝ≥0∞} (hs : SessionSound₂ Pf Pc ext session ε)
+    (hfull : ∀ u ω v, r.parent v = u → v ∈ (L₂ u).draw ω) (𝓑 : Finset (Fin nc) → Prop)
+    (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int session)) :
+    prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + ε := by
+  have := r.oracle₂_profile hs 𝓑 σ
+  simp only [effEscape_full r.parent hfull] at this
+  exact this
+
 end Partition
 
 end FlockSoundness.Audit

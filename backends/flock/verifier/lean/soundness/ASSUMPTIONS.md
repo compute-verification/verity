@@ -367,6 +367,9 @@ point (1,024 heads, 16 drawn): 590 or more wrong heads escape with probability a
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
 - `Partition.Refines.exists_wrong_fine`: a wrong coarse unit has a wrong fine unit under every interior, the lemma
   behind (b).
+- `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
+  (`SessionSound₂ ε`), with the link term zero. These are the plan's `two_stage_b_profile` and
+  `two_stage_full_eq_one_stage` as stated there.
 
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
@@ -399,6 +402,9 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 - `flock_oracle_drawn`: drawn units correct up to $2^{-195.4}$;
 - `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-195.4}$.
 
-The hypotheses are BCHKS25 Theorem 4.6 and the two lowerings.
+- `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
+  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-195.4}$, given the fine partition's lowering.
+
+The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 
 **Not yet:** the compiled instantiation, `KnowledgeSound` and `LinkSound` for Flock (DESIGN.md §12.5).
