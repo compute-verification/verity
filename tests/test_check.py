@@ -171,7 +171,8 @@ def test_a_shipped_trees_files_are_its_commits(tmp_path):
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
     """`agreement_key` covers backends/flock/verifier/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
-    it runs would be an input the key misses, so one fails here until the key covers it."""
+    it runs would be an input the key misses, so one fails here until the key covers it.  The key also leaves out the Lean
+    package's `lean-audit.json` (`agreement_closure`), so neither those scripts nor the package's lakefile may mention it."""
     import ast
     import re
     import sys
@@ -192,13 +193,19 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
                 else:
                     assert top in sys.stdlib_module_names or top == "__future__", f"{m}.py imports {n}"
     assert {"agree", "fuzz", "redigest", "transcript_check"} <= seen
+    readers = [here / f"{m}.py" for m in sorted(seen)] + [here / "lean" / "lakefile.toml"]
+    assert not (named := [p.name for p in readers if "lean-audit" in p.read_text()]), (
+        f"{', '.join(named)} mention lean-audit, which agreement_closure leaves out of the agreement's cache key")
 
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
     """`flock-verify` is built from the Lean package alone: level3/ and soundness/ (Lake packages of their own) are no input,
-    unless the package's lakefile requires something, which keeps everything in."""
+    unless the package's lakefile requires something, which keeps everything in.  Nor is the package's `lean-audit.json`, which
+    only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
+    policy, other = "backends/flock/verifier/lean/lean-audit.json", "backends/flock/verifier/lean/Flock/lean-audit.json"
+    assert policy in files and policy not in closure and other in CHECK.agreement_closure([*files, other])
     assert "backends/flock/verifier/ci.py" in closure and "backends/flock/verifier/lean/Main.lean" in closure
     assert "backends/flock/verifier/upstream.json" in closure
     assert not [f for f in closure if f.startswith(("backends/flock/verifier/lean/soundness/", "backends/flock/verifier/lean/level3/"))]
