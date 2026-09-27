@@ -162,13 +162,36 @@
    "assumptions": [],
    "type_hash": "00000000d1af148f"
   },
+  "PousDenseReCert.segTag_auditSecure": {
+   "signature": [
+    "PousDenseReCert.segTag_auditSecure {N B ℓ : ℕ} [NeZero (N * B)] (salt : Pous.Bits 192)",
+    "  (f : Pous.Bits (192 + 64) × Pous.Labelling.LabelQry B ℓ → Pous.Labelling.LabelQry (N * B) ℓ)",
+    "  (hf : Function.Injective f)",
+    "  (htag :",
+    "    ∀ (s : Fin N) (i : Fin B) (p : Fin B → Option (Pous.Bits ℓ)),",
+    "      f (PousDenseReCert.tag salt ↑s, i, p) =",
+    "        ((PousDenseReCert.segIndexEquiv N B) (s, i), PousDenseReCert.liftPar N B ℓ s p))",
+    "  {S D Q k : ℕ} {δ ε : ENNReal} (h : Pous.AuditSecure (Pous.Dense.segScheme N B ℓ) Pous.Reveal.sequential S D Q k δ ε) :",
+    "  Pous.AuditSecure (PousDenseReCert.segTagScheme N B ℓ salt) Pous.Reveal.sequential S D Q k δ ε"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003492c1a2"
+  },
+  "PousDenseReCert.segTag_meets_14": {
+   "signature": [
+    "PousDenseReCert.segTag_meets_14 (salt : Pous.Bits 192) :",
+    "  Pous.Meets (PousDenseReCert.segTagScheme 448 (2 ^ 9) 524288 salt) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c109625d"
+  },
   "PousDenseReCert.seg_meets_14": {
    "signature": [
     "PousDenseReCert.seg_meets_14 :",
-    "  Pous.Meets (PousDenseReCert.segScheme 448 (2 ^ 9) 524288) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
+    "  Pous.Meets (Pous.Dense.segScheme 448 (2 ^ 9) 524288) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
    ],
    "assumptions": [],
-   "type_hash": "00000000502a7ca7"
+   "type_hash": "00000000842a3710"
   },
   "PousDenseReCert.tag_injective_14": {
    "signature": [
@@ -366,6 +389,7 @@
     "Pous.not_meets_eps_one",
     "Pous.not_meets_of_lt_eps",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousProofs.DenseMeets",
     "PousProofs.KFloor"
@@ -414,6 +438,8 @@
     "Pous.raw_sim_accepted",
     "PousBridge.b5_stacked",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -458,6 +484,8 @@
     "PousBridge.b5_stacked",
     "PousDenseReCert.dense_meets_64",
     "PousDenseReCert.domainSep_equiv",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousDenseReCert.tag_injective_14",
     "PousProofs.A1CompressionPr",
@@ -512,6 +540,8 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -549,14 +579,22 @@
    ]
   },
   "Pous.Model.Dense": {
-   "digest": "488cec9d5bc1b51115c1e4cbe34dd132",
+   "digest": "e9ebcffc908d29535874ab99f86a2511",
    "definitions": {
     "Pous.Dense.blocks": "a6725d1c65c0d10a",
     "Pous.Dense.completeDAG": "19f00178376f9067",
     "Pous.Dense.denseModel": "53c87493a8d7c89b",
-    "Pous.Dense.denseScheme": "9ca3dbb2eba31360"
+    "Pous.Dense.denseScheme": "9ca3dbb2eba31360",
+    "Pous.Dense.segDAG": "b5a24cc870fd3ea9",
+    "Pous.Dense.segScheme": "b60c31b47dd43de7"
    },
-   "pins": ["PousDenseReCert.dense_meets_64", "PousDenseReCert.seg_meets_14", "PousProofs.DenseMeets"]
+   "pins": [
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
+    "PousDenseReCert.seg_meets_14",
+    "PousProofs.DenseMeets"
+   ]
   },
   "Pous.Model.HashChain": {
    "digest": "28053bfcb0e1511c0f202d7657c5a04b",
@@ -626,6 +664,8 @@
    "pins": [
     "PousBridge.b5_stacked",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousP3Column.band_twoWay_220_12",
     "PousP3Column.band_twoWay_220_12_d11",
@@ -651,6 +691,8 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousProofs.DenseMeets"
    ]
@@ -713,6 +755,8 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
     "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
     "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -821,15 +865,28 @@
    ]
   },
   "PousProofs.Dense.DenseReCert": {
-   "digest": "3f574d809ec05263bf9b995b4ddc7269",
+   "digest": "74ab024b8d7a1e29ee07fb56bcf62970",
    "definitions": {
-    "PousDenseReCert.segDAG": "9648793ee7d01726",
     "PousDenseReCert.segIndexEquiv": "a07d70a2b628ab34",
-    "PousDenseReCert.segScheme": "3c26bb1db290e208",
     "PousDenseReCert.tag": "3518d1f52f4099f0",
     "PousDenseReCert.u64": "6b625fbed4d9c726"
    },
-   "pins": ["PousDenseReCert.domainSep_equiv", "PousDenseReCert.seg_meets_14", "PousDenseReCert.tag_injective_14"]
+   "pins": [
+    "PousDenseReCert.domainSep_equiv",
+    "PousDenseReCert.segTag_auditSecure",
+    "PousDenseReCert.segTag_meets_14",
+    "PousDenseReCert.tag_injective_14"
+   ]
+  },
+  "PousProofs.Dense.SegTagged": {
+   "digest": "9f1137860a28056bede397736ec3dc01",
+   "definitions": {
+    "PousDenseReCert.liftPar": "c8f4a02a18d9252d",
+    "PousDenseReCert.segBlocks": "5f37300d65e59c88",
+    "PousDenseReCert.segTagScheme": "694d5c8b8f39b702",
+    "PousDenseReCert.tagModel": "b75426eeb23cb14e"
+   },
+   "pins": ["PousDenseReCert.segTag_auditSecure", "PousDenseReCert.segTag_meets_14"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "88b5ece951ec73b38003348121ad3c79",

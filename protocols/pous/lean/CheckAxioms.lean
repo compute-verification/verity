@@ -74,3 +74,6 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 -- the 14 GB theorem's global indices are the implementation's per-segment tags `salt ‖ u64 s`, relabeled injectively
 #print axioms PousDenseReCert.domainSep_equiv
 #print axioms PousDenseReCert.tag_injective_14
+-- the 14 GB theorem for the implementation's tagged keying, and the oracle-game transfer it rests on
+#print axioms PousDenseReCert.segTag_meets_14
+#print axioms PousDenseReCert.segTag_auditSecure
