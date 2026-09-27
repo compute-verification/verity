@@ -382,6 +382,11 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
     failed = []
     reports = []
+    if a.all:
+        for tc in sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs}):
+            if fs := controls(tc, out):
+                failed.append(f"controls ({tc})")
+                print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
     for pkg in pkgs:
         rep = audit(pkg, out, a.build, a.update, not a.no_replay)
         reports.append(rep)
@@ -395,11 +400,6 @@ def main(argv: list[str]) -> int:
             print("  " + f.replace("\n", "\n    "), flush=True)
         if rep["failures"]:
             failed.append(str(pkg))
-    if a.all:
-        for tc in sorted({r["toolchain"] for r in reports}):
-            if fs := controls(tc, out):
-                failed.append(f"controls ({tc})")
-                print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
                                                ensure_ascii=False) + "\n")
     print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)

@@ -29,7 +29,7 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 ~~~text
 bash tools/lean/setup.sh PKG                       once per machine: elan, the toolchain, Mathlib's cache
 cd PKG && lake build
-python tools/lean/audit.py PKG                     what check runs, for one package (about a minute with the replay)
+python tools/lean/audit.py PKG                     what check runs, for one package (seconds; level3's replay takes ~3 min)
 ~~~
 
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
