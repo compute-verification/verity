@@ -2321,10 +2321,30 @@
    0,
    39
   ],
+  "root_refused": {
+   "definition": "Root[TProg_v1]_v1",
+   "node": 3,
+   "arg": 1,
+   "reference": [
+    "n",
+    9
+   ],
+   "why": "not topological"
+  },
   "call_gate_0_operands": [
    12,
    1
   ],
+  "call_refused": {
+   "definition": "TPair_v1",
+   "node": 0,
+   "arg": 0,
+   "reference": [
+    "n",
+    1
+   ],
+   "why": "not topological"
+  },
   "q_word": "TPair_v1: gate 0 reads gate 1, not before it (the layout is not topological)"
  },
  "wiring": [

@@ -115,6 +115,18 @@ TwiceSep = _c("QTwiceSep", (("x", Array(2, V32)),), Tuple(V32, V32),
 Wide64 = _c("QWide64", (("a", Array(2, V64)),), V64, lambda B, S, a: B.call(TAdd64, a[0], a[1]))
 
 
+def _wide_rows(B, S, xr, xc, s):
+    a = B.call(I32Add, s, s)
+    w0 = B.batch(TWide, xr, a, axes=(0, None))                                                    # wide members mapped over axis 0
+    w1 = B.batch(TWide, xc, a, axes=(1, None))                                                    # and over axis 1
+    return tuple_of(B.call(I32Add, w0[0], w1[1]), w0[1], w1[0])
+
+
+#: wide gates inside batch nodes (member_refs' slice and take branches), in a flat body
+WideRows = _c("QWideRows", (("xr", Array(2, Array(cut.WIDE_FAN_IN, V32))), ("xc", Array(cut.WIDE_FAN_IN, Array(2, V32))), ("s", V32)),
+              Tuple(V32, V32, V32), _wide_rows)
+
+
 def _top(name, calls):
     """A program calling each Definition (or primitive) once on its own parameters."""
     sigs = [fn.signature() if hasattr(fn, "body") else (fn.params, fn.ret) for fn in calls]
@@ -138,6 +150,7 @@ PROGRAMS = {
     "narrow": _top("QTopNarrow", [Narrow]),
     "wiring-and-dead": _top("QTopWiring", [Wiring, Dead]),
     "wide": _top("QTopWide", [WideTwice, NarrowTwice]),
+    "wide-batched": _top("QTopWideRows", [WideRows]),
     "separable": _top("QTopSep", [SepMixed, SepScan, SepPartial]),
     "primitive-calls": Program(_c("QTopPrims", (("x", Array(3, V32)),), Tuple(V32, V32, V32), _const7)),
     "recompute": _top("QTopRecompute", [TwiceSep]),
@@ -148,7 +161,13 @@ PROGRAMS = {
 }
 #: (program, the queries it is evaluated at)
 EVALUATED = [("narrow", [(16, 32), (32, 32), (64, 64)]), ("wiring-and-dead", [(16, 32)]), ("wide", [(16, 32)]), ("separable", [(16, 32)]),
-             ("primitive-calls", [(16, 32)])]
+             ("primitive-calls", [(16, 32)]), ("wide-batched", [(16, 32)])]
+#: (label, program, definition (None: the root), node, argument, the reference sequence it is given): not topological
+ORDER = [
+    ("a gate of a Call reads itself", "wiring-and-dead", "QDead_v1", 2, 0, {"affine": ["n", 2, 0, 1]}),
+    ("a root Call reads its own output", "wiring-and-dead", None, 4, 0, {"concat": [{"affine": ["n", 4, 0, 2]}, {"affine": ["n", 2, 0, 2]}]}),
+    ("a root Call reads a later Call", "wiring-and-dead", None, 3, 0, {"concat": [{"affine": ["n", 4, 0, 2]}, {"affine": ["n", 0, 2, 1]}]}),
+]
 #: (label, program, X, W): verify refuses the program's own object
 REFUSED = [("a value two units compute", "recompute", 16, 32), ("a 64-bit output at W = 32", "too-wide", 16, 32),
            ("32-bit outputs at W = 16", "wiring-and-dead", 16, 16), ("a root batch", "root-batch", 16, 32), ("a root scan", "root-scan", 16, 32)]
@@ -216,7 +235,8 @@ def served_cases(D) -> list:
     g, own = part.graph(p), part.owner(p)
     dead_gate = own.index(c.kinds.index("dead"))
     interior = [x for x in full[k] if x not in g.outputs][0]
-    cases = [("the derived sets", full), ("nothing", {}), ("one Call left out", {j: v for j, v in full.items() if j != k}),
+    cases = [("the derived sets", full), ("nothing", {}), ("a gate that is not an integer", full | {k: [str(x) for x in full[k]]}),
+             ("a gate listed twice", full | {k: full[k] + full[k][:1]}), ("one Call left out", {j: v for j, v in full.items() if j != k}),
              ("a key that is no Call", full | {999: [0]}), ("a committed value left out", full | {k: [x for x in full[k] if x != interior]}),
              ("an output left out", full | {k: [x for x in full[k] if x != g.outputs[-1]]}),
              ("a dead gate served", full | {k: sorted(full[k] + [dead_gate])})]
@@ -319,6 +339,13 @@ def build() -> dict:
     for label, name, X, W in REFUSED:
         D = decoded[name]
         refused.append([label, name, X, W, _codes(PO.verify(PO.build(D, PO.query(X, W)), D))])
+    order = []
+    for label, name, key, node, arg, refs in ORDER:
+        d = json.loads(_canon(PROGRAMS[name]))
+        d["definitions"][key or d["root"]]["body"]["nodes"][node]["args"][arg]["refs"] = refs
+        D = codec.decode_program(d, reg)
+        v = PO.verify(PO.build(D), D)
+        order.append([label, name, key, node, arg, refs, {"codes": list(v.codes), "detail": v.detail.get("query-inapplicable", {}).get("gates")}])
     other = copy.deepcopy(PO.build(decoded["narrow"]))
     other["program"] = "f" * 128
     refused.append(["another program", "narrow", 16, 32, _codes(PO.verify(other, decoded["narrow"]))])
@@ -330,6 +357,7 @@ def build() -> dict:
         "descriptors": {k: _canon(p) for k, p in PROGRAMS.items()},
         "evaluations": [[name, [evaluation(decoded[name], X, W) for X, W in qs]] for name, qs in EVALUATED],
         "verify_refusals": refused,
+        "order_refusals": order,
         "served": served_cases(decoded["wiring-and-dead"]),
         "object_refusals": [[label, repr(obj) if not isinstance(obj, (dict, list)) or 1 in obj else obj, list(PO.validate(obj).codes)]
                             for label, obj in MALFORMED],
@@ -390,10 +418,20 @@ def test_verify_refuses(live, n):
     assert live["verify_refusals"][n] == VECTORS["verify_refusals"][n] and not VECTORS["verify_refusals"][n][4]["ok"]
 
 
+def test_every_query_refuses_a_program_that_is_not_topological(live):
+    assert live["order_refusals"] == VECTORS["order_refusals"]
+    for _l, _n, _k, _node, _a, _r, v in VECTORS["order_refusals"]:
+        assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
+    reg = registry()
+    for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
+        assert PO.order_violation(codec.decode_program(json.loads(text), reg)) is None, name
+
+
 def test_served(live):
     assert live["served"] == VECTORS["served"]
     got = {label: (v["codes"], [c for _k, cs in v["cut"] for c in cs]) for label, _s, v in VECTORS["served"]}
     assert got["the derived sets"] == ([], []) and got["nothing"][0] == ["served-missing"]
+    assert got["a gate that is not an integer"][0] == got["a gate listed twice"][0] == ["served-malformed"]
     assert got["one Call left out"][0] == ["served-missing"] and got["a key that is no Call"][0] == ["served-unknown"]
     assert "read-uncommitted" in got["a committed value left out"][1] and "output-uncommitted" in got["an output left out"][1]
     assert got["a dead gate served"][1] == ["committed-unread"]

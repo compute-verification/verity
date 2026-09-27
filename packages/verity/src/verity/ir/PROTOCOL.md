@@ -160,7 +160,7 @@ Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x
 A node has exactly the keys of its form. Its argument sequences are body-scoped (§3): `p` names the body's parameters and `n`
 the body's nodes. Writers name only nodes before the reading node (`defs.Builder` cannot do otherwise), and the canonical layout
 relies on it (§6). A descriptor whose node names itself or a later node still decodes, so that checkers can name the defect;
-`Q_word` refuses it (§8). The body's `ret` may name any node.
+every partition query refuses it (`partition_object.order_violation`, §8). The body's `ret` may name any node.
 
 - **primitive**: the callee is a primitive; the arguments are its parameters, in order; `out` is its return type.
 - **call**: the callee is a composite; likewise, with `out` its `ret_type`.
@@ -272,7 +272,7 @@ Gates are numbered by laying bodies out in node order, recursively.
   (§3). Order and repeats are kept. Input gates and constants have none.
 - **Topological order.** When every node names only earlier nodes (§4.4), every gate's operands are gates before it: a callee's
   gates precede the node reading its outputs, a scan iteration reads the iteration before it, and a parameter resolves into the
-  parent before the activation. A reader that relies on this checks it (§8).
+  parent before the activation. Every partition query checks the node-level rule before it evaluates (§8).
 
 Vectors: `layout.nodes` (each root node: index, form, callee, members, gates, offset), `layout.offsets` (every composite's
 offsets), `layout.gates` (every gate: index, primitive, operands, activation path), `layout.root_outputs`,
@@ -313,9 +313,12 @@ above, on the descriptor vector.
 `Q_word` v1 (`verity.ir.cut`, `partition_object`) reads a Program through §1–§7 and adds these conventions. They are pinned:
 changing any of them is a new version of the query.
 
-- **Applicability**: the Calls are the root's non-Input nodes (§5.2), each of form `call` or `primitive`, and no gate of a Call
-  reads itself or a later gate of the Call (§6). Otherwise the query is inapplicable: `evaluate` raises `cut.QueryInapplicable`
-  and `partition_object.verify` refuses with `query-inapplicable`.
+- **Applicability**: the program is topological: every node of every body names only its body's parameters and earlier nodes,
+  a body's `ret` any of its nodes (§4.4). `partition_object.evaluate` checks it once, before any query (`order_violation`), so
+  every query refuses the same programs. The Calls are the root's non-Input nodes (§5.2), each of form `call` or `primitive`.
+  Otherwise the query is inapplicable: `evaluate` raises `cut.QueryInapplicable` and `partition_object.verify` refuses with
+  `query-inapplicable` (the definition, node, argument and reference). `cut.CallGraph` keeps a gate-level check (an operand
+  inside the Call comes before its gate) as a backstop.
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
   (primitives without parameters) their gates are structure: computed in no unit, readable by any, never committed. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
@@ -334,7 +337,8 @@ changing any of them is a new version of the query.
 `WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/ir/qword_vectors.json`, with vectors for every step of the algorithm, every
 refusal and a seeded random corpus.
 
-Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39; a Call whose gate reads a
-later gate of the Call decodes and is refused); `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
+Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39, and `evaluate` refuses it; a
+Call whose gate reads a later gate of the Call decodes, and `evaluate` and the `CallGraph` backstop refuse it); `qword_vectors.json`
+→ `order_refusals` for `verify`; `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
 beside the same Call over a 4-leaf primitive (the narrow Call has the recompute pair `[2, 1]` and 5 inputs; the wide one has
 none and 1).

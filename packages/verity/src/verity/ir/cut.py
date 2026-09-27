@@ -6,9 +6,11 @@ The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any 
 `verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
 specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
-0. **Applicability.**  Q_word v1 applies to a program whose root body's nodes other than its Input nodes are each of form `call` or
-   `primitive`, and whose Calls are topological (step 3).  Otherwise the query is inapplicable: `evaluate` raises `QueryInapplicable`
-   and `verify` refuses with `query-inapplicable` (where, and why).
+0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's
+   parameters and earlier nodes, a body's `ret` any of its nodes (`partition_object.order_violation`, checked for every query) -- and
+   whose root body's nodes other than its Input nodes are each of form `call` or `primitive`.  Otherwise the query is inapplicable:
+   `evaluate` raises `QueryInapplicable` and `verify` refuses with `query-inapplicable` (where, and why).  `CallGraph`'s own check
+   (step 3: an operand inside the Call comes before its gate) is a backstop the program-level rule already implies.
 1. **Calls.**  The root body's nodes that are not Input nodes (callee id `Input<w>_v1`), in body order.  Each is cut as its Definition's activation
    in a one-Call Program (`call_scope`): the Definition's parameter leaves are Input gates `0..L-1` in parameter order, its own gates
    `L..L+gates-1`.  Activations of one Definition share its cut.  A primitive Call is one gate: it reads its inputs and is returned.

@@ -434,19 +434,28 @@ def _root_nodes(D):
 
 
 def _forward(desc: dict) -> dict:
-    """A body whose node reads a later node decodes (checkers name the defect); `Q_word` refuses a Call whose gate reads a later gate."""
+    """A body whose node reads a later node decodes (checkers name the defect); every partition query refuses it (`order_violation`),
+    and `CallGraph` refuses a Call whose gate reads a later gate of the Call (a backstop)."""
+    def refusal(D):
+        try:
+            PO.evaluate(D)
+            return None
+        except cut.QueryInapplicable as e:
+            return e.detail
+
     d = json.loads(_canon(desc))
     _node(d, 3)["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}               # root node 3 reads node 9: two Calls, out of order
-    root_gates = codec.decode_program(d, REG).circuit.gate(11).operands
+    R = codec.decode_program(d, REG)
     d = json.loads(_canon(desc))
     d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}   # inside TPair: s reads s + a
     D = codec.decode_program(d, REG)
     try:
         cut.CallGraph(D.defs["TPair_v1"])
-        refused = None
+        backstop = None
     except ValueError as e:
-        refused = str(e)
-    return {"root_gate_11_operands": list(root_gates), "call_gate_0_operands": list(D.circuit.gate(11).operands), "q_word": refused}
+        backstop = str(e)
+    return {"root_gate_11_operands": list(R.circuit.gate(11).operands), "root_refused": refusal(R),
+            "call_gate_0_operands": list(D.circuit.gate(11).operands), "call_refused": refusal(D), "q_word": backstop}
 
 
 def _identity(t_json):
@@ -600,6 +609,7 @@ def test_a_forward_reference_decodes_and_q_word_refuses_it(live):
     assert live["forward_reference"] == VECTORS["forward_reference"]
     f = VECTORS["forward_reference"]
     assert f["root_gate_11_operands"] == [0, 39] and f["call_gate_0_operands"] == [12, 1] and "not topological" in f["q_word"]
+    assert f["root_refused"]["node"] == 3 and f["call_refused"]["definition"] == "TPair_v1" and f["call_refused"]["why"] == "not topological"
 
 
 # -- 8. Q_word v1 inputs: wiring, wide gates ------------------------------------------------------------------------------------
