@@ -1,0 +1,64 @@
+# tools/lean: the Lean audit
+
+One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
+library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
+(`audit.py`, `Audit.lean`, `Replay.lean`, `setup.sh`, `tests/`) and point it at its own packages.
+
+~~~text
+bash tools/lean/setup.sh PKG                      elan, PKG's lean-toolchain, Mathlib's cache when Mathlib is a dependency
+python tools/lean/audit.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
+python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
+python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
+~~~
+
+## What it checks
+
+Every declaration of the package's audited modules (not a list of theorems), from the environment Lean builds:
+
+- only the allowed axioms (default `propext`, `Classical.choice`, `Quot.sound`): no `sorry`, no `native_decide`;
+- no `axiom` declaration: an assumption is a named `Prop`, taken as a hypothesis;
+- every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
+  `@[extern]`) is listed with a reason;
+- every `.lean` file of the package is imported by a root, or exempt with a reason;
+- no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
+  option, `addDeclWithoutChecking` or `addDeclCore`;
+- each `layers` rule holds: the modules under a prefix import only the listed prefixes;
+- the pinned theorems say what their records say (below);
+- the kernel accepts every declaration again (`Replay.lean`): a declaration that skipped the kernel shows no axiom, and
+  only the replay catches it.
+
+`--all` first runs the controls: `tests/fixtures/control`, built with each audited package's toolchain, must pass clean
+and fail once for each violation in `tests/fixtures/violations.json`. One of them adds a false theorem through
+`debug.skipKernelTC`, spelled so that no scan finds it: it must pass every check but the replay, and fail the replay.
+
+## The policy: `lean-audit.json`, beside the lakefile
+
+~~~json
+{
+ "roots": ["Pkg"],
+ "exempt": {"Pkg.Scratch": "why nothing needs to build it"},
+ "axioms": ["Classical.choice", "Quot.sound", "propext"],
+ "assumptions": ["Pkg.Assumptions"],
+ "meaning": ["Pkg"],
+ "escapes": {"Pkg.loop": "why compiled code no proof sees is acceptable here"},
+ "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
+ "pins": {"Pkg.main_theorem": {}}
+}
+~~~
+
+- `roots`: the modules the audit imports; every module under them is audited. `axioms` is optional.
+- `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
+- `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
+  statement is about (an executable, Mathlib) stays outside.
+- `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
+  build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
+  definitions the pinned statements read, with a digest. Without `--update` the audit fails on any difference, so a
+  statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
+  statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+
+## Using it from another repository
+
+Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
+package, run `audit.py --update` once on the trusted statements, review and commit the records, and run
+`audit.py --all --build` wherever the repository runs its checks. Build submissions from a clean tree in a sandbox:
+elaborating a Lean file runs arbitrary code, and the audit reads the `.olean` files the build wrote.
