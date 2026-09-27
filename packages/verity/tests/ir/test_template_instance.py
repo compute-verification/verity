@@ -171,7 +171,7 @@ def test_the_mixed_program_commits_the_value_across_units():
 
 @pytest.mark.parametrize("n", range(len(REFUSED)), ids=[r[0] for r in REFUSED])
 def test_the_query_refuses(live, n):
-    assert live["refused"][n] == VECTORS["refused"][n] and VECTORS["refused"][n][3].startswith("('query-refused',)")
+    assert live["refused"][n] == VECTORS["refused"][n] and VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
 
 
 @pytest.mark.parametrize("n", range(len(MALFORMED)), ids=[m[0] for m in MALFORMED])

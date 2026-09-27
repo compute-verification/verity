@@ -538,7 +538,7 @@
      "template": "TScale_v1{N=2,C=1.5}"
     }
    },
-   "('query-refused',) root node 2 is a batch of 'TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}': an instance is a call or batch of one of ['TScale_v1{N=2,C=1.5}']"
+   "('query-inapplicable',) root node 2 is a batch of 'TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}': an instance is a call or batch of one of ['TScale_v1{N=2,C=1.5}']"
   ],
   [
    "a node of another function",
@@ -550,7 +550,7 @@
      "template": "TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}"
     }
    },
-   "('query-refused',) root node 5 is a call of 'TDot_v1': an instance is a call or batch of one of ['TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}']"
+   "('query-inapplicable',) root node 5 is a call of 'TDot_v1': an instance is a call or batch of one of ['TScale_v1{N=2,C={\"f64\":\"0x1.8000000000000p+0\"}}']"
   ],
   [
    "a listed template without an instance",
@@ -566,7 +566,7 @@
      ]
     }
    },
-   "('query-refused',) the program has no instance of ['TOther_v1']"
+   "('query-inapplicable',) the program has no instance of ['TOther_v1']"
   ],
   [
    "a scan at the root",
@@ -578,7 +578,7 @@
      "template": "TStep_v1"
     }
    },
-   "('query-refused',) root node 2 is a scan of 'TStep_v1': an instance is a call or batch of one of ['TStep_v1']"
+   "('query-inapplicable',) root node 2 is a scan of 'TStep_v1': an instance is a call or batch of one of ['TStep_v1']"
   ],
   [
    "a primitive at the root",
@@ -590,7 +590,7 @@
      "template": "TAdd32_v1"
     }
    },
-   "('query-refused',) root node 1 is a primitive of 'TAdd32_v1': an instance is a call or batch of one of ['TAdd32_v1']"
+   "('query-inapplicable',) root node 1 is a primitive of 'TAdd32_v1': an instance is a call or batch of one of ['TAdd32_v1']"
   ],
   [
    "a batch of 0 members is no instance",
@@ -602,7 +602,7 @@
      "template": "TDot_v1"
     }
    },
-   "('query-refused',) the program has no instance of ['TDot_v1']"
+   "('query-inapplicable',) the program has no instance of ['TDot_v1']"
   ]
  ],
  "malformed": [
