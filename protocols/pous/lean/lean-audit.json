@@ -154,13 +154,13 @@
   },
   "PousDenseReCert.domainSep_equiv": {
    "signature": [
-    "PousDenseReCert.domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Pous.Bits 256) :",
+    "PousDenseReCert.domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Pous.Bits 192) :",
     "  ∃ t,",
     "    Function.Injective t ∧",
     "      ∀ (p : Fin N × Fin B), (PousDenseReCert.tag salt ↑p.1, p.2) = t ((PousDenseReCert.segIndexEquiv N B) p)"
    ],
    "assumptions": [],
-   "type_hash": "00000000032a3db7"
+   "type_hash": "00000000d1af148f"
   },
   "PousDenseReCert.seg_meets_14": {
    "signature": [
@@ -172,10 +172,10 @@
   },
   "PousDenseReCert.tag_injective_14": {
    "signature": [
-    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 256) : Function.Injective fun s => PousDenseReCert.tag salt ↑s"
+    "PousDenseReCert.tag_injective_14 (salt : Pous.Bits 192) : Function.Injective fun s => PousDenseReCert.tag salt ↑s"
    ],
    "assumptions": [],
-   "type_hash": "000000001aa7783d"
+   "type_hash": "000000003687c59d"
   },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
@@ -821,12 +821,12 @@
    ]
   },
   "PousProofs.Dense.DenseReCert": {
-   "digest": "5bc15f42d1625c0917319ef68371f03e",
+   "digest": "3f574d809ec05263bf9b995b4ddc7269",
    "definitions": {
     "PousDenseReCert.segDAG": "9648793ee7d01726",
     "PousDenseReCert.segIndexEquiv": "a07d70a2b628ab34",
     "PousDenseReCert.segScheme": "3c26bb1db290e208",
-    "PousDenseReCert.tag": "0a792ea19381614b",
+    "PousDenseReCert.tag": "3518d1f52f4099f0",
     "PousDenseReCert.u64": "6b625fbed4d9c726"
    },
    "pins": ["PousDenseReCert.domainSep_equiv", "PousDenseReCert.seg_meets_14", "PousDenseReCert.tag_injective_14"]

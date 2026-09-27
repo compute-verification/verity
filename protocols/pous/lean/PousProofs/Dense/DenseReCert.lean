@@ -308,13 +308,21 @@ theorem seg_hard_needs_hD :
 
 /-! ### Piece 3: alignment with the implementation's per-segment tagged domains (PR #166, D1–D5)
 
-The reference codec domain-separates each segment `s` by `tag_s = salt ‖ u64 s` (`chainDense B ℓ 512 (dom tag_s)`,
-`PROTOCOL.md`), whereas `segScheme` keys the oracle by the **global** block index. These are the *same* domain
-separation. `segIndexEquiv` shows the global index is exactly the `(segment, block)` pair (a bijection), and
-`tag_injective` shows distinct segments get distinct tags (for `N ≤ 2^64`, from `u64`). Then `domainSep_equiv` shows the
-per-segment tagged keying `(s, i) ↦ (tag_s, i)` is the global-index keying followed by an **injective relabeling** — so it
-separates the blocks exactly as global indices do. Hence `seg_meets_14` (proved with global indices) holds verbatim for
-the implementation's per-segment domains, and all witnesses and necessity proofs above are unchanged. -/
+The reference codec domain-separates each segment `s` by `tag_s = salt ‖ u64 s` — a **192-bit** salt then `u64 s`, exactly
+`chainDense`'s 256-bit salt slot (`chainDense B ℓ 512 (dom tag_s)`, `PROTOCOL.md`) — whereas `segScheme` keys the oracle by
+the **global** block index. These are the *same* domain separation. `segIndexEquiv` shows the global index is exactly the
+`(segment, block)` pair (a bijection), and `tag_injective` shows distinct segments get distinct tags (for `N ≤ 2^64`, from
+`u64` alone). Then `domainSep_equiv` shows the per-segment tagged keying `(s, i) ↦ (tag_s, i)` is the global-index keying
+followed by an **injective relabeling** — so it separates the blocks exactly as global indices do. Hence `seg_meets_14`
+(proved with global indices) holds verbatim for the implementation's per-segment domains, and all witnesses and necessity
+proofs above are unchanged.
+
+**Salt-entropy independence.** Nothing here needs the salt to carry more than 128 bits of entropy — in fact it needs
+none. The audit bound `2^-128` in `dense_meets_64`/`seg_meets_14` comes entirely from the union term (see
+`dense_union_term_64`/`seg_union_term_14`); those theorems do not mention the salt. Inter-segment separation
+(`tag_injective`, `domainSep_equiv`) comes from `u64 s`, not from salt entropy — the salt enters only as the opaque first
+argument of `Fin.append` and its value is never used. So any salt width (here 192 bits) works; the salt only separates
+*instances*/deployments, which is outside this per-store bound. -/
 
 /-- The global block index is exactly the `(segment, block)` pair. -/
 def segIndexEquiv (N B : ℕ) : Fin N × Fin B ≃ Fin (N * B) := finProdFinEquiv
@@ -322,8 +330,9 @@ def segIndexEquiv (N B : ℕ) : Fin N × Fin B ≃ Fin (N * B) := finProdFinEqui
 /-- The low 64 bits of `s` (`u64 s`), as in `tag_s = salt ‖ u64 s`. -/
 def u64 (s : ℕ) : Bits 64 := fun j => s.testBit j.val
 
-/-- The implementation's segment tag `tag_s = salt ‖ u64 s`. -/
-def tag (salt : Bits 256) (s : ℕ) : Bits (256 + 64) := Fin.append salt (u64 s)
+/-- The implementation's segment tag `tag_s = salt ‖ u64 s`: a 192-bit salt then `u64 s`, filling `chainDense`'s 256-bit
+salt slot exactly. -/
+def tag (salt : Bits 192) (s : ℕ) : Bits (192 + 64) := Fin.append salt (u64 s)
 
 theorem u64_inj {a b : ℕ} (ha : a < 2 ^ 64) (hb : b < 2 ^ 64)
     (h : ∀ j : Fin 64, a.testBit j.val = b.testBit j.val) : a = b := by
@@ -336,18 +345,18 @@ theorem u64_inj {a b : ℕ} (ha : a < 2 ^ 64) (hb : b < 2 ^ 64)
       Nat.testBit_eq_false_of_lt (lt_of_lt_of_le hb (Nat.pow_le_pow_right (by norm_num) hi))]
 
 /-- **Distinct segments get distinct tags** (`N ≤ 2^64`): `salt ‖ u64 s` is injective in `s`. -/
-theorem tag_injective (salt : Bits 256) {N : ℕ} (hN : N ≤ 2 ^ 64) :
+theorem tag_injective (salt : Bits 192) {N : ℕ} (hN : N ≤ 2 ^ 64) :
     Function.Injective (fun s : Fin N => tag salt s.val) := by
   intro s t h
   refine Fin.ext (u64_inj (lt_of_lt_of_le s.isLt hN) (lt_of_lt_of_le t.isLt hN) (fun j => ?_))
-  have hj := congrFun h (Fin.natAdd 256 j)
+  have hj := congrFun h (Fin.natAdd 192 j)
   simpa [tag, u64, Fin.append_right] using hj
 
 /-- **Distinct tags give the same domain separation as global indices.** The per-segment tagged keying
 `(s, i) ↦ (tag_s, i)` is the global-index keying (`segIndexEquiv`) composed with an injective relabeling `t`. So keying by
 `tag_s = salt ‖ u64 s` separates the `N·B` blocks exactly as global indices do; `seg_meets_14` transfers verbatim. -/
-theorem domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Bits 256) :
-    ∃ t : Fin (N * B) → Bits (256 + 64) × Fin B, Function.Injective t ∧
+theorem domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Bits 192) :
+    ∃ t : Fin (N * B) → Bits (192 + 64) × Fin B, Function.Injective t ∧
       ∀ p : Fin N × Fin B, (tag salt p.1.val, p.2) = t (segIndexEquiv N B p) := by
   refine ⟨fun g => (tag salt ((segIndexEquiv N B).symm g).1.val, ((segIndexEquiv N B).symm g).2), ?_, ?_⟩
   · intro g₁ g₂ h
@@ -358,7 +367,7 @@ theorem domainSep_equiv (N B : ℕ) (hN : N ≤ 2 ^ 64) (salt : Bits 256) :
 
 /-- **Satisfiability witness** at 14 GB: `N = 448 ≤ 2^64`, so the implementation's tags `salt ‖ u64 s` are distinct across
 the 448 segments — the hypothesis `hN` of `domainSep_equiv`/`tag_injective` holds, and the alignment applies. -/
-theorem tag_injective_14 (salt : Bits 256) : Function.Injective (fun s : Fin 448 => tag salt s.val) :=
+theorem tag_injective_14 (salt : Bits 192) : Function.Injective (fun s : Fin 448 => tag salt s.val) :=
   tag_injective salt (by norm_num)
 
 end PousDenseReCert

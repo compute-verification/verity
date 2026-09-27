@@ -40,11 +40,11 @@ sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits pa
 
 Each composes B5 (`dense_timedINC`, `seg_timedINC`, from the pebbling bounds `complete_hard` and `seg_hard`) with
 Theorem 1(ii) sequential. At the 64 KB point the sampling term is `p₀^106 ≈ 0.98%`, while `p₀^105 > 1%`, so `k = 106` is
-tight. The 14 GB store needs the same `k` as one segment. The implementation keys each segment's oracle by the tag
-`salt ‖ u64 s` instead of the global index. `domainSep_equiv` proves that this keying is the global-index keying
-followed by an injective relabeling when `N ≤ 2^64`, and `tag_injective_14` gives distinct tags for the 448 segments.
-The step from there to `seg_meets_14` under the tagged keying (an injectively relabeled random oracle is again one) is
-argued in the file, not proved as a separate `Meets`.
+tight. The 14 GB store needs the same `k` as one segment. The implementation keys each segment's oracle by the 256-bit
+tag `salt ‖ u64 s` (a 192-bit salt, then the segment index) instead of the global index. `domainSep_equiv` proves that
+this keying is the global-index keying followed by an injective relabeling when `N ≤ 2^64`, and `tag_injective_14` gives
+distinct tags for the 448 segments. The step from there to `seg_meets_14` under the tagged keying (an injectively
+relabeled random oracle is again one) is argued in the file, not proved as a separate `Meets`.
 
 **Not proved here:**
 - the concrete H, `ChainExPostFacto` (the main caveat);
