@@ -8,7 +8,9 @@ tables load from the committed sweep artifacts); skipped when unavailable."""
 
 from __future__ import annotations
 
+import math
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -86,6 +88,54 @@ def test_unary_kernels_match_prims(fn_np, prim):
     ev = getattr(P, prim).evaluate
     bad = [hex(int(x)) for x, g in zip(xs, got) if int(g) != ev(int(x))]
     assert not bad, (prim, len(bad), bad[:5])
+
+
+def _ex2_exact(w: int, T: np.ndarray) -> int:
+    """`ex2.approx.ftz.f32` of the word `w` from the rule's statement, in exact arithmetic on the input's value:
+    K = floor(|x| 2^23), q = K div 2^23, r = K mod 2^23; x >= 0 reads T[r] * 2^q, x < 0 the ones' complement of the
+    fraction, T[2^23-1-r] * 2^-(q+1), carried to T[0] * 2^-q when r = 0; +inf from 2^128, +0 below 2^-126."""
+    x = float(np.uint32(w).view(np.float32))
+    if x != x:
+        return 0x7FFFFFFF
+    if w & 0x7F800000 == 0:                                        # ftz: +-0 and every subnormal read as 0
+        return 0x3F800000
+    if math.isinf(x):
+        return 0 if x < 0 else 0x7F800000
+    q, r = divmod(math.floor(abs(Fraction(x)) * 2 ** 23), 2 ** 23)
+    n, j = (q, r) if x > 0 else ((-q, 0) if r == 0 else (-q - 1, 2 ** 23 - 1 - r))
+    if abs(n) > 300:
+        return 0x7F800000 if n > 0 else 0
+    v = Fraction(float(np.uint32(T[j]).view(np.float32))) * Fraction(2) ** n
+    if v >= 2 ** 128:
+        return 0x7F800000
+    if v < Fraction(2) ** -126:
+        return 0
+    return int(np.float32(float(v)).view(np.uint32))
+
+
+def test_ex2_every_exponent_class_equals_the_exact_rule():
+    """`MufuEx2Ftz` on every exponent class of both signs (edge and seeded mantissas; NaN and inf at 255): the compiled rule
+    (`fa2_model.mufu_ex2`), the IR reference (`verity.evaluation.evaluate`) and the numpy twin equal the rule evaluated
+    exactly, and every 0 < |x| < 2^-23 gives T[0] = 1.0.  That includes |x| < 2^-63, where the C shift count reached 64 or
+    more (undefined; x86-64 took it mod 64: ex2(6.5e-22) was 1.0083, ex2(2^-64) 2.0 and ex2(-2^-64) 0.5)."""
+    D = _derived()
+    from verity.evaluation import evaluate
+    from verity_vllm.program.kernels import fa2_model as FA
+    from verity_vllm.program.registry import prims as P
+    tabs = D._fa2_tables()
+    mants = np.concatenate([[0, 1, 2, 0x3FFFFF, 0x400000, 0x400001, 0x7FFFFE, 0x7FFFFF],
+                            np.random.default_rng(64).integers(0, 1 << 23, 8)]).astype(np.uint32)
+    e = np.arange(256, dtype=np.uint32)
+    xs = ((np.arange(2, dtype=np.uint32)[:, None, None] << 31) | (e[None, :, None] << 23) | mants[None, None, :]).reshape(-1)
+    want = np.array([_ex2_exact(int(w), tabs.ex2) for w in xs], dtype=np.uint32)
+    assert np.array_equal(FA.mufu_ex2(xs.view(np.float32), tabs).view(np.uint32), want)
+    assert np.array_equal(D.mufu_ex2_ftz(xs), want)
+    assert [evaluate(P.MufuEx2Ftz, int(w))[0] for w in xs] == want.tolist()
+    ex = (xs >> 23) & 0xFF
+    tiny = (ex >= 1) & (ex <= 103)
+    assert int(tiny.sum()) == 2 * 103 * mants.size and (want[tiny] == 0x3F800000).all()
+    words = np.array([np.float32(6.5e-22).view(np.uint32), 0x1F800000, 0x9F800000], dtype=np.uint32)  # 6.5e-22, +-2^-64
+    assert D.mufu_ex2_ftz(words).tolist() == [0x3F800000] * 3
 
 
 def test_binary_kernels_match_prims():
