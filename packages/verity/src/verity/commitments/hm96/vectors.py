@@ -1,10 +1,11 @@
-"""Generate the ``hm96-sha256/v1`` conformance vectors (``vectors.json`` beside this file) from the reference.
+"""Generate the hm96 conformance vectors from the reference: ``vectors.json`` (``hm96-sha256/v1``) and ``vectors_sha512.json``
+(``hm96-sha512/v1``) beside this file.
 
-    python -m verity.commitments.hm96.vectors          # rewrite vectors.json
-    python -m verity.commitments.hm96.vectors --check  # exit 1 if vectors.json is stale
+    python -m verity.commitments.hm96.vectors          # rewrite both files
+    python -m verity.commitments.hm96.vectors --check  # exit 1 if either is stale
 
 Salts and values are deterministic expansions of labels (a vector is not a commitment: a real salt comes from the OS),
-and every byte is spelled out so a Rust, CUDA or circuit implementation needs nothing but this file.
+and every byte is spelled out so a Rust, CUDA or circuit implementation needs nothing but these files.
 """
 
 from __future__ import annotations
@@ -16,25 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from .. import vllm_v1
-from ..rowleaf import ROLE_X, sha256_row_layout
-from . import (
-    DEFAULT_KEY,
-    KEY_LABEL,
-    NAME,
-    SALT_PREFIX,
-    HidingLayout,
-    Hm96Sha256,
-    commit_string,
-    leaf_prefix,
-    mask,
-    rows,
-    salt_digest,
-    scheme_digest,
-    tree_leaf,
-    xor_count,
-)
+from ..rowleaf import ROLE_X, sha256_row_layout, sha512_row_layout
+from . import SHA256, SHA512, HidingLayout, Hm96, Instance
 
-VECTORS = Path(__file__).with_name("vectors.json")
+VECTORS = {SHA256: Path(__file__).with_name("vectors.json"), SHA512: Path(__file__).with_name("vectors_sha512.json")}
+_ROW = {"sha256": ("sha256/row/v1", sha256_row_layout), "sha512": ("sha512/row/v1", sha512_row_layout)}
 
 
 def expand(label: str, n: int) -> bytes:
@@ -46,99 +33,107 @@ def expand(label: str, n: int) -> bytes:
     return bytes(out[:n])
 
 
-def _other_key() -> bytes:
-    return key_bytes(expand("hm96/other-key", 160))
+def _label(inst: Instance, label: str) -> str:
+    return label if inst is SHA256 else f"{inst.hash}/{label}"
 
 
-def key_bytes(raw: bytes) -> bytes:
-    out = bytearray(raw)
-    out[-1] &= 0x7F
-    return bytes(out)
+def _other_key(inst: Instance) -> bytes:
+    raw = bytearray(expand("hm96/other-key" if inst is SHA256 else "hm96-sha512/other-key", inst.key_bytes))
+    raw[-1] &= 0x7F
+    return inst.check_key(bytes(raw))
 
 
-def _mask_vectors() -> list[dict[str, Any]]:
+def _mask_vectors(inst: Instance) -> list[dict[str, Any]]:
     out = []
-    for key_name, key in (("default", DEFAULT_KEY), ("other", _other_key())):
-        for name, salt in (("zero", bytes(128)), ("e0", bytes([1]) + bytes(127)), ("e1023", bytes(127) + bytes([0x80])),
-                           ("ones", b"\xff" * 128), ("expand", expand(f"mask/{key_name}", 128))):
-            out.append({"key": key_name, "salt_case": name, "salt": salt.hex(), "mask": mask(key, salt).hex(),
-                        "salt_digest": salt_digest(salt).hex()})
+    n = inst.salt_bytes
+    for key_name, key in (("default", inst.default_key), ("other", _other_key(inst))):
+        for name, salt in (("zero", bytes(n)), ("e0", bytes([1]) + bytes(n - 1)), (f"e{inst.cols - 1}", bytes(n - 1) + bytes([0x80])),
+                           ("ones", b"\xff" * n), ("expand", expand(_label(inst, f"mask/{key_name}"), n))):
+            out.append({"key": key_name, "salt_case": name, "salt": salt.hex(), "mask": inst.mask(key, salt).hex(),
+                        "salt_digest": inst.salt_digest(salt).hex()})
     return out
 
 
-def _leaf_vectors() -> list[dict[str, Any]]:
+def _leaf_vectors(inst: Instance) -> list[dict[str, Any]]:
     out = []
-    cases = [("pos-leaf", n, vllm_v1.pos_leaf_layout(n)) for n in (0, 1, 4, 26, 256, 4096)]
-    cases += [("sha256/row/v1", n, sha256_row_layout(ROLE_X, 16, n // 2)) for n in (2, 3072)]
+    row_name, row_layout = _ROW[inst.hash]
+    cases = [("pos-leaf", n, vllm_v1.pos_leaf_layout(n, inst.hash)) for n in (0, 1, 4, 26, 256, 4096)]
+    cases += [(row_name, n, row_layout(ROLE_X, 16, n // 2)) for n in (2, 3072)]
+    key = inst.default_key
     for inner_name, n, inner in cases:
-        value = expand(f"leaf/{inner_name}/{n}/value", n)
-        salt = expand(f"leaf/{inner_name}/{n}/salt", 128)
-        layout = HidingLayout(inner, DEFAULT_KEY)
+        value = expand(_label(inst, f"leaf/{inner_name}/{n}/value"), n)
+        salt = expand(_label(inst, f"leaf/{inner_name}/{n}/salt"), inst.salt_bytes)
+        layout = HidingLayout(inner, key, inst)
         x = inner.digest(value)
         proven = layout.commit(value, salt)
         out.append({"inner": inner_name, "inner_prefix": inner.prefix.hex(), "inner_suffix": inner.suffix.hex(), "value": value.hex(),
-                    "inner_digest": x.hex(), "salt": salt.hex(), "b": proven[:32].hex(), "c": proven[32:].hex(),
-                    "leaf": tree_leaf(DEFAULT_KEY, proven).hex()})
-        assert proven == commit_string(DEFAULT_KEY, x, salt)
+                    "inner_digest": x.hex(), "salt": salt.hex(), "b": proven[:inst.digest_bytes].hex(), "c": proven[inst.digest_bytes:].hex(),
+                    "leaf": inst.tree_leaf(key, proven).hex()})
+        assert proven == inst.commit_string(key, x, salt)
     return out
 
 
-def _tree_vectors() -> list[dict[str, Any]]:
+def _tree_vectors(inst: Instance) -> list[dict[str, Any]]:
     out = []
     digest = hashlib.sha256(b"hm96/vectors/step").digest()
     for n in (1, 2, 5):
-        base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n)}, value_nbytes={"v": lambda _i: 40})
-        scheme = Hm96Sha256(base)
-        values = [expand(f"tree/{n}/{i}/value", 40) for i in range(n)]
-        salts = [expand(f"tree/{n}/{i}/salt", 128) for i in range(n)]
+        base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n, hash=inst.hash)}, value_nbytes={"v": lambda _i: 40})
+        scheme = Hm96(base, instance=inst)
+        values = [expand(_label(inst, f"tree/{n}/{i}/value"), 40) for i in range(n)]
+        salts = [expand(_label(inst, f"tree/{n}/{i}/salt"), inst.salt_bytes) for i in range(n)]
         proven = [scheme.leaf_layout("v", i).commit(v, s) for i, (v, s) in enumerate(zip(values, salts))]
         leaves = [scheme.tree_leaf("v", i, p) for i, p in enumerate(proven)]
         out.append({"domain": {"kind": "step", "program": digest.hex(), "ctx": digest.hex(), "geo": digest.hex(), "layout": digest.hex(),
-                               "leaf_count": n}, "values": [v.hex() for v in values], "salts": [s.hex() for s in salts],
+                               "leaf_count": n, **({} if inst is SHA256 else {"hash": inst.hash})},
+                    "values": [v.hex() for v in values], "salts": [s.hex() for s in salts],
                     "proven": [p.hex() for p in proven], "leaves": [x.hex() for x in leaves], "root": scheme.root("v", leaves).hex(),
                     "paths": [[None if p is None else p.hex() for p in scheme.path("v", leaves, i)] for i in range(n)]})
     return out
 
 
-def build() -> dict[str, Any]:
+def build(inst: Instance = SHA256) -> dict[str, Any]:
+    h = "SHA-256" if inst is SHA256 else "SHA-512"
+    key = inst.default_key
     return {
-        "scheme": NAME,
+        "scheme": inst.name,
         "generator": "python -m verity.commitments.hm96.vectors",
-        "encoding": ("lowercase hex; bit t of a byte string is bit t & 7 of byte t >> 3; M[i][j] = key bit i + j (256 x 1024); "
-                     "mask = M * salt over GF(2); b = inner_digest XOR mask; c = SHA-256(salt_prefix || salt); "
-                     "leaf = SHA-256(leaf_prefix || b || c)"),
-        "key_label": KEY_LABEL.hex(),
-        "default_key": DEFAULT_KEY.hex(),
-        "default_key_xor_gates": xor_count(DEFAULT_KEY),
-        "default_key_row_weights": [r.bit_count() for r in rows(DEFAULT_KEY)],
-        "other_key": _other_key().hex(),
-        "salt_prefix": SALT_PREFIX.hex(),
-        "leaf_prefix_default_key": leaf_prefix(DEFAULT_KEY).hex(),
-        "scheme_digest_default_key": scheme_digest(DEFAULT_KEY).hex(),
-        "masks": _mask_vectors(),
-        "leaves": _leaf_vectors(),
-        "trees": _tree_vectors(),
+        "encoding": (f"lowercase hex; bit t of a byte string is bit t & 7 of byte t >> 3; M[i][j] = key bit i + j ({inst.rows} x {inst.cols}); "
+                     f"mask = M * salt over GF(2); b = inner_digest XOR mask; c = {h}(salt_prefix || salt); "
+                     f"leaf = {h}(leaf_prefix || b || c)"),
+        "key_label": inst.key_label.hex(),
+        "default_key": key.hex(),
+        "default_key_xor_gates": inst.xor_count(key),
+        "default_key_row_weights": [r.bit_count() for r in inst.rows_of(key)],
+        "other_key": _other_key(inst).hex(),
+        "salt_prefix": inst.salt_prefix.hex(),
+        "leaf_prefix_default_key": inst.leaf_prefix(key).hex(),
+        "scheme_digest_default_key": inst.scheme_digest(key).hex(),
+        "masks": _mask_vectors(inst),
+        "leaves": _leaf_vectors(inst),
+        "trees": _tree_vectors(inst),
     }
 
 
-def render() -> str:
-    return json.dumps(build(), indent=1, sort_keys=True) + "\n"
+def render(inst: Instance = SHA256) -> str:
+    return json.dumps(build(inst), indent=1, sort_keys=True) + "\n"
 
 
-def load() -> dict[str, Any]:
-    return json.loads(VECTORS.read_text(encoding="utf-8"))
+def load(inst: Instance = SHA256) -> dict[str, Any]:
+    return json.loads(VECTORS[inst].read_text(encoding="utf-8"))
 
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    text = render()
-    if "--check" in args:
-        if VECTORS.read_text(encoding="utf-8") != text:
-            print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
-            return 1
-        return 0
-    VECTORS.write_text(text, encoding="utf-8")
-    return 0
+    stale = 0
+    for inst, path in VECTORS.items():
+        text = render(inst)
+        if "--check" in args:
+            if not path.exists() or path.read_text(encoding="utf-8") != text:
+                print(f"{path} is stale; rerun without --check", file=sys.stderr)
+                stale = 1
+        else:
+            path.write_text(text, encoding="utf-8")
+    return stale
 
 
 if __name__ == "__main__":

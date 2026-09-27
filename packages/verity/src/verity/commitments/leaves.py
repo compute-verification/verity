@@ -37,12 +37,14 @@ from __future__ import annotations
 
 import base64
 import dataclasses
-import hashlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from verity.errors import InvalidArtifact
+
+from .scheme import DIGEST_BYTES as _DIGEST_BYTES
+from .scheme import sha as _sha
 
 __all__ = [
     "DIGEST_BYTES",
@@ -79,10 +81,11 @@ EMPTY_TAG = "verity-vllm/empty/v1"
 DIGEST_BYTES = 32
 
 
-def H(tag: str, *parts: bytes) -> bytes:  # noqa: N802 - the contract names it H
-    """SHA-256 over the tag and the length-prefixed parts (layout in the module docstring)."""
+def H(tag: str, *parts: bytes, hash: str = "sha256") -> bytes:  # noqa: N802 - the contract names it H
+    """SHA-256 over the tag and the length-prefixed parts (layout in the module docstring); ``hash="sha512"`` is the
+    ``vllm-v1-sha512`` tree's form, the same bytes through SHA-512."""
 
-    digest = hashlib.sha256()
+    digest = _sha(hash)()
     encoded_tag = tag.encode("utf-8")
     digest.update(len(encoded_tag).to_bytes(4, "big"))
     digest.update(encoded_tag)
@@ -126,15 +129,15 @@ def leaf_hash(canonical_id: str, dtype: str, shape: Sequence[int] | str, value: 
     return H(LEAF_TAG, canonical_id.encode("utf-8"), dtype.encode("utf-8"), text.encode("utf-8"), value)
 
 
-def node_hash(left: bytes, right: bytes) -> bytes:
-    _check_digest(left, "left")
-    _check_digest(right, "right")
-    return H(NODE_TAG, left, right)
+def node_hash(left: bytes, right: bytes, hash: str = "sha256") -> bytes:
+    _check_digest(left, "left", hash)
+    _check_digest(right, "right", hash)
+    return H(NODE_TAG, left, right, hash=hash)
 
 
-def lift_hash(child: bytes) -> bytes:
-    _check_digest(child, "child")
-    return H(LIFT_TAG, child)
+def lift_hash(child: bytes, hash: str = "sha256") -> bytes:
+    _check_digest(child, "child", hash)
+    return H(LIFT_TAG, child, hash=hash)
 
 
 def ids_digest(ids: Iterable[str]) -> bytes:
@@ -144,8 +147,8 @@ def ids_digest(ids: Iterable[str]) -> bytes:
     return H(IDS_TAG, *(cid.encode("utf-8") for cid in sorted(ids)))
 
 
-def empty_root() -> bytes:
-    return H(EMPTY_TAG)
+def empty_root(hash: str = "sha256") -> bytes:
+    return H(EMPTY_TAG, hash=hash)
 
 
 def path_shape(leaf_count: int, index: int) -> list[bool]:
@@ -166,31 +169,31 @@ def tree_depth(leaf_count: int) -> int:
     return len(path_shape(leaf_count, 0)) if leaf_count > 0 else 0
 
 
-def fold_path(leaf: bytes, index: int, path: Sequence[bytes | None]) -> bytes:
+def fold_path(leaf: bytes, index: int, path: Sequence[bytes | None], hash: str = "sha256") -> bytes:
     """Walk from a leaf hash to the root: a sibling pairs by the cursor's parity, ``None`` lifts."""
 
     digest, cursor = leaf, index
     for sibling in path:
         if sibling is None:
-            digest = lift_hash(digest)
+            digest = lift_hash(digest, hash)
         elif cursor % 2 == 0:
-            digest = node_hash(digest, sibling)
+            digest = node_hash(digest, sibling, hash)
         else:
-            digest = node_hash(sibling, digest)
+            digest = node_hash(sibling, digest, hash)
         cursor //= 2
     return digest
 
 
-def levels(leaf_hashes: Sequence[bytes]) -> list[list[bytes]]:
+def levels(leaf_hashes: Sequence[bytes], hash: str = "sha256") -> list[list[bytes]]:
     """The tree over ``leaf_hashes`` (already in tree order): level 0 up to the root."""
 
     if not leaf_hashes:
-        return [[empty_root()]]
+        return [[empty_root(hash)]]
     out = [list(leaf_hashes)]
     while len(out[-1]) > 1:
         level = out[-1]
         out.append(
-            [node_hash(level[i], level[i + 1]) if i + 1 < len(level) else lift_hash(level[i]) for i in range(0, len(level), 2)]
+            [node_hash(level[i], level[i + 1], hash) if i + 1 < len(level) else lift_hash(level[i], hash) for i in range(0, len(level), 2)]
         )
     return out
 
@@ -376,6 +379,7 @@ class LeafTree:
         return doc
 
 
-def _check_digest(value: bytes, name: str) -> None:
-    if not isinstance(value, bytes | bytearray | memoryview) or len(value) != DIGEST_BYTES:
-        raise InvalidArtifact(f"{name} must be a 32-byte digest")
+def _check_digest(value: bytes, name: str, hash: str = "sha256") -> None:
+    n = _DIGEST_BYTES[hash]
+    if not isinstance(value, bytes | bytearray | memoryview) or len(value) != n:
+        raise InvalidArtifact(f"{name} must be a {n}-byte digest")
