@@ -1344,8 +1344,9 @@ fn beta_round(view: &View) -> Option<usize> {
 }
 
 /// `zkrewind --zk --n N`: per verifier strategy (`--strategies`, default all), N real sessions and N Goldreich–Kahan
-/// simulations against V* on one tape, each view printed as `ZKVIEW` (its summary) and `ZKVIEWP` (each received proof's
-/// checked fields) for `backends/flock/tests/zk_rewind_stats.py`, and each strategy's simulator statistics as `ZKREWIND`.
+/// simulations against V* on one tape, each view printed as `ZKVIEW` (its summary), `ZKVIEWP` (each received proof's
+/// checked fields) and, when complete, `ZKVIEWREL` (the session's cross-rep relations) for
+/// `backends/flock/tests/zk_rewind_stats.py`, and each strategy's simulator statistics as `ZKREWIND`.
 #[cfg(feature = "seed-injection")]
 fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let n: usize = arg("--n", "16").parse().unwrap();
@@ -1362,6 +1363,14 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let emit = |kind: &str, name: &str, run: usize, view: &View| {
         let (s, proofs) = view_summary(kind, name, run, view);
         println!("ZKVIEW\t{s}");
+        if let (2, Ok((points, coins))) = (proofs.len(), extracted(st, view)) {
+            let bytes: Vec<Vec<u8>> = proofs.iter().map(|p| p.1.clone()).collect();
+            let flat: Vec<Vec<F128>> = coins.iter().map(|c| c.concat()).collect();
+            if let Ok([l0, l1]) = session_relations(st, inst, &bytes, &flat, &points, [0, 1]) {
+                println!("ZKVIEWREL\t{}", json!({"kind": kind, "strategy": name, "run": run, "rep": 0, "rel_level0": f128s_hex(&l0),
+                                                  "rel_level1": f128s_hex(&l1)}));
+            }
+        }
         for (rep, b) in proofs {
             if let Ok((_, pr, inner)) = bincode::deserialize::<(Commitment, R1csProofLigerito, InnerProof)>(&b) {
                 let mut row = proof_fields(&lay, kind, run, rep, &pr, &inner);
@@ -1747,6 +1756,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_verifier_coin_off_its_commitment", false, false),
     ("zk_verifier_commits_beta_zero", false, false),
     ("zk_session_relations_vary_with_the_seed", true, false),
+    ("zk_dummy_witness_passes_the_region_claims", false, true),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -1866,6 +1876,17 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let stopped = r["prover_stopped"].as_str().is_some_and(|x| x.contains(want));
         return json!({"case": name, "gpu": gpu, "expect": "the prover stops at the coin", "accepted": r["accepted"], "pass": stopped && r["accepted"] != true,
                       "prover_stopped": r["prover_stopped"], "last_round": s["last_round"], "end": s["end"]});
+    }
+    if name == "zk_dummy_witness_passes_the_region_claims" {
+        // red-team-m1-zk F4: M2's extraction run is live, so the dummy witness carries the public region words; its region
+        // claims' s_hat_v, sent before any coin opens, are the public ones, and only the inner proof rejects it
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        let (v, _) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, zero_witness: true, ..Plan::default() }, ProverSeed::from_os());
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default();
+        let inner_only = reps.len() == 2 && reps.iter().all(|r| r["ok"] == false && r["why"].as_str().is_some_and(|w| w.starts_with("zk inner")));
+        return json!({"case": name, "gpu": gpu, "expect": "rejected by the inner proof alone (the region claims pass)", "accepted": v["accepted"],
+                      "pass": v["accepted"] != true && inner_only, "reps_ok": reps.iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect::<Vec<_>>()});
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_session_relations_vary_with_the_seed" {

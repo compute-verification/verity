@@ -7,8 +7,9 @@ messages), N real views and N simulated ones, the simulator seeing only the publ
 * ``end``: how each view ends (complete, or who stopped it in which block of ten rounds of which rep), real against
   simulated by a permutation test on the chi-square statistic (``end_p``);
 * ``verdicts_agree``: complete real and simulated views carry the same verdicts;
-* ``online``: rep 0's first masked values in every view that reaches them, whatever its end, and ``proofs``: the checked
-  fields of every proof a complete view received; ``zk_stats``'s tests real against simulated (bytes, bits, xor, constant);
+* ``online``: rep 0's first masked values in every view that reaches them, whatever its end; ``proofs``: the checked
+  fields of every proof a complete view received; ``relations``: the session's two cross-rep functionals of a complete
+  view (``ZKVIEWREL``); ``zk_stats``'s tests real against simulated (bytes, bits, xor, constant);
 * ``simulator``: no simulation failed (a binding failure, or no rewind within the estimate's bound).
 """
 from __future__ import annotations
@@ -28,7 +29,7 @@ MIN_ROWS = 8
 
 
 def load(lines):
-    views, proofs, sims = defaultdict(list), defaultdict(list), {}
+    views, proofs, rels, sims = defaultdict(list), defaultdict(list), defaultdict(list), {}
     for line in lines:
         tag, _, body = line.partition("\t")
         if tag == "ZKVIEW":
@@ -37,10 +38,13 @@ def load(lines):
         elif tag == "ZKVIEWP":
             v = json.loads(body)
             proofs[v["strategy"]].append(v)
+        elif tag == "ZKVIEWREL":
+            v = json.loads(body)
+            rels[v["strategy"]].append(v)
         elif tag == "ZKREWIND":
             v = json.loads(body)
             sims[v["strategy"]] = v
-    return views, proofs, sims
+    return views, proofs, rels, sims
 
 
 def end_of(v):
@@ -75,10 +79,11 @@ def fields(rows_by_kind, classes, reps):
     for cls in classes:
         a = {k: zk_stats.values(rows_by_kind[k], cls) for k in ("real", "sim")}
         fixed = zk_stats.structural(a)
-        a = {k: v[:, ~fixed] for k, v in a.items()}
+        shared = zk_stats.shared_by_the_reps(a, reps) & ~fixed
+        a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
         tab = np.array([zk_stats.byte_hist(a["real"]), zk_stats.byte_hist(a["sim"])])
         tab = tab[:, tab.sum(axis=0) > 0]
-        row = {"values_per_view": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()),
+        row = {"values_per_view": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
                "bytes_real_vs_sim": float(stats.chi2_contingency(tab)[1])}
         for k in ("real", "sim"):
             row[f"bits_{k}"] = zk_stats.bits_p(a[k])
@@ -92,7 +97,7 @@ def fields(rows_by_kind, classes, reps):
     return out, ok
 
 
-def analyse(views, proofs, sims):
+def analyse(views, proofs, rels, sims):
     out = {"alpha": ALPHA, "strategies": {}}
     all_ok = True
     for strategy, vs in views.items():
@@ -120,6 +125,12 @@ def analyse(views, proofs, sims):
             ok &= p
         else:
             res["proofs"] = f"{n_rows} proofs per kind: not tested (fewer than {MIN_ROWS})"
+        rel = {k: [r for r in rels.get(strategy, []) if r["kind"] == k] for k in ("real", "sim")}
+        if min(len(rel["real"]), len(rel["sim"])) >= MIN_ROWS:
+            res["relations"], r = fields(rel, zk_stats.RELATIONS, 1)
+            ok &= r
+        else:
+            res["relations"] = f"{min(len(rel['real']), len(rel['sim']))} complete views per kind: not tested (fewer than {MIN_ROWS})"
         res["pass"] = bool(ok)
         all_ok &= ok
         out["strategies"][strategy] = res
