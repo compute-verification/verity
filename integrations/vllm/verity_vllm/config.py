@@ -289,6 +289,10 @@ class CommitConfig:
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
                            help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
                                 "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
+    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="0",
+                                  help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
+                                       "first key block (verity_vllm.query.guarded_max), written by the guarded-max FA2/FA3 tap build; the "
+                                       "manifest's query header and the run root then differ from the record")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs
@@ -314,6 +318,8 @@ class RunEnv:
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
     hidden_so_fa2: str = option("--hidden-so-fa2")
     hidden_so_fa3: str = option("--hidden-so-fa3")
+    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build, used when --guarded-max-tap 1")
+    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build, used when --guarded-max-tap 1")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used when --norm-tap 1")
     hot_root: str = option("--hot-root", env="HOT_ROOT")
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")

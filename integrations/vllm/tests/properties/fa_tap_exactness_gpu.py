@@ -8,6 +8,10 @@ arguments, which library code may not do yet (lints P3, P9, P6).
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as gate (b)
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so --out DIR          # FA2 (L40S)
     $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so --out DIR      # FA3 (H100)
+
+A guarded-max build (`verity_tap_row3() == 1`) is checked against the record of the default build on the same GPU, `--baseline`:
+
+    $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so --baseline DIR/fa_tap_exactness.json --out DIR_G
 """
 from __future__ import annotations
 
@@ -24,8 +28,8 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.properties.fa_tap_exactness import (FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, expected_written, geometry,
-                                                negative_ok, negatives, seal, verify_record, visited_rows)
+from verity_vllm.properties.fa_tap_exactness import (FILL, INSTALLED, PAGE, QUICK, RECORD, SCHEMA, case_ok, cases, check_row3, expected_written,
+                                                geometry, masked_digest, negative_ok, negatives, seal, verify_record, visited_rows)
 from verity_vllm.commit.hidden_stream import StreamLayout
 
 
@@ -60,6 +64,10 @@ def _inputs(c: dict[str, Any], D: int, seed: int) -> dict[str, Any]:
     q = torch.randn(sum(c["seqlens_q"]), H, D, device="cuda", generator=g).to(torch.bfloat16)
     k = torch.randn(blocks, PAGE, Hk, D, device="cuda", generator=g).to(torch.bfloat16)
     v = torch.randn(blocks, PAGE, Hk, D, device="cuda", generator=g).to(torch.bfloat16)
+    if c.get("special"):                     # k[..., 0] < 0 everywhere: q[t, :, 0] = +inf / -inf / NaN makes every score of t -inf / +inf / NaN
+        k[..., 0] = -(k[..., 0].abs() + 0.5)
+        for kind, toks in c["special"].items():
+            q[toks, :, 0] = {"-inf": float("inf"), "+inf": float("-inf"), "nan": float("nan")}[kind]
     block_table = torch.randperm(blocks, device="cuda", generator=g).to(torch.int32)[: b * per_seq].reshape(b, per_seq).contiguous()
     cu_q = torch.zeros(b + 1, dtype=torch.int32, device="cuda")
     cu_q[1:] = torch.cumsum(torch.tensor(c["seqlens_q"], device="cuda"), 0)
@@ -127,12 +135,16 @@ def _armed(src, args: tuple, buf, decl: dict[str, int], tag: int) -> tuple[tuple
     return res, int(src.ns.verity_tap_skipped()) - skipped0
 
 
-def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int) -> dict[str, Any]:
+def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int, baseline: dict[tuple[str, int], str] | None = None) -> dict[str, Any]:
+    """One case at head dim `D`; a guarded-max build (`src.stats["row3"]`) also checks ROW word 3 and compares the rest of the stream with
+    the default build's (`baseline`: (case, D) -> its `stream_sha256_masked`)."""
     import torch
 
     geo = geometry(fa_version, c, D)
+    row3 = int(src.stats.get("row3") or 0)
     rec = {"case": c["name"], "D": D, "H": c["H"], "Hk": c["Hk"], "seqlens_q": c["seqlens_q"], "seqlens_k": c["seqlens_k"],
-           "softcap": c["softcap"], "window": c["window"], **{k: geo[k] for k in ("HB", "M", "NB", "BN", "kBM", "swapped")}}
+           "softcap": c["softcap"], "window": c["window"], **({"special": c["special"]} if c.get("special") else {}),
+           **{k: geo[k] for k in ("HB", "M", "NB", "BN", "kBM", "swapped")}}
     t = _inputs(c, D, seed)
     args = _vllm_args(fa_version, c, t)
     layout = StreamLayout(geo["HB"], geo["M"], geo["NB"], geo["BN"], D)
@@ -142,12 +154,16 @@ def check_case(src, fa_version: int, c: dict[str, Any], D: int, seed: int) -> di
     out_u, lse_u = _call(src.tapped_op, args)
     torch.cuda.synchronize()
     words = buf.cpu().numpy().view(np.uint32)
-    expected = expected_written(layout, src.src, visited_rows(c, geo))
+    expected = expected_written(layout, src.src, visited_rows(c, geo), row3=row3)
     written = words != FILL
     rec.update(words=int(layout.total_words), expected_written=int(expected.sum()), written=int(written.sum()),
                spill_outside_layout=int(np.count_nonzero(written & ~expected)), expected_but_unwritten=int(np.count_nonzero(expected & ~written)),
                skipped=skipped, out_lse_eq_installed=_same(out_t, out_i) and _same(lse_t, lse_i),
-               out_lse_eq_untapped=_same(out_t, out_u) and _same(lse_t, lse_u))
+               out_lse_eq_untapped=_same(out_t, out_u) and _same(lse_t, lse_u), stream_sha256_masked=masked_digest(words, layout))
+    if row3:
+        mine = (baseline or {}).get((c["name"], D))
+        rec["row3"] = {**check_row3(words, layout, visited_rows(c, geo)),
+                       "stream_eq_baseline": None if mine is None else mine == rec["stream_sha256_masked"]}
     rec["ok"] = case_ok(rec)
     return rec
 
@@ -176,8 +192,22 @@ def _guarded(fn, base: dict[str, Any], *args) -> dict[str, Any]:
         return {**base, "error": f"{type(e).__name__}: {e}"[:400], "ok": False}
 
 
-def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False) -> dict[str, Any]:
-    """Check the tap build at `so` on this GPU and write the sealed record to `<out>/fa_tap_exactness.json`."""
+def _baseline(path: str | None, fa_version: int, env: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[tuple[str, int], str]]:
+    """The default build's record a guarded-max build is compared with: intact, ok, the same backend on the same device capability."""
+    if not path:
+        return None, {}
+    doc = json.loads(Path(path).read_text())
+    problems = verify_record(doc)
+    if problems or not doc.get("ok") or (doc.get("tap") or {}).get("row3") or doc.get("backend") != f"fa{fa_version}" \
+            or (doc.get("environment") or {}).get("capability") != env["capability"]:
+        raise SystemExit(f"--baseline {path}: not an intact ok default-build fa{fa_version} record of this device capability ({problems[:3]})")
+    ref = {"record": path, "digest": doc["digest"], "so_sha256": (doc.get("tap") or {}).get("sha256")}
+    return ref, {(e["case"], int(e["D"])): e.get("stream_sha256_masked") for e in doc.get("cases") or []}
+
+
+def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False, baseline: str | None = None) -> dict[str, Any]:
+    """Check the tap build at `so` on this GPU (a guarded-max build against the default build's record `baseline`) and write the sealed
+    record to `<out>/fa_tap_exactness.json`."""
     import torch
     import vllm.vllm_flash_attn as vfa
 
@@ -192,22 +222,31 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False) 
     layout = {2: 8, 3: 9}[fa_version]
     if src.stats["tap_layout"] != layout:
         raise SystemExit(f"{so}: tap layout v{src.stats['tap_layout']}; the declared-tile check needs v{layout}")
+    env = _environment()
+    row3 = int(src.stats.get("row3") or 0)
+    if row3 and not baseline:
+        raise SystemExit(f"{so} is a guarded-max build (verity_tap_row3 {row3}): give --baseline <the default build's record>")
+    base_ref, base = _baseline(baseline, fa_version, env)
     doc: dict[str, Any] = {
         "schema": SCHEMA, "backend": f"fa{fa_version}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv,
-        "environment": _environment(),
+        "environment": env,
         "tap": {"so": so, "sha256": _sha256(so), "ns": src.ns_name, "mode": src.mode, "src": src.src, "layout": src.stats["tap_layout"],
-                "hdims": src.stats["hdims"]},
+                "hdims": src.stats["hdims"], **({"row3": row3} if row3 else {})},
         "installed": {"op": ".".join(INSTALLED[fa_version]), "so": installed[0] if installed else None,
                       "sha256": _sha256(installed[0]) if installed else None},
+        **({"baseline": base_ref} if base_ref else {}),
         "cases": [], "negatives": []}
     for D in hdims or src.stats["hdims"]:
         for i, c in enumerate(cases(fa_version, quick)):
-            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i)
+            rec = _guarded(check_case, {"case": c["name"], "D": D}, src, fa_version, c, D, 1000 * D + i, base)
             doc["cases"].append(rec)
+            g = rec.get("row3")
             print(f"[fa-tap] fa{fa_version} hd{D} {c['name']:30s} " + (rec.get("error") or
                   f"tile {rec['kBM']}x{rec['BN']} HB={rec['HB']} M={rec['M']} NB={rec['NB']} skipped={rec['skipped']} "
                   f"==installed {rec['out_lse_eq_installed']} ==untapped {rec['out_lse_eq_untapped']} spill={rec['spill_outside_layout']} "
-                  f"unwritten={rec['expected_but_unwritten']}") + f" -> {'OK' if rec['ok'] else 'FAIL'}", flush=True)
+                  f"unwritten={rec['expected_but_unwritten']}" + (f" row3 guards={g['guard_words']} !=guard {g['guard_mismatch']} first!=0 "
+                  f"{g['first_block_nonzero']} !=ir {g['ir_mismatch']}/{g['ir_sampled']} ==baseline {g['stream_eq_baseline']}" if g else ""))
+                  + f" -> {'OK' if rec['ok'] else 'FAIL'}", flush=True)
         for j, (c, decl, why) in enumerate(negatives(fa_version, D)):
             rec = _guarded(check_negative, {"case": c["name"], "D": D, "why": why}, src, fa_version, c, D, decl, why, 7 * D + j)
             doc["negatives"].append(rec)
@@ -228,6 +267,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", help=f"directory for {RECORD}")
     ap.add_argument("--hdims", default=None, help="comma list of head dims (default: every head dim the build compiles)")
     ap.add_argument("--quick", action="store_true", help=f"only the cases {', '.join(QUICK)}")
+    ap.add_argument("--baseline", metavar="RECORD", default=None,
+                    help="a guarded-max build: the default build's record on this GPU, whose streams (but ROW word 3) it must equal")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
@@ -237,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems or not doc.get("ok") else 0
     if not (a.so and a.out):
         ap.error("--so and --out are required (or --verify RECORD)")
-    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick)
+    doc = run(a.so, a.out, [int(h) for h in a.hdims.split(",")] if a.hdims else None, a.quick, a.baseline)
     return 0 if doc["ok"] else 1
 
 
