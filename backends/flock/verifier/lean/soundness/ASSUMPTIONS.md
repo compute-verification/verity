@@ -88,6 +88,11 @@ link term per audit.
   - `ε_c⁻` and `Adv₀` are the table's terms computed in the session (`epsS`, `adv₀S`).
   - It rests on `session_sound_of_table`, the compiled bound for any level-0 table in the session. The oracle
     prover plays the whole session there, and the table's value bounds it (`orcSess_value_le`).
+- **Several tables in one session** (`SessionBatch.lean`). `sessionB` is the protocol's batch: `Commit` with every
+  level-0 cap, one link-point draw, then every table concurrently.
+  - For each table `j`, `joint_le_B'` bounds `Pr[the session accepts] · Pr[table j's extraction fails]` by table `j`'s
+    `ε_c⁻ + K·Adv₀ + N₀/(eK)` in the session (`ksBoundB`).
+  - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
 - **Not yet:** the canonical HM96 values behind the witness, `registered_weights`, and the link term `δ_link`
   (DESIGN.md §3). The first two need the SHA-512 leaf layout in the model; `δ_link` probably dominates the audit bound.
 - **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
