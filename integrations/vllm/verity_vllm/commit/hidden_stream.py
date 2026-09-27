@@ -39,6 +39,9 @@ KBLOCK_N = 128
 KBLOCK_M = 64
 CLASSES = ("S", "P", "RP", "ROW", "O", "FIN")
 SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32}
+#: ROW word 3: never written, except by the guarded-max tap builds (`verity_tap_row3() == 1`, `query.guarded_max`), which store
+#: GuardNegInfZero(row_max) there at every key block after a row's first and 0 at the first
+ROW_GUARD_FIELD = 3
 
 
 @dataclass(frozen=True)
@@ -85,8 +88,8 @@ class StreamLayout:
 
     def word_index(self, cls: str, slab: int, row: int, *, col: int | None = None, block: int | None = None,
                    lane: int | None = None, d: int | None = None, field: int | None = None) -> int:
-        """Canonical position -> word index.  ROW fields: 0 row_max, 1 rescale, 2 step, 4+lane l_lane.  FIN: 0 sum,
-        1 inv_sum, 2 final row_max, 3 lse."""
+        """Canonical position -> word index.  ROW fields: 0 row_max, 1 rescale, 2 step, 3 the guarded max (`ROW_GUARD_FIELD`),
+        4+lane l_lane.  FIN: 0 sum, 1 inv_sum, 2 final row_max, 3 lse."""
         o = self.offsets
         if not (0 <= slab < self.HB and 0 <= row < self.M):
             raise ValueError("position outside the layout")

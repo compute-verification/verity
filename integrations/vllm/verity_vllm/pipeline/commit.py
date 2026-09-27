@@ -131,7 +131,6 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
     calibration point (B8, 7,853,122 rows, 628 B/row json, 9,387 B/row objects); the run measures the real number (C2 PROGRAMS FREED)."""
     import glob
     import gzip
-
     files: list[str] = []
     if programs_root:
         files = sorted(glob.glob(os.path.join(str(programs_root), "build_request_*", "instances.json.gz")))
@@ -355,7 +354,6 @@ def baseline_state(engine: va.Engine) -> dict:
 
 def _process_state() -> dict[str, Any]:
     import threading
-
     st: dict[str, Any] = {"threads": threading.active_count(), "gc_enabled": gc.isenabled(), "gc_threshold": list(gc.get_threshold()),
                           "gc_count": list(gc.get_count()), "gc_tracked_objects": len(gc.get_objects()), "gc_frozen": gc.get_freeze_count(),
                           "switch_interval_s": sys.getswitchinterval(), "torch_threads": torch.get_num_threads(),
@@ -419,7 +417,6 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
-
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads,
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
                                    batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)),
@@ -522,7 +519,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
             # raw bytes of this step's FA2 L0 row (and the whole layout) for offline byte-level diffs across pairs
             for m in com._layouts[step]:
                 if m.name.startswith("fa2.m1/L0/"):
-                    (out / f"dump_step{step}_pair{pair}_{m.name.replace('/', '_')}.bin").write_bytes(bytes(mv[m.dev_off:m.dev_off + m.nbytes]))
+                    (out / f"dump_step{step}_pair{pair}_{m.name.replace('/', '_')}.bin").write_bytes(bytes(mv(m.dev_off, m.dev_off + m.nbytes)))
             (out / f"dump_step{step}_pair{pair}_layout.json").write_text(json.dumps([[m.name, m.dtype, list(m.shape), m.nbytes, m.dev_off] for m in com._layouts[step]]))
     (out / f"tensor_digests_pair{pair}.json").write_text(json.dumps(cur) + "\n")
     if prev:
@@ -1057,6 +1054,9 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="opt-in, never the record: the norm-scale tap op (ops/pod_norm_tap.sh) -- commit `<norm module>/norm_scale` for every norm_scales identity of the required manifest (manifest build --norm-scales; acquire.sources.norm_scale_source)")
+    router_tap_so: str | None = option("--router-tap-so", default=None, help="opt-in, never the record: the router-softmax tap op (ops/pod_router_tap.sh) -- commit `moe/L<k>/router_softmax` for every router_softmax identity of the required manifest (manifest build --router-softmax; acquire.sources.router_softmax_source)")
+    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="opt-in, never the record: commit `<embedding module>/vocab_range` for every vocab_range identity of the required manifest (manifest build --vocab-range; acquire.sources.vocab_range_source)")
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
@@ -1105,7 +1105,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
         from verity_vllm.pipeline import hot as _HC
-
         sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
                             idle_s=float(os.environ.get("HOT_IDLE", "900")),
                             timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
@@ -1377,7 +1376,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
         if args.hidden_so:
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
             # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
@@ -1386,7 +1384,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if args.tap_cap_mb is not None:
                 os.environ["VERITY_FA2_TAP_CAP_MB"] = str(int(args.tap_cap_mb))   # [R18 tap] read by NativeHiddenM1Source at construction
             com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
+                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
             print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
             _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
             if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
@@ -1396,6 +1394,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
+        from verity_vllm.acquire.sources import norm_scale_source as _NSS, taps as _TAPS
+        required_classes = _NSS.attach(com, args, required_manifest, required_classes)     # --norm-tap-so only: the norm scales (opt-in, never the record)
+        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -1416,7 +1417,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"nothing is staged that the manifest does not name", flush=True)
         if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
-
             msrc = MoeBlockSource(com, com.model)
             if msrc.layers:
                 com.attach_source(msrc)

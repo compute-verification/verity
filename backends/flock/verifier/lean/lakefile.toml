@@ -1,0 +1,17 @@
+name = "flock_verifier"
+version = "0.1.0"
+defaultTargets = ["flock-verify", "FlockProofs"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Flock"
+
+# Level-3 theorems about the executable's own definitions that need no library beyond Lean's core.
+[[lean_lib]]
+name = "FlockProofs"
+
+[[lean_exe]]
+name = "flock-verify"
+root = "Main"

@@ -31,7 +31,7 @@ from fractions import Fraction
 from verity.ir.defs import bind, composite, primitive
 from verity.ir.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple
-from verity.ml.scalar import F32BitsShl23, F32IsFinite, F32Neg, F32Sat
+from verity.ml.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
@@ -151,6 +151,7 @@ def nv_expf_bits(x: int) -> int:
 
 ONE32 = b1.f32c(1.0)
 NEG_10000 = b1.f32c(-10000.0)
+PTX_NAN = b1.const(32, F32_NAN_PTX)
 
 
 def _butterfly(B, op, vals: list[Coll]) -> list[Coll]:
@@ -193,19 +194,43 @@ def MoeRouterTopK(B, S, logits):
     `p_i = expf(x_i - max) * (1.f / sum)` with `expf` = `NvExpf_v1` (the CUDA math-library sequence) and `1.f / sum` =
     `rcp.rn.f32` (IEEE, `F32Div_v1`), NaN/Inf -> 0, then TOPK rounds of lowest-index argmax with the winner masked to
     -10000.f.  Returns (topk_weights = the raw probabilities, topk_ids)."""
-    E, TOPK, VPT = S.E, S.TOPK, S.VPT
+    p = _router_probs(B, S.E, S.VPT, logits)
+    neg_big = B.call(NEG_10000)
+    consts = [B.call(b1.const(32, i)) for i in range(S.E)]
+    weights, ids = [], []
+    for _ in range(S.TOPK):
+        init = tuple_of(p[0], consts[0], consts[1])
+        res = B.scan(RouterArgmaxStep, init, xs=(_array(p[1:]),))
+        best, best_i = res[0][0], res[0][1]
+        weights.append(best)
+        ids.append(best_i)
+        p = [B.call(P.SelectF32, B.call(P.I32Eq, consts[i], best_i), neg_big, p[i]) for i in range(S.E)]
+    return tuple_of(_array(weights), _array(ids))
+
+
+def _router_probs(B, E: int, VPT: int, logits: Coll, *, interior: bool = False) -> list[Coll]:
+    """`topk_softmax`'s probabilities for one token row, in the kernel's reduction geometry (`MoeRouterTopK_v1`'s docstring).
+
+    `interior`: the values the probabilities are computed from are the kernel's word for word, as a construction committing them needs
+    (`MoeRouterProbs`): the row max is `fmaxf` (`F32Fmaxf_v1`: the kernel's `max(float, float)` without fast math keeps subnormals, a
+    NaN operand yields the other, two NaNs give 0x7FFFFFFF), and an exponential or the reciprocal that is NaN is the GPU's one NaN word
+    0x7FFFFFFF (`_ptx_nan`).  Off (`MoeRouterTopK_v1`, the record), the max is `F32Max_v1`; the probabilities are the same either way."""
     if E % VPT:
         raise ValueError("E must be a multiple of VPT")
     T = E // VPT
+    fmax = F32Fmaxf if interior else P.F32Max
     x = [B.call(P.Bf16ToF32, logits[i]) for i in range(E)]
     tmax = []
     for t in range(T):
         m = x[t * VPT]
         for j in range(1, VPT):
-            m = B.call(P.F32Max, m, x[t * VPT + j])
+            m = B.call(fmax, m, x[t * VPT + j])
         tmax.append(m)
-    rmax = _butterfly(B, P.F32Max, tmax)[0]
+    rmax = _butterfly(B, fmax, tmax)[0]
     ex = [B.call(NvExpf, B.call(F32Sub, x[i], rmax)) for i in range(E)]
+    if interior:
+        nan = B.call(PTX_NAN)
+        ex = [_ptx_nan(B, e, nan) for e in ex]
     tsum = []
     for t in range(T):
         s = B.call(b1.ZERO32)
@@ -214,22 +239,20 @@ def MoeRouterTopK(B, S, logits):
         tsum.append(s)
     rsum = _butterfly(B, P.F32Add, tsum)[0]
     rcp = B.call(P.F32Div, B.call(ONE32), rsum)
+    if interior:
+        rcp = _ptx_nan(B, rcp, nan)
     zero = B.call(b1.ZERO32)
     p = []
     for i in range(E):
         q = B.call(P.F32Mul, ex[i], rcp)
         p.append(B.call(P.SelectF32, B.call(F32IsFinite, q), q, zero))
-    neg_big = B.call(NEG_10000)
-    consts = [B.call(b1.const(32, i)) for i in range(E)]
-    weights, ids = [], []
-    for _ in range(TOPK):
-        init = tuple_of(p[0], consts[0], consts[1])
-        res = B.scan(RouterArgmaxStep, init, xs=(_array(p[1:]),))
-        best, best_i = res[0][0], res[0][1]
-        weights.append(best)
-        ids.append(best_i)
-        p = [B.call(P.SelectF32, B.call(P.I32Eq, consts[i], best_i), neg_big, p[i]) for i in range(E)]
-    return tuple_of(_array(weights), _array(ids))
+    return p
+
+
+def _ptx_nan(B, v: Coll, nan: Coll) -> Coll:
+    """`v`, or the GPU's canonical NaN word when `v` is a NaN: FP32 arithmetic on sm_80+ returns 0x7FFFFFFF for every NaN result, where
+    `F32Add_v1` / `F32Mul_v1` / `F32Div_v1` / `F32Sub_v1` keep a NaN operand's payload or give 0x7FC00000 / 0xFFC00000."""
+    return B.call(P.SelectF32, B.call(F32Eq, v, v), v, nan)
 
 
 def _array(parts: list[Coll]) -> Coll:
@@ -255,6 +278,92 @@ def MoeRouterTopKNorm(B, S, logits):
     denom = B.call(P.SelectF32, B.call(F32GtStrict, acc, B.call(b1.ZERO32)), acc, one)
     scale = B.call(P.F32Div, one, denom)
     return tuple_of(_array([B.call(P.F32Mul, w[k], scale) for k in range(S.TOPK)]), ids)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# the same router in its selection order (opt-in: `TargetProfile.moe_construction = "indexed-read-ordered"`): the softmax once, then
+# round k takes the expert after round k-1's (p, id) in the kernel's total order -- every value computed once, no masked vector carried
+# ---------------------------------------------------------------------------------------------------------
+
+
+@composite("MoeRouterProbs", 1, ["E", "VPT"], lambda S: ((("logits", Array(S.E, BF16)),), Array(S.E, F32)),
+           conformance="not-yet-established")
+def MoeRouterProbs(B, S, logits):
+    """`MoeRouterTopK_v1`'s probabilities, computed from the kernel's own interior words (`_router_probs(interior=True)`: the max, the
+    exponentials and the reciprocal the ordered router commits are `topkGating`'s bit for bit); +0 or positive, never NaN."""
+    return _array(_router_probs(B, S.E, S.VPT, logits, interior=True))
+
+
+@composite("MoeRouterFirst", 1, ["E"], lambda S: ((("p", Array(S.E, F32)),), I32), conformance="not-yet-established")
+def MoeRouterFirst(B, S, p):
+    """Round 0 of `MoeRouterTopK_v1`: the strict first-max argmax scan over the probabilities."""
+    c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
+    return B.scan(RouterArgmaxStep, tuple_of(p[0], c0, c1), xs=(_array([p[i] for i in range(1, S.E)]),))[0][1]
+
+
+@composite("MoeRouterNext", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("w", F32), ("e", I32)), I32), conformance="not-yet-established")
+def MoeRouterNext(B, S, p, w, e):
+    """Round k of `MoeRouterTopK_v1` from round k-1's selection (w = p[e], e): the experts after it in the kernel's total order
+    (`p_i < w`, or `p_i == w` and `i > e`) keep their probability, the others become -10000.f, then the same first-max scan.  The
+    experts chosen so far are exactly those not after (e, w) -- each round took the first of the order among the rest -- so this is the
+    kernel's masked vector at round k and the same argmax."""
+    neg_big = B.call(NEG_10000)
+    q = []
+    for i in range(S.E):
+        ci = B.call(b1.const(32, i))
+        after = B.call(BitOr, B.call(F32GtStrict, w, p[i]), B.call(BitAnd, B.call(F32Eq, p[i], w), B.call(BitNot, B.call(P.I32Le, ci, e))))
+        q.append(B.call(P.SelectF32, after, p[i], neg_big))
+    return B.scan(RouterArgmaxStep, tuple_of(q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1))), xs=(_array(q[1:]),))[0][1]
+
+
+@composite("MoeRouterPick", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("e", I32)), F32), conformance="not-yet-established")
+def MoeRouterPick(B, S, p, e):
+    """`p[e]` for an id in [0, E): the weight `MoeRouterTopK_v1` returns for the slot (a round's winning value is its unmasked
+    probability)."""
+    return _gather(B, S.E, [p[i] for i in range(S.E)], e)
+
+
+def _gather(B, E: int, p: list[Coll], e: Coll) -> Coll:
+    w = p[0]
+    for i in range(1, E):
+        w = B.call(P.SelectF32, B.call(P.I32Eq, B.call(b1.const(32, i)), e), p[i], w)
+    return w
+
+
+def _ordered(B, S, logits) -> tuple[list[Coll], list[Coll]]:
+    p = B.call(bind(MoeRouterProbs, E=S.E, VPT=S.VPT), logits)
+    ids = [B.call(bind(MoeRouterFirst, E=S.E), p)]
+    sel = [B.call(bind(MoeRouterPick, E=S.E), p, ids[0])]
+    for _ in range(1, S.TOPK):
+        ids.append(B.call(bind(MoeRouterNext, E=S.E), p, sel[-1], ids[-1]))
+        sel.append(B.call(bind(MoeRouterPick, E=S.E), p, ids[-1]))
+    return sel, ids
+
+
+@composite("MoeRouterTopKOrdered", 1, ["E", "TOPK", "VPT"],
+           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+           conformance="not-yet-established")
+def MoeRouterTopKOrdered(B, S, logits):
+    """`MoeRouterTopK_v1` computed once per value: one softmax, then TOPK selection rounds (`MoeRouterFirst`, `MoeRouterNext`) and
+    their weights (`MoeRouterPick`).  The same function, ties, NaN, -inf and +-0 included."""
+    sel, ids = _ordered(B, S, logits)
+    return tuple_of(_array(sel), _array(ids))
+
+
+@composite("MoeRouterTopKOrderedNorm", 1, ["E", "TOPK", "VPT"],
+           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+           conformance="not-yet-established")
+def MoeRouterTopKOrderedNorm(B, S, logits):
+    """`MoeRouterTopKNorm_v1` as `MoeRouterTopKOrdered_v1`, then the same epilogue: the selected probabilities summed in slot order from
+    0.f, `denom = sum > 0.f ? sum : 1.f`, `w_k * (1.f / denom)`."""
+    sel, ids = _ordered(B, S, logits)
+    acc = B.call(b1.ZERO32)
+    for k in range(S.TOPK):
+        acc = B.call(P.F32Add, acc, sel[k])
+    one = B.call(ONE32)
+    denom = B.call(P.SelectF32, B.call(F32GtStrict, acc, B.call(b1.ZERO32)), acc, one)
+    scale = B.call(P.F32Div, one, denom)
+    return tuple_of(_array([B.call(P.F32Mul, sel[k], scale) for k in range(S.TOPK)]), _array(ids))
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -338,5 +447,6 @@ def MoeSum(B, S, y):
     return B.batch(bind(MoeSumCoordinate, TOPK=S.TOPK), cols, axes=(0,))
 
 
-ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeExpertRow,
+ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
+       MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, MoeExpertRow,
        MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeSumCoordinate, MoeSum]

@@ -19,7 +19,9 @@
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default: first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (default
 # /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the device's compute capability, e.g. 8.9
 # on L40S -- the arch the R13 exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
-# to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build).
+# to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build),
+# FA2_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa2_matReqG.so` in $FA2/build/matReqG: the same tree with VERITY_ROW_GUARD=1, ROW
+# word 3 = GuardNegInfZero(row_max) after a row's first key block; the default build never writes word 3).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
@@ -29,6 +31,8 @@ export MAX_JOBS=${MAX_JOBS:-32}
 FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa2_tap_src
+ROW_GUARD=${FA2_TAP_ROW_GUARD:-0}; NAME=verity_fa2_matReq; BUILD=matReq; DEFS="VERITY_TAP=3,VERITY_MAT_SRC=59"
+[ "$ROW_GUARD" = "1" ] && { NAME=verity_fa2_matReqG; BUILD=matReqG; DEFS="$DEFS,VERITY_ROW_GUARD=1"; }
 fail() { echo "FA2-TAP-FAIL $*"; exit 1; }
 log() { echo "[fa2_tap] $(date -u +%FT%TZ) $*"; }
 [ -x "$PY" ] || fail "no venv python at $PY"
@@ -52,8 +56,8 @@ grep -q "Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>" "$FA2/trees/tap8/csrc/flash
 # (3) build for this GPU
 ARCH=${FA2_TAP_ARCH:-$($PY -c "import torch; cc=torch.cuda.get_device_capability(0); print(f'{cc[0]}.{cc[1]}')")} || fail "no CUDA device"
 [ -n "$ARCH" ] || fail "no CUDA device (set FA2_TAP_ARCH)"
-OUT=$FA2/build/matReq
-if [ -f "$OUT/verity_fa2_matReq.so" ] && ! $PY -c "import torch,sys; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); sys.exit(0 if hasattr(torch.ops.verity_fa2_matReq,'verity_tap_hdims') else 1)" 2>/dev/null; then
+OUT=$FA2/build/$BUILD
+if [ "$ROW_GUARD" != "1" ] && [ -f "$OUT/verity_fa2_matReq.so" ] && ! $PY -c "import torch,sys; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); sys.exit(0 if hasattr(torch.ops.verity_fa2_matReq,'verity_tap_hdims') else 1)" 2>/dev/null; then
   log "existing $OUT is the R9 hd-64 build -> kept as $FA2/build/matReq_hd64_r9"; rm -rf "$FA2/build/matReq_hd64_r9"; mv "$OUT" "$FA2/build/matReq_hd64_r9"
 fi
 NEED=$($PY - "$HDIMS" <<'EOF'
@@ -61,8 +65,8 @@ import sys; print(sum(1 << (int(h) // 32) for h in sys.argv[1].split(',') if h))
 EOF
 )
 HAVE=0
-if [ -f "$OUT/verity_fa2_matReq.so" ]; then
-  HAVE=$($PY -c "import torch; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); print(int(torch.ops.verity_fa2_matReq.verity_tap_hdims()))" 2>/dev/null || echo 0)
+if [ -f "$OUT/$NAME.so" ]; then
+  HAVE=$($PY -c "import torch; torch.ops.load_library('$OUT/$NAME.so'); print(int(torch.ops.$NAME.verity_tap_hdims()))" 2>/dev/null || echo 0)
 fi
 # [R16 sys, BRIEF §8 #4 (3)] rebuild only when the SOURCE SET or the BUILD CONFIG changed: sha256 over every file of fa2_tap_src (patch, apply_v8,
 # build_ext, stubs, headers) + the pinned FA tree commit + arch + hdims + defines + the nvcc version, recorded beside the .so
@@ -70,44 +74,47 @@ fi
 # ADOPT (an existing hdims-complete build from before this gate is taken as the baseline for the current source set WITHOUT rebuilding -- the
 # same assumption the hdims-only rule made; from then on any source/config change rebuilds).  FA2_TAP_FORCE=1 rebuilds regardless.
 NVCC_VER=$(nvcc --version 2>/dev/null | sed -n "s/.*release \([0-9.]*\), \(V[0-9.]*\).*/\1-\2/p" | head -1)   # e.g. 12.4-V12.4.131
-SRC_SHA=$( (cd "$SRC" && find . -type f ! -name '*.pyc' ! -path '*/__pycache__/*' | LC_ALL=C sort | while read -r f; do printf '%s ' "$f"; sha256sum "$f" | cut -c1-64; done; echo "pin=$PIN arch=$ARCH hdims=$HDIMS defines=VERITY_TAP=3,VERITY_MAT_SRC=59 nvcc=$NVCC_VER") | sha256sum | cut -c1-64)
+SRC_SHA=$( (cd "$SRC" && find . -type f ! -name '*.pyc' ! -path '*/__pycache__/*' | LC_ALL=C sort | while read -r f; do printf '%s ' "$f"; sha256sum "$f" | cut -c1-64; done; echo "pin=$PIN arch=$ARCH hdims=$HDIMS defines=$DEFS nvcc=$NVCC_VER") | sha256sum | cut -c1-64)
 OLD_SHA=$(cat "$OUT/source_set.sha256" 2>/dev/null || true)
 WHY=""
 if [ "${FA2_TAP_FORCE:-0}" = "1" ]; then WHY="FA2_TAP_FORCE=1"
-elif [ ! -f "$OUT/verity_fa2_matReq.so" ]; then WHY="no .so at $OUT"
+elif [ ! -f "$OUT/$NAME.so" ]; then WHY="no .so at $OUT"
 elif [ $(( HAVE & NEED )) -ne "$NEED" ]; then WHY="hdims mask $HAVE lacks $NEED ($HDIMS)"
 elif [ -z "$OLD_SHA" ]; then log "ADOPT existing $OUT (hdims mask $HAVE covers $HDIMS) as source-set ${SRC_SHA:0:16} -- no recorded hash yet, no rebuild"; echo "$SRC_SHA" > "$OUT/source_set.sha256"
 elif [ "$OLD_SHA" != "$SRC_SHA" ]; then WHY="source set / build config changed (${OLD_SHA:0:16} -> ${SRC_SHA:0:16})"
 fi
 if [ -n "$WHY" ]; then
-  log "REBUILD matReq hdims=$HDIMS arch=$ARCH (nvcc $NVCC_VER) MAX_JOBS=$MAX_JOBS -- $WHY; source-set ${SRC_SHA:0:16}"
+  log "REBUILD $BUILD hdims=$HDIMS arch=$ARCH (nvcc $NVCC_VER) MAX_JOBS=$MAX_JOBS -- $WHY; source-set ${SRC_SHA:0:16}"
   # build BESIDE the live .so and swap when done: the live tap stays loadable for a row / a second release running on this pod meanwhile
   # (05:14Z cp-sys: two pod_release.sh at once, the second's `rm -rf` emptied the first's build dir mid-nvcc -> FA2-TAP-FAIL, pod without a tap)
   NEW="$OUT.build-$$"; rm -rf "$NEW"; mkdir -p "$NEW"
-  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-build --tree "$FA2/trees/tap8/csrc" --name verity_fa2_matReq --build-dir "$NEW" --arch "$ARCH" --hdims "$HDIMS" \
-      --tree-commit "$PIN+tap8" --define VERITY_TAP=3 --define VERITY_MAT_SRC=59 > "$FA2/logs/build_matReq_v8.log" 2>&1 \
-      || { rm -rf "$NEW"; fail "build (see $FA2/logs/build_matReq_v8.log: $(grep -a -m1 -i 'error' "$FA2/logs/build_matReq_v8.log" | cut -c1-200))"; }
+  BLOG=$FA2/logs/build_${BUILD}_v8.log
+  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-build --tree "$FA2/trees/tap8/csrc" --name "$NAME" --build-dir "$NEW" --arch "$ARCH" --hdims "$HDIMS" \
+      --tree-commit "$PIN+tap8" $(for d in ${DEFS//,/ }; do printf -- '--define %s ' "$d"; done) > "$BLOG" 2>&1 \
+      || { rm -rf "$NEW"; fail "build (see $BLOG: $(grep -a -m1 -i 'error' "$BLOG" | cut -c1-200))"; }
   echo "$SRC_SHA" > "$NEW/source_set.sha256"
   rm -rf "$OUT.prev"; [ -d "$OUT" ] && mv "$OUT" "$OUT.prev"; mv "$NEW" "$OUT"; rm -rf "$OUT.prev"
-  log "$(tail -1 "$FA2/logs/build_matReq_v8.log")"
+  log "$(tail -1 "$BLOG")"
 elif [ -n "$OLD_SHA" ]; then
   log "REBUILD-SKIP $OUT: source-set ${SRC_SHA:0:16} == built ${OLD_SHA:0:16} (hdims mask $HAVE covers $HDIMS, arch $ARCH, nvcc $NVCC_VER)"
 fi
 
 # (4) verify
-$PY - "$OUT/verity_fa2_matReq.so" "$NEED" "$ARCH" "$HDIMS" <<'EOF' || fail "verify"
+$PY - "$OUT/$NAME.so" "$NEED" "$ARCH" "$HDIMS" "$NAME" "$ROW_GUARD" <<'EOF' || fail "verify"
 import sys, torch, hashlib, json, os
-so, need, arch, hdims = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+so, need, arch, hdims, name, row_guard = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], int(sys.argv[6])
 torch.ops.load_library(so)
-ns = torch.ops.verity_fa2_matReq
-for op in ("varlen_fwd", "verity_set_tap", "verity_set_tap_v8", "verity_set_tap_tag", "verity_tap_skipped", "verity_tap_mode", "verity_tap_src", "verity_tap_hdims", "verity_tap_layout_version"):
+ns = getattr(torch.ops, name)
+for op in ("varlen_fwd", "verity_set_tap", "verity_set_tap_v8", "verity_set_tap_tag", "verity_tap_skipped", "verity_tap_mode", "verity_tap_src", "verity_tap_hdims", "verity_tap_layout_version", "verity_tap_row3"):
     assert hasattr(ns, op), f"missing op {op}"
 mode, src, have, ver = int(ns.verity_tap_mode()), int(ns.verity_tap_src()), int(ns.verity_tap_hdims()), int(ns.verity_tap_layout_version())
+row3 = int(ns.verity_tap_row3())
 assert mode == 3 and src == 59, (mode, src)
 assert have & need == need, f"hdims mask {have} lacks {need}"
 assert ver == 8, ver
+assert row3 == row_guard, f"verity_tap_row3() = {row3}, the build asked for {row_guard}"
 sha = hashlib.sha256(open(so, "rb").read()).hexdigest()
 bi = os.path.join(os.path.dirname(so), "build_info.json")
 info = json.load(open(bi)) if os.path.exists(bi) else {}
-print(f"FA2-TAP-OK {sha} {so} arch={info.get('arch', arch)} hdims={hdims} mask={have} layout=v{ver}")
+print(f"FA2-TAP-OK {sha} {so} arch={info.get('arch', arch)} hdims={hdims} mask={have} layout=v{ver} row3={row3}")
 EOF

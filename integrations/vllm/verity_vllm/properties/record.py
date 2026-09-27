@@ -29,6 +29,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("fa_tap_exactness", "verity-vllm/fa-tap-exactness/v1",
              "The FA tap build computes exactly the installed FA kernel's output, writes exactly the declared stream words, "
              "and skips a launch whose declared tile is not the kernel's."),
+    Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
+             "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
+             "scale, and each scale is the IR model's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
+    Property("router_tap_exactness", "verity-vllm/router-tap-exactness/v1",
+             "The tapped topk_softmax computes exactly the installed op's outputs, writes every word of every row's softmax, and each word "
+             "is the ordered router's committed value in the IR bit for bit (ties, NaN, +-inf and +-0 included), in vLLM's own MoE layers too."),
+    Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
+             "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
+             "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "
              "where boundary hashes were taken, every compared boundary value is bit-identical)."),

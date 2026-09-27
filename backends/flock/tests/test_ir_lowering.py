@@ -661,3 +661,31 @@ def test_an_ir_run_result_is_a_point_not_a_second_cell():
 
     assert ir_bench.POINT_KIND == "bench-point/v1" and ir_bench.POINT_KIND in KINDS
     assert 'raw.pop("kind", None)' in Path(register.__file__).read_text()
+
+
+def test_hopper_wgmma_piece_is_the_ir_primitive():
+    """``PIECES["HopperBF16WgmmaDot16_v1"]`` (fp.tc_dot16 with HOPPER_BF16_WGMMA_K16's groups (16,), W 26, F -133) equals the IR
+    primitive on special-heavy vectors (NaN payloads, both infinities, subnormals, cancellation)."""
+    import random
+
+    from verity.ml.prims import HopperBF16WgmmaDot16 as P
+
+    rng = random.Random(7)
+    spec16 = [0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x3F80]
+    spec32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 1, 0x7F7FFFFF, 0x3F800000]
+    w16 = lambda: rng.choice(spec16) if rng.random() < 0.2 else rng.getrandbits(16)  # noqa: E731
+    cases = []
+    for _ in range(300):
+        a, b = [w16() for _ in range(16)], [w16() for _ in range(16)]
+        if rng.random() < 0.3:
+            for j in range(0, 16, 2):
+                a[j + 1], b[j + 1] = a[j] ^ 0x8000, b[j]
+        cases.append((rng.choice(spec32) if rng.random() < 0.3 else rng.getrandbits(32), a, b))
+    C = gf2.Circuit()
+    ins = [C.input(f"in{j}", 16) for j in range(32)] + [C.input("acc", 32)]
+    C.output("d", IL.PIECES["HopperBF16WgmmaDot16_v1"](C, ins[32], *ins[:32]))
+    vals = {f"in{j}": [sum((((c[1] + c[2])[j] >> i) & 1) << t for t, c in enumerate(cases)) for i in range(16)] for j in range(32)}
+    vals["acc"] = [sum(((c[0] >> i) & 1) << t for t, c in enumerate(cases)) for i in range(32)]
+    outs, _ = C.evaluate(vals, len(cases))
+    got = [sum(((outs["d"][i] >> t) & 1) << i for i in range(32)) for t in range(len(cases))]
+    assert got == [P.evaluate(c[0], *c[1], *c[2]) & 0xFFFFFFFF for c in cases]

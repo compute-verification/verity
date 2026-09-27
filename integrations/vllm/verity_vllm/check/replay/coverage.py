@@ -51,6 +51,15 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
                              "(NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain (R17-3)"),
     "fa3_hidden_m1_stream": ("attention interior (the Hopper launch's M1 export stream): no VU row of its own; the attention VU it belongs to is "
                              "state-linked (NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain (R17-3)"),
+    "norm_scales": ("opt-in, never the record (query.norm_scales): a norm's scale, one f32 per row -- interior to the kernel norms' Calls (the "
+                    "norm-scale tap) or an ATen-chain norm's rsqrt output: no VU row of its own under Q_module_body_v1; C1 / C3 here, and the "
+                    "tapped kernels' scale == the IR model's scale bit for bit is the norm-tap exactness property (properties.norm_tap_exactness)"),
+    "router_softmax": ("opt-in, never the record (query.router_softmax): the selection-order router's softmax per token row -- interior to the "
+                       "router Call (the router-softmax tap): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every tapped word == the "
+                       "ordered router's committed value in the IR bit for bit is the router-tap exactness property (properties.router_tap_exactness)"),
+    "vocab_range": ("opt-in, never the record (query.vocab_range): a TP rank's range values per token row -- interior to EmbeddingShard_v1 "
+                    "(the vocabulary-range source): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every value == the IR's is the "
+                    "vocabulary-range exactness property (properties.vocab_range_exactness)"),
 }
 #: the query families whose identities ARE produced by Program rows (a VU or a named non-evaluable row must address each of them)
 QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials")
