@@ -481,8 +481,9 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
 _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
-           "F32MulFtz_v1": "ROW step (max * scale)", "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums",
-           "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+           "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
+#: attention values the stream does not carry, by primitive: the tap each needs (ROW word 2 is the kernel's visit index, not max * scale)
+_STREAM_NEW = {"F32MulFtz_v1": "FA2 / FA3 tap build (MS plane, `max_scaled`)"}
 #: the kernel a new tap goes in, by the Definition family holding the value
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
@@ -500,8 +501,11 @@ def committed_today(scope: str | None, head: str | None) -> str | None:
     return None
 
 
-def tap_kernel(scope: str | None) -> str:
+def tap_kernel(scope: str | None, head: str | None = None) -> str:
+    """The kernel a new tap for a committed interior value goes in (`head`: the value's primitive)."""
     fam = (scope or "").split("{")[0].rsplit("_v", 1)[0]
+    if fam in _ATTENTION and head in _STREAM_NEW:
+        return _STREAM_NEW[head]
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 

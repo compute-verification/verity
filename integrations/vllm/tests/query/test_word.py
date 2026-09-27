@@ -209,3 +209,12 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
     (a, b), = G.recomputed                                            # temp == 0, in TemperatureScale and in GumbelSelectF32
     assert {G.prim_names[int(G.prim[a])], G.prim_names[int(G.prim[b])]} == {"F32Eq_v1"} and R["owner"][a] == R["owner"][b]
     assert R["kinds"] == ["output"] and R["cut"].ok and R["cut"].detail["redundant_gates"] == 1
+
+
+def test_max_scaled_is_not_in_the_fa_stream():
+    # ROW word 2 is the kernel's visit index (vt_step): max * scale needs the MS plane
+    for scope in ("AttnBlock_v3{D=64,NVIS=64,FIRST=False,BN=128}", "AttnBlockSoftcap_v1{D=256,NVIS=64,FIRST=False,BN=64,CAP=50.0}"):
+        assert W.committed_today(scope, "F32MulFtz_v1") is None
+        assert W.tap_kernel(scope, "F32MulFtz_v1") == "FA2 / FA3 tap build (MS plane, `max_scaled`)"
+        assert W.committed_today(scope, "F32Max_v1") == "ROW row_max"
+    assert W.tap_kernel("RMSNormTriton_v1{N=64,EPS=1e-05}", "F32MulFtz_v1") == "vLLM batch-invariant Triton _rms_norm_kernel"
