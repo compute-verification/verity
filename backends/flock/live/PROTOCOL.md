@@ -1,4 +1,4 @@
-# verity/flock-circuit: the masked protocol (M1)
+# verity/flock-circuit: the masked protocol (M1) and its coin commitment (M2)
 
 What `flock-circuit --zk` sends, where every mask comes from, and what the verifier checks. This is the layout the Lean
 reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of statement, witness,
@@ -6,7 +6,9 @@ prover seed and verifier coins), and the statement its zero-knowledge theorem is
 
 Code:
 - `src/zk_veil.rs`: masking, replay, constraints, the inner proof, the simulator's pieces.
-- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`.
+- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; M2's
+  `VStar`, `gk_simulate`, `rewind`, `zkrewind`.
+- `src/coin_tree.rs` (M2): the verifier's coin commitment and the prover's check of every opening.
 - `../flock-zk-b684b12.patch`: Ligerito level 0's hiding in upstream Flock (`pcs::ligerito::zk`, `commit::commit_zk`, the F256
   split prover and verifier).
 
@@ -52,7 +54,7 @@ Ligerito level 0    label flock-ligerito-basis-f256-split-v0 · scalar target ·
   M1                slice T' (2) · slice ybar (2 t_pad)
                     code-switch message · cap_1 · ... levels 1+, unchanged ...
 M1 inner proof      label verity-flock-zk-inner-v0 · squeeze ε · slice [ρ, σ] · squeeze γ (10)
-                    scalar τ · squeeze β · slice Y (s+192) · squeeze queries (168)
+  M2                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
 proof bytes         bincode (Commitment, R1csProofLigerito with the masked fields, InnerProof)
 ~~~
 
@@ -147,10 +149,16 @@ Ligerito verifier's lane-round arithmetic, which starts again from `T'`. The tri
 It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from `batch(cons, γ)` over the 10 rows:
 
 1. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
-2. `γ` (10) ← V. Both sides form `(c, t)`. P sends `τ = ⟨c, mu⟩`.
+2. `γ` (10) ← V. Both sides form `(c, t)`. P computes `τ = ⟨c, mu⟩` and sends its commitment
+   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
-4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths.
-5. V checks `⟨c, Y[..s]⟩ = t + β τ`, `C(Y)_j = C_h[j] + β C_mu[j]` at every query, and each path to the pads root.
+4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths. The proof carries
+   `τ` and its salt.
+5. V checks that `τ` opens its commitment, `⟨c, Y[..s]⟩ = t + β τ`, `C(Y)_j = C_h[j] + β C_mu[j]` at every query, and each
+   path to the pads root.
+
+`τ` in the clear before `β` (M1's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
+before the last coin; §9's extraction run needs every message before the last coin masked, committed or public.
 
 **Soundness terms, for review.** Batching costs `1/|F|`, the sacrifice `1/|F|`, and `β` `1/|F|`. RS proximity is at
 rate `L_h/N ≈ 0.12` with 168 queries: `(1 − δ)^168` at the unique-decoding `δ ≈ 0.44` is about `2^-140`, plus BCIKS20's
@@ -338,28 +346,68 @@ the statistics' relation classes.
   - The proof grows by the inner proof, mostly its 168 paths (130 KB per rep), which could share a cap, plus `ybar`
     (18 KB), the four extra lanes' entries, and level 0's 277 queries in place of 218.
 
-## 9. What M2 still needs
+## 9. M2: the verifier's coin commitment and the single-rewind simulator
 
-- **The coin commitment** (DESIGN.md §11.1). One up-front commitment per session: a SHA-512 Merkle root over
-  Halevi–Micali commitments to every coin, one per (table, repetition, round), each stream a subtree. Every prover
-  machine checks each coin's opening before using it. This replaces M0's `coin_seed` step 0 (a seed commitment with
-  `derive()` streams, which needs a PRF assumption). The prover's refusals (`β = 0`, mask rank, `ρ_0, ρ_1` dependent)
+Malicious-verifier zero knowledge for one batched session, in the soundness lane's model (ASSUMPTIONS.md §2 and §6,
+DESIGN.md §11.1): the verifier commits to every coin before the prover's first message, then opens them round by round,
+and a Goldreich–Kahan simulator rewinds once, to just after that commitment.
+
+**The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v1`, `SessionConfig::coin_tree`).
+- The schedule is pinned in `Hello` (`coins: {scheme, streams, rounds_log, block}`): streams `session`, `circuit/rep0`,
+  `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most 277 coins in one
+  (level 0's queries); the session stream's round 0 is the two link points.
+- At `Hello` the verifier draws every block and a 192-byte salt per (stream, round) and commits: per block the chain
+  `T_512 = SHA-512(TAIL)`, `T_i = SHA-512(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest `x = SHA-512(ROUND ‖ u32be(stream) ‖
+  u32be(round) ‖ T_0)` and the leaf `hm96::leaf(x, salt)`; each stream's leaves under a SHA-512 tree (a subtree), and the
+  streams' roots under one more, padded with `SHA-512(PAD)`. The 64-byte root is `Hello`'s answer (4 F128 words), before
+  the prover's first message (`Commit`).
+- Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
+  the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
+  and stops at one that does not open, before it answers anything that depends on it.
+- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. Binding rests on SHA-512 collision
+  resistance, hiding of the unopened coins on hm96 (ROM). The prover's refusals (`β = 0`, the mask rank, dependent `ρ`)
   stay functions of committed coins.
-- **The single-rewind simulator** (Goldreich–Kahan). The simulator runs the honest prover on a dummy witness until the
-  final openings reveal the committed coins. The dummy witness must carry the public region words (`b ‖ c` and the
-  declared outputs), every private word zero and the mask slot uniform: its region claims' `s_hat_v` are sent in the clear
-  before any coin opens, and a verifier compares them with the public data. It then rewinds once to just after the coin commitment and runs §8's
-  per-table simulator on those coins, for every table, with independent masks. Every message before the last coin is
-  masked, as §7 now makes Ligerito's too. So the dummy run is indistinguishable from a real one until the openings, as
-  §11.1 requires.
-- **C1's level-0 root check**, kept under M1. M0's commit hook compares rep 1's level-0 root with rep 0's and stops
-  before rep 1 opens anything, and the device refuses salt stream 0 for any tree whose leaf count is not level 0's
-  (commit `e2190ca3`). M1 keeps it:
-  - both reps prove one witness, uniform mask slot included;
-  - §7's padding and extra lanes are drawn once per session and belong to level 0's one tree;
-  - the pads trees take `next_id() ≥ 1`.
-- **GPU.** `--zk` is CPU-only. The masking challenger and the inner proof are host-side and small. The mask slot fill,
-  §7's padding and extra lanes, and `commit_zk` belong on the device, expanded from ChaCha20 like the hm96 salts. The
-  device prover also needs §7's fold and messages.
-- **Review.** A red team on this document, then the Lean reference prover and its differential test, before any
+
+**The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
+(rewinding V* is a fresh instance on the same tape, replayed to the same point):
+1. **Extraction.** The honest prover on a dummy witness against V*: every private word zero, the public region words
+   written in (`Stmt::write_regions`: `b ‖ c` and the declared outputs), the mask slot uniform, fresh masks. Every message
+   before the proofs is masked, committed or public (§7, §5), and the region claims' `s_hat_v` are the public ones, so this
+   run is distributed as a real one until the proofs, which follow the last coin. If it stops before the proofs (V*
+   aborted or cheated, or the prover refused a degenerate coin), its view is the output.
+2. **The extracted coins.** Every opening V* sent, checked against its commitment; the link points and each rep's rounds.
+3. **Estimation.** More dummy runs until `t` of them reach the proofs; `p̃ = t / runs`.
+4. **Rewinds**, at most `4t/p̃`, each to just after the coin commitment: V* from the start of the session, answered by a
+   scripted prover whose messages are the per-rep SHVZK simulations from the extracted coins (`simulate_full` on the
+   extraction run's dummy opening, §8, each rep with its own pair). A `RecordingChallenger` recovers each round's message
+   by replaying the verifier on the simulated proof. Every coin V* answers is checked against its commitment. The first
+   rewind that reaches the proofs is the output. A rewound V* that opens another coin than it did in step 2 is a binding
+   failure, and the simulator fails; so does exhausting the bound.
+
+Against the theorem's statement (ASSUMPTIONS.md §6): one extraction run of the honest prover on a dummy witness (step 1,
+with the estimation's repeats of it); rewinding only to just after the coin commitment (step 4, the one rewind point,
+repeated under Goldreich–Kahan's abort handling); expected polynomial time (`p̃`'s bound); resting on special HVZK for
+every fixed coin sequence (§7's session argument, with the extracted coins); the tables' simulations composing through
+independent masks (per rep: the pads and the pair; per session: the mask slot and the witness lanes' padding, which §7
+spends once).
+
+**Verifier strategies** (`VStar`): honest (its coins from its tape); `abort` at the first round whose message, hashed with
+the tape, falls below a threshold (about half the sessions); `adaptive-coins`, which at such a round answers a coin it
+picks from the prover's message under the committed coin's opening (the prover stops there); `zero-beta`, which commits
+to `β = 0` at rep 0's β round (the prover refuses it before sending `Y`). `zkrewind --zk --n N` prints N real and N
+simulated views per strategy, and `tests/zk_rewind_stats.py` compares how they end (a permutation test), their verdicts,
+rep 0's first 256 masked values, every received proof's checked fields and the session relations of §7.
+
+Selftest negatives: `zk_verifier_coin_off_its_commitment` (the prover stops at rep 0's round 3),
+`zk_verifier_commits_beta_zero` (it stops at the β round, 98), `zk_dummy_witness_passes_the_region_claims` (the dummy is
+rejected by the inner proof alone).
+
+**Still to do.**
+- **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
+  belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
+- **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
+  expanded from ChaCha20 like the hm96 salts.
+- **Several tables per session.** The schedule's streams are one table's; a batched session adds a subtree per table and
+  rep.
+- **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
