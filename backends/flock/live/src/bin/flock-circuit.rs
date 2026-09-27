@@ -771,6 +771,8 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     };
     let mut tape: Option<(Vec<Vec<F128>>, Vec<Vec<F128>>)> = None;
     let mut dummies: Vec<Vec<Vec<u8>>> = Vec::new();
+    // each rep's level-0 positions of the sampled rows (`lig_rows0`), from the verifier's record (the coins fix them)
+    let mut q0: Vec<Vec<usize>> = vec![Vec::new(); 2];
     for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() }),
                          ("dummy", Plan { zero_witness: true, ..Plan::default() })] {
         for run in 0..n {
@@ -791,8 +793,13 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                     let (coins, points) = tape.as_ref().unwrap();
                     let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut zkv::Tape::new(&coins[rep]));
                     assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
+                    let root: [u8; 64] = inner.root.clone().try_into().unwrap();
+                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&coins[rep])).unwrap_or_else(|e| refuse(e));
+                    q0[rep] = rec.queries0[..4].to_vec();
                 }
-                println!("ZK{}\t{}", kind.to_uppercase(), fields(kind, run, rep, &pr, &inner));
+                let mut row = fields(kind, run, rep, &pr, &inner);
+                row["lig_rows0_q"] = json!(q0[rep]);
+                println!("ZK{}\t{}", kind.to_uppercase(), row);
             }
             let (coins, points) = tape.as_ref().unwrap();
             relations(kind, run, &proofs, coins, points);
@@ -809,7 +816,9 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, &mut zkv::Tape::new(&coins[rep]));
             assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
             accepted += 1;
-            println!("ZKSIM\t{}", fields("sim", run, rep, &pr, &inner));
+            let mut row = fields("sim", run, rep, &pr, &inner);
+            row["lig_rows0_q"] = json!(q0[rep]);
+            println!("ZKSIM\t{row}");
             sims.push(bincode::serialize(&(&c, &pr, &inner)).unwrap());
         }
         relations("sim", run, &sims, &coins, &points);
