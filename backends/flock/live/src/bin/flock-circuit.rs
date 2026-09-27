@@ -833,8 +833,11 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     };
     let mut tape: Option<(Vec<Vec<F128>>, Vec<Vec<F128>>)> = None;
     let mut dummies: Vec<Vec<Vec<u8>>> = Vec::new();
-    // each rep's level-0 positions of the sampled rows (`lig_rows0`), from the verifier's record (the coins fix them)
+    // each rep's level-0 positions of the sampled rows (`lig_rows0`), from the verifier's record, and its inner proof's opened
+    // columns (its last `Q` coins); the coins fix both
     let mut q0: Vec<Vec<usize>> = vec![Vec::new(); 2];
+    let inner_n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+    let inner_q = |coins: &[F128]| zkv::query_positions(&coins[coins.len() - zkv::Q..], inner_n);
     for (kind, plan) in [("real", Plan::default()), ("control", Plan { zk_zero_pads: true, ..Plan::default() }),
                          ("dummy", Plan { zero_witness: true, ..Plan::default() })] {
         for run in 0..n {
@@ -861,6 +864,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 }
                 let mut row = fields(kind, run, rep, &pr, &inner);
                 row["lig_rows0_q"] = json!(q0[rep]);
+                row["inner_open_q"] = json!(inner_q(&tape.as_ref().unwrap().0[rep]));
                 println!("ZK{}\t{}", kind.to_uppercase(), row);
             }
             let (coins, points) = tape.as_ref().unwrap();
@@ -880,6 +884,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             accepted += 1;
             let mut row = fields("sim", run, rep, &pr, &inner);
             row["lig_rows0_q"] = json!(q0[rep]);
+            row["inner_open_q"] = json!(inner_q(&coins[rep]));
             println!("ZKSIM\t{row}");
             sims.push(bincode::serialize(&(&c, &pr, &inner)).unwrap());
         }
@@ -1460,6 +1465,8 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                     if let Ok((_, rec)) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[rep])) {
                         row["lig_rows0_q"] = json!(rec.queries0[..4]);
                     }
+                    let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+                    row["inner_open_q"] = json!(zkv::query_positions(&flat[rep][flat[rep].len() - zkv::Q..], n));
                 }
                 println!("ZKVIEWP\t{row}");
             }

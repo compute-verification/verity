@@ -199,13 +199,15 @@ What is changed:
    `64 + 2r, 64 + 2r + 1` (`zk::rep_lanes`), `R^r = (R_{2r}, R_{2r+1})`. The leaf holds 68 F128 values
    (`commit::commit_zk`: one tree over the same positions, so the same hm96 level-0 salts and C1's shared root).
 3. **After the lane rounds** of rep `r` (challenges `r̄^r`), in this order:
-   - P sends `e^r_i = ⟨b(r̄^r, ·), R^r_i⟩` (exposed, padded). They precede the coins that combine them, as in VEIL step 1;
+   - P sends `e^r_i = ⟨w^r, R^r_i⟩` (exposed, padded), where `w^r = b(r̄^r, ·) + Σ_j β_j·eq(z_j, (r̄^r, ·))` is the folded
+     next-stage weight, level 0's OOD claims included: the weight the running claim carries after the lane rounds (the
+     sumcheck's `combined_basis`). They precede the coins that combine them, as in VEIL step 1;
      otherwise a prover could choose `e` to fit any claim.
    - V draws `ρ^r_0, ρ^r_1 ∈ F256`. P refuses them unless they are independent over F128, so `W^r : (a, b) ↦ ρ^r_0 a + ρ^r_1 b`
      is invertible on F128².
    - The fold becomes `y_1'^r = y_1^r + W^r R^r`, uniform on F256^L.
-   - P sends `T'^r = ⟨b(r̄^r, ·), y_1'^r⟩` and `ybar^r = Σ_l eq(r̄^r, l) pad_l + W^r pad_{R^r}` (`t_pad` F256 values,
-     `zk::ybar`).
+   - P sends `T'^r = ⟨w^r, y_1'^r⟩ = s + ρ^r_0 e^r_0 + ρ^r_1 e^r_1` (`s` the running claim) and
+     `ybar^r = Σ_l eq(r̄^r, l) pad_l + W^r pad_{R^r}` (`t_pad` F256 values, `zk::ybar`).
    - The code switch and level 1 commit `y_1'^r`. The verifier's running claim restarts at `T'^r`.
 4. **The level-0 row check** at rep `r`'s queries (the verifier is told `r`: `zk::Level0Params`):
 

@@ -16,7 +16,9 @@ coordinate after Ligerito's code switch is always 0) and are excluded and counte
 Rep 1's value equal to rep 0's in every run is a reuse of randomness across the reps, which fails the class
 (``reused_across_reps``), with one exception: the level-0 rows (``lig_rows0``) at a sample slot where both reps opened the same
 level-0 position (``lig_rows0_q``, from the verifier's record). Both reps open the one level-0 codeword, so such a row is one
-observation of the session, not two; it is excluded and counted (``shared_by_the_reps``).
+observation of the session, not two; it is excluded and counted (``shared_by_the_reps``). Likewise the inner proof draws its
+168 query positions with replacement: a column whose position (``inner_open_q``, from the coins) repeats an earlier one in the
+same rep's list is one observation, excluded and counted (``repeated_positions``).
 
 Relations across fields and reps: the ``ZKREL`` lines hold, per session, two linear functionals of the public transcript that
 combine both reps' ``ybar``, their opened level-0 rows and their shared level-1 positions (``flock-circuit``'s
@@ -117,6 +119,23 @@ def level0_shared(rows, cls, width):
     return out
 
 
+INNER_OPENED = ("inner_open_h", "inner_open_mu")
+
+
+def repeated_positions(rows, cls, width):
+    """The inner opened columns whose declared position (``inner_open_q``) repeats an earlier one in the same rep's list."""
+    out = np.zeros(width, dtype=bool)
+    if cls not in INNER_OPENED:
+        return out
+    for rep in (0, 1):
+        q = next((r.get("inner_open_q") for r in rows["real"] if r["rep"] == rep), None) or []
+        seen = set()
+        for j, x in enumerate(q[:width]):
+            out[j] |= x in seen
+            seen.add(x)
+    return out
+
+
 def test_class(rows, cls, reps, masked):
     """The four tests on one class, and reuse across reps; ``rows``: kind -> rows."""
     a = {k: values(rows[k], cls) for k in ("real", "sim", "control")}
@@ -124,12 +143,13 @@ def test_class(rows, cls, reps, masked):
     equal = equal_across_reps(a, reps) & ~fixed
     allowed = level0_shared(rows, cls, a["real"].shape[1])
     shared, reused = equal & allowed, equal & ~allowed
-    a = {k: v[:, ~(fixed | shared)] for k, v in a.items()}
+    repeated = repeated_positions(rows, cls, a["real"].shape[1]) & ~fixed
+    a = {k: v[:, ~(fixed | shared | repeated)] for k, v in a.items()}
     tab = np.array([byte_hist(a["real"]), byte_hist(a["sim"])])
     tab = tab[:, tab.sum(axis=0) > 0]
     p_bytes = float(stats.chi2_contingency(tab)[1])
     row = {"values_per_transcript": int(a["real"].shape[1]), "structural_constants": int(fixed.sum()), "shared_by_the_reps": int(shared.sum()),
-           "reused_across_reps": int(reused.sum()), "bytes_real_vs_sim": p_bytes}
+           "reused_across_reps": int(reused.sum()), "repeated_positions": int(repeated.sum()), "bytes_real_vs_sim": p_bytes}
     for k in ("real", "sim", "control"):
         row[f"bits_{k}"] = bits_p(a[k])
         row[f"xor_{k}"] = xor_p(a[k], reps)
