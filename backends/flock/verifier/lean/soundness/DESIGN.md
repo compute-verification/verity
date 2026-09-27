@@ -154,7 +154,7 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
     `κ = ε_c⁻ + t·2^-243.7`.
   - The product form the audit consumes needs no condition on `ε`:
     `Pr[accepted ∧ extraction fails] ≤ 2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))` (`table_knowledge_sound_joint`). At
-    `K = √(N₀/(e·Adv₀))` this is `2ε_c⁻ + t·2^-243.7`, which is `2^-159.8` at `t = 2^80` above `2ε_c⁻`.
+    `K = √(N₀/(e·Adv₀))` this is `2ε_c⁻ + t·2^-243.7`, which is `2^-163.7` at `t = 2^80` above `2ε_c⁻`.
   - For comparison, the draft's form (fresh runs against `T*`, with a rewinding square root) gives a hash term of
     `t·2^-233.4/(ε − ε_c)` and `κ = ε_c + t·2^-231.4`.
 - **Not knowing ε.** For the audit, the extractor is an analysis device, and `K` may depend on `ε` and `Adv₀`. An
@@ -182,6 +182,8 @@ under the two alternatives. $N_s$ is the leaves under the serving roots, $N_0 = 
 | **(i) Expected-time collision resistance** | $t\cdot N_s\,(8N_0/e)/2^{256.5}$ | $t\cdot2^{-215.2}$ | $t\cdot2^{-205.6}$ | $t\cdot2^{-199.6}$ | $t\cdot2^{-193.9}$ |
 | **(ii) Random oracle** (tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
 
+The first two rows are the terms beyond $2\varepsilon_c^-$ and $\delta_{\rm tree}$, which (i) doubles (below).
+
 The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
 
 | Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
@@ -204,9 +206,18 @@ under (i).
     $\min(1,q^2/2^{513})\le q/2^{256.5}$. It is linear rather than quadratic because a finder can gamble, making
     $2^{256.5}$ evaluations with small probability. The quadratic form $T^2/2^{513}$ would be false for this reason.
   - **The reductions become expected-time,** as in Chiesa–Dall'Agnol–Guan–Spooner–Yogev (ePrint 2024/1434,
-    Theorem 2). The extractor runs the session once, and extracts only when it accepts. The link finder samples
-    auxiliary extractions until the position it needs is recovered, at an expected cost of about $N_s(8N_0/e)\,t$.
-    The square root goes.
+    Theorem 2). The extractor runs the session once. Only if that run accepts does it rerun, until $cN_0/e$ reruns
+    have accepted, about $cN_0/(e\varepsilon)$ runs at acceptance probability $\varepsilon$.
+    - An extraction then costs about $(1+cN_0/e)\,t$ in expectation, whatever $\varepsilon$, and needs no estimate
+      of it.
+    - The joint form's missing term becomes about $2\varepsilon/c$.
+  - **The link finder** samples auxiliary extractions until one recovers the position it needs. That is at most $N_s$
+    extractions in expectation, so about $N_s(cN_0/e)\,t$ evaluations.
+  - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
+    $\Pr[\text{accept}]\,(1-2/c)\le\delta_{\rm tree}+2\varepsilon_c^-+N_s(cN_0/e)\,t/2^{256.5}$, plus a conflict term
+    of order $t\cdot2^{-244}$. The square root goes.
+  - **The constant.** $c=4$ minimizes the total, giving the table's $t\cdot N_s(8N_0/e)/2^{256.5}$. It doubles the
+    other terms, to $2\delta_{\rm tree}+4\varepsilon_c^-$, one bit on terms 24 bits below the link term.
   - **The status.** It is a new assumption, not in Table 1, and this analysis is on paper, not in Lean.
 - **(ii) The random-oracle column** (lifetime doc §7). The extractor reads the commit strings, the `hm96` openings and
   the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one global
