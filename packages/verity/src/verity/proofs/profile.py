@@ -17,10 +17,26 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
-from math import comb, inf, log, prod
+from math import comb, inf, log, log1p, nextafter, prod
 from types import MappingProxyType
 
 from verity.ir.partition import Hierarchy, Level
+
+
+#: `worst_case`'s margin: risks are shrunk and the bound raised by this relative amount, far above the arithmetic's error
+#: (a few units in the last place), so the bound is never below the relaxation's exact optimum
+MARGIN = 2.0 ** -30
+
+
+def _neg_log_ratio(a: int, d: int) -> float:
+    """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
+    a/d >= 1/2 (no cancellation), the log of the correctly rounded d/a while it fits a float, and the difference of the
+    two big-integer logs only beyond that, where -ln(a/d) > 693 and the difference is relatively tiny."""
+    if 2 * a >= d:
+        return -log1p(-((d - a) / d))
+    if a << 1000 >= d:
+        return log(d / a)
+    return log(d) - log(a)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,21 +171,21 @@ class IntegrityProfile:
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m), in log space from exact integers, so it never underflows (`accept` is a ratio
-        of binomials that can fall far below the smallest float)."""
+        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`_neg_log_ratio`): no
+        underflow where `accept` falls below the smallest float, and no cancellation where it is close to 1."""
         n, k, num, den, top = self._odds()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         a = (den - num) * top + num * comb(n - m, k)
-        return inf if a == 0 else log(den * top) - log(a)
+        return inf if a == 0 else _neg_log_ratio(a, den * top)
 
     def _rhos(self) -> list[float]:
-        """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, no underflow."""
+        """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, the same values as `rho`."""
         n, k, num, den, top = self._odds()
-        whole, c, out = log(den * top), top, []
+        whole, c, out = den * top, top, []
         for m in range(n + 1):
             a = (den - num) * top + num * c
-            out.append(inf if a == 0 else whole - log(a))
+            out.append(inf if a == 0 else _neg_log_ratio(a, whole))
             c = c * (n - m - k) // (n - m) if n - m > k else 0
         return out
 
@@ -180,14 +196,15 @@ class IntegrityProfile:
         sum x_m <= members and sum x_m rho(m) <= ln(1/delta).  Scaled by `members`, that is the largest value, at
         mean risk at most ln(1/delta)/members, of the upper concave envelope of the points (rho(m), utility(m)) and
         (0, 0).  rho is nondecreasing in m (accept is), so the points arrive sorted and one pass builds the envelope:
-        linear in n, where trying every pair of m was quadratic.  A consumer reading at a level above the Bernoulli
-        level (touched requests, say) passes `cap`, that level's member count (`count`), which the bound never
-        exceeds."""
+        linear in n, where trying every pair of m was quadratic.  The rounding is directed: every risk is shrunk and the
+        result raised by `MARGIN`, capped at members * max utility, which the optimum never exceeds, so the bound is
+        never below the exact optimum.  A consumer reading at a level above the Bernoulli level (touched requests, say)
+        passes `cap`, that level's member count (`count`), which the bound never exceeds."""
         if cap is not None and cap < 0:
             raise ValueError("cap >= 0")
         members, n, _, _ = self._law()
         rhos = self._rhos()
-        points = [(r, float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
+        points = [(r * (1 - MARGIN), float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
         best = 0.0
         if points and members > 0:
             hull: list[tuple[float, float]] = []
@@ -202,7 +219,11 @@ class IntegrityProfile:
                     best = max(best, ua)
                     if t < rb < inf:
                         best = max(best, ua + (ub - ua) * (t - ra) / (rb - ra))
-            best *= members
+            top = max(u for _r, u in points)
+            full = members * top
+            if Fraction(full) < members * Fraction(top):                 # the cap, rounded up
+                full = nextafter(full, inf)
+            best = full if best * members >= full else min(full, nextafter(best * members * (1 + MARGIN), inf))
         return best if cap is None else min(best, float(cap))
 
     def to_json(self) -> dict:
@@ -214,4 +235,4 @@ class IntegrityProfile:
                 "delta": self.delta, "drawn": dict(self.drawn)}
 
 
-__all__ = ["Bernoulli", "Draw", "IntegrityProfile", "Subset"]
+__all__ = ["MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Subset"]

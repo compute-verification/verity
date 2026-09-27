@@ -3,14 +3,16 @@
 The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
 with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units drawn with p, then k of the n_v
 inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
-oracle the level form must reproduce: `accept` exactly, and `worst_case` up to float rounding (the envelope and the
-pairs round differently, by about 1e-15)."""
+oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
+`_exact_rhos` and `_exact_lp` are the high-precision reference (60-digit `Decimal`): `worst_case` is never below it."""
 
 from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations, product
-from math import comb, exp, inf, log
+import random
+from decimal import Decimal, localcontext
+from math import comb, exp, inf, log, sqrt
 
 import pytest
 
@@ -18,7 +20,7 @@ from verity.ir import Program, bind
 from verity.ir import query_ast as G
 from verity.ir.partition import Level, members_per_parent, validate_partition
 from verity.ml import gemm
-from verity.proofs.profile import Bernoulli, IntegrityProfile, Subset
+from verity.proofs.profile import MARGIN, Bernoulli, IntegrityProfile, Subset
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -150,7 +152,8 @@ def test_the_two_level_case_reproduces_the_four_number_law_exactly(n_r, n_v, p, 
         a = two_level(n_r, n_v, p, k, delta)
         assert all(a.accept(m) == accept(m) for m in range(n_v + 1))
         for utility in (lambda m: m, lambda m: 1, lambda m: m * m, lambda m: 4 * m):
-            assert a.worst_case(utility) == pytest.approx(worst_case(utility), rel=1e-12, abs=1e-12)
+            new, old = a.worst_case(utility), worst_case(utility)
+            assert old * (1 - 1e-12) - 1e-12 <= new <= old * (1 + 4 * MARGIN) + 1e-12
 
 
 def test_undrawn_levels_only_group():
@@ -239,11 +242,12 @@ def one_level(n, k, delta) -> IntegrityProfile:
     return IntegrityProfile((Level("unit"),), (n,), {"unit": Subset(k)}, delta)
 
 
-#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, worst_case(m), at most).
-E2E = {"A0": (1024, 16, 0.01, 254.22632080026347, 254),
-       "A1": (1024, 256, 2.0 ** -20, 46.92437954253062, 46),
-       "A3": (344, 128, 2.0 ** -20, 28.25559880146837, 28),
-       "A2": (183_680, 256, 2.0 ** -20, 9675.419457199421, 9675)}
+#: The one-stage audits' wrong-unit bounds (lane one-stage-e2e): (n units, k drawn, delta, the exact optimum to 12 digits,
+#: at most).  `worst_case` is within its margin above the exact optimum.
+E2E = {"A0": (1024, 16, 0.01, 254.226320800, 254),
+       "A1": (1024, 256, 2.0 ** -20, 46.9243795425, 46),
+       "A3": (344, 128, 2.0 ** -20, 28.2555988015, 28),
+       "A2": (183_680, 256, 2.0 ** -20, 9675.41945720, 9675)}
 
 
 @pytest.mark.parametrize("run", sorted(E2E))
@@ -251,7 +255,9 @@ def test_the_one_stage_audit_bounds(run):
     """A2 is serving's real population (183,680 units); the quadratic, float `worst_case` crashed there."""
     n, k, delta, value, at_most = E2E[run]
     bound = one_level(n, k, delta).worst_case(lambda m: m)
-    assert bound == pytest.approx(value, rel=1e-12)
+    exact = _exact_threshold(n, k, delta)
+    assert float(exact) == pytest.approx(value, rel=1e-11)
+    assert exact <= Decimal(bound) <= exact * (1 + 4 * Decimal(MARGIN))
     assert int(bound) == at_most
 
 
@@ -290,14 +296,108 @@ def test_rho_is_exact_where_accept_underflows():
         a.rho(n + 1)
 
 
-def test_worst_case_is_the_convex_threshold_for_one_subset_level():
-    """With one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between
-    the last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b, now served by core)."""
-    for n, k, delta, _, _ in E2E.values():
-        a, budget = one_level(n, k, delta), log(1 / delta)
+def _exact_threshold(n, k, delta) -> Decimal:
+    """For one level drawn Subset(k), rho is convex from rho(0) = 0, so the relaxation's optimum interpolates between the
+    last admitted count and the next (one-stage-e2e's direct bound, #116 6ccb9b7b), here in 60-digit Decimal."""
+    with localcontext() as ctx:
+        ctx.prec = 60
         lo = _largest_admitted(n, k, delta)
-        ra, rb = a.rho(lo), a.rho(lo + 1)
-        assert a.worst_case(lambda m: m) == pytest.approx(lo + (budget - ra) / (rb - ra), rel=1e-12)
+        top = Decimal(comb(n, k)).ln()
+        ra, rb = top - Decimal(comb(n - lo, k)).ln(), top - Decimal(comb(n - lo - 1, k)).ln()
+        return lo + ((1 / Decimal(delta)).ln() - ra) / (rb - ra)
+
+
+def test_worst_case_is_the_convex_threshold_for_one_subset_level():
+    for n, k, delta, _, _ in E2E.values():
+        exact = _exact_threshold(n, k, delta)
+        assert exact <= Decimal(one_level(n, k, delta).worst_case(lambda m: m)) <= exact * (1 + 4 * Decimal(MARGIN))
+
+
+def _exact_rhos(a: IntegrityProfile) -> list:
+    """rho(0..n) in 60-digit Decimal, None for inf: -ln of `accept`'s exact ratio."""
+    _, n, p, k = a._law()
+    num, den, top = p.numerator, p.denominator, comb(n, k)
+    with localcontext() as ctx:
+        ctx.prec = 60
+        whole = Decimal(den * top).ln()
+        return [None if (x := (den - num) * top + num * comb(n - m, k)) == 0 else whole - Decimal(x).ln()
+                for m in range(n + 1)]
+
+
+def _exact_lp(a: IntegrityProfile, utility, rhos=None) -> Decimal:
+    """The relaxation's exact optimum, independently of the envelope: members times the best value, at mean risk at most
+    t = ln(1/delta)/members, of a single point or of a chord between a point below t and one above (brute force), in
+    60-digit Decimal."""
+    members, n, _, _ = a._law()
+    rhos = _exact_rhos(a) if rhos is None else rhos
+    with localcontext() as ctx:
+        ctx.prec = 60
+        if members == 0:
+            return Decimal(0)
+        t = (1 / Decimal(a.delta)).ln() / members
+        pts = [(Decimal(0), Decimal(0))] + [(r, Decimal(utility(m))) for m, r in enumerate(rhos)
+                                            if m >= 1 and r is not None and utility(m) > 0]
+        lo, hi = [q for q in pts if q[0] <= t], [q for q in pts if q[0] > t]
+        best = max(u for _r, u in lo)
+        for ra, ua in lo:
+            for rb, ub in hi:
+                best = max(best, ua + (ub - ua) * (t - ra) / (rb - ra))
+        return best * members
+
+
+UTILITIES = {"m": lambda m: m, "one": lambda m: 1, "m2": lambda m: m * m, "4m": lambda m: 4 * m, "sqrt": lambda m: sqrt(m)}
+
+
+def _grid(count: int, seed: int = 135):
+    rng = random.Random(seed)
+    for _ in range(count):
+        n_v = rng.randint(1, 40)
+        p = rng.choice([Fraction(0), Fraction(1, 1000), Fraction(1, 7), Fraction(1, 4), Fraction(1, 2), Fraction(3, 4), Fraction(1)])
+        yield two_level(rng.choice([0, 1, 2, 3, 7, 50, 512, 10_000]), n_v, p, rng.randint(0, n_v),
+                        rng.choice([0.3, 0.01, 2.0 ** -20, 1e-9]))
+
+
+def test_worst_case_is_never_below_the_exact_optimum():
+    """On a seeded grid (small risks included, where a log difference would cancel), the bound is at or above the
+    high-precision optimum, and within the margin of it."""
+    for a in _grid(160):
+        rhos = _exact_rhos(a)
+        for name, u in UTILITIES.items():
+            exact, got = _exact_lp(a, u, rhos), Decimal(a.worst_case(u))
+            assert exact <= got <= exact * (1 + 4 * Decimal(MARGIN)) + Decimal(1e-300), (a.sizes, a.draws, a.delta, name)
+
+
+def test_rho_is_accurate_to_a_few_ulps():
+    """Against the 60-digit reference, including risks near 0 (p = 1/1000, k = 1) and the underflow regime."""
+    cases = list(_grid(80)) + [two_level(1, 250, Fraction(1, 1000), 1, 0.01), two_level(1, 4000, Fraction(1), 256, 2.0 ** -20),
+                               two_level(50, 4000, Fraction(1, 2), 256, 2.0 ** -20)]
+    worst = 0.0
+    for a in cases:
+        for m, (r, x) in enumerate(zip(a._rhos(), _exact_rhos(a))):
+            assert (r == inf) == (x is None) and r == a.rho(m)
+            if x is not None and x > 0:
+                worst = max(worst, abs(float((Decimal(r) - x) / x)))
+    assert worst < 1e-15
+
+
+def test_the_red_team_cases():
+    """Where the plain log difference put the bound below the exact optimum (red-team-flock-3 on b4c9a489): n = 4,000,
+    k = 256, p = 1/2, 50 members, by 8.5e-14; the exact optimum here is the envelope evaluated in Decimal."""
+    a = two_level(50, 4000, Fraction(1, 2), 256, 2.0 ** -20)
+    rhos = _exact_rhos(a)
+    with localcontext() as ctx:
+        ctx.prec = 60
+        t = (1 / Decimal(a.delta)).ln() / 50
+        hull = []
+        for q in sorted([(Decimal(0), Decimal(0))] + [(r, Decimal(m)) for m, r in enumerate(rhos) if m and r is not None]):
+            while len(hull) >= 2 and (hull[-1][0] - hull[-2][0]) * (q[1] - hull[-2][1]) >= (hull[-1][1] - hull[-2][1]) * (q[0] - hull[-2][0]):
+                hull.pop()
+            hull.append(q)
+        seg = max(i for i, q in enumerate(hull) if q[0] <= t)
+        (ra, ua), (rb, ub) = hull[seg], hull[seg + 1]
+        exact = 50 * (ua + (ub - ua) * (t - ra) / (rb - ra))
+    got = Decimal(a.worst_case(lambda m: m))
+    assert exact <= got <= exact * (1 + 4 * Decimal(MARGIN))
 
 
 
