@@ -48,12 +48,37 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `labels` | the bit layout: Lean's `codeEquiv` (bit `j` of block `i` at `i · width + j`), little-endian bytes; `transpose`; `tag` |
 | `oracle` | queries (`HQuery`, `PQuery`/`PinvQuery` with a `Tweak`, `PiQuery`/`PiInvQuery`), programs (`Prog`), `run` with Lean's depth/work/width, `parallel` |
 | `primitives` | `KeyDerivation` and `TweakablePermutation` interfaces; `OverwriteChain` (the default `H`), `RandomOracleKey`, and the broken `XorSponge` and `MiyaguchiPreneel`; the backends `reference`, `heuristic_arx`, `ideal` |
-| `scheme` | `encode(params, prims, W, salt) -> Encoding` (`C`), `decode`, `decode_segment`, and their programs |
-| `layout` | `Layout.of(params, [(name, size)], align)`, `pack`, `decode_tensor` |
-| `setup` | `commit`, `draw_salt`, `verifier_key`, `server_root`, `check_server_root` |
-| `verifier` | `VerifierKey` (`root` and leaf digests), `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock), `simulate` (oracle rounds) |
+| `codec` | `Codec(name, encode_segment, decode_segment)`, the seam every module above the scheme uses; `Geometry`, the sizes they read; `split`, `encode_segments` |
+| `scheme` | `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
+| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=P3)` |
+| `setup` | `commit` (streamed over segments), `draw_salt`, `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=P3)`, `server_root`, `check_server_root` |
+| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds) |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
+
+**Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
+segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to
+`setup.verifier_key(..., encoded=...)` with `W` as its segments for the commitment check.
+
+**A second scheme.** A dense single-layer scheme (POUS `docs/scheme-choice-e2e.md`) needs only its own `Codec` and
+geometry. Setup, the layout, `vk` and the audits take `codec=` and read the geometry's `blocks_per_segment`, `m`,
+`block_bytes`, `segment_bytes`, `segments`, `blocks`, `w_bytes`, `with_segments` and `manifest`.
+
+## Stable byte-format surface
+
+These names and values are the wire format a second implementation (the GPU codec) must match. They change only with
+a version bump in the strings they carry.
+
+| Name | Value |
+|---|---|
+| `params.SALT_BITS`, `params.TAG_BITS` | 192, 256: `tag_s = salt ‖ u64(s)` |
+| `primitives.CAPACITY_BITS` | 512: `Π₂` is `2m + 512` bits |
+| `primitives.HEADER` | `b"pous-p3-v1-H"`, the first 12 bytes of `h_0` |
+| `primitives.PI_DOMAIN`, `primitives.P_DOMAIN` | `0x48` (`Π₂`), `0x50` (`P_T`): the first byte of every round-function input |
+| `primitives.EM_KEY_DOMAIN` | `0x4B`: the heuristic ARX `P_T`'s key |
+| `verifier.leaf_hash`, `verifier.node_hash` | prefixes `0x00`, `0x01` |
+| `setup.COMMIT_TAG`, `setup.SALT_DOMAIN` | `"verity-pous/w-commitment/v1"`, `"verity/pous/salt/v1"` |
+| `audit.CHALLENGE_DOMAIN` | `"verity/pous/audit-challenge/v1"` |
 
 ## Backends
 
