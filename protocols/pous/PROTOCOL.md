@@ -27,9 +27,9 @@ Daniel chose the dense single-layer scheme as the secure-first build (the POUS s
 `Pous.Dense.denseScheme B ℓ` is one segment of `B` blocks of `ℓ` bits: `C_i = W_i ⊕ H(i, C_{<i})` over the complete DAG,
 with no `pp` and no coins, so its rate is 1. Decoding recomputes each block with one query. `Pous.Dense.segScheme N B ℓ`
 lays out `N` such segments on global block indices, so each block reads only its own segment's earlier blocks.
-`PousDenseReCert.segTagScheme N B ℓ salt` is the same store keyed as the implementation keys it: segment `s` is the
-dense scheme on `B` blocks with oracle `H(tag_s, ·)` and local queries, where `tag_s = salt ‖ u64 s` is 256 bits (a
-192-bit salt, then the segment index).
+`Pous.Dense.segTagScheme N B ℓ salt` is the same store keyed as the implementation keys it: segment `s` is the dense
+scheme on `B` blocks with oracle `H(tag_s, ·)` and local queries, where `tag_s = salt ‖ u64 s` is 256 bits (a 192-bit
+salt, then the segment index).
 
 **Proved, with H a random oracle.** Each is `Meets` with no named assumption: correct, rate 1, the space bound, and the
 sequential audit at `ε = 2^-128`, so an adversary holding `⌊ρ|C|⌋` bits passes with probability at most `1% + 2^-128`.

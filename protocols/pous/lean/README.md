@@ -10,7 +10,8 @@ Pous/Model/{Scheme,Audit,Inc}.lean  trusted: encoding schemes, the audit game, I
 Pous/Model/{M1,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledAudit}.lean
                                     trusted: model M1, B3's chain, Fisch's stacked DRGs and white/green game,
                                     Pietrzak's one-way labels, P3's invertible labels, the two-directional column
-                                    game, the dense scheme S1, the state after a history
+                                    game, the dense scheme S1 (one segment, segmented, and tagged as the code
+                                    keys it), the state after a history
 Pous/Accounting/{Params,LemmaA}.lean  trusted: ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows
 Pous/Assumptions.lean               trusted: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Pinned.lean                    trusted: the 33 statements grade.sh grades against
