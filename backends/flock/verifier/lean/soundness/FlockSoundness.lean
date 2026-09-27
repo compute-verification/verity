@@ -60,6 +60,8 @@ import FlockSoundness.Knowledge
 import FlockSoundness.Game.Batch
 import FlockSoundness.Session
 import FlockSoundness.SessionBatch
+import FlockSoundness.ExtractAcc
+import FlockSoundness.SessionAcc
 import FlockSoundness.Lowering
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
