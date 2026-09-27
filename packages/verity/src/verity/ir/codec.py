@@ -11,10 +11,9 @@ signature + body nodes with reference sequences), and the root binding. Referenc
 references only* (parameter leaves and node-output leaves); the descriptor contains no authentication
 locations, no commitments, no gate-output components.
 
-Status: one deterministic encoding (sorted keys, compact separators, ints only) — `canonical_json` — is what
-the program digest hashes. It is **not** a byte-canonical schema in the sense of a frozen external spec
-(no field-order/escaping/number-format specification beyond Python's `json` with `sort_keys=True`,
-`ensure_ascii=True`); say so wherever the digest is reported. Annotations are excluded from the digest.
+The format is specified in `PROTOCOL.md` beside this module, with pinned vectors (`tests/ir/format_vectors.json`). The bytes
+the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotations`: `canonical_json` is JCS on the domain a
+descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
 (the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
@@ -30,8 +29,9 @@ import json
 import re
 from typing import Callable, Any
 
-from .defs import (Body, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
+from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
+from .program import INPUT_ID, input_prim
 from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, refs_from_json
 from .types import type_from_json
 
@@ -103,6 +103,12 @@ def _spec_id(fn: FunctionDefinition) -> str:
     for k in fn.defn.statics:
         parts.append(f"{k}={json.dumps(_static_json(fn.bindings[k]), sort_keys=True, separators=(',', ':'))}")
     return fn.base_id + "{" + ",".join(parts) + "}"
+
+
+def descriptor_id(fn: FunctionDefinition) -> str:
+    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): the readable `fn.id` differs for string, float,
+    function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
+    return _spec_id(fn)
 
 
 def _flat_parts(r: Refs) -> list[Refs]:
@@ -311,11 +317,57 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     }
     if tables is not None:
         desc.update(tables.to_json())
+    _check_domain(desc)
     return desc
 
 
 def canonical_json(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+
+
+MAX_SAFE_INT = 2**53 - 1
+
+
+def jcs_domain_error(v: Any, where: str = "$") -> str | None:
+    """Where `v` leaves the domain on which `canonical_json` is RFC 8785 (JCS), or None: JSON values whose strings are ASCII
+    without DEL (U+0000..U+007E) and whose numbers are integers of magnitude at most 2^53 - 1."""
+    stack = [(v, where)]
+    while stack:
+        x, at = stack.pop()
+        if isinstance(x, str):
+            if not x.isascii() or "\x7f" in x:
+                return f"{at}: string {x[:40]!r} is not ASCII without DEL"
+        elif isinstance(x, bool) or x is None:
+            continue
+        elif isinstance(x, int):
+            if abs(x) > MAX_SAFE_INT:
+                return f"{at}: integer {x} exceeds 2^53 - 1 in magnitude"
+        elif isinstance(x, (list, tuple)):
+            stack.extend((y, f"{at}[{i}]") for i, y in enumerate(x))
+        elif isinstance(x, dict):
+            for k, y in x.items():
+                if not isinstance(k, str):
+                    return f"{at}: key {k!r} is not a string"
+                stack.append((k, f"{at}.<key>"))
+                stack.append((y, f"{at}.{k}"))
+        else:
+            return f"{at}: a {type(x).__name__} is not a JSON integer, string, boolean, null, array or object"
+    return None
+
+
+def _free_form(desc: dict) -> Any:
+    """The parts of a descriptor that are not structural indices: every top-level field but `definitions` and `annotations`,
+    and each definition's key, id, bindings, parameters and return type (a body's nodes and `ret` hold only table indices,
+    reference indices and the fixed vocabulary, checked by the decoder)."""
+    defs = {fid: {k: v for k, v in d.items() if k != "body"} | {k: v for k, v in d.get("body", {}).items() if k in ("params", "ret_type")}
+            for fid, d in desc.get("definitions", {}).items()}
+    return {k: v for k, v in desc.items() if k not in ("definitions", "annotations")} | {"definitions": defs}
+
+
+def _check_domain(desc: dict) -> None:
+    err = jcs_domain_error(_free_form(desc))
+    if err is not None:
+        raise ValueError(f"descriptor outside the canonical JSON domain (PROTOCOL.md §1): {err}")
 
 
 def program_digest(program_or_desc) -> str:
@@ -335,12 +387,10 @@ def descriptor_size(program_or_desc) -> int:
 # ---------------------------------------------------------------------------------------------------------
 
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
-# decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  The IR
-# registers only its own `Input<w>`; a semantics package registers its families with `register_lazy_family` (the IR never
-# imports a semantics package).
-_LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = [
-    (re.compile(r"^Input(\d+)_v1$"), lambda m: __import__("verity.ir.program", fromlist=["input_prim"]).input_prim(int(m[1]))),
-]
+# decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
+# package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
+# `program.INPUT_ID` always denotes the IR's own `Input<w>`, ahead of any registry entry.
+_LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []
 
 
 def register_lazy_family(pattern: str | re.Pattern[str], make: Callable[[re.Match[str]], PrimitiveDefinition]) -> None:
@@ -423,6 +473,9 @@ def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
 
 
 def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+    m = INPUT_ID.match(fid)
+    if m:
+        return input_prim(int(m[1]))
     if fid in registry:
         return registry[fid]  # type: ignore[return-value]
     for pat, make in _LAZY_PRIMITIVE_FAMILIES:
@@ -449,50 +502,144 @@ class DecodedProgram:
         return self.root.gates
 
 
-def _decode_refs(j, nodes: list[Node], schema: str) -> Refs:
+def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
     """v0: `refs_from_json`. v1: also resolves `{"alias": [k, a]}` to the reference sequence node `k` passed as
     argument `a` (already decoded — aliases point backwards), splicing a concatenation's alias parts in flat so
-    the decoded representation does not depend on how the writer nested it."""
+    the decoded representation does not depend on how the writer nested it.  Given `leaves`, every part read is `_checked_refs`."""
     if schema == SCHEMA_V0:
-        return refs_from_json(j)
+        return _checked_refs(refs_from_json(j), leaves)
     if "alias" in j:
         k, a = j["alias"]
-        if k >= len(nodes):
-            raise ValueError(f"alias to node {k} before it is defined")
+        if not (_nat(k) and _nat(a) and k < len(nodes) and a < len(nodes[k].args)):
+            raise ValueError(f"alias to argument {a} of node {k}: aliases name an argument of an earlier node")
         return nodes[k].args[a].refs
     if "concat" in j:
         parts: list[Refs] = []
         for x in j["concat"]:
-            p = _decode_refs(x, nodes, schema)
+            p = _decode_refs(x, nodes, schema, leaves)
             parts.extend(p.parts if isinstance(p, Concat) else [p])
         return Concat(parts)
-    return refs_from_json(j)
+    return _checked_refs(refs_from_json(j), leaves)
+
+
+def _int(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _nat(x: Any) -> bool:
+    return _int(x) and x >= 0
+
+
+def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> Refs:
+    """`r`, if every reference in it names an existing leaf: of a parameter of the body (`p`) or of a node's output (`n`).  A node
+    naming itself or a later node decodes (checkers name that defect); the canonical layout assumes it does not (PROTOCOL.md §6).
+    `leaves(space, idx)` is that collection's leaf count, None if there is none."""
+    if leaves is None:
+        return r
+    if isinstance(r, Concat):
+        for p in r.parts:
+            _checked_refs(p, leaves)
+        return r
+    if isinstance(r, Explicit):
+        ok = all(len(x) == 3 and _int(x[2]) for x in r.items)
+        spans = [(s, i, j, j) for s, i, j in r.items] if ok else []
+    elif isinstance(r, Affine):
+        ok = _int(r.base) and _nat(r.count)
+        spans = [(r.space, r.idx, r.base, r.base + r.count - 1)] if ok and r.count else []
+    else:
+        ok = all(map(_int, (r.base, r.outer_stride, r.inner_stride))) and _nat(r.count) and _int(r.inner) and r.inner >= 1
+        spans = []
+        if ok and r.count:
+            q, last = divmod(r.count - 1, r.inner)
+            corners = [(0, 0), (0, min(r.inner, r.count) - 1), (q, 0), (q, last)] + ([(q - 1, r.inner - 1)] if q else [])
+            vals = [r.base + a * r.outer_stride + b * r.inner_stride for a, b in corners]
+            spans = [(r.space, r.idx, min(vals), max(vals))]
+    for s, i, lo, hi in spans:
+        n = leaves(s, i) if s in ("p", "n") and _nat(i) else None
+        ok = ok and n is not None and 0 <= lo and hi < n
+    if not ok:
+        raise ValueError(f"references {r.to_json()} name no leaf of a parameter or a node")
+    return r
+
+
+def _type(j: Any) -> Any:
+    try:
+        return type_from_json(j)
+    except (TypeError, ValueError, IndexError, KeyError) as e:
+        raise ValueError(f"type {j!r}: {e}") from e
+
+
+def _at(table: list, i: Any, what: str) -> Any:
+    if not (isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(table)):
+        raise ValueError(f"{what} index {i!r} outside 0..{len(table) - 1}")
+    return table[i]
+
+
+_NODE_KEYS = {"primitive": {"form", "fn", "args", "out"}, "call": {"form", "fn", "args", "out"},
+              "batch": {"form", "fn", "args", "out", "axes", "n"}, "scan": {"form", "fn", "args", "out", "n", "n_xs"}}
+
+
+def _check_node(fid: str, k: int, nd: dict, fn: FunctionDefinition) -> None:
+    form = nd.get("form")
+    if form not in _NODE_KEYS or set(nd) != _NODE_KEYS[form]:
+        raise ValueError(f"definition {fid!r} node {k}: form {form!r} with keys {sorted(nd)}")
+    prim = isinstance(fn, PrimitiveDefinition)
+    if (form == "primitive" and not prim) or (form in ("call", "scan") and prim):
+        raise ValueError(f"definition {fid!r} node {k}: a {form} node does not call {'a primitive' if prim else 'a composite'} ({fn.id})")
+    if (form == "batch" and not (isinstance(nd["axes"], list) and all(a is None or _nat(a) for a in nd["axes"]) and _nat(nd["n"]))) or \
+            (form == "scan" and not (_nat(nd["n"]) and _nat(nd["n_xs"]) and nd["n_xs"] < len(nd["args"]))):
+        raise ValueError(f"definition {fid!r} node {k}: {form} counts {({x: nd[x] for x in ('axes', 'n', 'n_xs') if x in nd})}")
+
+
+def _build_node(B: Builder, fid: str, k: int, nd: dict, fn: FunctionDefinition, args: tuple[Coll, ...], out: Any) -> None:
+    """Rebuild node `k` through the `Builder`, which checks its arguments against the callee's signature and computes its output
+    type; the node's declared `out` must be that type."""
+    try:
+        if nd["form"] in ("primitive", "call"):
+            B.call(fn, *args)
+        elif nd["form"] == "batch":
+            B.batch(fn, *args, axes=nd["axes"], n=nd["n"])
+        else:
+            x = 1 + nd["n_xs"]
+            B.scan(fn, args[0], args[1:x], args[x:], n=nd["n"])
+    except (TypeError, IndexError) as e:
+        raise ValueError(f"definition {fid!r} node {k}: {e}") from e
+    if B.nodes[k].out != out:
+        raise ValueError(f"definition {fid!r} node {k}: declares out {out!r}, computes {B.nodes[k].out!r}")
 
 
 def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
     schema = desc.get("schema")
     if schema not in SCHEMAS:
         raise ValueError(f"unexpected descriptor schema {schema!r}")
+    _check_domain(desc)
     ddefs = desc["definitions"]
     built: dict[str, Any] = {}
     if schema == SCHEMA_V0:
-        callee_id, arg_type = (lambda f: f), type_from_json
+        callee_id, arg_type = (lambda f: f), _type
     else:
-        callees, types = desc["callees"], [type_from_json(t) for t in desc["types"]]
-        callee_id, arg_type = callees.__getitem__, types.__getitem__
+        callees, types = desc["callees"], [_type(t) for t in desc["types"]]
+        callee_id, arg_type = (lambda i: _at(callees, i, "callees")), (lambda i: _at(types, i, "types"))
 
     def get(fid: str):
         if fid in built:
             return built[fid]
         d = ddefs[fid]
         if d["form"] == "primitive":
+            if d["id"] != fid:
+                raise ValueError(f"definition {fid!r}: a primitive is keyed by its id, not {d['id']!r}")
             p = _lookup_primitive(registry, d["id"])
             if [[n, t.to_json()] for n, t in p.params] != d["params"] or p.ret.to_json() != d["ret"]:
                 raise ValueError(f"primitive {fid} signature differs from the registry")
             built[fid] = p
             return p
         name, _, ver = d["id"].rpartition("_v")
+        if d["form"] != "composite" or not (name and ver.isdigit() and f"{name}_v{int(ver)}" == d["id"]):
+            raise ValueError(f"definition {fid!r}: form {d['form']!r}, id {d['id']!r} (a composite's id is Name_vN)")
         statics = _statics_order(fid, tuple(d["bindings"].keys()))
+        key = d["id"] + ("{" + ",".join(f"{k}={canonical_json(d['bindings'][k]).decode()}" for k in statics) + "}" if statics else "")
+        if key != fid:
+            raise ValueError(f"definition {fid!r}: a composite is keyed by its id and binding record, {key!r}")
         cdef = CompositeDefinition(f"{name}", int(ver), statics, lambda S: ((), None), lambda *_: None, register=False)
         sp = SpecializedDefinition(cdef, {}, ())
         built[fid] = sp
@@ -510,20 +657,34 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         bindings = {k: static_of(v) for k, v in d["bindings"].items()}
         sp.bindings.update(bindings)
         b = d["body"]
-        params = tuple((n, type_from_json(t)) for n, t in b["params"])
-        ret_type = type_from_json(b["ret_type"])
-        nodes: list[Node] = []
-        offsets = [0]
+        params = tuple((n, _type(t)) for n, t in b["params"])
+        ret_type = _type(b["ret_type"])
+        B = Builder(params, ret_type)
+        nodes = B.nodes
+        outs = [arg_type(nd["out"]) for nd in b["nodes"]]           # each node's declared output, checked when the node is built
+
+        def leaves(space: str, idx: int) -> int | None:
+            if space == "p":
+                return params[idx][1].leaves if idx < len(params) else None
+            return outs[idx].leaves if idx < len(outs) else None
+
         for nd in b["nodes"]:
+            k = len(nodes)
             fn = get(callee_id(nd["fn"]))
-            args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema)) for a in nd["args"])
-            node = Node(nd["form"], fn, args, arg_type(nd["out"]), axes=tuple(nd.get("axes", ())),
-                        n=nd.get("n", 1), n_xs=nd.get("n_xs", 0))
-            nodes.append(node)
-            offsets.append(offsets[-1] + node.gates)
-        sp.set_body(Body(params, ret_type, nodes, _decode_refs(b["ret"], nodes, schema), offsets))
+            _check_node(fid, k, nd, fn)
+            try:
+                args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema, leaves)) for a in nd["args"])
+            except ValueError as e:
+                raise ValueError(f"definition {fid!r} node {k}: {e}") from e
+            _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))
+        try:
+            sp.set_body(B.finish(Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))))
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"definition {fid!r} ret: {e}") from e
         return sp
 
     root = get(desc["root"])
+    if not isinstance(root, SpecializedDefinition) or root.body.params:
+        raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
     return DecodedProgram(root, built, desc, pfn_fns)

@@ -4,7 +4,8 @@
 
 Each `DIR/<case>.json` (`case`, `expect`, `accepted`, `why`, `record`) and its proofs `DIR/<case>.rep<r>.proof` become
 `OUT_DIR/<case>/session.json` and `circuit.rep<r>.bin`; a case whose session stopped before a proof (refused at `Hello`) gets
-empty proof files, so both verifiers judge its record. Each case's `case.json` carries its expected verdict and the live
+empty proof files, so both verifiers judge its record. A case whose statement is false (`DIR/<case>.pub.bin`, written by the
+967b8d06 vectors patch) gets it as its own `pub.bin`, which both verifiers read. Each case's `case.json` carries its expected verdict and the live
 verdict upstream's own verifier gave (as the vectors patch's forgeries do), which `agree.py` reads.
 """
 import json, sys
@@ -22,6 +23,9 @@ def main():
         for r in (0, 1):
             p = src / f"{c['case']}.rep{r}.proof"
             (d / f"circuit.rep{r}.bin").write_bytes(p.read_bytes() if p.exists() else b"")
+        false_statement = src / f"{c['case']}.pub.bin"
+        if false_statement.exists():
+            (d / "pub.bin").write_bytes(false_statement.read_bytes())
         (d / "case.json").write_text(json.dumps({"case": c["case"], "expect": c["expect"],
                                                  "live": {"accepted": c["accepted"], "why": c["why"]}}, indent=1))
         n += 1

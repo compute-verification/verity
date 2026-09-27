@@ -71,10 +71,8 @@ def hash (msg : ByteArray) : Digest := Id.run do
   let mut h := iv
   for blk in [0:data.size / 64] do
     h := compress h data (64 * blk)
-  let mut out := ByteArray.emptyWithCapacity 32
-  for x in h do
-    out := out.push (x >>> 24).toUInt8 |>.push (x >>> 16).toUInt8 |>.push (x >>> 8).toUInt8 |>.push x.toUInt8
-  return out
+  -- the state's eight words, big-endian: 32 bytes whatever the loops computed (`Sha256.hash_size`)
+  return ⟨Array.ofFn (n := 32) fun i => (h[i.val / 4]! >>> (24 - 8 * (i.val % 4)).toUInt32).toUInt8⟩
 
 end Sha256
 
@@ -150,10 +148,8 @@ def hash (msg : ByteArray) : Digest := Id.run do
   let mut h := iv
   for blk in [0:data.size / 128] do
     h := compress h data (128 * blk)
-  let mut out := ByteArray.emptyWithCapacity 64
-  for x in h do
-    for j in [0:8] do out := out.push (x >>> (8 * (7 - j)).toUInt64).toUInt8
-  return out
+  -- the state's eight words, big-endian: 64 bytes whatever the loops computed (`Sha512.hash_size`)
+  return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
 
 end Sha512
 
