@@ -311,11 +311,23 @@ def agreement_key(e: dict[str, str]) -> str | None:
     if files is None:
         return None
     h = hashlib.sha256(json.dumps([sys.version, platform.platform(), _env_key(e)]).encode())
-    for f in files:
-        if f.startswith("backends/flock/verifier/"):
-            p = ROOT / f
-            h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
+    for f in agreement_closure(files):
+        p = ROOT / f
+        h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
     return h.hexdigest()
+
+
+def agreement_closure(files: list[str]) -> list[str]:
+    """The tracked files the agreement job can read: backends/flock/verifier/, less the Lake packages nested in its Lean package
+    (`level3/`, `soundness/`: proofs with a lakefile of their own), which `flock-verify` is not built from as long as the Lean
+    package requires nothing (a `require` in its lakefile keeps them all in)."""
+    pre, lean = "backends/flock/verifier/", "backends/flock/verifier/lean/"
+    lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
+    root = [f for f in lakefiles if f.count("/") == lean.count("/")]
+    nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
+    if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
+        nested = ()
+    return [f for f in files if f.startswith(pre) and not f.startswith(nested or ("\0",))]
 
 
 def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -> dict:
