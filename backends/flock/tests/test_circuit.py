@@ -115,3 +115,57 @@ def test_lookup_rows_match_the_rust_layout():
     # 128 input rows, decoders of 13 + 10 bits, 31 * 2^10 products, output word, constant (lookup.rs)
     assert FC.lookup_rows(23, 13, 31) == -(-(128 + FC._decode_rows(13) + FC._decode_rows(10) + 31 * 1024) // 128) * 128 + 129
     assert FC._decode_rows(2) == 4 and FC._decode_rows(3) == 8 + 4
+
+
+def _f32_samples(n, seed):
+    rng = np.random.default_rng(seed)
+    special = [0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0x3F800000,
+               0xBF800000, 0x4E800000, 0xCE800000, 0x42FE0000, 0xC3000000, 0x19DB6BEB, 0x9D60AFCB]
+    return special + [int(x) for x in rng.integers(0, 2**32, n, dtype=np.uint64)] + \
+        [int(np.float32(x).view(np.uint32)) for x in rng.normal(0, 30, n)]
+
+
+def _run(C, inputs, t):
+    got, _ = C.evaluate({k: [sum(((v >> i) & 1) << j for j, v in enumerate(vs)) for i in range(bits)] for k, (vs, bits) in inputs.items()}, t)
+    return {k: [sum(((b >> j) & 1) << i for i, b in enumerate(v)) for j in range(t)] for k, v in got.items()}
+
+
+@pytest.mark.parametrize("name,arity", [("F32AddFtz_v1", 2), ("F32MulFtz_v1", 2), ("F32FmaFtz_v1", 3), ("F32FmaSubFtz_v1", 3),
+                                        ("F32Max_v1", 2), ("F2fpBf16_v1", 1)])
+def test_attention_tail_ops_match_the_ir(name, arity):
+    """Exact on encodings, but for a NaN result's payload (canonical here, as for F32Add; every NaN meets a bf16 cast or a
+    NaN-blind consumer before it leaves the tail)."""
+    from verity_vllm.program.registry import prims as P
+
+    args = [_f32_samples(150, 11 + i) for i in range(arity)]
+    t = len(args[0])
+    C = Circuit()
+    C.output("y", list(TL.OPS[name](C, *[C.input(f"x{i}", 32) for i in range(arity)])))
+    got = _run(C, {f"x{i}": (args[i], 32) for i in range(arity)}, t)["y"]
+    nan = lambda u: (u & 0x7F800000) == 0x7F800000 and u & 0x7FFFFF
+    for k in range(t):
+        want = getattr(P, name[:-3]).evaluate(*[a[k] for a in args]) & 0xFFFFFFFF
+        assert got[k] == want or (nan(got[k]) and nan(want)), (name, [hex(a[k]) for a in args], hex(got[k]), hex(want))
+
+
+def test_mufu_ex2_matches_the_ir():
+    from verity_vllm.program.kernels import fa2_relation
+    from verity_vllm.program.registry import prims as P
+
+    ex2 = np.asarray(fa2_relation.tables().ex2, dtype=np.uint32)
+    xs = _f32_samples(300, 5)
+    t = len(xs)
+    pre, post = TL.MUFU["MufuEx2Ftz_v1"]
+    c1 = Circuit()
+    table, idx, ctx = pre(c1, [c1.input("x", 32)])
+    assert table == "ex2"
+    c1.output("idx", idx)
+    for i, w in enumerate(ctx):
+        c1.output(f"c{i}", w)
+    o1 = _run(c1, {"x": (xs, 32)}, t)
+    c2 = Circuit()
+    c2.output("y", post(c2, [c2.input(f"c{i}", 32) for i in range(len(ctx))], c2.input("v", TL.VALUE_BITS)))
+    ins = {f"c{i}": (o1[f"c{i}"], 32) for i in range(len(ctx))}
+    ins["v"] = ([int(ex2[j]) & 0x7FFFFFFF for j in o1["idx"]], TL.VALUE_BITS)
+    got = _run(c2, ins, t)["y"]
+    assert [hex(x) for x, g in zip(xs, got) if g != P.MufuEx2Ftz.evaluate(x)] == []

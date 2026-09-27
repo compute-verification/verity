@@ -171,8 +171,93 @@ def _f32_div(C, a, b):
     return fp.f32_div_const(C, a, sum(w.c << i for i, w in enumerate(b)))
 
 
+def _ftz(C, x):
+    """Flush a subnormal to signed zero (the fast-math build's ftz)."""
+    ez = is_zero_bits(C, x[23:31])
+    return [C.AND(NOT(ez), w) for w in x[:23]] + list(x[23:])
+
+
+def is_zero_bits(C, bits):
+    return NOT(or_reduce(C, bits))
+
+
+def _bit_mux(C, s, x, y):
+    return mux(C, s, [x], [y])[0]
+
+
+def _f32_gt(C, x, y):
+    """``f32(x) > f32(y)`` on non-subnormal encodings: false when either is NaN, and +0 and -0 are equal."""
+    nanx = C.AND(and_reduce(C, x[23:31]), or_reduce(C, x[:23]))
+    nany = C.AND(and_reduce(C, y[23:31]), or_reduce(C, y[:23]))
+    mx, my = x[:31], y[:31]
+    both_zero = C.AND(is_zero_bits(C, mx), is_zero_bits(C, my))
+    x_bigger = sub(C, my, mx, 31)[1]
+    x_smaller = sub(C, mx, my, 31)[1]
+    r = _bit_mux(C, x[31], _bit_mux(C, y[31], x_smaller, ZERO), _bit_mux(C, y[31], NOT(both_zero), x_bigger))
+    return C.AND(r, NOT(OR(C, nanx, nany)))
+
+
+def _f32_max(C, a, b):
+    """FA2 ``MaxOp``: ``x > y ? x : y`` on the flushed words (a NaN compares false)."""
+    x, y = _ftz(C, a), _ftz(C, b)
+    return mux(C, _f32_gt(C, x, y), x, y)
+
+
+def _ftz_op(op):
+    return lambda C, *ws: _ftz(C, op(C, *[_ftz(C, w) for w in ws]))
+
+
+def _fma_sub_ftz(C, a, b, c):
+    fc = _ftz(C, c)
+    return _ftz(C, fp.f32_fma(C, _ftz(C, a), _ftz(C, b), list(fc[:31]) + [NOT(fc[31])]))
+
+
+def _ex2_pre(C, args):
+    """FA2's MUFU.EX2 (``ir_tail.rs`` ``mufu_ex2``): K = floor(|x| 2^23); x >= 0: n = K >> 23, j = K mod 2^23; x < 0: the ones'
+    complement of K (plus one when its fraction bits are zero). Index j; context n and the special result (NaN, +-inf, x >= 2^30
+    in magnitude, a flushed x) with its flag."""
+    (x,) = args
+    s, e, frac = x[31], x[23:31], x[:23]
+    e_ones, e_zero, frac_nz = and_reduce(C, e), is_zero_bits(C, e), or_reduce(C, frac)
+    nan, inf = C.AND(e_ones, frac_nz), C.AND(e_ones, NOT(frac_nz))
+    big = NOT(sub(C, e, const_bits(157, 8), 8)[1])          # unbiased exponent >= 30 (inf and NaN included)
+    ge127 = NOT(sub(C, e, const_bits(127, 8), 8)[1])
+    mant = list(frac) + [ONE] + [ZERO] * 29                  # 53 bits
+    left = sub(C, e, const_bits(127, 8), 8)[0]
+    right = sub(C, const_bits(127, 8), e, 8)[0]
+    # the reference shifts a u64 by up to 126; the shift amount is taken mod 64 (numpy on x86, Rust release), so a tiny |x|
+    # indexes the table at mant >> ((127 - e) mod 64), not at 0
+    k = mux(C, ge127, fp.shl(C, mant, left[:5]), fp.shr_sticky(C, mant, right[:6])[0])
+    frac_zero = is_zero_bits(C, k[:23])
+    neg = add(C, [NOT(w) for w in k] + [ONE], [frac_zero], width=54)
+    fixed = mux(C, s, neg, list(k) + [ZERO])
+    n = fixed[23:54] + [fixed[53]]                           # 32-bit two's complement
+    special = OR(C, OR(C, big, e_zero), nan)
+    inf_or_zero = mux(C, s, const_bits(0, 32), const_bits(INF, 32))
+    sw = mux(C, nan, const_bits(QNAN_MUFU, 32), mux(C, e_zero, const_bits(ONE_F, 32), inf_or_zero))
+    del inf
+    return "ex2", fixed[:23], [n, sw, [special] + [ZERO] * 31]
+
+
+def _ex2_post(C, ctx, v):
+    """T[j] * 2^n: overflow +inf, underflow +0; else the special result."""
+    n, sw, sf = ctx
+    re = add(C, list(v[23:31]) + [ZERO] * 26, list(n) + [n[31]] * 2, width=34)
+    negative = re[33]
+    ge255 = C.AND(NOT(negative), OR(C, or_reduce(C, re[8:33]), and_reduce(C, re[:8])))
+    le0 = OR(C, negative, is_zero_bits(C, re[:33]))
+    word = list(v[:23]) + list(re[:8]) + [ZERO]
+    out = mux(C, le0, const_bits(0, 32), mux(C, ge255, const_bits(INF, 32), word))
+    return mux(C, sf[0], sw, out)
+
+
+MUFU["MufuEx2Ftz_v1"] = (_ex2_pre, _ex2_post)
+
 #: every other tail primitive -> piece(C, *operand words)
-OPS = {"F32Add_v1": fp.f32_add, "F32Mul_v1": fp.f32_mul, "F32Fma_v1": fp.f32_fma, "F32Div_v1": _f32_div, "DivFullScaleA_v1": _div_scale_a}
+OPS = {"F32Add_v1": fp.f32_add, "F32Mul_v1": fp.f32_mul, "F32Fma_v1": fp.f32_fma, "F32Div_v1": _f32_div, "DivFullScaleA_v1": _div_scale_a,
+       "F32AddFtz_v1": _ftz_op(fp.f32_add), "F32MulFtz_v1": _ftz_op(fp.f32_mul), "F32FmaFtz_v1": _ftz_op(fp.f32_fma),
+       "F32FmaSubFtz_v1": _fma_sub_ftz, "F32Max_v1": _f32_max,
+       "F2fpBf16_v1": lambda C, a: fp.f32_to_bf16(C, a, 0x7FFF) + [ZERO] * 16}
 
 
 # --- stages ---------------------------------------------------------------------------------------------------------------
