@@ -25,6 +25,7 @@ outputs, or oldest-operand-first), greedily, every value crossing between pieces
 e.g. a GEMM's FP32 carry at a K-chunk boundary). :func:`assess` prices one shape over a program's units.
 
     python -m verity_flock.unit_shapes --program-graphs DIR --out OUT_DIR [--pickle] [--rows ROW ...]
+    python -m verity_flock.unit_shapes --out OUT_DIR --shape 16,21,8 [--shape ...]
 """
 from __future__ import annotations
 
@@ -1000,11 +1001,27 @@ def assess(classes: list, S: tuple[int, int, int], cache: dict) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--program-graphs", required=True, type=Path)
+    ap.add_argument("--program-graphs", type=Path)
     ap.add_argument("--rows", nargs="*", help="row key prefixes (default: every *.program.json)")
     ap.add_argument("--out", required=True, type=Path, help="directory: <row>.json per row (a row already there is skipped)")
     ap.add_argument("--pickle", action="store_true", help="also <row>.pkl: the classes with their gate sequences (for assess)")
+    ap.add_argument("--shape", action="append", default=[], metavar="r,z,d",
+                    help="instead of a census: price S = (2^r, 2^z, 2^d) over OUT_DIR's <row>.pkl (repeatable); JSON to stdout")
     a = ap.parse_args(argv)
+    if a.shape:
+        import pickle
+        classes = {p.name[: -len(".pkl")]: pickle.loads(p.read_bytes()) for p in sorted(a.out.glob("*.pkl"))}
+        res: dict = {}
+        for s in a.shape:
+            S = tuple(1 << int(x) for x in s.split(","))
+            per = {row: assess(cl, S, {}) for row, cl in classes.items()}
+            fine = {row: sum(c for _u, c, _t in cl) for row, cl in classes.items()}
+            n = sum(p["n"] for p in per.values())
+            used = [sum(p["used"][i] for p in per.values()) for i in range(3)]
+            res[s] = {"n": n, "fine_units": sum(fine.values()), "waste": [1 - u / (n * x) for u, x in zip(used, S)],
+                      "extra_commitments": sum(p["extra_commitments"] for p in per.values()), "programs": per}
+        print(json.dumps(res, indent=1))
+        return 0
     files = sorted(a.program_graphs.glob("*.program.json"))
     if a.rows:
         files = [f for f in files if any(f.name.startswith(r) for r in a.rows)]
