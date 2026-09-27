@@ -875,8 +875,43 @@ def fifo_order(seq: dict) -> dict:
         "deps": [[pos[d] for d in seq["deps"][v]] for v in order]}
 
 
+def fold_free(seq: dict) -> dict:
+    """``seq`` with every costless gate of one consumer (a gather, wiring) folded into that consumer: its reads become the
+    consumer's, so a split never commits a gathered word between two pieces."""
+    n = len(seq["rows"])
+    cons: list[list[int]] = [[] for _ in range(n)]
+    for i, ds in enumerate(seq["deps"]):
+        for d in ds:
+            cons[d].append(i)
+    into = list(range(n))
+    for i in range(n):
+        if not seq["rows"][i] and not seq["z"][i] and not seq["is_out"][i] and len(set(cons[i])) == 1:
+            into[i] = cons[i][0]
+
+    def root(i):
+        while into[i] != i:
+            i = into[i]
+        return i
+
+    keep = [i for i in range(n) if into[i] == i]
+    pos = {v: k for k, v in enumerate(keep)}
+    ext = {v: list(seq["ext"][v]) for v in keep}
+    deps = {v: [] for v in keep}
+    for i in range(n):
+        r = root(i)
+        if r != i:
+            ext[r] += seq["ext"][i]
+        deps[r] += [root(d) for d in seq["deps"][i] if root(d) != r]
+    out = {k: [seq[k][v] for v in keep] for k in ("rows", "z", "width", "is_out")}
+    dl = [[pos[d] for d in deps[v]] for v in keep]
+    c = Counter(d for ds in dl for d in ds)
+    return out | {"ext": [ext[v] for v in keep], "deps": dl, "cons": [c.get(k, 0) for k in range(len(keep))]}
+
+
 def pack_best(seq: dict, R: int, Z: int, D: int) -> dict:
-    """:func:`pack` over the depth-first order and over :func:`fifo_order`, whichever makes fewer pieces plus commitments."""
+    """:func:`pack` of :func:`fold_free`'s sequence over the depth-first order and over :func:`fifo_order`, whichever
+    makes fewer pieces plus commitments."""
+    seq = fold_free(seq)
     a = pack(seq, R, Z, D)
     if a["pieces"] == 1:
         return a
