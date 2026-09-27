@@ -521,6 +521,20 @@ def f32_to_e4m3_sat(C, x):
     return mux(C, C.AND(e_max, m_nz), const_bits(0x7F, 8), out)
 
 
+def i32_le(C, a, b):
+    """``I32Le_v1``: signed ``a <= b``."""
+    return [NOT(sub(C, b[:31] + [NOT(b[31])], a[:31] + [NOT(a[31])], 32)[1])]
+
+
+def gather_bf16(C, tok, *col):
+    """``GatherBf16x{V}_v1``: ``col[tok]`` for ``0 <= tok < V``, else 0x7FFF: a multiplexer tree over the candidates by tok's low
+    bits (a candidate without a partner passes up, since selecting the missing one means tok >= V), then the range select."""
+    cur = [list(c) for c in col]
+    for b in range(max(1, (len(col) - 1).bit_length())):
+        cur = [mux(C, tok[b], cur[i + 1], cur[i]) if i + 1 < len(cur) else cur[i] for i in range(0, len(cur), 2)]
+    return mux(C, _ult_const(C, tok, len(col)), cur[0], const_bits(0x7FFF, 16))
+
+
 # --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
 
 def _tanh(C, x, table: str, nan_word: int):
@@ -592,6 +606,7 @@ PIECES = {
     "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],
     "I32Eq_v1": lambda C, a, b: [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])],
     "HopperE4m3QgmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:])),
+    "I32Le_v1": i32_le,
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
