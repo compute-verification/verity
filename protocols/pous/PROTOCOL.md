@@ -84,14 +84,14 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 - **H is a monolithic random oracle (narrow-state H).** Every result that models the hash H as a random oracle with
   `m`-bit outputs holds only in that model: B3's chain, B5 and the stacked audits, `DenseMeets`, and P3's labels (the
-  band certificate is pure combinatorics, so it is unaffected). A real hash whose `m`-bit output comes from a narrower internal state breaks the instantiation. The adversary stores
-  each label's pre-squeeze state and regenerates the labels from those states: with SHAKE's 1600-bit state, Dense in
-  one round from about 20% of `C`, and P3 in three rounds from about 39%. This is the Ristenpart–Shacham–Shrimpton
-  limit: indifferentiability does not carry over to storage games, so no ideal-hash result transfers to a concrete
-  hash by citation. So "no named assumption" for `DenseMeets` means within the ideal-hash model only. The planned fix
-  is H as a wide sponge (state at least `m` bits) over an ideal permutation, re-proved in the ideal-permutation model;
-  a pilot has started. The Lean statements are unchanged. Source: the POUS store's `docs/p3-cryptanalysis.md`,
-  "Narrow-state H".
+  band certificate is pure combinatorics, so it is unaffected). A real hash whose `m`-bit output comes from a narrower
+  internal state breaks the instantiation. The adversary stores each label's pre-squeeze state and regenerates the
+  labels from those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of `C`, and P3 in three
+  rounds from about 39%. This is the Ristenpart–Shacham–Shrimpton limit: indifferentiability does not carry over to
+  storage games, so no ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for
+  `DenseMeets` means within the ideal-hash model only. The planned fix is H as a wide sponge (state at least `m` bits)
+  over an ideal permutation, re-proved in the ideal-permutation model; a pilot has started. The Lean statements are
+  unchanged. Source: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H".
 - **One segment.** Every model plays one segment against a fresh primitive. A deployment must put a salt and the
   segment index in every oracle query.
 
