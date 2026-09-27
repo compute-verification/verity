@@ -368,6 +368,7 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
       | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
+
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
 `CUTCHECK` line per file. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
