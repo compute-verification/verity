@@ -90,8 +90,9 @@ anyone.
 - **`Adv_ℓ`** is the probability that an explicit collision finder `B_ℓ` outputs a SHA-512 collision. `B_ℓ` runs
   `P*` up to level ℓ's commitment, continues it twice on independent coins, and applies Merkle binding at the first
   position the two runs open to different columns.
-- **`Adv_×`** is the probability that a single run opens one level-0 position in both reps, with two different columns
-  that both verify. That is a collision found in one run, with no rewinding.
+- **`Adv_×`** is the probability that a single run opens one position two ways that both verify under one cap: level 0
+  across the two reps, or a position two queries of one level share. That is a collision found in one run, with no
+  rewinding.
 - For a false statement, where no witness satisfies it at all, the event is simply "accepted".
 
 **The number.** `B_ℓ` makes at most `2t` SHA-512 evaluations when `P*` makes `t`, plus two verifications. Under the
@@ -103,23 +104,23 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
 2^110.7 at m = 35 and 2^117 at m = 22. The hash term overtakes the statistical one from `t ≈ 2^43` (m = 35) to
 `2^50` (m = 22).
 
-**The proof, and where it stands in Lean.**
+**The proof, all of it in Lean** (`table_sound_compiled`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`):
 
-1. **The oracle-model prover `P̃`** sends the plurality table wherever `P*` sends a cap (at level ℓ ≥ 1, given the run
-   so far), and otherwise plays as `P*`. `table_sound` bounds it by `tableError`: proved, modulo the phase lemmas and
-   `link_sound`.
-2. **Coupling.** On the same coins, if every opening of `P*` agrees with the plurality tables and the compiled verifier
-   accepts, the oracle verifier accepts `P̃`. **To write**, with the compiled game: Ligerito with caps for oracles and
-   query answers deferred to the end of the proof, where the spec puts the openings.
-3. **Rewinding.** Runs with an opening off the plurality ("bad") have probability at most `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])`
-   per level, where `conflict_ℓ` is two runs sharing the prefix up to the commitment opening one position differently.
-   Proved: `Rewinding.prBad_le`, and `Compiled.compile_step_prefix` (Jensen over prefixes); `Compiled.compile_step`
-   combines steps 1–3 for one table.
-4. **Binding.** A conflict is a SHA-512 collision, so `Pr[conflict_ℓ] ≤ Adv_ℓ`. Proved: `Merkle.opening_binding`.
+1. **The oracle-model prover `P̃`** sends the plurality table wherever `P*` sends a cap (at a rep's cap, given the run
+   so far), and otherwise plays as `P*` (`Lock.oracleStrat`, `plurC`, `C0star`).
+2. **Coupling.** The compiled game runs in lockstep with the oracle game (`Game.Lock`): the same coins and messages,
+   a cap for each table, the openings as a last message. Along it, the compiled claim evaluated at openings that agree
+   with the fixed tables at every requested position equals the oracle claim (`StRel`), so on such runs compiled
+   acceptance is oracle acceptance, and `table_sound` bounds `P̃` (`compiled_le_bad`).
+3. **Rewinding.** A bad run clashes within the run or opens a position off the table fixed at some cap (`bad_split`).
+   Per cap, the second costs `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])`, where `conflict_ℓ` is two runs sharing the prefix up to the
+   cap opening one position differently: the rewinding lemma for any run distribution (`Rewinding.expect_bad_le`) at
+   the cap, and Jensen over the prefixes above it (`Lock.leafE_off_le`).
+4. **Binding.** A conflict, like a self-clash, is a SHA-512 collision (`Merkle.opening_binding`), so
+   `Pr[conflict_ℓ] ≤ Adv_ℓ`.
 5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
-`table_sound_compiled` then follows from `table_sound`, `compile_step`, `compile_step_prefix` and a union bound over
-levels. Steps 3 and 4 depend only on Lean's standard axioms (`Check.lean`).
+Every step depends only on Lean's standard axioms (`Check.lean`).
 
 **Remark: the random-oracle version.** Modeling SHA-512 as a random oracle gives straight-line extraction of the
 committed tables (VCVio's Merkle extraction) and a tight bound, `2^-195.5 + O(t²/2^512) + t·(cap entries)/2^512`,
