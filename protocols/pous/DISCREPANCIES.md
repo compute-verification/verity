@@ -1,4 +1,19 @@
-# Where the Lean model, the prose spec and this code differ
+# Where the Lean models, the prose and this code differ
+
+## The dense scheme (`dense.py`, Lean `chainDense`)
+
+The Lean model is `chainDense` (POUS `lean/submissions/sponge-dense/SpongeModel.lean` §4 and §9). The prose is POUS
+`docs/scheme-choice-e2e.md` and the `H` of `docs/p3-instantiation.md` §1. The code follows Lean.
+
+| # | Topic | Lean model | Prose | This code |
+|---|---|---|---|---|
+| D1 | `H`'s initial state | `h_0 = iv(dom i) = 0^ℓ ‖ salt ‖ i`: the domain fills the 512-bit capacity part, no header, no call | the memo takes `H` from the instantiation §1, whose `h_0` is the 48-byte header `"pous-p3-v1-H" ‖ tag_s ‖ u8(layer) ‖ u16(v) ‖ u8(npar)` in the low bytes, zero-filled | Lean's `iv(dom)`. The instantiation's `u8(npar)` also cannot count the dense scheme's up to 511 parents |
+| D2 | Salt and segments | one scheme of `B` blocks, `dom salt i` with a 256-bit salt; `ChainDenseMeets` quantifies over every salt | 24-byte salt drawn by the verifier, many segments | segment `s` is `chainDense B ℓ 512 (dom tag_s)` with `tag_s = salt ‖ u64(s)` as Lean's salt, so each segment is an instance of the target; the many-segment argument (the memo's "disjoint-union pebbling lemma") is not in Lean |
+| D3 | `pp` and coins | `t = 0`, `Coins = Unit`: the salt is a parameter, not coins | "no `pp`" | the salt is published beside `C` (24 B) and drawn after the commitment to `W`, as in `setup`; in the model that is a fixed parameter chosen after `W`, which the `∀ salt` target covers |
+| D4 | Pinned numbers | `ChainDenseMeetsPinned`: `B = 2^16`, `ℓ = 8192` bits, `D = 64`, `Q = 2^20`, `k = 107` | `B = 512`, `ℓ = 65,560` B, `D = 5`, `k = 106` (needs a numeric re-certificate) | the memo's numbers (`SECURE_FIRST`); `chainDense` is generic in `B` and `ℓ`, the certificate at them is not proved |
+| D5 | The chain's security | `ChainExPostFacto` is a target (not proved); `chainHard_of_pebblingHard` is proved | "in progress" | nothing here depends on it; the two-for-one tests exercise the same chaining mode on P3's rows, not on the dense rows |
+
+## P3 (`scheme.py`, Lean `p3Scheme`)
 
 The Lean model is `p3Scheme` (POUS `lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'`
 (`pebbling/ColumnAwareDraft.lean`) and `Pous.Model.Invertible`. The prose is POUS `docs/p3-scheme.md` (§1, §2c) and
@@ -18,7 +33,7 @@ changes the scheme (items 3, 5 and 6), which the Lean model has yet to absorb.
 | 9 | The column game's units | `colRound` charges one game round each for a reverse and for a promotion | — | an oracle adversary pays 1 round for a reverse (with a monolithic `H`) and 0 for a promotion. See below |
 | 10 | Band graph at `k = 0` | `bandGraph n 0` keeps the spine parent `v − 1` | `par(v) = {v − k, …, v − 1}`, empty at `k = 0` | Lean's; the same for `k ≥ 1` |
 | 11 | Verifier | the audit compares answers with the true blocks ("idealizes the per-block tags") | per-block tags; a SHA-256 Merkle root (instantiation §4) | the instantiation's tree (RFC 6962 shape) with leaf digests |
-| 12 | Audit parameters | `p3_meets`: `D = 20`, `Q = 2^20`, `k = 119` (relies on the `pos = 0` collapse) or `185` (no-mask charge) | `k = 423`/`229` (§2a); `k = 132`, `Δ = 300` µs (§2c); `Δ = 0.5` ms plus RTT (`p3-gpu-measurements.md`) | `k = 132`, `Δ = 0.5` ms, `rtt_allowance_ns = 0`, `Q = 2^14` |
+| 12 | Audit parameters | `p3_meets`: `D = 20`, `Q = 2^20`, `k = 119` (relies on the `pos = 0` collapse) or `185` (no-mask charge) | `k = 423`/`229` (§2a); `k = 132`, `Δ = 300` µs (§2c); `Δ = 0.5` ms plus RTT (`p3-gpu-measurements.md`); `k = 117` at `D = 10` (`scheme-choice-e2e.md`) | `k = 132`, `Δ = 0.5` ms, `rtt_allowance_ns = 0`, `Q = 2^14`, `CERTIFIED_ROUNDS = 28` |
 | 13 | Key inputs | full parent labels (P3.0) | P3.1 digest keys, later dropped | P3.0 |
 | 14 | Encoder and coins | `enc W ω salt`, with the salt uniform in `Coins` after `W` | the server encodes after committing to `W`; the verifier draws the salt and computes `vk` itself (§2c) | the prose's protocol (`setup`), which matches Lean's order when the commitment precedes the salt |
 | 15 | Bytes | `Bits` via `codeEquiv` | little-endian integers (instantiation) | consistent: bit `i` of a string is bit `i mod 8` of byte `⌊i/8⌋` |

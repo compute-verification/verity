@@ -1,12 +1,43 @@
-# POUS P3
+# POUS
 
 A server proves it stores an encoding `C` of the weights `W`. Answering a random block within the deadline requires the
-block itself: rebuilding it from a smaller state takes more sequential oracle rounds than the deadline allows. The Lean
-model is `p3Scheme` (`lean/submissions/p3-meets/P3Meets.lean` of the POUS project) over `p3Model'`
-(`pebbling/ColumnAwareDraft.lean`) and `Pous.Model.Invertible`. The concrete primitives are those of the POUS project's
-`docs/p3-instantiation.md`.
+block itself: rebuilding it from a smaller state takes more sequential oracle rounds than the deadline allows.
 
-## The scheme
+Two codecs share everything above the scheme (setup, layout, `vk`, audits):
+
+- **The dense scheme (`dense.DENSE`), the secure-first default** (POUS `docs/scheme-choice-e2e.md`). One layer on the
+  complete DAG, Lean's `chainDense` (`lean/submissions/sponge-dense/SpongeModel.lean` §9).
+- **P3 (`scheme.P3`), the fast research codec.** Two layers with a transpose, Lean's `p3Scheme`
+  (`lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'` (`pebbling/ColumnAwareDraft.lean`) and
+  `Pous.Model.Invertible`.
+
+The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set of parameters names its codec
+(`params.codec`), and every function that takes a codec defaults to it.
+
+## The dense scheme (secure-first)
+
+`dense.SECURE_FIRST` has `B = 512` blocks of `ℓ = 65,560` B per segment, so a segment is 33.6 MB. The audit runs with
+`k = 106` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. Segment `s` is exactly
+`chainDense B ℓ 512 (dom tag_s)`, where `tag_s = salt || u64(s)` plays the role of Lean's 256-bit salt:
+
+~~~text
+dom(tag_s, i)  = tag_s (32 B) || u256(i) (32 B)                  Lean `dom`
+h_0            = 0^ℓ || dom(tag_s, i)            (ℓ + 64 B)      Lean `iv`: the domain is the capacity, no call
+for B in (C_{i-1}, ..., C_0, pad):  (r, h) <- Pi2(B || h)        Lean `ovStep`, `absorbed` (newest first, then pad)
+    r = the first ℓ B (dropped), h = the last ℓ + 64 B (chained)
+key_i          = r of the pad call                              Lean `ovKey`
+C_i            = key_i xor W_i                                  Lean `labelOv`
+pad            = 0x01 || 0..0 || 0x80            (ℓ B)          Lean `padBlk`: the first and last bit
+Pi2            = Feistel10 on 2ℓ + 64 B, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : ℓ + 32]
+~~~
+
+- There is no `P` and no transpose. Block `i` costs `i + 1` calls, so a segment costs `B(B + 1)/2` (131,328), about 8
+  minutes to encode in Python.
+- Decoding recomputes every key from `C`: `W_i = C_i xor key_i`, the rows in parallel, `B` rounds deep (Lean
+  `chainDense.dec`).
+- `vk`, setup and the audit are the ones below. The leaf index `v` is `u16`, so `B ≤ 65,536`.
+
+## P3 (research)
 
 `W` is `N` segments of `n` lower inputs, each a label of `m = n · wc` bits (`n` components of `wc` bits). For segment
 `s`, with `tag_s = salt || u64(s)` and the band graph `B(n, k)` (the `max(k, 1)` nodes before `v`):
@@ -49,20 +80,21 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `oracle` | queries (`HQuery`, `PQuery`/`PinvQuery` with a `Tweak`, `PiQuery`/`PiInvQuery`), programs (`Prog`), `run` with Lean's depth/work/width, `parallel` |
 | `primitives` | `KeyDerivation` and `TweakablePermutation` interfaces; `OverwriteChain` (the default `H`), `RandomOracleKey`, and the broken `XorSponge` and `MiyaguchiPreneel`; the backends `reference`, `heuristic_arx`, `ideal` |
 | `codec` | `Codec(name, encode_segment, decode_segment)`, the seam every module above the scheme uses; `Geometry`, the sizes they read; `split`, `encode_segments` |
-| `scheme` | `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
-| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=P3)` |
-| `setup` | `commit` (streamed over segments), `draw_salt`, `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=P3)`, `server_root`, `check_server_root` |
+| `dense` | `DenseParams(blocks_per_segment, m, segments)`, `SECURE_FIRST`; `encode_segment` and `decode_segment` on bytes; `DENSE`, the two as a codec; `DenseChain` (its `H`), `reference`, `ideal`; the `*_prog` oracle programs |
+| `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
+| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
+| `setup` | `commit` (streamed over segments), `draw_salt`, `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)`, `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds) |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (dense: 106 and 483 µs) |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
 segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to
 `setup.verifier_key(..., encoded=...)` with `W` as its segments for the commitment check.
 
-**A second scheme.** A dense single-layer scheme (POUS `docs/scheme-choice-e2e.md`) needs only its own `Codec` and
-geometry. Setup, the layout, `vk` and the audits take `codec=` and read the geometry's `blocks_per_segment`, `m`,
-`block_bytes`, `segment_bytes`, `segments`, `blocks`, `w_bytes`, `with_segments` and `manifest`.
+**Codecs.** Setup, the layout, `vk` and the audits take `codec=` (default: the parameters' own) and read only the
+geometry: `blocks_per_segment`, `m`, `block_bytes`, `segment_bytes`, `segments`, `blocks`, `w_bytes`, `codec`,
+`with_segments` and `manifest`. Both `dense.DenseParams` and `params.Params` provide it.
 
 ## Stable byte-format surface
 
@@ -146,7 +178,21 @@ The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean'
 `decodeW'`, `Wlab'`, `enc` and `dec` are `P3Meets`' at `n = 220`. Lean evaluates labels lazily, so its encode cases
 stop at `n = 3`.
 
+The dense vectors come from `tests/lean/PousDenseCheck.lean`, which evaluates `chainDense`'s own `labelOv`, `ovKey`,
+`dom`, `iv`, `padBlk` and the decoder's formula with a nonlinear toy `Π₂`. Its `rfl` theorems tie the encoder and
+decoder to `chainDense`'s `enc` and `dec`. Compiled `ovStep` recomputes its call on every bit read, so the evaluated
+cases are small:
+
+- whole encodings of `B ≤ 2` blocks, with the real 512-bit `dom` and with a 4-bit analogue;
+- the absorption order through `ovKey` over four blocks;
+- the `dom`, `iv` and pad layout.
+
+`tests/test_pous_dense.py` also recomputes a segment from the Lean definitions' text and runs setup, per-tensor decode,
+the timed audit and the simulator with the dense codec as default.
+
 ## Not here yet
+
+- A GPU codec for the dense scheme (#172's is P3's).
 
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at
