@@ -409,6 +409,9 @@ def _guarded(fn, base: dict[str, Any], *args) -> dict[str, Any]:
 def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, Any]:
     """Check the tap build at `so` on this GPU and write the sealed record to `<out>/router_tap_exactness.json`."""
     pool = mp.get_context("fork").Pool(max(2, min(32, (os.cpu_count() or 4) - 2)))   # before CUDA: the IR evaluation needs none
+    from verity_vllm.engine import engine_profile as prof
+
+    env_flags = prof.apply_env()                               # the engine's pins (batch invariance, in-process core, no FlashInfer sampler)
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     import torch
@@ -422,6 +425,7 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     installed = sorted(glob.glob(os.path.join(os.path.dirname(vllm.__file__), "_moe_C*.so")))
     doc: dict[str, Any] = {
         "schema": X.SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv, "environment": _environment(), "quick": quick,
+        "env_flags": env_flags,
         "tap": {"so": so, "sha256": _sha256(so), "tap_version": int(tap.tap_version()), "want_version": TAP_VERSION,
                 "build_info": json.loads(Path(so).with_name("build_info.json").read_text()) if Path(so).with_name("build_info.json").exists() else None},
         "installed": {"op": "_moe_C.topk_softmax", "so": {os.path.basename(p): _sha256(p) for p in installed}}, "configs": []}
@@ -439,8 +443,6 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     doc["source"] = _guarded(check_source, {}, so, 7)
     print(f"[router-tap] source {json.dumps({k: v for k, v in doc['source'].items() if k != 'layers'})[:900]}", flush=True)
     if live and not quick:
-        from verity_vllm.engine import engine_profile as prof
-
         tok_dir = prof.checkpoint_for("B0", "manifests/checkpoints.json")["local_path"]
         doc["live"] = {"tokenizer": tok_dir, "models": [_guarded(check_live, {"kind": k}, so, pool, k, tok_dir, out) for k in TINY]}
         for m in doc["live"]["models"]:
