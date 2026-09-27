@@ -102,7 +102,8 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   for r in c.ranges do
     let (span, align) := if r.packed then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
       else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)
-    if r.packed && r.kind != Kind.net c.shaNet then throw "a packed range that is not the compressions'"
+    if r.packed && (r.kind == Kind.net c.hmNet || r.kind == Kind.net c.outNet || r.kind == Kind.mask) then
+      throw "a packed range that a region reads"
     if r.start % align != 0 || r.start + span > 2 ^ c.kLog then throw "a range is not aligned to its span or overruns the block"
     match r.kind with
     | .net i => if (c.nets.getD i default).2.unitLog != r.slotLog then throw "a unit range's slot size is not its circuit's"
@@ -125,13 +126,22 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     throw "the sha512x3 and hm96 circuits' ports are not (cv, msg) x 3 -> out x 3 and (cv, pad, y) -> bc"
   let unit := c.unit
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
-  if ur.size != 1 || ur[0]!.count != c.g * c.upv || !isPow2 ur[0]!.count then
+  if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
+  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words
+  let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
   let g0out := unit.outGroups.getD 0 default
   if unit.inGroups.isEmpty || unit.inGroups.size > 2 || unit.outGroups.isEmpty || unit.outGroups.size > 2
-      || g0in.bits.any (· != 16) || g0out.bits.any (· != 16) then
+      || g0in.bits.any (· != 16) || (!tailOut && g0out.bits.any (· != 16)) then
     throw "the unit's ports are not a group of 16-bit leaf inputs (then cut inputs) and one of 16-bit returned outputs"
+  if tailOut then
+    let nOut := c.outWords
+    let onet := c.nets.getD c.outNet default
+    let oc := portCols onet.2.outGroups
+    if !onet.1.startsWith "stage" || c.outNetPorts != Array.range oc.size || oc.size != nOut || oc.any (·.2 != 16)
+        || onet.2.outGroups.size != 1 || !isPow2 (16 * nOut) || c.leavesOut.any (!·.isEmpty) then
+      throw "the returned outputs are not the last stage's only output group: one 16-bit port per output word"
   for r in c.ranges do
     if let .net n := r.kind then
       if r.count != c.g * c.perVu.getD n 0 then throw s!"a range of {(c.nets.getD n default).1} is not {c.perVu.getD n 0} slots per VU"
@@ -150,6 +160,16 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
     wired := match wired.findIdx? (·.1 == w.dst) with
       | some i => wired.modify i fun (k, v) => (k, v + 1)
       | none => wired.push (w.dst, 1)
+  -- a leaf cut wires a unit's cut input from a row word
+  let nInW := c.inWords
+  let pcu := portCols unit.inGroups
+  for (u, j, leaf) in c.leafCuts do
+    if u ≥ c.upv || j < g0in.bits.size || j ≥ pcu.size || pcu[j]!.2 < 16 || leaf ≥ nInW then
+      throw "a leaf cut outside the unit's cut inputs or the rows"
+    let key := (c.unitNet, u, j)
+    wired := match wired.findIdx? (·.1 == key) with
+      | some i => wired.modify i fun (k, v) => (k, v + 1)
+      | none => wired.push (key, 1)
   for n in [0:c.nets.size] do
     if n == c.shaNet || n == c.hmNet then continue
     let net := (c.nets.getD n default).2
@@ -161,11 +181,12 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let nIn := c.inWords
   let nOut := c.outWords
   if c.leavesIn.size != c.upv || c.leavesOut.size != c.upv then throw "the leaf maps are not one per unit"
-  let mut seen : Array Bool := Array.replicate nOut false
+  -- a tail that returns the outputs returns every one of them (the units return none)
+  let mut seen : Array Bool := Array.replicate nOut tailOut
   for u in [0:c.upv] do
     let li := c.leavesIn[u]!
     let lo := c.leavesOut[u]!
-    if li.size != g0in.bits.size || li.any (fun x => x < -1 || x ≥ (nIn : Int)) || lo.size != g0out.bits.size then
+    if li.size != g0in.bits.size || li.any (fun x => x < -1 || x ≥ (nIn : Int)) || (!tailOut && lo.size != g0out.bits.size) then
       throw s!"unit {u}'s leaf maps are not its circuit's ports"
     for o in lo do
       if o ≥ nOut || seen[o]! then throw s!"output leaf {o} is outside the outputs or returned twice"
@@ -295,6 +316,17 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   | _ => pure ()
   let shaNet ← netOf SHA_NET
   let hmNet ← netOf HM_NET
+  let outNet ← netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
+  let outNetPorts ← match mj.getObjVal? "out_net_ports" with
+    | .ok (.arr a) => a.mapM (J.asNat · "out_net_ports")
+    | _ => pure #[]
+  let leafCuts ← match mj.getObjVal? "leaf_cuts" with
+    | .ok (.arr a) => a.mapM fun w => do
+      let x ← J.asArr w "a leaf cut"
+      if x.size != 4 then throw "META: a leaf cut is not [circuit, unit, port, leaf]"
+      if (x[0]!.getStr?).toOption != some "unit" then throw "META: a leaf cut into anything but a unit"
+      pure (← J.asNat x[1]! "a leaf cut", ← J.asNat x[2]! "a leaf cut", ← J.asNat x[3]! "a leaf cut")
+    | _ => pure #[]
   let wires ← match mj.getObjVal? "wires" with
     | .ok w => (← J.asArr w "wires").mapM fun x => do
       let a ← J.asArr x "wire"
@@ -313,7 +345,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj }
+                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts }
   check c tags leafScheme
   return c
 
@@ -374,6 +406,14 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
           msgCol g p (2 * (x - starts[p]!) + t / 8) (t % 8)
         let i := base + leafCols.getD j 0 + t
         d := d.push (i, i) |>.push (i, src)
+  let pc := portCols unit.inGroups
+  for g in [0:c.g] do
+    for (u, j, leaf) in c.leafCuts do
+      let p := ((List.range starts.size).reverse.find? (fun q => starts[q]! ≤ leaf)).getD 0
+      let dst := c.slotCol c.unitNet g u + pc[j]!.1
+      for t in [0:pc[j]!.2] do
+        let src := if t < 16 then msgCol g p (2 * (leaf - starts[p]!) + t / 8) (t % 8) else zero
+        d := d.push (dst + t, dst + t) |>.push (dst + t, src)
   for g in [0:c.g] do
     for w in c.wires do
       let dc := (portCols (c.nets.getD w.dst.1 default).2.inGroups).getD w.dst.2.2 default
@@ -576,6 +616,19 @@ def regions (c : Circuit) (pub : Public) : V (Array Region) := do
       fun b => (Array.range c.g).foldl (fun acc g => acc ++ match c.instOf pub.n b g with
         | some i => pub.digest i p np
         | none => c.dummyDigests.getD p ByteArray.empty) ByteArray.empty)
+  if c.outNet != c.unitNet then
+    -- the last stage's output group is the output words (one slot per VU)
+    let onet := (c.nets.getD c.outNet default).2
+    let r := c.rangeOf c.outNet
+    let nOut := c.outWords
+    let tz := fun (x : Nat) => (List.range 64).find? (fun i => x % 2 ^ (i + 1) != 0) |>.getD 0
+    return out.push (← mkRegion kl "out" (bits 0 (tz (16 * nOut)) ++ bits r.slotLog (tz r.count))
+      (r.start + (onet.outGroups.getD 0 default).col * WORD) fun b => (Array.range c.g).foldl (fun acc g =>
+        (Array.range nOut).foldl (fun acc o =>
+          let v := match c.instOf pub.n b g with
+            | some i => pub.outputs.getD (i * nOut + o) 0
+            | none => c.dummyOutputs.getD o 0
+          acc.push (v % 256).toUInt8 |>.push (v / 256).toUInt8) acc) ByteArray.empty)
   return out.push (← c.outRegion pub)
 
 end HmRow

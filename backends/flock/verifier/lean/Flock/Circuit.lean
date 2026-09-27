@@ -82,6 +82,12 @@ structure Circuit where
   classSha : ByteArray := ByteArray.empty
   /-- META, for its bindings (`program_sha512`, `partition`) -/
   metaJ : Json := Json.null
+  /-- the circuit whose output group holds the returned outputs: the unit, or (a tail that returns them) its last stage -/
+  outNet : Nat := 0
+  /-- `outNet`'s output ports that are the output words (a stage), in output-leaf order (META `out_net_ports`) -/
+  outNetPorts : Array Nat := #[]
+  /-- the unit inputs that are row words (`(unit, input port, leaf)`): the low 16 bits are the word's message bits -/
+  leafCuts : Array (Nat × Nat × Nat) := #[]
   deriving Inhabited
 
 namespace Circuit
