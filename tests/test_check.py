@@ -51,3 +51,26 @@ def test_the_steps_see_the_trees_packages_only(monkeypatch):
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/workspace/research/cache/pycache")
     env = CHECK.env()
     assert "PYTHONPATH" not in env and "RESEARCH_SOURCE_SHA" not in env and "PYTHONPYCACHEPREFIX" not in env
+
+
+def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
+    (pt,), (cc,), (lean,) = CHECK.groups(tmp_path, 16)
+    assert pt[1][pt[1].index("-n") + 1] == "8" and cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
+    assert lean[0] == "lean" and "--cache" not in CHECK.groups(tmp_path, 16, cache=False)[1][0][1]
+
+
+def test_the_pytest_cache_key_is_the_tree_the_environment_and_the_arguments(tmp_path, monkeypatch):
+    (tmp_path / "a.txt").write_text("a")
+    d = CHECK.tree_digest(tmp_path)
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "x.pyc").write_bytes(b"x")
+    assert CHECK.tree_digest(tmp_path) == d                                        # bytecode is not the tree
+    (tmp_path / "a.txt").write_text("b")
+    assert CHECK.tree_digest(tmp_path) != d
+    argv = ["py", "-m", "pytest", "-q", "-n", "8"]
+    e = CHECK.env()
+    k = CHECK.pytest_key(argv, e)
+    assert CHECK.pytest_key(["py", "-m", "pytest", "-q", "-n", "2"], e) == k       # the worker count computes nothing
+    assert CHECK.pytest_key(argv, {**e, "PWD": "/elsewhere"}) == k
+    assert CHECK.pytest_key(argv, {**e, "VERITY_X": "1"}) != k and CHECK.pytest_key(argv + ["-k", "x"], e) != k
