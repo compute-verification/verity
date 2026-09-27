@@ -42,10 +42,10 @@ def upstream_verdicts(a):
 
 
 def archived(a, path):
-    """Hold `path` in the run's archive, `OUT/archive/sha256/<hex>`, and return its digest: the Lean verifier loads the
+    """Hold `path` in the run's archive, `OUT/archive/sha512/<hex>`, and return its SHA-512: the Lean verifier loads the
     statement's objects by content (PROTOCOL.md §16.8)."""
-    h = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-    d = a.out / "archive" / "sha256"
+    h = hashlib.sha512(Path(path).read_bytes()).hexdigest()
+    d = a.out / "archive" / "sha512"
     d.mkdir(parents=True, exist_ok=True)
     if not (d / h).exists():
         try:
