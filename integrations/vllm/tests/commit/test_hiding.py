@@ -39,6 +39,16 @@ def test_batch_path_is_the_core_reference_on_its_vectors():
     assert [bytes(m).hex() for m in masks] == [hm96.mask(hm96.DEFAULT_KEY, bytes.fromhex(c["salt"])).hex() for c in cases]
 
 
+def test_batch_path_is_the_core_reference_for_hm96_sha512():
+    h = hiding.HidingLeaves(instance=hm96.SHA512)
+    cases = V.load(hm96.SHA512)["leaves"]
+    inner = [bytes.fromhex(c["inner_digest"]) for c in cases]
+    salts = b"".join(bytes.fromhex(c["salt"]) for c in cases)
+    assert [x.hex() for x in h.leaves_with(inner, salts)] == [c["leaf"] for c in cases]
+    leaves, fresh = h.leaves(inner)
+    assert len(fresh) == 192 * len(inner) and leaves[1] == h.leaf(inner[1], fresh[192:384])
+
+
 def test_batch_path_matches_core_over_many_leaves_and_fresh_salts():
     h = hiding.HidingLeaves(hm96.fresh_key())
     inner = [os.urandom(32) for _ in range(5000)]              # more than one numpy batch
@@ -97,6 +107,17 @@ def test_roots_bind_the_leaf_scheme_and_default_leaves_are_unchanged():
     assert not plain.verify(run_plain, Opening(op.step, op.index, op.value, op.path, op.identity, hm96.fresh_salt()))
     assert run_plain.extra["salt_bytes"] == 0
     assert run_hidden.persistent_bytes - run_plain.persistent_bytes == run_hidden.extra["salt_bytes"]
+
+
+def test_the_leaf_rule_takes_the_instances_salt_size():
+    c = committer()
+    c.hiding = hiding.HidingLeaves(instance=hm96.SHA512)          # what wiring hm96-sha512 at the re-baseline will configure
+    inner, salt = os.urandom(64), hm96.SHA512.fresh_salt()
+    assert c._salt_bytes() == 192
+    assert c._leaf_rule([inner], salt) == [c.hiding.leaf(inner, salt)]
+    assert c._leaf_rule([inner], salt[:128]) is None
+    c._salts[3] = salt * 2
+    assert not c._unsalted(3, 2) and c._unsalted(3, 3) and c._salts_of(3, 1, 2) == salt
 
 
 def test_the_context_suffix_keeps_the_context_encoding_injective():
