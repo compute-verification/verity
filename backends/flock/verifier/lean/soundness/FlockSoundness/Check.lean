@@ -10,9 +10,7 @@ The proved results must depend only on Lean's three standard axioms (`propext`,
 of the theorems that use them, never `axiom` declarations, so they cannot appear here.
 
 `rep_sound` and `table_sound` still show `sorryAx`, from three phase lemmas of `RepSound` (zerocheck,
-lincheck, Ligerito), the shared list-size lemma `closeMsgs_card_le`, and `link_sound`; that
-disappears when they are proved. The opening phase is proved for any list size
-(`opening_phase_of_card`).
+lincheck, Ligerito) and `link_sound`; that disappears when they are proved.
 -/
 
 -- the interaction model and the repetition theorem
@@ -35,8 +33,10 @@ disappears when they are proved. The opening phase is proved for any list size
 #print axioms FlockSoundness.Rewinding.prBad_le
 #print axioms FlockSoundness.Compiled.compile_step
 #print axioms FlockSoundness.Compiled.compile_step_prefix
--- the opening phase, for any list size
+-- the list size (ArkLib's Johnson bound) and the opening phase
+#print axioms FlockSoundness.closeMsgs_card_le
 #print axioms FlockSoundness.opening_phase_of_card
+#print axioms FlockSoundness.opening_phase
 -- the theorem: `rep_sound` is proved from four phase lemmas and `table_sound` from `rep_sound` and
 -- `link_sound`; the phase lemmas and `link_sound` are still `sorry`
 #print axioms FlockSoundness.rep_sound

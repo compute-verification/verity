@@ -1,6 +1,7 @@
 import FlockSoundness.Defs
 import FlockSoundness.Rounds
 import FlockSoundness.OpeningPhase
+import FlockSoundness.ListSize
 
 /-!
 # One rep is sound
@@ -85,17 +86,11 @@ theorem lincheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
       ENNReal.ofReal (εLc sch (S.shape mPts)) := by
   sorry
 
-/-! ## The list size (shared by every phase) -/
+/-! ## The opening phase
 
-open Classical in
-/-- **The list size.** At most `listBound₀` messages encode within the level-0 radius of any table
-(`25·2^r` at rate `2^-r`: ArkLib's Johnson bound `irs_lambda_le_johnson_mds` for the level-0
-interleaved Reed–Solomon code, `1/(2ηρ)`). *Status: to prove*, once `Model.encode` is identified
-with ArkLib's interleaved code through `Arith.Correct.xhat_poly`. -/
-theorem closeMsgs_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (m : ℕ)
-    (hsch : fast100 m = some sch) (C : Oracle F) :
-    (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ sch.listBound₀ := by
-  sorry
+Every phase pays a union bound over the list of codewords near the committed table, whose size is
+`closeMsgs_card_le` (`ListSize`: ArkLib's Johnson bound for the level-0 interleaved Reed–Solomon
+code). -/
 
 theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ≥0∞) / 2 ^ 128 := by
   unfold qF
@@ -105,7 +100,7 @@ theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ
 /-- **Opening.** Per claim, a wrong message survives its seven coins `r''` with probability at
 most `7/|F|` (the injective recombination over GF(2) of paper Appendix B), and the batch `γ`
 keeps a false claim false except with probability `1/|F|`; times the list bound. Proved in
-`OpeningPhase` for any list size (`opening_phase_of_card`), from the list size above. -/
+`OpeningPhase` for any list size (`opening_phase_of_card`), with `closeMsgs_card_le`. -/
 theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (h7 : 7 ≤ S.m) (mPts : ℕ) (C : Oracle F)
     (extra : List (Claim F S.m)) (hextra : extra.length = 2 * S.regions.length)

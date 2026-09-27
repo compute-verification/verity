@@ -20,3 +20,4 @@ import FlockSoundness.Merkle
 import FlockSoundness.Rewinding
 import FlockSoundness.Compiled
 import FlockSoundness.OpeningPhase
+import FlockSoundness.ListSize
