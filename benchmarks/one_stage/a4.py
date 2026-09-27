@@ -12,6 +12,10 @@ registration, one draw and one integrity profile, with the Lean verifier derivin
 * **`--served DIR`** holds `registration.json`, `index.json` and per member k `m<k>-pub-<n>.bin` and `m<k>-inst-<n>.bin`
   (prover only). For each member the verifier composes the bound circuit itself and holds the file's pin, bindings, global
   unit indices and served domains to it; then R1-R6 over one registration.
+* **GEMM members** use M0's shared-row files (flock-netlist handoff 20260927T0905Z): header `shared_rows` gives each input
+  port's table size, and the public file lists every instance's row references. The references must be exactly what the
+  layout's grid rule gives (`gemm-grid/v0`: instance i of group g, j = i - base_g, reads `x` row `x_base + j div columns`
+  and `w` row `w_base + j mod columns`); the verifier checks all of them against its own copy of the rule before the draw.
 * **One draw** of `subset:k` over the whole population by the verifier's Lean `flock-verify draw`; each member's server
   serves its share (`serve --draw-file`). Each member's session is one table; Lean verifies each with `--partition` and
   `--program` (units derived).
@@ -45,10 +49,42 @@ def member_ports(meta: dict, n: int, row_map: dict | None) -> dict[str, tuple[st
     if not row_map:
         return a0.ports(meta, n)
     groups = row_map["groups"]
-    rows = {"x": max(g["x_base"] + g["tokens"] for g in groups), "w": max(g["w_base"] + g["columns"] for g in groups)}
+    rows = {"x": max(g["x_base"] + g["tokens"] for g in groups), "w": max(g["w_base"] + g["columns"] for g in groups)}   # the table sizes
     out = {name: (ROW, rows[name]) for name, *_ in meta["ports"]}
     out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
     return out
+
+
+def grid_refs(row_map: dict, n: int):
+    """Every instance's (x row, w row) under the grid rule, as an n x 2 uint32 array."""
+    import numpy as np
+    out = np.empty((n, 2), dtype=np.uint32)
+    at = 0
+    for g in row_map["groups"]:
+        size = g["tokens"] * g["columns"]
+        j = np.arange(size, dtype=np.int64)
+        out[at:at + size, 0] = g["x_base"] + j // g["columns"]
+        out[at:at + size, 1] = g["w_base"] + j % g["columns"]
+        at += size
+    if at != n:
+        raise ValueError(f"the grid covers {at} instances, the member has {n}")
+    return out
+
+
+def check_shared_rows(pub: Path, header: dict, meta: dict, n: int, row_map: dict) -> dict:
+    """M0's shared-row file against the grid rule: `shared_rows` sizes, and every instance's references."""
+    import numpy as np
+    want = grid_refs(row_map, n)
+    sizes = {"x": int(want[:, 0].max()) + 1, "w": int(want[:, 1].max()) + 1}
+    ports = [name for name, *_ in meta["ports"]]
+    ok = {"shared_rows": header.get("shared_rows") == {p: sizes[p] for p in ports}}
+    with open(pub, "rb") as f:
+        f.readline()
+        f.seek(sum(sizes[p] for p in ports) * 128, 1)
+        refs = np.frombuffer(f.read(n * len(ports) * 4), dtype="<u4").reshape(n, len(ports))
+    ok["refs"] = bool(ok["shared_rows"]) and refs.shape == (n, len(ports)) and bool(
+        (refs == want[:, [("x", "w").index(p) for p in ports]]).all())
+    return ok
 
 
 def link(src: Path, dst: Path) -> None:
@@ -126,8 +162,11 @@ def main() -> int:
               "program": meta.get("program_sha512") == part["program"],
               "indices": header["units"]["indices"] == list(range(m["base"], m["base"] + m["n"])),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m["n"],
-              "template_program": meta.get("program_digests", {}).get(m["defn"].id) == program_digest(Program(m["defn"])),
-              "row_map": (meta.get("row_map") == m["row_map"]) if m["row_map"] else "row_map" not in meta}
+              "template_program": meta.get("program_digests", {}).get(m["defn"].id) == program_digest(Program(m["defn"]))}
+        if m["row_map"]:
+            ok.update(check_shared_rows(st_dir / f"pub-{m['n']}.bin", header, meta, m["n"], m["row_map"]))
+        else:
+            ok["no_shared_rows"] = "shared_rows" not in header
         for port, (schema, leaves) in member_ports(meta, m["n"], m["row_map"]).items():
             name = f"{m['tid']}/{port}"
             want[name] = {"leaves": leaves, "domain": R.served_domain(part["program"], pd, name, schema, leaves, run_id)}
