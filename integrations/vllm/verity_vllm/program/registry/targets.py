@@ -31,6 +31,7 @@ from typing import Any
 from verity.ir.defs import bind
 from verity.ml.prims import HopperBF16WgmmaDot16
 from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -112,6 +113,34 @@ def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     if D <= 128:
         return 128
     raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
+
+
+def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
+    """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
+    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128."""
+    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
+    one_wg = D in (64, 128) and seqlen_q * qh <= 64
+    if D <= 64:
+        return 64 if one_wg else 192
+    if D <= 96:
+        return 192
+    if D <= 128:
+        return 64 if one_wg else 128
+    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
+
+
+def fa3_check_inf(profile) -> bool:
+    """True when the target builds FA3's attention rows with the per-iteration `Check_inf` chain (`Attention_v4`):
+    an effective FA3 target declaring `fa3_construction = "check-inf-per-iteration"`."""
+    construction = getattr(profile, "effective_fa3_construction", None)
+    return profile.effective_flash_attn_version() == 3 and construction is not None and construction() == "check-inf-per-iteration"
+
+
+def fa3_masked_from(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int) -> int:
+    """`MASKED_FROM` of an `Attention_v4` row: the FA3 tile's `n_block_min_causal_local_mask` for query row `row` of its sequence (its
+    index among the sequence's query rows in the launch; `seqlen_q` = the launch's max_seqlen_q, which picks the tile)."""
+    g = max(1, int(NH) // max(1, int(KVH)))
+    return F3.fa3_masked_from(T, fa3_kblock_n(D, seqlen_q, g), row, fa3_tile_m(D, seqlen_q, g), g)
 
 
 class LaunchContextConflict(ValueError):
@@ -217,11 +246,17 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
-def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int):
-    """The registered attention Definition of one query row with T visible keys on the declared target."""
+def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None):
+    """The registered attention Definition of one query row with T visible keys on the declared target.  Under the FA3 per-iteration
+    `Check_inf` construction (`fa3_check_inf`) the row's index among its sequence's query rows in the launch (`row`) selects its tile."""
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if uses_accepted_kinds(profile):
         return bind(b1.AttentionV3, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
+    if fa3_check_inf(profile):
+        if row is None:
+            raise UnregisteredTarget("fa3_construction check-inf-per-iteration: the row's index among its sequence's query rows is not known")
+        return bind(F3.AttentionV4, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
+                    MASKED_FROM=fa3_masked_from(profile, T, NH, KVH, D, seqlen_q, row))
     return bind(b1.AttentionV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"])
 
 
@@ -236,11 +271,13 @@ def describe(profile) -> dict[str, Any]:
             "gemm_target": gt.key, "tuned_gemm_arch_family": gt.vllm_arch_family, "tuned_gemm_keys": sorted(f"{n},{k}" for n, k in gt.tuned_table),
             "gemm_kind": "Gemm_v1{K,N}" if uses_accepted_kinds(profile) else f"Gemm_v2{{K,N,DOT={t['dot_id']}}}",
             "attention_kind": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}" if uses_accepted_kinds(profile)
+            else f"Attention_v4{{T,NH,KVH,D,BN=fa3_kblock_n(D,seqlen_q,NH/KVH),DOT={t['dot_id']},INV=Fa3InvSum_v1,MASKED_FROM}}"
+            if v == 3 and fa3_check_inf(profile)
             else f"Attention_v2{{T,NH,KVH,D,BN={'fa2_kblock_n(D)' if v == 2 else 'fa3_kblock_n(D,seqlen_q,NH/KVH)'},DOT={t['dot_id']},"
                  f"INV={'Fa2InvSum_v1' if v == 2 else 'Fa3InvSum_v1'}}}",
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
-           "check_flash_attn_registered", "fa3_kblock_n", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
+           "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
