@@ -423,7 +423,7 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
 
 The hypotheses are BCHKS25 Theorem 4.6 and the lowerings.
 
-**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12.6):
+**The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`; DESIGN.md §12):
 
 - `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
   extractor**. Extraction failure and link failure are probabilities over the extractor's runs (`ExtractionAnalysis`),
