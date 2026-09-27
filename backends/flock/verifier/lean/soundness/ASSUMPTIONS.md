@@ -201,9 +201,10 @@ fallback anywhere.
 
 - **The lemma it rests on:** special honest-verifier ZK of masked Flock. That is a simulator, from the public statement
   alone, for every fixed coin sequence: VEIL's notion, and the first zero-knowledge theorem to prove.
-- **Keeping a malicious verifier from choosing coins adaptively, across concurrent sessions.** DESIGN.md §11 recommends
-  global serialization now: per-round coin commitments and a Goldreich–Kahan simulator, collision resistance only, no
-  setup. If concurrency is required, it recommends a Prabhakaran–Rosen–Sahai preamble. **Decision, with Daniel.**
+- **Keeping a malicious verifier from choosing coins adaptively, across concurrent sessions.** DESIGN.md §11.1
+  recommends batching: serialized sessions, each carrying every table from a time window and proved in parallel, with
+  one step-0 coin commitment. It needs a single-rewind Goldreich–Kahan simulator, collision resistance only, and no
+  setup. Prabhakaran–Rosen–Sahai is costed there as the fallback. **Decision, with Daniel.**
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
@@ -227,9 +228,9 @@ The weights are committed once and every later proof opens that root. The analys
   weights.
 - **Hiding** is fixed by the leaf count, not by the number of proofs. **Design change:** draw the root's key at
   commitment, and never reuse salts.
-- **Zero knowledge** must hold against a malicious verifier across concurrent sessions (§6). DESIGN.md §11 recommends
-  global serialization now, and a Prabhakaran–Rosen–Sahai preamble if concurrency is required. **Decision, with
-  Daniel.**
+- **Zero knowledge** must hold against a malicious verifier (§6). DESIGN.md §11.1 recommends serialized sessions that
+  each batch a time window's tables, so throughput comes from parallel proving rather than concurrency. **Decision,
+  with Daniel.**
 - **Statement leakage** accumulates over sessions. **Policy needed:** which predicates are public, and how many.
 - **Linkability** is intended, and it needs knowledge soundness (§1.3).
 

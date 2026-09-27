@@ -511,3 +511,71 @@ verifier):
    also sidestep quantum rewinding (§9), which (a) and (d) would need.
 
 All four rest on the SHVZK lemma for masked Flock, which is the first zero-knowledge theorem to prove.
+
+### 11.1 Batching inside one serialized session (Daniel's route, 2026-09-27)
+
+Daniel's constraints are exactly one verifier and no trusted third parties (so no beacon), and throughput matters. His
+route: one session carries every table from a time window, and many GPUs or datacenters prove them in parallel. The
+verifier commits once, at step 0, to the whole coin schedule. Sessions are serialized, and each is arbitrarily large.
+
+1. **Zero knowledge needs only the sequential, single-rewind simulator.**
+   - A session is one protocol with one commitment, however many tables and machines it spans. What forces repeated
+     rewinding is several commitments interleaved in time.
+   - The Goldreich–Kahan simulator makes one extraction phase: an honest prover on a dummy witness. That is
+     indistinguishable from a real run until the final openings, because every earlier message is masked and those
+     openings come after the last coin. It then rewinds once, to just after step 0, and simulates every table from the
+     extracted coins by SHVZK. The tables' masks are independent, so their simulations compose. The simulator runs in
+     expected polynomial time, handling aborts as Goldreich–Kahan do.
+   - Serialized sessions compose sequentially.
+   - **Conditions:** every prover machine checks each revealed coin against the same step-0 commitment before answering.
+     No other interactive zero-knowledge protocol with the verifier (predicates, openings, recursion's outer proof) runs
+     alongside a session, unless it is straight-line.
+2. **Sharing coins across tables costs no soundness.** Each table's bound holds for every prover strategy, and the other
+   tables are just part of that strategy. Each table's coins are still uniform, so the union bound gives
+   `Σ tableError` over the session's tables, exactly as for separate sessions. Three conditions:
+   - every table's statement and root is in round 0, before any coin;
+   - a round's coins are released only after that round's bytes are recorded for every table that uses them. With
+     identical coins that is a barrier across machines. Streams derived per table from the one commitment
+     (domain-separated) avoid the barrier and keep the single rewind;
+   - the two reps of one table keep independent coins, derived per (rep, round). Squaring 2^-97.8 into 2^-195.5 needs
+     it.
+3. **Latency.** A session lasts one machine's proving work plus about 220 round trips, paced by the slowest machine. With
+   tables spread across GPUs, that work is about one table, 0.5–1 s.
+   - That gives about 1–2 s with a co-located coin server, 3–16 s across datacenters in one region, and 11–33 s across a
+     border.
+   - Sessions run back to back, so the batching window equals the session length, and a table waits at most window plus
+     session: twice the session length.
+   - Throughput scales with machines, not concurrency, until prover memory limits the tables a machine holds in lockstep.
+   - The one verifier can run a coin-server instance beside each datacenter, all opening the one committed schedule.
+     That keeps round trips sub-millisecond everywhere.
+
+**If batching failed: Prabhakaran–Rosen–Sahai costs.**
+
+- **Structure.** The verifier commits to its secret σ and to 2k² shares of it (`σ⁰ᵢⱼ ⊕ σ¹ᵢⱼ = σ`). Then come k slots,
+  each one round trip: the prover sends k random bits, and the verifier opens one share of each of k pairs.
+- **Slots.** A session gets the simulator stuck with probability at most `2^-(k − O(h))`, where h ≈ log₂ of all slots in
+  the schedule, union-bounded over the N concurrent sessions. So `k ≈ λ + log₂ N + O(log(N·k))` for simulation error
+  2^-λ. Taking the hidden constant as 2, that is about 125 slots at λ = 80, N = 2^10, and 170–210 at λ = 128,
+  N = 2^10–2^20: 55–95% more round trips than Flock's 220.
+- **Growth.** k grows by about 3 slots per doubling of N, and does not depend on session size.
+- **Per-session overhead.** 2k² commitments to σ, plus k² openings.
+  - In Prabhakaran–Rosen–Sahai, σ is the verifier's challenge, and ours is a whole coin schedule: about 20 KB per
+    table schedule, or 4–5 KB if coins are cut to the bits used. So the shares alone are 0.1–2 GB per session.
+  - Protecting a short trapdoor instead means an FLS-style OR-branch in the proved circuit and a
+    witness-indistinguishable argument for it: a redesign.
+- **Lean.**
+  - A malicious-verifier ZK framework for the `Game` model (views, simulators, rewinding access).
+  - The Goldreich–Kahan simulator, about 1,000–1,500 lines, which batching needs too.
+  - The recursive simulator and its random-tape counting argument, about 3,000–5,000 lines; Pass–Tseng–
+    Venkitasubramaniam's simplified analysis is the one to formalize.
+
+  That is several times the knowledge-soundness work.
+- **"Exactly one verifier"** does not simplify it, because the concurrent model already has one adversarial verifier
+  controlling every session. It does make global serialization enforceable, with no identities to multiply. It also
+  makes registered keys trivial: one key, registered once with no concurrency, then straight-line simulation, at the
+  price of a public-key assumption (LWE).
+
+**Recommendation: batching.** It meets throughput with serialized sessions, and needs only collision resistance plus the
+single-rewind simulator we need anyway. Prabhakaran–Rosen–Sahai's rounds, bandwidth and proof stay off the table. If
+real concurrency is ever needed, a single registered verifier key is cheaper than Prabhakaran–Rosen–Sahai, if LWE is
+acceptable.
