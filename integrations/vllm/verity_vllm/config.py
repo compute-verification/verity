@@ -291,8 +291,8 @@ class CommitConfig:
                                 "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
     guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="0",
                                   help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
-                                       "first key block (verity_vllm.query.guarded_max), written by the guarded-max FA2/FA3 tap build; the "
-                                       "manifest's query header and the run root then differ from the record")
+                                       "first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written by the "
+                                       "guarded-max FA2/FA3 tap build; the manifest and the run root then differ from the record")
     router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
                              help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
                                   "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "

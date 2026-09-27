@@ -296,6 +296,58 @@ def ScaledMmFp8Block(B, S, xq, sx, w, ws):
     return _Coll(Array(N, BF16), concat([p.refs for p in parts]))
 
 
+# ---------------------------------------------------------------------------------------------------------
+# the same blockwise GEMM with each weight block's scale products computed once (opt-in: nothing binds it until the re-baseline).
+# `ScaledMmFp8Block_v1` forms `s = FMUL(sx[kb], sw[kb])` inside every coordinate, so the G coordinates of one weight block compute
+# the same K/G products in G units: G - 1 recomputes of each.  Here a weight block's products are one node its G coordinates read,
+# and the partition commits them: K/G f32 words per weight block, N/G * K/G per Call.
+# ---------------------------------------------------------------------------------------------------------
+
+
+@composite("ScaledMmFp8BlockCoordinateGivenScale", 1, ["K", "G"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("s", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3))), BF16),
+           conformance=_BLOCK_CONF)
+def ScaledMmFp8BlockCoordinateGivenScale(B, S, xq, s, wrow):
+    """`ScaledMmFp8BlockCoordinate{K,G}` with the tile scales `s[kb] = FMUL(sx[kb], sw[kb])` read, not computed."""
+    K, G = S.K, S.G
+    assert K % G == 0 and G % 32 == 0, (K, G)
+    acc = B.call(b1.ZERO32)
+    for kb in range(K // G):
+        temp = B.call(b1.ZERO32)
+        for st in range(G // 32):
+            lo = kb * G + 32 * st
+            temp = B.call(HopperE4m3QgmmaDot32, temp, xq[lo:lo + 32], wrow[lo:lo + 32])
+        acc = B.call(P.F32Fma, temp, s[kb], acc)
+    return B.call(P.F2fpBf16, acc)
+
+
+@composite("ScaledMmFp8BlockSharedScaleTile", 1, ["K", "G"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.G, Array(S.K, E4M3))),
+                       ("sw", Array(S.K // S.G, F32))), Array(S.G, BF16)),
+           conformance=_BLOCK_CONF)
+def ScaledMmFp8BlockSharedScaleTile(B, S, xq, sx, w, sw):
+    """One weight block's G output words: its K/G scale products `FMUL(sx[kb], sw[kb])` once, then the G coordinates reading them."""
+    s = B.batch(P.F32Mul, sx, sw, axes=(0, 0))
+    return B.batch(bind(ScaledMmFp8BlockCoordinateGivenScale, K=S.K, G=S.G), xq, s, w, axes=(None, None, 0))
+
+
+@composite("ScaledMmFp8BlockSharedScale", 1, ["K", "N", "G"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
+                       ("ws", Array(S.N // S.G, Array(S.K // S.G, F32)))), Array(S.N, BF16)),
+           conformance=_BLOCK_CONF)
+def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
+    """`ScaledMmFp8Block_v1{K,N,G}`'s function and signature, each weight block's scale products computed once: the N/G weight blocks
+    (`ScaledMmFp8BlockSharedScaleTile`), block nb over the weight rows `w[nb*G:(nb+1)*G]` and the scale row `ws[nb]`."""
+    K, N, G = S.K, S.N, S.G
+    assert N % G == 0, (N, G)
+    blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
+    out = B.batch(bind(ScaledMmFp8BlockSharedScaleTile, K=K, G=G), xq, sx, blocks, ws, axes=(None, None, 0, 0))
+    return _Coll(Array(N, BF16), out.refs)
+
+
+#: each restated GEMM by the Definition it restates (the re-baseline binds these instead)
+SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
+
 FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate, ScaledMmFp8Block]
 
 

@@ -18,7 +18,7 @@ from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 
 
 #: [R17 dense, ruling R17-11] the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units (R17-10 (3))
-ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2")
+ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4")
 
 
 def _phase(step: int, last_step: int) -> str:
