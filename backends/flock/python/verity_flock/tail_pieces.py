@@ -613,4 +613,4 @@ PIECES = {
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
 #: primitive families whose id carries a width: pattern -> piece
-FAMILIES = {r"BitAtx\d+_v1": bit_at}
+FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16}
