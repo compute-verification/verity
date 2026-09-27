@@ -147,7 +147,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7541)
     ap.add_argument("--session-m0-pythonpath", default=None,
                     help="run the sessions on copies re-headered for the circuit this M0 tree composes (after the checks)")
+    ap.add_argument("--statement", default=a0.STATEMENT_ID,
+                    help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
     a = ap.parse_args()
+    a0.STATEMENT_ID = a.statement
     out, served, sets_root = Path(a.out), Path(a.served), Path(a.template_sets)
     out.mkdir(parents=True, exist_ok=True)
     lay = json.loads(Path(a.layout_file).read_text())[a.layout]
@@ -165,7 +168,7 @@ def main() -> int:
     part = P.partition(program, query)
     pd = P.digest(part)
     n_all = P.units(program, query)
-    summary: dict = {"layout": a.layout, "population": n_all, "partition": pd, "k": a.k, "delta": a.delta,
+    summary: dict = {"layout": a.layout, "population": n_all, "partition": pd, "k": a.k, "delta": a.delta, "statement": a.statement,
                      "members": [{"k": m["k"], "template": m["tid"], "n": m["n"], "base": m["base"]} for m in members],
                      "expected_draws": expected_draws(members, n_all, a.k)}
     if pd != lay["digest"]:

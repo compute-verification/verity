@@ -55,7 +55,7 @@ if [ "${RUN:-a0}" = a4 ]; then
   fi
   $W/py/bin/python benchmarks/one_stage/a4.py --served $SERVED --template-sets $W/set --layout ${LAYOUT:-P6} $SESSION \
     ${LAYOUT_FILE:+--layout-file $SERVED/$LAYOUT_FILE} --m0-pythonpath $CHECK_M0 --bin $W/bin/flock-circuit --lean $W/bin/flock-verify \
-    --out $O/a4 --k ${K:-1024} ${DELTA:+--delta $DELTA} 2>&1 | tee $O/a4.log | cut -c1-4000
+    --out $O/a4 --k ${K:-1024} ${DELTA:+--delta $DELTA} ${STATEMENT:+--statement $STATEMENT} 2>&1 | tee $O/a4.log | cut -c1-4000
 elif [ "${RUN:-a0}" = a2 ]; then
   mkdir -p $W/served && tar -xf $I/served.tar -C $W/served || exit 1
   SERVED=$(dirname $(find $W/served -name registration.json | head -1))
