@@ -35,8 +35,8 @@ the verifier parses and "each template's rows compute its gates" is ASSUMPTIONS.
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
 $$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
 from `table_knowledge_sound_joint_tight` (BCHKS25 Theorem 4.6 its only named assumption). The link term
-stays a named hypothesis (`LinkSound`): removing it needs a spec decision (expected-time collision
-resistance, or the random-oracle column).
+stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
+resistance (`Assumptions.SHA512ExpectedTimeCR`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/

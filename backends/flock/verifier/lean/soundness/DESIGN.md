@@ -169,63 +169,81 @@ adopted form is the review's "fill and decode"; it is proved (`Knowledge.lean`).
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
 - **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
-  - The analysis is `note:20260927T0705Z-draft-link-term`, pending review.
-  - The lifetime numbers don't change until the decision below.
+  - The analysis is below and in `note:20260927T0705Z-draft-link-term`; the Lean plan is
+    `note:20260927T1510Z-draft-expected-time-link-plan`.
 - **Risks:** `δ_link`; bridging CompPoly, ArkLib and `Model` for the efficient decoder. It is classical only (§9).
 
-**The link term: a spec decision.** One audit's knowledge-plus-link term, under the assumption in Table 1 today and
-under the two alternatives. $N_s$ is the leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length
-(m = 33), and $t$ the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
+**The link term: expected-time collision resistance, of record** (Daniel, Sep 27). The audit's value layer rests on
+`ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record and, for comparison, under the other two
+assumptions. $N_s$ is the leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
+the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
 
 | Assumption | Knowledge + link | A | B | C | D |
 |---|---|---|---|---|---|
-| **Strict-time collision resistance** (Table 1 today) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
-| **(i) Expected-time collision resistance** | $t\cdot N_s\,(4N_0/e)/2^{256.5}$ | $t\cdot2^{-216.2}$ | $t\cdot2^{-206.6}$ | $t\cdot2^{-200.6}$ | $t\cdot2^{-194.9}$ |
-| **(ii) Random oracle** (tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
+| **Expected-time collision resistance** (A2, of record) | $t\cdot N_s\,(8N_0/e)/2^{256}$ | $t\cdot2^{-214.7}$ | $t\cdot2^{-205.1}$ | $t\cdot2^{-199.1}$ | $t\cdot2^{-193.4}$ |
+| Strict-time collision resistance (comparison) | $2\sqrt{t\cdot 4N_0\sqrt{N_s/e}/(e\,2^{256.5})}$ | $2\sqrt{t\cdot2^{-226.3}}$ | $2\sqrt{t\cdot2^{-221.5}}$ | $2\sqrt{t\cdot2^{-218.5}}$ | $2\sqrt{t\cdot2^{-215.7}}$ |
+| Random oracle (comparison; tree, link and knowledge together) | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ | $t^2/2^{511}$ |
 
-The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which (i) doubles (below).
+The first two rows are the terms beyond $\varepsilon_c^-$ and $\delta_{\rm tree}$, which the record doubles (below). The
+strict-time row keeps $\sqrt{q^2/2^{513}}=q/2^{256.5}$, which holds for a budget $q$ fixed in advance.
 
 The same terms in $\log_2$ for audit B, next to the rest of its hash bound ($\delta_{\rm Flock}+\delta_{\rm tree}=t\cdot2^{-229.3}$):
 
 | Audit B | $t=2^{64}$ | $2^{80}$ | $2^{100}$ | $2^{110}$ |
 |---|---|---|---|---|
+| Expected-time (of record) | −141.1 | −125.1 | −105.1 | −95.1 |
 | Strict-time | −77.8 | −69.8 | −59.8 | −54.8 |
-| (i) Expected-time | −142.6 | −126.6 | −106.6 | −96.6 |
-| (ii) Random oracle | −383 | −351 | −311 | −291 |
+| Random oracle | −383 | −351 | −311 | −291 |
 | $\delta_{\rm Flock}+\delta_{\rm tree}$ | −165.3 | −149.3 | −129.3 | −119.3 |
 
-At $t=2^{80}$ the audits read −72.2, −69.8, −68.3 and −66.8 under strict time, and −136.2, −126.6, −120.6 and −114.9
-under (i).
+At $t=2^{80}$ the audits read −134.7, −125.1, −119.1 and −113.4 of record, and −72.2, −69.8, −68.3 and −66.8 under
+strict time.
 
-- **Strict time.** Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows linearly
-  with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at $t=2^{80}$,
-  audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's protocol (CDGSY24).
-- **(i) Expected-time collision resistance.**
-  - **The assumption:** an algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with
-    probability at most $T/2^{256.5}$.
-  - **Why linear in $T$.** This is SHA-512's generic bound for such finders, since
-    $\min(1,q^2/2^{513})\le q/2^{256.5}$. It is linear rather than quadratic because a finder can gamble, making
-    $2^{256.5}$ evaluations with small probability. The quadratic form $T^2/2^{513}$ would be false for this reason.
-  - **The reductions become expected-time,** as in Chiesa–Dall'Agnol–Guan–Spooner–Yogev (ePrint 2024/1434,
-    Theorem 2). The extractor runs the session once. Only if that run accepts does it rerun, until $cN_0/e$ reruns
-    have accepted, about $cN_0/(e\varepsilon)$ runs at acceptance probability $\varepsilon$.
-    - An extraction then costs about $(1+cN_0/e)\,t$ in expectation, whatever $\varepsilon$, and needs no estimate
-      of it.
-    - The joint form's missing term becomes about $\varepsilon/c$.
-  - **The link finder** samples auxiliary extractions until one recovers the position it needs. That is at most $N_s$
-    extractions in expectation, so about $N_s(cN_0/e)\,t$ evaluations.
+- **Expected-time collision resistance, of record.**
+  - **The assumption** (A2, in the expected-time sense of Chiesa–Dall'Agnol–Guan–Spooner–Yogev, ePrint 2024/1434): an
+    algorithm whose *expected* number of SHA-512 evaluations is $T$ finds a collision with probability at most
+    $T/2^{256}$. It read $T/2^{256.5}$ until the correction of Sep 27 (the proximity-gap scoping lane).
+  - **Why $2^{256}$.** For a random oracle with $N=2^{512}$ outputs the sharp bound is $E[Q]/E[\tau_N]$, with $\tau_N$
+    the number of distinct inputs hashed until the first collision and $E[\tau_N]=\sqrt{\pi N/2}+2/3+o(1)\approx2^{256.33}$.
+    Hashing until the first collision attains it, with probability 1 at cost $E[\tau_N]$, so $2^{256}$ holds for a random
+    oracle with 0.33 bits to spare. The proof: with $a_i$ the probability of an $i$-th fresh query before any collision
+    and $w_i=(i-1)/N$, success is at most $\sum_ia_iw_i$, where $a_{i+1}\le a_i(1-w_i)$ and $\sum_ia_i\le E[Q]$.
+    Chebyshev's sum inequality puts the maximum at $a_i\propto\prod_{j<i}(1-w_j)$, where it is $E[Q]/E[\tau_N]$.
+  - **Why not $2^{256.5}$.** $\min(1,q^2/2^{513})\le q/2^{256.5}$ bounds a budget $q$ fixed in advance, not a finder
+    that stops adaptively: the first-collision attack beats $T/2^{256.5}$ by a factor 1.13.
+  - **Why linear in $T$.** A finder can gamble: running that attack with probability $p$ succeeds with probability $p$
+    at expected cost $pE[\tau_N]$. The quadratic form $T^2/2^{513}$ would be false for this reason.
+  - **The extractor** runs the session once. Only if that run accepts does it rerun, until $k=cN_0/e$ reruns have
+    accepted: $(1+k)\,t$ evaluations in expectation, whatever $\varepsilon$, and no estimate of it. It fills level 0
+    from the accepted reruns, and the compiled bound's deviation term needs only accepted runs. So with
+    $q_p=\Pr[\text{a run accepts and opens }p]$ the missing term is $\sum_p q_p(1-q_p/\varepsilon)^k\le\varepsilon/c$.
+    The conflict term is $(k/\varepsilon)\mathrm{Adv}_0$, and bounding the failure by $\min(\varepsilon,\cdot)$ turns
+    it into $\sqrt{k\,\mathrm{Adv}_0}\approx t\cdot2^{-244}$.
+  - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
+    function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
+    two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
+  - **The link finder** picks one of the $N_s$ strings uniformly and runs an extraction. If that recovered the string,
+    it runs extractions until one recovers it again, $1/r$ of them in expectation. That is $2(1+k)\,t$ evaluations in
+    expectation (Wald), so $\delta_{\rm link}\le2N_s(1+k)\,t/2^{256}$, plus one extraction's worth for two drawn
+    units that read one string differently.
   - **The bound is relative.** $u^*$ is wrong, so acceptance itself is the bad event:
-    $\Pr[\text{accept}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+N_s(cN_0/e)\,t/2^{256.5}$, plus a conflict term
-    of order $t\cdot2^{-244}$. The square root goes.
-  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the table's $t\cdot N_s(4N_0/e)/2^{256.5}$. It doubles the
-    other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 23 bits below the link term.
-  - **The status.** It is a new assumption, not in Table 1, and this analysis is on paper, not in Lean.
-- **(ii) The random-oracle column** (lifetime doc §7). The extractor reads the commit strings, the `hm96` openings and
-  the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one global
-  $t^2/2^{511}$. `ASSUMPTIONS.md` §4 keeps the random oracle as a cross-check only; the decision would be to quote it
-  for the audit's value layer.
+    $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
+    The square root goes.
+  - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot N_s(8N_0/e)/2^{256}$ up to lower-order
+    terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 24 bits below.
+  - **Half of it,** $4N_0/e$, would come from a value layer drawn from a sequence of auxiliary extractions (the first
+    recovery behind each string, $N_s$ extractions by Wald), with the committed transcript then chosen by averaging
+    over that sequence. The record keeps $8N_0/e$, the form the Lean plan proves.
+  - **The status.** On paper; the Lean plan is `note:20260927T1510Z-draft-expected-time-link-plan`.
+- **Strict time** (comparison). Balancing the knowledge term's $N_0/(eK)$ against the link finder's cost, which grows
+  linearly with the extractor's $K$ reruns, leaves a square root. The review's first estimate was $2^{-65.3}$ at
+  $t=2^{80}$, audit B. Improving substantially on the strict-time loss would improve the analysis of Schnorr's
+  protocol (CDGSY24).
+- **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
+  openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
+  global $t^2/2^{511}$. `ASSUMPTIONS.md` §4 keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
-  proved under strict-time collision resistance.
+  proved under strict-time collision resistance. A2 enters only the value layer.
 
 ## 4. Where the spec follows upstream rather than the paper (spec §19), and the bound
 
@@ -555,5 +573,5 @@ If real concurrency is ever needed:
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`, given L1 and the placement.
-  - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the spec
-    decides between expected-time collision resistance and the random-oracle column.
+  - The link event is the weakest one (every satisfying candidate disagrees). `δ_link` stays named until the link
+    theorem lands. Expected-time collision resistance is decided (§3), and its extractor replaces the fixed `Kr` reruns.
