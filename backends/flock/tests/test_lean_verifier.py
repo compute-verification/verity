@@ -178,3 +178,20 @@ def test_unit_draw_check(tmp_path):
     assert len(got) == len(cases)
     for (case, want), g in zip(cases, got):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
+
+
+def _template_vectors():
+    try:
+        import verity
+    except ImportError:
+        return None
+    v = Path(verity.__file__).resolve().parents[2] / "tests" / "ir" / "template_instance_vectors.json"
+    return v if v.exists() else None
+
+
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
+def test_template_queries_agree_with_the_vectors(tmp_path):
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr

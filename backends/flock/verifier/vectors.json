@@ -4234,6 +4234,25 @@
     ],
     "selftest_note": "honest and unit_draw_session, both accepted; rope-head/partition-noformat.json (no format) is refused at setup",
     "agreement": "2/2 (local, 2026-09-27T07:25Z)"
+   },
+   {
+    "tags": "verity/flock-circuit (the e2e bindings, Q_template_instance v0, units derived)",
+    "pr83": "e51e2b86",
+    "generator": "flock-circuit selftest --record-dir --only honest / unit_draw_session (PR #83 e51e2b86 with circuit-vectors-eb90718f.patch); staged with --partition (Q_template_instance v0 over RoPEHead_v1{D=64}) --program (a 2000-unit population program, core's codec at PR #131) --unit-indices [3, 17, 40, 1001]",
+    "statement": {
+     "circuit": "art:e1fb80d2/rope-head/stage/circuit.txt",
+     "public": "art:e1fb80d2/rope-head/stage/pub-4.bin",
+     "partition": "art:e1fb80d2/rope-head/partition.json",
+     "program": "art:e1fb80d2/rope-head/program.json",
+     "circuit_sha512": "ca5cbd543607882c9fd17506056e7e309369ff4f7feb10e5e0f535384fffbfd67655a6dd4dc86f01b8f85e485013f4d58c530fbf8013ac5ca02e56659a3856cf",
+     "detail": "RoPE d64, 4 instances at [3, 17, 40, 1001] of a 2000-unit population; the verdicts' partition finding says units derived"
+    },
+    "lean_statement": "verity/flock-circuit+seed-injection",
+    "selftest": [
+     "art:e1fb80d2/rope-head/records-cpu"
+    ],
+    "selftest_note": "honest and unit_draw_session, both accepted with units derived",
+    "agreement": "2/2 (local, 2026-09-27T07:45Z)"
    }
   ],
   "recorded_runs": [

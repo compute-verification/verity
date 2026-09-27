@@ -1112,10 +1112,21 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   natural number) and `params` (an object), and for a query the verifier evaluates, its parameters too (`Q_word` v1: exactly
   `X`, `W`, positive integers). Its tagged digest `SHA-512("verity/partition/v1\0" ‖ canon(object))` must be META's, and its
   `program` must be META's `program_sha512`. The provisional unit cover takes no object.
+- **The template queries** (`Flock.TemplateQuery`; core's `TemplatePartition`, #131): `Q_template_instance` v0 (`{template}`, a
+  string) and `Q_template_instances` v0 (`{templates}`, a non-empty list of distinct strings). With the verifier's own copy of
+  the program (`--program`, its `verity-ir/descriptor/v1` bytes, by path or archive digest), whose SHA-512 over the canonical
+  descriptor without `annotations` must be the object's `program`, the verifier decodes the program's callees, definitions
+  and root nodes, and applies the query. Every non-Input root node must be a `call` or `batch` of a listed template, matched
+  by the descriptor id in the program's bytes. Each call is one unit and each batch member one unit, in node then member
+  order, and a unit's gates are its instance's interval. Every listed template has an instance, or the query refuses. The
+  circuit's template (the one key of META `program_digests`) must be listed, and every unit the header's `units.indices`
+  claims must be an instance of it: then the statement's units are derived. `template_query_agree.py` checks the decoding
+  against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
+  the refusals word for word, the malformed parameters).
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
-  `units` is `derived` only when the verifier derived the statement's units itself: for a query it evaluates (`Q_word` v1,
-  `Flock.Qword`), from the program's Call graphs. It does not decode the program yet, so today `units` is always `as
-  stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
+  `units` is `derived` when the verifier derived the statement's units itself: the template queries, given `--program`.
+  For `Q_word` v1 (`Flock.Qword`) the program's Call graphs are not extracted yet, and any other query is not evaluated;
+  then `units` is `as stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
