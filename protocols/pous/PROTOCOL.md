@@ -53,7 +53,7 @@ The floor is `k = 86` challenges (`ρ^k ≤ δ`). Locality (bandwidth-limited of
 | `N10Refuted` | `¬ InvExPostFactoTwoLayer`: N10 as first stated (PIEs Conjecture 1 at `L = 2`) is false | proved |
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
-| `DenseMeets` | the dense scheme S1 meets `Meets`, with no named assumption (security, correctness and rate, not decode cost) | proved |
+| `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
 
 Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: the one-way bound on Fisch's stacked
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the
@@ -79,8 +79,21 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 - `|C| ≥ |W|` in `Meets` (so `|pp| ≤ 0.05·|W|`): otherwise a scheme can keep `W` in the free `pp`.
 - `ε_crypto ≤ 2^-128`: an unbounded `ε` makes the requirement vacuous.
 - Which reveal a graded `Meets` may use, which waits on the per-answer versus shared deadline.
-- Every model plays one segment against a fresh primitive. A deployment must put a salt and the segment index in every
-  oracle query.
+
+## Choices that could be wrong
+
+- **H is a monolithic random oracle (narrow-state H).** Every result that models the hash H as a random oracle with
+  `m`-bit outputs holds only in that model: B3's chain, B5 and the stacked audits, `DenseMeets`, and P3's labels (the
+  band certificate is pure combinatorics, so it is unaffected). A real hash whose `m`-bit output comes from a narrower internal state breaks the instantiation. The adversary stores
+  each label's pre-squeeze state and regenerates the labels from those states: with SHAKE's 1600-bit state, Dense in
+  one round from about 20% of `C`, and P3 in three rounds from about 39%. This is the Ristenpart–Shacham–Shrimpton
+  limit: indifferentiability does not carry over to storage games, so no ideal-hash result transfers to a concrete
+  hash by citation. So "no named assumption" for `DenseMeets` means within the ideal-hash model only. The planned fix
+  is H as a wide sponge (state at least `m` bits) over an ideal permutation, re-proved in the ideal-permutation model;
+  a pilot has started. The Lean statements are unchanged. Source: the POUS store's `docs/p3-cryptanalysis.md`,
+  "Narrow-state H".
+- **One segment.** Every model plays one segment against a fresh primitive. A deployment must put a salt and the
+  segment index in every oracle query.
 
 ## Next
 
