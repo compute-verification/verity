@@ -148,14 +148,15 @@ def guard_neg_inf_zero(C, m):
 
 def mufu_ex2(C, x):
     """``MufuEx2Ftz_v1`` (``fa2_model.cpp`` mufu_ex2_bits): x as a signed fixed-point value with 23 fraction bits; the table at
-    its fraction, the integer part added to the table word's exponent. For |x| < 2^-63 the model shifts a 64-bit word by 64 or
-    more, which C++ leaves undefined and x86 wraps modulo 64; the IR evaluates it that way, and so does this piece."""
+    its fraction, the integer part added to the table word's exponent. A right shift past the mantissa is clamped (K = 0), so
+    every |x| < 2^-23 reads the table's first word."""
     s, e, m, e_max, e_zero, m_nz = _fields(C, x)
     big = NOT(_ult_const(C, e, 157))                          # e - 127 >= 30
     neg = _ult_const(C, e, 127)
-    # e < 127: K = mant >> ((127 - e) & 63), the model's 64-bit shift as x86 executes it (a count of 64 or more wraps)
-    d = sub(C, const_bits(127, 8), e, 8)[0][:6]
-    over = C.AND(neg, NOT(_ult_const(C, d, 25)))                # a right shift past the 24-bit mantissa: K = 0
+    # e < 127: K = mant >> (127 - e), zero once the shift passes the 24-bit mantissa
+    d8 = sub(C, const_bits(127, 8), e, 8)[0]
+    d = d8[:6]
+    over = C.AND(neg, NOT(_ult_const(C, d8, 25)))
     sh = mux(C, neg, sub(C, const_bits(24, 6), d, 6)[0], sub(C, e, const_bits(103, 8), 8)[0][:6])
     K = fp.shl(C, m + [ONE] + [ZERO] * 53, sh)[24:77]          # mant << (e - 127), or the right shift above; 53 bits
     K = [C.AND(NOT(over), k) for k in K]
