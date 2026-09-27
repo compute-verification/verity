@@ -16,7 +16,9 @@
 //! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
 //! every row's `b || c` (its hm96 slot's output) and every unit's returned-output words. The rows, their salts, the chaining
 //! values and every word between slots stay private. A padding instance is the all-zero instance with zero salts, whose
-//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned.
+//! `b || c` (checked here natively: a zero salt's mask is zero) and outputs (forced by its circuit) are pinned. A shared-row file
+//! (header `shared_rows`) commits each input port's rows once, as one table, and names the row each instance reads (its refs):
+//! the instance's digest values are those rows' `b || c`, so the rows it hashes in the circuit are the committed ones.
 //!
 //! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3-sha512 roots against
 //! the public `b || c` and outputs, and nothing else. A circuit carrying a verifier-evaluated tail (a `CUT` line, or a tail,
@@ -721,14 +723,35 @@ pub struct Instances {
     pub rows: Option<Vec<u8>>,
     /// every row's salt, instance-major, ports in order (the prover's file only)
     pub salts: Option<Vec<u8>>,
-    /// every row's `b || c`, instance-major, ports in order
+    /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     pub outputs: Vec<u16>,
-    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, outputs): what Σ binds
+    /// SHA-512 of the header line and every public byte after the rows and salts (`b || c`, refs, outputs): what Σ binds
     pub public_sha512: [u8; 64],
     /// the registered population's `b || c` and outputs (a drawn statement: the frame-v3 roots are over them); `None`: the
     /// statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>, Vec<u16>)>,
+    /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
+    pub tables: Option<RowTables>,
+}
+
+/// Header `shared_rows: {port: R_p}`: input port `p`'s frame-v3 tree is a table of `R_p` committed rows, and instance `i`
+/// reads its row `refs[i * ports + p]`. Rows, salts and `b || c` are the tables', port-major.
+#[derive(Clone)]
+pub struct RowTables {
+    pub counts: Vec<usize>,
+    /// every table's rows (u16 LE), port-major (the prover's file only)
+    pub rows: Option<std::sync::Arc<Vec<u8>>>,
+    /// every table row's salt, port-major (the prover's file only)
+    pub salts: Option<std::sync::Arc<Vec<u8>>>,
+    pub refs: Vec<u32>,
+}
+
+impl RowTables {
+    /// port `p`'s first row among the tables' rows
+    pub fn start(&self, p: usize) -> usize {
+        self.counts[..p].iter().sum()
+    }
 }
 
 /// The header's `units`: the instances' global unit indices (the partition's order: ascending), and per block its units.
@@ -753,15 +776,45 @@ impl Instances {
         let rb = c.row_bytes();
         let (n_out, np) = (c.out_words.iter().sum::<usize>(), c.ports.len());
         let body = &b[nl + 1..];
-        let (rows_len, salts_len) = if has_rows { (n * rb, n * np * SALT_BYTES) } else { (0, 0) };
-        if body.len() != rows_len + salts_len + BC_BYTES * n * np + 2 * n * n_out {
+        let counts: Option<Vec<usize>> = match header.get("shared_rows") {
+            None => None,
+            Some(s) => {
+                let m = s.as_object().ok_or("header: shared_rows is not an object")?;
+                if m.len() != np || c.ports.iter().any(|p| !m.contains_key(&p.name)) {
+                    return Err("header: shared_rows does not name exactly the circuit's input ports".into());
+                }
+                let counts: Vec<usize> = c.ports.iter().map(|p| m[&p.name].as_u64().unwrap_or(0) as usize).collect();
+                if counts.contains(&0) {
+                    return Err("header: a shared_rows table has no row".into());
+                }
+                Some(counts)
+            }
+        };
+        // a per-instance file is `n` rows per port, instance-major; a shared-row file `R_p` table rows per port, port-major
+        let (rows_len, salts_len, n_bcs, refs_len) = match &counts {
+            None => (n * rb, n * np * SALT_BYTES, n * np, 0),
+            Some(k) => (k.iter().zip(&c.ports).map(|(r, p)| r * 2 * p.words).sum(), k.iter().sum::<usize>() * SALT_BYTES, k.iter().sum(), 4 * n * np),
+        };
+        let (rows_len, salts_len) = if has_rows { (rows_len, salts_len) } else { (0, 0) };
+        if body.len() != rows_len + salts_len + BC_BYTES * n_bcs + refs_len + 2 * n * n_out {
             return Err("instance file length".into());
         }
-        let rows = has_rows.then(|| body[..rows_len].to_vec());
-        let salts = has_rows.then(|| body[rows_len..rows_len + salts_len].to_vec());
+        let private = |a: usize, len: usize| has_rows.then(|| body[a..a + len].to_vec());
+        let (rows, salts) = (private(0, rows_len), private(rows_len, salts_len));
         let pubs = &body[rows_len + salts_len..];
-        let bcs = pubs[..BC_BYTES * n * np].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
-        let outputs = pubs[BC_BYTES * n * np..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let bcs = pubs[..BC_BYTES * n_bcs].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
+        let tail = &pubs[BC_BYTES * n_bcs..];
+        let outputs = tail[refs_len..].chunks(2).map(|x| u16::from_le_bytes([x[0], x[1]])).collect();
+        let (rows, salts, tables) = match counts {
+            None => (rows, salts, None),
+            Some(counts) => {
+                let refs: Vec<u32> = tail[..refs_len].chunks(4).map(|x| u32::from_le_bytes(x.try_into().unwrap())).collect();
+                if refs.iter().enumerate().any(|(k, &r)| r as usize >= counts[k % np]) {
+                    return Err("shared rows: an instance's ref is past its table".into());
+                }
+                (None, None, Some(RowTables { counts, rows: rows.map(std::sync::Arc::new), salts: salts.map(std::sync::Arc::new), refs }))
+            }
+        };
         let indices: Vec<usize> = header["units"]["indices"].as_array().ok_or("header: units.indices")?.iter()
             .map(|x| x.as_u64().map(|v| v as usize).ok_or("header: a unit index")).collect::<Result<_, _>>()?;
         if indices.len() != n || indices.windows(2).any(|w| w[0] >= w[1]) || header["units"] != units_entry(c, &indices) {
@@ -772,7 +825,7 @@ impl Instances {
         }
         header["rows"] = Value::Bool(false);
         let public_sha512 = Self::public_digest(&header, pubs);
-        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None })
+        Ok(Instances { header, n, rows, salts, bcs, outputs, public_sha512, population: None, tables })
     }
 
     fn public_digest(header: &Value, pubs: &[u8]) -> [u8; 64] {
@@ -799,26 +852,74 @@ impl Instances {
         header["population"] = json!(self.n);
         header["units"] = units_entry(c, &indices);
         let mut pubs: Vec<u8> = self.bcs.iter().flatten().copied().collect();
+        if let Some(t) = &self.tables {
+            pubs.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
         pubs.extend(self.outputs.iter().flat_map(|w| w.to_le_bytes()));
         let public_sha512 = Self::public_digest(&header, &pubs);
+        let outputs = units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect();
+        let population = Some((self.n, self.bcs.clone(), self.outputs.clone()));
+        if let Some(t) = &self.tables {
+            // the tables stay the population's; the drawn instances keep their refs into them
+            let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
+            return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), outputs, public_sha512, population,
+                                  tables: Some(RowTables { refs, ..t.clone() }) });
+        }
         Ok(Instances {
             header, n: units.len(),
             rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
             salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
-            outputs: units.iter().flat_map(|&u| self.outputs[u * n_out..(u + 1) * n_out].to_vec()).collect(),
+            outputs,
             public_sha512,
-            population: Some((self.n, self.bcs.clone(), self.outputs.clone())),
+            population,
+            tables: None,
         })
     }
 
-    pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
-        self.bcs[i * np + p]
+    /// Where instance `i`'s port-`p` `b || c` sits in `bcs` (a shared-row file: its ref into table `p`).
+    pub fn bc_index(&self, i: usize, p: usize, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.start(p) + t.refs[i * np + p] as usize,
+            None => i * np + p,
+        }
     }
 
-    pub fn salt(&self, i: usize, p: usize, np: usize) -> &[u8] {
-        let s = self.salts.as_ref().expect("the prover's instance file has the salts");
-        &s[(i * np + p) * SALT_BYTES..(i * np + p + 1) * SALT_BYTES]
+    pub fn bc(&self, i: usize, p: usize, np: usize) -> [u8; BC_BYTES] {
+        self.bcs[self.bc_index(i, p, np)]
+    }
+
+    /// Whether this is a prover's file (it holds rows and salts).
+    pub fn has_rows(&self) -> bool {
+        self.rows.is_some() || self.tables.as_ref().is_some_and(|t| t.rows.is_some())
+    }
+
+    /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs); `None`: the
+    /// verifier's file.
+    pub fn instance_rows(&self, c: &Composite) -> Option<Vec<u8>> {
+        let Some(t) = &self.tables else { return self.rows.clone() };
+        let rows = t.rows.as_ref()?;
+        let np = c.ports.len();
+        let base: Vec<usize> = c.ports.iter().zip(&t.counts).scan(0, |a, (p, &r)| { let s = *a; *a += r * 2 * p.words; Some(s) }).collect();
+        let mut out = Vec::with_capacity(self.n * c.row_bytes());
+        for i in 0..self.n {
+            for (p, port) in c.ports.iter().enumerate() {
+                let (w, r) = (2 * port.words, t.refs[i * np + p] as usize);
+                out.extend_from_slice(&rows[base[p] + r * w..base[p] + (r + 1) * w]);
+            }
+        }
+        Some(out)
+    }
+
+    /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
+    /// verifier's file.
+    pub fn instance_salts(&self, np: usize) -> Option<Vec<u8>> {
+        let Some(t) = &self.tables else { return self.salts.clone() };
+        let salts = t.salts.as_ref()?;
+        Some((0..self.n * np).flat_map(|k| {
+            let s = t.start(k % np) + t.refs[k] as usize;
+            salts[s * SALT_BYTES..(s + 1) * SALT_BYTES].iter().copied()
+        }).collect())
     }
 }
 
@@ -909,9 +1010,6 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     if fv["frame"] != "frame-v3-sha512" || fv["row_key_sha512"].as_str() != Some(crate::hex(&Sha512::digest(hm96_sha512_default_key())).as_str()) {
         return Err("the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key".into());
     }
-    let np = c.ports.len();
-    // the frame-v3 roots are over the registered population (a drawn statement's instances are some of its units)
-    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
     if let Some(d) = inst.header.get("unit_draw") {
         let units = crate::unit_draw::check(d)?;
         if inst.header["instances"].as_u64() != Some(units.len() as u64) || inst.n != units.len() {
@@ -919,30 +1017,52 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
         }
     }
     for (p, port) in c.ports.iter().enumerate() {
-        let dom = get("domain_ids", &port.name)?;
         if fv["schemas"][&port.name] != ROW_SCHEMA {
             return Err(format!("input port {}: schema is not {ROW_SCHEMA}", port.name));
-        }
-        let leaves = (0..n).into_par_iter().map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[i * np + p]))).collect();
-        if fv3_root(&dom, leaves).to_vec() != get("roots", &port.name)? {
-            return Err(format!("input port {}: the rows' b || c do not hash to the header's frame-v3-sha512 root", port.name));
         }
         if zero_row_bc(port.words) != c.dummy_bc[p] {
             return Err(format!("the pinned dummy b || c of port {} is not the zero row's", port.name));
         }
     }
+    for (k, (name, root)) in frame_roots(c, inst)?.into_iter().enumerate() {
+        if root.to_vec() != get("roots", &name)? {
+            return Err(if k < c.ports.len() {
+                format!("input port {name}: the rows' b || c do not hash to the header's frame-v3-sha512 root")
+            } else {
+                format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root")
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The frame-v3-sha512 roots of the file's public part, input ports' row trees then output ports' word trees: over the
+/// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
+pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
+    let fv = &inst.header["frame_v3"];
+    let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
+    let np = c.ports.len();
+    let (n, bcs, outputs) = match &inst.population { Some((n, b, o)) => (*n, b, o), None => (inst.n, &inst.bcs, &inst.outputs) };
+    let mut out = Vec::new();
+    for (p, port) in c.ports.iter().enumerate() {
+        let dom = dom_of(&port.name)?;
+        let (count, row): (usize, Box<dyn Fn(usize) -> usize + Sync>) = match &inst.tables {
+            Some(t) => (t.counts[p], Box::new(move |r| t.start(p) + r)),
+            None => (n, Box::new(move |i| i * np + p)),
+        };
+        let leaves = (0..count).into_par_iter().map(|r| fv3_leaf(&dom, r, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&bcs[row(r)]))).collect();
+        out.push((port.name.clone(), fv3_root(&dom, leaves)));
+    }
     let n_out: usize = c.out_words.iter().sum();
     let mut at = 0;
     for (name, w) in c.meta["out_ports"].as_array().unwrap().iter().map(|x| (x[0].as_str().unwrap_or(""), x[1].as_u64().unwrap_or(0) as usize)) {
-        let dom = get("domain_ids", name)?;
+        let dom = dom_of(name)?;
         let words: Vec<u16> = (0..n).flat_map(|i| outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
         let leaves = words.par_iter().enumerate().map(|(r, v)| fv3_leaf(&dom, r, b"u16", &v.to_be_bytes())).collect();
-        if fv3_root(&dom, leaves).to_vec() != get("roots", name)? {
-            return Err(format!("output port {name}: the output words do not hash to the header's frame-v3-sha512 root"));
-        }
+        out.push((name.to_string(), fv3_root(&dom, leaves)));
         at += w;
     }
-    Ok(())
+    Ok(out)
 }
 
 // --- the statement -------------------------------------------------------------------------------------------------------

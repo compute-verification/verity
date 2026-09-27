@@ -369,12 +369,12 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
 }
 
 fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: ProverSeed) -> Wit {
-    let mut rows = inst.rows.clone().expect("the prover's instance file has the rows");
+    let mut rows = inst.instance_rows(&st.c).expect("the prover's instance file has the rows");
     if plan.message_flip {
         rows[3] ^= 0x10;
     }
     let rows = Arc::new(rows);
-    let salts = Arc::new(inst.salts.clone().expect("the prover's instance file has the salts"));
+    let salts = Arc::new(inst.instance_salts(st.c.ports.len()).expect("the prover's instance file has the salts"));
     let (s1, r1, sa1) = (st.clone(), rows.clone(), salts.clone());
     let tamper = RowTamper { cv_flip: plan.chain_forged, midstate_flip: plan.midstate_forged, pad_flip: plan.pad_forged, salt_flip: plan.salt_forged };
     let rowin: Arc<dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + Sync + Send> = Arc::new(move |b| {
@@ -567,6 +567,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("mask_cells_random", true, false),
     ("output_claim_false", false, true),
     ("digest_claim_false", false, true),
+    ("row_ref_claim_false", false, true),
     ("message_byte_differs_from_the_committed_row", false, true),
     ("unit_input_differs_from_its_message_bits", false, true),
     ("unit_internal_bit_flipped", false, true),
@@ -636,39 +637,30 @@ fn load_composite(path: &str) -> Composite {
     Composite::parse(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e))
 }
 
-/// The verifier's file with one public word changed and its frame-v3 roots recomputed: a self-consistent, false statement.
+/// The verifier's file with one public claim changed and its frame-v3 roots recomputed: a self-consistent, false statement. `ref`
+/// (a shared-row file) points instance 0 at another row of a table, whose roots are unchanged.
 fn false_statement(st: &Stmt, what: &str) -> Instances {
     let path = arg("--instances", "");
     let mut v = Instances::load(&path, &st.c).unwrap();
+    let np = st.c.ports.len();
     match what {
         "output" => {
             let k = 5.min(v.outputs.len() - 1);
             v.outputs[k] ^= 1
         }
-        _ => v.bcs[1][0] ^= 1,
+        "ref" => {
+            let t = v.tables.as_mut().expect("a shared-row file");
+            let p = (0..np).find(|&p| t.counts[p] > 1).expect("a table of two rows or more");
+            t.refs[p] = (t.refs[p] + 1) % t.counts[p] as u32;
+        }
+        _ => {
+            let k = if v.tables.is_some() { v.bc_index(0, 0, np) } else { 1 };
+            v.bcs[k][0] ^= 1
+        }
     }
-    let text = std::fs::read(&path).unwrap();
-    let nl = text.iter().position(|&x| x == b'\n').unwrap();
-    let head: Value = serde_json::from_slice(&text[..nl]).unwrap();
-    let fv = &head["frame_v3"];
-    let mut roots = fv["roots"].clone();
-    let np = st.c.ports.len();
-    for (p, port) in st.c.ports.iter().enumerate() {
-        let dom = hexb(fv["domain_ids"][&port.name].as_str().unwrap()).unwrap();
-        let leaves: Vec<[u8; 64]> = (0..v.n).map(|i| fv3_leaf(&dom, i, ROW_SCHEMA.as_bytes(), &row_tree_leaf(&v.bc(i, p, np)))).collect();
-        roots[&port.name] = json!(hex(&fv3_root(&dom, leaves)));
+    for (name, root) in frame_roots(&st.c, &v).unwrap() {
+        v.header["frame_v3"]["roots"][&name] = json!(hex(&root));
     }
-    let n_out: usize = st.c.out_words.iter().sum();
-    let mut at = 0;
-    for x in st.c.meta["out_ports"].as_array().unwrap() {
-        let (name, w) = (x[0].as_str().unwrap(), x[1].as_u64().unwrap() as usize);
-        let dom = hexb(fv["domain_ids"][name].as_str().unwrap()).unwrap();
-        let words: Vec<u16> = (0..v.n).flat_map(|i| v.outputs[i * n_out + at..i * n_out + at + w].to_vec()).collect();
-        let leaves = words.iter().enumerate().map(|(r, x)| fv3_leaf(&dom, r, b"u16", &x.to_be_bytes())).collect();
-        roots[name] = json!(hex(&fv3_root(&dom, leaves)));
-        at += w;
-    }
-    v.header["frame_v3"]["roots"] = roots;
     check_public(&st.c, &v).expect("the false statement is self-consistent");
     let mut h = Sha512::new();
     h.update(v.public_sha512);
@@ -846,8 +838,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         plan.substitute = Some(session(st, inst, shared(InProc(s0)), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os()).1);
     }
     let (pst, pinst, vinst) = match name {
-        "output_claim_false" | "digest_claim_false" => {
-            let v = Arc::new(false_statement(st, if name.starts_with("output") { "output" } else { "digest" }));
+        "output_claim_false" | "digest_claim_false" | "row_ref_claim_false" => {
+            let what = match name { "output_claim_false" => "output", "row_ref_claim_false" => "ref", _ => "digest" };
+            let v = Arc::new(false_statement(st, what));
             let mut p = Instances::load(&arg("--instances", ""), &st.c).unwrap();
             p.public_sha512 = v.public_sha512;
             (st.clone(), Arc::new(p), v)
@@ -976,7 +969,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if skipped(st, name) {
+        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1))) {
             continue;
         }
         let v = if gpu {
@@ -1079,7 +1072,7 @@ fn main() {
         refuse(format!("the circuit's SHA-512 {} is not the pinned circuit {pin}", hex(&c.sha512)));
     }
     let inst = Arc::new(Instances::load(&arg("--instances", "inst.bin"), &c).unwrap_or_else(|e| refuse(e)));
-    if cmd == "serve" && inst.rows.is_some() {
+    if cmd == "serve" && inst.has_rows() {
         refuse("the verifier's instance file holds rows: stage its own public file (public_only)".into());
     }
     if let Err(e) = check_public(&c, &inst) {

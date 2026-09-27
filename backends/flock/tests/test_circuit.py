@@ -60,6 +60,42 @@ def test_rope_composes_private_by_default(tmp_path):
     assert bc0 == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt0)
 
 
+def test_shared_rows_are_tables_and_refs(tmp_path):
+    """A shared-row file commits each port's distinct rows once (its frame-v3 tree over them) and gives every instance its refs:
+    a population whose instances 2 and 3 repeat 0 and 1 has two-row tables and refs 0, 1, 0, 1."""
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+
+    s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
+    text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    ports = [(nm, w) for nm, w, _ in meta["ports"]]
+    pick = [0, 1, 0, 1]
+    rows = {nm: np.asarray(s.port(nm, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for nm, _ in ports}
+    outs = {p.name: np.asarray(s.port(p.name, 0, 4), dtype=np.uint16).reshape(4, -1)[pick] for p in s.subcircuit.outputs}
+    head = FC.write(text, s, 0, 4, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, share_rows=True, rows=rows, outs=outs)
+    assert head["shared_rows"] == {nm: 2 for nm, _ in ports}
+    prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
+    assert prover.endswith(verifier), "the public part is the same bytes"
+    n_out = sum(w for _, w in meta["out_ports"])
+    assert len(verifier) == 2 * len(ports) * FC.BC_BYTES + 4 * 4 * len(ports) + 2 * 4 * n_out
+    refs = np.frombuffer(verifier[2 * len(ports) * FC.BC_BYTES:][:16 * len(ports)], dtype="<u4").reshape(4, len(ports))
+    assert refs.tolist() == [[r] * len(ports) for r in pick]
+    # the tables: port-major rows, then port-major salts; each table row's b || c is hm96-sha512 of its row and salt
+    rows_len = sum(2 * 2 * w for _, w in ports)
+    at = 0
+    for k, (nm, w) in enumerate(ports):
+        table = np.frombuffer(prover[at:at + 2 * 2 * w], dtype="<u2").reshape(2, w)
+        assert (table == rows[nm][:2]).all()
+        for r in range(2):
+            salt = prover[rows_len + (2 * k + r) * FC.SALT_BYTES:][:FC.SALT_BYTES]
+            bc = verifier[(2 * k + r) * FC.BC_BYTES:][:FC.BC_BYTES]
+            assert bc == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(table[r].tolist(), 16, ROLE_X), salt)
+        at += 2 * 2 * w
+    per = FC.write(text, s, 0, 4, None, tmp_path / "per.bin", b"k" * 32, rows=rows, outs=outs)
+    assert "shared_rows" not in per and per["frame_v3"]["roots"] != head["frame_v3"]["roots"]
+
+
 def test_leaf_scheme_reserves_what_hm96_needs():
     import hashlib
 

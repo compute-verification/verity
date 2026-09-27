@@ -375,9 +375,10 @@ def digest(text: str) -> str:
 # --- instance files -----------------------------------------------------------------------------------------------------------
 
 def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo: int, hi: int, rows: dict, outs: dict, salts: dict):
-    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per input port, a ``u16`` word tree per
-    output port (instance-major words), each under a domain bound to the set, the range, the port and its schema. Returns the
-    header's ``frame_v3`` entry and every row's ``b || c``."""
+    """The frame-v3-sha512 roots over instances [lo, hi): an ``hm96-sha512/row/v1`` tree per input port (over ``rows[port]``:
+    the instances' rows, or a shared-row file's table), a ``u16`` word tree per output port (instance-major words), each under a
+    domain bound to the set, the range, the port and its schema. Returns the header's ``frame_v3`` entry and every row's
+    ``b || c``."""
     from verity.commitments import hm96
     from verity.commitments.frame_v3 import FrameV3, RowLeaf, WordLeaf
     from verity.commitments.frame_v3 import Port as FPort
@@ -390,7 +391,7 @@ def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo
 
     inst, n = hm96.SHA512, hi - lo
     schemas = {**{p.name: ROW_SCHEMA for p in ports}, **{nm: "u16" for nm, _ in out_ports}}
-    counts = {**{p.name: n for p in ports}, **{nm: n * w for nm, w in out_ports}}
+    counts = {**{p.name: len(rows[p.name]) for p in ports}, **{nm: n * w for nm, w in out_ports}}
     bind, doms = {}, {}
     for name in schemas:
         bind[name] = bytes.fromhex(identity_digest(ir_frame.BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
@@ -401,7 +402,7 @@ def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo
     bcs = _commit_strings(ports, rows, salts)
     roots = {}
     for p in ports:
-        leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bcs[p.name][i]), ROW_SCHEMA) for i in range(n)]
+        leaves = [row_leaf(doms[p.name], i, inst.tree_leaf(inst.default_key, bc), ROW_SCHEMA) for i, bc in enumerate(bcs[p.name])]
         roots[p.name] = fv.root(p.name, leaves).hex()
     for name, _ in out_ports:
         flat = np.asarray(outs[name], dtype=np.uint64).reshape(-1)
@@ -412,31 +413,57 @@ def statement(ports: list[Port], out_ports: list[tuple[str, int]], input_set, lo
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
 
 
-def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | None) -> dict[str, list[bytes]]:
-    """Every row's salt: fresh from the OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's
-    verifier pod can stage its own public file. A key makes the salts known to whoever holds it; the verifier's checking
-    process never reads them either way (its file has none). A serving committer draws its own."""
+def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | None, tables: dict | None = None) -> dict[str, list[bytes]]:
+    """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's): fresh from the
+    OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's verifier pod can stage its own public
+    file. A key makes the salts known to whoever holds it; the verifier's checking process never reads them either way (its file
+    has none). A serving committer draws its own."""
+    rows = {p.name: range(tables[p.name]) if tables else range(lo, hi) for p in ports}
     if key is None:
-        return {p.name: [os.urandom(SALT_BYTES) for _ in range(lo, hi)] for p in ports}
+        return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
     tag = b"verity/flock-circuit/stage-salt/v1\0" + key + bytes.fromhex(input_set.content_digest)
-    return {p.name: [hashlib.shake_256(tag + p.name.encode() + b"\0" + i.to_bytes(8, "big")).digest(SALT_BYTES) for i in range(lo, hi)]
+    kind = b"table\0" if tables else b""
+    return {p.name: [hashlib.shake_256(tag + p.name.encode() + b"\0" + kind + i.to_bytes(8, "big")).digest(SALT_BYTES) for i in rows[p.name]]
             for p in ports}
 
 
-def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None) -> dict:
+def share(rows: dict) -> tuple[dict, dict]:
+    """Each port's distinct rows, in first-occurrence order, and every instance's ref into them: a shared-row file's tables."""
+    tables, refs = {}, {}
+    for name, r in rows.items():
+        _, first, inv = np.unique(r, axis=0, return_index=True, return_inverse=True)
+        order = np.argsort(first)
+        rank = np.empty_like(order)
+        rank[order] = np.arange(len(order))
+        tables[name], refs[name] = r[first[order]], rank[inv.reshape(-1)]
+    return tables, refs
+
+
+def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
+          share_rows: bool = False, rows: dict | None = None, outs: dict | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set, the range, each block's unit indices, the composite circuit's
     sha256, the frame-v3-sha512 statement), then, for the prover only, every instance's input rows (ports in order, u16 LE) and
     every row's salt (192 bytes, instance-major, ports in order; :func:`stage_salts`), then every row's ``b || c`` (128 bytes)
     and every instance's output words (u16 LE, output leaves in order). ``path`` gets the prover's file (``None``: none),
-    ``pub_path`` the verifier's own file from the same salts, which has neither rows nor salts: it never holds a private word."""
+    ``pub_path`` the verifier's own file from the same salts, which has neither rows nor salts: it never holds a private word.
+
+    ``share_rows``: each input port's distinct rows are one committed table (header ``shared_rows: {port: R_p}``, the port's
+    frame-v3 tree over them; :func:`share`), and the rows, salts and ``b || c`` are the tables' (port-major, table order), with
+    every instance's refs (u32 LE, instance-major, ports in order) between the ``b || c`` and the outputs. ``rows`` and ``outs``
+    (``{port: (n, words)}``) replace the set's range as the instances' words."""
     meta = json.loads(text.split("\n", 2)[1][5:])
     sub = input_set.subcircuit
     n = hi - lo
     ports = [Port(nm, w) for nm, w, _ in meta["ports"]]
     out_ports = [tuple(x) for x in meta["out_ports"]]
-    rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
-    outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
-    salts = stage_salts(input_set, lo, hi, ports, salt_key)
+    if rows is None:
+        rows = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
+    if outs is None:
+        outs = {p.name: np.asarray(input_set.port(p.name, lo, hi), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
+    refs = None
+    if share_rows:
+        rows, refs = share({p.name: rows[p.name] for p in ports})
+    salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     fv, bcs = statement(ports, out_ports, input_set, lo, hi, rows, outs, salts)
     G = meta["vus_per_block"]
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
@@ -447,12 +474,21 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     head = {"format": INST_FORMAT, "statement": STATEMENT, "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
             "content_digest": input_set.content_digest, "range": [lo, hi], "instances": n, "circuit_sha512": digest(text),
             "units": units, "frame_v3": fv, "rows": True}
-    public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
+    if refs is not None:
+        head["shared_rows"] = {p.name: len(rows[p.name]) for p in ports}
+        public = b"".join(bc for p in ports for bc in bcs[p.name])
+        public += np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes()
+    else:
+        public = b"".join(bcs[p.name][i] for i in range(n) for p in ports)
     public += np.concatenate([outs[nm] for nm, _ in out_ports], axis=1).astype("<u2").tobytes()
     if path is not None:
-        # the ports' rows side by side, instance-major: one concatenation (inside the loop it was quadratic in n)
-        private = np.ascontiguousarray(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")).tobytes()
-        private += b"".join(salts[p.name][i] for i in range(n) for p in ports)
+        if refs is not None:
+            private = b"".join(np.ascontiguousarray(rows[p.name].astype("<u2")).tobytes() for p in ports)
+            private += b"".join(s for p in ports for s in salts[p.name])
+        else:
+            # the ports' rows side by side, instance-major: one concatenation (inside the loop it was quadratic in n)
+            private = np.ascontiguousarray(np.concatenate([rows[p.name] for p in ports], axis=1).astype("<u2")).tobytes()
+            private += b"".join(salts[p.name][i] for i in range(n) for p in ports)
         with open(path, "wb") as f:
             f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + private + public)
     if pub_path is not None:
@@ -462,10 +498,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
-          indices: list | None = None, partition: str | None = None, program: str | None = None) -> Path:
+          indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
-    ``pub-<n>.bin`` from the same salts; returns the prover's path, or (``public_only``: a verifier staging its own public file,
-    which needs the prover's ``salt_key``) writes and returns only ``pub-<n>.bin``."""
+    ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
+    (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
+    ``pub-<n>.bin``."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
@@ -478,7 +515,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program, statics=statics))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows)
     return pub if public_only else inst
 
 
@@ -509,6 +546,7 @@ def main(argv=None) -> int:
     ap.add_argument("--program", default=None, help="the SHA-512 of the Program the partition is over")
     ap.add_argument("--unit-indices", default=None, help="a JSON list: the global unit index of each staged instance, ascending")
     ap.add_argument("--class-only", action="store_true")
+    ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
     a = ap.parse_args(argv)
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
@@ -519,7 +557,8 @@ def main(argv=None) -> int:
         return 0
     idx = json.loads(Path(a.unit_indices).read_text()) if a.unit_indices else None
     for n in a.n:
-        stage(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program)
+        stage(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
+              share_rows=a.share_rows)
     text = (Path(a.out) / "circuit.txt").read_text()
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0
