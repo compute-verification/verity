@@ -276,6 +276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--model", choices=["tiny"])
     src.add_argument("--definition")
+    src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
     ap.add_argument("--modules", default=None, help="with --program-graph: keep groups whose module path starts with this")
     ap.add_argument("--partition", default="q-word")
@@ -287,6 +288,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "Nth provable class and on each flat Definition's largest (0: never)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
+    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     a = ap.parse_args(argv)
     calls: dict[str, int] | None = None
@@ -294,6 +296,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         program, calls, prov = distinct_calls(a.program_graph, a.modules)
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
+    elif a.program_module:
+        import importlib.util
+        mod, fn = a.program_module.rsplit(":", 1)
+        spec = importlib.util.spec_from_file_location("stress_program", mod) if mod.endswith(".py") else None
+        if spec:
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+        else:
+            m = importlib.import_module(mod)
+        program = getattr(m, fn)()
     else:
         program = PU._program(a)
     cache_slot_circuits()
@@ -312,6 +324,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             for sh, c in units._count(cut, fn).items():
                 row_units[sh] = row_units.get(sh, 0) + c * calls[descriptor_id(fn)]
     order = sorted(classes.items(), key=lambda kv: len(kv[1].representative.gates))
+    if a.sample:
+        keep = set(sorted(classes, key=lambda sh: hashlib.sha256(f"{a.seed}/{sh}".encode()).digest())[:a.sample])
+        order = [kv for kv in order if kv[0] in keep]
     largest = {}
     for sh, cl in order:
         largest[cl.definition.id if hasattr(cl.definition, "id") else cl.definition] = sh
