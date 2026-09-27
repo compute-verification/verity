@@ -179,6 +179,22 @@ def test_lowering_is_the_pinned_one(template):
         assert mod.frame_lowering(sub).sha256 == mod.FRAME_PINS[param]
 
 
+@pytest.mark.parametrize("template", sorted(LOWERED))
+def test_pinned_rows_read_earlier_columns(template):
+    """What the soundness package's `Rows` needs beyond the parser's checks (`soundness/ASSUMPTIONS.md` §1.5): every computed
+    row reads only earlier columns or the constant, and never an input padding column (`A = B = 0`, forced zero)."""
+    mod = REG.module(template)
+    sub = TM.subcircuit(template, **LOWERED[template])
+    lows = [mod.lowering(sub)] + ([mod.frame_lowering(sub)] if template == "silu-mul" else [])
+    for low in lows:
+        lay = low.layout
+        n_in = lay.in_words * IL.WORD
+        padding = {c for c in range(n_in) if not lay.rows_a[c] and not lay.rows_b[c]}
+        bad = [(r, c) for r in range(n_in, lay.const) for c in lay.rows_a[r] + lay.rows_b[r]
+               if not ((c < r and c not in padding) or c == lay.const)]
+        assert lay.const + 1 == lay.useful and not bad, (low.name, bad[:5])
+
+
 def test_the_pin_covers_the_leaf_maps():
     """IR6: the netlist's LEAVES line places every unit on its instance's words (flat input and output leaves, each port's
     [leaves, bits]); another arrangement of the same unit is another pin with the same rows."""
