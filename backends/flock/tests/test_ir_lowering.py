@@ -112,6 +112,37 @@ def test_mufu_pieces_match_on_every_exponent(name):
     assert [g for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
 
 
+@pytest.mark.parametrize("name,widths,gen", [
+    ("GumbelStreamKey_v1", (64, 64), lambda r: [r.getrandbits(64), r.choice([r.getrandbits(64), r.randint(0, 5000)])]),
+    ("GumbelNoiseLane_v1", (32, 32), lambda r: [r.getrandbits(32), r.choice([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF,
+                                                                            r.randint(0, 128255), r.getrandbits(32)])]),
+    ("F32Eq_v1", (32, 32), lambda r: (lambda v: [v[0], r.choice([v[1], v[0], v[0] ^ 0x80000000])])(f32_words(r, 2))),
+    ("BitOr_v1", (1, 1), lambda r: [r.getrandbits(1), r.getrandbits(1)]),
+    ("BitNot_v1", (1,), lambda r: [r.getrandbits(1)]),
+])
+def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
+    """The sampler's Philox stream key and Gumbel noise lane (libdevice logf / log1pf, its true toward-zero add) and the row's
+    bit logic, exact bits."""
+    rng = random.Random(9)
+    vecs = [gen(rng) for _ in range(300 if name.startswith("Gumbel") else 3000)]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
+
+
+def test_bit_at_selects_the_bit_or_zero():
+    """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
+    from verity_vllm.program.registry.sampling import bit_at
+    rng = random.Random(4)
+    W = 1000
+    vecs = [[rng.getrandbits(W), rng.choice([rng.randint(0, W - 1), 0, W - 1, W, 0xFFFFFFFF, 0x80000000])] for _ in range(64)]
+    C = gf2.Circuit()
+    word, i = C.input("w", W), C.input("i", 32)
+    C.output("o", IL.PIECES[f"BitAtx{W}_v1"](C, word, i))
+    outs, _ = C.evaluate({"w": [sum(((v[0] >> b) & 1) << t for t, v in enumerate(vecs)) for b in range(W)],
+                          "i": IL.slice_words([v[1] for v in vecs], 32)}, len(vecs))
+    assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
+
+
 def test_a_lookup_is_never_laid_out():
     """A table read is a lookup, which a Flock unit's expanded circuit does not express: the layout refuses it."""
     C = gf2.Circuit()

@@ -30,7 +30,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import fp, gf2, ir_lower as IL, unit as U
+from . import fp, gf2, ir_lower as IL, tail_pieces as TP, unit as U
 from .gf2 import Circuit, L, const_bits
 
 SCHEMA = "verity-boolean-circuit/v1"
@@ -51,6 +51,10 @@ DISPLAY = {
     "lzc": "leading-zero count", "shr": "shift right", "shl_window": "shift left (window)", "mux": "mux",
     "or_reduce": "OR-reduce", "and_reduce": "AND-reduce", "group_sum": "group sum (align + add + normalize)",
     "saturated": "saturation test", "decode_operand": "operand decode", "max_tree": "max tree",
+    "table_read": "MUFU table read (lookup slot)", "ftz": "flush to zero", "f32_sub": "f32 subtract", "f32_gt": "f32 compare (>)",
+    "mufu_ex2": "MUFU.EX2", "mufu_rcp": "MUFU.RCP", "rcp_post": "MUFU.RCP exponent", "_rsq_post": "MUFU.RSQ exponent",
+    "_div_scale": "div.full range scaling", "_abs_gt_big": "|b| > 2^126", "_scale": "scale by a power of two",
+    "_parity_index": "rsq / sqrt table index", "_word": "special cases",
 }
 KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "add": "add", "f32_add": "add",
         "sub": "add", "_normalize_sig": "normalize", "lzc": "normalize", "shl": "normalize", "round_f32": "round",
@@ -190,6 +194,8 @@ def _wrap(name, fn):
         else:
             outs = [("out", r)]
         node.oports = _ports(outs, node.outs)
+        if name == "table_read":
+            node.label = f"MUFU {a[1]} table read (lookup slot)"
         if name == "tc_dot16":
             node.label = _tc_label(fn, a, k)
         return r
@@ -206,19 +212,20 @@ def _patch():
     if _PATCHED:
         return
     originals = {}
-    for mod in (gf2, fp, U):
+    for mod in (gf2, fp, U, TP):
         for name in DISPLAY:
             f = getattr(mod, name, None)
             if callable(f) and not isinstance(f, type):
                 originals[id(f)] = (name, f)
     wrapped = {k: _wrap(n, f) for k, (n, f) in originals.items()}
-    for mod in (gf2, fp, U, IL):
+    for mod in (gf2, fp, U, IL, TP):
         for name in dir(mod):
             f = getattr(mod, name)
             if callable(f) and id(f) in wrapped:
                 setattr(mod, name, wrapped[id(f)])
     for k, f in list(IL.PIECES.items()):
         IL.PIECES[k] = _wrap(k, f)
+    IL.PIECES.wrap = _wrap
     L.__xor__, L.inv, Circuit._new = _xor, _inv, _new
     _PATCHED = True
 
@@ -240,6 +247,35 @@ def trace(build) -> tuple[Circuit, _Call]:
 
 
 # --- analysis: counts, structural ids, gate lists ----------------------------------------------------------------------
+
+#: M0's lookup slot (``live/src/lookup.rs``): low decoder bits per index width; the high decoder takes the rest
+LOOKUP_LO = {24: 14, 23: 13}
+_SLOTS: dict[str, dict] = {}
+
+
+def _decode_ands(k: int) -> int:
+    return 0 if k == 1 else (1 << k) + _decode_ands(k // 2) + _decode_ands(k - k // 2)
+
+
+def lookup_slot(table: str) -> dict:
+    """The gates of M0's lookup slot for a pinned MUFU table: one-hot decoders of the index's low and high bits (each minterm the
+    AND of two half minterms), per value bit j and high minterm h an AND of h with the XOR of the low minterms whose table word
+    has bit j set, each value bit the XOR of its products; a NOT per index bit (the complemented literal)."""
+    if table not in _SLOTS:
+        import numpy as np
+
+        n, bits = TP.TABLE_BITS[table], TP.VALUE_BITS
+        lo = LOOKUP_LO[n]
+        words = np.asarray(gf2.table(table), dtype=np.uint32).reshape(1 << (n - lo), 1 << lo)
+        xor = bits * ((1 << (n - lo)) - 1)
+        for j in range(bits):
+            c = ((words >> j) & 1).sum(axis=1, dtype=np.int64)
+            xor += int(np.maximum(c - 1, 0).sum())
+        _SLOTS[table] = {"and": _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)), "xor": xor, "not": n,
+                         "table": table, "table_sha256": IL.TABLES[table], "index_bits": n, "value_bits": bits,
+                         "built_by": "backends/flock/live/src/lookup.rs (M0, verity PR #83): LookupNet over the pinned table"}
+    return _SLOTS[table]
+
 
 class Registry:
     """Node types by structural hash, across units, templates and rows."""
@@ -332,7 +368,7 @@ class Registry:
                 return (tuple(sorted(lab(t) for t in f.s)), f.c)
 
             h = hashlib.sha256()
-            h.update(json.dumps([node.fn, len(node.ins), len(node.outs), xor, nots]).encode())
+            h.update(json.dumps([node.fn, len(node.ins), len(node.outs), xor, nots] + ([node.label] if node.label else [])).encode())
             for v in own:
                 a, b = data[v]
                 h.update(repr((v - node.start, canon(a), canon(b))).encode())
@@ -341,7 +377,10 @@ class Registry:
             h.update(repr([canon(f) for f in node.outs]).encode())
             hid = "sc-" + h.hexdigest()[:16]
             hid_of[id(node)] = hid
+            slot = lookup_slot(node.label.split()[1]) if node.fn == "table_read" else None
             n_and, n_xor, n_not = len(own), xor, nots
+            if slot:
+                n_and, n_xor, n_not = n_and + slot["and"], n_xor + slot["xor"], n_not + slot["not"]
             children: dict[str, int] = {}
             for kh, (ka, kx, kn) in kid_ids:
                 n_and, n_xor, n_not = n_and + ka, n_xor + kx, n_not + kn
@@ -356,6 +395,9 @@ class Registry:
                     "in_ports": [list(p) for p in node.iports], "out_ports": [list(p) for p in node.oports],
                     "children": [{"ref": c, "count": n} for c, n in children.items()],
                     "own": {"and": len(own), "xor": xor, "not": nots}}
+                if slot:
+                    rec.update(kind="lookup-slot", own={k: n_and if k == "and" else n_xor if k == "xor" else n_not for k in ("and", "xor", "not")},
+                               **{k: v for k, v in slot.items() if k not in ("and", "xor", "not")})
                 if wires is not None:
                     at = {c: i for i, c in enumerate(children)}
                     rec["parts"] = [at[kh] for kh, _ in kid_ids]
@@ -414,7 +456,7 @@ class Registry:
             gl = gate_list(C, node, owner, hid_of)
             if vals is None:
                 vals = _evaluate_all(C, 64)
-            _check(gl, node, vals)
+            _check(gl, node, vals, C)
             self.verified += 1
             self.tag_scopes += len(gl["tag_scopes"])
             self.tag_and_differs += self._tag_ands(gl)
@@ -597,6 +639,7 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
     # the objects the outputs need, inside the node; everything else they reach is an input
     need_tl: dict[int, TL] = {}
     need_and: set[int] = set()
+    need_lk: dict[int, int] = {}
     ext: dict = {}
     stack = list(node.outs)
     while stack:
@@ -618,6 +661,9 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
                     need_and.add(t)
                     stack.extend(data[t])
             else:
+                if lo <= t < hi and kind[t] == "lookup" and data[t][0] not in need_lk:
+                    need_lk[data[t][0]] = t
+                    stack.extend(C.lookups[data[t][0]][1])
                 ext.setdefault(("b", t), L(frozenset((t,)), 0))
     order: dict = {}
     origin = []
@@ -629,7 +675,11 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
     for k, x in ext.items():
         if k not in order:
             order[k] = len(order)
-            origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
+            if k[0] == "b" and kind[k[1]] == "lookup":
+                g, j = data[k[1]]
+                origin.append(["lookup", C.lookups[g][0], j, k[1]])
+            else:
+                origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
     n_in = len(order)
     gates: list[int] = []
     tags: list[int] = []
@@ -678,30 +728,22 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
                 wire_tl[id(x)] = emit("XOR", wire(x.p1), wire(x.p2))
             else:
                 wire_tl[id(x)] = emit("NOT", wire(x.p1))
+    lookups = []
+    for g, t in sorted(need_lk.items()):
+        cur[0] = scope_of[id(owner[t])] if id(owner[t]) in scope_of else 0
+        lookups.append({"table": C.lookups[g][0], "index": [wire(f) for f in C.lookups[g][1]],
+                        "value": [[data[v][1], order[("b", v)]] for v in range(t, t + C.lookups[g][2]) if ("b", v) in order]})
     cur[0] = 0
     outs = [wire(f) for f in node.outs]
-    return {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
+    gl = {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
+    if lookups:
+        gl["lookups"] = lookups
+    return gl
 
 
 def _evaluate_all(C: Circuit, T: int) -> list[int]:
     rng = random.Random(101)
-    mask = (1 << T) - 1
-    val = [0] * len(C.kind)
-    for name, bits in C.inputs.items():
-        for w in bits:
-            (v,) = tuple(w.s)
-            val[v] = rng.getrandbits(T)
-    for v, k in enumerate(C.kind):
-        if k == "and":
-            a, b = C.data[v]
-            x = mask if a.c else 0
-            for t in a.s:
-                x ^= val[t]
-            y = mask if b.c else 0
-            for t in b.s:
-                y ^= val[t]
-            val[v] = x & y
-    return val
+    return C.values({name: [rng.getrandbits(T) for _ in bits] for name, bits in C.inputs.items()}, T)[0]
 
 
 def _ev(f, val, mask):
@@ -711,7 +753,7 @@ def _ev(f, val, mask):
     return x
 
 
-def _check(gl, node, val, T: int = 64):
+def _check(gl, node, val, C: Circuit | None = None, T: int = 64):
     mask = (1 << T) - 1
     w = []
     for o in gl["input_origin"]:
@@ -719,6 +761,8 @@ def _check(gl, node, val, T: int = 64):
             w.append(_ev(node.ins[o[1]], val, mask))
         elif o[0] == "ext":
             w.append(val[o[1]])
+        elif o[0] == "lookup":
+            w.append(val[o[3]])
         else:
             w.append(_ev(L(frozenset(o[1]), o[2]), val, mask))
     g = gl["gates"]
@@ -730,6 +774,11 @@ def _check(gl, node, val, T: int = 64):
             continue
         vb = mask if b == CONST1 else 0 if b == CONST0 else w[b]
         w.append(va & vb if op == 0 else va ^ vb)
+    for lk in gl.get("lookups", ()):
+        t = gl["input_origin"][lk["value"][0][1]][3] if lk["value"] else None
+        idx = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in lk["index"]]
+        if t is not None and idx != [_ev(f, val, mask) for f in C.lookups[C.data[t][0]][1]]:
+            raise AssertionError(f"gate list of {node.fn}: a lookup's index wires disagree with the circuit")
     got = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in gl["outputs"]]
     want = [_ev(f, val, mask) for f in node.outs]
     if got != want:

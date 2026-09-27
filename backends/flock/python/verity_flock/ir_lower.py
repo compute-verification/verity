@@ -86,6 +86,37 @@ PIECES: dict[str, Callable] = {
 PIECES.update(tail_pieces.PIECES)
 
 
+class _Pieces(dict):
+    """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``);
+    ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+
+    wrap = None
+
+    def _resolve(self, key):
+        import re
+
+        for pat, fn in tail_pieces.FAMILIES.items():
+            if isinstance(key, str) and re.fullmatch(pat, key):
+                self[key] = self.wrap(key, fn) if self.wrap else fn
+                return self[key]
+        return None
+
+    def __missing__(self, key):
+        fn = self._resolve(key)
+        if fn is None:
+            raise KeyError(key)
+        return fn
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key) or self._resolve(key) is not None
+
+    def get(self, key, default=None):
+        return self[key] if key in self else default
+
+
+PIECES = _Pieces(PIECES)
+
+
 class NoPiece(NotImplementedError):
     """An IR primitive that C-Flock's lowering has no piece for."""
 

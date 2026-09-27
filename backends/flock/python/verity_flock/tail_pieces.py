@@ -267,6 +267,136 @@ def div_full_scale_a(C, a, b):
                mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), ir_nan=True), list(a)))
 
 
+# --- the sampler: Philox, the Gumbel noise (libdevice logf / log1pf), the row's bit logic -----------------------------------
+
+PHILOX_KEY_A, PHILOX_KEY_B = 0x9E3779B9, 0xBB67AE85
+PHILOX_ROUND_A, PHILOX_ROUND_B = 0xD2511F53, 0xCD9E8D57
+TL_RAND_SCALE = 0x2FFFFFFF        # uint_to_uniform_float's scale; vLLM's floor _TL_RAND_MIN is the same word
+LOGF_POLY = (0xBE055027, 0x3E1039F6, 0xBDF8CDCC, 0x3E0F2955, 0xBE2AD8B9, 0x3E4CED0B, 0xBE7FFF22, 0x3EAAAA78)
+LOG1PF_POLY = (0xBD39BF78, 0x3DD80012, 0xBE0778E0, 0x3E146475, 0xBE2A68DD, 0x3E4CAF9E, 0xBE800042, 0x3EAAAAE6)
+LN2, TWO_M23, TWO_P23, MINUS_ONE, MINUS_HALF, QUARTER_F = 0x3F317218, 0x34000000, 0x4B000000, 0xBF800000, 0xBF000000, 0x3E800000
+
+
+def _c32(v: int):
+    return const_bits(v & 0xFFFFFFFF, 32)
+
+
+def _fma_ftz(C, a, b, c):
+    return f32_fma_ftz(C, a, _c32(b) if isinstance(b, int) else b, _c32(c) if isinstance(c, int) else c)
+
+
+def _mul_ftz(C, a, b):
+    return f32_mul_ftz(C, a, _c32(b) if isinstance(b, int) else b)
+
+
+def _add_ftz(C, a, b):
+    return f32_add_ftz(C, a, _c32(b) if isinstance(b, int) else b)
+
+
+def _i32_to_f32(C, x):
+    """``(float)`` of a signed 32-bit integer, RN."""
+    s = x[31]
+    mag = add(C, [b ^ s for b in x], [s], width=32)
+    return fp.round_f32(C, s, const_bits(158, 9), 0, mag, ZERO)
+
+
+def _signed_gt_const(C, x, k: int):
+    """``(int32) x > k``: unsigned ``x ^ 2^31 >= (k + 1) ^ 2^31``."""
+    return NOT(_ult_const(C, x[:31] + [NOT(x[31])], ((k + 1) & 0xFFFFFFFF) ^ 0x80000000))
+
+
+def philox_word0(C, c0, c1, c2, c3, k0, k1):
+    """Word 0 of Philox4x32-10 (Random123, Triton's ``philox_impl``) on 32-bit words."""
+    for _ in range(10):
+        pb = gf2.multiply(C, c2, const_bits(PHILOX_ROUND_B, 32))
+        pa = gf2.multiply(C, c0, const_bits(PHILOX_ROUND_A, 32))
+        c0, c1, c2, c3 = ([x ^ y ^ z for x, y, z in zip(pb[32:64], c1, k0)], pb[:32],
+                          [x ^ y ^ z for x, y, z in zip(pa[32:64], c3, k1)], pa[:32])
+        k0 = add(C, k0, const_bits(PHILOX_KEY_A, 32), width=32)
+        k1 = add(C, k1, const_bits(PHILOX_KEY_B, 32), width=32)
+    return c0
+
+
+def gumbel_stream_key(C, seed, pos):
+    """``GumbelStreamKey_v1``: ``tl.randint(seed, pos)``, Philox word 0 with key (seed_lo, seed_hi), counter (pos_lo, pos_hi, 0, 0)."""
+    zero = [ZERO] * 32
+    return philox_word0(C, pos[:32], pos[32:64], zero, zero, seed[:32], seed[32:64])
+
+
+def nv_logf(C, a):
+    """libdevice ``__nv_logf`` on an f32 word (FTZ), operation for operation as ``sampling.nv_logf``."""
+    small = OR(C, C.AND(a[31], NOT(_is_nan(C, a))), C.AND(NOT(a[31]), _ult_const(C, a[:31], 0x00800000)))   # a < FLT_MIN
+    a2 = mux(C, small, _mul_ftz(C, a, TWO_P23), a)
+    i0 = mux(C, small, _c32(0xC1B80000), _c32(0))
+    e = sub(C, a2, _c32(1059760811), 32)[0]
+    e = [ZERO] * 23 + e[23:]
+    m = sub(C, a2, e, 32)[0]
+    i2 = _fma_ftz(C, _i32_to_f32(C, e), TWO_M23, i0)
+    f = _add_ftz(C, m, MINUS_ONE)
+    r = _fma_ftz(C, _c32(LOGF_POLY[0]), f, LOGF_POLY[1])
+    for k in LOGF_POLY[2:]:
+        r = _fma_ftz(C, r, f, k)
+    r = _fma_ftz(C, r, f, MINUS_HALF)
+    r = f32_mul_ftz(C, r, f)
+    r = f32_fma_ftz(C, r, f, f)
+    r = _fma_ftz(C, i2, LN2, r)
+    r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), _fma_ftz(C, a2, INF, INF), r)
+    return mux(C, NOT(or_reduce(C, a2[:31])), _c32(0xFF800000), r)
+
+
+def nv_log1pf(C, a):
+    """libdevice ``__nv_log1pf`` (FTZ): ``__fadd_rz(a, 1.0f)`` rounded toward zero, the binade selector, the polynomial, as
+    ``sampling.nv_log1pf``."""
+    s = ftz(C, fp.f32_add(C, ftz(C, a), _c32(ONE_F), rz=True))
+    e = sub(C, s, _c32(1061158912), 32)[0]
+    e = [ZERO] * 23 + e[23:]
+    m1 = sub(C, a, e, 32)[0]
+    t = sub(C, _c32(1082130432), e, 32)[0]
+    r0 = _fma_ftz(C, _c32(QUARTER_F), t, MINUS_ONE)
+    u = f32_add_ftz(C, m1, r0)
+    ef = _mul_ftz(C, _i32_to_f32(C, e), TWO_M23)
+    r = _fma_ftz(C, _c32(LOG1PF_POLY[0]), u, LOG1PF_POLY[1])
+    for k in LOG1PF_POLY[2:]:
+        r = _fma_ftz(C, r, u, k)
+    r = _fma_ftz(C, r, u, MINUS_HALF)
+    r = f32_mul_ftz(C, r, u)
+    r = f32_fma_ftz(C, r, u, u)
+    r = _fma_ftz(C, ef, LN2, r)
+    big = NOT(_ult_const(C, a, 0x7F800000))
+    r = mux(C, C.AND(big, _signed_gt_const(C, a, -1082130432)), _fma_ftz(C, a, INF, INF), r)
+    return mux(C, C.AND(big, NOT(or_reduce(C, a[:31]))), _c32(0x80000000), r)
+
+
+def gumbel_noise_lane(C, key, v):
+    """``GumbelNoiseLane_v1``: ``-logf(-log1pf(-max(rand(key, v), 2^-31')))`` in f32 (FTZ); rand is Philox word 0 of counter
+    (v, 0, 0, 0) under key (key, 0), made uniform by ``uint_to_uniform_float``."""
+    zero = [ZERO] * 32
+    w = philox_word0(C, v, zero, zero, zero, key, zero)
+    xi = [b ^ w[31] for b in w[:31]] + [ZERO]                   # i32 w, or -w - 1 when negative
+    u = f32_mul_ftz(C, _i32_to_f32(C, xi), _c32(TL_RAND_SCALE))
+    u = mux(C, _ult_const(C, u[:31], TL_RAND_SCALE), _c32(TL_RAND_SCALE), u)
+    l1 = nv_log1pf(C, u[:31] + [NOT(u[31])])
+    g = nv_logf(C, l1[:31] + [NOT(l1[31])])
+    return g[:31] + [NOT(g[31])]
+
+
+def f32_eq(C, a, b):
+    """``F32Eq_v1``: IEEE ``a == b`` (+0 == -0; NaN unequal to everything)."""
+    same = and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])
+    zeros = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
+    return [C.AND(C.AND(NOT(_is_nan(C, a)), NOT(_is_nan(C, b))), OR(C, same, zeros))]
+
+
+def bit_at(C, word, i):
+    """``BitAtx{W}_v1``: bit i of a W-bit word, 0 when i (signed) is outside [0, W)."""
+    W = len(word)
+    k = max(1, (W - 1).bit_length())
+    cur = list(word) + [ZERO] * ((1 << k) - W)
+    for b in range(k):
+        cur = [cur[2 * j] ^ C.AND(i[b], cur[2 * j + 1] ^ cur[2 * j]) for j in range(len(cur) // 2)]
+    return [C.AND(_ult_const(C, i, W), cur[0])]
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -287,4 +417,11 @@ PIECES = {
     "SelectF32_v1": lambda C, s, a, b: mux(C, s[0], a, b),
     "SelectI32_v1": lambda C, s, a, b: mux(C, s[0], a, b),
     "I32Add_v1": lambda C, a, b: add(C, a, b, width=32),
+    "GumbelStreamKey_v1": gumbel_stream_key,
+    "GumbelNoiseLane_v1": gumbel_noise_lane,
+    "F32Eq_v1": f32_eq,
+    "BitNot_v1": lambda C, a: [NOT(a[0])],
+    "BitOr_v1": lambda C, a, b: [OR(C, a[0], b[0])],
 }
+#: primitive families whose id carries a width: pattern -> piece
+FAMILIES = {r"BitAtx\d+_v1": bit_at}

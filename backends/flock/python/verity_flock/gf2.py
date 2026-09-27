@@ -168,8 +168,8 @@ class Circuit:
         words = np.asarray(table(name), dtype=np.int64)[idx]
         return [int.from_bytes(np.packbits(((words >> j) & 1).astype(np.uint8), bitorder="little").tobytes(), "little") for j in range(width)]
 
-    def evaluate(self, input_values, T):
-        """input_values: name -> list of T-bit ints (one per input bit). Returns (outputs, assertion_fail_mask)."""
+    def values(self, input_values, T):
+        """Every committed bit's T-bit value (inputs, ANDs, lookups), from input_values: name -> list of T-bit ints."""
         mask = (1 << T) - 1
         val = [0] * len(self.kind)
         for name, bits in self.inputs.items():
@@ -194,6 +194,11 @@ class Circuit:
                 if g not in looked:
                     looked[g] = self.lookup_values(g, [ev(f) for f in self.lookups[g][1]], T)
                 val[v] = looked[g][j]
+        return val, ev
+
+    def evaluate(self, input_values, T):
+        """input_values: name -> list of T-bit ints (one per input bit). Returns (outputs, assertion_fail_mask)."""
+        val, ev = self.values(input_values, T)
         outs = {name: [ev(w) for w in bits] for name, bits in self.outputs.items()}
         fail = 0
         for _, w in self.asserts:
