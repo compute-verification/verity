@@ -87,6 +87,18 @@ def check_shared_rows(pub: Path, header: dict, meta: dict, n: int, row_map: dict
     return ok
 
 
+def expected_draws(members: list[dict], n_all: int, k: int) -> dict[str, dict]:
+    """Per member under the uniform k-subset: the expected number of drawn units, k n / N, and the chance of at least one,
+    1 - C(N - n, k) / C(N, k), so a small template's rare draws are visible in the report."""
+    from math import lgamma, exp
+
+    def log_comb(a: int, b: int) -> float:
+        return lgamma(a + 1) - lgamma(b + 1) - lgamma(a - b + 1)
+    return {m["tid"]: {"n": m["n"], "expected": k * m["n"] / n_all,
+                       "p_at_least_one": 1.0 - (exp(log_comb(n_all - m["n"], k) - log_comb(n_all, k)) if n_all - m["n"] >= k else 0.0)}
+            for m in members}
+
+
 def link(src: Path, dst: Path) -> None:
     if not dst.exists():
         try:
@@ -127,7 +139,8 @@ def main() -> int:
     pd = P.digest(part)
     n_all = P.units(program, query)
     summary: dict = {"layout": a.layout, "population": n_all, "partition": pd, "k": a.k, "delta": a.delta,
-                     "members": [{"k": m["k"], "template": m["tid"], "n": m["n"], "base": m["base"]} for m in members]}
+                     "members": [{"k": m["k"], "template": m["tid"], "n": m["n"], "base": m["base"]} for m in members],
+                     "expected_draws": expected_draws(members, n_all, a.k)}
     if pd != lay["digest"]:
         summary["refused"] = {"layout-digest": {"layout": lay["digest"], "verifier": pd}}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
