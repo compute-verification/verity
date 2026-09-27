@@ -161,7 +161,28 @@ def analyse(views, proofs, rels, sims, gk=None):
         all_ok &= ok
         out["strategies"][strategy] = res
     out["pass"] = bool(all_ok)
+    out["family"] = family(out)
     return out
+
+
+FIELD_TESTS = ("bytes_real_vs_sim", "bits_real", "bits_sim", "xor_real", "xor_sim")
+
+
+def family(out):
+    """The analysis as one family: its number of tests, the smallest p-value and its Bonferroni adjustment. Per test, α =
+    10^-3 over a few hundred tests fails a clean run about a third of the time; the family verdict holds the whole analysis
+    to α. ``pass`` above stays the per-test verdict."""
+    ps = []
+    for res in out["strategies"].values():
+        ps.append(res["end_p"])
+        for sec in ("online", "proofs", "relations"):
+            if isinstance(res.get(sec), dict):
+                ps += [row[k] for row in res[sec].values() for k in FIELD_TESTS]
+    ps += [row["p_fresh"] for row in out.get("rewind_independence", {}).values()]
+    if not ps:
+        return {"tests": 0}
+    m = min(ps)
+    return {"tests": len(ps), "min_p": m, "bonferroni_p": min(1.0, m * len(ps)), "pass": bool(m * len(ps) > ALPHA)}
 
 
 def main(argv=None) -> int:
