@@ -68,3 +68,6 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousP3Column.band_twoWay_220_12_d11
 #print axioms PousP3Column.band_twoWay_220_16
 #print axioms PousP3Column.band_depthRobust
+-- the dense scheme at the deployment point: one 32 MiB segment, and 448 segments (14 GB), random-oracle `H`
+#print axioms PousDenseReCert.dense_meets_64
+#print axioms PousDenseReCert.seg_meets_14

@@ -21,4 +21,5 @@ import PousProofs.P3.Column.BandComb
 import PousProofs.P3.Column.BandWeights
 import PousProofs.P3.Column.TwoWay
 import PousProofs.P3.Column.BandTwoWay
+import PousProofs.Dense.DenseReCert
 import PousProofs.Pinned

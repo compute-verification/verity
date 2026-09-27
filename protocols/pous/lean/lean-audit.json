@@ -144,6 +144,22 @@
    "assumptions": [],
    "type_hash": "000000005b0ac9c7"
   },
+  "PousDenseReCert.dense_meets_64": {
+   "signature": [
+    "PousDenseReCert.dense_meets_64 :",
+    "  Pous.Meets (Pous.Dense.denseScheme (2 ^ 9) 524288) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000009c8f81e5"
+  },
+  "PousDenseReCert.seg_meets_14": {
+   "signature": [
+    "PousDenseReCert.seg_meets_14 :",
+    "  Pous.Meets (PousDenseReCert.segScheme 448 (2 ^ 9) 524288) Pous.Reveal.sequential 5 (2 ^ 20) 106 (2⁻¹ ^ 128)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000502a7ca7"
+  },
   "PousP3Column.band_twoWay_220_12": {
    "signature": ["PousP3Column.band_twoWay_220_12 : Pous.ColumnGame.ColumnHard (PousP3Column.bandGraph 220 12) 10 220 3"],
    "assumptions": [],
@@ -332,6 +348,8 @@
     "Pous.k_ge_86",
     "Pous.not_meets_eps_one",
     "Pous.not_meets_of_lt_eps",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.DenseMeets",
     "PousProofs.KFloor"
    ]
@@ -378,6 +396,8 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
     "PousBridge.b5_stacked",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -419,6 +439,8 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
     "PousBridge.b5_stacked",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.A1CompressionPr",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
@@ -470,6 +492,8 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -513,7 +537,7 @@
     "Pous.Dense.denseModel": "53c87493a8d7c89b",
     "Pous.Dense.denseScheme": "9ca3dbb2eba31360"
    },
-   "pins": ["PousProofs.DenseMeets"]
+   "pins": ["PousDenseReCert.dense_meets_64", "PousDenseReCert.seg_meets_14", "PousProofs.DenseMeets"]
   },
   "Pous.Model.HashChain": {
    "digest": "28053bfcb0e1511c0f202d7657c5a04b",
@@ -582,6 +606,8 @@
    },
    "pins": [
     "PousBridge.b5_stacked",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousP3Column.band_twoWay_220_12",
     "PousP3Column.band_twoWay_220_12_d11",
     "PousP3Column.band_twoWay_220_16",
@@ -605,6 +631,8 @@
     "Pous.honest_sim_accepted",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.DenseMeets"
    ]
   },
@@ -665,6 +693,8 @@
     "Pous.plain_short_coins_insecure",
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted",
+    "PousDenseReCert.dense_meets_64",
+    "PousDenseReCert.seg_meets_14",
     "PousProofs.A3Prime",
     "PousProofs.A3PrimeLam",
     "PousProofs.A6RederiveTimed",
@@ -770,6 +800,14 @@
     "Pous.raw_seq_accepted",
     "Pous.raw_sim_accepted"
    ]
+  },
+  "PousProofs.Dense.DenseReCert": {
+   "digest": "5f7dd3ca5cb444396c261feb89537584",
+   "definitions": {
+    "PousDenseReCert.segDAG": "9648793ee7d01726",
+    "PousDenseReCert.segScheme": "3c26bb1db290e208"
+   },
+   "pins": ["PousDenseReCert.seg_meets_14"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "88b5ece951ec73b38003348121ad3c79",
