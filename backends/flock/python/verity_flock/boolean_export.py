@@ -995,6 +995,7 @@ class Commitments:
     def __init__(self, walker: "Walker"):
         self.walker = walker
         self.records: dict[str, dict] = {}
+        self.openings: set[str] = set()
 
     def of(self, fn) -> str:
         from verity.ir.codec import _spec_id
@@ -1018,7 +1019,8 @@ class Commitments:
 
     def _boolean(self, gates: list[tuple[str, tuple]], pieces: dict) -> dict:
         """The gates' AND/XOR/NOT from their pieces (constant operands propagated), and each gate's index in ``pieces``
-        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``)."""
+        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``, ``{"commitment_opening": primitive}`` for the
+        embedding's gather)."""
         t = {"and": 0, "xor": 0, "not": 0}
         nyl: dict[str, int] = {}
         parts: list[int] = []
@@ -1027,7 +1029,9 @@ class Commitments:
             if sig not in memo:
                 memo[sig] = self.walker.prim(*sig)
             e = memo[sig]
-            if e is not None and "ref" in e:
+            if sig[0] in self.openings:
+                key = ("commitment_opening", sig[0])
+            elif e is not None and "ref" in e:
                 n = self.walker.reg.nodes[e["ref"]]
                 for k in t:
                     t[k] += n[k]
@@ -1223,9 +1227,13 @@ def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED = {
-    "Embedding_v1": "a row gather by token id (data movement from the committed table); no Boolean lowering yet",
-    "EmbeddingShard_v1": "a row gather by token id from a tensor-parallel shard of the table; no Boolean lowering yet",
     "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
+}
+#: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
+OPENED = {
+    "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
+    "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "
+                         "(a commitment opening, not a circuit)",
 }
 DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
 
@@ -1328,6 +1336,8 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
         return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
+    if tname in OPENED:
+        return dict(base, name=tname, kind="commitment-opening", reason=OPENED[tname], children=[])
     if tname in NOT_LOWERED:
         return dict(base, name=tname, kind="not-yet-lowered", reason=NOT_LOWERED[tname], children=[])
     if tname in ("AttentionHead", "AttentionSoftcap_v1"):
@@ -1447,6 +1457,11 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
         return {}
     q = g.get("q_word_v1") or {}
     try:
+        if g["definition"] in OPENED:
+            from verity.ir.defs import PrimitiveDefinition
+
+            fn = specialization(g["definition"], g["statics"])
+            cm.openings.update(n.fn.id for n in fn.body.nodes if isinstance(n.fn, PrimitiveDefinition) and n.fn.id.startswith("Gather"))
         if g.get("varying") and len(g["varying"]) == 1 and g.get("varying_calls"):
             (a,) = g["varying"]
             vals = sorted(int(v) for v in g["varying_calls"])
@@ -1596,7 +1611,7 @@ def main(argv=None) -> int:
                              "check": f"each Call's cut against its program graph's q_word_v1 (units, gates, structure gates, committed "
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
                              "differ": checks["differ"][:50]},
-             "not_yet_lowered": nyl}
+             "not_yet_lowered": nyl, "commitment_openings": OPENED}
     (out / "index.json").write_text(json.dumps(index, indent=1))
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
