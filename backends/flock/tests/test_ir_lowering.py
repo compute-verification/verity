@@ -129,6 +129,85 @@ def test_sampler_pieces_match_the_ir_primitives(name, widths, gen):
     assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, 32, vecs)) if g != ref(*v)] == []
 
 
+#: the other rows' primitives (tail_pieces): FA3's inverse sum, the greedy argmax, the FP8 linear's quantizer, the MoE router
+MORE = ["Fa3InvSum_v1", "Bf16GtStrict_v1", "SelectBf16_v1", "F32Fabs_v1", "F32Neg_v1", "F32Fmaxf_v1", "F32Fminf_v1", "F32ToE4m3Sat_v1",
+        "F32Div_v1", "F32Sub_v1", "F32FmaRm_v1", "F32Sat_v1", "F32BitsShl23_v1", "F32IsFinite_v1", "I32Eq_v1"]
+
+
+@pytest.mark.parametrize("name", MORE)
+def test_the_other_rows_pieces_match_the_ir_primitives(name):
+    """Exact bits, NaN payloads included, on each operand kind's specials and random words (f32 operands near each other so
+    sums cancel, the e4m3 grid's edges for the quantizer, divisors of every magnitude)."""
+    p = _registered()[name]
+    widths = [w for _, t in p.params for w in t.leaf_widths()]
+    rng = random.Random(31)
+    vecs = []
+    for i in range(6000):
+        v = []
+        for w in widths:
+            v.append(rng.getrandbits(1) if w == 1 else bf16_words(rng, 1)[0] if w == 16 else f32_words(rng, 1)[0])
+        f = [j for j, w in enumerate(widths) if w == 32]
+        if len(f) >= 2 and rng.random() < 0.3:
+            v[f[1]] = near(rng, v[f[0]])
+        if name == "F32ToE4m3Sat_v1" and i % 2:
+            v[0] = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.choice([0, 0x080000, 0x100000, rng.getrandbits(23)])
+        if name == "F32FmaRm_v1" and rng.random() < 0.3:
+            v[2] = near(rng, P.f32_mul_bits(v[0], v[1]))
+        if name == "I32Eq_v1" and rng.random() < 0.3:
+            v[1] = v[0]
+        vecs.append(v)
+    got = run_piece(IL.PIECES[name], widths, sum(p.ret.leaf_widths()), vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != p.evaluate(*v)] == []
+
+
+def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
+    """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` (the total model): E4M3 NaNs (0x7F, 0xFF), zeros, subnormals, the largest
+    magnitudes, accumulators of every class (the 14-bit adder truncates them too), bit for bit."""
+    from verity.ml.prims import HopperE4m3QgmmaDot32 as Q
+
+    rng = random.Random(12)
+    specials8 = [0x00, 0x80, 0x7F, 0xFF, 0x01, 0x81, 0x07, 0x7E, 0xFE, 0x08, 0x38]
+    specials32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F7FFFFF, 0xFF7FFFFF, 1, 0x00800000]
+
+    def e4(small):
+        r = rng.random()
+        return rng.choice(specials8) if r < (0.01 if small else 0.08) else (rng.getrandbits(1) << 7) | (rng.randint(4, 10) << 3) \
+            | rng.getrandbits(3) if small else rng.getrandbits(8) & (0x7E if r < 0.5 else 0xFF)
+
+    vecs = []
+    for i in range(1500):
+        small = i % 3 == 0
+        acc = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.getrandbits(23) if small else \
+            rng.choice(specials32) if rng.random() < 0.1 else rng.getrandbits(32)
+        vecs.append([acc] + [e4(small) for _ in range(64)])
+    got = run_piece(IL.PIECES["HopperE4m3QgmmaDot32_v1"], [32] + [8] * 64, 32, vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
+
+
+@pytest.mark.parametrize("name,table", [("MufuTanh_v1", "tanh_mufu"), ("TanhF32Rn_v1", "tanh_rn")])
+def test_the_tanh_pieces_match_the_ir_primitives(name, table):
+    """Gemma's tanh (a table read over |x|): each region's bounds and their neighbours, both signs, NaNs and infinities, and random
+    words across the table's region, exact bits."""
+    from verity_flock import tail_pieces as TP
+
+    lo, hi = TP.TANH_BOUNDS[table]
+    rng = random.Random(8)
+    words = [lo - 1, lo, lo + 1, hi - 1, hi, hi + 1, 0, 1, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF, 0x3F800000, 0x41200000]
+    words += [rng.randrange(lo, hi) for _ in range(6000)] + [rng.randrange(0, 0x7F800000) for _ in range(1000)]
+    vecs = [[w | (rng.getrandbits(1) << 31)] for w in words] + [[w | 0x80000000] for w in words[:14]]
+    ref = _registered()[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], (32,), 32, vecs)) if g != ref(*v)] == []
+
+
+def test_the_gelu_piece_matches_the_ir_primitive_on_every_gate_word():
+    """``GeluTanhMulBf16``: every bf16 gate word (the activation table's whole domain), each with a random up word, exact bits."""
+    rng = random.Random(3)
+    ups = bf16_words(rng, 1 << 16)
+    vecs = [[g, u] for g, u in zip(range(1 << 16), ups)]
+    ref = _registered()["GeluTanhMulBf16_v1"].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES["GeluTanhMulBf16_v1"], (16, 16), 16, vecs)) if g != ref(*v)] == []
+
+
 def test_bit_at_selects_the_bit_or_zero():
     """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
     from verity_vllm.program.registry.sampling import bit_at

@@ -165,7 +165,7 @@ class Circuit:
         idx = np.zeros(T, dtype=np.int64)
         for b, x in enumerate(index_bits):
             idx |= unpack(x) << b
-        words = np.asarray(table(name), dtype=np.int64)[idx]
+        words = np.asarray(table(name))[idx].astype(np.int64)
         return [int.from_bytes(np.packbits(((words >> j) & 1).astype(np.uint8), bitorder="little").tobytes(), "little") for j in range(width)]
 
     def values(self, input_values, T):
