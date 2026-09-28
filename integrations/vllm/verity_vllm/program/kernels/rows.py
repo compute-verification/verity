@@ -617,8 +617,12 @@ DOMAIN = ("instances whose bf16 operand and result words are all finite, outside
 ROWS: dict[str, RowKernel] = {}
 
 
+_FINITE_CHUNK = 1 << 22                                                        # words per scan: a weight table is never masked whole
+
+
 def _finite16(w: np.ndarray) -> bool:
-    return not bool(((np.asarray(w).reshape(-1) & 0x7F80) == 0x7F80).any())
+    w = np.asarray(w).reshape(-1)
+    return not any(bool(((w[i:i + _FINITE_CHUNK] & 0x7F80) == 0x7F80).any()) for i in range(0, w.size, _FINITE_CHUNK))
 
 
 def _instance(k: RowKernel) -> Callable[..., np.ndarray]:
