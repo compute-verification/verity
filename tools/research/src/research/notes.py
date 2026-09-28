@@ -1381,14 +1381,16 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
 
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
-    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent."""
+    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
+    out for a stamp ahead of the clock is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other notes synced."""
     from . import notes_sync  # noqa: PLC0415
 
-    if srep["rc"]:
+    refused = [f"{now:%H:%MZ} {x}" for x in notes_sync.refused_lines(srep)]
+    if srep["rc"] not in (0, notes_sync.FUTURE_RC):
         ab = notes_sync.lag(root)
         where = f"ahead {ab[0]} behind {ab[1]}" if ab else "lag unknown"
-        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}"]
-    return [f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []
+        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}", *refused]
+    return ([f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []) + refused
 
 
 def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[str]:
@@ -1798,9 +1800,10 @@ def main(argv: list[str]) -> int:
         lanes = [argv[1]] if len(argv) > 1 and not argv[1].startswith("-") else []
         if argv[0] == "relaunch" and "--as" in argv[:-1]:
             lanes.append(argv[argv.index("--as") + 1])
-        line = notes_sync.auto_sync(root, lanes if argv[0] != "relaunch" or "--as" in argv else [])
+        line, sync_rc = notes_sync.auto_sync(root, lanes if argv[0] != "relaunch" or "--as" in argv else [])
         if line:
             print(line, file=sys.stderr)
+        rc = rc or sync_rc
     return rc
 
 
