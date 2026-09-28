@@ -225,3 +225,32 @@ def test_a_path_rule_leaves_out_what_its_patterns_name():
     assert rule_touches(rule, ["flock/README.md", "flock/a.rs"]) == ["flock/"]
     assert rule_touches(rule, ["flockish/a.rs", "other/README.md"]) == []
     assert rule_touches(["flock/"], ["flock/README.md"]) == ["flock/"]            # no pattern, no exception
+
+
+def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_checked_merge(tmp_path, monkeypatch, capsys):
+    """A push to main is the step a stray local merge reaches the remote through (old-circuits-and-proofs, 2 Oct): the hook
+    `research merge` installs refuses every added first-parent commit whose tree no passing `check` attempt has."""
+    import io
+
+    from research.merge import ZERO, install_push_guard, unchecked_pushes
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    base = _git(main, "rev-parse", "HEAD")
+    assert _record(tmp_path, feat, monkeypatch, "true") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["feat"]) == 0 and "installed the push guard" in capsys.readouterr().err
+    hook = Path(_git(main, "rev-parse", "--git-path", "hooks/pre-push"))
+    assert (main / hook if not hook.is_absolute() else hook).exists() and install_push_guard(main) is None   # never clobbers
+    merged = _git(main, "rev-parse", "HEAD")
+    store = LocalStore()
+    line = f"refs/heads/main {merged} refs/heads/main {base}"
+    assert unchecked_pushes(main, [line], store) == []                            # its tree is feat's, which passed
+    (main / "stray.txt").write_text("x\n")
+    _git(main, "add", "stray.txt")
+    _git(main, "commit", "-q", "-m", "a stray local commit")
+    stray = _git(main, "rev-parse", "HEAD")
+    assert unchecked_pushes(main, [f"refs/heads/main {stray} refs/heads/main {base}"], store) == [stray]
+    assert unchecked_pushes(main, [f"refs/heads/other {stray} refs/heads/other {ZERO}"], store) == []   # only main is guarded
+    monkeypatch.setattr("sys.stdin", io.StringIO(f"refs/heads/main {stray} refs/heads/main {base}\n"))
+    assert merge_main(["--guard-push"]) == 1 and "refused push" in capsys.readouterr().err

@@ -114,6 +114,47 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
                   f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
 
 
+ZERO = "0" * 40
+HOOK = """#!/bin/sh
+# installed by `research merge`: a push to {into} needs, for every commit it adds, a passing `{tool}` attempt of that tree
+root=$(git rev-parse --show-toplevel)
+PYTHONPATH="$root/tools/research/src${{PYTHONPATH:+:$PYTHONPATH}}" exec {python} -m research merge --guard-push --into {into} --tool {tool}
+"""
+
+
+def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
+    """The commits a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would add to ``into`` without a
+    passing ``tool`` attempt of their tree: each first-parent commit passes on its own attempt, or, as a `research merge` commit
+    does, on its merged parent's when the two trees are equal."""
+    bad = []
+    for line in lines:
+        f = line.split()
+        if len(f) != 4 or f[2] != f"refs/heads/{into}" or f[1] == ZERO:
+            continue
+        span = f[1] if f[3] == ZERO else f"{f[3]}..{f[1]}"
+        for c in _git(repo, "rev-list", "--first-parent", span).stdout.split():
+            tree = _git(repo, "rev-parse", f"{c}^{{tree}}").stdout.strip()
+            parents = _git(repo, "rev-list", "--parents", "-n", "1", c).stdout.split()[1:]
+            ok = any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree and passing(store, x, tool, tree=tree)
+                     for x in [c, *parents[1:]])
+            if not ok:
+                bad.append(c)
+    return bad
+
+
+def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> Path | None:
+    """The pre-push hook (`--guard-push`) in ``repo``'s hooks directory, unless one is there already; its path when written."""
+    hooks = Path(_git(repo, "rev-parse", "--git-path", "hooks").stdout.strip())
+    hook = hooks if hooks.is_absolute() else repo / hooks
+    hook = hook / "pre-push"
+    if hook.exists():
+        return None
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(HOOK.format(into=into, tool=tool, python=sys.executable))
+    hook.chmod(0o755)
+    return hook
+
+
 def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
     """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
     merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
@@ -367,10 +408,20 @@ def main(argv: list[str]) -> int:
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
+                    "lines on stdin and refuse a push that adds to --into a commit with no passing --tool attempt of its tree")
     a = ap.parse_args(argv)
     from .store.local import LocalStore
 
     repo = Path.cwd()
+    if a.guard_push:
+        bad = unchecked_pushes(repo, sys.stdin.read().splitlines(), LocalStore(a.store), a.into, a.tool)
+        for c in bad:
+            print(f"research merge: refused push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; "
+                  "land it with `research merge`", file=sys.stderr)
+        return 1 if bad else 0
+    if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
+        print(f"research merge: installed the push guard {hook}", file=sys.stderr)
     if a.sweep:
         if a.ref or a.train:
             ap.error("--sweep takes no refs")
