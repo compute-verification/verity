@@ -1273,6 +1273,80 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp_path):
+    """cov-gm176's Build wrote its plans from a job tree that the 14:17Z redeploy (2 Oct) replaced. Node 2's Commit ran from the new
+    tree, found the plans' code key differing and derived both with GPU 6 held: two 25-min leases at 0%. submit refuses such a row
+    before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
+    source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
+    row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
+    tree, row, bin_, log = tmp_path / "tree", tmp_path / "sweep" / row_name, tmp_path / "bin", tmp_path / "ssh.log"
+    pipeline = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline"
+    for d in (pipeline, row / "plan", bin_):
+        d.mkdir(parents=True)
+    (pipeline.parent / "__init__.py").write_text("")
+    (pipeline / "__init__.py").write_text("")
+    (pipeline / "source_identity.py").write_text(
+        "import hashlib, pathlib\nTREE = pathlib.Path(__file__).resolve().parents[4]\n"
+        "def code_identity(root):\n    return {'sha256': hashlib.sha256((pathlib.Path(root) / 'code').read_bytes()).hexdigest()}\n")
+    (tree / "code").write_text("after the redeploy")
+    new, old = hashlib.sha256(b"after the redeploy").hexdigest(), hashlib.sha256(b"before it").hexdigest()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {log}\nexit 1\n')
+    (bin_ / "ssh").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "VY_JOB_PY": sys.executable, "VY_N1": "n1.invalid",
+           "VY_N2": "n2.invalid", "VY_N2_SRC": str(tree)}
+
+    def plans(commit: str | None, boundary: str | None) -> None:
+        for name, code in (("plan/commit_plan.json", commit), ("call_boundary_plan.json", boundary)):
+            (row / name).unlink(missing_ok=True)
+            if code is not None:
+                (row / name).write_text(json.dumps({"schema": "s", "key": {"program_digest": "d", "code": code}}))
+
+    def keyed(t: Path = tree) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "plan-keyed", str(t), str(row)], capture_output=True, text=True,
+                              env=env)
+
+    assert keyed().returncode == 0
+    plans(new, new)
+    assert keyed().returncode == 0
+    plans(new, old)
+    r = keyed()
+    assert r.returncode == 1 and r.stderr.strip() == f"call_boundary_plan.json is keyed to code {old[:16]}, the Commit's job tree is {new[:16]}"
+    plans(old, new)
+    assert "plan/commit_plan.json is keyed to code" in keyed().stderr
+    plans(None, None)
+    (row / "plan" / "commit_plan.json").write_text("not json")
+    r = keyed()
+    assert r.returncode == 1 and "plan/commit_plan.json is unreadable" in r.stderr
+    (tmp_path / "empty").mkdir()
+    r = keyed(tmp_path / "empty")
+    assert r.returncode == 1 and r.stderr.startswith("source_identity came from ") and r.stderr.strip().endswith("/empty"), r.stderr
+    (tree / "code").unlink()
+    r = keyed()
+    assert r.returncode == 1 and "the job tree's code identity isn't computable (FileNotFoundError" in r.stderr, r.stderr
+    (tree / "code").write_text("after the redeploy")
+
+    item = tmp_path / "item.json"
+    item.write_text(json.dumps({"template": "config-run", "tree": "/t", "env": {
+        "ROW": row_name, "ROLE": "GEMMA2_9B", "REPO": "unsloth/gemma-2-9b", "REVISION": "9145841c", "SWEEP_DIR": str(row.parent)}}))
+    (row / "manifest.json").write_text("{}")
+    (row / "two-task-build-run").write_text("r20261002-120300-0000")
+
+    def submit() -> subprocess.CompletedProcess:
+        log.write_text("")
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "submit", "vllm-epoch-run-cov-gm176", str(item)],
+                              capture_output=True, text=True, env=env)
+
+    plans(old, old)
+    r = submit()
+    assert r.returncode == 3 and "plan/commit_plan.json is keyed to code" in r.stderr and "not queued" in r.stderr, r.stderr
+    assert log.read_text() == ""
+    plans(new, new)
+    r = submit()
+    assert r.returncode == 3 and "isn't staged on node 2" in r.stderr, r.stderr
+    assert log.read_text().startswith("-n n2.invalid ")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
 def test_n2_commit_marks_a_commit_it_hands_back_so_offload_never_moves_it_to_node_2_again(tmp_path):
     """cov-cg04-norm-taps-2 went from node 1 to node 2 seven times (22:30-23:06Z, 1 Oct): node 2 handed it back after two stops,
     and node 1's offload moved it again 120 s later. A Commit handed back (task 1) goes into node 1's reclaimed.txt, which offload

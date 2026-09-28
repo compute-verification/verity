@@ -1003,14 +1003,10 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 1
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "thanks")[0] == 0
     assert len(bells(fake, circuits)) == 1
-    posts = len(fake.messages[COORD])
-    for argv in (["reply", "--thread", root["ts"], "--text", "@circuits one more"], ["send", "--to", "@circuits", "--text", "x"],
-                 ["send", "--text", "@circuits x"], ["send", "--thread", root["ts"], "--text", "@circuits x"]):
-        rc, _, err = run(capsys, argv[0], "--as", "infra", "--quiet", *argv[1:])
-        assert rc == 2 and "@circuits would never see this" in err, argv                 # a quiet ask reaches no one
-    assert len(fake.messages[COORD]) == posts
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "@circuits started, no reply needed")[0] == 0
+    assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
-    assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
+    assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
 def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
@@ -1114,15 +1110,17 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
 
 
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
-    inbox(fake, routes_dirs, "circuits")
+    box = inbox(fake, routes_dirs, "circuits")
+    add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
     old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
+    fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
-    assert rc == 0 and {"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0} in rep["inboxes"]
+    assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
     assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
-    assert old["ts"] in [s["ts"] for s in rep["unanswered"]]
+    assert old["ts"] in [s["ts"] for s in rep["unanswered"]] and fyi["ts"] not in [s["ts"] for s in rep["unanswered"]]
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

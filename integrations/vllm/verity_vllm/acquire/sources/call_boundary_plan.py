@@ -700,23 +700,30 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
 
 
 def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
-    """`d` on every row of `arrays` by its row kernel alone; an instance the kernel declines is a ValueError naming it."""
+    """`d` on every row of `arrays` by its row kernel alone (its batch form where it has one: `kernel_registry.register`); an
+    instance the kernel declines is a ValueError naming it."""
+    from verity.evaluation import kernels
     from verity.evaluation.batch import type_dtype, type_shape
     from verity.evaluation.reference import signature_of, statics_of
     from verity_vllm.program.kernels.kernel_registry import Declined, instance
     from verity_vllm.program.kernels.rows import KERNEL
 
     params, ret = signature_of(d)
-    fn, statics = instance(d, KERNEL), statics_of(d)
+    statics = statics_of(d)
     args = [np.asarray(a).reshape(len(a), *type_shape(pt)).astype(type_dtype(pt), copy=False) for a, pt in zip(arrays, params)]
-    out = []
-    for i in range(len(args[0])):
+    n = len(args[0])
+    got = kernels(d)[KERNEL].fn(*args, **statics)
+    vals, declined = (None, np.ones(n, dtype=bool)) if got is NotImplemented else got
+    if declined is not None and np.any(declined):
+        i = int(np.flatnonzero(declined)[0])
         try:
-            out.append(np.asarray(fn(*(a[i] for a in args), **statics)).reshape(-1))
+            instance(d, KERNEL)(*(a[i] for a in args), **statics)
+            why = "declined by its batch form"
         except (Declined, ValueError) as e:
-            raise ValueError(f"call boundaries: the row kernel of {spec} declines an instance ({e}); at "
-                             f"{sum(pt.leaves for pt in params)} words per instance the reference is not run") from None
-    return np.stack(out).astype(type_dtype(ret))
+            why = str(e)
+        raise ValueError(f"call boundaries: the row kernel of {spec} declines an instance ({why}); at "
+                         f"{sum(pt.leaves for pt in params)} words per instance the reference is not run") from None
+    return np.asarray(vals).reshape(n, -1).astype(type_dtype(ret))
 
 
 __all__ = ["FAMILY", "WORD_DTYPES", "Uncovered", "Operand", "Target", "Template", "Part", "Body", "Plan", "build_dirs", "request_programs",

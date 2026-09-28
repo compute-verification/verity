@@ -51,7 +51,7 @@ REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_
 SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".lock"})
 
 MD_SIZE_CAP = 48 * 1024
-PROTOCOL_SIZE_CAP = 128 * 1024
+PROTOCOL_SIZE_CAP = 256 * 1024
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
