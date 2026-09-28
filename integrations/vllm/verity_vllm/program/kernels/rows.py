@@ -83,6 +83,8 @@ EVALUATORS = {
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
                                             "TargetProfile.sampler_construction = shared-greedy)",
+    "GumbelTopPTokenSelect_v2": "GumbelTopPTokenSelect_v1's row at the split count S (registry.topp_words, a single-request Program's select): "
+                                "`splits` = S as v1 reads it, any other value as an unlaunched count, where v1 keeps no lane either",
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
@@ -385,6 +387,14 @@ def gumbel_topp(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str,
     return {SAMPLED_MEMBER: np.asarray([gumbel_topp_token_select(statics, [ops[g] for g in range(len(ops))])], dtype=np.uint64)}
 
 
+def gumbel_topp_split(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GumbelTopPTokenSelect_v2{V,S}`: v1 wherever `splits` is S; any other value keeps no lane, as v1 at the unlaunched count 0 does."""
+    ops = list(ops)
+    s = np.asarray(ops[5])
+    ops[5] = np.where(s == int(statics["S"]), s, 0).astype(s.dtype)
+    return gumbel_topp(statics, ops)
+
+
 def fp8_group_quant(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """Interior of the FP8 linear: ports 0 (K e4m3 words) and 1 (K/G f32 group scales), in the Definition's return order -- the
     consumer's `['n', row, lo, hi]` slices index the concatenation."""
@@ -677,10 +687,17 @@ def _sample_gumbel(rng: np.random.Generator, n: int, params: Sequence[Any], **st
             rng.integers(0, 1 << 20, n).astype(np.uint64), f32(rng.uniform(0.3, 2.0, n)), rng.choice([1, 2, 4, 8], n).astype(np.uint32)]
 
 
+def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any], **statics: Any) -> list[np.ndarray]:
+    """`_sample_gumbel` with splits = S on three rows in four (a Program's `Const32[S]`), another count on the rest."""
+    w = _sample_gumbel(rng, n, params, **statics)
+    w[5] = np.where(rng.random(n) < 0.75, int(statics["S"]), w[5]).astype(np.uint32)
+    return w
+
+
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, hopper, moe, moe_pad, sampling
+    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -703,6 +720,7 @@ def _check_targets() -> dict[str, list]:
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
+        "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
@@ -739,6 +757,7 @@ _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
+_row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
