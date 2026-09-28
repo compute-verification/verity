@@ -402,19 +402,20 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id,
-                                                                         V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
+    circuit = (V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id, V.FLOCK_CIRCUIT_HIDDEN_CONFIG.id,
+               V.FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG.id)
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id, V.FLOCK_VLLM_CONFIG.id, *circuit}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
                     "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
                     "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A,
-                    V.FLOCK_VLLM_CONFIG.id, V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id}
+                    V.FLOCK_VLLM_CONFIG.id, *circuit}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
         "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
         "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.FLOCK_VLLM_CONFIG.id,
-        V.FLOCK_CIRCUIT_CONFIG.id, V.FLOCK_CIRCUIT_TYPED_CONFIG.id]
+        *circuit]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", V.MACHINE_CHECKED, "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -1638,3 +1639,27 @@ def test_a_typed_circuit_cell_is_never_a_table2_cell(store: LocalStore, monkeypa
         assert all(c.artifact != typed for ln in views.lines for c in ln["cells"].values() if c is not None)
         assert typed not in {c.artifact for c in views.admissible}
         assert [r["codes"] for r in views.rejected if r["artifact"] == typed] == [[("X", V.TYPED_NOT_IN_TABLE2)]]
+
+
+def test_a_hidden_output_circuit_result_never_shares_a_cell_with_a_public_output_one(store: LocalStore) -> None:
+    """#757 moved `verity/flock-circuit` and `/types` to hidden outputs (at k64 about 28% slower), and the names alone no longer
+    tell the two apart: the identity's `outputs` does. A hidden-output result has a configuration of its own, which claims no
+    privacy (M0's transcript is not hiding), and is no Table 2 cell until Table 2 gives it lines of its own."""
+    flat = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+                     proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
+    doc = hashed("blake3", t_total=0.1)
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"], fp["statement"], fp["proof_class"] = "flock-circuit", V.CIRCUIT_FLAT, "NON_ZK_PROOF"
+    doc["measurements"].append({"name": V.COMMIT, "value": 0.1, "unit": "s"})
+    assert V.configuration_of(doc) is V.FLOCK_CIRCUIT_CONFIG
+    fp["software"]["backend"]["identity"] = {"statement": V.CIRCUIT_FLAT, "outputs": "hidden: each output port an hm96-sha512/row/v1 row"}
+    assert V.configuration_of(doc) is V.FLOCK_CIRCUIT_HIDDEN_CONFIG
+    assert V.configuration_of({"workload_fingerprint": {**fp, "statement": V.CIRCUIT_TYPED}}) is V.FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG
+    hidden = put(store, doc)
+    views = V.build(store)
+    assert line(views)["cells"]["Flock"].artifact == flat
+    assert hidden not in {c.artifact for c in views.admissible}
+    assert [r["codes"] for r in views.rejected if r["artifact"] == hidden] == [[("X", V.HIDDEN_NOT_IN_TABLE2)]]
+    for cfg in (V.FLOCK_CIRCUIT_HIDDEN_CONFIG, V.FLOCK_CIRCUIT_TYPED_HIDDEN_CONFIG):
+        assert "no output word" in cfg.ports and "y public" not in cfg.ports
+        assert cfg.zk.startswith("No: NON_ZK_PROOF; no privacy claim") and "transcript" in cfg.zk and "hiding" not in cfg.zk
