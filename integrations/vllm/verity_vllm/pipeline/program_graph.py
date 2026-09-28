@@ -558,15 +558,18 @@ def _class_words(rule: dict[str, Any]) -> dict[tuple[str, str], tuple[float, flo
 _WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gates", "redundant_gates")
 
 
-def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None) -> dict[str, Any]:
+def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None,
+                    max_gates: str | None = None) -> dict[str, Any]:
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
     interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
     primitives of one unit -- and the violations) and the row's totals, with `taps`: every committed interior value class of the row by
     (activation family, primitive), its words and bytes, where serving commits it today (`word_query.committed_today`) or the kernel a
     new tap goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
     rest interpolated (`interpolated`); its classes are its largest value's.  `substitute`: {Definition family: registered Definition}
-    to partition in a group's place (the same function, e.g. the MoE router stated round by round); off the record path."""
+    to partition in a group's place (the same function, e.g. the MoE router stated round by round); off the record path.  `max_gates`:
+    the run's gate limits (`word_query.gate_limits`)."""
     memo: dict = {}
+    limits = word_query.gate_limits(max_gates)
     tot = Counter()
     by_template: dict[str, Counter] = {}
     viol: Counter = Counter()
@@ -584,7 +587,8 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
             vals = sorted(calls)
             bn = x["statics"].get("BN") if a == "T" else None
             pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
-            rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo) for v in pts}
+            rules = {v: word_query.unit_rule(spec(x, dict(x["statics"], **{a: v})), X, W, extras, memo=memo, max_gates=limits)
+                     for v in pts}
             per = {f: [float(rules[v].get(f, 0)) for v in pts] for f in _WORD_FIELDS}
             total = {f: int(round(sum(_interp(pts, per[f], v) * calls[v] for v in vals))) for f in per}
             cw = {v: _class_words(rules[v]) for v in pts}
@@ -599,7 +603,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                      "partitioned_at": len(pts)}
         else:
             try:
-                rep = word_query.unit_rule(spec(x, x["statics"]), X, W, extras, memo=memo)
+                rep = word_query.unit_rule(spec(x, x["statics"]), X, W, extras, memo=memo, max_gates=limits)
             except (KeyError, TypeError, ValueError, AttributeError) as e:
                 x["q_word_v1"] = {"unresolved": f"{type(e).__name__}: {e}"[:300]}
                 continue
@@ -714,6 +718,8 @@ class Options:
     store: str | None = option("--store", default=None, help="the VU export's store (<export>/store): request -> Program, to place sampler VUs")
     row: str | None = option("--row", default=None, help="JSON object: the row block (row number, serving config, run)")
     word: str | None = option("--word", default=None, help="add each group's Q_word_v1{X,W} unit rule (\"16/32[+extras]\")")
+    word_max_gates: str | None = option("--word-max-gates", env=word_query.MAX_GATES_ENV, default=None,
+                                        help="--word's gate limits (query.word.gate_limits: N, or FAMILY=N, comma-separated); not in the query id")
 
 
 def main(a: Options) -> int:
@@ -724,7 +730,7 @@ def main(a: Options) -> int:
     g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus,
                       request_programs=request_programs_of(a.store) if a.store else None)
     if a.word:
-        g = with_word_rules(g, *word_query.parse(a.word))
+        g = with_word_rules(g, *word_query.parse(a.word), max_gates=a.word_max_gates)
     Path(a.out).write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
     return 0
 
