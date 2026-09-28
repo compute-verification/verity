@@ -16,6 +16,7 @@ def test_lowering_is_the_pinned_one(relation):
 
 
 @pytest.mark.parametrize("relation", ["bf16-hopper", "fp8-ada"])
+@pytest.mark.slow
 def test_lowered_unit_matches_the_reference(relation):
     assert lowering.self_check(relation, n=40) == 0
 

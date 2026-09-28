@@ -872,6 +872,7 @@ def _many_files(root: Path, n: int, seed: int = 0) -> Path:
     return root
 
 
+@pytest.mark.slow
 def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     """300 blobs with 16 workers: every object lands, every PUT is a conditional create, the manifest's PUT comes after the last blob's,
     and the report is deterministic.  A second push HEADs everything, uploads nothing and is still PRESERVED (`etag-md5`).  A key that
@@ -927,6 +928,7 @@ def test_push_is_concurrent_conditional_and_verified_by_etag(fake_s3, tmp_path):
     assert st.push(snap)["verified"] == "sha256-readback", "no blobs: the manifest read-back is the whole check"
 
 
+@pytest.mark.slow
 def test_push_falls_back_to_plain_put_when_the_service_rejects_the_condition(fake_s3, tmp_path):
     s = fake_s3(reject_conditional=501)
     st = LocalStore()
@@ -1054,6 +1056,7 @@ def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
     assert remote_s3.retry_delay("Wed, 21 Oct 2026 07:28:00 GMT", 2) == 0.0 and remote_s3.retry_delay(None, 1) == 0.0
 
 
+@pytest.mark.slow
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
     s = fake_s3()
     st = LocalStore()

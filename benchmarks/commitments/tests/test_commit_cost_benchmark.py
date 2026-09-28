@@ -9,7 +9,7 @@ from pathlib import Path
 from research import result as research_result
 from research.store import tools_registry
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _bench():

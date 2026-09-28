@@ -4,18 +4,18 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
 
-def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
+def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
-    assert names[0] == ("pytest", ["-m", "pytest", "-q"]) and names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
+    assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
+    assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[2] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
-    assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
 
 
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):

@@ -23,6 +23,7 @@ def _set(sid: str, n: int, tmp_path):
     return InputSet.open(summary["path"])
 
 
+@pytest.mark.slow
 def test_rope_composes_private_by_default(tmp_path):
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     low = FC.lowering_for_set(s)
@@ -60,6 +61,7 @@ def test_rope_composes_private_by_default(tmp_path):
     assert bc0 == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt0)
 
 
+@pytest.mark.slow
 def test_shared_rows_are_tables_and_refs(tmp_path):
     """A shared-row file commits each port's distinct rows once (its frame-v3 tree over them) and gives every instance its refs:
     a population whose instances 2 and 3 repeat 0 and 1 has two-row tables and refs 0, 1, 0, 1."""
@@ -96,6 +98,7 @@ def test_shared_rows_are_tables_and_refs(tmp_path):
     assert "shared_rows" not in per and per["frame_v3"]["roots"] != head["frame_v3"]["roots"]
 
 
+@pytest.mark.slow
 def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
     """Tables and refs as given (a value-independent layout): an equal row stays a separate table row with its own salt, the
     refs and the committer's salts are written as given."""

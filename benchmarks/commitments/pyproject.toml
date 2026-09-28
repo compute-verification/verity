@@ -1,0 +1,20 @@
+[project]
+name = "verity-commitments-benchmarks"
+version = "0.0.0"
+description = "Serving and proving costs of the commitment schemes."
+requires-python = ">=3.12"
+dependencies = ["research", "verity", "verity-numerical", "verity-vllm", "numpy", "blake3>=1.0"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+research = { workspace = true }
+verity = { workspace = true }
+verity-numerical = { workspace = true }
+verity-vllm = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

@@ -112,6 +112,7 @@ def _eval_program(prog: Program, inputs: list[list[int]]) -> list[int]:
     return [t[g] for g in C.root_outputs()]
 
 
+@pytest.mark.slow
 def test_serve_spec_tiny_schedule_obligation():
     """Evaluate ServeSpec under a guessed schedule, read the accepted lengths it computes, rebuild under that
     schedule: the accepted outputs then equal A (the equality obligation), and the appended slots are -1

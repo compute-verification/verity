@@ -21,22 +21,23 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 
 ## What `check` runs
 
-`check` (`tools/check/check.py`) is the merge gate. Its pytest step collects the root `pyproject.toml` testpaths. It
-has no `cargo` step, so no Rust test under `backends/` runs in it. Its Lean steps build C-Flock's Lean verifier, check
+`check` (`tools/check/check.py`) is the merge gate. Its pytest step runs every test suite (`tools/check/suites.py`, skill
+`testing`): each family below with Python tests is one suite, configured in its own `pyproject.toml`, and a pass is reused
+while the suite's inputs are unchanged. It has no `cargo` step, so no Rust test under `backends/` runs in it. Its Lean steps build C-Flock's Lean verifier, check
 its partition check against `verity.ir.partition` on random cuts, and audit every Lake package; the Lean verifier's
 agreement with upstream's Rust verifier runs only when the run is sent its input bundle.
 
-Python counts are pytest's collected items on a CPU machine after the root `uv sync` (no torch, no GPU), invoked as
-`check` invokes it (`python -m pytest`). Rust counts are `#[test]` functions.
+Python counts are pytest's collected items on a CPU machine after `uv sync --all-packages --all-extras` (torch for the CPU,
+no GPU). Rust counts are `#[test]` functions.
 
 | family | status | Python tests `check` collects | Python tests outside `check` | Rust tests (`check` runs none) |
 |---|---|---|---|---|
-| C-Flock | active | `flock/tests`: 181, of which 10 skip without `lake` on the PATH, 5 without `FLOCK_IR_SLOW=1` and 1 without a captured sampling set (`VERITY_CAPTURED_101_GUMBEL`) | none | `flock/live`: 12 |
-| A-GKR | frozen | `gkr/tests`: 50, one of which skips without torch; `test_live_coins.py` skips whole without torch | `gkr/packed/tests` 17, `gkr/gpu/v2/tests` 9, `gkr/tensor/tests` 22, `gkr/tensor/fused/tests` 25; 3 more files need torch to import | `gkr`: 23; `gkr/verifier`: 43 |
-| B-Ligero | frozen | the root `tests/test_ligero_auth.py`: 7, one of which skips without torch; `tests/test_ligero_batch_bound.py` and `tests/test_ligero_dump_artifacts.py` skip whole without torch | `direct/`: 427; 14 more files need torch to import | `direct`: 47 (157 more in vendored Plonky3); `ligero-verify`: 74; `ligerito-verify`: 99 |
+| C-Flock | active | `flock/tests`: 313, of which 64 skip: without `lake` on the PATH, without `FLOCK_IR_SLOW=1`, or without a captured sampling set (`VERITY_CAPTURED_101_GUMBEL`) | none | `flock/live`: 12 |
+| A-GKR | frozen | `gkr/tests`: 61 | `gkr/packed/tests` 17, `gkr/gpu/v2/tests` 9, `gkr/tensor/tests` 22, `gkr/tensor/fused/tests` 25; 3 more files need torch to import | `gkr`: 23; `gkr/verifier`: 43 |
+| B-Ligero | frozen | `direct/ligero/tests`: 12 | `direct/`: 427; 14 more files need torch to import | `direct`: 47 (157 more in vendored Plonky3); `ligero-verify`: 74; `ligerito-verify`: 99 |
 | D-SP1 | frozen | `sp1/tests`: 10, of which 3 skip without `VERITY_SP1_RELATION_ONLY_HOST` or `VERITY_SP1_PROVE=1`; `test_typed.py` skips whole without a built host | none | `sp1/common`: 135; `sp1/host`: 1 |
 | VOLE | frozen | none: `vole/` has no tests | none | none (the swanky patch is applied outside the repository) |
-| numerical | frozen | `numerical/tests`: 1,058 | none | none |
+| numerical | frozen | `numerical/tests`: 1,059, of which 9 skip | none | none |
 | shared | frozen | none | `shared/hash_gpu/tests`: 132 | none |
 
 Outside `backends/`, the root testpaths also omit `integrations/vllm`, which has its own pytest configuration.

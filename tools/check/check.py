@@ -8,7 +8,8 @@
 
 Steps, in order; `check` stops at the first that fails:
 
-    pytest          every test under the root `pyproject.toml` testpaths, except the `circuit_suite` ones (the next step runs them)
+    pytest          every test suite (`tools/check/suites.py`): each package's tests in their own process, a pass reused while its
+                    inputs are unchanged; each suite's log and the outcomes (`suites.json`) beside the run's result
     circuit-check   `circuit-check --all`: every registered Definition and template (`tools/circuit_check`), its report beside
                     the run's result
     lean-build      `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then
@@ -70,7 +71,11 @@ def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
 def steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
     """(name, argv or the reason it is skipped / cannot run, cwd), in order."""
     py = sys.executable
-    return [("pytest", [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not circuit_suite"], ROOT),
+    # not in the gate yet: 12 of its 4,400 CPU tests fail with torch 2.14 and it takes 20 minutes on one core (it was never in `check`)
+    skip = ["--skip", "verity-vllm"]
+    commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
+    return [("pytest", [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
+                        *skip, *commit], ROOT),
             ("circuit-check", [py, "-m", "circuit_check", "--all", "-q", "--out", str(out / "circuit-check.json")], ROOT),
             *lean_steps(out)]
 
@@ -118,7 +123,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("circuit-check.json", "lean-audit/") if (run_dir / p).exists()]}
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/") if (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")

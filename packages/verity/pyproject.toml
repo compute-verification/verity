@@ -11,3 +11,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/verity"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: tests/proofs and tests/ml cross-check against the numerical backend, the tensor-core probe and
+# the research store, and read the repository's fixtures and census.
+inputs = ["backends/numerical", "census", "fixtures/discrepancy_log.json", "fixtures/hawkeye", "fixtures/tc", "fixtures/typed-obligation-v0", "tools/research", "tools/tc_probe"]

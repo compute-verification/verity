@@ -356,6 +356,7 @@ def _elementwise_domain(rng, DT: str) -> np.ndarray:
 
 @pytest.mark.parametrize("DT", DTS)
 @pytest.mark.parametrize("approx", R.GELU_APPROX)
+@pytest.mark.slow
 def test_gelu_ref_vs_torch(DT, approx):
     rng = np.random.default_rng(SEED)
     x = _elementwise_domain(rng, DT)
@@ -673,6 +674,7 @@ def test_i64_to_i32_vs_torch():
 
 @pytest.mark.parametrize("name,fn,top", [("F32ExpRn_v1", R.f32_exp_rn_bits, torch.exp), ("F32ErfRn_v1", R.f32_erf_rn_bits, torch.erf),
                                          ("F32TanhRn_v1", R.f32_tanh_rn_bits, torch.tanh)])
+@pytest.mark.slow
 def test_transcendentals_vs_torch_and_float64(name, fn, top):
     rng = np.random.default_rng(SEED)
     x = _elementwise_domain(rng, "f32")
