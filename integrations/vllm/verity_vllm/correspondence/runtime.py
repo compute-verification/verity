@@ -78,7 +78,9 @@ JSON_SCHEMA: dict[str, Any] = {
                     "kind": {"type": "string"}, "occurrence": {"type": "integer", "description": "k-th collective of this rank's forward, in graph order"},
                     "operand_ranks": {"type": "array", "items": {"type": "integer"}, "description": "rank that produced operand i"},
                     "own_operand": {"type": ["integer", "null"], "description": "operand index computed by this rank (structural: not a Program input)"},
-                    "peer_operand": {"type": ["integer", "null"]}, "peer_input": {"type": ["string", "null"], "description": "user input carrying the peer's partial"}}}}}},
+                    "peer_operand": {"type": ["integer", "null"]}, "peer_input": {"type": ["string", "null"], "description": "user input carrying the peer's partial"},
+                    "peer_operands": {"type": "array", "items": {"type": "integer"}, "description": "world > 2: every peer's operand index, in rank order"},
+                    "peer_inputs": {"type": "array", "items": {"type": ["string", "null"]}, "description": "world > 2: the user input carrying each peer's partial"}}}}}},
         "calls": {"type": "array", "items": {
             "type": "object", "required": ["occ"],
             "properties": {
@@ -186,6 +188,8 @@ class CollectiveOccurrence:
     own_operand: int | None
     peer_operand: int | None
     peer_input: str | None
+    peer_operands: tuple[int, ...] = ()
+    peer_inputs: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -260,7 +264,8 @@ class RuntimeCorrespondence:
             if o and o.get("collective"):
                 cj = o["collective"]
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
-                                            cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"))
+                                            cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
+                                            tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
                                      (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), rets, tuple(args),
                                      dict((o or {}).get("lifetime") or {}), rank, coll)

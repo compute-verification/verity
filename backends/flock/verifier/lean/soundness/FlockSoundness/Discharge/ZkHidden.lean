@@ -3,3 +3,13 @@ import FlockSoundness.Discharge.ZkHidden.Statements
 import FlockSoundness.Discharge.ZkHidden.Sched
 import FlockSoundness.Discharge.ZkHidden.Theorems
 import FlockSoundness.Discharge.ZkHidden.Count
+import FlockSoundness.Discharge.ZkHidden.SoundDefs
+import FlockSoundness.Discharge.ZkHidden.SoundBind
+import FlockSoundness.Discharge.ZkHidden.SoundRuns
+import FlockSoundness.Discharge.ZkHidden.Sound
+import FlockSoundness.Discharge.ZkHidden.SoundDrawOk
+import FlockSoundness.Discharge.ZkHidden.SoundCustody
+import FlockSoundness.Discharge.ZkHidden.DefsJ
+import FlockSoundness.Discharge.ZkHidden.SoundJ
+import FlockSoundness.Discharge.ZkHidden.CustodyJ
+import FlockSoundness.Discharge.ZkHidden.CustodyJJson

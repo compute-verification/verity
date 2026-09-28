@@ -12,7 +12,9 @@ The executors, as they stand:
   (`AllowedCPUs=`), so a workload's own `taskset` can't leave them; systemd drops that without a word where user@.service
   doesn't delegate cpuset (research's pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the
   scope's cpuset is the pin.
-- **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools.
+- **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools, idle (`CPUWeight=idle`): GPU jobs' host
+  threads share those CPUs, and network's timing chunks among them stalled for seconds behind Lean audits' replays
+  (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave.
 - **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
   `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
   GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
@@ -71,7 +73,8 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
-              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}", "--",
+              "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
+              *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus else []), "--",
               "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
     if not j.gpus:
         return runner, []
