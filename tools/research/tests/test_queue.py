@@ -203,6 +203,17 @@ def test_a_main_moved_outside_the_queue_rebuilds_next_on_it(world):
     _git(world.origin, "merge-base", "--is-ancestor", moved, "refs/heads/next")      # raises unless next is on the new main
 
 
+def test_the_clone_follows_the_callers_origin_so_a_url_that_stopped_working_does_not_strand_it(world):
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.queue().sync()
+    moved = world.tmp / "origin-now.git"
+    world.origin.rename(moved)                  # the URL the clone was made from fails now, as one with a rotated token does
+    world.origin = world.gh.origin = moved
+    members, _ = world.queue().sync()
+    assert [m.pr for m in members] == [1]
+    assert _git(world.tmp / "q" / "verity", "remote", "get-url", "origin") == str(moved)
+
+
 def test_a_rewritten_pr_head_is_fetched_by_force_and_merged(world):
     old = world.change({"a.txt": "1\n"})
     world.gh.put(1, old)
