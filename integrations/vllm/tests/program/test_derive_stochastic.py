@@ -180,7 +180,7 @@ def test_a_single_request_takes_S_as_a_constant(S):
     names = [n for n, _ in fsd.signature()[0]]
     assert names[:2] == ["prompt", "seed"] and "splits" not in names, names
     nodes = fsd.body.nodes
-    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelect_v1"]
+    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelectSharedGreedy_v1"]
     assert len(sel) == STEPS + 1
     for e, k in enumerate(sel):
         ref = nodes[k].args[5].refs[0]
