@@ -1,6 +1,6 @@
 {
  "schema": "veritor/a56/unsupported-census/v1",
- "record": "/Users/danielreuter/veritor-archive/A9-TINY-04137cde/V5-TINY-bex0-inc",
+ "record": "veritor-archive/A9-TINY-04137cde/V5-TINY-bex0-inc",
  "program": "Serve_v1{C={6f196795e564},LP=4,STEPS=8}",
  "program_build_s": 0.64,
  "unsupported_selected": 653,

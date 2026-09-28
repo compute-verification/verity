@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-LANE_DIRS = ("/private/tmp/ctr-", "/private/tmp/lane-", "/Users/danielreuter/projects/veritor", "/Users/danielreuter/projects/verity")
+LANE_DIRS = ("/private/tmp/ctr-", "/private/tmp/lane-", os.path.expanduser("~/projects/veritor"), os.path.expanduser("~/projects/verity"))
 LANE_CMDS = ("python", "pytest", "cargo", "rustc", "veritor-zk-host", "node")
 PROTECT = ("budget_cap.py", "mem_guard.py", "runpod.py", "caffeinate", "lane_run.py")
 
