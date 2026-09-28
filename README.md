@@ -95,26 +95,26 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - [`protocols/pous/`](protocols/pous/README.md): proofs of useful space
 - [`integrations/vllm/`](integrations/vllm/README.md): the vLLM integration, a hooked vLLM engine that builds each served workload's circuit and commits its values while serving
 - [`tools/research/`](tools/research/README.md): the research harness, for recorded runs on remote pods and the evidence store that keeps their results; it treats every workload as opaque and imports nothing from Verity
-- [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires
+- [`tools/check/`](tools/check/check.py): `check`, the one check a merge requires, and `suites.py`, which runs the test suites
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes ([rules](AGENTS.md#circuits))
 - [`tools/lean/`](tools/lean/README.md): the audit every Lean package passes
 - `tools/tc_probe/`, `tools/tc_probe_fp4/`, `tools/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `benchmarks/`: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md)
 - [`census/`](census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
-- `fixtures/` and `tests/`: repository-wide fixtures and tests; replicated inputs are registered in `fixtures/artifacts.json`
+- `fixtures/` and `tests/`: repository-wide fixtures, and the repository's own suite of whole-tree invariants; replicated inputs are registered in `fixtures/artifacts.json`
 
 ## Getting started
 
 Install the workspace with [uv](https://docs.astral.sh/uv/), then run the tests and checks:
 
 ~~~sh
-uv sync                                  # the workspace, every package editable
-uv run pytest                            # the root pyproject's test paths
+uv sync --all-packages --all-extras      # the workspace, every package editable, with torch for the vLLM integration's CPU tests
+uv run tools/check/suites.py             # every test suite whose inputs changed since it last passed; --quick skips slow tests
 uv run circuit-check --all               # the property checks on every registered circuit
 uv run python tools/check/check.py       # the one check a merge requires; its Lean steps need lake
 ~~~
 
-The vLLM integration keeps its own test configuration: see [its README](integrations/vllm/README.md#running). Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
+Each package's tests live in its own `tests/` and run as their own suite; the [testing skill](.agents/skills/testing/SKILL.md) has the rules. Serving, proving and hardware probes run on GPU pods through the research harness (`research run --on ...`), never on a laptop.
 
 Build, evaluate and query a circuit from the primitive library:
 
@@ -144,7 +144,7 @@ ir + ml + commitments  <-  proofs
 randomness, claims: import no other core module
 ~~~
 
-`packages/verity/tests/test_boundaries.py` and `protocols/tests/test_protocol_boundaries.py` enforce these rules. Import each object from the module that owns it (`from verity.ir import Program`); `verity` itself re-exports nothing. Tests live beside the code they exercise.
+`packages/verity/tests/test_boundaries.py` and `tests/test_protocol_boundaries.py` enforce these rules. Import each object from the module that owns it (`from verity.ir import Program`); `verity` itself re-exports nothing.
 
 There is no GitHub Actions CI. `check` is the one check, and a merge into `main` goes through `research merge`, which refuses without a passing `check` of that exact commit. [AGENTS.md](AGENTS.md) has the full rules for contributors and agents: commands, circuits, checking and merging, Lean, and where writing goes.
 
