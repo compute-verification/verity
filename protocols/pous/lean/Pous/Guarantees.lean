@@ -836,7 +836,10 @@ storage at rest: the audit's window must be too short to re-encode `C`. Re-encod
 `t` at `D_late`, last under `240·6 + 3·13 = 1,479` call-times, and the verifier's gaps between them add to the window,
 so it is bounded by the verifier's limit on the audit's duration that `BackgroundRebuildExcluded` requires, `1,505`
 call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps on `D_late` are
-`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. Proof:
+`Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole `Π₂` calls,
+so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing,
+rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026, art:7617c8017e80).
+The statement itself is about the ideal model and is unaffected. Proof:
 `PousGraded.band_graded_meets_family` (`Pous/SecurityProofs/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`. -/
 def BandGradedMeetsFamily : Prop :=
@@ -921,7 +924,9 @@ verifier's gaps between them, and no round deadline bounds the gaps. So the boun
 verifier aborts, without accepting, every audit that lasts more than `auditCap · call_ns` (≈ 363.5 ms at 241.5 µs per
 call) from its first challenge's send to its last answer's receipt. If every round of the worst row answers at its
 deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the cap, which is the
-proof's reach, not on `R(d)`, which exceeds it.
+proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls of at least
+241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover answers from
+1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
 
 **What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
 cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
@@ -1021,8 +1026,9 @@ a responder that pads every hit to `D` units makes about 2.5% of the slots busy 
 and `0 < b` makes the draw space nonempty. The
 scope is the model's: the arrival coins are the verifier's own randomness, independent of the setup and the answers;
 memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which the
-step floor converts to seconds. Proof: `PousContinuous.continuous_time_average`; here
-`Pous.SecurityProofs.ContinuousTimeAverage`. -/
+step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
+answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
+`PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β T a b : ℕ) (π : ℝ≥0∞), 0 < b → a ≤ b →
     TimedINC sch D Q β π →
