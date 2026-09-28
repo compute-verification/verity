@@ -433,7 +433,8 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         head = next((json.loads(ln.split("\t", 1)[1]) for ln in lines if ln.startswith("SELFTEST")), None)
         failed = [c.get("case") for c in neg if c.get("pass") is not True]
         all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
-        return {"all_pass": all_pass, "cases": len(neg), "failed": failed}
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed} | \
+            ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
     pin = FC.digest(circ.read_text())
     srv = subprocess.Popen([binary, "serve", "--listen", f"127.0.0.1:{port}", "--out", str(d / "sessions"), "--instances", str(pub),
                             "--circuit", str(circ), "--pin", pin, "--operator", "loopback-stress"],
@@ -593,6 +594,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="selftest every Nth shape only, not also each flat Definition's largest (a full CPU selftest per attention key count)")
     ap.add_argument("--selftest-gpu", action="store_true", help="run the selftests on the GPU (selftest --gpu; a read-bearing class's "
                     "subset adds GPU_CASES)")
+    ap.add_argument("--selftest-cases", default=None, help="comma-separated selftest cases to run instead (one process each)")
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
@@ -680,11 +682,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
                 if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
-                    if rec["table_reads"]:                       # a read-bearing circuit re-parses per case: a few cases, one process each
-                        cases = READ_CASES + (GPU_CASES if g else ())
+                    if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each
+                        cases = tuple(a.selftest_cases.split(",")) if a.selftest_cases else READ_CASES + (GPU_CASES if g else ())
                         runs = [prove(sb, d, rec["stage"]["n"], a.port, selftest=c, gpu=g) for c in cases]
                         rec["selftest"] = {"all_pass": all(x["all_pass"] for x in runs), "cases": len(runs),
-                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)}
+                                           "failed": [c for c, x in zip(cases, runs) if not x["all_pass"]], "subset": list(cases)} | \
+                            ({"gpu_cases": gc} if (gc := [c for x in runs for c in x.get("gpu_cases", [])]) else {})
                     else:
                         rec["selftest"] = prove(sb, d, rec["stage"]["n"], a.port, selftest=True, gpu=g)
                     rec["selftest"]["gpu"] = g
