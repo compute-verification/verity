@@ -49,7 +49,7 @@ markers = [
 # this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/program/test_lowering.py imports `verity_sp1.proofs`.
 inputs_only = true
-inputs = ["verity", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
+inputs = ["verity", "verity/README.md", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",

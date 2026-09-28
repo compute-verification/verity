@@ -47,7 +47,8 @@ fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
 so a cached pass never hides a change to something the tests read; the workspace metadata, and what a store fetch reads
-(`STORE_READS`), every suite may read. It also records what the key leaves out but the tests
+(`STORE_READS`), every suite may read. Markdown is prose: a suite's directories key without their `*.md`, and its guard fails a
+test that opens one, unless the suite lists a `.md` under `inputs` (`markdown`), when its directories key whole. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
@@ -401,6 +402,33 @@ def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
     return {p: ("absent" if line.endswith(" missing") else line) for p, line in zip(paths, out)}
 
 
+def markdown(suite: Suite) -> bool:
+    """Whether the suite's tests read Markdown, which it says by listing a `.md` file under `inputs`: its directories key whole.
+    Any other suite's directories key without their `*.md` (`input_ids`), and its guard fails a test that opens one, so an edit
+    to prose alone re-runs only the suites that read it."""
+    return any(p.endswith(".md") for p in suite.inputs)
+
+
+_PROSE: dict[tuple[str, str], str] = {}
+#: each digest `input_ids` wrote -> the git tree it read it from, which `components` keeps beside the key for `--explain`
+_TREES: dict[str, str] = {}
+
+
+def input_ids(tree: str, paths: list[str], prose: bool = True) -> dict[str, str]:
+    """`object_ids`, with each directory, when not ``prose``, as a digest of its files but its `*.md` (each by its path from the
+    directory, as git's tree id hashes them)."""
+    ids = object_ids(tree, paths)
+    for p in paths if not prose else ():
+        if ids[p] != "absent" and (ROOT / p).is_dir():
+            if (tree, p) not in _PROSE:
+                cut = "" if p == "." else p + "/"
+                _PROSE[tree, p] = "nomd:" + _digest(sorted((f.removeprefix(cut), i) for f, i in own_ids(tree, p).items()
+                                                           if not f.endswith(".md")))
+            _TREES[_PROSE[tree, p]] = ids[p]
+            ids[p] = _PROSE[tree, p]
+    return ids
+
+
 def locked(text: str | None = None) -> dict[str, dict]:
     """{distribution: its entries in uv.lock, and the names they depend on (dependencies, extras, groups)}; of ``text``, another
     revision's lock, when given."""
@@ -557,7 +585,7 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     if "uv.lock" in files:
         r = subprocess.run(["git", "show", f"{rev}:uv.lock"], cwd=ROOT, capture_output=True, text=True)
         before = locked(r.stdout if r.returncode == 0 else "")
-    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files)
+    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files if markdown(s) or not f.endswith(".md"))
             or resolved(roots(s, pkgs), before, s.path) != resolved(roots(s, pkgs), lock, s.path)]
 
 
@@ -600,13 +628,20 @@ def _digest(doc) -> str:
 def components(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> dict:
     """What a suite's key hashes: its name and depth, each input's object id (under its own directory by the path from there:
     `_rel`), the build outputs, the resolved dependencies, the environment and the pytest arguments. A pass keeps them beside it,
-    so `--explain` can say what a miss changed."""
-    return {"suite": suite.name, "depth": depth(suite), "inputs": _rel_keys(suite.path, ids),
-            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
+    so `--explain` can say what a miss changed; beside them, unhashed, the git tree of each directory keyed without its Markdown
+    (`trees`), which lists the files a change moved."""
+    inputs = _rel_keys(suite.path, ids)
+    out = {"suite": suite.name, "depth": depth(suite), "inputs": inputs,
+           "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
+    if trees := {q: _TREES[i] for q, i in inputs.items() if i in _TREES}:
+        out["trees"] = trees
+    return out
 
 
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
-    return _digest(components(suite, ids, env, args, deps))
+    c = components(suite, ids, env, args, deps)
+    c.pop("trees", None)
+    return _digest(c)
 
 
 def cached(k: str) -> dict | None:
@@ -808,7 +843,7 @@ class PerTest:
                  tree: str):
         self.suite, self.tree = suite, tree
         self.dir = per_test_dir(suite)
-        self.own = own_ids(tree, suite.path)
+        self.own = {f: i for f, i in own_ids(tree, suite.path).items() if markdown(suite) or not f.endswith(".md")}
         self.narrow = suite.parallel             # a suite that doesn't declare order independence keys each module on everything
         texts = {}
         for f in self.own if self.narrow else ():
@@ -828,7 +863,7 @@ class PerTest:
         self.fixtures = {p.removeprefix("fixture:"): i for p, i in ids.items() if p.startswith("fixture:")}
         self._index: tuple[dict[str, str], dict[str, str]] | None = None
         self._held: dict[str, bool] = {}
-        self.components = {"suite_tree": ids.get(suite.path), "depth": depth(suite),
+        self.components = {"suite_tree": _TREES.get(ids.get(suite.path), ids.get(suite.path)), "depth": depth(suite),
                            "outside": _rel_keys(suite.path, {p: i for p, i in ids.items() if p != suite.path}),
                            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "environment": _digest(env),
                            "resolved": _digest(deps or {}), "pytest": arg_sets[0]}
@@ -1049,6 +1084,8 @@ class PerTest:
             files = _changed_files(was.get("suite_tree"), now["suite_tree"])
             if files is not None and self.suite.path != ".":
                 files = [f"{self.suite.path}/{f}" for f in files]      # the subtree's own paths, as the root's
+            if files is not None and not markdown(self.suite):
+                files = [f for f in files if not f.endswith(".md")]
             if files is None:
                 why.append(f"a file under {self.suite.path} changed (its old tree isn't here to list which)")
             else:
@@ -1088,7 +1125,10 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
         elif q not in ni:
             out.append(f"input {p}: no longer an input")
         elif wi[q] != ni[q]:
-            files = _changed_files(wi[q], ni[q])
+            wt, nt = was.get("trees", {}).get(q, wi[q]), now.get("trees", {}).get(q, ni[q])
+            files = _changed_files(wt, nt)
+            if files is not None and q in now.get("trees", {}):
+                files = [f for f in files if not f.endswith(".md")]
             where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
                 (f" and {len(files) - 8} more" if len(files) > 8 else "")
             out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
@@ -1253,7 +1293,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
-               VERITY_SUITE_WATCH=json.dumps(list(watch)))
+               VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0")
     env.pop("VERITY_SUITE_REUSE", None)
     env.pop("VERITY_SUITE_MODULE", None)
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
@@ -1505,7 +1545,7 @@ def main(argv: list[str] | None = None) -> int:
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
-        ids = object_ids(tree, sorted(set(paths) | set(RUNNER)))
+        ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s))
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
         deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
