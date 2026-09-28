@@ -17,6 +17,8 @@ from verity_flock import ir_sampling as S
 P = pytest.importorskip("verity_vllm.program.registry.prims")
 from verity.evaluation import evaluate  # noqa: E402
 from verity.ir.defs import bind  # noqa: E402
+from verity.ml import fp32 as F  # noqa: E402
+from verity.ml.scalar import SelectF32  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402
 from verity_numerical.bench import templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
@@ -63,8 +65,8 @@ def run_piece(piece, widths, vectors):
 
 
 PIECES = [
-    ("F32Mul_v1", (32, 32), P.F32Mul.evaluate),
-    ("F32AddFtz_v1", (32, 32), P.F32AddFtz.evaluate),
+    ("F32Mul_v1", (32, 32), F.F32Mul.evaluate),
+    ("F32AddFtz_v1", (32, 32), F.F32AddFtz.evaluate),
     ("DivFullScaleA_v1", (32, 32), P.DivFullScaleA.evaluate),
     ("F32GtStrict_v1", (32, 32), RP.F32GtStrict.evaluate),
 ]
@@ -137,7 +139,7 @@ def _set(tmp_path, V, n=3):
 
 def _replay_scan(masked, g, noisy, V):
     """``GumbelSelectF32``'s scan replayed from its Definition with the IR primitives: every lane's carry out."""
-    y0 = P.SelectF32.evaluate(noisy, P.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
+    y0 = SelectF32.evaluate(noisy, F.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
     carry = (y0, 0, 1)
     out = [carry]
     for v in range(1, V):
