@@ -37,6 +37,7 @@ pub mod glue;
 pub mod pure_block;
 #[cfg(feature = "glue")]
 pub mod tables;
+pub mod typed;
 pub mod vllm_block;
 pub mod zk_hooks;
 #[cfg(feature = "sha512")]
