@@ -140,10 +140,10 @@ def fit(p: dict) -> dict:
         if len(json.dumps(p).encode()) <= MAX_BODY:
             return p
         p["rows"] = [[c[:cap - 1] + "…" if isinstance(c, str) and len(c) > cap else c for c in r] for r in p["rows"]]
-    n = len(p["rows"])
+    n, note = len(p["rows"]), p.get("note", "")
     while len(json.dumps(p).encode()) > MAX_BODY and p["rows"]:
         p["rows"] = p["rows"][:int(len(p["rows"]) * 0.9)]
-        p["note"] = (f"The first {len(p['rows'])} of {n} rows (the site's 64 KiB limit). " + p.get("note", ""))[:500]
+        p["note"] = (f"The first {len(p['rows'])} of {n} rows (the site's 64 KiB limit). " + note)[:500]
     return p
 
 
@@ -543,8 +543,10 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
         out += hillclimb_panels(now, errors)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"hillclimb: {type(e).__name__}: {e}")
+    out += overnight_panels(errors)
     return out, {"queue_samples": len(qlines), "pool_file": POOL.exists(),
-                 "hillclimb_files": len(list(HILLCLIMB.glob("*.json"))) if HILLCLIMB.is_dir() else 0}
+                 "hillclimb_files": len(list(HILLCLIMB.glob("*.json"))) if HILLCLIMB.is_dir() else 0,
+                 "overnight_files": len(list(OVERNIGHT.glob("*.json"))) if OVERNIGHT.is_dir() else 0}
 
 
 # ---------------------------------------------------------------------------------------------------------------- proofs hill climb
@@ -587,6 +589,42 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
                                       "prover buckets alone. One row per step.")))
         except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
             errors.append(f"hillclimb {f.name}: {type(e).__name__}: {e}")
+    return out
+
+
+# ------------------------------------------------------------------------------------------------------- overnight goal numbers
+
+OVERNIGHT = Path("/workspace/usage/overnight")  # one `verity/overnight-numbers/v0` file per owner, for the console's Overnight view
+OWNER = re.compile(r"[a-z0-9-]{1,40}")
+GOAL_KEY = re.compile(r"[a-z0-9-]{1,40}")
+
+
+def overnight_panels(errors: list) -> list[dict]:
+    """One table per owner: a row per number, filed under the goal's key, which the site's Overnight view reads."""
+    out = []
+    for f in sorted(OVERNIGHT.glob("*.json")) if OVERNIGHT.is_dir() else []:
+        try:
+            doc = json.loads(f.read_text())
+            owner = doc.get("owner")
+            if doc.get("schema") != "verity/overnight-numbers/v0" or not isinstance(owner, str) or not OWNER.fullmatch(owner):
+                raise ValueError(f"schema {doc.get('schema')!r}, owner {owner!r}")
+            rows = []
+            for n in doc.get("numbers") or []:
+                v = n.get("value")
+                if not (isinstance(n.get("goal"), str) and GOAL_KEY.fullmatch(n["goal"]) and isinstance(n.get("metric"), str)):
+                    raise ValueError(f"number {json.dumps(n)[:120]}: goal must be a lowercase key and metric a string")
+                if isinstance(v, bool) or not (v is None or isinstance(v, (int, float, str))):
+                    raise ValueError(f"number {n['metric'][:60]!r}: value must be a number, a string or null")
+                rows.append([n["goal"], n["metric"][:200], (v if isinstance(v, int) else sig(v, 6)) if isinstance(v, (int, float)) else (v[:200] if v else None),
+                             (str(n["unit"])[:20] if n.get("unit") else None), isoz(n.get("as_of")), (str(n["source"])[:200] if n.get("source") else None)])
+            when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
+            out.append(fit(panel(f"overnight-{owner}", f"{owner}: overnight goal numbers", "table",
+                                 ["Goal", "Metric", "Value", "Unit", "As of (UTC)", "Source"], rows, updated_at=when,
+                                 source=f"{owner}'s {f} on vy-nebius-1",
+                                 note="Numbers the owner reports for the overnight set (Project store docs/goals.md), one row per number, "
+                                      "filed under the goal's key.")))
+        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
+            errors.append(f"overnight {f.name}: {type(e).__name__}: {e}")
     return out
 
 
