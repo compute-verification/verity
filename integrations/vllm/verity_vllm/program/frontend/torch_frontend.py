@@ -763,7 +763,7 @@ def scan(step: _Callable, init, xs: Sequence[Any] = (), shared: Sequence[Any] = 
 
 
 class Ops:
-    """`ops.Bf16Add`, `ops["AmpereBF16TcDot16_v1"]`, `ops.const(32, 0)`, `ops.Gemm(K=.., N=..)`; role names
+    """`ops.Bf16Add`, `ops["AmpereBF16TcDot16_v2"]`, `ops.const(32, 0)`, `ops.Gemm(K=.., N=..)`; role names
     (`ops.dot`, `ops.rmsnorm`) come from a configuration: `Ops(dot=ops.AmpereBF16TcDot16, ...)`."""
 
     def __init__(self, registry=REGISTRY, **roles: _Callable) -> None:
@@ -771,7 +771,7 @@ class Ops:
 
     @property
     def id(self) -> str:
-        """`Ops{dot=AmpereBF16TcDot16_v1,...}`: the bundle is identified by its role bindings only."""
+        """`Ops{dot=AmpereBF16TcDot16_v2,...}`: the bundle is identified by its role bindings only."""
         return "Ops{" + ",".join(f"{k}={_fmt(v)}" for k, v in sorted(self._roles.items())) + "}"
 
     @property
@@ -793,8 +793,8 @@ class Ops:
     def __getitem__(self, fid: str) -> _Callable:
         if fid in self._roles:
             return self._roles[fid]
-        d = self._registry.defs.get(fid if "_v" in fid else f"{fid}_v1")
-        if d is None:
+        vs = [n] if (n := fid if "_v" in fid else f"{fid}_v1") in self._registry.defs or "_v" in fid else [k for k in self._registry.defs if k.startswith(f"{fid}_v") and k[len(fid) + 2:].isdigit()]
+        if len(vs) != 1 or (d := self._registry.defs.get(vs[0])) is None:     # an unversioned name: its v1, else its one registered version
             raise FrontendError("E_UNREGISTERED_OP", f"no registered function {fid!r}")
         return Prim(d) if isinstance(d, PrimitiveDefinition) else Registered(d)
 

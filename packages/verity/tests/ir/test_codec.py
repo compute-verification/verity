@@ -185,6 +185,27 @@ def test_unbound_composite_as_a_static_value_is_not_encodable():
         encode_program(Program(bind(TopUnbound, f=NeedsK)))
 
 
+def test_a_self_compare_round_trips():
+    """A batch whose two arguments are the same multi-part sequence (the top-p keep word's NaN test, `x == x`): its second argument
+    is written out, not as an alias to its own node, which a reader cannot resolve (PROTOCOL.md §4.5)."""
+    from verity.ir.refs import Affine, Coll, concat
+    from verity.ml.scalar import BIT, F32, F32Eq
+
+    F2 = Array(2, F32)
+
+    def body(B, S, a, b):
+        x = Coll(F2, concat([Affine("p", 0, 0, 1), Affine("p", 1, 1, 1)]))
+        return B.batch(F32Eq, x, x, axes=(0, 0))
+
+    sig = lambda S: ((("a", F2), ("b", F2)), Array(2, BIT))  # noqa: E731
+    fn = bind(CompositeDefinition("SelfCompare", 1, (), sig, body, register=False))
+    P = Program(CompositeDefinition("CallsSelfCompare", 1, (), sig, lambda B, S, a, b: B.call(fn, a, b), register=False))
+    desc = json.loads(json.dumps(encode_program(P)))
+    (node,) = desc["definitions"][fn.id]["body"]["nodes"]
+    assert node["args"][0]["refs"] == node["args"][1]["refs"] and "alias" not in json.dumps(node)
+    _same_circuit(P, decode_program(desc, REGISTRY))
+
+
 # -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
