@@ -25,7 +25,7 @@ at most `tableError(fast100 m, shape)`:
   `1/50` (0.2729) until Sep 27; the protocol and queries are unchanged.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
-- **The statement shapes covered** have at most 2^26 witness bits per block, 1,024 public regions and 64 link-point
+- **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point
   coordinates. That is every statement of §16, with room to spare.
 - **The link points' layout** is a named hypothesis (`Statement.LinkLayout`, `ASSUMPTIONS.md`).
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
@@ -148,13 +148,13 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` **to write**; required for sampled audits (§4) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; L1 remains |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices and L1 proved; the link from `setupH`'s unit net to the derived rows remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
-| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
+| L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named; proved for RoPE | RoPE: `Rope.rope_sound`, a verified lowering; the rest: the IR comparison tests |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `lake env lean FlockSoundness/Check.lean` to check.
@@ -216,7 +216,20 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - It needs two executable checks (PR #147): `Net.parse` refuses a net whose input rows reach its constant, and
     `HmRow.pin` refuses a pin range with no slot. Otherwise an input port can cover a slot's constant column and Δ's
     copies rewrite that row, or the pin's row is empty or lands inside another range.
-- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`).
+- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`). For RoPE it is proved
+  (`Rope.rope_sound`, `assumptions/l1-template-rows.md`).
+- **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
+  - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
+    first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the
+    pin).
+  - `placement_of_realizes` gives `Placement` when the block matrices, at each row's position, read its columns'
+    positions, and the rows that copy `one` and the pin's row read the pin.
+  - For a flat type, `derive`'s rows (`Compose.ofDerived`) are in that order (`compose_ordered`), and satisfied composed
+    rows carry the type's outputs (`Rows.compose_eval`, from `Types.compose_sound`).
+  - Over the type DAG (`ComposeDag.lean`), the unit's rows as the block holds them (`Compose.ofBlock`: `deriveChecked`'s
+    order, Δ's constant copies copying `one`) are in that order (`ofBlock_ordered`, from `Types.Dag.order_sound`), and
+    satisfied composed rows carry the unit type's outputs (`Rows.compose_eval_unit`, from `Types.Dag.unit_sound`).
+  - Still to prove: that the unit net `setupH` parses holds the derived rows (1e), for templates too (#277).
 
 ### 1.6 Proved from the libraries, not assumed
 
@@ -279,7 +292,7 @@ term below 2^-170.
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
   step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
-  (`placement_of_setupH`). L1 remains.
+  (`placement_of_setupH`). L1 is proved for RoPE and otherwise remains.
 
 ## 3. Zero knowledge (planned; not yet proved)
 

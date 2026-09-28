@@ -76,6 +76,11 @@ import FlockSoundness.ExecCircuit
 import FlockSoundness.ExecCheck
 import FlockSoundness.ExecLookup
 import FlockSoundness.ExecSetup
+import FlockSoundness.Types.Flat
+import FlockSoundness.Rope.Lowering
+import FlockSoundness.Types.Dag
+import FlockSoundness.Compose
+import FlockSoundness.ComposeDag
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
@@ -90,3 +95,4 @@ import FlockSoundness.Audit.Stratified
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.E2E

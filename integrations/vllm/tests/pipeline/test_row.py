@@ -8,7 +8,9 @@
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
 * the weights of record beside a component are reused only when they are this Program's, of this tree's schema and
   complete; an unresolved checkpoint dir is named in row.log;
-* the admission plan is advisory: it writes admission.json and one row.log line and never stops the row.
+* the admission plan is advisory: it writes admission.json and one row.log line and never stops the row;
+* the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
+  row runs the guarded-max build and every tap that applies to it.
 """
 from __future__ import annotations
 
@@ -249,6 +251,83 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     end, row_end = _timeline(r)
     assert {"stage": "stage.commit", "ev": "end", "rc": 3, "fail_class": "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE", "missing": lacks}.items() <= end.items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
+
+
+# ---------------------------------------------------------------------------------------------------------------- taps
+
+TP_MOE = "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager"
+TP_DENSE = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+def _tap_manifest(path: Path, *families: str) -> str:
+    """A manifest built under every tap policy whose identities name `families` (a policy with no site writes its header only)."""
+    query = {"engine": "v2-query", **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}] + [{"family": f} for f in families]}))
+    return str(path)
+
+
+def test_the_taps_are_on_by_default_and_0_turns_one_off_for_ab_only(tmp_path):
+    ck = _opts(tmp_path).commit
+    assert (ck.norm_tap, ck.guarded_max_tap, ck.router_tap, ck.vocab_tap) == ("1", "1", "1", "1")
+    off = _opts(tmp_path, "--router-tap", "0", environ={"NORM_TAP": "0", "GUARDED_MAX_TAP": "0"}).commit
+    assert (off.norm_tap, off.guarded_max_tap, off.router_tap, off.vocab_tap) == ("0", "0", "0", "1")
+    assert R.tap_policy_flags(ck) == ["--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"]
+    assert R.tap_policy_flags(off) == ["--no-norm-scales", "--no-router-softmax", "--vocab-range", "--no-guarded-max"]
+    for argv in (["manifest", "build", "--program", "p"], ["manifest", "build-global", "--fixture", "f", "--programs-root", "r"],
+                 ["manifest-verify", "--manifest", "m"]):
+        on, ab = cli.parse(argv[0], [*argv[1:], "--out", "o"], {}), cli.parse(argv[0], [*argv[1:], "--out", "o", *R.tap_policy_flags(off)], {})
+        assert (on.norm_scales, on.router_softmax, on.vocab_range, on.guarded_max) == (True, True, True, True)
+        assert (ab.norm_scales, ab.router_softmax, ab.vocab_range, ab.guarded_max) == (False, False, True, False)
+
+
+def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
+    man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
+    assert R.manifest_policy_mismatch(man, _opts(tmp_path).commit) == []
+    assert R.manifest_policy_mismatch(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == ["norm_scales"]
+    (tmp_path / "old.json").write_text(json.dumps({"query": {"engine": "v2-query"}, "identities": []}))
+    assert R.manifest_policy_mismatch(str(tmp_path / "old.json"), _opts(tmp_path).commit) == ["norm_scales", "router_softmax", "vocab_range",
+                                                                                                "guarded_max"]
+
+
+def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
+    r = _row(tmp_path)
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
+    taps = R.applicable_taps(man, r.ck_)
+    assert taps == ["norm_tap"]
+    cmd = r.commit_cmd(taps)
+    assert cmd[cmd.index("--norm-tap-so") + 1] == r.env.norm_tap_so and "--router-tap-so" not in cmd and "--vocab-range" not in cmd
+    assert R.missing_tap_build(taps, r.env).startswith("NORM_TAP=1 and the manifest names its family, but the tap .so is missing")
+    assert R.applicable_taps(_tap_manifest(tmp_path / "bare.json"), r.ck_) == [] and R.missing_tap_build([], r.env) == ""
+    assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
+
+
+def _tp_row(tmp_path: Path, row: str, **kw):
+    from verity_vllm.pipeline.row_tp import TpRow
+    o = _opts(tmp_path, row=row, **kw)
+    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
+              build=o.build, match=o.match, commit=o.commit)
+    t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""
+    t.bdir, t.M = f"{t.d}/build", f"{t.d}/match"
+    return t
+
+
+def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_path, monkeypatch):
+    t = _tp_row(tmp_path, TP_MOE)
+    assert t.hidden_so == t.env.hidden_so_fa2_guarded
+    assert _tp_row(tmp_path, TP_MOE, environ={"GUARDED_MAX_TAP": "0"}).hidden_so == t.env.hidden_so_fa2
+    seen: list[list[str]] = []
+    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    t.manifest_global("commit.required_manifest", 1)
+    assert {"--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max"} <= set(seen[0])
+    taps = R.applicable_taps(_tap_manifest(tmp_path / "moe.json", "norm_scales", "router_softmax", "vocab_range"), t.ck_)
+    cmd = t.commit_cmd(taps)
+    assert cmd[cmd.index("--hidden-so") + 1] == t.env.hidden_so_fa2_guarded and "--vocab-range" in cmd
+    assert cmd[cmd.index("--norm-tap-so") + 1] == t.env.norm_tap_so and cmd[cmd.index("--router-tap-so") + 1] == t.env.router_tap_so
+    dense = _tp_row(tmp_path, TP_DENSE)
+    cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
+    assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
 
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
