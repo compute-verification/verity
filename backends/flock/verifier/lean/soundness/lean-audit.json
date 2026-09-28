@@ -136,6 +136,84 @@
   }
  },
  "pins": {
+  "FlockSoundness.Audit.Partition.flock_e2e_count": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count {C : FlockSoundness.Audit.Circuit} {n : ℕ}",
+    "  (P : FlockSoundness.Audit.Partition C n) {Reg D : Type} [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D) {mPts : ℕ}",
+    "  (plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts))",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) {L : FlockSoundness.Audit.Law n}",
+    "  {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ (o : Bool × Finset (Fin n)), execAccept o → o.1 = true)",
+    "  {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows) {CB : FlockSoundness.Audit.Circuit}",
+    "  (PB : FlockSoundness.Audit.Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (hL1 : P.RowsL1 PB proj)",
+    "  {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc) {k : ℕ}",
+    "  (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)",
+    "  (hr : ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (plan S R).length), FlockSoundness.rateB (plan S R) j k ≤ ρ) {t' : ℝ}",
+    "  (ht : 0 ≤ t')",
+    "  (hCR :",
+    "    ∀ (R : Reg) (τ : FlockSoundness.Audit.Cont L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan) R)",
+    "      (c : vb.Pos) (x : Nonempty (P.Ωc plan tab vb L c)),",
+    "      FlockSoundness.Assumptions.SHA512ExpectedTimeCR Hc",
+    "        (FlockSoundness.LinkFinder.finderG (P.trialG H E plan tab vb R τ c k Rw) M)",
+    "        (FlockSoundness.LinkFinder.finderStrat (P.trialG H E plan tab vb R τ c k Rw)",
+    "          (P.trialStrat H E plan tab vb R τ c k Rw) M)",
+    "        (P.outC H E plan tab vb R τ c)",
+    "        (FlockSoundness.LinkFinder.finderCost (P.rdT H E plan tab vb R τ c)",
+    "          (FlockSoundness.Audit.Partition.cT plan R t')))",
+    "  (K : ℕ) (σ : (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)).Strategy) :",
+    "  FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        execAccept o ∧",
+    "          K ≤",
+    "            (PB.wrong",
+    "                (proj (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw))).card)",
+    "      (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)) σ ≤",
+    "    L.miss K +",
+    "        FlockSoundness.Audit.Partition.ksAvgBE H E plan k (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) +",
+    "      P.linkBoundE plan tab vb k Rw M ρ t'"
+   ],
+   "assumptions": [],
+   "type_hash": "000000002dd78db2"
+  },
+  "FlockSoundness.Audit.Partition.flock_e2e_drawn": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn {C : FlockSoundness.Audit.Circuit} {n : ℕ}",
+    "  (P : FlockSoundness.Audit.Partition C n) {Reg D : Type} [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D) {mPts : ℕ}",
+    "  (plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts))",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) {L : FlockSoundness.Audit.Law n}",
+    "  {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ (o : Bool × Finset (Fin n)), execAccept o → o.1 = true)",
+    "  {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows) {CB : FlockSoundness.Audit.Circuit}",
+    "  (PB : FlockSoundness.Audit.Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (hL1 : P.RowsL1 PB proj)",
+    "  {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc) {k : ℕ}",
+    "  (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)",
+    "  (hr : ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (plan S R).length), FlockSoundness.rateB (plan S R) j k ≤ ρ) {t' : ℝ}",
+    "  (ht : 0 ≤ t')",
+    "  (hCR :",
+    "    ∀ (R : Reg) (τ : FlockSoundness.Audit.Cont L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan) R)",
+    "      (c : vb.Pos) (x : Nonempty (P.Ωc plan tab vb L c)),",
+    "      FlockSoundness.Assumptions.SHA512ExpectedTimeCR Hc",
+    "        (FlockSoundness.LinkFinder.finderG (P.trialG H E plan tab vb R τ c k Rw) M)",
+    "        (FlockSoundness.LinkFinder.finderStrat (P.trialG H E plan tab vb R τ c k Rw)",
+    "          (P.trialStrat H E plan tab vb R τ c k Rw) M)",
+    "        (P.outC H E plan tab vb R τ c)",
+    "        (FlockSoundness.LinkFinder.finderCost (P.rdT H E plan tab vb R τ c)",
+    "          (FlockSoundness.Audit.Partition.cT plan R t')))",
+    "  (σ : (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)).Strategy) :",
+    "  FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        execAccept o ∧",
+    "          ¬Disjoint",
+    "              (PB.wrong",
+    "                (proj (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw)))",
+    "              o.2)",
+    "      (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)) σ ≤",
+    "    FlockSoundness.Audit.Partition.ksAvgBE H E plan k (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) +",
+    "      P.linkBoundE plan tab vb k Rw M ρ t'"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bdde7811"
+  },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
@@ -371,6 +449,8 @@
     "FlockLevel3.unpack": "33c9bd21c8216137"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -384,6 +464,8 @@
     "FlockLevel3.natPoly": "5162bcc1ce64f198"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -399,6 +481,8 @@
     "FlockLevel3.w128": "74a2d7f0bc29b87a"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -413,6 +497,8 @@
     "FlockLevel3.instFieldGF128": "d78105b3c29f09dd"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -426,6 +512,8 @@
     "FlockLevel3.toAdj": "dacfbc5be315f0f6"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -445,6 +533,8 @@
     "FlockLevel3.xK": "3c5829f32f812106"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -459,6 +549,8 @@
     "FlockLevel3.lagΛ": "4bc831a2c07c9734"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -473,6 +565,8 @@
     "FlockLevel3.sPoly": "97b19d0ec8fd900f"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -487,6 +581,8 @@
     "FlockLevel3.u": "2b76b486951e7592"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -522,6 +618,8 @@
     "FlockSoundness.Accounting.tableError": "9f0c445d3f517528"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -567,6 +665,8 @@
     "FlockSoundness.Accounting.queriesAt": "1f62ee663f3e17b3"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -576,12 +676,130 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
-  "FlockSoundness.Audit.Circuit": {
-   "digest": "05493c94f08c51532df94b847f41e713",
+  "FlockSoundness.Assumptions": {
+   "digest": "ccb6f722fa4330ad7a31a868a59f6053",
    "definitions": {
+    "FlockSoundness.Assumptions.SHA512ExpectedTimeCR": "ccb6f722fa4330ad"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.Circuit": {
+   "digest": "f8e33f60eb43c2bd69ae731ff0418dae",
+   "definitions": {
+    "FlockSoundness.Audit.Circuit": "ac0209898d7f0b93",
+    "FlockSoundness.Audit.Circuit.N": "ab448554c28c1c7d",
+    "FlockSoundness.Audit.Circuit.op": "d2e7ed001812d20b",
+    "FlockSoundness.Audit.Circuit.outputs": "0b39b9dec279981a",
+    "FlockSoundness.Audit.Circuit.run": "4be3672db31c479a",
+    "FlockSoundness.Audit.Op": "99e112a75c6e5c06",
+    "FlockSoundness.Audit.Op.and": "b5b348c58b687b35",
+    "FlockSoundness.Audit.Op.apply": "fd6baf15b385c4d3",
+    "FlockSoundness.Audit.Op.args": "147b0a15ecf3da7d",
+    "FlockSoundness.Audit.Op.input": "40a40f4aba47940a",
+    "FlockSoundness.Audit.Op.isInput": "31db3f4b76d9d9ce",
+    "FlockSoundness.Audit.Op.not": "a75d9b4d4257c431",
+    "FlockSoundness.Audit.Op.row": "f08c72a9fe3bd2ec",
+    "FlockSoundness.Audit.Op.xor": "904817d34211a037",
+    "FlockSoundness.Audit.Partition": "9a719009f4f01fdf",
+    "FlockSoundness.Audit.Partition.Correct": "926a70ca08af9ee0",
+    "FlockSoundness.Audit.Partition.committed": "5e30fcbca748a6e6",
+    "FlockSoundness.Audit.Partition.io": "710c798260b02960",
+    "FlockSoundness.Audit.Partition.localEval": "26e6bb4e9e72636e",
+    "FlockSoundness.Audit.Partition.unit": "92123cd7e478810a",
+    "FlockSoundness.Audit.Partition.wrong": "0f0a7fa92e17ff19",
     "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
    },
-   "pins": ["FlockSoundness.Types.compose_complete", "FlockSoundness.Types.compose_sound"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Types.compose_complete",
+    "FlockSoundness.Types.compose_sound"
+   ]
+  },
+  "FlockSoundness.Audit.FlockBatched": {
+   "digest": "dea09807e364910a078eb29acdb12fb3",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.DecoderB": "4a3c09aa446cb485",
+    "FlockSoundness.Audit.Partition.batchStrat": "e575fb50b81475fd",
+    "FlockSoundness.Audit.Partition.batchedSession": "c9f9c060ac307ed0",
+    "FlockSoundness.Audit.Partition.tabOf": "443b5aa6c1c50bd3"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockBatchedAcc": {
+   "digest": "490b0378546e13b9531fb420e4e4ebeb",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.ksAvgBE": "490b0378546e13b9"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockLink": {
+   "digest": "11af9ca0821ce01081424179f7dd4743",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.OpensAt": "59e46d02cfe2f41a",
+    "FlockSoundness.Audit.Partition.Reads": "2fbdd5f598fff987",
+    "FlockSoundness.Audit.Partition.ReadsDraw": "8358bbd3e0638d93",
+    "FlockSoundness.Audit.Partition.TrialOut": "ec16051630324548",
+    "FlockSoundness.Audit.Partition.ValueBinding": "27b97023c8649478",
+    "FlockSoundness.Audit.Partition.ValueBinding.Opening": "612fd65182e04851",
+    "FlockSoundness.Audit.Partition.ValueBinding.Pos": "2f20299ac628234f",
+    "FlockSoundness.Audit.Partition.ValueBinding.Val": "c797807f66542acb",
+    "FlockSoundness.Audit.Partition.ValueBinding.bit": "b7becf7f72aca4b7",
+    "FlockSoundness.Audit.Partition.ValueBinding.collide": "7d740db846ff51eb",
+    "FlockSoundness.Audit.Partition.ValueBinding.finPos": "548a9acd9aedd113",
+    "FlockSoundness.Audit.Partition.ValueBinding.finVal": "a4b17c433135a357",
+    "FlockSoundness.Audit.Partition.ValueBinding.inhVal": "42da1631fa01f921",
+    "FlockSoundness.Audit.Partition.ValueBinding.opening": "54f640bbfbb13357",
+    "FlockSoundness.Audit.Partition.ValueBinding.pos": "2336880226f0da07",
+    "FlockSoundness.Audit.Partition.ValueBinding.val": "fe2ec8444b7f322b",
+    "FlockSoundness.Audit.Partition.Xplur": "10241559b798fc55",
+    "FlockSoundness.Audit.Partition.Xval": "086e7984979e8edf",
+    "FlockSoundness.Audit.Partition.accω": "4d1d6064e1fc874b",
+    "FlockSoundness.Audit.Partition.cT": "d9e969d6723c188a",
+    "FlockSoundness.Audit.Partition.cand": "95ef7bed3348203e",
+    "FlockSoundness.Audit.Partition.gameω": "821f5937576bec50",
+    "FlockSoundness.Audit.Partition.instFintypeΩc": "23d0fe9de549ac95",
+    "FlockSoundness.Audit.Partition.opOf": "39281adfde1005be",
+    "FlockSoundness.Audit.Partition.outC": "fa6ef00dc7008c60",
+    "FlockSoundness.Audit.Partition.rdT": "a040f87929fced2e",
+    "FlockSoundness.Audit.Partition.readsAt": "33c09da6f6c3beb5",
+    "FlockSoundness.Audit.Partition.stratω": "d2ab55f3a40fad5c",
+    "FlockSoundness.Audit.Partition.tabExt": "6ee285fe73b2f2bb",
+    "FlockSoundness.Audit.Partition.trialG": "e57a4d0e53db0214",
+    "FlockSoundness.Audit.Partition.trialStrat": "5e0afba475f400c6",
+    "FlockSoundness.Audit.Partition.Ωc": "dbd8ff314e4aac75"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockLinked": {
+   "digest": "eea53dee89f0210e563922dd66354f52",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.linkBoundE": "7152c4c16a0c01e4",
+    "FlockSoundness.Audit.Partition.placeDecoder": "48b816a77733250c"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.Law": {
+   "digest": "3fb92dc3a95ed41b5f28cadecc91125c",
+   "definitions": {
+    "FlockSoundness.Audit.Law": "ab6311f067d1e558",
+    "FlockSoundness.Audit.Law.draw": "e9f1dc8a2d17dfbd",
+    "FlockSoundness.Audit.Law.escape": "54759f255ec28484",
+    "FlockSoundness.Audit.Law.fintype": "e69a6854a7f2747b",
+    "FlockSoundness.Audit.Law.miss": "d7e09d10fca7bd60",
+    "FlockSoundness.Audit.Law.Ω": "829fd6ddac35b1ca"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.OneStage": {
+   "digest": "a20a8b34af0234a867313fb5c573090b",
+   "definitions": {
+    "FlockSoundness.Audit.Cont": "78d0a1f1523d45de",
+    "FlockSoundness.Audit.audit": "74586d8a66f3427c",
+    "FlockSoundness.Audit.cont": "ea2c637aa000131e",
+    "FlockSoundness.Audit.reg": "965ee5ab445cdecb"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.CompiledLock": {
    "digest": "703ed11cb8289e0e443a40539e2782a6",
@@ -612,7 +830,11 @@
     "FlockSoundness.tableCmp": "118a4d065d18d5f4",
     "FlockSoundness.tableOrc": "754edfa0fe154cb9"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.CompiledSound": {
    "digest": "896bd03046ccb99b547909edd8d33742",
@@ -633,7 +855,11 @@
     "FlockSoundness.slotOpens": "d6979365b039c3a5",
     "FlockSoundness.tabOf": "6b8f77cd3962baad"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -647,6 +873,8 @@
     "FlockSoundness.instDecidableFits": "c58796efd6440472"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -657,23 +885,51 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.E2E": {
+   "digest": "6d3fe52555dbda6a7ddf57ae872daa9b",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.DerivedPlaces": "939851eaefbe2de9",
+    "FlockSoundness.Audit.Partition.DerivedPlaces.place": "58c6f4c0c85674a8",
+    "FlockSoundness.Audit.Partition.RowsL1": "e9ea25144ea6a9a8"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Extract": {
+   "digest": "2e90c25ca1a2d40529a6ce773df8e68e",
+   "definitions": {
+    "FlockSoundness.Extract.firstTable": "2e90c25ca1a2d405"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.ExtractWait": {
+   "digest": "ab9062903c31c4b97e462bc07050ecc8",
+   "definitions": {
+    "FlockSoundness.Extract.firsts": "38d7f19d9d2a8126",
+    "FlockSoundness.Extract.waitCost": "0b2ddf280a5d6cb3"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.Game.Basic": {
-   "digest": "634ba2028d8a1545aad522a08e4877e1",
+   "digest": "d39bbe0b0175850214e89b610c58bbe4",
    "definitions": {
     "FlockSoundness.Game": "fd35e1f2071277e1",
     "FlockSoundness.Game.Strategy": "74474416fceda635",
+    "FlockSoundness.Game.avg": "d2062df562dd07a7",
     "FlockSoundness.Game.bind": "f03387860619ff82",
     "FlockSoundness.Game.brecOn.go": "f039f51273f2be1f",
     "FlockSoundness.Game.coin": "f4d3016e8e9b0cfe",
     "FlockSoundness.Game.draw": "8be81c07b62af09e",
     "FlockSoundness.Game.instMonad": "d66985901c7cf5a7",
     "FlockSoundness.Game.map": "2dd8901027ff369b",
+    "FlockSoundness.Game.prCoin": "e6966f5cbf0413ac",
     "FlockSoundness.Game.prob": "09a0d2b9679c7e10",
     "FlockSoundness.Game.recv": "7038bcd497ba84e4",
     "FlockSoundness.Game.ret": "88fe9cd2b7f87553",
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -683,6 +939,20 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.Game.Batch": {
+   "digest": "0f678d4dc2109e8a4351c7e06146c843",
+   "definitions": {
+    "FlockSoundness.Game.Lock.batchLock": "e841e1129e23c11a",
+    "FlockSoundness.Game.Lock.leftSame": "dd9e5571d8024732",
+    "FlockSoundness.Game.Lock.lockWithL": "c5eaae6e7e58c984",
+    "FlockSoundness.Game.Lock.lockWithSame": "f4b22fda0261f157",
+    "FlockSoundness.Game.Lock.mapL": "bda9ed1f5d4204ce",
+    "FlockSoundness.Game.Lock.rightSame": "df789c3cfa99e7ed",
+    "FlockSoundness.Game.Lock.sameThen": "b576e93f4d8a2698",
+    "FlockSoundness.Game.batch": "04cc7e06ce627a1a"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.Game.Expect": {
    "digest": "1d9ca2b4c76019fbe50326b120a9da3d",
    "definitions": {
@@ -691,7 +961,11 @@
     "FlockSoundness.Game.ind": "c6107682cdaab6dd",
     "FlockSoundness.Rewinding.IsPluralityE": "0deb9b829a3919bd"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Game.Interleave": {
    "digest": "6e09f08ba672c6c5ab53cf845ffde115",
@@ -700,6 +974,8 @@
     "FlockSoundness.Game.interleaveWith": "a560b554cf64074c"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -710,7 +986,7 @@
    ]
   },
   "FlockSoundness.Game.Lock": {
-   "digest": "6c2d5f6a6f6ced6a7034bbb8d4ffbba5",
+   "digest": "6c615892bf20f6a79d1ceed6143fe8ce",
    "definitions": {
     "FlockSoundness.Game.Lock": "aa384fbf3a62fb74",
     "FlockSoundness.Game.Lock.Chooser": "30c9e5ec2c71eb00",
@@ -725,14 +1001,37 @@
     "FlockSoundness.Game.Lock.getPair": "10295cfa95b26934",
     "FlockSoundness.Game.Lock.interleaveLock": "04f9a644e6f63b4d",
     "FlockSoundness.Game.Lock.lockWith": "26e9c36a78eec76c",
-    "FlockSoundness.Game.Lock.mono": "7181797cf45c408c",
+    "FlockSoundness.Game.Lock.map": "5058642db844ed75",
+    "FlockSoundness.Game.Lock.mono": "97e2d2f6eabf8b7b",
     "FlockSoundness.Game.Lock.oracleStrat": "9b2170fcdd8f6dc0",
     "FlockSoundness.Game.Lock.ret": "d28725ff4bbc77c1",
     "FlockSoundness.Game.Lock.same": "f2a8dc9ef6e8e72b",
     "FlockSoundness.Game.Lock.send": "1bb2b13d2987b4a6",
     "FlockSoundness.Game.Lock.table": "dcb2a3475ca6b33e"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
+  },
+  "FlockSoundness.Game.Prob": {
+   "digest": "42270a46a7c16ac64f5c5a51c7569db7",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.ofMap": "42270a46a7c16ac6"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Game.Seq": {
+   "digest": "9da3f9905f3092408e83d86356e58105",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.bind": "3f8a210645cb3622",
+    "FlockSoundness.Game.Strategy.map": "4fa94ba73929c637",
+    "FlockSoundness.Game.drawStrat": "061c1a2f0e465e5d",
+    "FlockSoundness.Game.runsG": "e72dd36e2030d14a",
+    "FlockSoundness.Game.runsStrat": "9bc113835d0df7f5"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.Instance": {
    "digest": "614e3e3f08e4cd9422ad82c3c4444147",
@@ -740,6 +1039,8 @@
     "FlockSoundness.execArith": "614e3e3f08e4cd94"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -754,12 +1055,26 @@
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
   },
+  "FlockSoundness.LinkFinder": {
+   "digest": "db3e7fbd5c745fb38049d6b9e79582dd",
+   "definitions": {
+    "FlockSoundness.LinkFinder.finderCost": "2c4c0dfa7fcf9d24",
+    "FlockSoundness.LinkFinder.finderG": "2ff67bd0091d1262",
+    "FlockSoundness.LinkFinder.finderStrat": "4c2cee66bf97bdcd",
+    "FlockSoundness.LinkFinder.loopCost": "66b6bcf36f3a5583",
+    "FlockSoundness.LinkFinder.nextRead": "f03052b33dd7f473",
+    "FlockSoundness.LinkFinder.pRd": "dd59e91de4619eac"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.LinkSound": {
    "digest": "6c32c076a0c9c1cc6f968128ffc221ac",
    "definitions": {
     "FlockSoundness.Model.Statement.LinkLayout": "6c32c076a0c9c1cc"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -768,6 +1083,31 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
+  },
+  "FlockSoundness.Lowering": {
+   "digest": "ae236f689bdf02632b5940c130bbba57",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.IsRowsUnit": "e8fd3a86de155234",
+    "FlockSoundness.Audit.Partition.IsRowsUnit.decode": "a6f173a9a2cb273f",
+    "FlockSoundness.Audit.Partition.IsRowsUnit.wire": "0091ebc2dc688ed3",
+    "FlockSoundness.Placement": "48dda1a1429920d8",
+    "FlockSoundness.Rows": "451bf782963ef6af",
+    "FlockSoundness.Rows.a": "83e5a1723bb68a69",
+    "FlockSoundness.Rows.b": "736dab133b244b1c",
+    "FlockSoundness.Rows.comp": "11cf48e4964d93c9",
+    "FlockSoundness.Rows.nComp": "95cc405951a17f39",
+    "FlockSoundness.Rows.nIn": "c068cb69891d4646",
+    "FlockSoundness.Rows.one": "2f294e1490520e33",
+    "FlockSoundness.Rows.w": "fbe53e17a6cfd83e",
+    "FlockSoundness.UnitPlace": "0766bc23158d944c",
+    "FlockSoundness.UnitPlace.R": "317ae06ff4f882ba",
+    "FlockSoundness.UnitPlace.col": "b3493b273430b5f5",
+    "FlockSoundness.UnitPlace.decode": "dae56579106b91a2",
+    "FlockSoundness.UnitPlace.inst": "98a66c30c327558b",
+    "FlockSoundness.UnitPlace.o": "d16360389a3f37c9",
+    "FlockSoundness.bit": "f1dc7fd94ed01cee"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.Merkle": {
    "digest": "84a6380af28fe8d0d3144cd777760087",
@@ -781,7 +1121,12 @@
     "FlockSoundness.Merkle.up": "9dbce0b81a2b294b",
     "FlockSoundness.Merkle.walk": "515ccc6c9ff48dc6"
    },
-   "pins": ["FlockSoundness.Merkle.opening_binding", "FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Merkle.opening_binding",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Model.Basic": {
    "digest": "f28feff001cc0b255c696bcf7cd396e2",
@@ -804,6 +1149,8 @@
     "FlockSoundness.Model.eqAt": "2cc1488397babdef"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -858,7 +1205,11 @@
     "FlockSoundness.Model.tableC": "c12cf7196e132c19",
     "FlockSoundness.Model.twoOodC": "78dfd131e6d68b4e"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Model.Ligerito": {
    "digest": "7fc3a806055498d6e804461c35306af5",
@@ -905,6 +1256,8 @@
     "FlockSoundness.Model.twoOod": "ef721c561532de41"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -943,6 +1296,8 @@
     "FlockSoundness.Model.zerocheck": "8138b662477225cc"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -963,6 +1318,8 @@
     "FlockSoundness.Model.table": "dcc09e165b51dba2"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1004,6 +1361,8 @@
     "FlockSoundness.Model.witnessOf": "f422b8c5d9c2023b"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -1018,7 +1377,61 @@
    "definitions": {
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
+  },
+  "FlockSoundness.Session": {
+   "digest": "8344410d7ebde5b556090193ed67f9b5",
+   "definitions": {
+    "FlockSoundness.SessRel": "cd141a7ff20d7005",
+    "FlockSoundness.advRS": "366b5d8563f7c5e6",
+    "FlockSoundness.adv₀S": "04710bae36b3cc4e",
+    "FlockSoundness.dfltOut": "ab58d31e21552549",
+    "FlockSoundness.epsS": "7c47392ec06f60e6",
+    "FlockSoundness.extractTableS": "8f01247a37509339",
+    "FlockSoundness.lockAfter": "0da5ffe368897c0f",
+    "FlockSoundness.lockSess": "639db54e298c22b8",
+    "FlockSoundness.orcOut": "1c964ebe2d63a032",
+    "FlockSoundness.orcSess": "6164cc1f9af2e92e",
+    "FlockSoundness.plurS": "e7a0cdead025f4e3",
+    "FlockSoundness.sessAfter": "a3005511b23a8923",
+    "FlockSoundness.tableAfter": "dc1b64f7332d10b6",
+    "FlockSoundness.tableOrcAfter": "a633e796bf11a195"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.SessionBatch": {
+   "digest": "528c2a066bc7ab8c6584ddb4959ed2f2",
+   "definitions": {
+    "FlockSoundness.TabSpec": "4bcade2ae7643c64",
+    "FlockSoundness.TabSpec.S": "fcfc51289b012983",
+    "FlockSoundness.TabSpec.after": "6ccccaace4e4bd10",
+    "FlockSoundness.TabSpec.ext": "3c2e3c50fd51e6c7",
+    "FlockSoundness.TabSpec.k0": "717742fcf9660791",
+    "FlockSoundness.TabSpec.l₀": "c02f36e7f03c968f",
+    "FlockSoundness.TabSpec.l₁": "224869dc768a60fa",
+    "FlockSoundness.TabSpec.m": "03945e909285e3df",
+    "FlockSoundness.TabSpec.ptLocal": "6fc8a105422f374a",
+    "FlockSoundness.TabSpec.rest": "e8664de3f817ce24",
+    "FlockSoundness.TabSpec.sch": "cecd28932a30414f",
+    "FlockSoundness.acceptedB": "6c55ac3c919d276f",
+    "FlockSoundness.gamesB": "d137b21f6ef88972",
+    "FlockSoundness.sessAfterB": "965800793877fe3a",
+    "FlockSoundness.sessionB": "d829da73421b5324",
+    "FlockSoundness.stratB": "75fa3c3ba8472b03"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.SessionBatchAcc": {
+   "digest": "90a3be4b69cf70f5ed360f98a2d7252b",
+   "definitions": {
+    "FlockSoundness.ksBoundAccB": "0d373391d5252a3a",
+    "FlockSoundness.rateB": "1467e969687a7192"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.Types.Flat": {
    "digest": "e2aa14726fee06a1623d37ada4bbb718",

@@ -4,6 +4,10 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
+**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `FlockSoundness/E2E.lean`. They
+state the whole chain, from the executable verifier's acceptance to the integrity profile on the committed circuit. Each
+unfinished piece is a named hypothesis, and `assumptions/e2e-checklist.md` lists them with their owners.
+
 ## Named assumptions (taken without proof)
 
 There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem takes as a hypothesis (`hCR`).

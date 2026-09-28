@@ -83,3 +83,4 @@ import FlockSoundness.Audit.Stratified
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.E2E
