@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -16,7 +17,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     assert names[0] == ("pytest", [str(ROOT / "tools/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
-    assert names[3] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
+    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[4] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
 
 
 def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
@@ -25,6 +27,49 @@ def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
     script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
     assert "for features in sha512 sha512,glue sha512,glue,seed-injection; do" in script
     assert "cargo check -q -p flock-live --bin flock-circuit" in script
+
+
+def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_crates_the_patches_change():
+    """In release, as upstream's CI runs them, on the checkout the build step patches; in two invocations, since `--lib` on the
+    upstream crates would drop their integration tests."""
+    script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
+    start = script.index('if [ "${1:-}" = test ]')
+    mode = script[start:script.index("\n  exit\nfi\n", start)]
+    assert "for features in sha512 sha512,glue,seed-injection; do" in mode, "the proving build's set, without seed-injection"
+    assert 'cargo test --release -q -p flock-live --lib --features "$features"' in mode
+    patched = set()
+    for p in sorted((ROOT / "backends" / "flock").glob("flock-*-b684b12.patch")):
+        patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
+
+
+def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only(tmp_path, monkeypatch):
+    flock = tmp_path / "backends" / "flock"
+    files = {"backends/flock/check_build.sh": "x", "backends/flock/flock-sha512-b684b12.patch": "p",
+             "backends/flock/live/src/lib.rs": "fn a() {}", "backends/flock/verifier/ci.py": "", "backends/flock/README.md": ""}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    assert CHECK.rust_tests_inputs(list(files)) == list(files)[:3]
+    home = tmp_path / "home"
+    rustc = home / ".cargo" / "bin" / "rustc"
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "tracked_files", lambda: list(files))
+    e = {"HOME": str(home), "PATH": "/nonexistent"}
+    assert CHECK.rust_tests_key(e) is None, "no rustc yet: the script installs one, and that run stores nothing"
+    rustc.parent.mkdir(parents=True)
+    rustc.write_text("#!/bin/sh\necho 'rustc 1.98.1'\n")
+    rustc.chmod(0o755)
+    key = CHECK.rust_tests_key(e)
+    (flock / "verifier" / "ci.py").write_text("changed")
+    (flock / "README.md").write_text("changed")
+    assert CHECK.rust_tests_key(e) == key
+    (flock / "live" / "src" / "lib.rs").write_text("fn b() {}")
+    assert CHECK.rust_tests_key(e) != key
+    key = CHECK.rust_tests_key(e)
+    rustc.write_text("#!/bin/sh\necho 'rustc 1.99.0'\n")
+    assert CHECK.rust_tests_key(e) != key
 
 
 #: an upstream verifier that accepts every session it replays (the last argument)
@@ -272,8 +317,9 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
 
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
-    (pt,), (cc, build), (lean,) = CHECK.groups(tmp_path, 16)
+    (pt,), (cc, build, rust), (lean,) = CHECK.groups(tmp_path, 16)
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
+    assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
