@@ -19,8 +19,14 @@
 # pod id as $1 instead of the API), LEASE_API_GQL / LEASE_API_REST, LEASE_ENVIRON (default /proc/1/environ).
 # A machine that is not a RunPod pod (an ssh machine: pods/nebius/) names itself with LEASE_MACHINE_ID and ends itself through
 # LEASE_TERMINATE_CMD, which is then the production path, not a seam.
+#
+# Hard deadline: when $LEASE_DEADLINE_FILE exists (root's, `EPOCH ISO BY`: the end of the spend authorization), nothing carries the
+# machine past it.  `extend` clamps the expiry to EPOCH - LEASE_DEADLINE_MARGIN_S, and the loop ends the machine from that moment
+# whatever the lease file says (no grace), so it has stopped by EPOCH.  A deadline file that does not parse is a deadline of 0.
 
 LEASE_DIR=${LEASE_DIR:-/root/.research}
+LEASE_DEADLINE_FILE=${LEASE_DEADLINE_FILE:-/etc/research/deadline}
+LEASE_DEADLINE_MARGIN_S=${LEASE_DEADLINE_MARGIN_S:-300}
 LEASE_FILE=${LEASE_FILE:-$LEASE_DIR/lease}
 LEASE_LOG=${LEASE_LOG:-$LEASE_DIR/lease.log}
 LEASE_PID=${LEASE_PID:-$LEASE_DIR/lease.pid}
@@ -38,6 +44,15 @@ lease_read() {
   [ -r "$LEASE_FILE" ] && read -r e _rest < "$LEASE_FILE" 2>/dev/null
   case $e in ''|*[!0-9]*) return 1;; esac
   echo "$e"
+}
+
+lease_cap() {
+  # the latest moment the lease may reach (deadline - margin), or nothing when there is no deadline file
+  [ -e "$LEASE_DEADLINE_FILE" ] || return 1
+  d=""
+  read -r d _rest < "$LEASE_DEADLINE_FILE" 2>/dev/null
+  case $d in ''|*[!0-9]*) d=0;; esac
+  echo $(( d - LEASE_DEADLINE_MARGIN_S ))
 }
 
 lease_env() {
@@ -97,6 +112,10 @@ lease_extend() {
   want=$(( $(lease_now) + secs ))
   cur=$(lease_read) || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
+  if cap=$(lease_cap); then
+    if [ "$cur" -gt "$cap" ]; then cur=0; want=$cap; fi
+    if [ "$want" -ge "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
+  fi
   if [ "$want" -gt "$cur" ]; then
     mkdir -p "$(dirname "$LEASE_FILE")" || return 1
     printf '%s %s %s\n' "$want" "$(lease_iso "$want")" "$by" > "$LEASE_FILE.tmp.$$" && mv -f "$LEASE_FILE.tmp.$$" "$LEASE_FILE" || return 1
@@ -133,7 +152,10 @@ lease_loop() {
   while :; do
     if e=$(lease_read); then exp=$e; fi
     now=$(lease_now)
-    if [ -n "$exp" ] && [ "$now" -ge $((exp + LEASE_GRACE_S)) ]; then
+    due=0
+    if [ -n "$exp" ] && [ "$now" -ge $((exp + LEASE_GRACE_S)) ]; then due=1; fi
+    if cap=$(lease_cap) && [ "$now" -ge "$cap" ]; then due=1; exp=$cap; fi
+    if [ "$due" = 1 ]; then
       if [ -z "$me" ]; then
         lease_say "lease expired $(lease_iso "$exp") but no RUNPOD_POD_ID: cannot terminate"
         rc=2

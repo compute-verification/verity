@@ -22,7 +22,7 @@ from .events import append, events_path, utc_now_ms
 from .procs import stat_fields
 
 DEFAULT_FALLBACK = os.environ.get("TELEMETRY_CANCEL_FALLBACK") or (
-    "/root/dm/cancel.jsonl" if Path("/root/dm").is_dir() else str(Path.home() / ".veritor" / "telemetry" / "cancel.jsonl"))
+    "/root/dm/cancel.jsonl" if os.path.isdir("/root/dm") else str(Path.home() / ".veritor" / "telemetry" / "cancel.jsonl"))
 
 
 def identify(pid: int) -> dict[str, Any]:
