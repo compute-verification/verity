@@ -119,6 +119,7 @@ import FlockSoundness.Audit.FlockPublic
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
 import FlockSoundness.Audit.InfluenceWitness
+import FlockSoundness.Audit.Partitioning
 import FlockSoundness.Refine
 import FlockSoundness.E2E
 import FlockSoundness.Certificate
