@@ -379,10 +379,10 @@ impl Composite {
                     return Err(format!("META: {k:?}: a typed template's block wiring is derived from its types, never stated"));
                 }
             }
-            let inst = crate::typed::instance(&meta)?;
+            let (inst, mut generated) = crate::typed::instance(&meta, tables)?;
             nets.push(("root".to_string(), parse_net(&inst.root_text(&name))?));
             for (&j, (d, _, _)) in &inst.layouts {
-                nets.push((d.clone(), parse_net(&inst.layout_text(j))?));
+                nets.push((d.clone(), match generated.remove(&j) { Some(net) => net, None => parse_net(&inst.layout_text(j))? }));
             }
             instance = Some(inst);
         }
@@ -1299,11 +1299,45 @@ pub struct RegionShape {
     pub fixed: u32,
 }
 
+/// A generated read's table-direct B side (`Lookup.foldB`): product row `prod0 + j nh + h` (`j < k`) reads low minterm
+/// `lo_top + l` exactly when bit `j` of word `h 2^lo + l` is set. Its slot type's own B leaves those rows empty.
+#[derive(Clone)]
+pub struct TableSide {
+    pub table: &'static [u32],
+    pub lo: usize,
+    pub nh: usize,
+    pub k: usize,
+    pub prod0: usize,
+    pub lo_top: usize,
+}
+
+impl TableSide {
+    pub fn of(ln: &LookupNet) -> Self {
+        TableSide { table: ln.table, lo: ln.lo, nh: 1 << (ln.n - ln.lo), k: ln.k, prod0: ln.prod0(), lo_top: ln.lo_top() }
+    }
+
+    /// Adds `Bᵀ eq` over the product rows to a slot's fold `out`.
+    pub fn fold(&self, eq: &[F128], out: &mut [F128]) {
+        let (nlo, mask) = (1usize << self.lo, if self.k >= 32 { u32::MAX } else { (1u32 << self.k) - 1 });
+        out[self.lo_top..self.lo_top + nlo].par_iter_mut().enumerate().for_each(|(l, o)| {
+            for h in 0..self.nh {
+                let mut x = self.table[h * nlo + l] & mask;
+                while x != 0 {
+                    *o += eq[self.prod0 + x.trailing_zeros() as usize * self.nh + h];
+                    x &= x - 1;
+                }
+            }
+        });
+    }
+}
+
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
     /// per slot type: its log size and its circuit
     pub types: Vec<(usize, SparseMatrixCircuit<'static>)>,
+    /// per slot type: a generated read's table-direct B side
+    pub tables: Vec<Option<TableSide>>,
     /// (type index, first position, count) per range
     pub ranges: Vec<(usize, usize, usize)>,
     pub da: Vec<(u32, u32)>,
@@ -1320,7 +1354,13 @@ impl LincheckCircuit for BlockCircuit {
         let lo = self.types.iter().map(|t| 1usize << t.0).min().unwrap();
         let c0 = eq[..lo].iter().position(|e| *e != F128::ZERO).expect("eq tensor vanishes on the first slot");
         let inv = eq[c0].inv();
-        let bases: Vec<Vec<F128>> = self.types.iter().map(|(sl, m)| m.fold_alpha_batched(alpha, &eq[..1 << sl])).collect();
+        let bases: Vec<Vec<F128>> = self.types.iter().zip(&self.tables).map(|((sl, m), tb)| {
+            let mut base = m.fold_alpha_batched(alpha, &eq[..1 << sl]);
+            if let Some(tb) = tb {
+                tb.fold(&eq[..1 << sl], &mut base);
+            }
+            base
+        }).collect();
         let mut out = vec![F128::ZERO; 1 << self.k_log];
         for &(t, pos0, count) in &self.ranges {
             let sl = self.types[t].0;
@@ -1502,8 +1542,12 @@ impl Stmt {
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
+        let mut tables: Vec<Option<TableSide>> = Vec::new();
         let mut type_of: BTreeMap<String, usize> = BTreeMap::new();
         let mut ranges = Vec::new();
+        // a typed template's generated read layouts, by circuit: their slot types' table-direct B side
+        let reads: BTreeMap<usize, TableSide> = c.typed.as_ref().map(|t| t.parts.iter().zip(&t.inst.parts)
+            .filter_map(|(&(net, _), &(j, _))| t.inst.reads.get(&j).map(|ln| (net, TableSide::of(ln)))).collect()).unwrap_or_default();
         for r in &c.ranges {
             let key = format!("{:?}", r.kind);
             let t = *type_of.entry(key).or_insert_with(|| {
@@ -1521,6 +1565,7 @@ impl Stmt {
                     }
                 };
                 types.push((r.slot_log, circ));
+                tables.push(match r.kind { Kind::Net(i) => reads.get(&i).cloned(), Kind::Mask => None });
                 types.len() - 1
             });
             ranges.push((t, r.pos0, r.count));
@@ -1557,7 +1602,7 @@ impl Stmt {
             digest_cache: OnceLock::from(flock_digest),
             csc_cache: OnceLock::new(),
         };
-        let circuit = BlockCircuit { k_log, pin, types, ranges, da, db };
+        let circuit = BlockCircuit { k_log, pin, types, tables, ranges, da, db };
         Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity })
     }
 
@@ -1834,14 +1879,15 @@ impl Stmt {
     #[allow(clippy::type_complexity)]
     pub fn witness(&self, ins: &[Vec<Vec<F128>>], mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>)
         -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
-        self.witness_with(ins, mask, nets, None)
+        self.witness_with(ins, mask, nets, None, None)
     }
 
     /// [`Stmt::witness`], a typed template's root instance `flip.0` with its bound input row `flip.1` (unit coordinates)
-    /// flipped and everything downstream of it evaluated from the flipped bit.
+    /// flipped and everything downstream of it evaluated from the flipped bit; or (`forged`) every instance evaluated by
+    /// another instance of the same parts (a swapped tail).
     #[allow(clippy::type_complexity)]
     pub fn witness_with(&self, ins: &[Vec<Vec<F128>>], mask: &(dyn Fn(usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>,
-                        flip: Option<(usize, usize)>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+                        flip: Option<(usize, usize)>, forged: Option<&crate::typed::Instance>) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
         let c = &self.c;
         let kl = c.k_log;
         let n = 1usize << (self.m - 7);
@@ -1871,7 +1917,7 @@ impl Stmt {
             }
         }
         if let Some(t) = &c.typed {
-            for (at, uz, ua, ub) in self.typed_zab(t, &ins[c.unit_net], flip) {
+            for (at, uz, ua, ub) in self.typed_zab(t, &ins[c.unit_net], flip, forged) {
                 z[at..at + uz.len()].copy_from_slice(&uz);
                 a[at..at + ua.len()].copy_from_slice(&ua);
                 bb[at..at + ub.len()].copy_from_slice(&ub);
@@ -1884,14 +1930,16 @@ impl Stmt {
     /// A typed template's root and part slots: `(absolute F128 word offset, z, a, b)`, each VU evaluated from its root's
     /// input words `ins` (`unit_inputs`) by [`crate::typed::Instance::eval64`], 64 at once.
     #[allow(clippy::type_complexity)]
-    pub fn typed_zab(&self, t: &TypedBlock, ins: &[Vec<F128>], flip: Option<(usize, usize)>) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
+    pub fn typed_zab(&self, t: &TypedBlock, ins: &[Vec<F128>], flip: Option<(usize, usize)>, forged: Option<&crate::typed::Instance>)
+        -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
         let c = &self.c;
+        let inst = forged.unwrap_or(&t.inst);
         let (wpb, rr) = (1usize << (c.k_log - 7), c.range_of(c.unit_net));
-        let (own, root_rows) = (t.inst.root.rows.len(), 1usize << c.nets[c.unit_net].1.unit_log);
+        let (own, root_rows) = (inst.root.rows.len(), 1usize << c.nets[c.unit_net].1.unit_log);
         let xs: Vec<usize> = (0..ins.len()).collect();
         xs.par_chunks(64).flat_map_iter(|grp| {
             let lanes = flip.filter(|f| grp.contains(&f.0)).map(|f| (f.1, 1u64 << (f.0 % 64)));
-            let (zz, aa, bq) = t.inst.eval64(&|w| grp.iter().enumerate().fold(0u64, |x, (l, &i)| x | (bit(&ins[i][w / WORD], w % WORD) << l)), lanes);
+            let (zz, aa, bq) = inst.eval64(&|w| grp.iter().enumerate().fold(0u64, |x, (l, &i)| x | (bit(&ins[i][w / WORD], w % WORD) << l)), lanes);
             grp.iter().enumerate().flat_map(|(l, &x)| {
                 let (blk, g) = (x / rr.count, x % rr.count);
                 // lane l's bits `[lo, lo + used)` into a slot of `rows` rows
@@ -1905,9 +1953,9 @@ impl Stmt {
                     o
                 };
                 let mut out = vec![(blk * wpb + c.slot_col(c.unit_net, g, 0) / WORD, pack(&zz, 0, own, root_rows), pack(&aa, 0, own, root_rows), pack(&bq, 0, own, root_rows))];
-                for (p, &(j, base)) in t.inst.parts.iter().enumerate() {
+                for (p, &(j, base)) in inst.parts.iter().enumerate() {
                     let (net, q) = t.parts[p];
-                    let (span, used) = (1usize << t.inst.layouts[&j].1, t.inst.layouts[&j].2.rows.len());
+                    let (span, used) = (1usize << inst.layouts[&j].1, inst.layouts[&j].2.rows.len());
                     out.push((blk * wpb + c.slot_col(net, g, q) / WORD, pack(&zz, base, used, span), pack(&aa, base, used, span), pack(&bq, base, used, span)));
                 }
                 out
@@ -2210,7 +2258,7 @@ mod tests {
                 }
             }
         }
-        let staged = crate::typed::staged_rows(&c.meta, &c.name).unwrap();
+        let staged = crate::typed::staged_rows(&c.meta, &c.name, None).unwrap();
         let delta_txt = &staged.last().unwrap().1;
         assert_eq!(lines, delta_txt.lines().filter(|l| l.starts_with("DELTA")).map(str::to_string).collect::<BTreeSet<_>>());
         for (l, (&(j, base), &(net, q))) in delta_txt.lines().filter(|l| l.starts_with("PART")).zip(t.inst.parts.iter().zip(&t.parts)) {
@@ -2224,6 +2272,25 @@ mod tests {
         // the instance exercises every kind: two exported inputs, bindings of a part's output, an input and a constant form
         assert_eq!((t.inst.parts.len(), t.inst.bind.iter().map(Vec::len).sum::<usize>(), t.inst.root.in_cols.iter().filter(|&&u| u >= t.inst.root.rows.len()).count()), (2, 4, 2));
         assert!(!cross.is_empty() && lines.len() == 3 + 4);
+    }
+
+    /// A generated read's table-direct B side folds as `LookupNet::build_v2`'s explicit product rows do, at random weights.
+    #[test]
+    fn the_table_side_folds_as_the_explicit_rows() {
+        let table: &'static [u32] = Box::leak((0..512u32).map(|i| (i.wrapping_mul(2654435761) >> 7) & 0x7FFF_FFFF).collect::<Vec<_>>().into_boxed_slice());
+        let (net, ln) = LookupNet::build_v2("t", &crate::lookup::table_sha512(table), table, 9, 4, 31).unwrap();
+        let n = 1usize << net.unit_log;
+        let mut s = 7u64;
+        let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
+        let mut want = vec![F128::ZERO; n];
+        for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
+            for &c in &net.b[r] {
+                want[c] += eq[r];
+            }
+        }
+        let mut got = vec![F128::ZERO; n];
+        TableSide::of(&ln).fold(&eq, &mut got);
+        assert!(ln.k == 31 && got == want);
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.

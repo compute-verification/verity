@@ -185,6 +185,11 @@ impl LookupNet {
         self.lo_rows.last().map_or(0, |b| b.0)
     }
 
+    /// The first product row: output bit `j < k`'s product with high minterm `h` is row `prod0 + j 2^(n - lo) + h`.
+    pub fn prod0(&self) -> usize {
+        self.prod0
+    }
+
     /// The rows digest the verifier's vectors pin (`Lookup.rowsDigest`): `SHA-512("flock-lookup-rows/v2" ‖ 0 ‖ le32[n, lo,
     /// bits, k, useful, const_pos, prod0, lo_top, unit_log] ‖ per row: le32|A_r| ‖ A_r ‖ le32|B_r| ‖ B_r)`. The product rows'
     /// B side counts as empty, as the verifier's fold reads it from the table (`Lookup.foldB`); `product_b_is_the_table`

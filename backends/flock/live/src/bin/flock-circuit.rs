@@ -243,6 +243,8 @@ struct Wit {
     cut_flip: Option<(usize, usize, usize)>,
     /// a typed template's: a part's bound input row (root instance, unit coordinate) flipped as it's evaluated
     typed_flip: Option<(usize, usize)>,
+    /// a typed template's swapped tail: the forged statement's instance evaluates every instance
+    typed_forged: Option<Arc<flock_live::typed::Instance>>,
     /// evaluate these circuits instead of the pinned ones (a swapped tail)
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
 }
@@ -303,7 +305,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         let word = &mut ins[n][x][col / 128];
         if col % 128 < 64 { word.lo ^= 1 << (col % 128) } else { word.hi ^= 1 << (col % 128 - 64) }
     }
-    let (mut z, a, b, zl) = st.witness_with(&ins, &*w.mask, &w.nets, w.typed_flip);
+    let (mut z, a, b, zl) = st.witness_with(&ins, &*w.mask, &w.nets, w.typed_flip, w.typed_forged.as_deref());
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
@@ -430,7 +432,23 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
         Some(t) => t.inst.first_and().map(|u| t.col(&st.c, ur.count.min(6) - 1, u)),
         None => Some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40),
     };
-    Wit { rowin, inputs, mask, flip_z: flip_z.filter(|_| plan.unit_flip), cut_flip, typed_flip, nets: Arc::new(nets) }
+    let typed_forged = if plan.tail_swapped { forged_instance(st) } else { None };
+    Wit { rowin, inputs, mask, flip_z: flip_z.filter(|_| plan.unit_flip), cut_flip, typed_flip, typed_forged, nets: Arc::new(nets) }
+}
+
+/// A typed template's forged instance (`--forged`, derived once): its parts where the pinned instance's are and its root
+/// inside the pinned root's slot, so it evaluates in the pinned block; `None` if the file isn't such a typed statement.
+fn forged_instance(st: &Stmt) -> Option<Arc<flock_live::typed::Instance>> {
+    static FORGED: std::sync::OnceLock<Option<Arc<flock_live::typed::Instance>>> = std::sync::OnceLock::new();
+    let pinned = &st.c.typed.as_ref()?.inst;
+    FORGED.get_or_init(|| {
+        let text = std::fs::read_to_string(arg("--forged", "circuit-forged.txt")).ok()?;
+        let meta: Value = serde_json::from_str(text.split('\n').nth(1)?.strip_prefix("META ")?).ok()?;
+        let (f, _) = flock_live::typed::instance(&meta, Some(&arg("--tables", "tables"))).ok()?;
+        let fits = f.parts == pinned.parts && f.extent == pinned.extent && f.root.rows.len() <= 1 << st.c.unit().unit_log
+            && f.root.in_cols == pinned.root.in_cols && f.root.rows != pinned.root.rows;
+        fits.then(|| Arc::new(f))
+    }).clone()
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -659,6 +677,7 @@ fn skipped(st: &Stmt, name: &str) -> bool {
     (name == "chaining_value_forged" && !multi_block)
         || (!cut && ["private_cut_word_tampered", "tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
         || (forged_same && ["tail_swapped", "tail_swapped_circuit_refused"].contains(&name))
+        || (name == "tail_swapped" && st.c.typed.is_some() && forged_instance(st).is_none())
 }
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -899,9 +918,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let mut layout_altered = meta.clone();
         let split = if meta["layouts"][0]["in_split"] == json!([]) { json!([1]) } else { json!([]) };
         layout_altered["layouts"][0]["in_split"] = split;
-        let rows = if flock_live::typed::is_flat(&meta) { flock_live::typed::unit_rows(&meta, &st.c.name) } else {
-            flock_live::typed::instance(&meta).map(|i| i.root_text(&st.c.name))
-        }.unwrap();
+        let rows = match &st.c.typed {
+            Some(t) => t.inst.root_text(&st.c.name),
+            None => flock_live::typed::unit_rows(&meta, &st.c.name).unwrap(),
+        };
         let with_rows = format!("{text}CIRCUIT unit {}\n{rows}", rows.lines().count());
         let why: Vec<Option<String>> = [with_meta(&type_altered), with_meta(&layout_altered), with_rows].iter()
             .map(|t| Composite::parse(t, Some(&arg("--tables", "tables"))).err()).collect();
@@ -1149,7 +1169,7 @@ fn main() {
         // a typed statement's rows as this prover derives them, laid out as staging's rows/ (to diff the two mirrors)
         let out = arg("--out", "rows");
         std::fs::create_dir_all(&out).expect("--out");
-        for (f, text) in flock_live::typed::staged_rows(&c.meta, &c.name).unwrap_or_else(|e| refuse(e)) {
+        for (f, text) in flock_live::typed::staged_rows(&c.meta, &c.name, Some(&arg("--tables", "tables"))).unwrap_or_else(|e| refuse(e)) {
             std::fs::write(format!("{out}/{f}"), text).expect("rows");
         }
         return;
@@ -1173,6 +1193,10 @@ fn main() {
     // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
     if flag("--gpu") && st.circuit.types.len() > 12 {
         refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
+    // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
+    if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
+        refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
     }
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
