@@ -1,17 +1,17 @@
-import Proofs.Flock.Soundness.Registered.Binding
+import Proofs.Flock.Soundness.Registered.ReadsX
 import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
 # Registered reads off the registrant's leaf, at the outcome's draw
 
-`Reads.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
+`ReadsX.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
 registration and one set of reads. In a live session both are the outcome's: the registration is the one the prover sent,
 and the verifier checks only the reads of the units it draws. So:
 
-* `rowIn S`: a commit string that is a row of a unit of `S`; `Reads.restrict`: the reads at the positions `A` keeps;
-* `Reads.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
-* `prob_auditLive_draw`, `prob_auditLive_liveOf_mono`: an event of the live audit's draw alone has the law's
-  probability, and implications at every outcome of `liveOf`'s session bound probabilities;
+* `rowIn S`: a commit string that is a row of a unit of `S`; `ReadsX.restrict`: the reads at the positions `A` keeps;
+* `ReadsX.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
+* `prob_auditLive_draw`: an event of the live audit's draw alone has the law's probability (implications at every
+  outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
 -/
 
@@ -39,12 +39,12 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
-namespace Reads
+namespace ReadsX
 
-variable {lay : Layout P plan tab decode} {rs : HmRows lay}
+variable {lay : Layout P plan tab decode} {rs : HmRowsX lay}
 
 /-- **The registered reads at the positions `A` keeps.** -/
-def restrict (rd : Reads lay rs) (A : lay.Pos → Prop) : Reads lay rs where
+def restrict (rd : ReadsX lay rs) (A : lay.Pos → Prop) : ReadsX lay rs where
   isRead p := rd.isRead p ∧ A p
   read_row p h := rd.read_row p h.1
   port := rd.port
@@ -59,7 +59,7 @@ def restrict (rd : Reads lay rs) (A : lay.Pos → Prop) : Reads lay rs where
 `path o`: the probability of accepting while one of `rdo o`'s reads has a leaf under `Rof o` that is not the
 registrant's is at most `qR²/2^513`, under `SHA512CRStrict` (`cr/sha-512`) for the finder that plays `G` once and
 outputs the extractor's pair. -/
-theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → Reads lay rs) (Rof : β → Reg)
+theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → ReadsX lay rs) (Rof : β → Reg)
     (accept : β → Prop) (path : β → lay.Pos → ByteArray) (hchk : ∀ o, accept o → (rdo o).Checked (Rof o) (path o))
     {qR : ℝ} (hR : (StrictCR.oneRun G σ fun o => (rdo o).pick (Rof o) (path o)).CR H512 qR) :
     prob (fun o => accept o ∧ (rdo o).Off (Rof o)) G σ ≤ ENNReal.ofReal (qR ^ 2 / 2 ^ (513 : ℝ)) := by
@@ -76,7 +76,7 @@ theorem prob_offOn_le {β : Type} (G : Game β) (σ : Strategy G) (rdo : β → 
     ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)
   exact hle.trans ((ENNReal.le_ofReal_iff_toReal_le hfin (by positivity)).2 hev)
 
-end Reads
+end ReadsX
 
 end FlockSoundness.Registered
 
@@ -98,21 +98,6 @@ theorem prob_auditLive_draw {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (F
     exact le_antisymm (prob_le_one _ _ _) ((prob_true _ _).symm.le.trans (prob_mono (fun _ _ => h) _ _))
   · rw [if_neg h]
     exact le_antisymm ((prob_mono (fun _ hq => h hq) _ _).trans (prob_false _ _).le) zero_le
-
-/-- **Implications at every outcome of `liveOf`'s live audit bound probabilities**: at the registration the prover
-sends, each of the law's draws and each output of the live session written by `wr`. -/
-theorem prob_auditLive_liveOf_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr)))
-    {p q : Reg × Finset (Fin n) × Exec.Transcript → Prop}
-    (h : ∀ ω o', p (τ.1, L.draw ω, wr (L.draw ω) τ.1 o') → q (τ.1, L.draw ω, wr (L.draw ω) τ.1 o')) :
-    prob p (auditLive L Reg (liveOf dg mPts N wr)) τ ≤ prob q (auditLive L Reg (liveOf dg mPts N wr)) τ := by
-  show avg (fun ω => prob p ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)) ≤
-    avg fun ω => prob q ((liveOf dg mPts N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)
-  refine avg_mono fun ω => ?_
-  rw [prob_map, prob_map]
-  unfold liveOf
-  rw [prob_map, prob_map]
-  exact prob_mono (fun o' => h ω o') _ _
 
 /-- **A strategy's registration survives a cast along an equation of sessions.** -/
 theorem reg_cast {n : ℕ} {L : Law n} {Reg : Type} {g g' : Finset (Fin n) → Reg → Game Bool} (h : g = g')

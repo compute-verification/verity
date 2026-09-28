@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
+import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 
 /-!
 # The drawn units of one `--zk --registered` session
@@ -11,7 +12,8 @@ simulation keeps both (`simAuditZKOn`):
 * `exec_le_of_refines_drawn`: draw by draw, if the live session's acceptance is at most the compiled session's, then
   any bound on `Pr[accept ∧ Q R S]` in the compiled audit, `R` its registration and `S` its draw, bounds
   `Pr[acc ∧ Q o.1 o.2.1]` in the live audit;
-* `zk_headline_exec_drawn`: that at `--zk`, from the decoder at the law's draws;
+* `zk_headline_exec_drawn`: that at `--zk`, from the decoder at the law's draws; `zk_headline_exec_drawnJ` at sessions
+  of `J` tables, and `simZHJ` the simulation it reads at hidden-output tables;
 * `zk_flock_drawnC_cr`: the compiled audit's drawn bound, `Pr[accept ∧ a drawn unit is wrong] ≤ ε_ks + δ_link`
   (`extraction_audit_drawn` at `analysisZC`), every term on the accepted assumptions;
 * `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no drawn unit is wrong in the
@@ -109,6 +111,75 @@ theorem zk_headline_exec_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin c
   exact h.trans_eq (prob_map _ _ _ _)
 
 end On
+
+section OnJ
+
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+
+local notation "𝔽" => FlockLevel3.GF128
+
+variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl]
+  (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (I : Inputs)
+  (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
+  (opn : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → OpensZ 𝔽 D Sl)
+  (dg : ByteArray → ByteArray)
+  (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
+  (one : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → Bool)
+  (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
+
+/-- **The `--zk` headline at an event of the registration and the draw, for sessions of `J` tables**
+(`zk_headline_exec_drawn` at `simZJ`). -/
+theorem zk_headline_exec_drawnJ (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
+    (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (Q : Reg → Finset (Fin n) → Prop) (B : ℝ≥0∞)
+    (hB : prob (fun o => o.1 = true ∧ Q (reg (simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ)) o.2)
+      (audit L Reg (batchedSessionZC A Hs planZ)) (simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ) ≤ B) :
+    prob (fun o => LiveAcceptsZK I o ∧ Q o.1 o.2.1) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤ B := by
+  refine exec_le_of_refines_drawn τ (simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ) rfl (AcceptsZK I)
+    (fun ω => ?_) Q hB
+  have h : prob (LiveAcceptsZK I) ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) ≤
+      prob (fun o => o.1 = true) ((batchedSessionZC A Hs planZ (L.draw ω) τ.1).map fun ok => (ok, L.draw ω))
+        ((simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ).2 ω) := by
+    unfold simZJ batchedSessionZC
+    rw [prob_strategy_map, prob_strategy_map, prob_map]
+    unfold liveOfZJ
+    rw [prob_map]
+    refine (live_le_sessionZJ A Hs (planZ (L.draw ω) τ.1) _ (opn (L.draw ω) τ.1) dg (dec (L.draw ω) τ.1)
+      (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (hdec ω τ.1) _).trans_eq ?_
+    congr 1
+    funext outs
+    classical
+    exact propext decide_eq_true_iff.symm
+  rw [prob_map] at h
+  exact h.trans_eq (prob_map _ _ _ _)
+
+end OnJ
+
+section Hidden
+
+open ZkHidden (planZHJ DrawSetupZHJ TagsOkZHJ DrawOkZKHJ opnAtZHJ runsZCJH_live)
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+
+variable {mPts n : ℕ} {Reg : Type}
+
+/-- **The simulation of a hidden-output `--zk` session of `J` tables**: `simZJ` at the tables `planZHJ`, with the decoder
+`runsZCJH_live` gives. -/
+noncomputable abbrev simZHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
+    (hU : Built c.unit)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ) {L : Law n} (hTags : TagsOkZHJ I)
+    (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω))
+    (τ : Strategy (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr))) :
+    Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀))) :=
+  simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+    (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+      (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr L hTags hRec hDraw)) τ
+
+end Hidden
 
 section Drawn
 

@@ -10,8 +10,8 @@ facts about one copy of one unit in a layer agreeing with the registrant, the de
 * The bytes. A row's bytes (`MerkleScheme.rowBytes`) put bit `j` of element `k` at bit `128 k + j`
   (`bitL_rowBytes`), and an element is its 128 bits (`eq_of_bitOf`), so two rows whose bytes agree on element `k`'s
   bits agree at `k` (`getElem!_of_bitL`).
-* The outputs. `RegBit` reads a copy's input columns; a unit's outputs are gates it computes, each its own commit string
-  (`posK`'s `.inr`). `RegOut u hj col b`: copy `j`'s column `col` is a committed gate at a registered read whose
+* The outputs. `RegBit` reads a copy's input columns; a unit's outputs are gates it computes, and a returned output's
+  commit string is its output row (`posK`'s `.inl`, `HiddenExec.rowOfH`). `RegOut u hj col b`: copy `j`'s column `col` is a committed gate at a registered read whose
   registrant's bit is `b`. In a layer agreeing with the registrant where the unit is correct, the copy's column is `b`
   (`copyVal_regOut`).
 * `unitSum_of_cols`: output columns holding `decode_recOpen`'s bytes, whose `acc_out` half is `rec-acc`'s row `p + 1`,
@@ -114,11 +114,11 @@ theorem unitSum_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (
 
 section Copy
 
-variable {mPts nv : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv Reg' c hU hscope Lv)
+variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
+  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy `j`'s output column `col` of unit `u` is a registered bit `b`**: the copy's gate there is committed, at a
-registered read (its own commit string, `posK`'s `.inr`), and the registrant's bit there is `b`. -/
+registered read (its commit string, `posK`'s: a returned output's output row), and the registrant's bit there is `b`. -/
 def RegOut (u : Fin nv) {j : ℕ} (hj : j < c.upv) (col : ℕ) (b : Bool) : Prop :=
   ∃ hcol : col < (Rows.ofNet hU).w,
     (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hcol⟩) ∈

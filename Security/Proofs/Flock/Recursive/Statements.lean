@@ -53,13 +53,13 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c` under their laws `(Vs j).law`, each
-the full draw (`--draw subset:<units>`) on the operating system's bytes (A3, `uniform/io-getrandombytes`); at each
-history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is `zs R ω t R₂ j`, whose fields carry
-`flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody (`ZkOuter.hRec`) and the
-registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s values, and the verifier's
-own). For every prover `σ` of the recursive audit, given V*'s bridge (`Flock.Assumptions.VBridge`) and the inner
-protocol's soundness at `ε_in`, one of four holds.
+/-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c`, with hidden outputs and `(Vs j).J`
+tables, under their laws `(Vs j).law`, each the full draw (`--draw subset:<units>`) on the operating system's bytes (A3,
+`uniform/io-getrandombytes`); at each history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is
+`zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody
+(`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
+values, and the verifier's own). For every prover `σ` of the recursive audit, given V*'s bridge
+(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds.
 
 * A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
   sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
@@ -93,7 +93,8 @@ def RecursiveSound : Prop :=
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the count curve's parameters
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
-    (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
@@ -374,7 +375,8 @@ def RecursiveRanRegistered : Prop :=
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
-    (_hr : ∀ R ω t R₂ j S' R' i, rateZ (planZAt (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))

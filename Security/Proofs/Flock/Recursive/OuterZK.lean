@@ -27,17 +27,17 @@ committed coins, which read the tape and what was public before the session).
   bound `δ`. The sessions one by one at each of `R₂`'s salts (`ZK.prCoin_pi_close`), then `R₂`'s commit strings to
   ideal ones (`ZK.ideal_leaves_swap`); the sessions read `R₂`'s salts only through their witnesses, which the
   simulator doesn't read, so the second step follows the first.
-* `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at `verify --zk`'s table of the
-  session's data at a draw it sets up (`coinedOf_setup`; every `--zk` setup avoids the mask slot,
-  `FailClosed.DrawSetupZK.avoidsMask`).
+* `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at a table of `verify --zk`'s
+  hidden-output session of the session's data at a draw, where it sets that table up (`coinedOf_setup_of`; every such
+  setup avoids the mask slot, `FailClosed.DrawSetupZHJ.avoidsMask`).
 * `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the firewall's
   commitments under live inner coins (`firewallCommits`); `Flock.SecurityProofs.RecursiveFirewallPrivate`
   (`Proofs.Flock.Recursive.FirewallZK`) takes it at `proverExe` and the pinned key's hiding gap, with no hypothesis on
   the abort.
 
-Left to the instance at V*'s staging: that each session's table is `coinedOf` at its data and draw (with a
-`DrawSetupZK` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses (`Honest`, which
-(ii)'s `honest` carries).
+Left to the instance at V*'s staging: that each session's table is `coinedOf` at a table of its data and draw (with a
+`ZkHidden.DrawSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
+(`Honest`, which (ii)'s `honest` carries).
 -/
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
@@ -187,19 +187,26 @@ end Sessions
 
 /-! ## V*'s tables, and (ii) -/
 
-/-- **V*'s session tables pass `CoinedOK`** where each is `coinedOf` at `verify --zk`'s table of the session's data at
-a draw `verify --zk` sets up (`coinedOf_setup`); every `--zk` setup avoids the mask slot
-(`FailClosed.DrawSetupZK.avoidsMask`). -/
+/-- **V*'s session tables pass `CoinedOK`** where each is `coinedOf` at a table of `verify --zk`'s hidden-output session
+of the session's data at a draw, where `verify --zk` sets that table up (`coinedOf_setup_of`); every such setup is a
+`MaskSetup` (`ZkHidden.maskSetup_of_setupHidden`) and avoids the mask slot (`FailClosed.DrawSetupZHJ.avoidsMask`). -/
 theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigProver) (Vs : Fin V.S → VStmt)
     {Reg' : Type} (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
     (draw : (j : Fin V.S) → Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → Finset (Fin (Vs j).nv))
-    (y : ∀ j pc l, DrawSetupZK (D pc l j).I (Vs j).mPts (draw j pc l) ((D pc l j).dj (draw j pc l)))
-    (hC : ∀ j pc l, V.C j pc l = coinedOf P (tableAtZK (D pc l j).dj (D pc l j).y₀ (draw j pc l)) (y j pc l).x.st) :
+    (tab : ∀ j pc l, Fin (nTab (D pc l j).I))
+    (y : ∀ j pc l, ZkHidden.DrawSetupZHJ (inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
+      (partS (D pc l j).I ((D pc l j).dj (draw j pc l)) (draw j pc l) (tab j pc l))
+      (drawJ (D pc l j).I ((D pc l j).dj (draw j pc l)) (tab j pc l)))
+    (hC : ∀ j pc l, V.C j pc l =
+      coinedOf P (ZkHidden.tableZHJ (D pc l j).dj (D pc l j).y₀ (draw j pc l) (tab j pc l)) (y j pc l).x.st) :
     V.TablesOK := by
   intro j pc l
   rw [hC j pc l]
-  exact (coinedOf_setup (Reg := Unit) P (D pc l j).I (D pc l j).dj (D pc l j).y₀ (D pc l j).ht
-    (fun _ y' => FailClosed.DrawSetupZK.avoidsMask y') (draw j pc l) () (y j pc l)).2.2.2.2.2
+  exact (coinedOf_setup_of P _ (y j pc l).x.st (y j pc l).x.wf.1
+    (by rw [ZkHidden.tableZHJ, dif_pos ⟨y j pc l⟩, ZkHidden.DrawSetupZHJ.table_eq _ (y j pc l)]; rfl)
+    (ZkHidden.maskSetup_of_setupHidden ((FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans
+      ((FlockSoundness.Discharge.ZkExec.zkTags_typed _).trans (D pc l j).ht)) (y j pc l).x.h)
+    (FailClosed.DrawSetupZHJ.avoidsMask (y j pc l))).2.2.2.2.2
 
 /-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = errAt δ` at any hm96 hiding bound `δ`: the view
 `Sessions.view` at the honest context, the simulator `Sessions.sim` at the public context `pubS` reads (the owed
