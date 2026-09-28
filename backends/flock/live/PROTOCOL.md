@@ -480,7 +480,9 @@ rejected by the inner proof alone).
     table's Σ. The server refuses at configuration a Bernoulli law (its count is random), a count J does not divide, and
     tables `--zk` cannot prove. The session's law is the record's `unit_draw`: each table's header carries only its part
     as a subset draw;
-  - randomness per table (§2) and a rank check per table (§6);
+  - randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
+    message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
+    tables can read the same row;
   - one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
     stop unless they bind it;
   - a coin subtree per table and rep;
@@ -488,7 +490,28 @@ rejected by the inner proof alone).
 
   The selftests are `tables_two_in_one_session`, `tables_proofs_before_the_last_coin_detected` (a prover without the
   barrier is accepted by the verifier and caught by the order check), `zk_tables_share_no_randomness` and
-  `tables_unsplittable_draw_refused`. The device prover
-  still proves one table per session, and `gk_simulate` still simulates one table.
+  `tables_unsplittable_draw_refused`. The device prover still proves one table per session.
+
+  **The simulator over several tables.** `zkrewind` and `zkgk` take `--session-tables J`: `gk_simulate` extracts,
+  simulates and replays every table's streams in the prover's order. `zk_rewind_stats.py` tests each table's proofs and
+  relations as their own classes, and fails any value that table j shares with table 0 in every view (`across_tables`).
+  At J = 2 on RoPE (two tables of m = 25), 40 real and 40 simulated views per strategy:
+
+| V* | complete views, real / simulated | how views end (p) | extraction runs reaching the proofs | estimation runs | rewinds | failures |
+|---|---|---|---|---|---|---|
+| honest | 40 / 40, all accepted | 1.0 | 40 of 40 | 160 | 40 | 0 |
+| abort | 14 / 18, all accepted | 0.70 | 18 of 40 | 181 | 64 | 0 |
+| adaptive-coins | 17 / 14, all accepted | 0.74 | 14 of 40 | 147 | 51 | 0 |
+| zero-beta | 0 / 0 (all stop at table 0's β round) | identical | 0 of 40 | 0 | 0 | 0 |
+| cap-gated | 20 / 24, all accepted | 0.51 | 24 of 40 | 194 | 49 | 0 |
+| late-gated | 21 / 22, all accepted | 1.0 | 22 of 40 | 164 | 35 | 0 |
+
+  - No value is shared across the tables in any strategy.
+  - As one family of 688 tests the run passes: the smallest p-value is 3.2·10^-4, Bonferroni-adjusted 0.22.
+  - That p-value, the one test below α = 10^-3, is the real side's xor test on table 1's `inner_y` in the abort strategy,
+    which reads the real views alone. Rerun with 40 fresh views per kind, it is 0.30, and every one of the abort
+    strategy's 136 tests passes.
+  - The rewinds are independent trials (`zkgk`, 40 attempts). cap-gated: 22 real sessions complete and 21 fresh rewinds
+    (p = 1.0), against 1 rewind on a reused dummy. late-gated: 16 real and 24 fresh (p = 0.12), against 40 reused.
 - **Review.** A red team on §5, §7 and this section, then the Lean reference prover and its differential test, before any
   `COMPLETE_*` class.
