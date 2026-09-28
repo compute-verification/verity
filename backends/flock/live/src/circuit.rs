@@ -2179,6 +2179,7 @@ mod tests {
     fn typed_block_delta_is_the_derivation() {
         let c = Composite::parse(&typed_statement(), None).unwrap();
         let t = c.typed.as_ref().unwrap();
+        assert_eq!(c.tags().statement, crate::typed::STATEMENT);
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut back: BTreeMap<usize, usize> = (0..t.inst.root.rows.len()).map(|u| (t.col(&c, 0, u), u)).collect();
