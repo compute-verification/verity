@@ -36,22 +36,21 @@ The auditor never runs any part of the computation; it only checks proofs. The i
 
 ## Architecture
 
-An arrow points from a component to what it may depend on:
+Each layer may depend on the layers below it:
 
 ~~~text
-        integrations/vllm              benchmarks/
-                |        \            /     |
-                v         v          v      v
-  protocols/                    backends/
-    one_stage                     flock                    C-Flock and its Lean verifier
-    sampled_proofs                gkr, direct, sp1, vole   frozen
-    pous
-                \                    /
-                 v                  v
-        packages/verity: the core library
-
-  tools/research depends on none of these; it runs and records the work.
+integrations/vllm, benchmarks/
+---------------------------------------------------------------------------
+protocols/                    backends/
+  one_stage                     flock                    C-Flock and its Lean verifier
+  sampled_proofs                gkr, direct, sp1, vole   frozen
+  pous
+---------------------------------------------------------------------------
+packages/verity, the core library:
+  ir, ml, evaluation, commitments, randomness, proofs, claims
 ~~~
+
+`tools/research` sits outside the layers: it runs and records the work, and depends on none of them.
 
 ### Circuits
 
@@ -102,7 +101,7 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 - `tools/tc_probe/`, `tools/tc_probe_fp4/`, `tools/native_peak/`: GPU probes that compare tensor-core instructions bit for bit with the primitive circuits' models, and measure native peak throughput
 - `benchmarks/`: reproducible workloads and measurements, including the [one-stage audit end to end](benchmarks/one_stage/README.md)
 - [`census/`](census/README.md): data only: hardware, datatypes, networks, subcircuits, input sets and workloads
-- `fixtures/` and `tests/`: repository-wide fixtures, registered in `fixtures/artifacts.json`, and the repository's own tests
+- `fixtures/` and `tests/`: repository-wide fixtures and tests; replicated inputs are registered in `fixtures/artifacts.json`
 
 ## Getting started
 
