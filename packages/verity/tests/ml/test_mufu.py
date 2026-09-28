@@ -141,7 +141,7 @@ def test_tanh_reproduces_the_manifest_hardware_sample() -> None:
 
 def test_a_tanh_table_that_is_not_the_pinned_one_does_not_load(monkeypatch) -> None:
     monkeypatch.setattr(M, "MUFU_TANH_TABLE_MANIFEST_SHA256", "0" * 64)
-    M._tanh_shards.cache_clear()
+    M.mufu_tanh_shards.cache_clear()
     with pytest.raises(M.MufuTanhUnmeasured, match="pinned"):
         M.MufuTanh.evaluate(0x3F000000)
     assert M.mufu_tanh_coverage()["shards"] == []

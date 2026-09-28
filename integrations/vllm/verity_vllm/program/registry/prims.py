@@ -32,11 +32,13 @@ from verity.ml.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf1
                             GuardNegInfZero, _decode, _round_f32, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
                             f32_fma_bits, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits, f32_to_bf16_rn_bits,
                             ftz_bits)
-# Re-exported: the MUFU primitives, their tables and MufuTanh's measured shard are core's.
+# Re-exported: the MUFU primitives, their tables and MufuTanh's measured shard (C-Flock's tail pieces read it as
+# `_tanh_shards`) are core's.
 from verity.ml.mufu import (MUFU_TANH_RULES, MUFU_TANH_SHARD_FORMAT, MUFU_TANH_TABLE_DIR, MUFU_TANH_TABLE_FORMAT,
                             MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA256, DivFullRcp, DivFullScaleA, Fa2InvSum,
-                            MufuEx2Ftz, MufuRcpFtz, MufuSqrtFtz, MufuTanh, MufuTanhUnmeasured, RsqrtApprox, _tanh_shards,
-                            mufu_tanh_coverage, mufu_tanh_table_manifest)
+                            MufuEx2Ftz, MufuRcpFtz, MufuSqrtFtz, MufuTanh, MufuTanhUnmeasured, RsqrtApprox, mufu_tanh_coverage,
+                            mufu_tanh_table_manifest)
+from verity.ml.mufu import mufu_tanh_shards as _tanh_shards
 from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
 from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16

@@ -42,8 +42,8 @@ F32 = Value(32)
 __all__ = ["DELTA_TABLES", "F32", "MUFU_TANH_RULES", "MUFU_TANH_SHARD_FORMAT", "MUFU_TANH_TABLE_DIR", "MUFU_TANH_TABLE_FORMAT",
            "MUFU_TANH_TABLE_MANIFEST", "MUFU_TANH_TABLE_MANIFEST_SHA256", "TABLE_DIR", "DivFullRcp", "DivFullScaleA", "Fa2InvSum",
            "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz", "MufuTanh", "MufuTanhUnmeasured", "RsqrtApprox", "mufu_ex2_bits",
-           "mufu_rcp_bits", "mufu_rsq_bits", "mufu_sqrt_bits", "mufu_tanh_coverage", "mufu_tanh_table_manifest", "table",
-           "table_path"]
+           "mufu_rcp_bits", "mufu_rsq_bits", "mufu_sqrt_bits", "mufu_tanh_coverage", "mufu_tanh_shards", "mufu_tanh_table_manifest",
+           "table", "table_path"]
 
 TABLE_DIR = str(resources.files(__package__) / "tables")
 #: the library tables stored as delta files, each read by index
@@ -372,7 +372,7 @@ def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
 
 
 @lru_cache(maxsize=None)
-def _tanh_shards() -> tuple:
+def mufu_tanh_shards() -> tuple:
     """The loaded table: the in-tree manifest, which must be the pinned one (`MUFU_TANH_TABLE_MANIFEST_SHA256`).  Raises
     `MufuTanhUnmeasured` when it is missing / not the pinned one / corrupt or does not cover the table-only region
     [identity_below, saturate_from) (a configuration error, not a measurement gap)."""
@@ -397,7 +397,7 @@ def _tanh_shards() -> tuple:
 def mufu_tanh_coverage() -> dict:
     """What the evaluator can answer right now: table word ranges (with their odd-symmetry verdict) and the established rules."""
     try:
-        shards = _tanh_shards()
+        shards = mufu_tanh_shards()
     except MufuTanhUnmeasured as e:
         return {"shards": [], "rules": {k: (None if v is None else f"0x{v:08X}") for k, v in MUFU_TANH_RULES.items()}, "error": str(e)}
     return {"shards": [{"lo": f"0x{s.lo:08X}", "hi": f"0x{s.hi:08X}", "n_words": s.hi - s.lo, "odd_symmetry_verified": s.sym_ok,
@@ -427,7 +427,7 @@ def MufuTanh(x: int) -> int:
     w = MUFU_TANH_RULES["identity_below"]
     if w is not None and a < w:
         return u
-    shards = _tanh_shards()  # raises MufuTanhUnmeasured itself when the table does not load
+    shards = mufu_tanh_shards()  # raises MufuTanhUnmeasured itself when the table does not load
     for s in shards:
         y = s.lookup(u)
         if y is not None:

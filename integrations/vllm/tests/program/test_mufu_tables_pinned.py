@@ -29,7 +29,7 @@ def test_the_environment_selects_no_table(monkeypatch, tmp_path):
     assert fa2 == fa2_relation.TABLE_SHA256
     for kernel, pinned in rms_relation.TABLE_SHA256.items():
         assert {n: _sha256(os.path.join(rms_relation.tables_dir(kernel), f"mufu_{n}_delta_int8.xz")) for n in pinned} == pinned
-    P._tanh_shards.cache_clear()
+    mufu.mufu_tanh_shards.cache_clear()
     assert isinstance(P.MufuTanh.evaluate(TANH_TABLE_WORD), int)
     table = os.path.join(P.MUFU_TANH_TABLE_DIR, P.mufu_tanh_table_manifest()["table"]["file"])
     assert [s["path"] for s in P.mufu_tanh_coverage()["shards"]] == [table]
@@ -44,7 +44,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
     with pytest.raises(ValueError, match="pinned"):
         rms_relation.tables("cuda")
     monkeypatch.setattr(mufu, "MUFU_TANH_TABLE_MANIFEST_SHA256", "0" * 64)
-    P._tanh_shards.cache_clear()
+    mufu.mufu_tanh_shards.cache_clear()
     with pytest.raises(P.MufuTanhUnmeasured, match="pinned"):
         P.MufuTanh.evaluate(TANH_TABLE_WORD)
 
