@@ -58,6 +58,7 @@ DOMAIN = "domain"
 DOMAINS = ("total", "finite-only")
 BREAKTHROUGH = "breakthrough"
 LANE = "lane"
+QUESTION = "question"
 ROW = "row"
 SWEEP = "sweep"
 ARM = "arm"
@@ -237,6 +238,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
                                    "hardware) or finite-only (non-finite operands asserted away; Daniel 2026-09-26: an explicit, named choice)", DOMAINS),
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
+    _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (Daniel, 30 Sep: every job names one)"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
     _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),

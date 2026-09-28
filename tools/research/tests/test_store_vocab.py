@@ -39,7 +39,7 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
-               "lane", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
+               "lane", "question", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "interaction_attempt_of", "hash", "sharing", "fold",
                "pipeline")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "commit_map")
@@ -131,7 +131,7 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     refused (exit 2, nothing written) with the reason; `--off-vocab` writes it with a warning."""
     st = LocalStore()
     refused = [(["nonesuch", "v1"], "label key 'nonesuch' is not in the vocabulary"),
-               (["Relation", "fp8-ada"], "did you mean 'relation'?"),
+               (["Relation", "fp8-ada"], "did you mean 'relation'"),
                (["verfied", "accepted"], "did you mean 'verified' or 'verifier'?"),
                (["subbatches", "32"], "label key 'subbatches' is a measurement or run parameter"),
                (["result_artifact", "art:" + "1" * 64], "names another store object: that is a ref"),
