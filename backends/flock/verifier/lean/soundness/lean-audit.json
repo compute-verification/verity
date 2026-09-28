@@ -325,6 +325,20 @@
    "assumptions": [],
    "type_hash": "0000000077bd9194"
   },
+  "FlockSoundness.Refine.merkleCheck_verifies": {
+   "signature": [
+    "FlockSoundness.Refine.merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}",
+    "  {rows : Array (Array Flock.F128)} {sibs salts : Array ByteArray} {lanes : ℕ}",
+    "  (h : Flock.merkleCheck (Flock.MerkleScheme.sha512 msId) cap c d pos rows sibs salts lanes = Except.ok ()) (j : ℕ)",
+    "  (hj : j < pos.size) :",
+    "  rows[j]!.size = lanes ∧",
+    "    FlockSoundness.Merkle.Verifies FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
+    "      (fun i => FlockSoundness.Refine.toDig (cap.getD i ByteArray.empty)) (d - c) pos[j]! rows[j]!.toList",
+    "      (List.map FlockSoundness.Refine.toDig (Flock.sibsOf sibs (d - c) j))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000be141dea"
+  },
   "FlockSoundness.Refine.opening_refines": {
    "signature": [
     "FlockSoundness.Refine.opening_refines (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim)",
@@ -342,6 +356,22 @@
    ],
    "assumptions": [],
    "type_hash": "00000000c08c219f"
+  },
+  "FlockSoundness.Refine.opensOK_of": {
+   "signature": [
+    "FlockSoundness.Refine.opensOK_of (msId : String) (sch : Flock.Schedule)",
+    "  (hlv : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default)) (cap : Array ByteArray)",
+    "  (p : Flock.LigeritoProof) (r : ℕ) (pend : FlockSoundness.Model.PendL FlockLevel3.GF128 FlockSoundness.Refine.Dig)",
+    "  (o : FlockSoundness.Model.Opens FlockLevel3.GF128 FlockSoundness.Refine.Dig)",
+    "  (hcaps :",
+    "    pend.caps = List.map (fun j => FlockSoundness.Refine.capDig p.recursiveCaps[j]!) (List.range (sch.levels.size - 1)))",
+    "  (hreqs : ∀ req ∈ pend.reqs, FlockSoundness.Refine.ReqOK (Flock.MerkleScheme.sha512 msId) sch cap p req)",
+    "  (ho : ∀ (ℓ j : ℕ), o r ℓ j = FlockSoundness.Refine.openRow p sch ℓ j) :",
+    "  FlockSoundness.Model.OpensOK FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
+    "    (FlockSoundness.Refine.capDig cap) r pend o"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000617d7f13"
   },
   "FlockSoundness.Refine.rep_refines": {
    "signature": [
@@ -612,7 +642,9 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -773,6 +805,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -824,6 +857,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1048,7 +1082,12 @@
     "FlockSoundness.Merkle.up": "9dbce0b81a2b294b",
     "FlockSoundness.Merkle.walk": "515ccc6c9ff48dc6"
    },
-   "pins": ["FlockSoundness.Merkle.opening_binding", "FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Merkle.opening_binding",
+    "FlockSoundness.Refine.merkleCheck_verifies",
+    "FlockSoundness.Refine.opensOK_of",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Model.Basic": {
    "digest": "f28feff001cc0b255c696bcf7cd396e2",
@@ -1139,6 +1178,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound_compiled"
    ]
@@ -1194,6 +1234,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1367,8 +1408,22 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines"
    ]
+  },
+  "FlockSoundness.Refine.Paths": {
+   "digest": "56fbd975296b992b9028b03887bb530c",
+   "definitions": {
+    "FlockSoundness.Refine.Dig": "f9c1e94fe07bc130",
+    "FlockSoundness.Refine.H512": "8644faacf4476776",
+    "FlockSoundness.Refine.capDig": "c0abb2726eb5ec92",
+    "FlockSoundness.Refine.colBytes": "8d9ccd8ac2d18ae6",
+    "FlockSoundness.Refine.enc512": "45863ebd8ea39b9a",
+    "FlockSoundness.Refine.openRow": "7064f0c1c5a5745a",
+    "FlockSoundness.Refine.toDig": "d188cde24e5cecab"
+   },
+   "pins": ["FlockSoundness.Refine.merkleCheck_verifies", "FlockSoundness.Refine.opensOK_of"]
   },
   "FlockSoundness.Refine.Realizes": {
    "digest": "0b5160f9a91b928dcd8506df54b44633",
@@ -1423,6 +1478,7 @@
     "FlockSoundness.Refine.ligerito_accepts",
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines"
    ]
   },
@@ -1447,6 +1503,7 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.opening_refines",
+    "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.zerocheck_refines"
    ]
