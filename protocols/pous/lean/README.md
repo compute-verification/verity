@@ -23,15 +23,16 @@ Pous/Protocol/Model/{P3Chain,BandChain,PubEncoder}.lean
 Pous/Protocol/Model/{BandGraph,SegLift}.lean
                                     the band graph the column game's band certificates are stated over; a
                                     segment's parents at their global positions, which the tagged transfer reads
-Pous/Protocol/Accounting/{Params,LemmaA,PubMeets}.lean
+Pous/Protocol/Model/Graded.lean     the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
+Pous/Protocol/Accounting/{Params,LemmaA,PubMeets,GradedMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
-                                    `PubMeets`, the requirement with a public encoder
+                                    `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`
 Pous/Protocol/P2/Cost.lean          P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Pous/Assumptions.lean               trusted, the Assumptions layer: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Assumptions/P2.lean            P2's named open step `PrimeP16448`, the primality of its modulus
-Pous/Guarantees.lean                trusted, the Guarantees layer: 65 statements, the 54 grade.sh grades against,
+Pous/Guarantees.lean                trusted, the Guarantees layer: 66 statements, the 55 grade.sh grades against,
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
                                     cited outside the package
 Pous/Guarantees/P2.lean             six statements about the abstract model `m1p` at P2's parameters,
@@ -51,6 +52,9 @@ Pous/SecurityProofs/Continuous/     the continuous audit: MissCount (proved, pin
                                     conditional probabilities are at least q_j); Game (draft, unreviewed: the
                                     variable-state responder and two statements), PerAnswer (their proofs) and
                                     Band (the guarantee on the 64 KiB band at D = 5)
+Pous/SecurityProofs/Graded/         proved: the tail rule (`Tail.lean`), Theorem 1(ii) for the graded audit
+                                    (`Theorem.lean`) and the band with grace `t` at `D = 5` (`Band.lean`,
+                                    `BandGradedMeetsFamily`)
 lean-audit.json                     the policy and pin records for tools/lean/audit.py
 CheckAxioms.lean                    one #print axioms line per headline theorem
 PousTargets.lean                    untrusted, not in the default build: the open statements as sorry targets

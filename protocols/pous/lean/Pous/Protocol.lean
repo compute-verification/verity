@@ -1,3 +1,4 @@
+import Pous.Protocol.Accounting.GradedMeets
 import Pous.Protocol.Accounting.LemmaA
 import Pous.Protocol.Accounting.Params
 import Pous.Protocol.Accounting.PubMeets
@@ -8,6 +9,7 @@ import Pous.Protocol.Model.BandChain
 import Pous.Protocol.Model.BandGraph
 import Pous.Protocol.Model.ColumnGame
 import Pous.Protocol.Model.Dense
+import Pous.Protocol.Model.Graded
 import Pous.Protocol.Model.HashChain
 import Pous.Protocol.Model.Inc
 import Pous.Protocol.Model.Invertible
