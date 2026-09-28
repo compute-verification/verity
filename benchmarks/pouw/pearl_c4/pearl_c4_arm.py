@@ -1,4 +1,4 @@
-"""Pearl-C4's arms for the PoUW harness (benchmarks/pouw/harness, arm interface v0.4): `PearlC4Nv` (``pearl-c-nvfp4-v0``,
+"""Pearl-C4's arms for the PoUW harness (benchmarks/pouw/harness, arm interface v0.5): `PearlC4Nv` (``pearl-c-nvfp4-v0``,
 the FP4 headline, divided by the ``nvfp4`` baseline) and `PearlC4Mx` (``pearl-c-mxfp4-v0``, beside it, by ``mxfp4``; a
 contrast, not a protocol candidate).
 
@@ -11,11 +11,13 @@ SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines
 fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitment and seed_b first).  The host supplies the
 operands, the salt and the two domain ids (verity.commitments', public before A exists).  The salt is the verifier's
 (`audit.Epoch.start` over B's root, committed on the host, and an epoch beacon that is a label of the operand set: a
-shortcut for a public round).  The first hash-role call freed at each shape dumps its transcript into the harness's
-``transcripts_dir``/<scheme>-<shape> (`dump`, relaunched over poisoned outputs, so the transcript carries only what that
-launch wrote), and the build record names the verifier (``verifier``) that proves and
-verifies it after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT line names the
-transcript's sha256.  The build record's ``binaries`` is the cubin (loaded with ``cuModuleLoadData``, so never mapped).
+shortcut for a public round).  The harness makes each shape's transcript after the timed items (`bench.poison_dump`):
+it fills every buffer of the hash call's ``transcript_buffers`` with 0xA5, runs the weight side and the call, and has
+`dump` read them back into ``transcripts/<arm>/<shape>/``; then it poisons them again, launches nothing, and has `dump`
+write the no-write control into ``negative/<arm>/<shape>/``.  The build record names the verifier (``verifier``) that
+proves and verifies both after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT
+line names the transcript's sha256, and which must reject the control.  The build record's ``binaries`` is the cubin
+(loaded with ``cuModuleLoadData``, so never mapped).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
 an m that isn't is the scheme's matmul of A padded with zero filler rows: the call first copies A into the padded buffer;
@@ -28,7 +30,11 @@ and B's roots equal to `audit.commit_rows` over the rows on the host and both se
 context; and PEARLC4_GATE_TILES whole 64 x 64 tiles (the first and seeded random ones) against the CPU twin (`twin.tile`,
 itself held to the scalar reference): y, P_A's and P_B's rows, and with hashing the tile's leaf (hence its 128 C̃‖U
 digests).  `known_bad` is the plain mode under the hash flags.  Pearl's lottery tickets are not computed (no PoUW check
-reads them; the coordinator's 06:35Z ruling for pearl-c-sm120, taken for Pearl-C4).
+reads them; the coordinator's 06:35Z ruling for pearl-c-sm120, taken for Pearl-C4).  Each gate reads its tiles' inputs
+(both seeds and the tiles' 64 A and B rows) from the device and reuses a twin tile made from the same ones, so a shape's
+roles, their flip controls and `known_bad` share its tiles; A's and B's host commitments are likewise recomputed only
+when the rows differ.  `prefetch` (arm interface v0.6, optional) starts the tiles in the harness's `refs.pool()` before
+a flag set's first gate.
 
 Shortcut: γ is unstated (the certificate's tt-out-fp4 conjecture is pending).
 """
@@ -55,6 +61,7 @@ import dev as D  # noqa: E402
 
 TILE, WEIGHT_BASE, POISON = 64, 1, 0xA5
 OUTPUTS = {"hash": ("y", "digests", "leaves"), "nohash": ("y",), "plain": ("y",)}
+TRANSCRIPT_WEIGHT = ("root_b", "b_scales")
 LINE_IN = 37                           # seed ‖ role ‖ index u32
 
 
@@ -63,6 +70,21 @@ def _ref():
     from verity_pouw import audit
     from verity_pouw.schemes import pearl_c4 as F
     return T, F, audit
+
+
+_JOBS: dict = {}
+
+
+def _twin_tile(fmt: str, seed_a: bytes, seed_b: bytes, k: int, ti: int, tj: int, ra: bytes, rb: bytes):
+    """The CPU twin's 64 x 64 tile (ti, tj) of A rows `ra` and B rows `rb` (BF16 bytes) under the call's seeds.  Host only,
+    so a forked worker of the harness's pool (`refs.pool()`) may run it.  twin.Job's F_A, F_B and G depend on seed_b and
+    k alone, so each process keeps them."""
+    T, F, _ = _ref()
+    if (fmt, seed_b, k) not in _JOBS:
+        _JOBS[fmt, seed_b, k] = T.job(F.FORMATS[fmt], seed_a, seed_b, k)
+    jb = dataclasses.replace(_JOBS[fmt, seed_b, k], seed_a=seed_a)
+    a, b = (np.frombuffer(r, "<u2").reshape(TILE, k) for r in (ra, rb))
+    return T.tile(jb, a, b, np.arange(TILE * ti, TILE * ti + TILE), np.arange(TILE * tj, TILE * tj + TILE))
 
 
 def mode_of(flags: frozenset[str]) -> str:
@@ -83,7 +105,19 @@ class _Call:
         self.pl.prime()
         self.d.sync()
         self.outputs = {n: Buffer(self.pl.buf[n], self.pl.sizes[n]) for n in OUTPUTS[mode_of(flags)]}
+        self.transcript_buffers = self._transcript_buffers()
         self.phases = {part: (lambda stream, part=part: self._part(part, stream)) for part in ("before", "gemm", "after")}
+
+    def _transcript_buffers(self) -> dict[str, Buffer]:
+        """What the harness poisons before the call it dumps (arm interface v0.5): every buffer the hash call writes
+        (`dev.WRITTEN`, root_a and seed_a included, which `prime` wrote before timing), the weight side's that `write_dump`
+        reads (root_b, b_scales), and with m padded, A's real rows in the padded buffer (the launch's copy; the filler rows
+        stay zero).  The operands (xb, and xa when m isn't padded) are the harness's and never poisoned."""
+        pl = self.pl
+        out = {nm: Buffer(pl.buf[nm], pl.sizes[nm]) for nm in D.WRITTEN["hash"] + TRANSCRIPT_WEIGHT if nm in pl.buf}
+        if self.m_pad != self.shape.m:
+            out["xa"] = Buffer(pl.buf["xa"], self.a_bytes)
+        return out
 
     def _pipeline(self, operands, store_cu: bool = False) -> D.Pipeline:
         ext = {"xb": operands.b.ptr}
@@ -114,24 +148,25 @@ class _Call:
         self.pl.weight_side(stream)
 
     def free(self) -> None:
-        out = self.arm.transcripts
-        if out and self.mode == "hash" and self.arm.first_dump(self.shape):
-            self.dump(Path(out) / f"{self.arm.name}-{self.shape.label}")
         self.pl.free()
 
     def dump(self, path: Path, write: bool = True) -> None:
-        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): every buffer the hash call
-        writes (`dev.WRITTEN`, root_a and seed_a included, which `prime` wrote before timing) poisoned with 0xA5, the call
-        launched once more on its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed
-        scale bytes read back.  write=False leaves the launch out: the no-write negative control, which the verifier must
-        reject (server.md 11:50Z)."""
-        from verity_pouw.schemes import pearl_c4_replay as R
-        for nm in D.WRITTEN["hash"]:
-            if nm in self.pl.buf:
-                self.d.write(self.pl.buf[nm], bytes([POISON]) * self.pl.sizes[nm])
+        """What the harness does with this call (`bench.poison_dump`), for arm_smoke.py, which runs without it: every
+        buffer of `transcript_buffers` poisoned with 0xA5, the weight side and the call launched once more on its operands
+        as they stand, then `write_dump`.  write=False leaves both launches out: the no-write negative control, which the
+        verifier must reject (server.md 11:50Z)."""
+        for b in self.transcript_buffers.values():
+            self.d.write(b.ptr, bytes([POISON]) * b.nbytes)
         if write:
+            self.weight_side(0)
             self.launch(0)
         self.d.sync()
+        self.write_dump(path)
+
+    def write_dump(self, path: Path) -> None:
+        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): A's and B's rows, both roots,
+        the tile leaves and the formed scale bytes, read from the device as they stand.  It computes nothing."""
+        from verity_pouw.schemes import pearl_c4_replay as R
         d, b, s = self.d, self.pl.buf, self.shape
         call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
                 "real_rows": s.m, "epoch_beacon": self.beacon.hex(), "label": s.label, "device": d.uuid,
@@ -151,16 +186,16 @@ class _PearlC4:
 
     def __init__(self):
         self.d: D.Dev | None = None
-        self.transcripts: str | None = None
-        self._jobs: dict = {}
         self._epochs: dict = {}
-        self._dumped: set = set()
+        self._refs: dict = {}
+        self._commits: dict = {}
+        self._commits_shape: str | None = None
 
-    def first_dump(self, shape: Shape) -> bool:
-        """True once per shape: the first hash-role call freed there dumps its transcript."""
-        new = shape.label not in self._dumped
-        self._dumped.add(shape.label)
-        return new
+    def dump(self, dev, call: _Call, shape: Shape, out: Path) -> None:
+        """The harness's hook (arm interface v0.5, `bench.poison_dump`): the call's transcript into `out`, read from the
+        device after the harness poisoned `call.transcript_buffers` and ran (or, for the no-write control, didn't run)
+        the weight side and the call."""
+        call.write_dump(out)
 
     def build(self, ctx: dict) -> dict:
         cubin = Path(os.environ.get("PEARLC4_CUBIN", HERE / "pearl_c4.cubin"))
@@ -169,21 +204,22 @@ class _PearlC4:
         want = getattr(ctx.get("device"), "info", {}).get("uuid")
         if want and self.d.uuid != want:
             raise RuntimeError(f"pearl_c4's device {self.d.uuid} is not the harness's {want}")
-        self.transcripts = ctx.get("transcripts_dir")
         return {"cubin": str(cubin), "cubin_sha256": hashlib.sha256(data).hexdigest(), "identity": self.d.identity,
                 "scheme": self.name, "gate_tiles": self.gate_tiles(), "binaries": [str(cubin)],
                 "verifier": self.verifier()}
 
     @staticmethod
     def verifier() -> dict:
-        """The reference verifier on each shape's dump (arm interface v0.4): ``prove`` makes the transcript from the dump in
-        ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256."""
+        """The reference verifier on each shape's dump (arm interface v0.5): ``prove`` makes the transcript from the dump in
+        ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256.  The harness's dump is under
+        ``transcripts/{arm}/{shape}/``, so verify.py runs the same commands on the no-write control under ``negative/``,
+        which they must reject; ``--path`` names whichever of the two it is."""
         r = ["{python}", "-m", "verity_pouw.schemes.pearl_c4_replay"]
         w = ["--workers", os.environ.get("PEARLC4_VERIFY_WORKERS", "16")]
-        return {"name": "verity_pouw.schemes.pearl_c4_replay", "transcript": "transcripts/{arm}-{shape}/transcript.json",
+        return {"name": "verity_pouw.schemes.pearl_c4_replay", "transcript": "transcripts/{arm}/{shape}/transcript.json",
                 "commands": [r + ["prove", "{dir}", "--run", "{run_id}", "--out", "{transcript}"] + w,
                              r + ["verify", "{transcript}", "--out", "{dir}/verify.json",
-                                  "--path", "{run_id}:transcripts/{arm}-{shape}/transcript.json", "--commit", "{commit}"] + w]}
+                                  "--path", "{run_id}:{transcript}", "--commit", "{commit}"] + w]}
 
     @staticmethod
     def gate_tiles() -> int:
@@ -241,13 +277,60 @@ class _PearlC4:
     def known_bad(self, dev, shape: Shape, operands) -> _Call:
         return _Call(self, shape, self.flag_sets["hash"], operands, "plain")
 
-    def _job(self, seed_a: bytes, seed_b: bytes, k: int):
-        """twin.Job; F_A, F_B and G depend on seed_b and k alone, so they are kept for later gates."""
-        T, F, _ = _ref()
-        key = (seed_b, k)
-        if key not in self._jobs:
-            self._jobs[key] = T.job(F.FORMATS[self.fmt], seed_a, seed_b, k)
-        return dataclasses.replace(self._jobs[key], seed_a=seed_a)
+    def _tile_inputs(self, call: _Call, shape: Shape) -> list[tuple[tuple, bytes, bytes]]:
+        """The gate's twin tiles (the first and PEARLC4_GATE_TILES − 1 seeded random ones), each as its key and its A and
+        B rows, read from the device as it stands.  The key holds every input of `_twin_tile`, the rows by their sha256."""
+        d, k = self.d, shape.k
+        seed_a, seed_b = (d.read(call.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
+        rng = random.Random(f"{shape.label}/{seed_a.hex()}")
+        spots = [(0, 0)] + [(rng.randrange(call.m_pad // TILE), rng.randrange(shape.n // TILE))
+                            for _ in range(self.gate_tiles() - 1)]
+        out = []
+        for ti, tj in spots:
+            ra = d.read(call.pl.buf["xa"] + TILE * ti * k * 2, TILE * k * 2)
+            rb = d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2)
+            out.append(((self.fmt, seed_a, seed_b, k, ti, tj, hashlib.sha256(ra).digest(), hashlib.sha256(rb).digest()),
+                        ra, rb))
+        return out
+
+    def prefetch(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> None:
+        """Arm interface v0.6's hook: the gate's twin tiles for `call`, started in the harness's pool (`refs.pool()`) from
+        the device as it stands.  A tile already made or started from the same inputs is not started again."""
+        try:
+            import refs
+        except ImportError:
+            return
+        pool = refs.pool()
+        if pool is None:
+            return
+        for key, ra, rb in self._tile_inputs(call, shape):
+            if key not in self._refs:
+                self._refs[key] = pool.submit(_twin_tile, *key[:6], ra, rb)
+
+    def _twin(self, key: tuple, ra: bytes, rb: bytes):
+        """The twin tile of these inputs: made once per shape, so a role's gates, its flip control and `known_bad` share
+        it, or taken from `prefetch`."""
+        got = self._refs.get(key)
+        if got is None:
+            got = _twin_tile(*key[:6], ra, rb)
+        elif hasattr(got, "result"):
+            got = got.result()
+        self._refs[key] = got
+        return got
+
+    def _commit_rows(self, shape: Shape, binding: bytes, index: int, ptr: int, count: int, k: int):
+        """`audit.commit_rows` over `count` rows at `ptr`, made once per shape for each binding and its rows' bytes: the
+        harness gates each role's first and last operand sets in turn, whose A and B have bindings of their own."""
+        _, _, au = _ref()
+        raw = self.d.read(ptr, count * 2 * k)
+        if self._commits_shape != shape.label:
+            self._commits, self._commits_shape = {}, shape.label
+        got = self._commits.get((binding, index, count, k))
+        if got is not None and got[0] == raw:
+            return got[1]
+        tree = au.commit_rows(binding, index, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)])
+        self._commits[binding, index, count, k] = (raw, tree)
+        return tree
 
     def commitments(self, call: _Call, shape: Shape, mode: str) -> dict:
         """The device's roots and seeds against `audit.commit_rows` over the rows and the scheme's `noise` on the host.  The
@@ -257,12 +340,8 @@ class _PearlC4:
         from verity_pouw.protocol import Context, Matmul
         from verity_pouw.protocol import Shape as PShape
         d, pl, k = self.d, call.pl, shape.k
-        def rows(ptr: int, count: int) -> list[bytes]:
-            raw = d.read(ptr, count * 2 * k)
-            return [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)]
-
-        ta = au.commit_rows(au.activation_binding(call.salt, 0), 0, rows(pl.buf["xa"], call.m_pad))
-        tb = au.commit_rows(au.weight_binding(call.weight), -2, rows(pl.buf["xb"], shape.n))
+        ta = self._commit_rows(shape, au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
+        tb = self._commit_rows(shape, au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)
         ctx = Context(call.salt, Matmul(0, PShape(call.m_pad, k, shape.n), call.weight), ta.commitment.root,
                       tb.commitment.root)
         noise = F.PearlC4(self.fmt).noise(ctx)
@@ -273,8 +352,7 @@ class _PearlC4:
 
     def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
         T, _, _ = _ref()
-        d, mode, m, n, k = self.d, mode_of(flags), call.m_pad, shape.n, shape.k
-        seed_a, seed_b = (d.read(call.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
+        d, mode, m, n = self.d, mode_of(flags), call.m_pad, shape.n
         twin = call._pipeline(_Ops(call), store_cu=False)
         try:
             call.pad(twin, 0)
@@ -289,18 +367,9 @@ class _PearlC4:
             relaunch = {nm: d.read(twin.buf[nm], b.nbytes) == d.read(b.ptr, b.nbytes) for nm, b in call.outputs.items()}
         finally:
             twin.free()
-        xa = call.pl.buf["xa"]
         y = np.frombuffer(d.read(call.pl.buf["y"], call.pl.sizes["y"]), "<u2").reshape(m, n)
-        jb = self._job(seed_a, seed_b, k)
-        rng = random.Random(f"{shape.label}/{seed_a.hex()}")
-        spots = [(0, 0)] + [(rng.randrange(m // TILE), rng.randrange(n // TILE)) for _ in range(self.gate_tiles() - 1)]
-        tiles = []
-        for ti, tj in spots:
-            rows, cols = np.arange(TILE * ti, TILE * ti + TILE), np.arange(TILE * tj, TILE * tj + TILE)
-            a_rows = np.frombuffer(d.read(xa + TILE * ti * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
-            b_rows = np.frombuffer(d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
-            t = T.tile(jb, a_rows, b_rows, rows, cols)
-            tiles.append(self._compare(call, t, ti, tj, y, mode, T))
+        tiles = [self._compare(call, self._twin(key, ra, rb), key[4], key[5], y, mode, T)
+                 for key, ra, rb in self._tile_inputs(call, shape)]
         commit = self.commitments(call, shape, mode)
         ok = all(relaunch.values()) and all(all(v for key, v in t.items() if key != "tile") for t in tiles)
         ok = ok and all(v for key, v in commit.items() if key != "root_a_hex")
