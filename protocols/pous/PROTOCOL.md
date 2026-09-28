@@ -16,10 +16,11 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 39%. This is the Ristenpart–Shacham–Shrimpton limit: indifferentiability does not carry over to storage games, so no
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
-over an ideal permutation `Π₂` of width `2m + 512`, to be proved in the ideal-permutation model. Its pebbling side is
-proved, but its ex post facto bounds are stated and not yet proved, and neither is in this package: `ChainExPostFacto`
-(B5 for `Π₂`) for dense, and its DAG-generic form `ChainExPostFactoG` for the band. `Π₂` itself (Feistel-SHAKE) is a
-heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
+over an ideal permutation `Π₂` of width `2m + 512`, proved in the ideal-permutation model. Its pebbling side and its ex
+post facto bounds are proved in this package (`PousProofs/Chain/Flat.lean`): `ChainExPostFacto` (B5 for `Π₂`) for
+dense, and its DAG-generic form `ChainExPostFactoG` for the band, with the pinned finals below (P3 with the concrete
+`H`, the band, and the dense chain scheme). They hold in the ideal-permutation model only. `Π₂` itself (Feistel-SHAKE)
+is a heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
 `docs/band-vs-dense.md`.
 
 ## The problem: timed audit, perfect isolation
@@ -394,9 +395,14 @@ the timed audit and the simulator with the dense codec as default.
 
 ### The band
 
-The band's proofs are in the POUS store's `lean/submissions/band-chain/`, not yet in this package: `band_meets_64` gives
-`Meets` at 64 KiB, `B = 512`, `D = 5`, `Q = 2^20`, `k = 111` and `ε = 2^-128` for every `d ≥ 5`, given
-`ChainExPostFactoG`.
+`Pous.BandChain.chainBand B d ℓ c dom` (`Pous/Model/BandChain.lean`) is the band over the overwrite chain on one ideal
+permutation `Π₂`, and `Pous.BandMulti.chainBandSeg` lays out segments of it. The proofs are in this package
+(`PousProofs/Chain/Flat.lean`, from the POUS store's `lean/submissions/band-chain/`, `band-multi/` and `sponge-dense/`),
+with no hypothesis: `Pous.Pinned.BandChainMeets64` gives `Meets` at 64 KiB, `B = 512`, `D = 5`, `Q = 2^20`, `k = 111`
+and `ε = 2^-128` for every `d ≥ 5`; `BandMultiMeets14` the same for 448 segments (14 GiB), with per-segment and with
+global salts, and `BandMultiMeets14K106` at `k = 106` per segment. `BandPubMeets*` are the same rows with an untrusted
+server encoding and the exact setup check (`Pous/Model/PubEncoder.lean`), under the four deployment conditions in their
+docstrings. The band needs `d ≥ D`.
 
 ### The dense scheme
 
@@ -426,8 +432,14 @@ and `ℓ ≥ 256`). Under it the two schemes write the same codeword, every tagg
 same rounds, work and acceptance probability, and the restricted oracle is again uniform. `domainSep_equiv` and
 `tag_injective_14` record the index-level fact: the tagged keying is the global one relabeled injectively.
 
+**Over the overwrite chain** (`Pous.Sponge.chainDense`, `H` the overwrite chain on an ideal permutation, proved with no
+hypothesis in `PousProofs/Chain/Flat.lean`): `Pous.Pinned.ChainDenseMeets64`, 512 blocks of 64 KiB at `D = 5`,
+`Q = 2^20`, `k = 111`; and the deployment point, `Pous.Pinned.ChainDenseMeets111`, `2^16` blocks of 1 KiB at `D = 64`,
+`Q = 2^20`, `k = 111`. The deployment was pinned at `k = 107`, which the ex post facto argument does not reach; it is
+re-pinned at `k = 111`, four challenges more.
+
 **Not proved here:**
-- the concrete H, `ChainExPostFacto` (the main caveat);
+- a concrete permutation for `Π₂` (the main caveat);
 - the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and perfect
   isolation: both outside Lean;
 - decode cost, which isn't modeled.
@@ -450,6 +462,10 @@ same rounds, work and acceptance probability, and the restricted oracle is again
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
+| `P3ConcreteMeets64`, `P3ConcreteMeets14GB`, `P3ConcreteMeets64D12` | P3 with the overwrite-chain `H` (`Pous/Model/P3Chain.lean`), 64 KB labels, `k = 106`: one segment and 971 segments (14.005 GB) on `B(220, 12)` at `D = 10`, and `B(220, 16)` at `D = 12`, in the ideal two-permutation model | proved |
+| `BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`, `BandMultiMeets14`, `BandMultiMeets14K106` | the band over the overwrite chain (`Pous/Model/BandChain.lean`): 64 KiB labels, `D = 5`, `k = 111`, every `d ≥ 5` and `d = 5`, `12`; 448 segments (14 GiB) at `k = 111`, and at `k = 106` per segment | proved |
+| `BandPubMeets64`, `BandPubMeets14`, `BandPubMeets14Global` | the same band rows with a public encoder and the exact setup check (`Pous/Model/PubEncoder.lean`, `Pous/Accounting/PubMeets.lean`) | proved |
+| `ChainDenseMeets64`, `ChainDenseMeets111` | the dense scheme over the overwrite chain: 64 KiB at `D = 5`, and the deployment point (`2^16` blocks of 1 KiB, `D = 64`), both at `k = 111` | proved |
 
 Also proved and pinned in `lean-audit.json`, with no `Pous.Pinned` statement: the one-way bound on Fisch's stacked
 graph (`PousBridge.b5_stacked`), and the band certificate for the two-directional column game (`Pous.ColumnGame`): the

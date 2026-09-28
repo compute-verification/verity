@@ -2,6 +2,7 @@ import Pous.Game.Prob
 import Pous.Game.Oracle
 import Pous.Model.Scheme
 import Pous.Model.Audit
+import Pous.Model.PubEncoder
 import Pous.Model.Inc
 import Pous.Model.M1
 import Pous.Model.HashChain
@@ -10,8 +11,11 @@ import Pous.Model.Labelling
 import Pous.Model.Invertible
 import Pous.Model.ColumnGame
 import Pous.Model.Dense
+import Pous.Model.P3Chain
+import Pous.Model.BandChain
 import Pous.Model.SampledAudit
 import Pous.Accounting.Params
+import Pous.Accounting.PubMeets
 import Pous.Accounting.Numbers
 import Pous.Accounting.LemmaA
 import Pous.Assumptions

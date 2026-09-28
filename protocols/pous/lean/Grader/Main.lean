@@ -6,20 +6,25 @@ import Grader.Registry
 `pous-grader FILE TARGET IMPORTS`. `grade.sh` has compiled the submission in a sandbox and put its `.olean`, alone,
 first on `LEAN_PATH`; every other module resolves to the trusted tree. FILE is the submission's path (for the report),
 TARGET a pinned statement, IMPORTS the submission's imports, comma-separated. It prints one JSON line and exits 0 iff
-PASS.
+PASS. With `POUS_GRADE_MEMORY_MB` set, as `grade.sh` sets it, that is Lean's resident-memory limit (`lean -M`), which
+the kernel checks during the replay.
 
 1. The trusted environment is the submission's imports without the submission. TARGET must be in `pinnedTargets`
    and be a definition of type `Prop` in namespace `Pous.Pinned` there.
 2. Every constant the submission adds is replayed through the kernel on top of the trusted environment, so a
    declaration that skipped kernel checking (the kernel-skipping debug option, environment tampering) is rejected here.
-3. In the replayed environment, `solution` must be a universe-monomorphic theorem whose type is TARGET up to the
-   kernel's definitional equality.
+3. In the replayed environment, `solution` must be a universe-monomorphic theorem whose type is the constant TARGET
+   itself, as `theorem solution : Pous.Pinned.NAME` elaborates. The comparison is syntactic: deciding definitional
+   equality against a near-miss statement can keep the kernel unfolding without bound.
 4. Every axiom `solution` depends on must be in `allowedAxioms`. The axioms are collected from the replayed
    environment with no environment extensions loaded, so nothing the submission's own compilation recorded is
    trusted.
 -/
 
 open Lean
+
+/-- Lean's resident-memory limit in bytes, as `lean -M` sets it. -/
+@[extern "lean_internal_set_max_memory"] opaque setMaxMemory (max : USize) : BaseIO Unit
 
 def solutionName : Name := `solution
 def pinnedPrefix : Name := `Pous.Pinned
@@ -33,6 +38,8 @@ def report (file target : String) (pass : Bool) (reason : String) (axioms : Arra
 def main (args : List String) : IO UInt32 := do
   let [file, target, importsArg] := args
     | IO.eprintln "usage: pous-grader FILE TARGET IMPORTS"; return 2
+  if let some mb := (← IO.getEnv "POUS_GRADE_MEMORY_MB").bind String.toNat? then
+    setMaxMemory (mb * 1024 * 1024).toUSize
   let imports := (importsArg.splitOn ",").filter (· ≠ "") |>.map fun m => ({ module := m.toName } : Import)
   initSearchPath (← findSysroot)
   let targetName := target.toName
@@ -63,9 +70,8 @@ def main (args : List String) : IO UInt32 := do
     return ← report file target false "solution is not a theorem"
   unless sinfo.levelParams.isEmpty do
     return ← report file target false "solution must not be universe polymorphic"
-  match Kernel.isDefEq checked {} sinfo.type (mkConst targetName) with
-  | .ok true => pure ()
-  | _ => return ← report file target false s!"solution does not have the pinned type {target}"
+  unless sinfo.type == mkConst targetName do
+    return ← report file target false s!"solution does not have the pinned type {target}"
   -- 4. axiom audit
   let axioms ← (collectAxioms solutionName : CoreM (Array Name)).toIO'
     { fileName := "<pous-grader>", fileMap := default } { env := checked }
