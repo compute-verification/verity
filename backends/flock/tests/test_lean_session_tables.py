@@ -101,6 +101,7 @@ def refused_draws(rope, tmp_path_factory):
     return dict(zip(DRAWS, _verify(rope, 2, *dirs)))
 
 
+@pytest.mark.slow
 def test_two_tables_of_a_drawn_session_are_accepted(rope):
     [v] = _verify(rope, 2, _session(rope, "j2-draw"))
     assert v["accepted"], v["why"]
@@ -115,22 +116,26 @@ def test_every_live_session_is_accepted(rope):
     assert [v["accepted"] for v in _verify(rope, 4, _session(rope, "j4"))] == [True]
 
 
+@pytest.mark.slow
 def test_another_table_count_is_refused(refused):
     """J is the verifier's: a J = 4 session read as J = 2 names other tables and another Σ."""
     v = refused["another J"]
     assert not v["accepted"] and v["why"].startswith("S2/R7"), v["why"]
 
 
+@pytest.mark.slow
 def test_a_missing_tables_root_is_refused(refused):
     v = refused["a missing root"]
     assert not v["accepted"] and "circuit-01 missing" in v["why"], v["why"]
 
 
+@pytest.mark.slow
 def test_y_is_two_words_per_table(refused):
     v = refused["a short y"]
     assert not v["accepted"] and v["why"].startswith("S10"), v["why"]
 
 
+@pytest.mark.slow
 def test_proofs_are_their_tables(refused):
     """Table 1's proofs in table 0's files: S17 refuses the files; with the record's digests swapped too, table 0's streams
     refuse table 1's messages."""
@@ -140,6 +145,7 @@ def test_proofs_are_their_tables(refused):
     assert not v["accepted"] and v["why"].startswith("R2"), v["why"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", list(DRAWS))
 def test_the_parts_come_from_the_sessions_draw(refused_draws, name):
     """Σ covers each table's part, so another draw is another session (S2); a draw the tables cannot split is refused."""
