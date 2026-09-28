@@ -290,7 +290,7 @@ fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32], fp_pub: O
 }
 
 /// Python's `repr(float)`: shortest round-trip digits, always with a fractional part or an exponent.  Rust's `{:?}`
-/// agrees for the values a target takes (e.g. -128.0, -80.0, -133.02); documented in DISCREPANCIES.md (D2).
+/// agrees for the values a target takes (e.g. -128.0, -80.0, -133.02); documented in discrepancies/d2.md (D2).
 fn py_float_repr(x: f64) -> Result<String, String> {
     let s = format!("{:?}", x);
     if !x.is_finite() || s.contains('e') {

@@ -235,6 +235,11 @@
    "not": 2041,
    "xor": 55268
   },
+  "gemm-coordinate/k64/sm80-mma-bf16": {
+   "and": 8660,
+   "not": 2041,
+   "xor": 55268
+  },
   "gemm-coordinate/k64/sm90-wgmma-bf16": {
    "and": 8250,
    "not": 1791,
