@@ -31,7 +31,7 @@ class Pass:
 
 @dataclass
 class Executor:
-    name: str = "pouw:pearl-c-sm120-v1-h1"
+    name: str = "pouw:pearl-c-sm120-v1-h3"
     keeps_weight_state: bool = True
     accepts: frozenset = frozenset({"bf16"})
     controls: frozenset = frozenset({"poison", "omit"})
@@ -69,7 +69,7 @@ def original(layer, x, bias):
     return ("stock", layer.weight, layer.quant_config, x, bias)
 
 
-PEARLC = Arm("pearlc", "bf16", "pouw:pearl-c-sm120-v1-h1")
+PEARLC = Arm("pearlc", "bf16", "pouw:pearl-c-sm120-v1-h3")
 
 
 def test_a_source_that_forbids_weight_state_refuses_an_executor_that_keeps_it():
@@ -90,9 +90,9 @@ def test_a_control_or_schedule_nothing_implements_is_refused_by_name():
     assert stack.refusals(PassSpec(controls=(Control("poison", 0xA5), Control("drop", 0.01)), schedule="deferred")) == []
     got = stack.refusals(PassSpec(controls=(Control("tamper", "tile"),), schedule="h3o"))
     assert got == ["control 'tamper': nothing in this stack implements it",
-                   "schedule 'h3o': pouw:pearl-c-sm120-v1-h1 runs deferred, serial"]
+                   "schedule 'h3o': pouw:pearl-c-sm120-v1-h3 runs deferred, serial"]
     with pytest.raises(Refused, match="control 'tamper'"):
-        stack.activate(Arm("tampered", "bf16", "pouw:pearl-c-sm120-v1-h1", spec=PassSpec(controls=(Control("tamper"),))))
+        stack.activate(Arm("tampered", "bf16", "pouw:pearl-c-sm120-v1-h3", spec=PassSpec(controls=(Control("tamper"),))))
 
 
 def test_an_inactive_stack_is_vllms_own_apply_with_the_sources_weight():
@@ -143,7 +143,7 @@ def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
             stack.activate(None)
     stack.activate(Arm("bf16", "bf16"))
     assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
-    with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h1"):
+    with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h3"):
         stack.activate(Arm("ncp", "bf16", "pouw:ncp-v2"))
 
 

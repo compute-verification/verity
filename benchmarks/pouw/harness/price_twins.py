@@ -240,7 +240,7 @@ def load(path: Path = TABLE) -> list[dict]:
 
 
 def statement(line: str | None, version: str | None) -> str | None:
-    """The statement a panel line and version is γ for: the hashing format (-h1, -h2, ...) is outside γ's statement."""
+    """The statement a panel line and version is γ for: the hashing format (-h0, -h3) is outside γ's statement."""
     if not line or not version:
         return None
     return f"{line}/{re.sub(r'-h[0-9]+$', '', version)}"

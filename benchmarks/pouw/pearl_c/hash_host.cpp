@@ -1,6 +1,7 @@
-// hash.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins it uses, and `launch`, which runs a 1-D
-// grid's CTAs in order; a CTA's threads run in order too, or as host threads under one barrier for a kernel that calls
-// __syncthreads (hash_rows).  Buffers are host memory: Args' pointers are host addresses.
+// hash_h3.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins they use, and `launch`,
+// which runs a 1-D grid's CTAs in order; a CTA's threads run in order too, or as host threads under one barrier for a kernel
+// that calls __syncthreads (hash_rows, s512_rows, s512_tile_leaves, s512_tree_small).  Buffers are host memory: Args' pointers are host
+// addresses.
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -I benchmarks/pouw/pearl_c -o hash_host.so hash_host.cpp
 #include <algorithm>
 #include <barrier>
@@ -15,30 +16,29 @@ using std::min;
 #define __forceinline__ inline
 #define __global__
 #define __constant__ static const
-#define __launch_bounds__(n)
+#define __launch_bounds__(...)
 #define __shared__ static
 struct Dim3 { unsigned x = 0, y = 1, z = 1; };
 static Dim3 blockIdx, blockDim;
 static thread_local Dim3 threadIdx;
 static std::barrier<>* g_barrier;
 static void __syncthreads() { g_barrier->arrive_and_wait(); }
-static uint32_t __funnelshift_r(uint32_t lo, uint32_t hi, uint32_t s) { return (uint32_t)((((uint64_t)hi << 32) | lo) >> (s & 31)); }
 static uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
   return (uint32_t)(((((uint64_t)hi << 32) | lo) << (s & 31)) >> 32);
 }
-static int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
+static int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct uint4 { uint32_t x, y, z, w; };
 static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return {x, y, z, w}; }
 
-#include "hash.cuh"
+#include "hash_h3.cuh"
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); bool syncs; };
-const Kernel KERNELS[] = {{"hash_msg", hash_msg, false},       {"hash_leaf", hash_leaf, false},
-                          {"hash_rows", hash_rows, true},      {"hash_pad", hash_pad, false},
-                          {"hash_node_keys", hash_node_keys, false}, {"hash_nodes", hash_nodes, false},
-                          {"hash_tree_leaves", hash_tree_leaves, false}, {"tickets", tickets, false},
-                          {"b3_seeds", b3_seeds, false},       {"seed_subkeys", seed_subkeys, false}};
+const Kernel KERNELS[] = {{"s512_rows", s512_rows, true},          {"s512_seeds", s512_seeds, false},
+                          {"s512_line_raws", s512_line_raws, false}, {"s512_tile_leaves", s512_tile_leaves, true},
+                          {"s512_pads", s512_pads, false},         {"s512_nodes", s512_nodes, false},
+                          {"s512_tree_small", s512_tree_small, true}, {"hm_leaves", hm_leaves, false},
+                          {"s512_tickets", s512_tickets, false},     {"s512_frame_leaves", s512_frame_leaves, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 

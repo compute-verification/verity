@@ -1,4 +1,4 @@
-// CPU stand-in for libcuda.so.1, for run.py's dry run off the pod (tests/test_pearl_c_kernel.py): "device" memory is host
+// CPU stand-in for libcuda.so.1, for run.py's dry run off the pod (tests/test_pearl_c_sm120.py): "device" memory is host
 // memory, copies and memsets are bounds-checked against their allocation, a launch fails as the driver's does when its
 // dynamic shared memory exceeds 48 KB without cuFuncSetAttribute, and every allocation, stream, stream wait and launch (name,
 // stream, grid, block, dynamic shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.

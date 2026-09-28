@@ -74,13 +74,13 @@ PASSES: dict[str, tuple[Coins, bytes, dict]] = {}
 
 @pytest.fixture(scope="module")
 def served():
-    scheme = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h2")
+    scheme = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
     tag = lambda s: hashlib.sha256(s).digest()  # noqa: E731
     ctx = Context(tag(b"salt"), Matmul(5, Shape(16, K, N), 2), tag(b"root_a"), tag(b"root_b"))
     noise = scheme.noise(ctx)
     a = _rows(1, M) + [bytes(4 * K)]                 # a zero row, which forming refuses
-    words = {"a": SC.form(scheme, noise, K, "a", a, list(range(M + 1))),
-             "b": SC.form(scheme, noise, K, "b", _rows(2, N), list(range(N)))}
+    words = {"a": SC.form(scheme, ctx, noise, K, "a", a, list(range(M + 1))),
+             "b": SC.form(scheme, ctx, noise, K, "b", _rows(2, N), list(range(N)))}
     return scheme, ctx, noise, words
 
 

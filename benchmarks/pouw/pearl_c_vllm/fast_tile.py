@@ -158,7 +158,7 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
     return out
 
 
-@functools.lru_cache(maxsize=48)
+@functools.lru_cache(maxsize=48, typed=True)
 def _gram(seed_b: bytes, k: int, norm: float, device) -> tuple[tuple[int, ...], ...]:
     fa, fb = C._basis(seed_b, 0, k, norm), C._basis(seed_b, 1, k, norm)
     fa_cols, fb_cols = [C._column(fa, q) for q in range(C.R)], [C._column(fb, p) for p in range(C.R)]
@@ -317,7 +317,7 @@ def install(scheme, debit: bool = True) -> callable:
             for name, fn, new in (("blake3", pure.blake3, h), ("keyed", pure.keyed, kd)):
                 if getattr(mod, name, None) is fn and (mod is pure or mod.__name__.startswith(("verity", "pearl_c"))):
                     swap(mod, name, new)
-    swap(C, "_basis", functools.lru_cache(maxsize=48)(C._basis.__wrapped__))
+    swap(C, "_basis", functools.lru_cache(maxsize=48, typed=True)(C._basis.__wrapped__))
     swap(C, "form_v1", form_v1)
     swap(C, "gram", gram)
     swap(C, "peel_factors_a", peel_factors_a)

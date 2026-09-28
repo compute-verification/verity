@@ -1816,7 +1816,6 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
-    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
@@ -1832,7 +1831,6 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

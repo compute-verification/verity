@@ -15,6 +15,7 @@ stats     s = max|x|, ρ = pearl_c's every-8th RMS in its pinned order;  σ = ρ
           β_row = (σ·α)·f32(16/√2346.125);  a_E = ue4m3(β_row)                     (FP32 nearest even, in that order)
 lines     32 uniform E2M1 codes per line: TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = 0x24), 16 bytes, low nibble first.
           E_A (row i, seed_A), F_A and F_B (position t), E_B (row j) from seed_B
+          (-h3: row i's E_A is line 0 of its own seed, `row_seed` over the row's SHA-512 digest; the tickets keep seed_A)
 atom      D_t = NVF4.step(C = α·x_t, E ‖ 0^32 at scale a_E, F_t ‖ 0^32 at scale 2^-4)    (one k64 atom per element)
 block     nvfp4, 16 along k: s_b = max(ue4m3(amax_b|D| · f32(1/6)), 2^-9), r_b = 1/s_b (FP32 nearest even)
           mxfp4, 32 along k: s_b = 2^⌈log2(amax_b|D| · f32(1/6))⌉ as UE8M0, r_b = 1/s_b (exact)
@@ -183,6 +184,9 @@ NVFP4 = Fmt("nvfp4", BLACKWELL_SM120_NVF4, 16, UE4M3_ONE)
 MXFP4 = Fmt("mxfp4", BLACKWELL_SM120_MXF4, 32, UE8M0_ONE)
 FORMATS = {f.name: f for f in (NVFP4, MXFP4)}
 NAMES = {"nvfp4": "pearl-c-nvfp4-v0", "mxfp4": "pearl-c-mxfp4-v0"}
+#: the hashing formats Pearl-C4 implements (`serving.HASH_FORMATS`): h0, and h3 (`pearl_c`'s SHA-512 trees, leaf and tickets,
+#: E_A per row from a seed keyed on the row's SHA-512 digest)
+HASHINGS = ("h0", "h3")
 
 
 def _finite(word: int) -> int:
@@ -279,6 +283,20 @@ def line(seed: bytes, role: int, index: int) -> list[int]:
     """One noise line: 32 E2M1 codes, uniform over the 16 nibbles."""
     raw = turboshake128(seed + bytes([role]) + index.to_bytes(4, "little"), D_LINE, R // 2)
     return [b >> s & 0xF for b in raw for s in (0, 4)]
+
+
+def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's seed_A: keyed BLAKE3 under blake3("pearl-c4/v0/seed-A") of salt ‖ root_A ‖ root_B ‖ index u64 LE."""
+    return keyed(blake3(LABELS["seed-A"]), salt + root_a + root_b + index.to_bytes(8, "little"))
+
+
+def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int) -> bytes:
+    """-h3's seed of row `row` of unit `unit`, `pearl_c.row_seed`'s layout under Pearl-C4's seed-A label: the one-row
+    unit's seed_A over the row's 64-byte SHA-512 digest `leaf` (`pearl_c.row_digest`), at index unit · 2^32 + row, the unit
+    and the row each below 2^32."""
+    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+        raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
+    return unit_seed_a(salt, leaf, root_b, unit << 32 | row)
 
 
 @lru_cache(maxsize=16)
@@ -1089,20 +1107,24 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 
 class PearlC4:
     """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
-    test instance."""
+    test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
+    tickets, and each row of A drawing its E_A line from its own seed (`row_seeds`); h0 is the default."""
 
     tickets = C.PearlC.tickets
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h0"):
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
-        self.fmt = FORMATS[fmt]
+        if hashing not in HASHINGS:
+            raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
+        self.fmt, self.hashing = FORMATS[fmt], hashing
+        self.commitment_hash = C.TREE_HASH[hashing]
         #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
         #: assessor's rating of its bounds)
         self.f1 = row_f1 if f1 is None else f1
-        self.name = NAMES[fmt]
+        self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
         #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
         #: D on honest coverage and Pearl-C4 claims NVFP4 alone (the assessor, 15:12Z; Daniel, 15:34Z).
@@ -1116,8 +1138,8 @@ class PearlC4:
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
-                    "live-verifier"),
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", *(("cr/sha-512",) if hashing != "h0" else ()),
+                    "cr/sha-256", "device-reproducibility", "live-verifier"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
@@ -1139,7 +1161,7 @@ class PearlC4:
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
                         ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ), ("n_min", n_min),
-                        ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF))),
+                        ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF)), *((("hashing", hashing),) if hashing != "h0" else ())),
         )
         if self.contrast:
             self.certificate = Certificate(
@@ -1187,9 +1209,17 @@ class PearlC4:
         """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
         both sides itself from these seeds on every drawn tile, so a word derived from any other B̃ fails its checked
         values."""
-        unit = ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little")
-        seed_a = keyed(blake3(LABELS["seed-A"]), unit)
-        return C.Noise(seed_a, seed_b(ctx.salt, ctx.root_b))
+        return C.Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b(ctx.salt, ctx.root_b))
+
+    def row_seeds(self, ctx: Context, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[bytes]:
+        """-h3's seeds of A's rows `idx` (values `a_rows`): `row_seed` over each row's SHA-512 digest (`pearl_c.row_digest`,
+        the inner digest of its hm96 leaf in A's tree)."""
+        u = ctx.matmul
+        return [row_seed(ctx.salt, C.row_digest(r), ctx.root_b, u.index, i) for i, r in zip(idx, a_rows, strict=True)]
+
+    def _lines_a(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[list[int]] | None:
+        """E_A's lines of A's rows `idx` under -h3 (line 0 of each row's seed); None under h0, which draws line i of seed_A."""
+        return [line(x, ROLE_EA, 0) for x in self.row_seeds(ctx, a_rows, idx)] if self.hashing == "h3" else None
 
     def parse_row(self, row: bytes, k: int) -> list[int]:
         return parse_row(row, k)
@@ -1244,12 +1274,13 @@ class PearlC4:
         row, its index and the side's basis, so a prover may map it over the rows in any order and in any process."""
         noise, k = self.noise(ctx), ctx.matmul.shape.k
         role_e, role_f, seed_e = (ROLE_EA, ROLE_FA, noise.seed_a) if side == "A" else (ROLE_EB, ROLE_FB, noise.seed_b)
-        formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k)
+        lines = self._lines_a(ctx, noise, [row], [index]) if side == "A" else None
+        formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k, lines)
         return row_terms(self.fmt, {}, side, formed, e, 0, self.f1)[1] > self._r1_cap(k_kept, ctx.matmul.shape.n)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
-              k: int) -> tuple[Formed, list[list[int]]]:
-        e = [line(seed_e, role_e, i) for i in idx]
+              k: int, e: list[list[int]] | None = None) -> tuple[Formed, list[list[int]]]:
+        e = [line(seed_e, role_e, i) for i in idx] if e is None else e
         side = form(self.fmt, [parse_row(r, k) for r in rows], e, basis(seed_b, role_f, k))
         check_scale_bytes(self.fmt, side)
         return side, e
@@ -1262,7 +1293,8 @@ class PearlC4:
             return self._encoded[1]
         k = ctx.matmul.shape.k
         try:
-            a, e_a = self._side(a_rows, tile.rows, ROLE_EA, ROLE_FA, noise.seed_a, noise.seed_b, k)
+            a, e_a = self._side(a_rows, tile.rows, ROLE_EA, ROLE_FA, noise.seed_a, noise.seed_b, k,
+                                self._lines_a(ctx, noise, a_rows, tile.rows))
             b, e_b = self._side(b_rows, tile.cols, ROLE_EB, ROLE_FB, noise.seed_b, noise.seed_b, k)
             ops = C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
                         peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
@@ -1283,7 +1315,7 @@ class PearlC4:
         return C.Checked(c, u)
 
     def digest(self, ctx: Context, noise: C.Noise, checked: C.Checked) -> bytes:
-        return C.leaf(checked)
+        return C.leaf(checked, self.hashing)
 
     def useful(self, ctx: Context, noise: C.Noise, ops: C.Ops, checked: C.Checked) -> list[list[float]]:
         """U/(α_A,i · α_B,j) in double, for measuring quality; the served y is the integration's pinned unscale."""
@@ -1291,5 +1323,6 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1", "form",
-           "hw_scales", "line", "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]
+__all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
+           "form", "hw_scales", "line", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
+           "unit_seed_a", "word_replay"]

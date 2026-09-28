@@ -1,7 +1,7 @@
 """U's pinned vectors (`verity.protocols.accounting.work.pouw.schemes.pearl_c_u`): ``uv run python verity/protocols/accounting/work/pouw/tests/pearl_c_u_vectors.py
 [GATE_CHECK_DIR]`` rewrites ``tests/vectors/pearl_c_u.json``.
 
-The cells come from the H100 kernel's gate problem, the one benchmarks/pouw/pearl_c/fixture.py builds: 256 x 384 x 1,024,
+The cells come from the H100 kernel's gate problem, the one archive/pouw-blake3/pearl_c/fixture.py builds: 256 x 384 x 1,024,
 case "gpu-check", unit index 5, weight 1, both formings.  Its rows `ROWS` and columns `COLS` straddle the GEMM's 128 x 128
 tiles and the leaves' 64 x 64 ones.  Every value is computed by the pin and by `pearl_c`, which must agree.  Given the gate's
 check directory (build.sh's OUT/check), the cells must also equal the gate's expected buffers, whose SHA-256 are recorded.
@@ -185,7 +185,7 @@ def vectors(gate_dir: Path | None = None) -> dict:
         "module": "verity/protocols/accounting/work/pouw/schemes/pearl_c_u.py",
         "problem": {"shape": list(SHAPE), "case": CASE, "index": INDEX, "weight": WEIGHT, "rows": list(ROWS),
                     "cols": list(COLS), "inputs": "verity/protocols/accounting/work/pouw/tests/pearl_c_vectors.py rows / rows_f32, as "
-                                                  "benchmarks/pouw/pearl_c/fixture.py builds them"},
+                                                  "archive/pouw-blake3/pearl_c/fixture.py builds them"},
         "gate": {"check_json_sha256": hashlib.sha256((gate_dir / "check.json").read_bytes()).hexdigest(),
                  "files": gate_hashes, "agree": True} if gate_dir else None,
         "formings": formings,

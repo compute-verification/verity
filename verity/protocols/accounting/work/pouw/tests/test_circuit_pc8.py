@@ -391,11 +391,11 @@ def test_a_short_last_tile_row_is_the_schemes(m):
 
 @pytest.mark.slow
 def test_the_decode_32_case_is_one_short_tile_row():
-    """`pearl_c.json`'s decode-32 case (32 × 1,024 × 64 on the H100; its h1 and h2 twins share these words) through
+    """`pearl_c.json`'s decode-32 case (32 × 1,024 × 64 on the H100) through
     `Pc8Weight` and `Pc8Call` at the scheme's own 64 × 64 tile, one 32-row tile row: the vector's B̃ codes, P_B, C̃ and U,
     every row admitted.  About 40 s: the only test that takes a pinned production-depth case through the circuit."""
-    case = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "decode-32-v1-h1")
-    (m, k, n), base = case["shape"], case["case"].removesuffix("-h1")
+    case = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "decode-32-v1")
+    (m, k, n), base = case["shape"], case["case"]
     s, ctx, _ops, a, ea, b, eb, fa, fb, g = _case(base, (m, k, n), "h100", case["index"], case["weight"])
     noise = s.noise(ctx)
     assert (noise.seed_a.hex(), noise.seed_b.hex()) == (case["seed_a"], case["seed_b"])
