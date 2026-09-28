@@ -15,7 +15,9 @@
   "Properties.NetworkCertifier",
   "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork"
+  "Properties.Proofs.CertifierNetwork",
+  "Properties.Identity",
+  "Properties.Proofs.Identity"
  ],
  "proved_in": ["../Proofs"],
  "meaning": [
@@ -51,6 +53,7 @@
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
+  "Properties.Identity",
   "Properties.NetworkCertifier",
   "Definitions.NetworkCertifier",
   "Properties.CertifierNetwork"
@@ -81,8 +84,19 @@
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
+  "Properties.Identity": {
+   "imports": ["Identity.Tagged"],
+   "except": [],
+   "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
+  },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Models.Core.Assumptions", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
+   "imports": [
+    "NetworkCheck.Check",
+    "Properties.Identity",
+    "Models.Core.Assumptions",
+    "Definitions.NetworkCertifier",
+    "Mathlib.Data.Set.Card"
+   ],
    "except": [],
    "why": "the properties are stated against the check's own functions, with `security`'s named assumptions and the reference Program they are read against, never a proof"
   },
@@ -208,6 +222,18 @@
    "signature": ["Properties.CertifierNetwork.deviceOutputAccepted : Properties.CertifierNetwork.DeviceOutputAccepted"],
    "assumptions": [],
    "type_hash": "e60b64d60e57ef470c1c3b410954f8dfa0db434866dc3ea3d91a0c0f618c5e4f"
+  },
+  "Properties.Identity.streamIsFlock": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"],
+   "assumptions": [],
+   "type_hash": "6aec9f0aeb818e57fee91f2501341e6daedc03c827239507a164afefe16a1227"
+  },
+  "Properties.Identity.taggedIsFlock": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Identity.taggedIsFlock : Properties.Identity.TaggedIsFlock"],
+   "assumptions": [],
+   "type_hash": "b8c26397362383a6cd25f84f8849848435fb7099b294d9b366798b9740e59e7f"
   },
   "Properties.NetworkCertifier.acceptedRowsAreProgramRows": {
    "owner": "@network-accounting",
@@ -1166,6 +1192,7 @@
     "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierDevice.records",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -1282,6 +1309,8 @@
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.lmsCorrect",
     "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsIff",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -1472,6 +1501,22 @@
     "Identity.Sha512.init": "89edeb8d92675d3fd8c6aa32da7bb2b09cfb3c963165ed7e2202d607b57a03b1"
    },
    "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.CertifierDevice.issuerSigns",
+    "Properties.CertifierDevice.issuerVerifies",
+    "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
+    "Properties.NetworkCertifier.acceptsIff",
+    "Properties.NetworkCertifier.acceptsOneRecordEach",
+    "Properties.NetworkCertifier.answerAccepts",
+    "Properties.NetworkCertifier.decodeRefusals",
+    "Properties.NetworkCertifier.honestAccepted",
+    "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.undecidedIff",
+    "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
@@ -1491,6 +1536,21 @@
     "Identity.taggedState": "47ed529cb2cbb2d42fa243cf0c5d734417fb83045300c8c253efe871407407d1"
    },
    "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.CertifierDevice.issuerSigns",
+    "Properties.CertifierDevice.issuerVerifies",
+    "Properties.CertifierNetwork.deviceOutputAccepted",
+    "Properties.Identity.taggedIsFlock",
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
+    "Properties.NetworkCertifier.acceptsIff",
+    "Properties.NetworkCertifier.acceptsOneRecordEach",
+    "Properties.NetworkCertifier.answerAccepts",
+    "Properties.NetworkCertifier.decodeRefusals",
+    "Properties.NetworkCertifier.honestAccepted",
+    "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.undecidedIff",
+    "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
     "Properties.Pouw.Commit.coinNumbers",
@@ -1731,7 +1791,7 @@
    ]
   },
   "NetworkCheck.Certificate": {
-   "digest": "aecf8213ae4e106d3272662409ad7d8d79662c1e46a6230abf94df0f991326ae",
+   "digest": "b8c8e6d8efbcddc6ac47dfca910c728f2bfc34b52e6c0e5cca7dbe97398bf6e6",
    "definitions": {
     "NetworkCheck.Direction": "e813aeb54a2376b4bf209416ab40c706ec7d9e1f7e3095417b154cb5936eb65a",
     "NetworkCheck.Direction.casesOn": "dff3f33d1ef1b290170e95d0450f3fed861459d8c2f27f1803047eda00212056",
@@ -1754,7 +1814,7 @@
     "NetworkCheck.RecordHead.buckets": "adaf966be2048eee2106c4f05c195d8d776b7d00a6b47adbd038dc0209b969e0",
     "NetworkCheck.RecordHead.counts": "941b6a44414c433a208a042a53e5942348e0524afe251132bedac3ea9edad8ad",
     "NetworkCheck.RecordHead.deadline": "40dd91c2a6e35a90e26c563038f4e377bddda56b88cdeb4fe4d33d75be7d6175",
-    "NetworkCheck.RecordHead.digest": "de17360dae5d4f2c4943db42f710c3411b8a67610a76ac7ea64d5a9d53d59e17",
+    "NetworkCheck.RecordHead.digest": "d7b6592129704dc3d5596fecb6a2e8b168f8bb921880a92958b4c4af7389ade6",
     "NetworkCheck.RecordHead.direction": "01466055546d165314d5736f1d15a1c86b8e6d8b87fa8fa2263f2903ecb181e0",
     "NetworkCheck.RecordHead.encode": "71ad93c28e00d96ffba2ca63faaaf2ddc7ff180f48723162e1b1ea5b791e460f",
     "NetworkCheck.RecordHead.frameBytes": "6c1a29b3396d7bf7f60dca548e160e8bbc02ed6dd178aa6d1358a3540f0945e1",
@@ -1788,7 +1848,7 @@
     "NetworkCheck.nodeInput": "265b1233f55960fe53c0646796e480e80fbd53430c690e7c050265ad39890410",
     "NetworkCheck.nodeTag": "b05bf51ad2c5b46f3a24e554c31ac5eff984d276c3b9c7c8930de9a485dc93c9",
     "NetworkCheck.pairs": "d9d5aea29031a8d6e9f2265781a558bd17dc22e68d7707b5507614354592de56",
-    "NetworkCheck.parametersDigest": "0dfe5ea70de5b129b0ff8732ac6f909170151e5b7f5d55edcb7c2cc0f3010edf",
+    "NetworkCheck.parametersDigest": "f28662dda0cc156b8e1fa2fcd396e6db609df22d1707dfb9273dd516ec775c47",
     "NetworkCheck.parametersManifest": "dc0098e5d44d1d8a6597f0b33ad505991139ed281c2d68deba4085530b659459",
     "NetworkCheck.parametersTag": "ebe0ee936fdee51f00b751b01f611147e311f619a05e029dc3241e682aeb71d3",
     "NetworkCheck.realFrames": "cae102f9fbc493d3a4a8ae36c4033dc2ff3495dd8fa649448a2f5ca35a875176",
@@ -1797,8 +1857,6 @@
     "NetworkCheck.rhoText": "3367f678e3851ab9b530ad4b1d31fb1dfa9f0a00acffdb0396249ab8e8f5ce0e",
     "NetworkCheck.rowFrames": "3bcbb00445c322cb87e1a242f16d6e848bec1d4b2852f9fdd0771fb72eee3583",
     "NetworkCheck.statusCode": "a0af986e4a740012cf8101ec1017725efb5addfe9b42db247a5249b84906fd2b",
-    "NetworkCheck.taggedInput": "85d2dc65d1e902ab58dc28d842043f65b5d551543a0bb6e0db1a35fd9cf760c8",
-    "NetworkCheck.taggedSha512": "34d4100b189bfd601c69f8972b390caf9f9727b3f3e64093a15a410777651507",
     "NetworkCheck.text": "286c98c6a1d53c1800199c68914196e6bc48de720610d69011aa11a7fca6fce0",
     "NetworkCheck.top": "aebcc8ef9bda3d0dd62b3ce936f4fce6dba50b564f9c140f7d34349508dc99bc",
     "NetworkCheck.uBE": "38d77111405981b7e835cb0fa472f2901f09c7cfd17c15cb472df79452673164"
@@ -1826,7 +1884,7 @@
    ]
   },
   "NetworkCheck.Check": {
-   "digest": "267ff9e61b0d7519f310a8bfa74057970116677a1127396f513ad5c0b443c6ab",
+   "digest": "6d2d777c08348588d26a291852973a020ef4d4ddb622b140996297e7e4fde683",
    "definitions": {
     "NetworkCheck.Check.Certificate": "82198d9fd58a4a1fa9d074b3c40acb8d268479408bb10f620408856f6b49c852",
     "NetworkCheck.Check.Certificate.digest": "e38f27c9440f66cb1a80971fa2dd244959d9b055021c727b42b1b10f1dc1e1ea",
@@ -1883,7 +1941,7 @@
     "NetworkCheck.Check.noSync": "c541c368bcec6fb41bb5df8a6f84f71c5ac69fe13b8dee47cefd4a88a2494483",
     "NetworkCheck.Check.paramsOf": "88e16b9f74e1a23c3a7b40e4daae3383ec4f5cc14390812a99da8d7fb44644d5",
     "NetworkCheck.Check.profileJson": "48d4286362e2a9dfb0ead073c697c1e769944cd8843abc7cfa4671f5ebaf6b18",
-    "NetworkCheck.Check.protocol": "1b2ba808ead8f6d42a2543e727cd477d3e14c9cbad91e421313d21c8e4c07556",
+    "NetworkCheck.Check.protocol": "17fe70878303ceec2df4b76688a748d7bf813b936137221f640b554993f9edf6",
     "NetworkCheck.Check.protocolId": "4ebf5dec7e0aaf38008a6c69a1a2110940f732ff72a58832061721bed2cbd08b",
     "NetworkCheck.Check.screen": "b896bf8a8a8352c3ef3bd21034eb6c096328ad4e6d07c15ffa4e4fe823f673d5",
     "NetworkCheck.Check.screen._sparseCasesOn_1": "f1d629bb0f8e7bf222e4c8111ae4c30341f5cdfaeecf9d51443114745d009ce3",
@@ -2471,6 +2529,21 @@
    },
    "guarantees": ["Properties.CertifierNetwork.deviceOutputAccepted"]
   },
+  "Properties.Identity": {
+   "digest": "dc9606657ca9b76d1053f0bf00d086b127839b8959e65a0dd30d5e8c57402b8f",
+   "definitions": {
+    "Properties.Identity.StreamIsFlock": "a66cc1a3e8c26467089eef04906707ab3ddd77eb3411b91e9a200c054eb6b851",
+    "Properties.Identity.TaggedIsFlock": "66705479c5929a574c2f15b47a26dd90c5744bbe93b27c8b62afe4ed1fd14723",
+    "Properties.Identity.taggedInput": "6e5a58ad26b9bb5ab41d91ee9caceeab889ee235a79cfb34c00922ad1162505c"
+   },
+   "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.Identity.streamIsFlock",
+    "Properties.Identity.taggedIsFlock",
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
+   ]
+  },
   "Properties.Nci": {
    "digest": "4b3d77855a2e124826e7a66b941d25fed75466b4c80308bbf134a764603d1ed0",
    "definitions": {
@@ -2512,7 +2585,7 @@
    ]
   },
   "Properties.NetworkCertifier": {
-   "digest": "9647aadc6970752a5eedc2bb02b2e588ca29a202d49fc34a0fe32c78d19b823c",
+   "digest": "df70ff01f8ca8592064be18ae7afe7c2c2cee0ed83da0ba83c72f31885eb47f1",
    "definitions": {
     "Properties.NetworkCertifier.AcceptedObservations": "02d87b47193b266c765867346b4128a7dee49068b8525d78fbd2320e07f4ecc2",
     "Properties.NetworkCertifier.AcceptedRowsAreProgramRows": "025a5c1676245c72b67174470ed0c7ec016c078648a85c8cc4a9510a56d362bf",
@@ -2553,7 +2626,7 @@
     "Properties.NetworkCertifier.declared": "22531c9cd5ea4a6aac7ccfa67dfe6953142bdb7788a2540ad7557a8ca975a5cd",
     "Properties.NetworkCertifier.deviceGrid": "b9eb883be48637d5281e1a2cda668cd4768f034a2e2b18cc0a2d49631efcd0af",
     "Properties.NetworkCertifier.framesStrings": "dd63042a1de7436a3e86725323225e3db95e4c56146a722624e87f900bb47143",
-    "Properties.NetworkCertifier.headStrings": "ee54ab1d50adf7b8af478fdb783e1592f872d1cbdec9296cbf928b5e41a609b0",
+    "Properties.NetworkCertifier.headStrings": "c9dce9398e28dadf7959a38e228a3ed0827f61eb30cd1c871ae210380e634811",
     "Properties.NetworkCertifier.honestRecord": "440ac4ef72ebf65f1c0a4bf3f10bc61024f0968ec87a76f1434cbee735ca94e5",
     "Properties.NetworkCertifier.levelAt": "bac989eebc12b83fe05e6fdeba2a1c30037e7ff5a8e0dded573286bcde2ac05f",
     "Properties.NetworkCertifier.linkNames": "7f03d49b3e89b36d33fccb47b92655b3c4dc499bf12226b7cf09acd2d3aa355d",
