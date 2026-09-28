@@ -530,6 +530,7 @@ def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path
     cmd += ["--deadline-ns", str(a.deadline_ns)] if a.deadline_ns else []
     cmd += ["--limit-ns", str(limit_ns)] if limit_ns else []
     cmd += ["--verifier-cpu", str(a.verifier_cpu)] if a.verifier_cpu is not None else []
+    cmd += ["--seed", a.seed] if getattr(a, "seed", None) else []
     return cmd + extra
 
 

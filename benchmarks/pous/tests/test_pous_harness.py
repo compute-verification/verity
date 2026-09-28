@@ -28,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 BAND = "band-chain/d12/v1"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
+SEED = "5eed" * 8
+"""`memory_challenger.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -147,7 +149,8 @@ def _vectors(params):
 def _args(tmp_path, **kw):
     base = {"scheme": BAND, "max_segments": 0, "kernels": "", "build_dir": str(tmp_path / "build"), "reference_segments": 2,
             "workers": 2, "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0, "clock": "logical",
-            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None}
+            "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None,
+            "seed": SEED}
     return types.SimpleNamespace(**{**base, **kw})
 
 
@@ -385,6 +388,22 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
     assert got[0] == got[4] == (777_000, 777_000, b"R" * width)                         # recomputed: reported, not held
     assert got[3] == (0, 999_000, c_host[5 * width:6 * width]) and got[7][1] == 999_000
     assert got[1] == (0, 1_000, c_host[width:2 * width])
+
+
+def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
+    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
+    and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
+    _harness()
+    from band_gpu import memory_challenger as mc
+
+    files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
+    with pytest.raises(SystemExit) as refused:
+        mc.main([*files, "--seed", SEED])
+    assert refused.value.code == 2 and not (tmp_path / "out.json").exists()
+    seed = bytes.fromhex(SEED)
+    with pytest.raises(ValueError, match="logical clock alone"):
+        mc.audit("127.0.0.1", 0, None, None, audits=1, pings=1, seed=seed)
+    assert len({mc.seeded_source(seed, j) for j in range(4)} | {mc.seeded_source(b"other", 0)}) == 5
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():

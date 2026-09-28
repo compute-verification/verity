@@ -3,6 +3,7 @@ harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudi
 
     python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
+        [--seed HEX]
 
 `READY.json` names the responder's port, the salt, the scheme and its parameters; `vk` is `VerifierKey.from_leaves` over
 `LEAVES.bin` (64 bytes a block, in block order).
@@ -22,6 +23,10 @@ harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudi
   context switches.
 - **Clocks.** `--clock wall` (the default) times each answer on this process's monotonic clock. `--clock logical` takes each
   answer's time to be the responder's reported server time (the CPU tests: no outcome there depends on the machine).
+- **Challenge sources.** Each audit's source is `os.urandom(32)`.  `--seed HEX`, accepted only with `--clock logical`,
+  derives them from the seed instead (`seeded_source`), so a CPU test's draws, and with them its controls' verdicts, are
+  the same on every run: a control's gate is a statistical test that real draws fail now and then (a value control with
+  every 10th block zeroed misses them all in an audit of 105 with probability about 1e-5).
 
 Wire: a request is `<QQ` (op, argument); an answer is a 24-byte header `<QQQ` (status, device ns, server ns) and one block.
 Exit 0 when every audit accepted, 1 otherwise.
@@ -30,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import os
 import resource
@@ -46,6 +52,11 @@ HEADER = 24
 ALLOWANCE_KIND = "loopback"
 TRACE_OVER_NS = 60_000
 """A round trip over this (or an answer the memory challenger timed over it) is kept in the audit's host trace."""
+
+
+def seeded_source(seed: bytes, j: int) -> bytes:
+    """Audit `j`'s challenge source under `--seed`."""
+    return hashlib.sha256(b"verity-pous/bench/memory-challenger/seeded-source/v1\0" + seed + j.to_bytes(4, "big")).digest()
 
 
 def quantiles(xs: list[float]) -> dict[str, float]:
@@ -221,15 +232,18 @@ def limit_of(rtt: list[float], deadline_ns: int, allowance: str) -> dict[str, An
 
 def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int, k: int | None = None, cpu: int | None = None,
           allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
-          clock: Callable[[], int] = time.perf_counter_ns, research: bool = True) -> dict[str, Any]:
+          clock: Callable[[], int] = time.perf_counter_ns, research: bool = True, seed: bytes | None = None) -> dict[str, Any]:
     """Run `audits` audits (the first is the audit of record) against the limit `limit_ns`, or `Δ` plus a calibration of this
     connection when none is given; pings before and after are kept either way.  The timed part runs with the garbage
     collector frozen and off, on core `cpu` when given, since the memory challenger's own stalls count against the server.
     With `research=False` (`--strict`) the memory challenger refuses an audit its certificate does not cover: no challenge is
-    sent, and the record says why (`refused`)."""
+    sent, and the record says why (`refused`).  Each audit's challenge source is `os.urandom(32)`, or `seeded_source(seed, j)`
+    with `seed` (the logical clock's runs alone)."""
     from verity.core.protocols.pous import audit as pous_audit
     from verity.core.protocols.pous import protocol
 
+    if seed is not None and not isinstance(clock, LogicalClock):
+        raise ValueError("a seeded audit runs on the logical clock alone: a timed audit's challenges come from os.urandom")
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     deadline_ns = deadline_ns or pous_audit.DEADLINE_NS
@@ -248,8 +262,8 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
         cal = limit_of(before, deadline_ns, allowance)
         limit = limit_ns if fixed else cal["limit_ns"]
         results = []
-        for _ in range(audits):
-            source = os.urandom(32)
+        for j in range(audits):
+            source = os.urandom(32) if seed is None else seeded_source(seed, j)
             try:
                 v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline_ns,
                                       rtt_allowance_ns=limit - deadline_ns, clock=clock, research=research,
@@ -327,7 +341,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--strict", action="store_true",
                     help="refuse an audit the certificate does not cover (protocol.TimedAudit's default) instead of running "
                          "it as a research audit; the refusal is recorded and the exit is 1")
+    ap.add_argument("--seed", default=None, help="derive each audit's challenge source from this hex seed (--clock logical only)")
     a = ap.parse_args(argv)
+    if a.seed is not None and a.clock != "logical":
+        ap.error("--seed is for the logical clock's runs alone: a timed audit's challenges come from os.urandom")
+    seed = None if a.seed is None else bytes.fromhex(a.seed)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
     clock = LogicalClock() if a.clock == "logical" else time.perf_counter_ns
@@ -341,10 +359,10 @@ def main(argv: list[str] | None = None) -> int:
     raw = Path(a.leaves).read_bytes()
     vk = VerifierKey.from_leaves(params, bytes.fromhex(ready["salt"]),
                                  [raw[i:i + DIGEST_BYTES] for i in range(0, len(raw), DIGEST_BYTES)])
-    doc = {"root": vk.root.hex(), "clock": a.clock,
+    doc = {"root": vk.root.hex(), "clock": a.clock, **({"seed": a.seed} if seed is not None else {}),
            **audit("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu,
                    allowance=a.allowance, deadline_ns=deadline, limit_ns=a.limit_ns or None, clock=clock,
-                   research=not a.strict)}
+                   research=not a.strict, seed=seed)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted"] == doc["audits"] else 1
 
