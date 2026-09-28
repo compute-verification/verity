@@ -28,9 +28,10 @@ and what the merge gate runs per family: `../README.md`.
   `flock-verify`), its Lean proofs (`lean/level3/`, `lean/soundness/`) and the agreement scripts. See its README.
 
 C-Flock's circuit prover (M0: the module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit`)
-is on draft PR #83, not on `main`. `main` holds its consumers: the Lean verifier reads its format, serving writes rows in
-it (`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage` runs it from PR #83's tree. C-Flock ZK (M1/M2) is on
-draft PRs #123 and #138, stacked on #83.
+comes with PR #192, and its multi-table statement (`verity/flock-tables`) with PR #193. Its consumers are on `main`: the
+Lean verifier reads its format, serving writes rows in it (`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage`
+runs it (from a checkout of #192's branch until #192 merges). C-Flock ZK (M1/M2) is on draft PRs #123 and #138, stacked
+on #192.
 
 ## Tests
 
