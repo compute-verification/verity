@@ -20,6 +20,7 @@
 # timeout (status.json's start + timeout_s, or control/timeout_s after `tele set-timeout`), or at JOB_DEADLINE_UTC if that is earlier;
 # DEADLINE_BUILD / DEADLINE_MATCH / DEADLINE_COMMIT end one stage earlier still.  A stage still running then is stopped (TERM, then KILL
 # after 120 s) and the row stops "STOP <stage>: deadline" (exit 124).  STOP_AFTER=build|match stops the row after that stage (exit 23).
+# EPOCH_NOW (epoch seconds) fixes the "now" these deadlines are measured from; a stage's own timeout still runs from its start.
 # Env: PY (/workspace/venv312/bin/python; `verity-vllm` is the launcher beside it), SWEEP_DIR (/workspace/epoch/sweep), RESEARCH_STORE
 # (/workspace/epoch/store), RESEARCH_CLI (`python3 -m research`), EPOCH_BOOTSTRAP (`bash verity_vllm/ops/epoch_failfast.sh`),
 # ALLOWED_QWORD_MAX_GATES (a GO's one allowed VERITY_QWORD_MAX_GATES value for the row).  Everything this script asks of Python is a
@@ -48,6 +49,7 @@ launcher() {  # the `verity-vllm` launcher pod_bootstrap.sh writes beside $PY; b
 export VV; VV=$(launcher)
 
 epoch_of() { [ -n "${1:-}" ] && date -u -d "$1" +%s 2>/dev/null; }
+now() { echo "${EPOCH_NOW:-$(date +%s)}"; }
 read -r RUN_END JOB_END KEY_EXPIRES < <("$VV" epoch job "$RESEARCH_RUN_DIR" --custody-dir "$CUSTODY_DIR" \
   --store-reserve-s "${STORE_RESERVE_S:-2400}" ${JOB_DEADLINE_UTC:+--job-deadline "$JOB_DEADLINE_UTC"})
 for v in RUN_END JOB_END KEY_EXPIRES; do [ "${!v:--}" = - ] && printf -v "$v" ''; done
@@ -61,7 +63,7 @@ run_stage() {  # run_stage STAGE LOG CMD...: CMD in the background under the sta
   local stage=$1 log=$2 end left; shift 2
   end=$(stage_end "$stage")
   if [ -n "$end" ]; then
-    left=$(( end - $(date +%s) ))
+    left=$(( end - $(now) ))
     [ "$left" -gt 0 ] || return 124
     timeout --kill-after=120 "$left" "$@" > "$log" 2>&1 &
   else
@@ -134,7 +136,7 @@ stage() {  # stage NAME: `verity-vllm row run --stages NAME` under its deadline;
   run_stage "$1" "$EV/$1.log" "$VV" row run "$ROW" "$ROLE" "$REPO" "$REV" --stages "$1"
   rc=$?; small
   local end; end=$(stage_end "$1")
-  if { [ "$rc" = 124 ] || [ "$rc" = 137 ]; } && [ -n "$end" ] && [ "$(date +%s)" -ge $(( end - 5 )) ]; then
+  if { [ "$rc" = 124 ] || [ "$rc" = 137 ]; } && [ -n "$end" ] && [ "$(now)" -ge $(( end - 5 )) ]; then
     stop 124 "$1: deadline $(date -u -d "@$end" +%FT%TZ) reached, the stage was stopped"
   fi
   say "$1 rc=$rc $(grep "^$1 " "$D/stages.txt" 2>/dev/null | tail -n 1 | cut -c1-240)"
