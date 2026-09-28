@@ -57,11 +57,18 @@ def _register_lazy_families() -> None:
         from verity_vllm.program.registry import lifted
         return lifted
 
+    def _topp_word_gates():
+        from verity_vllm.program.registry import topp_word_gates
+        return topp_word_gates
+
     register_lazy_family(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
     register_lazy_family(r"^BitAtx(\d+)_v1$", lambda m: _sampling().bit_at(int(m[1])))
+    # the keep word as word gates at a constant S (`topp_words`, a single-request Program): its own word gates, which no module a
+    # decoder imports for the sampler (`sampling`, GP-01's list) registers
+    register_lazy_family(r"^(BitXor|U32Xor|SelectBit|I32ToF32|NvLogf|TopPNumkeep)_v1$", lambda m: getattr(_topp_word_gates(), m[1]))
     # [pad, lifted-padded] the ⊥-lifted families (LIFTING-SPEC §8): the strict lift of a registered primitive is a total function
     # of the original's id, the specified ones of their width/size parameters
     register_lazy_family(r"^LSelect(\d+)_v1$", lambda m: _lifted().l_select(int(m[1])))
