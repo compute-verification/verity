@@ -62,7 +62,10 @@ steps:
 - the shaper **hands** it to the warden in canonical order, at `h(k) = max(eligible(k), h(k−1))`;
 - the warden's own rule then **releases** it.
 
-`expected_grids` is the Program's grid, and `run_shaper` drives a warden as an honest sender does.
+`expected_grids` is the Program's grid, and `run_shaper` drives a warden as an honest sender does. Lean's
+`NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
+`constantRate` whose advice is the content advice and one in-set sync per window (`lean/README.md`, modelling choices
+13–17).
 
 ## The audit (`audit`)
 
@@ -94,8 +97,9 @@ A declared sync outside Σ_sync, or other than the unit's, is an `advice` violat
 Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
 a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward. So a window before the violating one gets the same verdict whatever that window declared, and a later
-one is checked against the grid the declared advice gives it.
+carries forward (`SecurityProofs.ExpectedRowCausal`, for any clock-sync values, in the set or not). So a window before
+the violating one gets the same verdict whatever that window declared, and a later one is checked against the grid the
+declared advice gives it.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
@@ -120,13 +124,24 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
-| Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync` |
-| A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock` |
+| Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
+| The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
+| A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
+
+The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
+dataflow hypothesis: for every frame function, sync set and operator, over a horizon within the W windows with advice
+(n ≤ W·T), since those are the windows the audit checks. The clock-sync bound is
+`SecurityProofs.EncardAccSeqsLeConstantRate`, which is 7 bits per window at 16 × 8 sync values. Under J with one sync
+value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A horizon within the first m
+windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
+wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`). The block cap does not sharpen these:
+Theorem 3's dataflow conditions fail for this schedule, since δ and ⌊λ/ρ⌋ carry a frame into later windows and the
+queue carries across them (`constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`).
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
@@ -181,7 +196,7 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 ## Tests
 
 `uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
-statements on examples and prove nothing. By name, they mirror 15 of the Lean package's 39 pins, each a guarantee
+statements on examples and prove nothing. By name, they mirror 19 of the Lean package's 47 pins, each a guarantee
 `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and its three proved but unpinned lemmas:
 - **`test_network_warden_grid.py`:**
   - Proposition 2's ten pins, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
@@ -197,6 +212,11 @@ statements on examples and prove nothing. By name, they mirror 15 of the Lean pa
   - `SecurityProofs.EncardAccSeqsLeFixedClock`: the fixed clock's single accepted grid;
   - `SecurityProofs.EncardObsDecodableLe`: under a fixed clock, accepted secrets all show one grid sequence;
   - `SecurityProofs.EncardAccSeqsLeBlocks`: the block bound on random Programs;
+  - `SecurityProofs.EncardAccSeqsLeConstantRate` and `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`: the two
+    tests above, for the shipped schedule;
+  - `SecurityProofs.EncardAccSeqsLeConstantRateWindows`: runs accepted on their first m windows show at most
+    `#Σ_sync^m` grid prefixes;
+  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again;
 - **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names; one clock
   per spatial unit, the advice `SecurityProofs.EncardAccSeqsLeSync` counts; and the ingress links' status check, Lean's
   `StatusComplete`;
@@ -206,10 +226,11 @@ statements on examples and prove nothing. By name, they mirror 15 of the Lean pa
   - the committed audit's verdicts equal the raw audit's;
 - **`test_network_warden_calibration.py`:** the calibration tool.
 
-No test mirrors the other seven pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
+No test mirrors the other eight pins of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
 `SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
-`SecurityProofs.EncardDecodableLeBlocks`), nor the ingress bound's four (`SecurityProofs.EncardIngressObsDecodableLe`,
-`SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLeContents`,
-`SecurityProofs.EncardIngressDecodableLeContents`), and the thirteen witnesses of `NetTiming.SecurityProofs.Sanity` have
-no Python counterpart.
+`SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four
+(`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`,
+`SecurityProofs.EncardIngressObsDecodableLeContents`, `SecurityProofs.EncardIngressDecodableLeContents`), and the
+sixteen witnesses (thirteen in `NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
+Python counterpart.

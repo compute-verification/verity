@@ -1,7 +1,9 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror five of their guarantees (`NetTiming.SecurityProofs`,
-proved in its `Counting` and `Advice`): `SecurityProofs.EncardLeProdOfBranching`, `SecurityProofs.EncardObsDecodableLe`,
-`SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock` and
-`SecurityProofs.EncardAccSeqsLeBlocks`.
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror nine of their guarantees (`NetTiming.SecurityProofs`,
+proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
+`SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
+`SecurityProofs.EncardAccSeqsLeBlocks`, and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
+`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateWindows` and
+`SecurityProofs.ExpectedRowCausal`.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can
@@ -73,7 +75,8 @@ def test_tree_lemma():
 
 
 def test_accepted_count_le_sync_advice():
-    """SecurityProofs.EncardAccSeqsLeSync: accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
+    """SecurityProofs.EncardAccSeqsLeSync, for the constant-rate Program SecurityProofs.EncardAccSeqsLeConstantRate:
+    accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     seen = accepted_observations(sync_set, windows)
@@ -92,8 +95,42 @@ def test_fractional_rate_count_le_sync_advice():
     assert 1 <= len(seen) <= sync_set.size ** 2
 
 
+def test_accepted_count_le_sync_per_window_opened():
+    """SecurityProofs.EncardAccSeqsLeConstantRateWindows: runs accepted on their first m windows show at most
+    #Σ_sync^m grid prefixes, however many windows the advice covers."""
+    sync_set = SyncSet((0, 1), (1, 2))
+    windows = 2
+    for m in range(windows + 1):
+        seen = set()
+        for hands in schedules(windows):
+            records = run(hands, windows)
+            for syncs in itertools.product(list(sync_set), repeat=windows):
+                verdicts = Audit().check_link("responses", records, FRAMES, syncs, sync_set, P)
+                if all(v.accepted for v in verdicts[:m]):
+                    seen.add(tuple(r.grid for r in records[:m]))
+        assert 1 <= len(seen) <= sync_set.size**m
+
+
+def test_window_grid_reads_only_earlier_syncs():
+    """SecurityProofs.ExpectedRowCausal: window w's grid is the same whatever later windows declare, in Σ_sync or not,
+    with fractional rates and frames anchored past the horizon."""
+    rng = random.Random(11)
+    rhos = (Fraction(1), Fraction(2), Fraction(1, 2), Fraction(2, 3))
+    for _ in range(300):
+        params = GridParams(buckets=rng.randint(1, 3), allocation=rng.randint(1, 2), frame_bytes=1)
+        windows = rng.randint(1, 3)
+        frames = [LogicalFrame(bytes([k]), rng.randrange(params.buckets * (windows + 1)), rng.randrange(4))
+                  for k in range(rng.randint(0, 6))]
+        syncs = [ClockSync(rng.randrange(4), rng.choice(rhos)) for _ in range(windows)]
+        grids = expected_grids(frames, syncs, params)
+        for w in range(windows):
+            later = [ClockSync(rng.randrange(4), rng.choice(rhos)) for _ in range(windows - w - 1)]
+            assert expected_grids(frames, syncs[: w + 1] + later, params)[w] == grids[w]
+
+
 def test_fixed_clock_zero_capacity():
-    """SecurityProofs.EncardAccSeqsLeFixedClock: with a fixed clock, every accepted run shows the same grids."""
+    """SecurityProofs.EncardAccSeqsLeFixedClock, for the constant-rate Program
+    SecurityProofs.EncardAccSeqsLeConstantRateFixedClock: with a fixed clock, every accepted run shows the same grids."""
     sync_set = SyncSet((1,), (1,))
     seen = accepted_observations(sync_set, 2)
     assert len(seen) == 1

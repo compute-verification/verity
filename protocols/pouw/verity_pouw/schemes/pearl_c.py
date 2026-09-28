@@ -455,26 +455,35 @@ class PearlC:
     def _chain_units(self, rows: int, cols: int, k: int) -> int:
         return rows * cols * (k + self.prices.fadd * self.device.promotions(k))
 
+    def first_adds(self, shape: Shape) -> int:
+        """Lean's `firstAddDev` (`DeviceRev1.lean`; `firstAddOf` at the H100's prices): the first promotion add of every
+        word, m·n adds at the add price, none without promotion.  It adds into T_0 = +0 and so returns its group's word:
+        no program needs to execute it, the honest kernel included."""
+        return self.prices.fadd * shape.m * shape.n if self.device.g else 0
+
     def wref(self, shape: Shape) -> int:
-        """The honest W1 cost of one unit at the scheme's prices, Lean's `wrefOf` (`Game.lean`; `wrefDev` at a device's
-        `Prices`): the chain (1 per MAC) with its promotion adds (one FADD per G atoms), the fused A′·F_B (r per element
+        """The honest W1 cost of one unit at the scheme's prices under rev1, Lean's `wrefDevRev1` (`DeviceRev1.lean`;
+        `wrefOfRev1` at the H100's prices, and `wrefDevRev1K` at the cast offset 0): the chain (1 per MAC) with its
+        promotion adds (one FADD per G atoms) less the first of every word (`first_adds`), the fused A′·F_B (r per element
         of A), the peel in BF16 (a BF16 MAC per product over depth 2r) and A's forming (fs + qa per element under v1, 320
         under v0).  The weight side (B's forming, B̃·F_A, G, P_B) is done once per weight and epoch, not per unit: it is
         `job_cost`, outside W_ref and the credit.  Hashing is the random oracle's."""
         m, k, n = shape.m, shape.k, shape.n
-        return self._chain_units(m, n, k) + m * k * R + self.prices.bf16_mac * PEEL_K * m * n + self._forming() * m * k
+        return (self._chain_units(m, n, k) - self.first_adds(shape) + m * k * R + self.prices.bf16_mac * PEEL_K * m * n
+                + self._forming() * m * k)
 
     def credit_of(self, shape: Shape) -> int:
-        """Lean's `creditOf` (`creditDev` at a device's `Prices`): `wref` less ρ's qa per element of A, which depends on A
-        alone.  An accepted unit is credited (1 − ρ)·`credit_of` (`PearlCAccounting`).  v0 has no TT_OUT accounting."""
+        """Lean's `creditDevRev1` (`creditOfRev1` at the H100's prices): `wref` less ρ's qa per element of A, which
+        depends on A alone, so `creditDev` less `first_adds`.  An accepted unit is credited (1 − ρ)·`credit_of`
+        (`pearlCProtocolDevRev1`).  v0 has no TT_OUT accounting."""
         if self.forming != "v1":
             raise ValueError(f"{self.name}: TT_OUT's accounting is stated for forming v1 only")
         return self.wref(shape) - self.prices.forming_a_only * shape.m * shape.k
 
     def job_cost(self, n: int, k: int) -> int:
         """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
-        FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditOf` leaves it out,
-        which only raises γ)."""
+        FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditDevRev1` leaves it
+        out, which only raises γ)."""
         return (self._forming() * n * k + self._chain_units(n, R, k) + self._chain_units(R, R, k)
                 + self.prices.fadd * n * R * R)
 
