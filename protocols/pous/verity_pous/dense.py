@@ -104,11 +104,12 @@ class DenseParams:
                 "segments": self.segments}
 
 
-SECURE_FIRST = DenseParams(512, 524_288)
-"""The secure-first point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls
-of at least 483 µs with `k = 111`: the point `chain_meets_64` certifies for this `H` (POUS
+POINT_64K = DenseParams(512, 524_288)
+"""The dense point: 512 blocks of 65,536 B (`ℓ = 524288` bits) per segment (32 MiB), audited at `D = 5` calls of at
+least 483 µs with `k = 111`: the point `chain_meets_64` certifies for this `H` (POUS
 `lean/submissions/sponge-dense/ChainEPF.lean`, given `ChainExPostFacto`) and `dense_meets_64` for a random oracle
-(`lean/submissions/dense/DenseReCert.lean`, `k = 106`)."""
+(`lean/submissions/dense/DenseReCert.lean`, `k = 106`).  The secure-first default is now the band
+(`band.SECURE_FIRST`)."""
 
 
 def dom(t: int, i: int) -> int:
@@ -160,8 +161,9 @@ def ideal(params: DenseParams, seed: bytes) -> Primitives:
     return Primitives(DenseChain(params, IdealPermutation(2 * params.m + CAPACITY_BITS, seed, "pi2")), None)
 
 
-def _query(t: int, i: int, labels: Sequence[int]) -> KeyQuery:
-    return KeyQuery(t, 0, i, tuple((u, labels[u]) for u in range(i)))
+def _query(params, t: int, i: int, labels: Sequence[int]) -> KeyQuery:
+    """Row `i`'s key query: its parents `params.parents(i)` (every earlier block here, a band for `band.BandParams`)."""
+    return KeyQuery(t, 0, i, tuple((u, labels[u]) for u in params.parents(i)))
 
 
 def encode_segment_prog(params: DenseParams, h: DenseChain, t: int, w: Sequence[int],
@@ -169,14 +171,14 @@ def encode_segment_prog(params: DenseParams, h: DenseChain, t: int, w: Sequence[
     """Lean `labelOv`: blocks `0 .. count - 1` (default all) of one segment, each after every earlier one."""
     c: list[int] = []
     for i in range(params.blocks_per_segment if count is None else count):
-        key = yield from key_program(h, _query(t, i, c))
+        key = yield from key_program(h, _query(params, t, i, c))
         c.append(key ^ w[i])
     return c
 
 
 def decode_segment_prog(params: DenseParams, h: DenseChain, t: int, c: Sequence[int]) -> Prog[list[int]]:
     """Lean `chainDense.dec`: `W_i = C_i xor key(IV(dom i); C_{i-1}, ..., C_0, pad)`, every row in parallel."""
-    keys = yield from parallel(key_program(h, _query(t, i, c)) for i in range(params.blocks_per_segment))
+    keys = yield from parallel(key_program(h, _query(params, t, i, c)) for i in range(params.blocks_per_segment))
     return [c[i] ^ keys[i] for i in range(params.blocks_per_segment)]
 
 
@@ -210,4 +212,4 @@ def decode_segment(params: DenseParams, prims: Primitives, salt: bytes, s: int, 
 
 
 DENSE = Codec("dense-chain/v1", encode_segment, decode_segment)
-"""The dense scheme as a codec: the secure-first default."""
+"""The dense scheme as a codec (a selectable alternative to the band, `band.BAND12`)."""

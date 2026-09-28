@@ -3,10 +3,12 @@
 A server proves it stores an encoding `C` of the weights `W`. Answering a random block within the deadline requires the
 block itself: rebuilding it from a smaller state takes more sequential oracle rounds than the deadline allows.
 
-Two codecs share everything above the scheme (setup, layout, `vk`, audits):
+Three codecs share everything above the scheme (setup, layout, `vk`, audits):
 
-- **The dense scheme (`dense.DENSE`), the secure-first default** (POUS `docs/scheme-choice-e2e.md`). One layer on the
-  complete DAG, Lean's `chainDense` (`lean/submissions/sponge-dense/SpongeModel.lean` §9).
+- **The band scheme (`band.BAND12`), the secure-first default** (POUS `docs/band-vs-dense.md`). One layer on the band
+  DAG with in-degree 12, Lean's `chainBand` (`lean/submissions/band-chain/BandChainModel.lean`).
+- **The dense scheme (`dense.DENSE`), selectable.** One layer on the complete DAG, Lean's `chainDense`
+  (`lean/submissions/sponge-dense/SpongeModel.lean` §9). It is the same construction with every earlier block a parent.
 - **P3 (`scheme.P3`), the fast research codec.** Two layers with a transpose, Lean's `p3Scheme`
   (`lean/submissions/p3-meets/P3Meets.lean`) over `p3Model'` (`pebbling/ColumnAwareDraft.lean`) and
   `Pous.Model.Invertible`.
@@ -14,9 +16,27 @@ Two codecs share everything above the scheme (setup, layout, `vk`, audits):
 The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set of parameters names its codec
 (`params.codec`), and every function that takes a codec defaults to it.
 
-## The dense scheme (secure-first)
+## The band scheme (secure-first)
 
-`dense.SECURE_FIRST` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
+`band.SECURE_FIRST` is `BandParams(512, 524288, d = 12)`: 512 blocks of 65,536 B per segment (32 MiB), audited with
+`k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs (`band_meets_64`, for every
+`d ≥ 5`, given `ChainExPostFactoG`). Segment `s` is exactly `chainBand B d ℓ 512 (dom tag_s)`. It is the dense scheme
+below with one change: block `v` absorbs only its `d` newest parents, `C_{v-1}, ..., C_{max(0, v-d)}` (Lean
+`parentsDesc (bandDAG B d) v`), then the pad.
+
+- Block `v` costs `min(v, d) + 1` calls: 6,578 per segment at `d = 12`, 20 times fewer than dense's 131,328. Decoding
+  is `d + 1 = 13` rounds deep, and a segment decodes in 24.6 s on one core in Python (dense: 493.9 s).
+- **Deployment condition, the cliff.** The effective `D`, the sequential `Π₂` calls an adversary completes within
+  `Δ + RTT`, must not exceed `d`. With `d ≥ D′` the band is exactly as hard as dense at `D′` (`band_chain_hard`). At
+  `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
+  dropped row has all its parents held, and the audit accepts with probability 1. At 483 µs per call, `d = 12` holds
+  while `Δ + RTT < 6.279` ms. `audit.TimedVerifier` refuses a deadline past it (`band.check_deployment`), and
+  `test_gap_attack_at_the_cliff` replays the attack on real labels.
+- `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
+
+## The dense scheme (selectable)
+
+`dense.POINT_64K` has `B = 512` blocks of `ℓ = 65,536` B (524,288 bits) per segment, so a segment is 32 MiB: the
 point `dense_meets_64` certifies. P3 keeps 65,560 B, the multiple of `n = 220` it needs. The audit runs with
 `k = 111` challenges and a certificate for `D = 5` calls of `Π₂`, each at least 483 µs. The 111 is what
 `chain_meets_64` (POUS `lean/submissions/sponge-dense/ChainEPF.lean`) certifies for this overwrite-chain `H`, given
@@ -99,12 +119,13 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
 | `oracle` | queries (`HQuery`, `PQuery`/`PinvQuery` with a `Tweak`, `PiQuery`/`PiInvQuery`), programs (`Prog`), `run` with Lean's depth/work/width, `parallel` |
 | `primitives` | `KeyDerivation` and `TweakablePermutation` interfaces; `OverwriteChain` (the default `H`), `RandomOracleKey`, and the broken `XorSponge` and `MiyaguchiPreneel`; the backends `reference`, `heuristic_arx`, `ideal` |
 | `codec` | `Codec(name, encode_segment, decode_segment)`, the seam every module above the scheme uses; `Geometry`, the sizes they read; `split`, `encode_segments` |
-| `dense` | `DenseParams(blocks_per_segment, m, segments)`, `SECURE_FIRST`; `encode_segment` and `decode_segment` on bytes; `DENSE`, the two as a codec; `DenseChain` (its `H`), `reference`, `ideal`; the `*_prog` oracle programs |
+| `band` | `BandParams(blocks_per_segment, m, d, segments)`, `SECURE_FIRST`; `codec_for(d)`, `BAND12`; `reference`, `ideal`; `effective_rounds`, `check_deployment` (the cliff) |
+| `dense` | `DenseParams(blocks_per_segment, m, segments)`, `POINT_64K`; `encode_segment` and `decode_segment` on bytes (reading each row's parents from the parameters, so the band shares them); `DENSE`, the two as a codec; `DenseChain` (the chain `H` of both), `reference`, `ideal`; the `*_prog` oracle programs |
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (dense: 111 and 483 µs) |
+| `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -199,6 +220,12 @@ The Lean vectors come from `tests/lean/PousRefCheck.lean`, which evaluates Lean'
 `decodeW'`, `Wlab'`, `enc` and `dec` are `P3Meets`' at `n = 220`. Lean evaluates labels lazily, so its encode cases
 stop at `n = 3`.
 
+The band vectors come from `tests/lean/PousBandCheck.lean`, which evaluates `parentsDesc (bandDAG B d)` for five
+shapes and `labelG` with the decoder's formula on three `d = 1` cases, where the band already cuts row 2's oldest
+parent. Its `rfl` theorems tie them to `chainBand`'s `enc` and `dec`; a `d = 2` label case exceeds Lean's evaluation
+budget. `tests/test_pous_band.py` also recomputes a segment from the Lean text, runs setup, per-tensor decode and the
+timed audit with the band as default, and replays the gap attack at the cliff.
+
 The dense vectors come from `tests/lean/PousDenseCheck.lean`, which evaluates `chainDense`'s own `labelOv`, `ovKey`,
 `dom`, `iv`, `padBlk` and the decoder's formula with a nonlinear toy `Π₂`. Its `rfl` theorems tie the encoder and
 decoder to `chainDense`'s `enc` and `dec`. Compiled `ovStep` recomputes its call on every bit read, so the evaluated
@@ -214,11 +241,13 @@ the timed audit and the simulator with the dense codec as default.
 ## Not here yet
 
 Done in the random-oracle model (POUS `lean/submissions/dense/DenseReCert.lean`): the dense re-certificate at
-`SECURE_FIRST`'s point (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), which covers the code's
-per-segment `tag_s` domains (`domainSep_equiv`). Pending:
+`POINT_64K` (`dense_meets_64`) and the multi-segment lemma (`seg_meets_14`, 14 GB), which covers the code's
+per-segment `tag_s` domains (`domainSep_equiv`). The band's statements are proved (`lean/submissions/band-chain/`,
+red-team §39), and the red team is verifying the proofs (§40). Pending:
 
-- `ChainExPostFacto`, the hypothesis of `chain_meets_64`, which carries the certificate from the random oracle to the
-  overwrite chain at `k = 111` (`sponge-dense/ChainEPF.lean`, `DISCREPANCIES.md` D5).
+- `ChainExPostFactoG`, the hypothesis of `band_meets_64` (the band at `k = 111`), and its complete-DAG form
+  `ChainExPostFacto`, the hypothesis of `chain_meets_64` (dense). Both carry the certificate from the random oracle to
+  the overwrite chain (`DISCREPANCIES.md` D5, B1).
 - A GPU codec for the dense scheme (#172's is P3's).
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - A restated Lean model: two ideal permutations (`Π₂`, a tweakable `P`), `H` as the overwrite chain, levels charged at

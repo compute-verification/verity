@@ -1,8 +1,10 @@
 """Known-answer vectors for `F`, `Π₂`, `P_T`, `H` and whole segments of both codecs (`fixtures/vectors.json`).
 
-`python tests/pous_vectors.py` rewrites the file, including P3's 64 KB-label segment (about 20 s); the tests recompute
-everything but that segment by default and compare.  The dense scheme's 64 KB entry is the first 16 blocks of a
-segment (136 calls of `Π₂`; the whole segment is 131,328).
+`python tests/pous_vectors.py` rewrites the file, including P3's and the band's 64 KB-label segments (about a minute);
+the tests recompute
+everything but the two whole 64 KB segments by default and compare.  The dense scheme's 64 KB entry is the first 16
+blocks of a segment (136 calls of `Π₂`; the whole segment is 131,328); the band's are the first 16 blocks and the whole
+secure-first segment (6,578 calls).
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity_pous import dense  # noqa: E402
+from verity_pous import band, dense  # noqa: E402
 from verity_pous.labels import salt_value, tag  # noqa: E402
 from verity_pous.oracle import Tweak, run  # noqa: E402
 from verity_pous.params import OPERATING_POINT, Params  # noqa: E402
@@ -34,6 +36,11 @@ def _int(label: str, nbytes: int) -> int:
 
 def _digest(x: int, nbytes: int) -> str:
     return hashlib.sha256(x.to_bytes(nbytes, "little")).hexdigest()
+
+
+def band_segment_input() -> tuple[bytes, bytes]:
+    """One whole secure-first band segment's `W` (32 MiB) and salt."""
+    return _bytes("band-segment-w", band.SECURE_FIRST.segment_bytes), _bytes("salt", 24)
 
 
 def segment_input(params: Params) -> tuple[bytes, bytes]:
@@ -69,12 +76,27 @@ def vectors(operating_point_segment: bool = True) -> dict:
     prims = dense.reference(small)
     out["dense/small/blocks"] = [b.hex() for s in range(2)
                                  for b in dense.encode_segment(small, prims, salt, s, w[s * 64:(s + 1) * 64])]
-    sf = dense.SECURE_FIRST
+    sf = dense.POINT_64K
     w, salt = _bytes("dense-w", 16 * sf.m // 8), _bytes("salt", 24)
     labels = [int.from_bytes(w[i * sf.m // 8:(i + 1) * sf.m // 8], "little") for i in range(16)]
     prims = dense.reference(sf)
     c, _ = run(dense.encode_segment_prog(sf, prims.h, tag(salt_value(salt), 0), labels, count=16), prims)
     out["dense/64kb/prefix16"] = hashlib.sha256(b"".join(x.to_bytes(sf.m // 8, "little") for x in c)).hexdigest()
+    small = band.BandParams(16, 64, 4, 2)
+    w, salt = _bytes("band-small-w", small.w_bytes), _bytes("salt", 24)
+    prims = band.reference(small)
+    out["band/small/blocks"] = [b.hex() for s in range(2)
+                                for b in small.codec.encode_segment(small, prims, salt, s, w[s * 128:(s + 1) * 128])]
+    bf = band.SECURE_FIRST
+    labels = [int.from_bytes(_bytes("band-w", 16 * bf.m // 8)[i * bf.m // 8:(i + 1) * bf.m // 8], "little")
+              for i in range(16)]
+    prims = band.reference(bf)
+    c, _ = run(dense.encode_segment_prog(bf, prims.h, tag(salt_value(salt), 0), labels, count=16), prims)
+    out["band/64kb/prefix16"] = hashlib.sha256(b"".join(x.to_bytes(bf.m // 8, "little") for x in c)).hexdigest()
+    if operating_point_segment:
+        w, salt = band_segment_input()
+        blocks = bf.codec.encode_segment(bf, prims, salt, 0, w)
+        out["band/64kb/segment"] = hashlib.sha256(b"".join(blocks)).hexdigest()
     if operating_point_segment:
         w, salt = segment_input(OPERATING_POINT)
         enc = encode(OPERATING_POINT, op, w, salt)

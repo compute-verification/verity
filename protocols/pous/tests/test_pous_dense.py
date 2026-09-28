@@ -74,7 +74,7 @@ def test_costs():
 
 
 def test_secure_first_parameters():
-    p = dense.SECURE_FIRST
+    p = dense.POINT_64K
     assert (p.blocks_per_segment, p.m, p.segment_bytes) == (512, 524_288, 1 << 25), "dense_meets_64's point"
     assert (p.challenges, p.certified_rounds, p.call_ns) == (111, 5, 483_000) and p.codec is dense.DENSE
     assert dense.reference(p).h.pi2.width == 2 * 524_288 + 512

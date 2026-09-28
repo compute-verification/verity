@@ -1,5 +1,17 @@
 # Where the Lean models, the prose and this code differ
 
+## The band scheme (`band.py`, Lean `chainBand`)
+
+The Lean model is `chainBand` (POUS `lean/submissions/band-chain/BandChainModel.lean`, sha256 `ba654b0f…`), the prose
+POUS `docs/band-vs-dense.md`. The band is `chainScheme (bandDAG B d)` with the dense chain's `H`, `dom` and `iv`, so D1
+(the instantiation header), D2 (the segment tags) and D3 (the salt) apply unchanged.
+
+| # | Topic | Lean model | Prose | This code |
+|---|---|---|---|---|
+| B1 | Security | `band_meets_64` gives `Meets` at `B = 512`, `ℓ = 524288` bits, `D = 5`, `Q = 2^20`, `k = 111` for every `d ≥ 5`, given `ChainExPostFactoG` (not proved); the red team is verifying the proofs (§40) | the same, "recommend `d = 12`" | `band.SECURE_FIRST` is that point at `d = 12`; nothing here depends on the open hypothesis |
+| B2 | The cliff | `band_chain_hard` needs `D ≤ d`; `band_gap_attack` and `band_cliff_d12` show the bound fails at `D = d + 1` | "the effective `D` must not exceed `d`" | enforced where it can be: `TimedVerifier` refuses a deadline whose effective `D` (calls of at least 483 µs within `Δ + RTT`) exceeds `d`. The 483 µs floor itself is a timing assumption the code cannot check. `simulate` does not refuse, so the attack can be replayed |
+| B3 | Lean-evaluated vectors | — | — | Lean evaluated the band's parents for five shapes, but labels only for `d = 1` (a `d = 2` case exceeds the evaluation budget). The larger band structure is checked against the Lean text in Python |
+
 ## The dense scheme (`dense.py`, Lean `chainDense`)
 
 The Lean model is `chainDense` (POUS `lean/submissions/sponge-dense/SpongeModel.lean` §4 and §9). The prose is POUS

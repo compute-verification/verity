@@ -23,6 +23,7 @@ from typing import Protocol
 
 from verity.randomness import Key, derive
 
+from .band import check_deployment
 from .oracle import Cost, Prog, pure, run
 from .primitives import Primitives
 from .scheme import Encoding
@@ -147,7 +148,8 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
 class TimedVerifier:
     """Verifier-driven sequential reveal with a strict wall-clock deadline per answer.
 
-    `challenge()` reveals the next index and starts its clock; `respond(block)` stops it, is on time within
+    For the band codec it refuses a deadline past the cliff (`band.check_deployment`: the effective `D` must not
+    exceed `d`).  `challenge()` reveals the next index and starts its clock; `respond(block)` stops it, is on time within
     `deadline_ns + rtt_allowance_ns`, and checks the block against
     `vk`'s leaf digests, or with `path` against its root when `root_only`.  A second challenge before the answer, or
     more than `k`, is refused.
@@ -158,6 +160,7 @@ class TimedVerifier:
                  on_answer: Callable[[Answer], None] | None = None, root_only: bool = False) -> None:
         if deadline_ns < 0 or rtt_allowance_ns < 0:
             raise ValueError("deadlines and allowances are nonnegative")
+        check_deployment(vk.params, deadline_ns, rtt_allowance_ns)
         self.vk, self.key, self.k, self.root_only = vk, key, _challenges(vk) if k is None else k, root_only
         self.deadline_ns, self.rtt_allowance_ns = deadline_ns, rtt_allowance_ns
         self.clock, self.on_answer = clock, on_answer
