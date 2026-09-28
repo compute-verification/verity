@@ -21,8 +21,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     is written in its docstring), `partition.validate_unit_cut` (the invariant)
     and `partition_object` (`verity/partition/v1` = program digest + query,
     `Q_word` v1 or the instance-granular `Q_template_instance(s)` v0:
-    `evaluate`, `locate`, `validate`, `verify`; pinned by
-    `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
+ `evaluate`, `locate`, `validate`, `verify`; pinned by
+ `tests/ir/partition_vectors.json` and `template_instance_vectors.json`).
+ `annotations` is `verity/annotations/v0`: names, descriptions, formats and
+ groupings keyed by descriptor ids, validated against a descriptor's
+ structure, never inside a digest.
   - `verity.evaluation`: the one evaluator. The plain-integer reference
     (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
     `register_kernel`, `self_check`. Every registered kernel must be listed
