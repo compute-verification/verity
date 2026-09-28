@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ir.defs import bind
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, gemm_bias
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
@@ -165,3 +165,39 @@ class BiasAdd:
         return Compute(bind(b1.BiasAdd, N=N), M, (PerRow(y), Shared(b)), (PerRow(outs[0]),), (node.id,),
                        hint=hint_of(node, ctx.roots_of(b)[0].name), kernels=("vectorized_elementwise_kernel", "elementwise_kernel"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -> list:
+    """The linear's bias add as part of its GEMM: a `Gemm_v1` Compute (the launch) whose output the step names ONLY in the next Compute,
+    a `BiasAdd_v1` over exactly that output (only aliasing / no-op resolutions between them), becomes a no-op at the launch and ONE
+    `GemmBias_v1{K,N}(a, w, b)` Compute at the add -- the frontend's binding of the same pair (`TritonGemmRule`), so the pre-bias word is
+    interior to each coordinate on both sides.  `roots[k]` is the event subtree `resolutions[k]` resolves; any other event of the step
+    naming the launch's output allocation (a view of it, another reader) keeps the pair.  That allocation is then never written: a read
+    of it anywhere is an uninitialised read, never a silent value.  One resolution per root is kept."""
+    out = list(resolutions)
+    for i, g in enumerate(out):
+        if type(g) is not Compute or g.spec.id.split("{")[0] != "Gemm_v1" or not isinstance(g.outputs[0], PerRow):
+            continue
+        c = g.outputs[0].view
+        j = i + 1
+        while j < len(out) and type(out[j]) is Transparent and out[j].effect in ("alias", "noop") and not _names(roots[j], c.alloc):
+            j += 1
+        if j >= len(out):
+            continue
+        a = out[j]
+        if (type(a) is not Compute or a.spec.id.split("{")[0] != "BiasAdd_v1" or a.rows != g.rows or a.operands[0] != PerRow(c)
+                or not isinstance(a.operands[1], Shared) or any(_names(r, c.alloc) for k, r in enumerate(roots) if k not in (i, j))):
+            continue
+        K, N = g.spec.bindings["K"], g.spec.bindings["N"]
+        w, b = g.operands[1].view, a.operands[1].view
+        names = tuple(rs[0].name if rs else None for rs in (ctx.roots_of(w), ctx.roots_of(b)))
+        out[i] = Transparent("noop", g.consumed, rows=g.rows, hint=g.hint, pattern="gemm_bias.launch")
+        out[j] = Compute(bind(gemm_bias.GemmBias, K=K, N=N), a.rows, (g.operands[0], g.operands[1], a.operands[1]), a.outputs, a.consumed,
+                         hint=a.hint, kernels=g.kernels + a.kernels, attribution=a.attribution, pattern="gemm_bias.fused",
+                         roots=(None, *names))
+    return out
+
+
+def _names(root: TreeNode, alloc: int) -> bool:
+    """Whether any event of `root`'s subtree reads or writes a view of allocation `alloc`."""
+    return any(v.alloc == alloc for n in root.walk() for v in (*n.input_views(), *n.output_views()))

@@ -27,7 +27,7 @@ from verity_vllm.program.registry import b1
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (AttentionScope, BiasAdd, Embedding, FusedAddRMSNorm, GemmLaunch, KVCacheUpdate, LogitsGather,
                         RMSNormTritonLaunch, RotaryEmbedding, SiluAndMul, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
-                        TransparentAten, TransparentTritonMetadata)
+                        TransparentAten, TransparentTritonMetadata, fuse_bias_adds)
 from verity_vllm.observe.fold.resolver import Profile
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16"
@@ -268,6 +268,7 @@ def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_n
         weight_field=wf,
         accepted=False,
         kernel_allowlist=KERNEL_ALLOWLIST,
+        step_passes=(fuse_bias_adds,),
         notes={
             "case": case,
             "model": {"repo": C.get("model"), "note": model_note},

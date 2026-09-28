@@ -25,6 +25,7 @@ CUDA = "cuda:0"
 # allocation ids
 A_EMBED, A_LN1, A_QKV_W, A_O_W, A_LN2, A_GU_W, A_DOWN_W, A_NORM, A_COS_SIN, A_KV = range(100, 110)
 A_INPUT_IDS, A_POSITIONS, A_SLOTS, A_BLOCK_TABLE, A_LOGITS_IDX, A_CU_Q, A_SEQUSED = range(200, 207)
+A_QKV_B = 110
 
 
 def bf(alloc, shape, strides=None, offset=0):
@@ -88,6 +89,7 @@ def weights_roots() -> list[Root]:
         Root(bf(A_EMBED, (V, H)), "weight", "model.embed_tokens.weight"),
         Root(bf(A_LN1, (H,)), "weight", "model.layers.0.input_layernorm.weight"),
         Root(bf(A_QKV_W, (QKV, H)), "weight", "model.layers.0.self_attn.qkv_proj.weight"),
+        Root(bf(A_QKV_B, (QKV,)), "weight", "model.layers.0.self_attn.qkv_proj.bias"),
         Root(bf(A_O_W, (H, NH * D)), "weight", "model.layers.0.self_attn.o_proj.weight"),
         Root(bf(A_LN2, (H,)), "weight", "model.layers.0.post_attention_layernorm.weight"),
         Root(bf(A_GU_W, (GU, H)), "weight", "model.layers.0.mlp.gate_up_proj.weight"),
@@ -147,11 +149,12 @@ def gemm_launch(b: Builder, a_view, w_root_view, c_alloc, K, N, M, phase="forwar
 
 def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False, with_dangling=False,
                 gemm_over=None, mm_wrapper=False, f32_logits=False, sampler="argmax", kv_layout="kappa",
-                metadata_kernel=False, num_sms=128) -> tuple[list, StepStart]:
+                metadata_kernel=False, num_sms=128, qkv_bias=None) -> tuple[list, StepStart]:
     """One decode step of layer 0 + final norm + sampling, as one request `r0` at absolute position `position`.
     `sampler`: `argmax` (plain `aten.argmax` over the logits) or `gumbel` (the V2 sampler's two-stage
     `_gumbel_sample_kernel` + argmax + gather); `metadata_kernel` adds the model runner's integer-only input-preparation
-    Triton launch (phase `other`)."""
+    Triton launch (phase `other`); `qkv_bias` makes qkv_proj Qwen2's biased linear (`linear_batch_invariant`'s `output + bias`
+    after the launch; q, k, v read the sum): "add", or "reread" (a view of the pre-bias output taken after the add as well)."""
     M = 1
     T = position + 1
     block_table = [0, 1, 2]
@@ -182,17 +185,25 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
     b.triton("vllm.model_executor.determinism.batch_invariant._rms_norm_kernel", rms_args, {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}, [M], 4, 3)
     # qkv GEMM
     qkv = gemm_launch(b, n1, bf(A_QKV_W, (QKV, H)), 303, H, QKV, M, wrapper=mm_wrapper, **{"num_sms": num_sms, **(gemm_over or {})})
-    q = ViewDesc(303, 0, (M, NH * D), (QKV, 1), "bfloat16", CUDA)
-    k = ViewDesc(303, NH * D, (M, KVH * D), (QKV, 1), "bfloat16", CUDA)
-    v = ViewDesc(303, (NH + KVH) * D, (M, KVH * D), (QKV, 1), "bfloat16", CUDA)
+    qa = 303
+    if qkv_bias:
+        qa = 315
+        b.leaf("aten.add.Tensor", "aten::add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor", [qkv, bf(A_QKV_B, (QKV,))],
+               outs=bf(qa, (M, QKV)), module="model.layers.0.self_attn.qkv_proj")
+        if qkv_bias == "reread":
+            b.leaf("aten.view.default", "aten::view(Tensor(a) self, SymInt[] size) -> Tensor(a)", [qkv, [-1]], outs=bf(303, (M * QKV,)))
+        qkv = bf(qa, (M, QKV))
+    q = ViewDesc(qa, 0, (M, NH * D), (QKV, 1), "bfloat16", CUDA)
+    k = ViewDesc(qa, NH * D, (M, KVH * D), (QKV, 1), "bfloat16", CUDA)
+    v = ViewDesc(qa, (NH + KVH) * D, (M, KVH * D), (QKV, 1), "bfloat16", CUDA)
     b.leaf("aten.split_with_sizes.default", "aten::split_with_sizes(Tensor(a -> *) self, SymInt[] split_sizes, int dim=0) -> Tensor(a)[]",
            [qkv, [NH * D, KVH * D, KVH * D], -1], outs=[q, k, v])
     # rope in place on q, k
     b.leaf("_C.rotary_embedding.default", "_C::rotary_embedding(Tensor positions, Tensor! query, Tensor!? key, int head_size, Tensor cos_sin_cache, bool is_neox) -> ()",
            [positions, q, k, D, bf(A_COS_SIN, (C["MAX_POS"], D)), True], outs=None, module="model.layers.0.self_attn.rotary_emb")
-    q3 = ViewDesc(303, 0, (M, NH, D), (QKV, D, 1), "bfloat16", CUDA)
-    k3 = ViewDesc(303, NH * D, (M, KVH, D), (QKV, D, 1), "bfloat16", CUDA)
-    v3 = ViewDesc(303, (NH + KVH) * D, (M, KVH, D), (QKV, D, 1), "bfloat16", CUDA)
+    q3 = ViewDesc(qa, 0, (M, NH, D), (QKV, D, 1), "bfloat16", CUDA)
+    k3 = ViewDesc(qa, NH * D, (M, KVH, D), (QKV, D, 1), "bfloat16", CUDA)
+    v3 = ViewDesc(qa, (NH + KVH) * D, (M, KVH, D), (QKV, D, 1), "bfloat16", CUDA)
     for src, dst, shp in ((q, q3, [-1, NH, D]), (k, k3, [-1, KVH, D]), (v, v3, [-1, KVH, D])):
         b.leaf("aten.view.default", "aten::view(Tensor(a) self, SymInt[] size) -> Tensor(a)", [src, shp], outs=dst)
     attn_out = bf(304, (M, H))
@@ -417,6 +428,35 @@ def test_gemm_target_profile_is_the_same_object_the_builder_pins():
     assert TargetProfile.from_gpu_document({"name": "x", "cc": "8.9", "sms": 142}) == tp
     assert TargetProfile.from_gpu_document({"name": "x"}) is None and TargetProfile.from_gpu_document(None) is None
     assert target_of(context(start, se.sample)) == (TargetProfile.default(), False)
+
+
+def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
+    """Qwen2's qkv_proj: the launch writes the pre-bias [M, QKV] buffer, `aten.add(c, bias)` its only reader.  The step resolves to a
+    no-op at the launch and ONE `GemmBias_v1{K,N}(n1, W, b)` at the add (both weights named), the frontend's binding of the pair;
+    every other GEMM of the step stays `Gemm_v1`."""
+    events, start = decode_step(qkv_bias="add")
+    se = step_events(events)
+    res = resolve_step(se, context(start, se.sample))
+    assert not [r for r in res if isinstance(r, Unsupported)]
+    specs = by_spec(res)
+    (gb,) = specs[f"GemmBias_v1{{K={H},N={QKV}}}"]
+    assert gb.operands == (PerRow(bf(302, (1, H))), Shared(ViewDesc(A_QKV_W, 0, (QKV, H), (H, 1), "bfloat16", CUDA)), Shared(bf(A_QKV_B, (QKV,))))
+    assert gb.outputs == (PerRow(bf(315, (1, QKV))),) and gb.pattern == "gemm_bias.fused"
+    assert gb.roots == (None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.bias")
+    assert not any(s.startswith("BiasAdd_v1") for s in specs) and f"Gemm_v1{{K={H},N={QKV}}}" not in specs
+    launch = next(r for r in res if getattr(r, "pattern", "") == "gemm_bias.launch")
+    assert isinstance(launch, Transparent) and launch.effect == "noop"
+    plain, _ = decode_step()
+    unbiased = by_spec(resolve_step(step_events(plain), context(start)))
+    assert {s: len(v) for s, v in specs.items() if s.startswith("Gemm_v1")} == \
+        {s: len(v) for s, v in unbiased.items() if s.startswith("Gemm_v1") and s != f"Gemm_v1{{K={H},N={QKV}}}"}
+
+
+def test_a_biased_linear_whose_pre_bias_output_is_read_again_keeps_gemm_and_bias_add():
+    events, start = decode_step(qkv_bias="reread")
+    se = step_events(events)
+    specs = by_spec(resolve_step(se, context(start, se.sample)))
+    assert f"Gemm_v1{{K={H},N={QKV}}}" in specs and f"BiasAdd_v1{{N={QKV}}}" in specs and not any(s.startswith("GemmBias") for s in specs)
 
 
 def test_gemm_bias_path_is_unsupported():

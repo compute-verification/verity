@@ -19,7 +19,7 @@ from __future__ import annotations
 from verity_vllm.observe.fold.patterns.activations import SiluAndMul
 from verity_vllm.observe.fold.patterns.attention import FA2_OP_NAMES, AttentionScope
 from verity_vllm.observe.fold.patterns.embedding import Embedding
-from verity_vllm.observe.fold.patterns.gemm import BiasAdd, GemmLaunch
+from verity_vllm.observe.fold.patterns.gemm import BiasAdd, GemmLaunch, fuse_bias_adds
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, as_weight_view, is_int, is_row_major, split_heads, sub_rows
 from verity_vllm.observe.fold.patterns.kv_cache import KVCacheUpdate, kv_group_of, kv_layer_of, kv_slots
 from verity_vllm.observe.fold.patterns.norms import FusedAddRMSNorm, RMSNormTritonLaunch

@@ -249,6 +249,8 @@ class Profile:
     accepted: bool = False
     kernel_allowlist: tuple[str, ...] = ()      # device kernels accounted for by Transparent/infra (census)
     notes: dict = field(default_factory=dict)
+    # step passes: `pass(resolutions, ctx, roots) -> resolutions`, applied in order to a resolved step (one resolution per root kept)
+    step_passes: tuple = ()
 
 
 class ResolutionError(Exception):
@@ -294,6 +296,8 @@ def resolve_step(step: StepEvents, ctx: StepContext) -> list[Resolution]:
             raise ResolutionError(f"events consumed twice: {sorted(dup)[:8]}")
         seen |= consumed
         out.append(r)
+    for p in ctx.profile.step_passes:
+        out = p(out, ctx, list(step.roots))
     return out
 
 
