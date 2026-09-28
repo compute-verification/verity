@@ -73,8 +73,7 @@ class TwoStageLaw:
         A wrong RU of `n_v` VUs is caught only when it is selected and a wrong VU is among the `k` checked, so it escapes
         with probability at most 1 - p * k / n_v, independently across RUs.  A larger RU escapes more often, so the
         class's rate is its largest RU's: one level `REPLAY` drawn `Bernoulli(p * k / n_v)` with `n_v` the largest RU of
-        the class (`k = n_v` when every VU is checked).  It counts wrong RUs; a consumer reading work in VUs charges that
-        `n_v` per wrong RU.
+        the class (`k = n_v` when every VU is checked).  It counts wrong RUs, each of at most `n_v` VUs.
 
         Pass the class's RUs as `units` (RUs of other classes are ignored): `n_r` is their count and `n_v` their largest
         VU count.  A caller's `n_r` must equal the count and its `n_v` can't be smaller than the largest; without
