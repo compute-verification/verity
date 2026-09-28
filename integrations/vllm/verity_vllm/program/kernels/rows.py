@@ -754,3 +754,14 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+from verity_vllm.program.kernels import softcap_rows  # noqa: E402  -- AttentionSoftcap_v2's head twin
+
+
+def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    f = softcap_rows.FAMILY
+    return softcap_rows.attention_softcap(statics, ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
+
+
+EVALUATORS[softcap_rows.FAMILY] = softcap_rows.EVALUATOR
+_k = ROWS[softcap_rows.FAMILY] = RowKernel(softcap_rows.FAMILY, attention_softcap, ("out",))
+register(softcap_rows.FAMILY, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=softcap_rows.check_targets)
