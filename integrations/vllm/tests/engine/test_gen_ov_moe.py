@@ -296,7 +296,7 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert g.consumed == tuple(sorted(se.roots[0].ids()))
     computes = [p for p in g.parts if isinstance(p, Compute)]
     specs = [c.spec.id for c in computes]
-    assert specs == [f"MoeRouterTopK_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
+    assert specs == [f"MoeRouterTopKOrdered_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}}",
                      f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     assert [c.rows for c in computes] == [M, M * TOPK, M * TOPK, M * TOPK, M]
     router, up, silu, down, msum = computes

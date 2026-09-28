@@ -59,7 +59,8 @@ def test_qwen3_fp8_role_derives_a_profile_with_the_fp8_patterns_first():
     assert names[:2] == ["PerTokenGroupFp8Quant", "CutlassScaledMmFp8Block"]      # specific kernels first
     assert p.patterns[0].group == 128 and p.patterns[1].group == 128
     assert "RMSNormTritonLaunch" in names and "GemmLaunch" in names
-    assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8Block_v1{K,N,G}"]
+    assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
+                                          "ScaledMmFp8Block_v1{K,N,G})"]
     mod = importlib.import_module(f"verity_vllm.engine.profiles.dense_{ROLE}")
     assert mod.PROVENANCE["QK_NORM"] == "hand" and mod.PROVENANCE["FP8_BLOCK"] == "hf-config"
 
@@ -124,12 +125,13 @@ def _roots():
             Root(view(A_WS, (N // G, K // G), "float32"), "weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")]
 
 
-def _ctx(cc=(9, 0), roots=None, kernel="CutlassFp8BlockScaledMMKernel"):
+def _ctx(cc=(9, 0), roots=None, kernel="CutlassFp8BlockScaledMMKernel", target=None):
     p = profile_for_case(ROLE)
     backends = {} if kernel is None else {"fp8_block_gemm_kernel": kernel}
     hdr = RunHeader("verity-capture/log/v1", "2026-09-19T00:00:00Z", "pid",
                     {"gpu": {"name": "NVIDIA H100 80GB HBM3", "compute_capability": list(cc), "multi_processor_count": 132,
-                             "tuned_gemm_arch_family": "hopper" if cc[0] == 9 else "ada"}, "backends": backends},
+                             "tuned_gemm_arch_family": "hopper" if cc[0] == 9 else "ada"}, "backends": backends,
+                     **({} if target is None else {"target": target.to_json()})},
                     {"repo": "Qwen/Qwen3-4B-Instruct-2507-FP8", "config": {}}, {"requests": []})
     rows = [("r0", i) for i in range(M)]
     start = StepStart(0, rows, list(range(M)), list(range(M)), {"r0": M}, {"r0": 0}, {"r0": [0]}, 16, list(range(M)), [("r0", M - 1)], [M - 1], 1, M, M)
@@ -187,13 +189,27 @@ def test_cutlass_scaled_mm_blockwise_resolves_with_both_weights_named_per_operan
     ctx = _ctx()
     r = CutlassScaledMmFp8Block(group=G).match(_node("_C.cutlass_scaled_mm.default", MM_SCHEMA, mm_args()), ctx)
     assert isinstance(r, Compute), r
-    assert spec_label(r.spec) == f"ScaledMmFp8Block_v1{{K={K},N={N},G={G}}}" and r.rows == M
+    assert spec_label(r.spec) == f"ScaledMmFp8BlockSharedScale_v1{{K={K},N={N},G={G}}}" and r.rows == M
     assert [type(o).__name__ for o in r.operands] == ["PerRow", "PerRow", "Shared", "Shared"]
     w, ws = r.operands[2].view, r.operands[3].view
     assert w.shape == (N, K) and w.strides == (K, 1) and ws.shape == (N // G, K // G) and ws.strides == (K // G, 1)   # the parameters, not their .T
     assert r.roots == (None, None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale_inv")
     assert r.hint.endswith("/model.layers.0.self_attn.qkv_proj.weight")
     assert isinstance(r.outputs[0], PerRow) and r.outputs[0].view.dtype == "bfloat16"
+
+
+def test_cutlass_scaled_mm_binds_the_declared_scale_construction():
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    node = _node("_C.cutlass_scaled_mm.default", MM_SCHEMA, mm_args())
+    specs = {}
+    for scale in (None, "shared-per-block", "per-coordinate"):
+        tp = TargetProfile(compute_capability=(9, 0), num_sms=132, fp8_block_gemm="cutlass", fp8_scale_construction=scale)
+        r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(target=tp))
+        assert isinstance(r, Compute), r
+        specs[scale] = spec_label(r.spec)
+    assert specs[None] == specs["shared-per-block"] == f"ScaledMmFp8BlockSharedScale_v1{{K={K},N={N},G={G}}}"
+    assert specs["per-coordinate"] == f"ScaledMmFp8Block_v1{{K={K},N={N},G={G}}}"
 
 
 def test_cutlass_scaled_mm_refuses_non_hopper_targets_bias_and_other_scale_shapes():

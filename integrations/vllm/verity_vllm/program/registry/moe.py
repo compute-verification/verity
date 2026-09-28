@@ -281,7 +281,7 @@ def MoeRouterTopKNorm(B, S, logits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same router in its selection order (opt-in: `TargetProfile.moe_construction = "indexed-read-ordered"`): the softmax once, then
+# the same router in its selection order (`TargetProfile.moe_construction = "indexed-read-ordered"`, the default): the softmax once, then
 # round k takes the expert after round k-1's (p, id) in the kernel's total order -- every value computed once, no masked vector carried
 # ---------------------------------------------------------------------------------------------------------
 

@@ -24,7 +24,7 @@ ATTN = '''each("//AttentionHead_v3{*}",
          concat(
            each("@call:AttnBlock_v3",
              concat(
-               zip("@batch:AmpereBF16TcDot16_v1", by="member"),
+               zip("@batch:AmpereBF16TcDot16_v2", by="member"),
                instances("@call:DotBf16_v1"),
                rest())),
            rest()))'''
@@ -210,7 +210,7 @@ def test_members_nodes_zip(gemm, attn):
     assert sg == s2
     # zip inside AttnBlock: member d of every PV k-step batch (BN/16 = 1 batch per block here; D = 16 sets per block)
     blocks = list(evaluate(attn, "//AttnBlock_v3{*}"))
-    famz, sz = materialise(attn, 'zip("//AttnBlock_v3{*}", ["@batch:AmpereBF16TcDot16_v1"])')
+    famz, sz = materialise(attn, 'zip("//AttnBlock_v3{*}", ["@batch:AmpereBF16TcDot16_v2"])')
     assert famz.count() == 16 * len(blocks)
     for b, blk in enumerate(blocks):
         pv = [j for j, n in enumerate(query(attn.circuit, "//AttnBlock")[b].scope().spec.body.nodes)
@@ -288,7 +288,7 @@ def test_each_concat_rest_compose(attn):
     # the AttnBlock interior: zip sets (PV chain per d), DotBf16 calls whole, rest singletons
     blocks = query(attn.circuit, "//AttnBlock")
     dots = set(evaluate(attn, "//AttnBlock//DotBf16"))
-    zips = set(evaluate(attn, 'zip("//AttnBlock_v3{*}", ["@batch:AmpereBF16TcDot16_v1"])'))
+    zips = set(evaluate(attn, 'zip("//AttnBlock_v3{*}", ["@batch:AmpereBF16TcDot16_v2"])'))
     assert dots <= set(sets) and zips <= set(sets)
     for blk in blocks:
         inside = [s for s in sets if blk.lo <= s.intervals()[0][0] < blk.hi]
@@ -339,10 +339,10 @@ def test_override_and_canonical_query(gemm, rms, attn):
 
 def test_override_nested_activation(attn):
     """Override addresses bodies matched anywhere, here the AttnBlock calls inside the head."""
-    q = 'override(default(32), {"//AttnBlock_v3{*}": concat(nodes(".", "@batch:AmpereBF16TcDot16_v1"), rest())})'
+    q = 'override(default(32), {"//AttnBlock_v3{*}": concat(nodes(".", "@batch:AmpereBF16TcDot16_v2"), rest())})'
     fam, sets = materialise(attn, q)
     assert sweep(attn, sets)[1]
-    whole = set(evaluate(attn, 'nodes("//AttnBlock_v3{*}", "@batch:AmpereBF16TcDot16_v1")'))
+    whole = set(evaluate(attn, 'nodes("//AttnBlock_v3{*}", "@batch:AmpereBF16TcDot16_v2")'))
     assert whole and whole <= set(sets) and all(s.size() == 16 for s in whole)
     default_sets = set(evaluate(attn, "default(32)"))
     assert default_sets.isdisjoint(whole)  # default keeps the PV batches per member (one gate each)
@@ -476,7 +476,7 @@ def test_parse_errors():
 def test_python_constructors_match_parse():
     q = G.override(G.default(32), {"//Gemm_v1{*}": G.members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1"),
                                    "//AttentionHead_v3{*}": G.each("//AttentionHead_v3{*}", G.concat(
-                                       G.each("@call:AttnBlock_v3", G.concat(G.zip_("@batch:AmpereBF16TcDot16_v1"),
+                                       G.each("@call:AttnBlock_v3", G.concat(G.zip_("@batch:AmpereBF16TcDot16_v2"),
                                                                             G.instances("@call:DotBf16_v1"), G.rest())),
                                        G.rest()))})
     assert q == parse(CANONICAL) and query_id(q) == query_id(parse(CANONICAL))

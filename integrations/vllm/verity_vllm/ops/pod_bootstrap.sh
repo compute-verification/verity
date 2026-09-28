@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Pod runtime for the Verity x vLLM integration (research/infra; no Verity semantics): ONE Python 3.12 environment (torch cu129, vLLM
 # d9105ea80, numpy, safetensors),
-# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90), the pinned checkpoints, and a readiness record.
+# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on row taps), the pinned checkpoints, and a readiness record.
 #
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's integrations/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
-# Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME.
+# Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
+# ROW_TAPS (1: build the taps a row runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips them, and a
+# row on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
 #
 # PROTOCOL SUMMARY (pod readiness; runs once per pod, before any row_pod.sh)
 #   Purpose: make a fresh pod able to run rows from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
@@ -21,7 +23,8 @@
 #     "cuda_available": <torch.cuda.is_available()> and a cpu{nproc, model} measurement; `ok` = AND of the CPU checks.  The gpu-mode
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
-#     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap}.log, $OUT/bootstrap.fail on a failure; the last stdout line is BOOTSTRAP-OK.
+#     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
+#     failure; the last stdout line is BOOTSTRAP-OK.
 #   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
 #     every Verity package must import from this tree (verity_from_tree, verity_vllm_from_tree,
@@ -43,7 +46,7 @@ if [ "$MODE" = auto ]; then
 fi
 if [ "$DRY_RUN" = 1 ]; then
   echo "mode=$MODE cases=$CASES out=$OUT venv=$VENV"
-  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo '4 native taps (hidden_gpu, fa2_tap, fa3_tap on cc 9.0); ' || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
+  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo "4 native taps (hidden_gpu, fa2_tap, fa3_tap on cc 9.0; row taps ROW_TAPS=${ROW_TAPS:-1}); " || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
   echo BOOTSTRAP-DRY-RUN; exit 0
 fi
 mkdir -p "$OUT" "$WORK/wheels"
@@ -132,8 +135,20 @@ if [ "$CC" = "9.0" ]; then
   VENV=$VENV bash verity_vllm/ops/pod_fa3_tap.sh >"$OUT/fa3_tap.log" 2>&1; grep -q '^FA3-TAP-OK' "$OUT/fa3_tap.log" || fail FA3_TAP "$(tail -2 "$OUT/fa3_tap.log")"
   log "$(grep '^FA3-TAP-OK' "$OUT/fa3_tap.log" | tail -1)"
 fi
+if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by default, at the paths cli.MACHINE names
+  VENV=$VENV FA2_TAP_ROW_GUARD=1 FA2_TAP_HDIMS=${FA2_TAP_HDIMS:-64,96,128,256} bash verity_vllm/ops/pod_fa2_tap.sh >"$OUT/fa2_tap_guarded.log" 2>&1; grep -q '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" || fail FA2_TAP_GUARDED "$(tail -2 "$OUT/fa2_tap_guarded.log")"
+  log "$(grep '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" | tail -1)"
+  if [ "$CC" = "9.0" ]; then
+    VENV=$VENV FA3_TAP_ROW_GUARD=1 bash verity_vllm/ops/pod_fa3_tap.sh >"$OUT/fa3_tap_guarded.log" 2>&1; grep -q '^FA3-TAP-OK' "$OUT/fa3_tap_guarded.log" || fail FA3_TAP_GUARDED "$(tail -2 "$OUT/fa3_tap_guarded.log")"
+    log "$(grep '^FA3-TAP-OK' "$OUT/fa3_tap_guarded.log" | tail -1)"
+  fi
+  VENV=$VENV bash verity_vllm/ops/pod_norm_tap.sh >"$OUT/norm_tap.log" 2>&1; grep -q '^NORM-TAP-OK' "$OUT/norm_tap.log" || fail NORM_TAP "$(tail -2 "$OUT/norm_tap.log")"
+  log "$(grep '^NORM-TAP-OK' "$OUT/norm_tap.log" | tail -1)"
+  VENV=$VENV bash verity_vllm/ops/pod_router_tap.sh >"$OUT/router_tap.log" 2>&1; grep -q '^ROUTER-TAP-OK' "$OUT/router_tap.log" || fail ROUTER_TAP "$(tail -2 "$OUT/router_tap.log")"
+  log "$(grep '^ROUTER-TAP-OK' "$OUT/router_tap.log" | tail -1)"
+fi
 else
-CC=""; HG_LINE=""; log "cpu mode: native taps (hidden_gpu, fa2_tap, fa3_tap) skipped"
+CC=""; HG_LINE=""; log "cpu mode: native taps (hidden_gpu, fa2_tap, fa3_tap, row taps) skipped"
 fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------

@@ -57,7 +57,8 @@ export NATIVE_COLLECT_BUILD
 # cc 9.x runs FlashAttention-3 -> the FA3 M1 tap (HOP-01) and the required hidden class is fa3_hidden_m1_stream; the omitted negative's
 # expected reason names that class.  HIDDEN_SO overrides (a foreign tap is refused by commit_delta's engine check, not silently accepted).
 FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)
-HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so || echo /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so)}; export HIDDEN_SO
+G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
+HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}; export HIDDEN_SO
 HIDDEN_CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
 GPU_UTIL=${GPU_UTIL:-0.5}; export GPU_UTIL
 CD=${CANARY_DIR:-/workspace/cp/canary}/$TAG; mkdir -p "$CD"; export SWEEP_DIR=$CD

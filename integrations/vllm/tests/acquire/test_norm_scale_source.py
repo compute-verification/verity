@@ -1,8 +1,10 @@
 """The norm-scale source (`acquire.sources.norm_scale_source`) on CPU tensors with a recording committer: the module scope, the Triton
 stand-in and the rsqrt site acquire `<module>/norm_scale` only inside a manifest norm module during a committed step, a site of another
-kind is a collector error, `attach` refuses a manifest without norm scales, and install/uninstall restore `torch.rsqrt`."""
+kind is a collector error, `attach` refuses a manifest without norm scales, install/uninstall restore `torch.rsqrt`, and a TP Commit attaches
+it on every rank (`acquire.sources.taps`)."""
 from __future__ import annotations
 
+import json
 import types
 
 import pytest
@@ -134,18 +136,34 @@ def test_attach_refuses_a_manifest_without_norm_scales_and_adds_the_required_cla
     com = Recorder()
     com.model = model()
     base = ("input_token_ids", "weights")
-    assert S.attach(com, types.SimpleNamespace(norm_tap_so=None), {}, base) == base and not com.sources
-    args = types.SimpleNamespace(norm_tap_so="/nonexistent/verity_norm_tap.so", required_classes=None)
+    assert S.attach(com, None, {}, base) == (base, None) and not com.sources
+    so = "/nonexistent/verity_norm_tap.so"
     with pytest.raises(SystemExit) as e:
-        S.attach(com, args, {"identities": []}, base)
+        S.attach(com, so, {"identities": []}, base)
     assert e.value.code == 3
     man = {"identities": [{"family": NS.FAMILY, "op_path": "chain", "spec": "RsqrtF32_v1", "request_id": "r0", "step": 0, "rows": 2},
                           {"family": "input_token_ids", "op_path": "embed", "request_id": "r0", "step": 0, "rows": 2}]}
-    assert S.attach(com, args, man, base) == (*base, NS.FAMILY)
-    src = com.sources[0]
+    classes, src = S.attach(com, so, man, base)
+    assert classes == (*base, NS.FAMILY) and src is com.sources[0]
     assert src.modules == {"chain": "aten"} and src.words_per_token == 1
     assert src.extra_step_bytes({}, None) == {"per_token_bytes": 4, "per_seq_bytes": 0, "tensors_per_step": 1}
     d = src.declaration_classes()[0]
     assert d["class"] == NS.FAMILY and d["how"] == "bound-as-leaf" and d["tensors"] == 0
-    explicit = types.SimpleNamespace(norm_tap_so=args.norm_tap_so, required_classes="a,b")
-    assert S.attach(com, explicit, man, base) == base, "--required-classes named the classes: they stand"
+    assert S.attach(com, so, man, base, explicit_classes=True)[0] == base, "--required-classes named the classes: they stand"
+
+
+def test_a_tp_rank_attaches_the_norm_tap_over_its_own_rows_and_the_driver_fails_closed_without_it(tmp_path):
+    from verity_vllm.acquire.sources import taps as T
+
+    row = {"family": NS.FAMILY, "op_path": "chain", "spec": "RsqrtF32_v1", "request_id": "r0", "step": 0, "rows": 2, "rank": 0}
+    (tmp_path / "manifest.json").write_text(json.dumps({"identities": [row]}))
+    taps = T.TapSources(norm_tap_so="/nonexistent/verity_norm_tap.so", vocab_range=False)
+    assert T.for_ranks(T.TapSources()) is None and T.for_ranks(taps).keywords == {"norm_tap_so": taps.norm_tap_so}
+    com = Recorder()
+    made = [{"rank": r, "tap_sources": T.for_ranks(taps)(com, model(), str(tmp_path / "manifest.json"), r)} for r in (0, 1)]
+    assert made[0]["tap_sources"]["norm_scale_source"]["stats"]["modules"] == 1 and len(com.sources) == 1
+    assert "error" in made[1]["tap_sources"]["norm_scale_source"], "rank 1 has no norm_scales rows: its attach refuses"
+    with pytest.raises(SystemExit, match=r"norm_scales source did not attach on ranks \[1\]"):
+        T.require_on_every_rank(made, ("a",), {}, taps, explicit_classes=False)
+    made[1] = dict(made[0], rank=1)
+    assert T.require_on_every_rank(made, ("a",), {}, taps, explicit_classes=False) == ("a", NS.FAMILY)
