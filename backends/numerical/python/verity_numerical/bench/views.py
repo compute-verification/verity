@@ -421,10 +421,27 @@ FLOCK_CIRCUIT_CONFIG = dataclasses.replace(
     pin="verity/flock-circuit pinned circuit file (PR #83); the Lean verifier of record for this format (PR #142)",
     interaction="live verifier: coins for every squeeze of both reps; prover end-to-end time (witness, proof, live rounds, upload), "
                 "verification separate")
+CIRCUIT_FLAT, CIRCUIT_TYPED = "verity/flock-circuit", "verity/flock-circuit/types"
+#: red-team-flock-3's C2 for the typed statement (Q4): #277 and #268 on main, and the typed path calling #268's checks.  Until it
+#: holds, no typed cell or row says the circuit computes its type.
+TYPED_C2 = False
+#: Why a typed cell is not a Table 2 cell (nor in the workload headline): until C2 holds and Table 2 gives the typed statement
+#: lines of its own, a typed cell would compete with a flat one for the same line.
+TYPED_NOT_IN_TABLE2 = (f"{CIRCUIT_TYPED}: not a Table 2 cell until C2 holds (#277 and #268 on main, the typed path calling #268's "
+                       "checks) and Table 2 shows typed and flat statements on separate lines")
+#: M0's typed statement (``verity/flock-circuit/types``, PR #281): the same circuit route with typed ports.  Its own row and
+#: backend, so a typed cell is never merged with a flat one (red-team-flock-3's Q4).
+FLOCK_CIRCUIT_TYPED_CONFIG = dataclasses.replace(
+    FLOCK_CIRCUIT_CONFIG, id="C-Flock, typed circuit (verity/flock-circuit/types), SHA-512 in-circuit commitments",
+    zk=FLOCK_CIRCUIT_CONFIG.zk + "; the sessions accepted by the Rust live verifier (flock-circuit serve), no Lean replay"
+       + ("; the circuit computes its type (#268's checks)" if TYPED_C2 else ""),
+    pin=f"{CIRCUIT_TYPED} pinned circuit file (circuit_format flock-circuit/types, PR #281); compared with the flat statement per "
+        "instance only")
 CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG,
-                  FLOCK_CIRCUIT_CONFIG)
+                  FLOCK_CIRCUIT_CONFIG, FLOCK_CIRCUIT_TYPED_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
-assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id}, "every drilldown.VARIANTS entry is a declared configuration"
+assert set(_CONFIG) == set(D._BY_ID) | {FLOCK_CONFIG.id, FLOCK_VLLM_CONFIG.id, FLOCK_CIRCUIT_CONFIG.id, FLOCK_CIRCUIT_TYPED_CONFIG.id}, \
+    "every drilldown.VARIANTS entry is a declared configuration"
 
 TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Interaction model", "Transferability",
@@ -443,9 +460,28 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
     name = _get(fp, "software", "backend", "name")
     if not FLOCK.recognises(name):
         return None
-    if fp.get("statement") == "verity/flock-circuit":
+    if fp.get("statement") == CIRCUIT_FLAT:
         return cfgs.get(FLOCK_CIRCUIT_CONFIG.id)
+    if fp.get("statement") == CIRCUIT_TYPED:
+        return cfgs.get(FLOCK_CIRCUIT_TYPED_CONFIG.id)
     return cfgs.get(FLOCK_VLLM_CONFIG.id if str(name).lower().startswith("flock-vllm-v1") else FLOCK_CONFIG.id)
+
+
+def circuit_facts(meta: Mapping[str, Any]) -> dict[str, Any] | None:
+    """A circuit-statement result's AND count, its convention and the verifier that accepted it (red-team-flock-3's Q4); ``None``
+    for any other result.  A flat result recorded before #281 has no ``ands_counted``: its count is the tensor-core units' only."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    if fp.get("statement") not in (CIRCUIT_FLAT, CIRCUIT_TYPED):
+        return None
+    counted = fp.get("ands_counted")
+    verifier = fp.get("verifier") if isinstance(fp.get("verifier"), Mapping) else {}
+    draw = fp.get("unit_draw")
+    return {"statement": fp["statement"], "ands_per_instance": fp.get("ands_per_instance"), "rows_per_instance": fp.get("rows_per_instance"),
+            "ands_label": "ANDs per instance: tensor-core units + tail" if counted else "ANDs per instance: units only (recorded before #281)",
+            "not_counted": "in-circuit SHA-512 and hm96: proved but not counted",
+            "accepted_by": verifier.get("accepted_by") or "the Rust live verifier (flock-circuit serve)",
+            "computes_its_type": TYPED_C2 if fp["statement"] == CIRCUIT_TYPED else None,
+            **({"unit_draw": f"{draw} (units_per_vu 1: a unit draw counts instances)"} if draw else {})}
 
 
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
@@ -1311,6 +1347,7 @@ class Views:
     key_class_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible class cell's key counts (:func:`key_class_of`)
     omitted_of: dict[str, Any] = field(default_factory=dict)  #: each admissible result's latest ``omitted`` label (what it leaves out)
     domain_of: dict[str, str] = field(default_factory=dict)  #: each admissible result's operand domain (``domain`` label, else its fingerprint)
+    circuit_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible circuit-statement result's :func:`circuit_facts`
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
     #: the attempts labelled ``interaction_attempt_of`` a cell, by that cell's artifact (IX1): ``{artifact, attempt, deviation}``
@@ -1474,6 +1511,13 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
+        if c.config is not None and c.config.id == FLOCK_CIRCUIT_TYPED_CONFIG.id:
+            # never the best of a typed and a flat cell (different statement ids are never merged): out of Table 2 until C2 holds
+            # and Table 2 gives the typed statement lines of its own, whatever TYPED_C2 says
+            rid, _ = T._attempt_of(store, c.art)
+            V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id, "line": c.target.name,
+                               "subcircuit": c.subcircuit, "attempt": rid, "codes": [("X", TYPED_NOT_IN_TABLE2)]})
+            continue
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules, c.config is not None and not c.config.transferability.startswith("transferable"))
         key = (c.target.name, c.subcircuit, scheme_of(c), _column(c, rules), vkey(c))
@@ -1513,6 +1557,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         dom = _latest(c.labels, "domain") or (fp_dom if fp_dom in contract.DOMAINS else None)
         if dom:
             V.domain_of[c.art] = str(dom)
+        if (facts := circuit_facts(c.meta)) is not None:
+            V.circuit_of[c.art] = facts
         if c.key_class:
             V.key_class_of[c.art] = c.key_class
             N = n_of(c)                 # its own key counts' work-weighted N (the row's is its first cell's)
@@ -2529,8 +2575,10 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return (sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier"))) or SimpleNamespace(id=None)).id
 
     def result_key(c: ViewCell) -> str:
-        """backend x statement x input set x prover hardware."""
-        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}"
+        """backend x statement x input set x prover hardware; the typed circuit statement is its own statement, so a typed
+        result never stands in for a flat one (red-team-flock-3's Q4)."""
+        typed = "+types" if c.configuration == FLOCK_CIRCUIT_TYPED_CONFIG.id else ""
+        return (f"{backend_by_cfg.get(c.configuration or '') or slug(c.column)}@{statement_id(c.line, c.scheme, c.subcircuit)}{typed}"
                 f"@{input_set_id(c)}@{prover_of(c)}")
 
     def input_set_of(c: ViewCell) -> dict[str, Any] | None:
@@ -2594,6 +2642,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                       "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
                       "under_reverification": c.legacy.finding},
             "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None, "domain": V.domain_of.get(c.artifact),
+            **({"circuit": V.circuit_of[c.artifact]} if c.artifact in V.circuit_of else {}),
             "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
