@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.acquire.sources import taps as TAPS
-from verity_vllm.config import option
+from verity_vllm.config import group, option
 
 TP_ROOT_TAG = b"verity/tp-run-root/v1"
 SCHEMA = "verity/commit-integ/delta-tp/v1"
@@ -328,8 +328,7 @@ class Options:
     world: int | None = option("--world", type=int, default=None, choices=(1, 2), help="alias of --tp (the communicator size)")
     no_tp_partials: bool = option("--no-tp-partials", default=False, action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
     omit_rank: int | None = option("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
-    router_tap_so: str | None = option("--router-tap-so", default=None, help="opt-in, never the record: the router-softmax tap op (ops/pod_router_tap.sh) -- every rank commits `moe/L<k>/router_softmax` for its router_softmax identities of the required manifest (acquire.sources.taps)")
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="opt-in, never the record: every rank commits `<embedding module>/vocab_range` for its vocab_range identities of the required manifest (acquire.sources.taps)")
+    tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     required_manifest: str | None = option("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     relabel_rank: str | None = option("--relabel-rank", default=None, help="NEGATIVE (R15 TP-04 'relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     wrong_root_rank: int | None = option("--wrong-root-rank", type=int, default=None, help="NEGATIVE (R15 TP-04 'wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
@@ -561,7 +560,7 @@ def main(args: Options) -> int:
                                       "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
                                       "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                       "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
-                                      "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.router_tap_so, args.vocab_range),
+                                      "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
                                          "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                       "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                       "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})
@@ -586,7 +585,7 @@ def main(args: Options) -> int:
         versions["moe_source"] = {int(m["rank"]): m.get("moe_source") for m in made}
         (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
         print(f"[tp2commit] MoE block source attached on every rank ({versions['moe_source'][0]}); required classes {list(required_classes)}", flush=True)
-    required_classes = TAPS.require_on_every_rank(made, required_classes, versions, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=args.required_classes is not None)
+    required_classes = TAPS.require_on_every_rank(made, required_classes, versions, args.tap_sources, explicit_classes=args.required_classes is not None)
     for m in made:
         asz = m.get("arena_sizing") or {}
         rm = m.get("required_manifest") or {}

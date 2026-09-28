@@ -13,7 +13,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
-Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip; TP rank Programs
+Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
 too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
 """
 from __future__ import annotations
@@ -40,7 +40,9 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "sampler_splits",                   # [R16 reqval REQ-03, stoch M-0254 derived S] additive: only a Program whose `splits` Input a stochastic selector reads
             "norm_scales",                      # opt-in (query.norm_scales): one f32 per norm Call per row, `<norm module>/scale`; never the record
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
-            "vocab_range")                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
+            "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
+            "scale_products",                   # additive (query.scale_products): a shared-scale FP8 GEMM's products per row, `<linear module>/scale_products`
+            "call_boundaries")                  # Q_word: a Value two Calls of one module body exchange, `<module>/<fx node>[/<port>]`
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
@@ -261,6 +263,25 @@ def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
             g["H"] = int(st.get("H", g["H"]))
             g["TOPK"] = int(st.get("TOPK", g["TOPK"]))
     return geo
+
+
+def moe_plane_kind(family: str, module: str) -> str | None:
+    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
+    MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
+    per token), `up` (MoeExpertGemm: the w13 launch per pair), `act` (the SiluMul rows under the MoE runner module `...experts`: the
+    silu_and_mul per pair), `down` (MoeExpertGemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the
+    Program's spec family + module name alone."""
+    if family.startswith("MoeRouterTopK"):
+        return "router"
+    if family.startswith("MoeExpertGemmW"):
+        return "down"
+    if family.startswith("MoeExpertGemm"):
+        return "up"
+    if family.startswith("MoeSum"):
+        return "sum"
+    if family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == MOE_LEAF:
+        return "act"
+    return None
 
 
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
