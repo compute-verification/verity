@@ -10,6 +10,11 @@ exit is 3 and the conflicted files are named.  Before anything is pushed, the ou
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
 file.  With no remote configured the commit is local and the report says so.
 
+A lane note (`lanes/**/*.md`) the sync would add or change stays out of the commit when its filename stamp `YYYYMMDDTHHMMZ` (a
+path new since HEAD) or its front matter's `created:` (new or changed since HEAD) is more than 5 minutes ahead of the sync's
+clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
+failed.  What HEAD already has is never re-checked, and a stamp stops being ahead once the clock passes it.
+
 `scan` reads every blob in the repo's history: files over `--max-bytes` and key material, each with the path it was committed
 under.  Exit 1 when it finds anything; run it before the first push and after (acceptance A5).
 
@@ -19,7 +24,9 @@ they succeed (a cloud agent's default; the laptop keeps the watcher's snapshot u
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
+import math
 import os
 import re
 import subprocess
@@ -29,6 +36,11 @@ from pathlib import Path
 
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 MAX_BYTES = 1 << 20
+FUTURE_RC = 5
+FUTURE_TOLERANCE = dt.timedelta(minutes=5)
+STAMP_RE = re.compile(r"^(\d{8}T\d{4}Z)-")
+CREATED_RE = re.compile(r"^created:\s*[\"']?((\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s*(Z|[+-]\d{2}:?\d{2})?)[\"']?\s*$",
+                        re.M | re.I)
 KEY_PATTERNS = {
     "aws-access-key-id": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     "apikey": re.compile(r"(?i)\bapi_?key\b\s*[=:]\s*[\"']?[A-Za-z0-9_\-]{16,}"),
@@ -79,20 +91,73 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
     return keep, big
 
 
-def commit(root: Path, paths: list[str] | None = None, message: str | None = None, max_bytes: int = MAX_BYTES) -> dict:
-    """Commit the caller's changes (all, or under `paths`).  Retries a held index lock (another writer on this machine) briefly."""
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def created_at(text: str) -> tuple[str, dt.datetime] | None:
+    """(as written, time) of the front matter's `created:` (ISO, seconds optional, UTC unless it gives an offset), or None."""
+    end = text.find("\n---", 3) if text.startswith("---\n") else -1
+    m = CREATED_RE.search(text[4:end]) if end >= 0 else None
+    if m is None:
+        return None
+    try:
+        t = dt.datetime.fromisoformat(f"{m[2]}T{m[3]}{m[4] if m[4] and m[4].upper() != 'Z' else ''}")
+    except ValueError:
+        return None
+    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, str]:
+    """{path: why} for the lane notes among `paths` whose filename stamp (a path HEAD lacks) or `created:` (a value HEAD's copy
+    lacks) is more than FUTURE_TOLERANCE after `now` (UTC); `why` gives the value `date -u` prints at `now`."""
+    out = {}
+    for path in paths:
+        p = root / path
+        if not (path.startswith("lanes/") and path.endswith(".md") and p.is_file()):
+            continue
+        try:
+            text = p.read_text(errors="replace")
+        except OSError:
+            continue
+        old = _out(root, "show", f"HEAD:{path}")
+        found = []
+        if old is None and (m := STAMP_RE.match(p.name)):
+            try:
+                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc), "%Y%m%dT%H%MZ"))
+            except ValueError:
+                pass
+        c, prev = created_at(text), created_at(old) if old is not None else None
+        if c and (prev is None or prev[1] != c[1]):
+            found.append(("created:", *c, "%Y-%m-%dT%H:%MZ"))
+        why = [f"{what} {was} is {math.ceil((t - now).total_seconds() / 60)} min ahead; use {now.strftime(fmt)} (date -u +{fmt})"
+               for what, was, t, fmt in found if t - now > FUTURE_TOLERANCE]
+        if why:
+            out[path] = "; ".join(why)
+    return out
+
+
+def commit(root: Path, paths: list[str] | None = None, message: str | None = None, max_bytes: int = MAX_BYTES,
+           now: dt.datetime | None = None) -> dict:
+    """Commit the caller's changes (all, or under `paths`) but lane notes stamped ahead of `now` (`future`: `path: why`).  Retries
+    a held index lock (another writer on this machine) briefly."""
     keep, big = _changed(root, paths, max_bytes)
+    future = future_stamps(root, keep, now or _utcnow())
+    if future:
+        keep = [p for p in keep if p not in future]
+        _run(root, "--literal-pathspecs", "reset", "-q", "--", *future)          # a staged copy would be committed anyway
+    left = {"skipped": big, "future": [f"{p}: {why}" for p, why in future.items()]}
     if not keep:
-        return {"commit": None, "paths": 0, "skipped": big}
+        return {"commit": None, "paths": 0, **left}
     msg = message or f"notes sync {time.strftime('%Y-%m-%dT%H:%MZ', time.gmtime())}: {len(keep)} paths"
     for attempt in range(10):
         add = _run(root, "--literal-pathspecs", "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul", input="\0".join(keep))
         if add.returncode == 0:
             c = _run(root, "commit", "-q", "--no-verify", "-m", msg)
             if c.returncode == 0:
-                return {"commit": (_out(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(keep), "skipped": big}
+                return {"commit": (_out(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(keep), **left}
             if "index.lock" not in c.stderr and "nothing to commit" in (c.stdout + c.stderr):
-                return {"commit": None, "paths": 0, "skipped": big}
+                return {"commit": None, "paths": 0, **left}
             err = c.stderr
         else:
             err = add.stderr
@@ -118,13 +183,16 @@ def outgoing_keys(root: Path, base: str | None, secrets: list[str]) -> list[str]
 
 
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
-         max_bytes: int = MAX_BYTES, secrets: list[str] | None = None) -> dict:
+         max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
     """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
-    `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files) or `keys` (hits); `rc` is the exit code."""
+    `future` (notes left out, stamped ahead of `now`), `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
+    or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
-    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes)}
+    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    if rep["future"]:
+        rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:
         return {**rep, "note": f"no remote {remote!r}: committed locally only"}
     branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
@@ -212,6 +280,8 @@ def render_sync(rep: dict) -> str:
     parts = [head]
     if rep.get("skipped"):
         parts.append(f"skipped {len(rep['skipped'])} over 1 MB (put them in the store): {', '.join(rep['skipped'][:3])}")
+    if rep.get("future"):
+        parts.append(f"left out {len(rep['future'])} stamped ahead of the clock (SYNC-REFUSED)")
     if rep.get("note"):
         parts.append(rep["note"])
     if rep.get("error"):
@@ -219,18 +289,24 @@ def render_sync(rep: dict) -> str:
     return "; ".join(parts)
 
 
-def auto_sync(root: Path, lanes: list[str]) -> str | None:
-    """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  None when off."""
+def refused_lines(rep: dict) -> list[str]:
+    return [f"SYNC-REFUSED {x}" for x in rep.get("future", [])]
+
+
+def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
+    """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  (report lines, FUTURE_RC
+    when a note was left out for its stamp, else 0; other failures stay advisory, the next sync retries them); (None, 0) when off."""
     if os.environ.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
-        return None
+        return None, 0
     rep = sync(root, paths=[f"lanes/{x}" for x in lanes if x], message=f"notes: {', '.join(x for x in lanes if x)}")
-    return render_sync(rep)
+    return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") else 0
 
 
 def main(argv: list[str], default_root: Path) -> int:
     ap = argparse.ArgumentParser(prog="research notes", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (bounded retries; a conflict drops nothing)")
+    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (bounded retries; a conflict drops nothing; "
+                                     "exit 5: lane notes stamped over 5 min ahead of the clock were left out)")
     sy.add_argument("--path", action="append", default=[], metavar="P", help="only changes under P (repeatable; default every change)")
     sy.add_argument("-m", "--message", default=None)
     sy.add_argument("--retries", type=int, default=5)
@@ -244,7 +320,7 @@ def main(argv: list[str], default_root: Path) -> int:
     root = ns.root or default_root
     if ns.cmd == "sync":
         rep = sync(root, ns.path or None, ns.message, max(0, ns.retries), ns.remote)
-        print(render_sync(rep), file=sys.stdout if rep["rc"] == 0 else sys.stderr)
+        print("\n".join([render_sync(rep), *refused_lines(rep)]), file=sys.stdout if rep["rc"] == 0 else sys.stderr)
         return rep["rc"]
     rep = scan(root, ns.max_bytes)
     if ns.json:

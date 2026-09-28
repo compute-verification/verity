@@ -184,7 +184,7 @@ def validate(t: CircuitType, callee: Callable[[str], CircuitType]) -> None:
         check_form(f, n)
     used = {w for f in t.outputs for w in f[0]}
     for lo, width, it in reversed(spans):
-        if not any(lo <= w < lo + width for w in used):
+        if not any(w in used for w in range(lo, lo + width)):
             bad(f"a dead item at wire {lo}: nothing it makes is read")
         used.update(w for f in _item_forms(it) for w in f[0])
 

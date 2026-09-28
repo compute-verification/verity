@@ -43,14 +43,16 @@ def f32_bits(x: float) -> int:
 
 class GumbelTopPTokenSelectRule(OpRule):
     """`vllm_iface.gumbel_topp_token_select(logits bf16 [.., V], seed int64 [1], temperature: float, top_p: float, pos: int, splits int32 [1])`
-    -> per row `GumbelTopPTokenSelect_v1{V}(row, Const32[top_p], seed[0], Const64[pos], Const32[temperature], splits[0])`, an I32 token id
-    per row (the op's int32 result).  Refused: a temperature of 0 (that is the greedy `TokenSelect_v1`, not a stochastic select — do not
+    -> per row `GumbelTopPTokenSelect_v1{V}(row, Const32[top_p], seed[0], Const64[pos], Const32[temperature], splits[0])` (its
+    `registry.sampling.SHARED_GREEDY` entry under the target's `sampler_construction = shared-greedy`), an I32 token id per row (the op's
+    int32 result).  Refused: a temperature of 0 (that is the greedy `TokenSelect_v1`, not a stochastic select — do not
     relabel), a seed that is not a 64-bit 1-element value collection (the seed must be a Program input, never a literal), a non-static
     pos, a `splits` that is not a 32-bit 1-element value collection (S is the workload's derived value, read from the request's `splits`
     Input per event: `SplitsFor_v1(|live(t)|, num_SMs)`; a literal S is not a policy and not a geometry the Program may assume) unless
-    `splits` is None and `S` is a launched split count: the single-request constant."""
+    `splits` is None and `S` is a launched split count: the single-request constant, where each row is
+    `GumbelTopPTokenSelect_v2{V,S}(row, ..., Const32[S])` instead (the same operands; its top-p keep word as word gates at S)."""
     modes = frozenset({"profile"})
-    info = RuleInfo("GumbelTopPTokenSelect[vllm]", 2, "op-binding",
+    info = RuleInfo("GumbelTopPTokenSelect[vllm]", 3, "op-binding",
                     applies_to="vllm_iface.gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
                     preconditions=("logits is a bf16 value collection [.., V]", "seed is a 1-element 64-bit value collection (a Program input)",
                                    "temperature is a static float > 0 (0 is greedy: TokenSelect_v1, not this rule)", "0 < top_p <= 1 static",
@@ -117,7 +119,11 @@ class GumbelTopPTokenSelectRule(OpRule):
         x = ctx.coll(logits)
         rows, lead = rows_of(x)
         V = rows[0].type.n
-        fn = ctx.kind("token_select_stochastic", node, V=V)
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports the rule modules)
+        # a constant split count (a single-request workload): the select specialised on it, its keep word as word gates, the same
+        # six operands (the Const32[S] still read, in operand order)
+        fn = ctx.kind("token_select_stochastic", node, V=V, CONSTRUCTION=active_target_profile().effective_sampler_construction()) \
+            if splits is not None else ctx.kind("token_select_stochastic_split", node, V=V, S=int(S))
         hint = ctx.hint_name(node)
         seed_c = ctx.coll(seed).reshape(Array(1, Value(64)))[0]
         splits_c = None if splits is None else ctx.coll(splits).reshape(Array(1, Value(32)))[0]   # the event's S: the `splits` Input entry

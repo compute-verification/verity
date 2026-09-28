@@ -32,10 +32,10 @@
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1318},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/pipeline/build.py", "kind": "function", "symbol": "_construct", "detail": "lines", "count": 160},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 210},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1769},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 201},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1767},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "openings_after_release", "detail": "lines", "count": 179},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2939},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2927},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 397},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "function", "symbol": "build", "detail": "lines", "count": 161},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 840},
@@ -45,7 +45,7 @@
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1106},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "function", "symbol": "produce", "detail": "lines", "count": 183},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 779},
-    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1138},
+    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1137},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 151},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 208},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1012},
@@ -62,7 +62,6 @@
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2368},
     {"file": "verity_vllm/program/registry/quarantine/ln/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
     {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 994},
-    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 187},
-    {"file": "verity_vllm/query/required.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 802}
+    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 187}
   ]
 }
