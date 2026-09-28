@@ -115,6 +115,24 @@ def flatOk (t : CircuitType) : Bool :=
 def splitOk (n : Nat) (split : List Nat) : Bool :=
   split.all (· ≤ n) && (List.range (split.length - 1)).all fun i => split[i]! ≤ split[i + 1]!
 
+/-- The geometry, checked: each port bit has a column in its region that names it back, no other column of a region names
+a bit, and the output region lies between the ANDs and the constant. `place` always lays groups out so; `derive` checks
+it anyway, in time linear in the port regions, so its theorems read these facts off the check. -/
+def geoOk (t : CircuitType) (G : Geo) : Bool :=
+  decide (G.andBase + G.nAnd ≤ G.const) &&
+  (List.range t.inBits).all (fun i => match colOf G.ins i with
+    | some c => decide (c < G.andBase) && bitAt G.ins c == some i
+    | none => false) &&
+  (List.range G.andBase).all (fun r => match bitAt G.ins r with
+    | some i => decide (i < t.inBits) && colOf G.ins i == some r
+    | none => true) &&
+  (List.range t.outBits).all (fun o => match colOf G.outs o with
+    | some c => decide (G.andBase + G.nAnd ≤ c ∧ c < G.const) && bitAt G.outs c == some o
+    | none => false) &&
+  (List.range (G.const - (G.andBase + G.nAnd))).all (fun j => match bitAt G.outs (G.andBase + G.nAnd + j) with
+    | some o => decide (o < t.outBits) && colOf G.outs o == some (G.andBase + G.nAnd + j)
+    | none => true)
+
 structure Derived where
   geo : Geo
   rows : List (List Nat × List Nat)
@@ -125,7 +143,8 @@ def derive (t : CircuitType) (inSplit outSplit : List Nat) : Except String Deriv
   else if !(splitOk t.ins.size inSplit && splitOk t.outs.size outSplit) then .error "derive: a split out of order"
   else
     let G := geo t inSplit outSplit
-    .ok ⟨G, (List.range (G.const + 1)).map (G.rowAt t)⟩
+    if !geoOk t G then .error "derive: the port groups do not lay out"
+    else .ok ⟨G, (List.range (G.const + 1)).map (G.rowAt t)⟩
 
 /-! ## `flock-ir-unit/v2` -/
 
