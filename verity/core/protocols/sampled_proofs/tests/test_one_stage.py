@@ -279,7 +279,7 @@ def test_a_record_over_an_explicit_partition_object():
     whose program must still be the verifier's."""
     prog = P.population_program(PAIR, 6)
     q = P.template_instance_query(PAIR.id)
-    old = {"program": P.program_sha512(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
+    old = {"program": P.program_digest(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
     rec = R.record(prog, q, LAW, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
@@ -463,13 +463,13 @@ def _template_program(name: str):
 
 def _one_stage(program, q) -> dict:
     obj = P.partition(program, q)
-    return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_sha512(program),
+    return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_digest(program),
             "population": P.units(program, q), "ranges": P.ranges(program, q)}
 
 
 def _core(program, q) -> dict:
     obj, part = PO.build(program, q), PO.evaluate(program, q)
-    return {"object": codec.canonical_json(obj), "digest": PO.digest(obj), "program": PO.program_sha512(program),
+    return {"object": codec.canonical_json(obj), "digest": PO.digest(obj), "program": codec.program_digest(program),
             "population": part.population, "ranges": [(t, lo, n) for _k, t, lo, n in part.ranges]}
 
 
@@ -479,7 +479,7 @@ def test_the_partition_is_cores_on_the_pinned_q_word_vector():
     q = QWORD["object"]["query"]
     obj = P.partition(prog, q)
     assert codec.canonical_json(obj) == codec.canonical_json(QWORD["object"]) == codec.canonical_json(PO.build(prog, q))
-    assert P.program_sha512(prog) == QWORD["program_sha512"] == PO.program_sha512(prog)
+    assert P.program_digest(prog) == QWORD["program_digest"] == codec.program_digest(prog)
     assert P.digest(obj) == QWORD["object_digest"] == PO.digest(PO.build(prog, q))
     with pytest.raises(P.QueryRefused):
         P.units(prog, q)
@@ -546,7 +546,7 @@ def test_a_pre_canonical_object_keeps_its_digest():
     """A record made before the canonical envelope names `{program, query}` (benchmarks' `--legacy-partition`); its digest is
     the envelope's rule over that object, as the roots registered with it bind."""
     prog = P.population_program(PAIR, 6)
-    old = {"program": P.program_sha512(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
+    old = {"program": P.program_digest(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 

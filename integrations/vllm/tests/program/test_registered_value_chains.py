@@ -169,7 +169,7 @@ def test_the_constant_twins_keep_their_digests():
         "LayerNormAten_v1": bind(LN.LayerNormAten, N=8, EPS=1e-5),
     }
     assert {k: program_digest(encode_program(Program(v)))[:16] for k, v in got.items()} == {
-        "Attention_v2": "60e807334440913c", "Attention_v4": "24c1db008a6c9530", "AttentionSoftcap_v1": "7b4c0527ff71ccf5",
-        "AttentionSoftcap_v2": "73566dca0e3f4f58", "Bf16DivScalar_v1": "7d862b3a4e7a6bc5", "Bf16MulScalar_v1": "69e49293ae28239f",
-        "AddScalarF32_v1": "8e231a99070d49e4", "AddScalarBf16_v1": "a00d19a8d03b6837",
-        "RMSNormRef_v1": "43fba1ae9045cff2", "LayerNormRef_v1": "636d5a7416b8bb62", "LayerNormAten_v1": "88dff3fe4246dfa1"}
+        "Attention_v2": "62fa3bb28d03e5d8", "Attention_v4": "95413195ae00c692", "AttentionSoftcap_v1": "eb63193194c87cf0",
+        "AttentionSoftcap_v2": "3e69667726a0a607", "Bf16DivScalar_v1": "25bace9a57773ab6", "Bf16MulScalar_v1": "efe2e181523aafd8",
+        "AddScalarF32_v1": "5d68003bd74e3840", "AddScalarBf16_v1": "22017d4f8b23c248",
+        "RMSNormRef_v1": "c1f320c64fef5c6b", "LayerNormRef_v1": "7f97dc6cdf51458d", "LayerNormAten_v1": "93931c7a49661fb0"}

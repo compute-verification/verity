@@ -34,7 +34,7 @@ B0_DIGEST = "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d"
 B0_DIGEST_V1 = "2d483c89d14d215f49305ab3db7b1dd6370bdecc4449f56ca36bd8c6ac4aae30"
 #: the same program after the re-baseline re-key: only the k16 step's id moved (AmpereBF16TcDot16_v1 -> core's _v2), so the descriptor is
 #: B0_DIGEST_V1's with that id substituted, byte for byte
-B0_DIGEST_TC_V2 = "e7be3165a1d377261e99734be5749ea6d5aacd772942eb100c7ec048e058c100"
+B0_DIGEST_TC_V2 = "9f74dc8e427111532cda0e1311eca470575ebfc18d544354d0a0d97e25667ec870d0eca262689eb4ec7f5fdbc3f8066b5425fe1da377c46a8809312f44e87865"
 
 NAN_WORDS = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FBFFFFF,
              0xFFA00000, 0x7F808000, 0x7FC07FFF, 0x7FC08000]

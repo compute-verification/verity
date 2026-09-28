@@ -48,8 +48,8 @@ def check_vectors(a, out, bad):
     got = lean(a, out / "pv.desc")
     if not got["ok"]:
         return bad.append(("vectors", got["error"]))
-    if got["program_sha512"] != v["program_sha512"] or got["population"] != v["population"]:
-        bad.append(("vectors", "program_sha512 or population"))
+    if got["program_sha512"] != v["program_digest"] or got["population"] != v["population"]:
+        bad.append(("vectors", "program_digest or population"))
     det = {c["call"]: c for c in got["detail"]}
     for c in v["calls"]:
         g = det.get(c["call"], {})
@@ -236,7 +236,7 @@ def check_vector_cuts(a, v, out, bad):
         prog = codec.decode_program(json.loads(_text(text)), reg)
         for (X, W), version in ((xw, ver) for ver in (1, 2) for xw in CUT_LIMITS):
             q = po.query(X, W, version)
-            obj = {"format": po.FORMAT, "program": po.program_sha512(prog), "query": q}
+            obj = {"format": po.FORMAT, "program": codec.program_digest(prog), "query": q}
             want = po.verify(obj, prog)
             got = lean(a, out / f"{name}.desc", str(X), str(W), "--cuts", *(["--query-version", "2"] if version == 2 else []))
             checked += 1
@@ -260,7 +260,7 @@ def check_vector_cuts(a, v, out, bad):
 
 def check_program(a, path, out, bad):
     from verity.ml.circuits import partition_object as po
-    from verity.ml.circuits.codec import _spec_id, decode_program
+    from verity.ml.circuits.codec import _spec_id, decode_program, program_digest
     from verity.ml.circuits.cut import CallGraph
     from verity.ml.circuits.defs import REGISTRY
     raw = gzip.open(path).read() if str(path).endswith(".gz") else Path(path).read_bytes()
@@ -270,8 +270,8 @@ def check_program(a, path, out, bad):
         return bad.append(("program", str(path), got["error"]))
     P = decode_program(json.loads(raw), REGISTRY)
     part = po.evaluate(P, po.query(16, 32))
-    if got["program_sha512"] != po.program_sha512(json.loads(raw)) or got["population"] != part.population:
-        bad.append(("program", str(path), "program_sha512 or population"))
+    if got["program_sha512"] != program_digest(json.loads(raw)) or got["population"] != part.population:
+        bad.append(("program", str(path), "program_digest or population"))
     want_calls = [[k, _spec_id(c.fn), c.units] for k, c in part.calls]
     if got["calls"] != want_calls:
         bad.append(("program", str(path), "calls"))

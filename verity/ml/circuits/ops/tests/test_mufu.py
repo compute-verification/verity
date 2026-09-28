@@ -25,29 +25,29 @@ from verity.ml.circuits.ops import mufu as M
 from verity_sp1.proofs import reduce_mufu as R
 
 PINNED = {  # id: (definition digest, one-call program digest, outputs fingerprint)
-    "DivFullRcp_v1": ("3b96ef979e97f6ae5d5757069f8fa574fb5aa62c6a2c88ab99ff07da4dbdb170",
-                      "cbbddebe9ffb811b3f75c643e2ed1aa47e480b725585ab6500600052050b9875",
+    "DivFullRcp_v1": ("8a8820d688d6c921025399b6c3aaa7cc86ee9be02c5df23061c24afbc689b2ec795f73da842826c1923d2dc4b38d4dfd6642fe2c2a3ebefa3bb347fa2b855dac",
+                      "df119b4e5672d5ba34d42341d985fc19c044fc142d28f40ff135e675a94c6f3db0ec2fe8bd8124b40922358e573004e74bf4e10eff87337692d2f1b780f3f864",
                       "9204f41f6990ee4cb3d8830bbee15a2c89dbec96c344fcce25f733cf9aab4e2a"),
-    "DivFullScaleA_v1": ("305108267bace43e67d7cf6f66762d841ca4b285e0e4cd005ade80c7f08cd389",
-                         "e9011a0e9ea857e0107b846cd3e49c4826ae3b01afcdcfc88dbc5411f8f3d67f",
+    "DivFullScaleA_v1": ("e1f74245807daa7c2cf2971e0374ee81d06aa478f33cc0c4eef624448ecaee0d53c4adc1f0e1dd10ce9495d141ba01b80f8a4f7a1820adb52ae0886d5b89d1c9",
+                         "516841fb4303306c6e59a28b4f5635e23bb194595985492d0b1108caef0e9321a9de6fdefba9e64d11f64c4dfa66e9f717d947ba73e3857b27da2e36130af43f",
                          "0d4a18ec9a743eece75f31ceac06da273f9f5e0eb3af8c0e2386e37a7c444649"),
-    "Fa2InvSum_v1": ("9bd65175eefd4da57e12704238f7d2fdf6168cbe112c4de45808aaeda1b28a2b",
-                     "9a73a24e0ab894f718b076be71534d319a6850f37f038d2ffde4f2b593518fca",
+    "Fa2InvSum_v1": ("8492eb683d244d906f70cb11eb015da799b2db093be0e810a5ce045846f793dc1440af283609209a5cd6581bc675dfe7f78984efb2978d47d11cac3491a05008",
+                     "9d27b9b4415c7f6cb4370aab862d0591c30e837a5ec4ba9069c8765c6decb6e69cdd909dcb4ec563bafc255c6efb971d8dd8eb2fbc3bbdc9cbf189459b162d8d",
                      "7594edc01d89c0d325ae0e4731b97082c19b1112b20b35967feaad481bc0f2ea"),
-    "MufuEx2Ftz_v1": ("bfd71d72d99d6f6e07832227f6f2598746c8a1199e36405f84572abdf44172d1",
-                      "cd51675e86870a40512d73170595862b2f213ad325ce220ba991e08381444dcd",
+    "MufuEx2Ftz_v1": ("5ea21fc594f9428f47516441228855fa6e80f95d479b88e61c8c7d400438d524c5257e7ea7c1db427e59c0c0fde3ea11ad078f9aec8e4f7f54086ec427f4f9ac",
+                      "44695eb4be8e6b828eb8ac5e248393bb64692ef7b4525eb2e57a01da7139a8dfff079669eb1e5d2979ba30fb01f4e516fe05c74c367161a3026df001ccd95b3c",
                       "59ad46a236c432fd763eb0320096b60c52687950a6af27337c02063c8dc23f88"),
-    "MufuRcpFtz_v1": ("9abb264e2aba44bd54cdea24f9de150de1c4c829f137a494c8a375ff2ce734d0",
-                      "5078f4f68a88bf4373a9f28087d83f75a1c66abf2f4340e6e1e56e7c2e661e55",
+    "MufuRcpFtz_v1": ("1fcac46a7b6b82aea06524707371658f8c6372fa810c9f2140b3221c50aea93e71c329e1790adeadceff2abea0a582d9b3260c4eda0c35a13668cca711578fb2",
+                      "271bdb3de3af806339656cd4af1a6d8df0e01935473b8e4f3d80d708443cef22e03a0435612b782d32d3e638457dbd85ab6c42b1edae28c034d3c40a0d066e35",
                       "717ad7815295ed009d1cb6ec296ef5320ed4999c5b040bba37deaf5bbc41e52e"),
-    "MufuSqrtFtz_v1": ("b5d461a3f22a16a7763b857c9a35da1b28e5d8f4e1e69feffbd29b97f45d7080",
-                       "ccf4ee11ebbad50bde7663e268e40b69a1cca966329552e9f2500bc88677ca4e",
+    "MufuSqrtFtz_v1": ("b209c0da558f7bf996179b518bc2ea02a5980def393a19ca76d3b8c5b966da51bf2b9cf61492009cfac11edb9fc0e4f443975181931c94e50c6e5d4f4c967f83",
+                       "e5513b59bbfd2c05f164bdd5911e9c96eff8342703c4cc35b99ca201c826825a80478f0eb38e755983bacac2a5915125d2d27488ec3c8398e12c23a42d3c5279",
                        "b8351402782d183785b8cc3e1222a9901e55bd355600114cd3e0e0d7ecca6df2"),
-    "MufuTanh_v1": ("035f917671f67bfaf821cb44a94b89bb1a62aa357c8291fa5f7dc827f60379e7",
-                    "72bee5acd2684cf2ec1cff48e01e7e3fd7fe014442e93527bffddb1bf0ce7f87",
+    "MufuTanh_v1": ("5a5f80812fb5924444aeada23b0e8964a352848cc26e32813532422c2eb4392aec212f612877ebabf0f146a9c4153af73e4f05c42afbd3be02940700dd0549a3",
+                    "c860784cfc0fdc969e65e10275f5f25d33b55307370a7ba00475352c0def0e60386c4a4262f6e4db4bab109e4551592708d7844dd2420128fa792f1d3d0f1cbd",
                     "ad38928341bc38849f8a7f223f27c1589823f9fab8a31ac06244280eb248287b"),
-    "RsqrtApprox_v1": ("446141811fd3d0a35036ef13f616bdb5df8b5f5442948c81767023edd3dbc8b7",
-                       "41d612f5078898a4f75858ef90429d407b012768f7907097dfc5c07f720baf55",
+    "RsqrtApprox_v1": ("90008efd80c64dd52b67c19d59bc8dcd185e2fe709d7ab5a04a96710d917f2abcd0b0bc829f4d069b82fefcf244ca816ef381addc92773c2ce243b29bd28759f",
+                       "94f2c5d28e59fcdd63aa55b2e9a0b7e58fa9c4e03eff1d55e32bba46d98a83e0586ab6e6c4c16831f3c18d95fc27ea408cd2a8e9d08498b14e84fd3bcc9b6858",
                        "68f760b8f0b114f1a456b2e102a4f2de2272e3f13fe473ce351357da987710ac"),
 }
 
@@ -140,7 +140,7 @@ def test_tanh_reproduces_the_manifest_hardware_sample() -> None:
 
 
 def test_a_tanh_table_that_is_not_the_pinned_one_does_not_load(monkeypatch) -> None:
-    monkeypatch.setattr(M, "MUFU_TANH_TABLE_MANIFEST_SHA256", "0" * 64)
+    monkeypatch.setattr(M, "MUFU_TANH_TABLE_MANIFEST_SHA512", "0" * 128)
     M.mufu_tanh_shards.cache_clear()
     with pytest.raises(M.MufuTanhUnmeasured, match="pinned"):
         M.MufuTanh.evaluate(0x3F000000)

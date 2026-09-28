@@ -2,7 +2,7 @@
 
     to_json(query)   -> {"op": ..., ...}        one object per constructor; paths / selectors as their canonical strings
     from_json(doc)   -> Query                   inverse
-    query_id(query)  -> sha256 hex of canonical_json(to_json(query)); program-independent identity of the query text
+    query_id(query)  -> sha512 hex of canonical_json(to_json(query)); program-independent identity of the query text
 
 Schema name for the wrapping artifact (owned by `query_artifact.py`): `verity-ir/query/v1`.  The query document carries
 no purpose (`kind` / `w_max`) -- that is the use configuration, not the query.
@@ -118,10 +118,10 @@ def _decode(doc: dict) -> Query:
 
 
 def query_id(q) -> str:
-    """sha256 of the canonical JSON of the AST: independent of the Program, stable across spellings that parse to the
+    """SHA-512 of the canonical JSON of the AST: independent of the Program, stable across spellings that parse to the
     same AST (paths and selectors are re-rendered canonically).  Accepts a Query, an encoded document, or an object with
     `to_json()`; a document is hashed as given (callers who want normalisation pass `from_json(doc)`)."""
-    return hashlib.sha256(canonical_json(to_json(q))).hexdigest()
+    return hashlib.sha512(canonical_json(to_json(q))).hexdigest()
 
 
 def query_document(q: Query) -> dict:

@@ -369,9 +369,9 @@ def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_p
 # -- digest stability: the v0 encoding of programs whose reference construction did not change ----------------------
 
 V0_DIGESTS = {  # recorded with the codec at vllm-poc e47be70
-    "running-example": "ce880dad211f11d5ed2f37d921168d622d1d4190e3204243ec8c96e36e1c755a",
-    "running-example-Id16": "aaef9ec70fc17a5227b64647bee6da5e5a8da41ba2c110567504d87172e5900b",
-    "Gemm{K=32,N=4}": "082b51d00404e4fc3807a6b7940f636f45787f2ac8f2361c140e54843350bf55",  # the re-key (AmpereBF16TcDot16_v2); 708fd264 = docs/data/frontend acceptance
+    "running-example": "d4ab767ce4d2a53369a712b45ab1d534d338a559067eb7f2e737c8b11126ced6877d3402dd2c45c44f511d353d27169440152bcb85d5079c73e76626eb5b5d8d",
+    "running-example-Id16": "7ab1b121aefdc5b77e44ea6eefaa06c71192b316e4cacd7bbe3cbe67ef604a25b0aead3ac174b6adf90e118877a06ae6d4674619b0ef0cac05fbded0045ce7ec",
+    "Gemm{K=32,N=4}": "73b31a201e80a139da6a2c8ff9fdf8de66e1d4c79a5994be754574d3677d40c1d0838cb571b6bd43e8448e1c5b4bc8bb4cd259e5e1a3e7fcb9c3921645f2cc11",  # the re-key (AmpereBF16TcDot16_v2); 708fd264 = docs/data/frontend acceptance
 }
 # Programs with broadcasts or KV caches (B0/B1 `Serve`, `AttentionHead`) moved: descriptor-codec.md records old -> new.
 

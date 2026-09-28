@@ -1,10 +1,10 @@
 """The MoE / FP8 registry split (`integrations/vllm/tools/migrate/split_moe_fp8.py`) keeps every Definition and every circuit-check
 target as it was.
 
-`fixtures/moe_fp8_split.json` was written by ``python tests/test_moe_fp8_split.py --write`` on the tree before the split and is never
-rewritten after it.  It holds
+`fixtures/moe_fp8_split.json` was written by ``python tests/test_moe_fp8_split.py --write`` on the tree before the split; only the
+SHA-512 re-baseline of the circuit identities has rewritten it since.  It holds
 
-* ``digests``: descriptor id -> SHA-256 of the canonical descriptor entry (`verity.ml.circuits.codec.definition_entry`, callees by id) of every
+* ``digests``: descriptor id -> SHA-512 of the canonical descriptor entry (`verity.ml.circuits.codec.definition_entry`, callees by id) of every
   Definition defined in, or named by, one of the family's registry modules (`FAMILY`) that circuit-check's catalog reaches, and of
   every other binding of those Definitions that a tracked pin, fixture, record or capture map names (``extra``);
 * ``tasks``: circuit-check's task list restricted to the family (kind, target id with its statics, and the pins of that id).
@@ -51,7 +51,7 @@ def _owned(fn) -> bool:
 
 def _digest(fn) -> str:
     from verity.ml.circuits.codec import canonical_json, definition_entry
-    return hashlib.sha256(canonical_json(definition_entry(fn))).hexdigest()
+    return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
 
 
 @lru_cache(maxsize=1)

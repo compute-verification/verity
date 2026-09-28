@@ -35,7 +35,7 @@ from verity.ml.circuits.ops.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN,
 from verity.ml.circuits.ops.fp32 import f32_decode as _decode, f32_round as _round_f32
 # Re-exported: the MUFU primitives and their tables are core's.
 from verity.ml.circuits.ops.mufu import (MUFU_TANH_RULES, MUFU_TANH_SHARD_FORMAT, MUFU_TANH_TABLE_DIR, MUFU_TANH_TABLE_FORMAT,
-                            MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA256, DivFullRcp, DivFullScaleA, Fa2InvSum,
+                            MUFU_TANH_TABLE_MANIFEST, MUFU_TANH_TABLE_MANIFEST_SHA512, DivFullRcp, DivFullScaleA, Fa2InvSum,
                             MufuEx2Ftz, MufuRcpFtz, MufuSqrtFtz, MufuTanh, MufuTanhUnmeasured, RsqrtApprox, mufu_tanh_coverage,
                             mufu_tanh_table_manifest)
 from verity.ml.circuits.ops.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)

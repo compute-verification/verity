@@ -168,7 +168,7 @@ def test_the_query_of_record_commits_every_call_boundary_and_names_the_partition
     corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
     sha = "ab" * 64
-    man = request_manifest(P, corr, res, request_id="r0", program_sha512=sha).manifest
+    man = request_manifest(P, corr, res, request_id="r0", program_digest=sha).manifest
     rows = {(x["family"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"]}
     assert rows == MODULE_BODY_ROWS | {("call_boundaries", "model/mul", "out", (0, 4))}
     assert man["complete"] and man["unmodelled"] == {}

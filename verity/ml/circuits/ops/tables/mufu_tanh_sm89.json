@@ -2179,7 +2179,7 @@
   "block_words": 4194304,
   "preset": 6,
   "bytes": 449932,
-  "sha256_file": "5e261b88720e17cf8d868f2f9612bf6663600c40b7bc97e706d34855831ff247",
+  "sha512_file": "1728051caf9710b3f0bebb18e72e07150dd68155af18e314d9b94d79a0ed681b6b08b25679699b720731f925b3b33eadbd3b2c5a83993a39f4b73d7750c799a7",
   "file": "mufu_tanh_sm89.xzblocks",
   "sha256_words_le_u32": "139fa3f9787e3e158044a909cb7645b2e5feeaae76407078c5c5f8421ddd4392",
   "odd_symmetry": {

@@ -261,7 +261,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     write the window's files into ``out_dir``.  It reads the committed values and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
-    served = {CS.program_sha512(dirs[str(r)]) for r in programs}
+    served = {CS.program_digest(dirs[str(r)]) for r in programs}
     if len(served) != 1:
         raise NotImplementedError(f"serving rows register one served Program; this run has {len(served)}")
     pf = json.loads(Path(partition_file).read_text())
