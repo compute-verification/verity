@@ -37,12 +37,12 @@ EVALUATORS = {
     # `Gemm_v2{K,N,DOT}` -- the SAME VU as Gemm_v1 (one token row: x[K] @ W[N,K]^T -> [N], the instance row Q(P) selects; the registry's
     # GemmCoordinate is its interior), with the k16 accumulator step read from the DOT static of THIS row's spec: HopperBF16WgmmaDot16_v1
     # (wgmma m64nNk16: one group of 16 + acc, 26-bit adder, floor -133, the H100 measurement of record) -> derived_rows.dot_bf16_hopper;
-    # AmpereBF16TcDot16_v1 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`Declined`), never another adder.
+    # AmpereBF16TcDot16_v2 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`Declined`), never another adder.
     # The ascending-from-0 chain is the cuBLASLt-without-split-K GEMM of a VLLM_BATCH_INVARIANT=1 step on cc 9.0 (vLLM keeps cuBLASLt there,
     # split-K off by workspace config), pinned word for word on the H100 at every Qwen2.5-1.5B shape x M (0 / 27.2M words; derived_rows).
     "Gemm_v2": "verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}: ascending k16 chain of the DOT static's step from 0 -- "
                "HopperBF16WgmmaDot16_v1 = tc_dot16_hopper (16:26:-133, silicon_total.HOPPER_BF16_WGMMA_K16; cuBLASLt split-K off = the "
-               "batch-invariant Linear of record), AmpereBF16TcDot16_v1 = tc_dot16) + f2fp_bf16 (GemmCoordinate_v2); "
+               "batch-invariant Linear of record), AmpereBF16TcDot16_v2 = tc_dot16) + f2fp_bf16 (GemmCoordinate_v2); "
                "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     # [R17 dense, ruling R17-9] the NeoX rotation of one token row's q / k heads with ONE bf16 cos/sin cache row (a `weights` field slice
     # the Program's args name by position): b1.RoPE{NHEADS,D} = NHEADS x RoPEHead{D} = prims.RopeOut / RopeOutAdd per coordinate.
@@ -60,7 +60,7 @@ EVALUATORS = {
                     "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
     "Attention_v2": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v2{T,NH,KVH,D,BN,DOT,INV}: the DOT / INV statics resolved by name "
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.program.kernels.fa3_model.fa3_rows); "
-                    "AmpereBF16TcDot16_v1 + Fa2InvSum_v1 = FA2 under the lifted name); "
+                    "AmpereBF16TcDot16_v2 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # [revb M-0148 (5) / rev] the silicon envelope of the FA3 relation, stated with the evaluator
                     "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves, "
                     "hopper-profile.md s1b); rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
@@ -296,7 +296,7 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     if family in ("Attention_v2", "Attention_v4"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
-        dot_id, inv_id = "AmpereBF16TcDot16_v1", "Fa2InvSum_v1"
+        dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
     masked_from = int(statics["MASKED_FROM"]) if family == "Attention_v4" else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
