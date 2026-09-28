@@ -381,7 +381,8 @@ class D2Draft:
     credited at 7·32 + 3·16 = 272 units per element under H_32.  The noise codes (E1 per unit row, F1 per epoch weight row)
     come from `MaxRelativeCodes` over SHAKE256("verity/pouw/fp8-is/d2/E1", salt, index, root_A, weight, i) and
     ("…/F1", salt, weight, j), k bytes each.  The input domain keeps every transform inside E4M3's range: |A| <= a_max,
-    |B| <= b_max (64 and 32 by default: |U| <= 4·1.25·64 and |V| <= 8·1.25·32 stay below 448).
+    |B| <= b_max (64 and 32 by default: with this sampler's noise below a quarter of the row's binade, block 3's two noise
+    parts give |U| <= 4·1.5·64 = 384 and |V| <= 8·1.5·32 = 384, below 448; a new sampler re-derives the range).
     """
 
     name = "d2-draft"

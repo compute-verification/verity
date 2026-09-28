@@ -127,6 +127,7 @@ def test_d2_input_domain_and_trace_binding():
     assert s.encode(ctx, s.noise(ctx), [good_a], [bytes([0x61] * k)], tile) is None      # |B| > 32 would saturate
     assert s.encode(ctx, s.noise(ctx), [bytes([0x7F] * k)], [good_b], tile) is None      # NaN
     ops = s.encode(ctx, s.noise(ctx), [good_a], [good_b], tile)
+    assert all(c & 0x7F < 0x7E for c in ops.x[0] + ops.y[0])                             # no transform saturates at the cap
     checked = s.checked(ctx, ops)
     assert len(ops.trace_x[0]) == len(ops.trace_y[0]) == 7 * k * 4 + 3 * k
     forged = F.Checked(bytes([checked.trace[0] ^ 1]) + checked.trace[1:], checked.cells)
