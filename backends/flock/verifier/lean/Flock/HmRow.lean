@@ -101,6 +101,7 @@ exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let mut spans : Array (Nat × Nat) := #[]
   for r in c.ranges do
+    if r.slotLog < 7 || r.slotLog > c.kLog then throw "a range's slots are smaller than a word or larger than the block"
     let (span, align) := if r.packed then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
       else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)
     if r.packed && (r.kind == Kind.net c.hmNet || r.kind == Kind.net c.outNet || r.kind == Kind.mask) then

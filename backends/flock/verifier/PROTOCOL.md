@@ -1099,7 +1099,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   1536`, output `bc 1024`) are `CIRCUIT` sections. Per VU, port `p`'s compressions are numbered on from the previous
   ports', three per slot (slot `k / 3`, sub `k % 3`), `per_vu[sha512x3] = ⌈total / 3⌉`; `per_vu[hm96] = next_pow2(ports)`,
   slot `p` for port `p`. The `sha512x3` range is `packed` (aligned to one slot, spanning its count); every other range is
-  aligned to its power-of-two span.
+  aligned to its power-of-two span. Every range's slots are at least a word, as on the BLAKE3 path, and at most the block
+  (`7 ≤ slot_log ≤ k_log`): a slot below 64 bits makes the fold no `αA₀ᵀe + B₀ᵀe` of any matrices, and a packed range of
+  no slots would escape the block bound.
 - **Wires.** META `wires` begins with the row wires, which the verifier derives and compares: compression `k`'s `cv` from
   compression `k − 1`'s `out`, and hm96 slot `p`'s `cv` from the row's last compression. No other wire touches a row slot.
 - **Δ,** in this order: every slot's constant from the pin; per VU and port, the first compression's `cv` bits (the

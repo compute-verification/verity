@@ -353,6 +353,44 @@ def test_region_refuses_a_repeated_free_bit(tmp_path):
     assert p.stdout.split("\n")[:3] == [repeat, repeat, '"ok #[3, 9, 4]"'], p.stdout
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
+    """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
+    `αA₀ᵀe + B₀ᵀe`) or larger than the block (a packed range of no slots would escape the `k_log` bound), as the BLAKE3
+    path's layout check does (R9c's refinement). A composed RoPE circuit is accepted; either change to it is refused."""
+    pytest.importorskip("verity_numerical")
+    from verity_flock import circuit as FC
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
+    FC.stage(low, s, 0, 4, tmp_path / "st")
+    head, meta_line, rest = text.split("\n", 2)
+    meta = json.loads(meta_line[5:])
+
+    def statement(circuit):
+        f = tmp_path / "c.circuit"
+        f.write_text(circuit)
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+                               "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True, text=True)
+
+    p = statement(text)
+    assert p.returncode == 0, p.stderr
+    mask = next(r for r in meta["ranges"] if r["net"] == "mask")
+    packed = next(r for r in meta["ranges"] if r.get("packed"))
+    for r, change in [(mask, {"slot_log": 6}), (packed, {"count": 0, "slot_log": meta["k_log"] + 1})]:
+        saved = dict(r)
+        r.update(change)
+        p = statement(f"{head}\nMETA {json.dumps(meta)}\n{rest}")
+        r.clear()
+        r.update(saved)
+        assert p.returncode == 1 and "a range's slots are smaller than a word or larger than the block" in p.stdout, (change, p.stdout)
+
+
 TOY_EXTRACTOR = r"""import FlockProofs
 open Flock
 
