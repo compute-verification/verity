@@ -31,6 +31,9 @@ MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.j
 #: correspondence-B0-LP32-STEPS7-v0-v1.json` (descriptor-codec.md §2/§4). The L8 record keeps the digest it was written under.
 B0_DIGEST = "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d"
 B0_DIGEST_V1 = "2d483c89d14d215f49305ab3db7b1dd6370bdecc4449f56ca36bd8c6ac4aae30"
+#: the same program after the re-baseline re-key: only the k16 step's id moved (AmpereBF16TcDot16_v1 -> core's _v2), so the descriptor is
+#: B0_DIGEST_V1's with that id substituted, byte for byte
+B0_DIGEST_TC_V2 = "e7be3165a1d377261e99734be5749ea6d5aacd772942eb100c7ec048e058c100"
 
 NAN_WORDS = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FBFFFFF,
              0xFFA00000, 0x7F808000, 0x7FC07FFF, 0x7FC08000]
@@ -71,7 +74,7 @@ def test_production_binds_the_hardware_conversion_and_the_b0_digest_is_unchanged
     assert "F2fpBf16_v1" in ids
     assert "F32ToBf16Rn_v1" not in ids
     assert program.gates == 441_772_368
-    assert program_digest(desc) == B0_DIGEST_V1
+    assert program_digest(desc) == B0_DIGEST_TC_V2
     # the B1 program binds the same definitions (a one-position specialisation, built here for its definition set)
     small = Program(bind(b1.Serve, C=b1.B1_CONFIG, LP=2, STEPS=1))
     ids_b1 = set(encode_program(small)["definitions"])
