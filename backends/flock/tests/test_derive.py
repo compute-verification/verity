@@ -310,4 +310,6 @@ def test_vectors_are_current():
 
 
 if __name__ == "__main__" and "--write" in sys.argv:
-    VECTORS.write_text(json.dumps(vectors(), indent=1) + "\n")
+    v = vectors()
+    cases = ",\n ".join(json.dumps(c, separators=(",", ":")) for c in v["cases"])
+    VECTORS.write_text("{\"about\": " + json.dumps(v["about"]) + ",\n \"cases\": [\n " + cases + "\n]}\n")
