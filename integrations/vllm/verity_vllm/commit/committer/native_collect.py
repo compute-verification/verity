@@ -73,7 +73,9 @@ from verity_vllm.commit.committer.native_host import (
     _StepJob,
     memtrace,
 )
-from verity_vllm.engine import hooks
+from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLIT_KERNELS, TOPP_SPLIT_MODULE, _SplitKernelProxy,  # noqa: F401
+                                                      batch_top_p, install_split_kernel_proxies, split_count_of_launches, step_splits,
+                                                      uninstall_split_kernel_proxies)
 
 _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -564,82 +566,6 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
     return out
 
 
-#: [R16 stoch REQ-03] vLLM's split-row top-p pipeline (`vllm.v1.sample.ops.topk_topp_triton._apply_topp_split`): three Triton JITFunctions
-#: looked up from the module's globals at every launch, each taking the split count as the constexpr kwarg `S` over grid (batch_size * S,).
-TOPP_SPLIT_MODULE = "vllm.v1.sample.ops.topk_topp_triton"
-TOPP_SPLIT_KERNELS = ("_topp_sb_stats_kernel", "_topp_sb_step_kernel", "_topp_sb_mask_kernel")
-SPLITS_IDENTITY = "runner.sampler/splits"
-
-
-class _SplitKernelProxy:
-    """Launch proxy for one `_topp_sb_*_kernel` JITFunction: `proxy[grid](*args, **kw)` appends (kernel name, grid, kw['S']) to `sink`
-    and then performs the ORIGINAL launch unchanged.  The recorded S is the constexpr the kernel was compiled and ran with -- the value
-    of record for `runner.sampler/splits`; the collector never recomputes it from the batch (that would be `SplitsFor` observed post hoc,
-    not the kernel's own S).  Attribute access falls through to the wrapped JITFunction."""
-
-    def __init__(self, kernel: Any, name: str, sink: list) -> None:
-        self._kernel, self._name, self._sink = kernel, name, sink
-
-    def __getitem__(self, grid: Any):
-        launch = self._kernel[grid]
-        name, sink = self._name, self._sink
-
-        def run(*args: Any, **kw: Any):
-            try:                                              # vLLM launches on a literal tuple grid; a callable (meta) grid is left unread
-                g0 = None if callable(grid) else (int(grid[0]) if isinstance(grid, (tuple, list)) else int(grid))
-            except Exception:  # noqa: BLE001
-                g0 = None
-            s = kw.get("S")
-            sink.append((name, g0, int(s) if isinstance(s, int) else None))
-            return launch(*args, **kw)
-        return run
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self._kernel, item)
-
-
-def install_split_kernel_proxies(sink: list) -> dict[str, hooks.Patch]:
-    """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: patch} for uninstall (empty
-    when the module / kernels are absent -- an older vLLM without the split pipeline binds no splits, and the manifest's `sampler_splits`
-    rows then fail coverage closed, visibly)."""
-    try:
-        mod = sys.modules.get(TOPP_SPLIT_MODULE) or __import__(TOPP_SPLIT_MODULE, fromlist=["_"])
-    except Exception:  # noqa: BLE001
-        return {}
-    patches: dict[str, hooks.Patch] = {}
-    for nm in TOPP_SPLIT_KERNELS:
-        k = getattr(mod, nm, None)
-        if k is None or isinstance(k, _SplitKernelProxy):
-            continue
-        patches[nm] = hooks.patch(mod, nm, _SplitKernelProxy(k, nm, sink))
-    return patches
-
-
-def uninstall_split_kernel_proxies(patches: dict[str, hooks.Patch]) -> None:
-    for p in reversed(list(patches.values())):
-        p.uninstall()
-
-
-def split_count_of_launches(launches: list[tuple], n_rows: int) -> tuple[int | None, str | None]:
-    """The split count S ONE sampling step's split-kernel launches ran with, or (None, why).  Every launch of the step must carry the same
-    S and a grid of exactly n_rows * S (the sampled rows): a disagreement is a finding (bind nothing -> the `sampler_splits` rows fail
-    coverage closed), never averaged or taken from the last launch."""
-    if not launches:
-        return None, "no split-kernel launch this step"
-    Ss = {s for _n, _g, s in launches}
-    if len(Ss) != 1 or None in Ss:
-        return None, f"split kernels disagree on S within one step: {sorted(str(s) for s in Ss)}"
-    S = Ss.pop()
-    if S < 1 or S & (S - 1):
-        return None, f"kernel S={S} is not a power of two"
-    bad = [(n, g) for n, g, _s in launches if g != n_rows * S]
-    if bad:
-        return None, f"split-kernel grid != rows*S ({n_rows}*{S}): {bad[:3]}"
-    if not any(n == "_topp_sb_mask_kernel" for n, _g, _s in launches):
-        return None, "the mask kernel did not launch this step"
-    return S, None
-
-
 class NativeCollectCommitter(NativeHostCommitter):
     """Arm 3.  Inherits the whole R9 complete path; replaces the serving-thread acquisition (see module docstring).
 
@@ -656,6 +582,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.profile = bool(profile)
         self.gather = bool(gather)
         self.native_hooks = bool(native_hooks)
+        # SplitsFor_v1 when the required manifest names `sampler_splits` (a derived-S Program; set by `taps.attach`): see `topp_splits.step_splits`
+        self.prescribe_idle_splits = None
         if self.gather and not self.wrap:
             raise ValueError("gather mode needs wrap mode (flush points are module wrappers)")
         if self.native_hooks and (not self.wrap or self.profile):
@@ -857,16 +785,16 @@ class NativeCollectCommitter(NativeHostCommitter):
                         st = getattr(so, "sampled_token_ids", None)
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
-                            launches = list(me._split_launches)
-                            if launches:
-                                S, why = split_count_of_launches(launches, int(st.shape[0]))
-                                if S is None:
-                                    me.errors.append(f"sampler splits: {why}"[:200])
-                                else:                     # the launch's S, materialised once per sampled row in the step's row order
-                                    me._acquire(SPLITS_IDENTITY, torch.full((int(st.shape[0]),), S, dtype=torch.int32, device=st.device), job)
-                                    me.splits_bound_steps = getattr(me, "splits_bound_steps", 0) + 1
-                                    me.splits_seen = getattr(me, "splits_seen", {})
-                                    me.splits_seen[S] = me.splits_seen.get(S, 0) + 1
+                            # launched S, or (a derived-S Program's step on which vLLM skipped top-p) the prescribed S -- once per sampled row
+                            S, why, counter = step_splits(list(me._split_launches), int(st.shape[0]), me.prescribe_idle_splits, lambda: batch_top_p(runner, a, kw),
+                                                          lambda: torch.cuda.get_device_properties(st.device).multi_processor_count)
+                            if why:
+                                me.errors.append(f"sampler splits: {why}"[:200])
+                            elif S is not None:
+                                me._acquire(SPLITS_IDENTITY, torch.full((int(st.shape[0]),), S, dtype=torch.int32, device=st.device), job)
+                                setattr(me, counter, getattr(me, counter, 0) + 1)
+                                me.splits_seen = getattr(me, "splits_seen", {})
+                                me.splits_seen[S] = me.splits_seen.get(S, 0) + 1
                         # [R15 stoch] the per-sequence SEED the sampler consumed this step (manifest family `sampler_seed`, identity
                         # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
                         # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
