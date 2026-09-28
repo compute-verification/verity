@@ -521,6 +521,67 @@ def test_a_late_tick_fails_closed_and_does_not_slip():
     assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
 
 
+def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
+    """The ingress ticker wakes 0.3τ before bucket 2's boundary and releases a's request, read in bucket 1 and so
+    anchored at 2; the server answers at once, so its event is ready at bucket 2, no later than its anchor. The online
+    prover refuses window 1's declaration, whose snapshot at bucket T − lag reads that frame (the proxy used to raise
+    its `ValueError` and stop): egress window 1 is monitor-unavailable, padding with its T rows, its sync is the
+    choice made on what the snapshot read, and windows 0 and 2 and every ingress window are accepted."""
+    early = 2
+
+    async def run():
+        clock = VirtualClock(-TAU / 2)
+        server = Server()
+        srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+
+        async def sleep(delay: float) -> None:
+            ingress = asyncio.current_task().get_coro().__name__ == "_ingress"
+            await clock.sleep(delay - (0.3 * TAU if ingress and abs(clock() + delay - early * TAU) < 1e-9 else 0))
+
+        prover = online.Prover(SYNC_SET, EGRESS.buckets, online.rule("last"), ClockSync(1, 1), lag=1)
+        proxy = Proxy(srv.sockets[0].getsockname()[:2], EGRESS, INGRESS, SYNC_SET, [], origin=0.0, clock=clock,
+                      sleep=sleep, prover=prover, windows=WINDOWS, executor=active.InlineExecutor())
+        link, writer = LinkReader(), NullWriter()
+        running = asyncio.create_task(proxy.run(link, writer))
+
+        async def until(predicate) -> None:
+            waiting = asyncio.ensure_future(proxy.until(predicate))
+            await asyncio.wait([waiting, running], return_when=asyncio.FIRST_COMPLETED)
+            if not waiting.done():
+                waiting.cancel()
+                running.result()
+
+        for t in range(WINDOWS * EGRESS.buckets):
+            if t == early:
+                clock.advance(early * TAU - 0.3 * TAU)
+                await until(lambda p: p.requests_released == 1)
+                await server.until(1)
+                server.writers["a"].write(event("a", 0, 1, 0))
+                await until(lambda p: len(p.frames) == 1)
+            clock.advance(t * TAU)
+            await until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
+            if t == early - 1:
+                clock.advance(t * TAU + TAU / 2)
+                link.chunks.put_nowait(active.encode_frame(LAST, 1, request("a", 1), B))
+                await until(lambda p: p.link_frames_read == 1)
+        await running
+        server.writers["a"].close()
+        srv.close()
+        return proxy, writer
+
+    proxy, writer = asyncio.run(run())
+    assert proxy.frames == [(0, 1, 0, early, early)]
+    assert proxy.lateness["ingress"][early] < 0 and max(proxy.lateness["egress"]) == 0
+    assert [(r.link, r.window, r.status.reason) for r in proxy.records if r.status.reason is not None] == \
+        [("responses", 1, Reason.MONITOR_UNAVAILABLE)]
+    assert sorted((r.link, r.window) for r in proxy.records) == \
+        sorted((link, w) for link in ("responses", "requests") for w in range(WINDOWS))
+    assert all(len(r.grid) == EGRESS.buckets for r in proxy.records)
+    assert len(proxy.shaper.syncs) == WINDOWS and proxy.shaper.syncs == proxy.choices.prover.syncs
+    assert proxy.shaper.hands == [early + 1]
+    assert len(writer.data) == WINDOWS * EGRESS.buckets * EGRESS.allocation * B
+
+
 def test_an_overrun_link_fails_closed():
     """When the link still holds more than a bucket unwritten at a tick, the window's status is delivery-refused."""
 
@@ -691,6 +752,16 @@ class EmptyReader:
             return self.chunks.pop(0)
         await asyncio.Event().wait()
         return b""
+
+
+class LinkReader:
+    """A link whose peer sends what the test puts in `chunks`, one read each."""
+
+    def __init__(self) -> None:
+        self.chunks: asyncio.Queue[bytes] = asyncio.Queue()
+
+    async def read(self, n: int) -> bytes:
+        return await self.chunks.get()
 
 
 class NullWriter:

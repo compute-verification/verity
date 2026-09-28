@@ -38,6 +38,9 @@ names the first reason (W6). Since the Program's grid carries a queue into the n
 closes faulted while its queue would still hold frames faults the next one too, with the same reason. They are:
 - a late tick (`monitor-unavailable`): the ticker woke more than `slack` after its boundary. A bucket it missed is
   still emitted, as padding, so every window keeps its T rows and no bucket slips into the next;
+- a declaration the online prover refuses (`monitor-unavailable`, `online.Refused`): a frame read for the window's
+  choice, at tick w·T − lag, is ready no later than its anchor's bucket, which an ingress tick read before its boundary
+  makes. The egress window that declares is faulted, and its sync is the choice made once those frames are read;
 - an overrun: the link still holds a whole bucket unwritten at a tick (`delivery-refused`), or the queue or the
   shaper's buffer passes Q (`overflow`); a server that refuses a stream's connection is `delivery-refused` on ingress;
 - a late forward (`delivery-refused`): a released request not written to its server connection by `slack` after its
@@ -75,7 +78,7 @@ from verity.experimental.protocols.certifier.grid import (
     Certifier,
     row_count,
 )
-from verity.experimental.protocols.certifier.online import Prover
+from verity.experimental.protocols.certifier.online import Prover, Refused
 from verity.experimental.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 
 HEADER = struct.Struct(">BII")
@@ -132,7 +135,9 @@ class Shaper:
 
     With a `prover`, the syncs after the given ones are its: it sees every frame the shaper takes, and declares each of
     the first `windows` windows' syncs at the window's first tick, before anything is handed. The proxy's is
-    `LaggedChoices`, whose `declare` only takes a choice already made; an `online.Prover` chooses at the tick."""
+    `LaggedChoices`, whose `declare` only takes a choice already made; an `online.Prover` chooses at the tick. A
+    declaration it refuses (`online.Refused`) faults the window `monitor-unavailable`, and the next one, on the frames
+    it has read, is the window's."""
 
     def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet,
                  prover: Prover | LaggedChoices | None = None, windows: int | None = None) -> None:
@@ -162,7 +167,12 @@ class Shaper:
     def tick(self) -> tuple[Row, Record | None]:
         T = self.certifier.params.buckets
         if self.prover is not None and self.t % T == 0 and self.t // T == len(self.syncs) < self.windows:
-            self.syncs.append(self.prover.declare())
+            try:
+                sync = self.prover.declare()
+            except Refused:
+                self.certifier.fault(Reason.MONITOR_UNAVAILABLE)
+                sync = self.prover.declare()
+            self.syncs.append(sync)
             self._check_advice()
         while self.next in self.pending:
             frame, ready = self.pending[self.next]
@@ -263,16 +273,27 @@ class LaggedChoices:
             raise ValueError("the proxy's online prover chooses off its tick: a lag of 1 … T − 1 buckets")
         self.prover, self.executor = prover, executor
         self._next: tuple[int, Future] | None = None
+        self._refused: int | None = None
         self.log: dict = {"lag": prover.lag, "unready": [], "choose_ms": []}
 
     def arrive(self, link: int, position: int, frame: LogicalFrame, ready: int) -> None:
         self.prover.arrive(link, position, frame, ready)
 
     def start(self) -> None:
-        self._next = (len(self.prover.syncs), self.executor.submit(_choose, self.prover.snapshot()))
+        w = len(self.prover.syncs)
+        try:
+            snapshot = self.prover.snapshot()
+        except Refused:
+            self._refused = w
+            snapshot = self.prover.snapshot()
+        self._next = (w, self.executor.submit(_choose, snapshot))
 
     def declare(self) -> ClockSync:
+        """Window w's declaration; `Refused` once if its snapshot was, and then the choice made on what it read."""
         w, sync = len(self.prover.syncs), None
+        if self._refused == w:
+            self._refused = None
+            raise Refused("a frame is ready only after its anchor's bucket")
         if self._next is not None and self._next[0] == w and self._next[1].done():
             sync, ms = self._next[1].result()
             self.log["choose_ms"].append(ms)
