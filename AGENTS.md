@@ -63,8 +63,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
- C-Flock's circuit prover (M0, `verity_flock.circuit`, which lands on `main` with
- PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
+ C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
+ that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,

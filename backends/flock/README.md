@@ -17,21 +17,26 @@ and what the merge gate runs per family: `../README.md`.
     reference evaluator; `boolean_export.py`: a served row's leaf templates as Boolean circuits (a derived format, not a
     statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
+  - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
+    the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`); `tables.py`
+    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
+    any partition as an M0 statement, and `class_sweep.py`, the backend sweep's work lists; `circuit_bench.py`,
+    `flock-circuit`'s sweep.
   - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
     registration.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
-  `crates/flock-live`: the prover and verifier binaries (`flock-pure`, `flock-ir-frame`, `flock-ir-sampling`,
-  `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session.
+  `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
+  `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
 - `verifier/`: the verifier of record: the specification `PROTOCOL.md`, the executable Lean verifier (`verifier/lean/`,
   `flock-verify`), its Lean proofs (`lean/level3/`, `lean/soundness/`) and the agreement scripts. See its README.
 
-C-Flock's circuit prover (M0: the module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit`)
-comes with PR #192, and its multi-table statement (`verity/flock-tables`) with PR #193. Its consumers are on `main`: the
-Lean verifier reads its format, serving writes rows in it (`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage`
-runs it (from a checkout of #192's branch until #192 merges). C-Flock ZK (M1/M2) is on draft PRs #123 and #138, stacked
-on #192.
+C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
+`verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
+(`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
+(`--m0-pythonpath`), not from the checkout. C-Flock ZK (M1/M2) is on draft PRs #123 and #138: #123 targets M0's branch
+(`cursor/flock-m0-prover-4d6a`), which `main` has merged, and #138 is stacked on #123.
 
 ## Tests
 
