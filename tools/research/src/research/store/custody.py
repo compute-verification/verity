@@ -14,8 +14,9 @@ published on the machine that ran it with a minted key, so custody no longer dep
     research data custody --triage [--runs-dir D] [--verify] [--json]    every run under the runs root by custody state (F2)
 
 The record uploads the run's own files, the files matching its `--declared-output` globs, and undeclared files up to
-UNDECLARED_CAP_BYTES; every other file is listed in the record's `meta.trimmed` (path, bytes, sha256) without bytes (`select`;
-how jobs declare outputs: .agents/skills/writing-runs/SKILL.md).
+UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
+.agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
+file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).
 
 `.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
 file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before
@@ -48,7 +49,9 @@ from .evict import EVICTED_FILE
 MARKER = ".custody"
 SCHEMA = "research/run-custody/v0.1"
 KIND = "run-record/v1"
-EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json", EVICTED_FILE})   # markers about the dir, not of it
+TRIMMED_LISTING = ".custody-trimmed.json"
+EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json", EVICTED_FILE,   # markers about the dir, not of it
+                      TRIMMED_LISTING})
 DIR_NAME = "custody"                          # <root>/requests/<run-id>/custody/ on the machine
 CRED_FILE = "cred.json"
 STORE_TOML = "store.toml"
@@ -95,6 +98,9 @@ RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log"
                        "result.json", "launch.json", "remote.json", "refused.json"})
 #: Undeclared files are uploaded (in path order) while their total stays within this; the rest are trimmed.  0 = never upload undeclared.
 UNDECLARED_CAP_BYTES = 256 << 20
+#: A trimmed listing bigger than this goes in the record's tree: a manifest's meta is capped at 256 KiB (model.META_MAX_BYTES), and a
+#: `check` run lists thousands of files (r20261001-091202-7aa6: 3719 files, a 561 KB meta, so its passing attempt never published).
+TRIMMED_INLINE_BYTES = 64 << 10
 SKILL = ".agents/skills/writing-runs/SKILL.md"
 
 
@@ -144,8 +150,8 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
 
 
 def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
-    """The `run-record/v1` artifact of the run dir (None when it holds no file): the files `select` keeps, and the trimmed ones in
-    `meta.trimmed`."""
+    """The `run-record/v1` artifact of the run dir (None when it holds no file): the files `select` keeps, and the listing of the trimmed
+    ones (module docstring)."""
     root = Path(getattr(st, "root", None) or Path(run_dir).parent) / "scratch"
     tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
     tmp.mkdir(parents=True)
@@ -157,11 +163,26 @@ def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
         size = sum((Path(run_dir) / r).stat().st_size for r in rels)
         meta: dict[str, Any] = {"run_id": run_id, "files": len(rels), "bytes": size}
         if trimmed:
-            meta["trimmed"] = trimmed
+            listing = json.dumps(trimmed, separators=(",", ":"))
+            if len(listing) <= TRIMMED_INLINE_BYTES:
+                meta["trimmed"] = trimmed
+            else:
+                (tmp / TRIMMED_LISTING).write_text(listing)
+                meta.update(trimmed_listing=TRIMMED_LISTING, trimmed_files=len(trimmed), trimmed_bytes=sum(t["bytes"] for t in trimmed))
             print(f"research: {trim_warning(trimmed)}", file=sys.stderr)
         return st.put_artifact(KIND, meta, tree=tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def trimmed_of(st: Any, record: str, man: Any = None) -> list[dict[str, Any]]:
+    """The run record's listing of the files it holds no bytes of: `meta.trimmed`, or its TRIMMED_LISTING file (fetched when not local)."""
+    man = man or st.get_manifest(record)
+    meta = man.meta or {}
+    if not meta.get("trimmed_listing"):
+        return list(meta.get("trimmed") or [])
+    tree = st.fetch(record, paths=[meta["trimmed_listing"]])
+    return json.loads((Path(tree) / meta["trimmed_listing"]).read_text())
 
 
 def marker_problem(run_dir: Path) -> str | None:
@@ -249,8 +270,8 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
         rep["error"] = f"not preserved on the remote: {why[0]}"
         return rep
     man = st.get_manifest(rr)
-    want = {f.path: (f.bytes, f.sha256) for f in (man.payload.files or [])}
-    want.update({t["path"]: (t["bytes"], t["sha256"]) for t in (man.meta or {}).get("trimmed") or []})
+    want = {f.path: (f.bytes, f.sha256) for f in (man.payload.files or []) if f.path != TRIMMED_LISTING}
+    want.update({t["path"]: (t["bytes"], t["sha256"]) for t in trimmed_of(st, rr, man)})
     t0 = time.time()
     have: dict[str, list[Any]] = {}
     for rel in run_files(d):
@@ -484,4 +505,4 @@ def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False) -> list[dict
 
 
 __all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output", "has_custody", "marker_problem",
-           "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "triage", "triage_row", "verify"]
+           "mint_for_machine", "push_run", "put_run_record", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]
