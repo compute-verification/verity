@@ -124,5 +124,5 @@ def test_the_new_word_gates():
     assert TWGates.TopPNumkeep.evaluate(5, f(-2.0)) == 5 and TWGates.TopPNumkeep.evaluate(5, f(float("inf"))) == 5
     assert TWGates.I32ToF32.evaluate(7) == f(7.0) and TWGates.I32ToF32.evaluate(0xFFFFFFFF) == f(-1.0)
     assert TWGates.I32ToF32.evaluate(16777217) == f(16777216.0)      # ties to even
-    assert TWGates.NvLogf.evaluate(f(1.0)) == 0 and TWGates.NvLogf.evaluate(0xBF800000) == 0xFFC00000
+    assert TWGates.NvLogf.evaluate(f(1.0)) == 0 and TWGates.NvLogf.evaluate(0xBF800000) == 0x7FFFFFFF
     assert TWGates.BitXor.evaluate(1, 1) == 0 and TWGates.U32Xor.evaluate(0xF0F0, 0xFFFF) == 0x0F0F and TWGates.SelectBit.evaluate(0, 1, 0) == 0
