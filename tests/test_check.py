@@ -10,12 +10,21 @@ CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
 
-def test_the_steps_are_pytest_then_circuit_check_then_the_lean_hook(tmp_path, monkeypatch):
+def test_the_steps_are_pytest_then_circuit_check_then_the_build_then_the_lean_hook(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", ["-m", "pytest", "-q"]) and names[1] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[2] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
+    assert names[2] == ("flock-circuit-build", [str(ROOT / "backends" / "flock" / "check_build.sh")])
+    assert names[3] == ("lean", "skipped: backends/flock/verifier/lean is not on this tree")
     assert "-m" in CHECK.steps(tmp_path)[0][1] and "not circuit_suite" in CHECK.steps(tmp_path)[0][1]
+
+
+def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
+    """A proving build never has `seed-injection` (1053c0c9 compiled only with it); the class sweep's proving build has no
+    `glue`."""
+    script = (ROOT / "backends" / "flock" / "check_build.sh").read_text()
+    assert "for features in sha512 sha512,glue sha512,glue,seed-injection; do" in script
+    assert "cargo check -q -p flock-live --bin flock-circuit" in script
 
 
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
