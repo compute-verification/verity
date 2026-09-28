@@ -113,6 +113,7 @@ import FlockSoundness.Audit.Window
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.Audit.FlockPublic
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
 import FlockSoundness.Audit.InfluenceWitness
@@ -123,6 +124,7 @@ import FlockSoundness.Types.Program
 import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
+import FlockSoundness.Binding
 import FlockSoundness.ZK.Masking
 import FlockSoundness.ZK.Adaptivity
 import FlockSoundness.ZK.CoinBinding
