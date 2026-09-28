@@ -96,7 +96,7 @@ def test_stochastic_serve_binds_one_select_per_sample_with_seed_and_splits_as_in
     assert f"Const32[{_bits(0.8)}]_v1" in consts and f"Const32[{_bits(0.95)}]_v1" in consts, consts
     for k in range(STEPS + 1):
         assert f"Const64[0x{LP - 1 + k:016x}]_v1" in consts, (k, consts)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v3"]
     assert len(apps) == STEPS + 1 and all(a["preconditions_checked"]["seed"] == "Program input (runtime)" for a in apps)
     assert [a["preconditions_checked"]["pos"] for a in apps] == [LP - 1 + k for k in range(STEPS + 1)]
     assert rep.provenance["mutation_effects"] == []
@@ -155,8 +155,8 @@ def _derive_constant(C, LP, STEPS, S, **kw):
 @pytest.mark.parametrize("S", [32, 16])
 def test_a_single_request_takes_S_as_a_constant(S):
     """[single-request workloads] A single-request workload's S = SplitsFor_v1(1, num_SMs) is a constant of its Program: no `splits`
-    parameter, and every select's 6th operand a `Const32[S]` emitted as the row's 4th constant (top_p, pos, temperature, S: the
-    fold's operand order), read by that select alone."""
+    parameter, every select `GumbelTopPTokenSelect_v2{V,S}` (its keep word as word gates at S), and its 6th operand a `Const32[S]`
+    emitted as the row's 4th constant (top_p, pos, temperature, S: the fold's operand order), read by that select alone."""
     C = _tiny_config()
     LP, STEPS = 3, 2
     rep = _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95)
@@ -165,15 +165,16 @@ def test_a_single_request_takes_S_as_a_constant(S):
     names = [n for n, _ in fsd.signature()[0]]
     assert names[:2] == ["prompt", "seed"] and "splits" not in names, names
     nodes = fsd.body.nodes
-    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelect_v1"]
-    assert len(sel) == STEPS + 1
+    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelect_v2"]
+    assert len(sel) == STEPS + 1 and not [n for n in nodes if _base(n) == "GumbelTopPTokenSelect_v1"]
     for e, k in enumerate(sel):
+        assert nodes[k].fn.id.endswith(f",S={S}}}"), nodes[k].fn.id      # the select specialised on the constant: its keep word as word gates
         ref = nodes[k].args[5].refs[0]
         assert ref[0] == "n" and ref[1] == k - 1, (k, ref)
         assert [nodes[j].fn.id for j in range(k - 4, k)] == [f"Const32[{_bits(0.95)}]_v1", f"Const64[0x{LP - 1 + e:016x}]_v1",
                                                              f"Const32[{_bits(0.8)}]_v1", f"Const32[0x{S:08x}]_v1"]
         assert sum(1 for n in nodes for a in n.args for r in a.refs if r[0] == "n" and r[1] == k - 1) == 1   # read by this select alone
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v3"]
     assert all(a["preconditions_checked"]["S"].startswith(f"Const32[{S}]") for a in apps)
     assert rep.digest != _derive(C, LP, STEPS, temperature=0.8, top_p=0.95).digest       # another Program than the derived-S form
     assert rep.digest == _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95).digest

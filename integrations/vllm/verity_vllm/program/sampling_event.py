@@ -5,13 +5,15 @@ the required-value manifest derives.  Torch-free; the commit and match tooling i
     TokenSelect_v1{V}                     greedy: first maximum of the bf16 logits row (torch.argmax / greedy _gumbel_sample_kernel)
     GumbelTopPTokenSelect_v1{V,S}         temperature + top-p + seeded Gumbel-max (registry.sampling; vLLM d9105ea80 stochastic path)
     GumbelTokenSelect_v1{V}               temperature + seeded Gumbel-max, top_p == 1 (registry.sampling, X-06)
+    GumbelTopPTokenSelect_v2{V,S}         GumbelTopPTokenSelect_v1 at a constant split count S, its keep word as word gates
+                                          (registry.topp_words; a single-request workload)
 
 Greedy is not stochastic: the families are distinct Definitions with distinct digests; this module only says which families are
 "the sampling event of a step".  A spec may carry a `prefix:` (the fold's `spec` strings) and statics `{...}`.
 """
 from __future__ import annotations
 
-SAMPLING_EVENT_FAMILIES = ("TokenSelect_v1", "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1")
+SAMPLING_EVENT_FAMILIES = ("TokenSelect_v1", "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v2")
 
 
 def family_of(spec: str) -> str:

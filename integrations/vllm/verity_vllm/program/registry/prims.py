@@ -32,9 +32,10 @@ from verity.ir.types import Array, Value
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
 from verity.ml.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,
-                            GuardNegInfZero, _decode, _round_f32, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
+                            GuardNegInfZero, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
                             f32_fma_bits, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits, f32_to_bf16_rn_bits,
                             ftz_bits)
+from verity.ml.fp32 import f32_decode as _decode, f32_round as _round_f32
 from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
 from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
