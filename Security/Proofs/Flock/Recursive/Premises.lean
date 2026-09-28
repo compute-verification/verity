@@ -1,0 +1,70 @@
+import Proofs.Flock.Recursive.Compile
+import Proofs.Flock.Soundness.Assumptions.Recursive
+import Proofs.Flock.Soundness.Assumptions.Zk
+
+/-!
+# The premises the recursive audit's property takes
+
+The named premises a property of the recursive audit may take (the ruling of 8 Oct, 4:30 PM): `shape.premises` in
+`Security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
+premise and refuses every other. Each but `CompiledForkSound`, an open lemma's conclusion, is the named assumption it
+abbreviates, unchanged.
+
+* `VBridge` (`Flock.Assumptions.VBridge`): V*'s circuits compute C-Flock's inner verifier. On the list until VBridge G
+  (`FlockVBridge.Compiled.vbridge_compiled`'s open hypotheses) is proved.
+* `CompiledForkSound` (the compile lemma in fork form): C-Flock's compiled table at the executable's arithmetic and
+  Merkle scheme is sound in fork form at `tableError`, `Recursion.flock_inner_sound_compiled`'s conclusion. On the list
+  until that lemma is proved; it discharges this premise at a class whose schedule is `fast100`'s and whose layout
+  holds.
+* `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform, at
+  each of V*'s laws (one premise over `Vs`, so the shape check reads its head).
+* `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
+* `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZK`): the record and the draw file each of V*'s
+  sessions reads are the challenger's of the live session and the verifier's own draw, at every history (one premise
+  over V*'s sessions' data `ZkOuterD`, so the shape check reads its head; the property builds the sessions from it).
+
+The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
+definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
+-/
+
+namespace Flock.Premises
+
+open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
+
+/-- **VBridge**: `Flock.Assumptions.VBridge`. -/
+abbrev VBridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    {Reg' Reg₂ : Type} (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
+  Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg
+
+/-- **The compile lemma, in fork form**: `Recursion.flock_inner_sound_compiled`'s conclusion at the executable's
+arithmetic (`execArith`) and hm96-sha512 Merkle scheme (`Refine.enc512`, `Refine.leaf512` under `Refine.H512`), on the
+class `cls`, its regions and the schedule `sch`. -/
+def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+    (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
+    (sch : Accounting.Schedule) : Prop :=
+  InnerSoundForkOn Refine.H512 (flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch)
+    (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leaf512 cls regs sch)
+    (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))
+
+/-- **A3** at every one of V*'s laws: `Assumptions.UniformRandomBytes` at each law's lengths and source. -/
+abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
+  ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src
+
+/-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
+abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96
+
+/-- **live-verifier** at every one of V*'s sessions: `Assumptions.Zk.RecordCustodyZK` at each session's inputs, draw
+files and record writer, under its law's executable strata over V*'s units `[0, nv)`. -/
+abbrev RecordCustody {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
+    (zs₀ : A → B → C → D → (j : Fin S) → (Vs j).OuterD Reg') : Prop :=
+  ∀ R ω t R₂ j, FlockSoundness.Assumptions.Zk.RecordCustodyZK (zs₀ R ω t R₂ j).I (zs₀ R ω t R₂ j).dj
+    (zs₀ R ω t R₂ j).wr (.stratified (Vs j).law.Kd (Array.ofFn (Vs j).law.St)) (Vs j).nv
+
+end Flock.Premises
