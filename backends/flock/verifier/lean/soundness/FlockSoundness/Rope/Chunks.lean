@@ -28,79 +28,79 @@ def chunks : List (List Gate × CP × List (ℕ × ℕ)) := [
   (gatesChunk16.map decGate, decCP cpData17, pinAnd16.map pinMasks),
   (gatesChunk17.map decGate, decCP cpData18, pinAnd17.map pinMasks)]
 
-theorem chunk0 : checkChunk 6272 (decCP cpData0) (gatesChunk0.map decGate) (decCP cpData1)
+theorem chunk0 : checkChunk 6144 (decCP cpData0) (gatesChunk0.map decGate) (decCP cpData1)
     (pinAnd0.map pinMasks) = true ∧ pinAnd0.all runsBounded = true := by
   decide +kernel
 
-theorem chunk1 : checkChunk 6272 (decCP cpData1) (gatesChunk1.map decGate) (decCP cpData2)
+theorem chunk1 : checkChunk 6144 (decCP cpData1) (gatesChunk1.map decGate) (decCP cpData2)
     (pinAnd1.map pinMasks) = true ∧ pinAnd1.all runsBounded = true := by
   decide +kernel
 
-theorem chunk2 : checkChunk 6272 (decCP cpData2) (gatesChunk2.map decGate) (decCP cpData3)
+theorem chunk2 : checkChunk 6144 (decCP cpData2) (gatesChunk2.map decGate) (decCP cpData3)
     (pinAnd2.map pinMasks) = true ∧ pinAnd2.all runsBounded = true := by
   decide +kernel
 
-theorem chunk3 : checkChunk 6272 (decCP cpData3) (gatesChunk3.map decGate) (decCP cpData4)
+theorem chunk3 : checkChunk 6144 (decCP cpData3) (gatesChunk3.map decGate) (decCP cpData4)
     (pinAnd3.map pinMasks) = true ∧ pinAnd3.all runsBounded = true := by
   decide +kernel
 
-theorem chunk4 : checkChunk 6272 (decCP cpData4) (gatesChunk4.map decGate) (decCP cpData5)
+theorem chunk4 : checkChunk 6144 (decCP cpData4) (gatesChunk4.map decGate) (decCP cpData5)
     (pinAnd4.map pinMasks) = true ∧ pinAnd4.all runsBounded = true := by
   decide +kernel
 
-theorem chunk5 : checkChunk 6272 (decCP cpData5) (gatesChunk5.map decGate) (decCP cpData6)
+theorem chunk5 : checkChunk 6144 (decCP cpData5) (gatesChunk5.map decGate) (decCP cpData6)
     (pinAnd5.map pinMasks) = true ∧ pinAnd5.all runsBounded = true := by
   decide +kernel
 
-theorem chunk6 : checkChunk 6272 (decCP cpData6) (gatesChunk6.map decGate) (decCP cpData7)
+theorem chunk6 : checkChunk 6144 (decCP cpData6) (gatesChunk6.map decGate) (decCP cpData7)
     (pinAnd6.map pinMasks) = true ∧ pinAnd6.all runsBounded = true := by
   decide +kernel
 
-theorem chunk7 : checkChunk 6272 (decCP cpData7) (gatesChunk7.map decGate) (decCP cpData8)
+theorem chunk7 : checkChunk 6144 (decCP cpData7) (gatesChunk7.map decGate) (decCP cpData8)
     (pinAnd7.map pinMasks) = true ∧ pinAnd7.all runsBounded = true := by
   decide +kernel
 
-theorem chunk8 : checkChunk 6272 (decCP cpData8) (gatesChunk8.map decGate) (decCP cpData9)
+theorem chunk8 : checkChunk 6144 (decCP cpData8) (gatesChunk8.map decGate) (decCP cpData9)
     (pinAnd8.map pinMasks) = true ∧ pinAnd8.all runsBounded = true := by
   decide +kernel
 
-theorem chunk9 : checkChunk 6272 (decCP cpData9) (gatesChunk9.map decGate) (decCP cpData10)
+theorem chunk9 : checkChunk 6144 (decCP cpData9) (gatesChunk9.map decGate) (decCP cpData10)
     (pinAnd9.map pinMasks) = true ∧ pinAnd9.all runsBounded = true := by
   decide +kernel
 
-theorem chunk10 : checkChunk 6272 (decCP cpData10) (gatesChunk10.map decGate) (decCP cpData11)
+theorem chunk10 : checkChunk 6144 (decCP cpData10) (gatesChunk10.map decGate) (decCP cpData11)
     (pinAnd10.map pinMasks) = true ∧ pinAnd10.all runsBounded = true := by
   decide +kernel
 
-theorem chunk11 : checkChunk 6272 (decCP cpData11) (gatesChunk11.map decGate) (decCP cpData12)
+theorem chunk11 : checkChunk 6144 (decCP cpData11) (gatesChunk11.map decGate) (decCP cpData12)
     (pinAnd11.map pinMasks) = true ∧ pinAnd11.all runsBounded = true := by
   decide +kernel
 
-theorem chunk12 : checkChunk 6272 (decCP cpData12) (gatesChunk12.map decGate) (decCP cpData13)
+theorem chunk12 : checkChunk 6144 (decCP cpData12) (gatesChunk12.map decGate) (decCP cpData13)
     (pinAnd12.map pinMasks) = true ∧ pinAnd12.all runsBounded = true := by
   decide +kernel
 
-theorem chunk13 : checkChunk 6272 (decCP cpData13) (gatesChunk13.map decGate) (decCP cpData14)
+theorem chunk13 : checkChunk 6144 (decCP cpData13) (gatesChunk13.map decGate) (decCP cpData14)
     (pinAnd13.map pinMasks) = true ∧ pinAnd13.all runsBounded = true := by
   decide +kernel
 
-theorem chunk14 : checkChunk 6272 (decCP cpData14) (gatesChunk14.map decGate) (decCP cpData15)
+theorem chunk14 : checkChunk 6144 (decCP cpData14) (gatesChunk14.map decGate) (decCP cpData15)
     (pinAnd14.map pinMasks) = true ∧ pinAnd14.all runsBounded = true := by
   decide +kernel
 
-theorem chunk15 : checkChunk 6272 (decCP cpData15) (gatesChunk15.map decGate) (decCP cpData16)
+theorem chunk15 : checkChunk 6144 (decCP cpData15) (gatesChunk15.map decGate) (decCP cpData16)
     (pinAnd15.map pinMasks) = true ∧ pinAnd15.all runsBounded = true := by
   decide +kernel
 
-theorem chunk16 : checkChunk 6272 (decCP cpData16) (gatesChunk16.map decGate) (decCP cpData17)
+theorem chunk16 : checkChunk 6144 (decCP cpData16) (gatesChunk16.map decGate) (decCP cpData17)
     (pinAnd16.map pinMasks) = true ∧ pinAnd16.all runsBounded = true := by
   decide +kernel
 
-theorem chunk17 : checkChunk 6272 (decCP cpData17) (gatesChunk17.map decGate) (decCP cpData18)
+theorem chunk17 : checkChunk 6144 (decCP cpData17) (gatesChunk17.map decGate) (decCP cpData18)
     (pinAnd17.map pinMasks) = true ∧ pinAnd17.all runsBounded = true := by
   decide +kernel
 
-theorem chunksOK : ChunksOK 6272 (decCP cpData0) chunks := by
+theorem chunksOK : ChunksOK 6144 (decCP cpData0) chunks := by
   simp only [chunks, ChunksOK]
   exact ⟨chunk0.1, chunk1.1, chunk2.1, chunk3.1, chunk4.1, chunk5.1, chunk6.1, chunk7.1, chunk8.1, chunk9.1, chunk10.1, chunk11.1, chunk12.1, chunk13.1, chunk14.1, chunk15.1, chunk16.1, chunk17.1, trivial⟩
 

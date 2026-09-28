@@ -13,9 +13,9 @@ The statement is in `../ASSUMPTIONS.md`.
 
   They sample. They don't prove it.
 - **Proved for RoPE** (`FlockSoundness/GateRows.lean`, `FlockSoundness/Rope/`). `Rope.rope_sound`: column values that
-  satisfy the pinned `rope-head/neox-bf16/pair` rows (sha256 `933c4ef8…`), with the constant at 1, carry on output
-  column `6144 + o` the gate circuit's output `o` on input columns `0 … 63`. The gate circuit is the unit's Boolean
-  export (`verity_flock.boolean_export`: 64 inputs; 5,996 AND, 9,774 XOR and 1,733 NOT gates; 32 outputs). That is L1
+  satisfy the pinned `rope-head/neox-bf16/pair` rows (sha256 `9cbdef19…`), with the constant at 1, carry on output
+  column `6016 + o` the gate circuit's output `o` on input columns `0 … 63`. The gate circuit is the unit's Boolean
+  export (`verity_flock.boolean_export`: 64 inputs; 5,828 AND, 9,747 XOR and 1,717 NOT gates; 32 outputs). That is L1
   for this template, for the pinned file's rows. The proof shows that RoPE's rows compute the unit's Boolean gate
   circuit; that the gate circuit computes the IR's bf16 RoPE is outside L1 and still tested on samples (the IR
   comparison tests above), not proved.
