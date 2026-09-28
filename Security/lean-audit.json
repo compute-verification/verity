@@ -54,6 +54,7 @@
   "Flock",
   "Proofs.Flock.Level3",
   "Proofs.Flock.Soundness",
+  "Randomness",
   "Proofs.Flock.Recursive",
   "Proofs.Flock.VBridge",
   "Proofs.Flock.EndToEnd",
