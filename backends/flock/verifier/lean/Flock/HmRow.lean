@@ -752,9 +752,9 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `work:K` expanded over the verifier's own program, partition object and work table (`Draw.deriveWork`), and the
-population. -/
-def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat)) : V (Draw.Law × Nat) := do
+/-- `work:K` expanded over the verifier's own program, partition object and work table of works and floors
+(`Draw.deriveWork`), and the population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
   let (strata, population) ← templateStrata "work" obj program
   match Draw.deriveWork k strata table with
   | .ok law => return (law, population)
@@ -932,7 +932,7 @@ session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verif
 draw's law is held to, and `stratified` its own `K`, at which a stratified draw's law is its own derivation. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) : V (SessionSpec × Array Stmt) := do
   -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then

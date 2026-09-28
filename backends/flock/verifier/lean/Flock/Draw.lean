@@ -94,17 +94,18 @@ def strataOf (ranges : Array (String × Nat × Nat)) : Array (String × Array (N
       out := out.set! i (t, rs)
   return out
 
-/-- A stratum of the work law: a stratified law's stratum, and the PoUW work of each of its units, an integer in any fixed
-unit (`0` for units that do none: dequantization, the quantizer, attention). -/
+/-- A stratum of the work law: a stratified law's stratum, the PoUW work of each of its units, an integer in any fixed unit
+(`0` for units that do none: dequantization, the quantizer, attention), and its floor, the fewest units it draws (at least
+one), both from the verifier's work table. -/
 structure WorkStratum extends Stratum where
   work : Nat
+  floor : Nat
   deriving BEq, Inhabited
 
 /-- A stratum's draw under the work law: `⌈K · work · n_s / W⌉`, with `W` the population's work `Σ_s work_s · n_s`, never
-below one (the integrity floor, which binds exactly for strata that do no work) and never above `n_s`. Rounding up keeps
-each unit's inclusion probability at least `K · work / W`, which the work bound (`FlockSoundness.Audit.Law.work_escape_le`,
-through `workRule_eq_draw`) reads. -/
-def workK (k work size total : Nat) : Nat := min size (max 1 ((k * work * size + total - 1) / total))
+below the stratum's floor and never above `n_s`. Rounding up keeps each unit's inclusion probability at least `K · work / W`,
+which the work bound (`FlockSoundness.Audit.Law.work_escape_le`, through `workRule_eq_draw`) reads. -/
+def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * work * size + total - 1) / total))
 
 /-- A work law's population work, `Σ_s work_s · n_s`. -/
 def totalWork (strata : Array WorkStratum) : Nat := strata.foldl (fun acc s => acc + s.work * s.size) 0
@@ -114,7 +115,8 @@ inductive Law where
   | bernoulli (num den : Nat)
   /-- one uniform `k_s`-subset per stratum, independently (the default law; `k` is the agreement's) -/
   | stratified (k : Nat) (strata : Array Stratum)
-  /-- the work law, the stratified law's second version: its sampler, each stratum's `k_s` sized by work (`workK`) -/
+  /-- the work law, the stratified law's second version: its sampler, each stratum's `k_s` sized by work (`workK`) above
+  its floor -/
   | work (k : Nat) (strata : Array WorkStratum)
   deriving BEq, Inhabited
 
@@ -125,25 +127,36 @@ def derive (k : Nat) (strata : Array (String × Array (Nat × Nat))) : Except St
   return .stratified k (strata.map fun (t, rs) =>
     { template := t, units := rs, k := stratumK k (rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) n })
 
-/-- `work:K` expanded over the strata and the verifier's work table (template descriptor id ↦ work per unit): each stratum
-with `workK`, for `1 ≤ K ≤ population` and a population that does some work. A template the table does not name is
-refused, not taken as doing none. -/
-def deriveWork (k : Nat) (strata : Array (String × Array (Nat × Nat))) (table : Array (String × Nat)) : Except String Law := do
+/-- `work:K` expanded over the strata and the verifier's work table (template descriptor id ↦ work per unit and floor):
+each stratum with `workK` above its floor, for `1 ≤ K ≤ population` and a population that does some work. A template the
+table does not name is refused, not taken as doing none. -/
+def deriveWork (k : Nat) (strata : Array (String × Array (Nat × Nat))) (table : Array (String × Nat × Nat)) :
+    Except String Law := do
   let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
   if k < 1 || k > n then throw s!"a work law needs 1 <= k <= {n}, not {k}"
   let ws ← strata.mapM fun (t, rs) => match table.find? (·.1 == t) with
-    | some (_, w) => pure ({ template := t, units := rs, k := 0, work := w } : WorkStratum)
+    | some (_, w, f) => pure ({ template := t, units := rs, k := 0, work := w, floor := f } : WorkStratum)
     | none => throw s!"the work table names no work for template '{t}'"
   let total := totalWork ws
   if total == 0 then throw "a work law needs a population that does some work"
-  return .work k (ws.map fun s => { s with k := workK k s.work s.size total })
+  return .work k (ws.map fun s => { s with k := workK k s.work s.size total s.floor })
 
-/-- A work table: a JSON object from template descriptor id to the PoUW work of one of its units. -/
-def workTableOfJson (j : Json) : Except String (Array (String × Nat)) := do
+/-- A work table: a JSON object from template descriptor id to the PoUW work of one of its units, or to
+`{"work": w, "floor": f}` with its floor `f ≥ 1` (one when the table gives only the work). -/
+def workTableOfJson (j : Json) : Except String (Array (String × Nat × Nat)) := do
   let .ok kvs := j.getObj? | throw "a work table is an object from template id to work per unit"
-  kvs.toArray.mapM fun (t, v) => match v.getNat? with
-    | .ok w => pure (t, w)
-    | .error _ => throw s!"work table: template '{t}': the work is not a natural number"
+  kvs.toArray.mapM fun (t, v) => match v.getNat?, v.getObj? with
+    | .ok w, _ => pure (t, w, 1)
+    | _, .ok o => do
+      let bad := s!"work table: template '{t}': neither a work nor an object of work and floor"
+      if o.toArray.any (fun (key, _) => key != "work" && key != "floor") then throw bad
+      let some w := (v.getObjValAs? Nat "work").toOption | throw bad
+      match v.getObjVal? "floor" with
+      | .error _ => pure (t, w, 1)
+      | .ok fj => match fj.getNat? with
+        | .ok f => if f < 1 then throw s!"work table: template '{t}': a floor is at least one" else pure (t, w, f)
+        | .error _ => throw bad
+    | _, _ => throw s!"work table: template '{t}': the work is not a natural number"
 
 /-- The bytes a stratum's stream starts with: `2 k_s · width(n_s) + 64`, as a `subset` draw's. -/
 def Stratum.need (s : Stratum) : Nat := 2 * s.k * width s.size + 64
@@ -172,7 +185,7 @@ def Stratum.toJson (s : Stratum) : Json :=
 def WorkStratum.toJson (s : WorkStratum) : Json :=
   Json.mkObj [("template", Json.str s.template),
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
-    ("work", Lean.toJson s.work), ("k", Lean.toJson s.k)]
+    ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
 
 /-- The law object (the registration's `law`): `{law, k, strata}` for `stratified` and `work`. -/
 def Law.toJson : Law → Json
@@ -227,19 +240,22 @@ def strataProblem (k : Nat) (strata : Array Stratum) (population : Nat) : Option
     at_ := hi
   return if at_ == population then none else some "U2: the strata don't tile the population"
 
-/-- A work stratum object: exactly `{template, units, work, k}`, its `work` a natural number and the rest a stratum's. -/
+/-- A work stratum object: exactly `{template, units, work, floor, k}`, its `work` and `floor` natural numbers and the
+rest a stratum's. -/
 private def workStratumOfJson (j : Json) : V WorkStratum := do
-  let .ok kvs := j.getObj? | throw "U2: a work stratum is exactly {template, units, work, k}"
-  if kvs.toArray.size != 4 || ["template", "units", "work", "k"].any (fun key => !(j.getObjVal? key).isOk)
+  let .ok kvs := j.getObj? | throw "U2: a work stratum is exactly {template, units, work, floor, k}"
+  if kvs.toArray.size != 5 || ["template", "units", "work", "floor", "k"].any (fun key => !(j.getObjVal? key).isOk)
       || !(j.getObjValAs? String "template").isOk then
-    throw "U2: a work stratum is exactly {template, units, work, k}"
+    throw "U2: a work stratum is exactly {template, units, work, floor, k}"
   let get := fun (key : String) => (j.getObjVal? key).toOption.getD Json.null
   let work ← J.asNat (get "work") "U2: a stratum's work"
+  let floor ← J.asNat (get "floor") "U2: a stratum's floor"
   let s ← stratumOfJson (Json.mkObj [("template", get "template"), ("units", get "units"), ("k", get "k")])
-  return { toStratum := s, work }
+  return { toStratum := s, work, floor }
 
-/-- A work law over `population` units (`workProblem`): `1 ≤ k ≤ population`, distinct templates, a population that does
-some work, each stratum's `k` the rule's (`workK`), and the strata's ranges tiling `[0, population)` exactly. -/
+/-- A work law over `population` units (`workProblem`): `1 ≤ k ≤ population`, distinct templates, a floor of at least one
+in every stratum, a population that does some work, each stratum's `k` the rule's (`workK` above its floor), and the
+strata's ranges tiling `[0, population)` exactly. -/
 def workProblem (k : Nat) (strata : Array WorkStratum) (population : Nat) : Option String := Id.run do
   if strata.isEmpty || k < 1 || k > population then return some "U2: strata and 1 <= k <= population"
   let total := totalWork strata
@@ -247,7 +263,9 @@ def workProblem (k : Nat) (strata : Array WorkStratum) (population : Nat) : Opti
   for i in [0:strata.size] do
     let s := strata[i]!
     if (strata.extract 0 i).any (·.template == s.template) then return some s!"U2: template '{s.template}' twice"
-    if s.k != workK k s.work s.size total then return some s!"U2: stratum '{s.template}': k is not the work rule's"
+    if s.floor < 1 then return some s!"U2: stratum '{s.template}': a floor is at least one"
+    if s.k != workK k s.work s.size total s.floor then
+      return some s!"U2: stratum '{s.template}': k is not the work rule's"
   let mut at_ := 0
   for (lo, hi) in (strata.foldl (· ++ ·.units) #[]).qsort (fun a b => a.1 < b.1) do
     if lo != at_ then return some "U2: the strata don't tile the population"
