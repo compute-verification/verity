@@ -238,7 +238,7 @@ theorem netOK_parsed {lines : Array String} {net : Net} (h : Net.parse lines = .
 theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build nm tb n lo bits = .ok net) :
     NetOK net ∧ 7 ≤ net.unitLog ∧ (net.unitLog ≤ 32 → ConstRow net) := by
-  obtain ⟨-, hig, hiw, hn, hu, hl, hc⟩ := build_spec h
+  obtain ⟨-, hig, hiw, hn, hu, hl, hc⟩ := build_facts h
   have h1 : 2 ^ log2ceil net.useful ≤ 2 ^ net.unitLog :=
     Nat.pow_le_pow_right (by norm_num) (by rw [hl]; exact le_max_right _ _)
   have h7 : 7 ≤ net.unitLog := by rw [hl]; exact le_max_left _ _
@@ -284,7 +284,7 @@ theorem unit_parsed {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : Che
     exact Array.mem_def.1 (Array.getElem_mem P.unitNet)
   rcases P.nets _ hmem with h | ⟨_, _, _, _, _, hb⟩
   · exact h
-  · have h1 := (build_spec hb).1
+  · have h1 := (build_facts hb).1
     have h2 : (c.nets.getD c.unitNet default).2.lookup.isSome = false := C.unit_lookup
     rw [h1] at h2
     cases h2

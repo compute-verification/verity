@@ -328,7 +328,7 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.loop_inv
 #print axioms FlockSoundness.parse_facts
 #print axioms FlockSoundness.check_facts
-#print axioms FlockSoundness.build_spec
+#print axioms FlockSoundness.build_facts
 #print axioms FlockSoundness.setupH_spec
 #print axioms FlockSoundness.pin_spec
 #print axioms FlockSoundness.rowSlots_spec

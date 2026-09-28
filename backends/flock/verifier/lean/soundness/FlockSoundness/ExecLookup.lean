@@ -1,4 +1,7 @@
 import FlockSoundness.ExecPlacement
+-- level3 already realizes `Lookup.row`'s and `Lookup.decode`'s equation lemmas, so this file reuses them rather than
+-- declaring them a second time, which the audit's kernel replay refuses
+import FlockLevel3.LookupRows
 
 /-!
 # What `Lookup.build` builds
@@ -127,7 +130,7 @@ theorem count_singleton_zmod (j k : ℕ) : (((#[k] : Array ℕ).toList.count j :
   · simp [hj, Ne.symm hj]
 
 /-- **What `Lookup.build` builds**: a lookup slot, one input word, its constant the last useful row, reading itself. -/
-theorem build_spec {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
+theorem build_facts {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build name table n lo bits = .ok net) :
     net.lookup.isSome = true ∧ net.inGroups = #[⟨0, 1, #[n]⟩] ∧ net.inWords = 1 ∧ n ≤ 128 ∧
       net.useful = net.constPos + 1 ∧ net.unitLog = max 7 (log2ceil net.useful) ∧
