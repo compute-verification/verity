@@ -7,7 +7,8 @@
                                                             record `research merge` reads; with the pinned upstream build and
                                                             inputs when the commit changes backends/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
-                                                            dependency bundles
+                                                            dependency bundles; with --on, in a free check slot of M
+                                                            (`tools/check/slot.py`), the lock and cores the train checks take
     uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
@@ -153,6 +154,8 @@ def agreement_files(out: Path) -> dict[str, Path]:
 #: variable for a local one
 LEAN_DEPS_URLS = "lean-deps-urls.json"
 LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
+#: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
+SLOT_WRAP = ["python3", "tools/check/slot.py", "--"]
 
 
 def take_lean_deps_urls(out: Path) -> Path | None:
@@ -391,7 +394,7 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-    cmd += ["--", *tool.CHECK.command, *rest]
+    cmd += ["--", *(SLOT_WRAP if on else []), *tool.CHECK.command, *rest]
     try:
         return subprocess.run(cmd, cwd=ROOT, env=env).returncode
     finally:
