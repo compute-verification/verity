@@ -53,6 +53,70 @@ pub const HM_NET: &str = "hm96";
 pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
+/// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 26`,
+/// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
+/// is refused, so an accepted statement is one the pins cover.
+pub const IN_RANGE_K_LOG: usize = 26;
+pub const IN_RANGE_REGIONS: usize = 1024;
+pub const IN_RANGE_M_PTS: usize = 64;
+pub const M_MAX: usize = 35;
+
+/// A range of a `2^k_log`-bit block, checked before any shift by its `slot_log`: its slots at least one 128-bit word and at
+/// most the block, and all of them inside the block (`pos0 + count <= 2^(k_log - slot_log)`, as the Lean check's unbounded
+/// arithmetic requires).
+pub fn range_in_block(k_log: usize, r: &Range) -> Result<(), String> {
+    if !(7..=k_log).contains(&r.slot_log) {
+        return Err(format!("slot_log {} is not in [7, k_log = {k_log}]", r.slot_log));
+    }
+    let slots = 1usize << (k_log - r.slot_log);
+    if r.pos0 > slots || r.count > slots - r.pos0 {
+        return Err(format!("slots [{}, {} + {}) are not inside the block's {slots}", r.pos0, r.pos0, r.count));
+    }
+    Ok(())
+}
+
+/// A circuit file's block, before its regions are built from it: the block size (`Stmt.InRange`), the hm96 slots' size
+/// (at least one 128-bit word, at most the block) and the pinned constant's column inside the block.
+pub fn block_in_range(k_log: usize, hm_slot_log: usize, pin: usize) -> Result<(), String> {
+    if k_log > IN_RANGE_K_LOG {
+        return Err(format!("k_log {k_log}: outside the proved range (Stmt.InRange: k_log <= {IN_RANGE_K_LOG})"));
+    }
+    if !(7..=k_log).contains(&hm_slot_log) {
+        return Err(format!("the hm96 range's slot_log {hm_slot_log} is not in [7, k_log = {k_log}]"));
+    }
+    if pin >= 1 << k_log {
+        return Err(format!("the pinned constant's column {pin} is outside the block (2^{k_log} bits)"));
+    }
+    Ok(())
+}
+
+/// A circuit file's regions, as the pinned table-soundness theorems assume them: at most 1,024 (`Stmt.InRange`), each with
+/// distinct free bits (`LinkLayout`: a region is a subcube, one coordinate per free bit).
+pub fn regions_in_range(regions: &[RegionShape]) -> Result<(), String> {
+    if regions.len() > IN_RANGE_REGIONS {
+        return Err(format!("{} public regions: outside the proved range (Stmt.InRange: at most {IN_RANGE_REGIONS})", regions.len()));
+    }
+    for r in regions {
+        let mut free = r.free.clone();
+        free.sort_unstable();
+        if free.windows(2).any(|p| p[0] == p[1]) {
+            return Err(format!("{:?}: its free bits are not distinct (LinkLayout: one coordinate per free bit)", r.region));
+        }
+    }
+    Ok(())
+}
+
+/// The instance count's part: the dense size `m = k_log + nbl` (PROTOCOL.md §16.5) and the link points' coordinates.
+pub fn shape_in_range(m: usize, m_pts: usize) -> Result<(), String> {
+    if m > M_MAX {
+        return Err(format!("m = {m}: outside the spec's shape (m <= {M_MAX})"));
+    }
+    if m_pts > IN_RANGE_M_PTS {
+        return Err(format!("{m_pts} link-point coordinates: outside the proved range (Stmt.InRange: at most {IN_RANGE_M_PTS})"));
+    }
+    Ok(())
+}
+
 pub const PARTITION_V1: &str = "verity/partition/v1";
 pub const PARTITION_PROVISIONAL: &str = "flock-circuit/unit-cover/v0";
 pub const SALT_BYTES: usize = 192;
@@ -452,12 +516,22 @@ impl Composite {
             lookups: lookups_fast.into_iter().collect(),
         };
         c.check()?;
+        block_in_range(c.k_log, c.range_of(c.hm_net).slot_log, pin_of(&c))?;
+        regions_in_range(&Stmt::regions(&c)?)?;
         Ok(c)
     }
 
     /// The layout's shape: aligned, disjoint ranges inside the block; the comp ranges' roles cover every run and parent of
     /// every VU exactly once; the unit ranges hold `g x units_per_vu` units whose leaf maps are the unit's expanded circuit's ports.
     fn check(&self) -> Result<(), String> {
+        // first, before anything shifts by them (as HmRow.check): the block and every range's slots bounded, so an empty packed
+        // range can't carry an oversized slot_log and no shift or span below overflows
+        if !(7..=IN_RANGE_K_LOG).contains(&self.k_log) {
+            return Err(format!("k_log {}: not in [7, {IN_RANGE_K_LOG}] (Stmt.InRange)", self.k_log));
+        }
+        for (i, r) in self.ranges.iter().enumerate() {
+            range_in_block(self.k_log, r).map_err(|e| format!("range {i}: {e}"))?;
+        }
         let mut spans: Vec<(usize, usize)> = Vec::new();
         for r in &self.ranges {
             let (span, align) = if r.packed { (r.count << r.slot_log, 1 << r.slot_log) } else { (r.count.next_power_of_two() << r.slot_log, r.count.next_power_of_two() << r.slot_log) };
@@ -1308,6 +1382,7 @@ impl Stmt {
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
         let m = k_log + nbl;
+        shape_in_range(m, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, SparseMatrixCircuit<'static>)> = Vec::new();
@@ -1820,6 +1895,59 @@ impl Stmt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn k_log_past_in_range_is_refused() {
+        assert!(block_in_range(IN_RANGE_K_LOG, 18, 0).is_ok());
+        assert!(block_in_range(IN_RANGE_K_LOG + 1, 18, 0).unwrap_err().contains("Stmt.InRange"));
+    }
+
+    #[test]
+    fn hm96_slot_log_outside_7_to_k_log_is_refused() {
+        assert!(block_in_range(20, 7, 0).is_ok() && block_in_range(20, 20, 0).is_ok());
+        assert!(block_in_range(20, 6, 0).unwrap_err().contains("hm96"));
+        assert!(block_in_range(20, 21, 0).unwrap_err().contains("hm96"));
+    }
+
+    #[test]
+    fn every_range_slot_log_and_slots_are_bounded_before_any_shift() {
+        let r = |slot_log: usize, pos0: usize, count: usize, packed: bool| Range { kind: Kind::Mask, slot_log, pos0, count, packed };
+        assert!(range_in_block(20, &r(7, 0, 1 << 13, true)).is_ok() && range_in_block(20, &r(20, 0, 1, false)).is_ok());
+        assert!(range_in_block(20, &r(6, 0, 1, false)).unwrap_err().contains("slot_log"));
+        // an empty packed range with an oversized slot_log (its span is 0, so the overrun check alone passed it)
+        assert!(range_in_block(20, &r(40, 0, 0, true)).unwrap_err().contains("slot_log"));
+        // a shift of 64 or more: refused, not a panic (debug) or a wrap (release)
+        assert!(range_in_block(20, &r(64, 1, 1, false)).unwrap_err().contains("slot_log"));
+        // slots past the block, including a pos0 whose shift would drop bits
+        assert!(range_in_block(20, &r(18, 3, 2, false)).unwrap_err().contains("inside the block"));
+        assert!(range_in_block(20, &r(18, 1 << 60, 0, true)).unwrap_err().contains("inside the block"));
+        assert!(range_in_block(20, &r(18, 4, 0, true)).is_ok());
+    }
+
+    #[test]
+    fn pin_outside_the_block_is_refused() {
+        // the pinned constant past the block: a first range placed at the block's end, as an empty packed range can be
+        assert!(block_in_range(20, 18, (1 << 20) - 1).is_ok());
+        assert!(block_in_range(20, 18, 1 << 20).unwrap_err().contains("outside the block"));
+    }
+
+    #[test]
+    fn regions_past_in_range_or_not_subcubes_are_refused() {
+        let region = |free: Vec<usize>| RegionShape { region: Region::Out, free, mask: 0, fixed: 0 };
+        let many = |n: usize| (0..n).map(|i| region(vec![i % 20, 20])).collect::<Vec<_>>();
+        assert!(regions_in_range(&many(IN_RANGE_REGIONS)).is_ok());
+        assert!(regions_in_range(&many(IN_RANGE_REGIONS + 1)).unwrap_err().contains("Stmt.InRange"));
+        // a region's two bit ranges overlapping: bits 8 and 9 twice (as [bits(0, 10), bits(8, 4)] would be)
+        let overlap = region([(0..10).collect::<Vec<_>>(), (8..12).collect()].concat());
+        assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
+    }
+
+    #[test]
+    fn shapes_past_the_spec_are_refused() {
+        assert!(shape_in_range(M_MAX, PT_LOCAL + M_MAX - IN_RANGE_K_LOG).is_ok());
+        assert!(shape_in_range(M_MAX + 1, PT_LOCAL).is_err());
+        assert!(shape_in_range(30, IN_RANGE_M_PTS + 1).unwrap_err().contains("Stmt.InRange"));
+    }
 
     #[test]
     fn headers_serialize_key_sorted_as_they_are() {

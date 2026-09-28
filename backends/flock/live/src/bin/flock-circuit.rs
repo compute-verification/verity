@@ -623,6 +623,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("prover_file_differs_from_verifier_file", false, false),
     ("relabelled_circuit", false, false),
     ("relabelled_circuit_refused_at_load", false, false),
+    ("k_log_outside_the_proved_range_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
     ("leaf_salts_from_prover_seed_refused", false, false),
     ("device_salts_match_host", true, false),
@@ -719,6 +720,17 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let refused_file = Instances::load(&arg("--instances", ""), &c2).is_err();
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
                       "pin_differs": refused_pin, "file_refused": refused_file});
+    }
+    if name == "k_log_outside_the_proved_range_refused_at_load" {
+        // the same circuit with META's k_log one past Stmt.InRange: the ranges still fit the larger block, so only the range
+        // check can refuse it
+        let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
+        let mut lines: Vec<&str> = text.splitn(3, '\n').collect();
+        let meta = lines[1].replacen(&format!("\"k_log\":{}", st.c.k_log), &format!("\"k_log\":{}", IN_RANGE_K_LOG + 1), 1);
+        lines[1] = &meta;
+        let why = Composite::parse(&lines.join("\n"), Some(&arg("--tables", "tables"))).err();
+        return json!({"case": name, "expect": "refused at load: k_log past Stmt.InRange", "why": why,
+                      "pass": meta != text.splitn(3, '\n').nth(1).unwrap_or("") && why.as_deref().is_some_and(|e| e.contains("Stmt.InRange"))});
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
