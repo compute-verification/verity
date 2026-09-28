@@ -8,8 +8,8 @@ import FlockSoundness.Session
 `verify_refines`: when the executable's `Flock.verify` accepts a session record and its two proof files, under the
 unsalted SHA-512 scheme, the record and both proofs decode. Then at the proofs' openings (`opensOf`), each rep's
 compiled game `repC`, played with its proof's messages and its stream's coins, accepts. Both reps' paths also verify
-against the one level-0 cap. That is `tableAfter`'s verdict, and `verify_tableAfter` states it as one run of
-`tableAfter`.
+against the one level-0 cap. That is `tableAfter`'s verdict. `verify_tableAfter` states it as an accepting run of
+`tableAfter`, with existential messages and rep 0 first.
 -/
 
 namespace FlockSoundness.Refine
@@ -228,8 +228,10 @@ theorem verify_refines (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
 
 open Classical in
 /-- **The verifier refines the model's table, as one run** (§5). When `Flock.verify` accepts, with the extra claims the
-model's `extraClaims` at link points `pts` read off the record, `tableAfter` has an accepting run. It is played on the
-two streams' coins, rep 0's then rep 1's; its messages interleave the proofs' messages, and end with the openings. -/
+model's `extraClaims` at link points `pts` read off the record, some message list makes `tableAfter` accept. The run is
+played on the two streams' coins, rep 0's then rep 1's, and its openings are the proofs'. The messages are existential
+and the schedule is rep 0 first, while the live server may interleave the streams: a bound on the live interaction
+lifts from `verify_refines`, which names each rep's messages and coins. -/
 theorem verify_tableAfter (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : Session → Fin 2 → Fin mPts → 𝔽)
