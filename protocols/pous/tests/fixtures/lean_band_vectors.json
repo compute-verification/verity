@@ -1,5 +1,5 @@
 {
- "source": "tests/lean/PousBandCheck.lean evaluated with lean --run against lean/submissions/band-chain/BandChainModel.lean (ba654b0f)",
+ "source": "tests/lean/PousBandCheck.lean evaluated with lean --run against lean/submissions/band-chain/BandChainModel.lean (ba654b0f) and BandEncDec.lean (f58d6945)",
  "parents": [
   {
    "B": 6,
@@ -434,6 +434,64 @@
     "123"
    ],
    "decode": "10064690"
+  }
+ ],
+ "encdec": [
+  {
+   "B": 3,
+   "d": 1,
+   "l": 3,
+   "seed": 5,
+   "salt": "2",
+   "code": [
+    "1",
+    "2",
+    "5"
+   ],
+   "w": "117",
+   "reencode": [
+    "1",
+    "2",
+    "5"
+   ]
+  },
+  {
+   "B": 4,
+   "d": 1,
+   "l": 2,
+   "seed": 6,
+   "salt": "1",
+   "code": [
+    "1",
+    "2",
+    "0",
+    "1"
+   ],
+   "w": "73",
+   "reencode": [
+    "1",
+    "2",
+    "0",
+    "1"
+   ]
+  },
+  {
+   "B": 3,
+   "d": 1,
+   "l": 8,
+   "seed": 7,
+   "salt": "0",
+   "code": [
+    "148",
+    "41",
+    "82"
+   ],
+   "w": "11586422",
+   "reencode": [
+    "148",
+    "41",
+    "82"
+   ]
   }
  ]
 }

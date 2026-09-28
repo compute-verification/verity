@@ -96,13 +96,16 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
    - **Private encoder** (`public_encoder=False`). The verifier encodes `W` itself (`setup.verifier_key`). Comparing
      roots (`setup.check_server_root`) catches a wrong server encoding at setup.
 
-   Lean (POUS `lean/submissions/public-encoder/`) proves that acceptance forces `C* = Enc(W, salt)` for the dense
-   codec (`chainDense_encDec`). It also proves that the public game is equivalent to the private one for any scheme
-   with that property (`pubAuditSecure_exact_iff`, `pubMeets_exact`), so the certificates carry over at `k = 111`:
-   `dense_pub_meets_64`, `seg_pub_meets_14`, and `chain_pub_meets_64`, the last given `ChainExPostFacto`. An
-   accept-all check provably fails (`acceptAll_fails_dense`). The band's encode-after-decode property (`EncDec` for
-   `chainBand`) holds by the same induction, since row `v` reads only earlier blocks, but it is not in Lean yet: only
-   `test_enc_dec` checks it (`DISCREPANCIES.md` B4). P3 goes through the same code, and its lemma is not proved either.
+   Lean proves that acceptance forces `C* = Enc(W, salt)` for both chain codecs: `chainDense_encDec` (POUS
+   `lean/submissions/public-encoder/`) and `chainBand_encDec` (`band-chain/BandEncDec.lean`, through the DAG-generic
+   `chainScheme_encDec`, pending red-team §40). It also proves that the public game is equivalent to the private one
+   for any scheme with that property (`pubAuditSecure_exact_iff`, `pubMeets_exact`), so the certificates carry over
+   at `k = 111`:
+   - the band: `band_pub_meets_64` (`band-chain/BandPubEncoder.lean`), for every `d ≥ 5`, given `ChainExPostFactoG`;
+   - dense: `dense_pub_meets_64`, `seg_pub_meets_14`, and `chain_pub_meets_64`, the last given `ChainExPostFacto`.
+
+   An accept-all check provably fails (`acceptAll_fails_dense`). P3 goes through the same code, but its
+   encode-after-decode lemma is not proved.
 
    The encoder is deterministic and public, so the server running it changes nothing in the timed game. A
    server-chosen or predictable salt would break the model's "`W` before coins" order.
@@ -226,8 +229,9 @@ stop at `n = 3`.
 
 The band vectors come from `tests/lean/PousBandCheck.lean`, which evaluates `parentsDesc (bandDAG B d)` for five
 shapes and `labelG` with the decoder's formula on three `d = 1` cases, where the band already cuts row 2's oldest
-parent. Its `rfl` theorems tie them to `chainBand`'s `enc` and `dec`; a `d = 2` label case exceeds Lean's evaluation
-budget. `tests/test_pous_band.py` also recomputes a segment from the Lean text, runs setup, per-tensor decode and the
+parent, and encode after decode on three codes that are not encodings (`labelG_dec`). Its `rfl` theorems tie them to
+`chainBand`'s `enc` and `dec`, and it imports `BandEncDec.lean` and `BandPubEncoder.lean` to pin `chainBand_encDec` and
+`band_pub_meets_64_d12` at the secure-first point; a `d = 2` label case exceeds Lean's evaluation budget. `tests/test_pous_band.py` also recomputes a segment from the Lean text, runs setup, per-tensor decode and the
 timed audit with the band as default, and replays the gap attack at the cliff.
 
 The dense vectors come from `tests/lean/PousDenseCheck.lean`, which evaluates `chainDense`'s own `labelOv`, `ovKey`,

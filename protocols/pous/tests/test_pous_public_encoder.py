@@ -22,6 +22,8 @@ from verity_pous.primitives import Primitives, key_program, reference
 from verity_pous.scheme import P3
 from verity_pous.verifier import MerkleTree, VerifierKey, segment_leaves
 
+LEAN = json.loads((Path(__file__).parent / "fixtures" / "lean_dense_vectors.json").read_text())
+LEAN_BAND = json.loads((Path(__file__).parent / "fixtures" / "lean_band_vectors.json").read_text())
 SCHEMES = {"band": band.BandParams(16, 64, 4, 3), "dense": dense.DenseParams(8, 64, 3)}
 PARAMS = SCHEMES["band"]
 
@@ -128,13 +130,30 @@ def test_3_corrupt_and_continue(scheme, s, j):
 @pytest.mark.parametrize("scheme", SCHEMES)
 def test_enc_dec(scheme):
     """`EncDec` (POUS `PubEncoderModel.lean`): every C re-encodes from its own decode, so `commit(Dec(C*)) = com_W`
-    forces `C* = Enc(W)`.  Lean proves it for dense (`chainDense_encDec`); for the band only this test checks it."""
+    forces `C* = Enc(W)`.  Lean proves it for dense (`chainDense_encDec`) and the band (`chainBand_encDec`)."""
     x = WORLDS[scheme]
     p, rng = x.params, random.Random(9)
     for s in range(p.segments):
         c = [rng.randbytes(p.block_bytes) for _ in range(p.blocks_per_segment)]
         w = p.codec.decode_segment(p, x.prims, x.salt, s, c)
         assert p.codec.encode_segment(p, x.prims, x.salt, s, w) == c
+
+
+@pytest.mark.parametrize("case", LEAN_BAND["encdec"], ids=lambda c: f"B{c['B']}-d{c['d']}-l{c['l']}")
+def test_enc_dec_matches_lean(case):
+    """Lean-evaluated encode after decode on codes that are not encodings (`labelG_dec`): the decode matches Lean's `W'`
+    and re-encodes to the code."""
+    from test_pous_dense import SmallCapacity, ToyF
+
+    b, d, ell = case["B"], case["d"], case["l"]
+    params = band.BandParams(b, ell, d)
+    h = SmallCapacity(params, ToyF(2 * ell + 4))
+    prims = Primitives(h, None)
+    code = [int(x) for x in case["code"]]
+    w, _ = run(dense.decode_segment_prog(params, h, int(case["salt"]), code), prims)
+    assert str(sum(x << (i * ell) for i, x in enumerate(w))) == case["w"]
+    again, _ = run(dense.encode_segment_prog(params, h, int(case["salt"]), w), prims)
+    assert [str(x) for x in again] == case["reencode"] == case["code"]
 
 
 def test_4_wrong_sizes():
@@ -184,8 +203,6 @@ def test_6_no_encoder(monkeypatch):
         encoded=dense_world.honest).root
 
 
-LEAN = json.loads((Path(__file__).parent / "fixtures" / "lean_dense_vectors.json").read_text())
-LEAN_BAND = json.loads((Path(__file__).parent / "fixtures" / "lean_band_vectors.json").read_text())
 
 
 def _lean_codec(t: int) -> Codec:
