@@ -3,13 +3,13 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-one-stage", "verity-flock", "verity-circuit-check"]
+dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pous", "verity-one-stage", "verity-pouw", "verity-flock", "verity-circuit-check"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "backends/flock", "tools/circuit_check"]
+members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pous", "protocols/one_stage", "protocols/pouw", "backends/flock", "tools/circuit_check"]
 
 [tool.uv.sources]
 research = { workspace = true }
@@ -20,6 +20,7 @@ verity-vllm = { workspace = true }
 verity-sampled-proofs = { workspace = true }
 verity-pous = { workspace = true }
 verity-one-stage = { workspace = true }
+verity-pouw = { workspace = true }
 verity-flock = { workspace = true }
 verity-circuit-check = { workspace = true }
 
@@ -27,6 +28,6 @@ verity-circuit-check = { workspace = true }
 dev = ["jsonschema>=4.26", "pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "backends/flock/tests", "tools/circuit_check/tests", "tools/lean/tests", "protocols", "benchmarks/pouw/tests"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
            "circuit_suite: one circuit-check target per test (tools/circuit_check); `check` runs these as `circuit-check --all`"]
