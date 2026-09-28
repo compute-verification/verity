@@ -6,8 +6,8 @@ the registry primitives themselves (verity_vllm/program/registry/prims.py), so e
 FTZ f32 ops, `x > y ? x : y` max, the measured MUFU.EX2 / MUFU.RCP tables, the measured Ampere m16n8k16 model,
 RNE bf16.  Emits every online-state version the kernel holds in registers (mapping: p0-tap-spec.md).
 
-Run:  cd <veritor>; PYTHONPATH=. python out/gen/r8/fa2-sem/verity_attn_ref.py --case p0b --out /tmp/p0b_ref.json
-      PYTHONPATH=. python out/gen/r8/fa2-sem/verity_attn_ref.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
+Run:  cd integrations/vllm; PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --case p0b --out /tmp/p0b_ref.json
+      PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
 Needs the MUFU tables (verity_vllm/program/kernels/tables/W11-40f0cebeb670-20260907T1800Z).
 Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words are hex in the JSON (f32: 8 digits,
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.

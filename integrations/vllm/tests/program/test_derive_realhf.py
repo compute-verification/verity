@@ -11,7 +11,7 @@ vocab 128, intermediate 128, max_position 64; tie_word_embeddings True/False; f3
 
 Run (pod, `/workspace/venv-realhf`, torch 2.14.0+cu130, transformers 5.16.1):
 
-    cd /workspace/veritor-realhf && export PYTHONPATH=$PWD:$PWD/src HF_HUB_OFFLINE=1
+    cd <tree>/integrations/vllm && export PYTHONPATH=$PWD HF_HUB_OFFLINE=1
     REALHF_OUT=/workspace/realhf/results/realhf.jsonl /workspace/venv-realhf/bin/python -m pytest \
         tests/program/test_derive_realhf.py -q -p no:cacheprovider -s
 

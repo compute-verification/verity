@@ -27,7 +27,7 @@ the JSON is Verity-level -- ``Subcircuit``, ``Gate``, ``Value``, boundary,
 ``Region`` / ``FunctionCall`` targets, ``Obligation``.  The legacy SP1 backend's
 representation of a lowered local relation (``KindProgram``: ports, ``port k``
 / ``local i`` arguments, opened offsets, slots) is **not** part of this object;
-it is produced from it by :func:`veritor.interface.lowering.lower`, behind the
+it is produced from it by :func:`verity.proofs.lowering.lower`, behind the
 lowering boundary, and is never named above it.
 
 Three related objects, not synonyms (IR §D.1, §D.6): a *subcircuit* is any

@@ -11,7 +11,7 @@ and other applications (24 GB machine). Cursor, browsers and other user apps are
 touched. Every action is appended to the log with the full command line so the owning lane
 can be told what happened and why.
 
-Run:  .venv/bin/python zk/campaign/mem_guard.py --per-proc 3.5 --min-free 2.0
+Run:  python -m research.pods.mem_guard --per-proc 3.5 --min-free 2.0
 """
 from __future__ import annotations
 

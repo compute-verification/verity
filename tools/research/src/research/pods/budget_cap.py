@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Hard spend cap for a RunPod day (lead, 2026-09-09; user authorization §57.10).
 
-    python zk/campaign/budget_cap.py start --cap 40 --rate-max 50 --tag 2026-09-09   # detached daemon
-    python zk/campaign/budget_cap.py status --tag 2026-09-09
-    python zk/campaign/budget_cap.py stop --tag 2026-09-09
+    python -m research.pods.budget_cap start --cap 40 --rate-max 50 --tag 2026-09-09   # detached daemon
+    python -m research.pods.budget_cap status --tag 2026-09-09
+    python -m research.pods.budget_cap stop --tag 2026-09-09
 
 Every POLL seconds the daemon lists all pods on the account and integrates ``costPerHr`` over the
 elapsed interval for every pod that is not EXITED/TERMINATED (a pod is charged whether or not a lane is
