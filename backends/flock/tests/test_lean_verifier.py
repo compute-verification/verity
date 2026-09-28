@@ -649,6 +649,17 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None
+                    or not (_format_vectors() / "qcall_vectors.json").exists(), reason="no Lean toolchain or no Q_call vectors")
+def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
+    ir = _format_vectors()
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(LEAN.parent / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path), "--qcall", str(ir / "qcall_vectors.json"), "--format", str(ir / "format_vectors.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
