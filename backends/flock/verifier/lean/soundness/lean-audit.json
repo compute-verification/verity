@@ -394,14 +394,15 @@
   },
   "FlockSoundness.Refine.merkleCheck_verifies": {
    "signature": [
-    "FlockSoundness.Refine.merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}",
-    "  {rows : Array (Array Flock.F128)} {sibs salts : Array ByteArray} {lanes : ℕ}",
-    "  (h : Flock.merkleCheck (Flock.MerkleScheme.sha512 msId) cap c d pos rows sibs salts lanes = Except.ok ()) (j : ℕ)",
-    "  (hj : j < pos.size) :",
-    "  rows[j]!.size = lanes ∧",
-    "    FlockSoundness.Merkle.Verifies FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
-    "      (fun i => FlockSoundness.Refine.toDig (cap.getD i ByteArray.empty)) (d - c) pos[j]! rows[j]!.toList",
-    "      (List.map FlockSoundness.Refine.toDig (Flock.sibsOf sibs (d - c) j))"
+    "FlockSoundness.Refine.merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : Nat} {pos : Array Nat}",
+    "  {rows : Array (Array Flock.F128)} {sibs salts : Array ByteArray} {lanes : Nat}",
+    "  (h : Eq (Flock.merkleCheck (Flock.MerkleScheme.sha512 msId) cap c d pos rows sibs salts lanes) (Except.ok Unit.unit))",
+    "  (j : Nat) (hj : instLTNat.lt j pos.size) :",
+    "  And (Eq (Array.instGetElem?NatLtSize.getElem! rows j).size lanes)",
+    "    (FlockSoundness.Merkle.Verifies FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
+    "      (fun i => FlockSoundness.Refine.toDig (cap.getD i ByteArray.empty)) (instHSub.hSub d c)",
+    "      (Array.instGetElem?NatLtSize.getElem! pos j) (Array.instGetElem?NatLtSize.getElem! rows j).toList",
+    "      (List.map FlockSoundness.Refine.toDig (Flock.sibsOf sibs (instHSub.hSub d c) j)))"
    ],
    "assumptions": [],
    "type_hash": "00000000be141dea"
@@ -432,13 +433,22 @@
   "FlockSoundness.Refine.opensOK_of": {
    "signature": [
     "FlockSoundness.Refine.opensOK_of (msId : String) (sch : Flock.Schedule)",
-    "  (hlv : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default)) (cap : Array ByteArray)",
-    "  (p : Flock.LigeritoProof) (r : ℕ) (pend : FlockSoundness.Model.PendL FlockLevel3.GF128 FlockSoundness.Refine.Dig)",
+    "  (hlv :",
+    "    ∀ (i : Nat),",
+    "      instLTNat.lt i sch.levels.size →",
+    "        FlockSoundness.Refine.LevelSeam (sch.levels.getD i Flock.instInhabitedLevel.default))",
+    "  (cap : Array ByteArray) (p : Flock.LigeritoProof) (r : Nat)",
+    "  (pend : FlockSoundness.Model.PendL FlockLevel3.GF128 FlockSoundness.Refine.Dig)",
     "  (o : FlockSoundness.Model.Opens FlockLevel3.GF128 FlockSoundness.Refine.Dig)",
     "  (hcaps :",
-    "    pend.caps = List.map (fun j => FlockSoundness.Refine.capDig p.recursiveCaps[j]!) (List.range (sch.levels.size - 1)))",
-    "  (hreqs : ∀ req ∈ pend.reqs, FlockSoundness.Refine.ReqOK (Flock.MerkleScheme.sha512 msId) sch cap p req)",
-    "  (ho : ∀ (ℓ j : ℕ), o r ℓ j = FlockSoundness.Refine.openRow p sch ℓ j) :",
+    "    Eq pend.caps",
+    "      (List.map (fun j => FlockSoundness.Refine.capDig (Array.instGetElem?NatLtSize.getElem! p.recursiveCaps j))",
+    "        (List.range (instHSub.hSub sch.levels.size 1))))",
+    "  (hreqs :",
+    "    ∀ (req : FlockSoundness.Model.Req),",
+    "      List.instMembership.mem pend.reqs req →",
+    "        FlockSoundness.Refine.ReqOK (Flock.MerkleScheme.sha512 msId) sch cap p req)",
+    "  (ho : ∀ (ℓ j : Nat), Eq (o r ℓ j) (FlockSoundness.Refine.openRow p sch ℓ j)) :",
     "  FlockSoundness.Model.OpensOK FlockSoundness.Refine.H512 FlockSoundness.Refine.enc512",
     "    (FlockSoundness.Refine.capDig cap) r pend o"
    ],
