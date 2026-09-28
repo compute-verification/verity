@@ -44,7 +44,7 @@
 //! `UNSOUND DIAGNOSTIC BUILD: ...` first and commits the verdict byte `0xEE`
 //! (accept) or `0xEF` (reject) instead of `1` / `0`, so the output can never
 //! pass for a sound guest's; the host reports it as `unsound`.  See
-//! `zk/sp1/README.md`.
+//! `backends/sp1/README.md`.
 
 #![no_main]
 sp1_zkvm::entrypoint!(main);
