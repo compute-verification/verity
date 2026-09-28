@@ -333,7 +333,7 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          "(flock-128-r2, live coins) and joined to the prime side by the sigma link (two GF(2^128) points); frame-v3 SHA-256 trees",
          (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
           Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
-         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
+         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-205 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
          (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA)),
          "interactive: live-verifier-only (live prime and Flock coins in one session)",
          "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
@@ -381,7 +381,8 @@ FLOCK_CONFIG = Configuration(
      Hash("BLAKE3 / SHA-256", _INTERNAL, _CR + " (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"),
      Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
     "No: not zero-knowledge yet (declared class NON_ZK_PROOF; the Flock lane may change it)",
-    "2^-195.5 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit); red-team-flock: NOT GRANTED until "
+    "2^-205 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit; the table theorems at η = 1/200, "
+    "soundness ASSUMPTIONS.md; the cells record the earlier, still valid 2^-195.5); red-team-flock: NOT GRANTED until "
     "R1–R8 (reps bound to one commitment, a live challenger); under Fiat–Shamir at most 2^-75.6",
     "the Ligerito query term per run (2^-97.8), squared by the two live-coin reps; it does not grow with the batch",
     (Proximity("Ligerito PCS (binary field)", "Johnson regime (list decoding)", _FLOCK_MCA),),
@@ -396,7 +397,8 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
                "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
                "(statement verity/flock-vllm-block/v1)",
     hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *FLOCK_CONFIG.hashes[2:]),
-    soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
+    soundness="2^-205 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-203 over 4 proofs (the cells "
+              "record the earlier, still valid 2^-195.44); "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
 CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
