@@ -31,7 +31,7 @@ from verity_vllm.program.kernels import _jit
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "fa2_model.cpp"
 CPP_DEP = HERE / "cpp" / "tc_model.cpp"
-LIB = _jit.lib_path("libfa2_model.so")                 # build product (cpp/build/, gitignored), compiled on first use
+LIB = _jit.lib_path("libfa2_model.so")                 # build product (the _jit cache, outside the checkout), compiled on first use
 
 M_LOG2E = 1.4426950408889634  # <math.h> M_LOG2E as a double
 KBLOCK_M = 64

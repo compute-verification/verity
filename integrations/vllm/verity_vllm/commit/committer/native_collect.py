@@ -117,24 +117,6 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
 
 
-def _clear_stale_jit_lock(bd, max_age_s=600.0):
-    """torch's cpp_extension.load() serialises builds with `<build_dir>/lock` (FileBaton) and WAITS FOREVER while it exists; a process
-    killed mid-build (OOM, timeout) leaves it behind and every later loader hangs silently (R13 07:24Z: three runs 'hung' at the first
-    instrumented step in the worker's ext load).  A lock older than `max_age_s` cannot be a live build here (~2 min) -> remove it, loudly."""
-    import sys, time
-    p = os.path.join(bd, "lock")
-    try:
-        age = time.time() - os.stat(p).st_mtime
-    except FileNotFoundError:
-        return
-    if age > max_age_s:
-        print(f"[jit] removing stale build lock {p} ({age:.0f} s old; a killed build left it)", file=sys.stderr, flush=True)
-        try:
-            os.remove(p)
-        except FileNotFoundError:
-            pass
-
-
 def build_source_digest() -> str:
     """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
     from verity_vllm.commit.committer import native_jit
@@ -146,28 +128,15 @@ def ext(build_dir: str | None = None, verbose: bool = False):
     """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
     PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- [COORD R17-41 (1)] torch's
     mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
-    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way."""
+    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
+    on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
-        from torch.utils.cpp_extension import load
-
         from verity_vllm.commit.committer import native_jit
 
-        digest = build_source_digest()
-        parent = build_dir or os.environ.get("NATIVE_COLLECT_BUILD")
-        if not parent:
-            try:
-                from torch.utils.cpp_extension import _get_build_directory
-
-                parent = _get_build_directory("verity_native_collect", verbose=False)
-            except Exception:  # noqa: BLE001 -- private helper; the documented default location is the fallback
-                parent = os.path.join(os.path.expanduser("~/.cache/torch_extensions"), "verity_native_collect")
-        bd = native_jit.keyed_build_dir(parent, digest)
-        os.makedirs(bd, exist_ok=True)
-        _clear_stale_jit_lock(bd)
-        _EXT = load(name="verity_native_collect", sources=native_jit.source_paths(HERE),
-                    extra_cflags=list(native_jit.CFLAGS), extra_cuda_cflags=list(native_jit.CUDA_CFLAGS), with_cuda=True, build_directory=bd,
-                    verbose=verbose)
+        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
+                                               parent=build_dir or os.environ.get("NATIVE_COLLECT_BUILD") or None,
+                                               cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
         missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))
         if missing:
             _EXT = None

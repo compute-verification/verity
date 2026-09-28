@@ -1075,6 +1075,7 @@ class Options:
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all, stratified by family (one stratum per family, round-robin, at least one each) in place of the row's per-stratum sample")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
@@ -1953,8 +1954,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                  # fail-closed diagnostics: WHICH positions failed (step, leaf index, identity) -- a failed opening is a Commit FAIL
                                  "failed": [{"step": o.step, "index": o.index, "identity": {k: (v if isinstance(v, (int, str, bool)) else str(v)) for k, v in (o.identity or {}).items()}}
                                             for o, k_ok in zip(ops, ok) if not k_ok][:16]},
-                    "weight_registration": rc.weight_registration,
-                }
+                    "weight_registration": rc.weight_registration}
                 for s in rc.steps:
                     step_rows.append({"pair": pair, "arm": arm, "step": s.step, "wall_s": r["step_wall_s"][s.step] if s.step < len(r["step_wall_s"]) else None,
                                       "n_leaves": s.n_leaves, "n_bytes": s.n_bytes, "n_tensors": s.n_tensors, "hashing_s": s.hashing_s,
@@ -2291,7 +2291,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             _rc_key = json.dumps({"run_root": rc.run_root.hex(), "manifest_digest": (required_manifest or {}).get("manifest_digest") if isinstance(required_manifest, dict) else None,
                                                   "program_digest": getattr(args, "program_digest", None), "seed": _ks,
                                                   "binding_map_sha256": hashlib.sha256((Path(args.out) / f"binding_map_p{pair}.json").read_bytes()).hexdigest(),
-                                                  "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []),
+                                                  "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []), "k": args.replay_k,
                                                   "code": versions.get("git_head"), "weights_root": _w_ref_k, "committer": com.name, "retain": getattr(args, "retain", None)}, sort_keys=True)
                         except Exception as _ke:  # noqa: BLE001  -- no key, no reuse
                             _rc_key = None
@@ -2435,7 +2435,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                               served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in r["tokens"].items() if str(k) in _rl})
                         if hasattr(SR, "executed_prefix_of_record") and "executed_prefix" in inspect.signature(SR.sampled_replay).parameters:
                             _ep_facts = EPX.facts_accepted_by(SR.executed_prefix_of_record, _ep_facts)
-                            _sr_kw["executed_prefix"] = {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
+                            _sr_kw["executed_prefix"] = {} if args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
                             _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
                             if _epr_r["any_eos_stop"] or _flt:
                                 print(f"[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
@@ -2446,7 +2446,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
                         sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                                                seed_challenge=_seed_chal,
-                                               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
+                                               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
                                                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                                                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity

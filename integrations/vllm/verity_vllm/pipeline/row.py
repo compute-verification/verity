@@ -111,6 +111,8 @@ def run_row(o: Run | Stage, stages: str) -> int:
         print(f"[row] REFUSE (fail-closed): {e}", flush=True)
         return 3
     if row_world(o.row) > 1:
+        if o.commit.config_run == "1":
+            raise UsageError(f"--config-run 1: {o.row} is a tensor-parallel row; the config run covers single-GPU rows for now")
         from verity_vllm.pipeline import row_records as R
         from verity_vllm.pipeline.row_tp import TpRow
         world = o.world if o.world is not None else R.tp_world(_workload(o.row))

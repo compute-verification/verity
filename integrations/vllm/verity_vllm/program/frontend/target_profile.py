@@ -137,7 +137,7 @@ class TargetProfile:
                            of what it computes).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
-    tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
+    tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
     batch-invariant GEMM table for the capability: `ada` 8.9, `hopper` 9.x, None otherwise — mirrors
     `batch_invariant_configs._get_tuned_matmul_arch_family`, read back by the builder).
     """
@@ -352,12 +352,15 @@ class TargetProfile:
         """The registered k16 tensor-core pipeline family of the capability: `ampere` (sm_80/8.6/8.9: `AmpereBF16TcDot16`, one
         registered function serves all — `silicon_total.AMPERE_BF16_DOT16_TOTAL`), `hopper` (sm_90: `HopperBF16WgmmaDot16`;
         Hawkeye's `HOPPER_BF16_M16N8K16` and lane HP's wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
-        the GEMM's `wgmma` on an H100 are one registered step).  Anything else is `unregistered:<cc>` (rules refuse)."""
+        the GEMM's `wgmma` on an H100 are one registered step), `blackwell_consumer` (sm_120, cc 12.0 exactly: `mma.sync` only, on
+        the same 16:26:-133 pipeline, so `HopperBF16WgmmaDot16` again).  Anything else is `unregistered:<cc>` (rules refuse)."""
         major = self.compute_capability[0]
         if major == 8:
             return "ampere"
         if major == 9:
             return "hopper"
+        if self.compute_capability == (12, 0):
+            return "blackwell_consumer"
         return f"unregistered:{self.capability_str}"
 
     @property

@@ -300,13 +300,22 @@ def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     return q if q in QUERIES else None
 
 
+def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2) -> tuple[list[dict], int]:
+    """With `k` (the config run), every VU re-keyed to its family's one stratum (`family|all|all|all|all|all`, the key's fields kept) and
+    `k` picks per family: with the cap at `k`, the round-robin order of `sample` then takes k units in all, one per family first, a small
+    family used up before the others, the rest split evenly.  Without `k`, the VUs and `per_stratum` as given."""
+    if not k:
+        return vus, per_stratum
+    return [dict(v, stratum=f"{v['family']}|all|all|all|all|all") for v in vus], int(k)
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None) -> dict[str, Any]:
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
@@ -315,7 +324,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...}; rev-cb
     M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap).
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units stratified by family (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
@@ -346,9 +355,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         not_ev_fam.update(nef)
         indices[rid] = pi
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
-    picked_all, strata, tgt = sample(pool_vus, per_stratum, seed, targets=targets, key=challenge_key)
+    picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
-    cap = max(int(max_evaluate), len(strata))                                     # never below one VU per stratum
+    cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
         not_ev[f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"] += 0
@@ -478,12 +487,12 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
             "addresses": addr_rec,
-            "sample": {"per_stratum": int(per_stratum), "seed": int(seed), "seed_source": seed_source,
+            "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": "family" if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
                        # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),
                        "picked": len(picked), "evaluated": evaluated, "equal": equal,
-                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(max_evaluate), "cap_effective": int(cap),
+                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(cap),
                        "stratified_picked": min(cap, n_strat), "targeted": targeted, "targeted_n": n_targeted,
                        "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
                        "picks_by_request_step": picks_by_request_step,      # [revb n-pad-c-1] {request: {step: [picked, evaluated, mismatch]}}

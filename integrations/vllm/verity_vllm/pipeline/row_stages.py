@@ -17,9 +17,12 @@
   (derived beside the component Program, re-derived when stale); then the manifest verification and the verdict
   record (``verdict from-record``), whose outcome is the stage's decision.
 
+A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
+k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
-record incomplete at Commit; 21 a call-boundary identity without a source the Commit attaches; 3 precheck FAIL; 2 no
-workload; 128+signal when cancelled.
+record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
+attaches; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 
@@ -60,21 +64,28 @@ class SingleRow(Row):
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
         self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
+        self.config_run = commit.config_run == "1"
 
     def run(self) -> int:
         try:
             self.prepare()
             if stage_on(self.stages, "build"):
                 self.build()
-            if stage_on(self.stages, "match"):
+                if self.config_run:
+                    RC.word_check(self)
+            if stage_on(self.stages, "match") and not self.config_run:
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
         except Stop as s:
+            if self.config_run and self.trap:
+                RC.config_record(self)
             return s.rc
         finally:
             if self.trap:
                 self.research_result()
+        if self.config_run:
+            RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
         self.log("DONE")
@@ -268,17 +279,18 @@ class SingleRow(Row):
             if lx is None:
                 rc_x = 1
                 continue
-            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx)))
+            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx), out))
         if jobs_n <= 1:
-            rc1 = self.run_tl("build.derive_step", to, f"{self.d}/build_step.log", cmd_s)
-            rc2 = self.run_tl("build.derive_request", to, f"{self.d}/build_request.log", cmd_r) if lctx is not None else 1
-            for st, lf, cmd in extra:
-                rcx = self.run_tl(st, to, lf, cmd)
+            rc1 = RC.derive_cached(self, "build.derive_step", to, f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")
+            rc2 = (RC.derive_cached(self, "build.derive_request", to, f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request")
+                   if lctx is not None else 1)
+            for st, lf, cmd, out in extra:
+                rcx = RC.derive_cached(self, st, to, lf, cmd, out)
                 rc2 = rcx if rcx != 0 else rc2
             return rc1, rc2 if rc_x == 0 else 1
 
-        def job(st: str, lf: str, cmd: list[str]) -> None:
-            rc = self.run_tl(st, to, lf, cmd, ("par", "true"))
+        def job(st: str, lf: str, cmd: list[str], out: str) -> None:
+            rc = RC.derive_cached(self, st, to, lf, cmd, out, ("par", "true"))
             open(f"{lf}.rc", "w").write(f"{rc}\n")
 
         def rc_of(lf: str) -> int:
@@ -287,11 +299,11 @@ class SingleRow(Row):
             except (OSError, ValueError):
                 return 1
         t0 = int(time.time())
-        todo = [("build.derive_step", f"{self.d}/build_step.log", cmd_s)]
+        todo = [("build.derive_step", f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")]
         if lctx is not None:
-            todo.append(("build.derive_request", f"{self.d}/build_request.log", cmd_r))
+            todo.append(("build.derive_request", f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request"))
         todo += extra
-        for _, lf, _ in todo:
+        for _, lf, _, _ in todo:
             if os.path.exists(f"{lf}.rc"):
                 os.remove(f"{lf}.rc")
         with ThreadPoolExecutor(max_workers=jobs_n) as pool:
@@ -301,7 +313,7 @@ class SingleRow(Row):
         if self.signalled:
             self.cancelled(rc1)
         rc2 = rc_of(f"{self.d}/build_request.log") if lctx is not None else 1
-        for _, lf, _ in extra:
+        for _, lf, _, _ in extra:
             rc2 = rc_of(lf) if rc_of(lf) != 0 else rc2
         rc2 = rc_x if rc_x != 0 else rc2
         self.log(f"Build derives ran {jobs_n}-wide (SYS-06): step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
@@ -517,9 +529,12 @@ class SingleRow(Row):
     def commit_cmd(self, taps: list[str]) -> list[str]:
         """The Commit's command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
+        pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
-                       "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", str(ck.pairs), "--warmup", "2", "--max-num-seqs", str(self.B),
+                       "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
+        if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
+            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
@@ -537,7 +552,7 @@ class SingleRow(Row):
             cmd.append("--replay-cache")
         if ck.required_classes:
             cmd += ["--required-classes", ck.required_classes]
-        if ck.vu_export != "0":
+        if ck.vu_export != "0" and not self.config_run:
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
@@ -727,6 +742,9 @@ class SingleRow(Row):
             self.gpu_exclusive("commit-cold")
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
+        if self.config_run:
+            RC.commit_verdict(self, rck, wall)
+            return
         if rck == 0 and man:
             self.manifest_verify(man)
         self.tl("closure.verdict", "start")

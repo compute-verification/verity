@@ -42,7 +42,6 @@ if REPO not in sys.path:
     sys.path.insert(0, REPO)
 import numpy as np  # noqa: E402  -- identity is settled before anything heavy loads
 import torch  # noqa: E402
-from torch.utils.cpp_extension import load  # noqa: E402
 from verity_vllm.commit import hidden_stream as hs  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 from verity_vllm.config import option  # noqa: E402
@@ -50,33 +49,15 @@ from verity_vllm.config import option  # noqa: E402
 _EXT = None
 
 
-def _clear_stale_jit_lock(bd, max_age_s=600.0):
-    """torch's cpp_extension.load() serialises builds with `<build_dir>/lock` (FileBaton) and WAITS FOREVER while it exists; a process
-    killed mid-build (OOM, timeout) leaves it behind and every later loader hangs silently (R13 07:24Z: three runs 'hung' at the first
-    instrumented step in the worker's ext load).  A lock older than `max_age_s` cannot be a live build here (~2 min) -> remove it, loudly."""
-    import sys, time
-    p = os.path.join(bd, "lock")
-    try:
-        age = time.time() - os.stat(p).st_mtime
-    except FileNotFoundError:
-        return
-    if age > max_age_s:
-        print(f"[jit] removing stale build lock {p} ({age:.0f} s old; a killed build left it)", file=sys.stderr, flush=True)
-        try:
-            os.remove(p)
-        except FileNotFoundError:
-            pass
-
-
 def ext():
+    """JIT-build the GPU tree extension once per process into `<HIDDEN_GPU_BUILD or torch's default>/<source digest12>`, serialised
+    with other jobs on the host (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
-        bd = os.environ.get('HIDDEN_GPU_BUILD', None)
-        if bd:
-            os.makedirs(bd, exist_ok=True)
-            _clear_stale_jit_lock(bd)
-        _EXT = load(name='hidden_gpu_tree', sources=[os.path.join(HERE, 'hidden_gpu_tree.cu')], extra_cuda_cflags=['-O3', '--use_fast_math'],
-                    build_directory=bd, verbose=False)
+        from verity_vllm.commit.committer import native_jit
+
+        _EXT, _bd, _digest = native_jit.jit_load('hidden_gpu_tree', [os.path.join(HERE, 'hidden_gpu_tree.cu')],
+                                                 parent=os.environ.get('HIDDEN_GPU_BUILD') or None, cuda_cflags=('-O3', '--use_fast_math'))
     return _EXT
 
 
