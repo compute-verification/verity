@@ -2,7 +2,9 @@
 compared bit for bit against ``verity.ml.tc.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
 the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
-record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted).
+record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
+are mxf4's ``families_mxf4_edges`` (the UE8M0 NaN scale, overflowing blocks that cancel, the RZ edge at 2^128, infinite
+accumulators against overflows): what a total mxf4 step must decide.
 
     python tools/tc_probe_fp4/probe.py --instruction nvf4 --out $RESEARCH_RUN_DIR --sass-check \
         --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json --sweep --n-random 4096
@@ -71,6 +73,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -95,7 +98,7 @@ MAX_TILES_PER_CALL = 1 << 14
 
 # Families whose accumulators or sums lie outside every model's domain (NaN / inf accumulators, sums leaving binary32): the
 # hardware words are recorded and summarised, they never gate validation.
-RECORD_ONLY_FAMILIES = {"specials"}
+RECORD_ONLY_FAMILIES = {"specials", "mxf4_nan_scale", "mxf4_overflow_cancel", "mxf4_overflow_edge", "mxf4_inf_acc_overflow"}
 
 PTX = {
     "nvf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
@@ -151,6 +154,20 @@ def build(arch: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
     nvcc = subprocess.run([nvcc_bin(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc_bin(), "-O2", *arch_flags(arch), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
     return so, " / ".join(line.strip() for line in nvcc)
+
+
+def prebuilt(path: str) -> tuple[Path, str]:
+    """A library ``build`` produced on another host (``--library``; the cluster's job containers have no CUDA toolkit): the path
+    and its toolchain identity (``<so>.nvcc``, else the ``nvcc`` of a ``build.json`` beside it) plus its sha256."""
+    so = Path(path)
+    sidecar, record = Path(f"{so}.nvcc"), so.parent / "build.json"
+    if sidecar.exists():
+        ident = sidecar.read_text().strip()
+    elif record.exists():
+        ident = json.loads(record.read_text()).get("nvcc") or "unknown toolchain"
+    else:
+        ident = "unknown toolchain"
+    return so, f"{ident} (prebuilt {so.name}, sha256 {hashlib.sha256(so.read_bytes()).hexdigest()})"
 
 
 def sass_check(so: Path) -> dict:
@@ -727,6 +744,123 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
         sfa[sel] = rng.integers(200, 255, (int(sel.sum()), 16, nblk))
         sfb[sel] = rng.integers(200, 255, (int(sel.sum()), 8, nblk))
     yield "specials", A, Bt, sfa, sfb, acc
+    if not ue4:
+        yield from families_mxf4_edges(rng)
+
+
+#: accumulators of the mxf4 edge families: both zeros, +-1, NaNs of both signs (quiet and signalling), both infinities, +-FLT_MAX,
+#: the least subnormal
+_EDGE_ACC = np.array([0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7FC00000, 0xFFC00000, 0x7F800001, 0x7F800000, 0xFF800000,
+                      0x7F7FFFFF, 0xFF7FFFFF, 0x00000001], np.uint32)
+#: accumulators at the top of binary32: +-FLT_MAX, +-2^127, +-1.5 2^127, +-(2^127 - 2^103), FLT_MAX - 1 ulp, +0
+_TOP_ACC = np.array([0x7F7FFFFF, 0xFF7FFFFF, 0x7F000000, 0xFF000000, 0x7F400000, 0xFF400000, 0x7EFFFFFF, 0xFEFFFFFF, 0x7F7FFFFE,
+                     0x00000000], np.uint32)
+
+
+def families_mxf4_edges(rng):
+    """Record-only (UE8M0, two blocks of 32): what a total mxf4 step decides and no finite-domain family reaches.  Yield
+    (name, A, Bt, SFA, SFB, C) like ``families_nvf4``.
+
+    ``mxf4_nan_scale``: the UE8M0 NaN code 0xFF on even rows / columns only (odd ones are the controls of the same tile), by block
+    and operand, over blocks with nonzero products, a zero A or B block, no product at all, an exactly cancelling block, every
+    scale 0xFF, and 0xFF beside a block that overflows.  ``mxf4_overflow_cancel``: block dots that leave binary32 on their own
+    (scales 185..254) and cancel exactly -- block 1 = -block 0 under equal scales, group 1 = -group 0 inside block 0, block 1 at
+    twice the codes under half the scale -- and a cancellation leaving a residual inside binary32.  ``mxf4_overflow_edge``: one
+    or two products of 1 or 1.5 at 2^(100..129) (row i and column j set the exponent) against the accumulators at the top of
+    binary32, both signs, so that exact sums fall on both sides of 2^128 and inside (FLT_MAX, 2^128); and random codes whose sums
+    straddle it.  ``mxf4_inf_acc_overflow``: infinite and NaN accumulators against positive and negative overflows, an exact
+    cancellation of overflowing blocks, and moderate products."""
+    k, nblk = 64, 2
+
+    def nz(shape, lo=1):
+        return (rng.integers(lo, 8, shape) | (rng.integers(0, 2, shape) << 3)).astype(np.uint8)
+
+    def neg(c):
+        return np.where(c & 7, c ^ 8, c).astype(np.uint8)
+
+    def acc_from(pool, n, zero_tiles=None):
+        acc = pool[rng.integers(0, len(pool), (n, 16, 8))]
+        if zero_tiles is not None:
+            acc[zero_tiles] = 0
+        return acc.astype(np.uint32)
+
+    n = 8 * 16
+    v = np.arange(n) // 16
+    A, Bt = nz((n, 16, k)), nz((n, 8, k))
+    sfa, sfb = rng.integers(110, 145, (n, 16, nblk)).astype(np.uint8), rng.integers(110, 145, (n, 8, nblk)).astype(np.uint8)
+    sel = [v == i for i in range(8)]
+    sfa[sel[0], 0::2, 0] = 0xFF                                  # A block 0
+    sfb[sel[1], 0::2, 1] = 0xFF                                  # B block 1
+    sfa[sel[2], 0::2, 0] = 0xFF
+    A[sel[2], :, :32] = 0                                        # ... over A's zero codes
+    sfa[sel[3], 0::2, 0] = 0xFF
+    Bt[sel[3], :, :32] = 0                                       # ... over B's zero codes
+    sfa[sel[4]], sfb[sel[4]] = 0xFF, 0xFF                        # every scale
+    A[sel[5]], Bt[sel[5]] = 0, 0
+    sfa[sel[5], 0::2, 0] = 0xFF                                  # no product anywhere
+    sfa[sel[6], 0::2, 0] = 0xFF                                  # beside a block 1 that overflows
+    A[sel[6], :, 32:], Bt[sel[6], :, 32:] = 0x7, 0x7
+    sfa[sel[6], :, 1] = rng.integers(230, 255, (int(sel[6].sum()), 16))
+    sfb[sel[6], :, 1] = rng.integers(230, 255, (int(sel[6].sum()), 8))
+    sfa[sel[7], 0::2, 0] = 0xFF                                  # over a block 0 that cancels exactly
+    A[sel[7], :, 1:32:2] = A[sel[7], :, 0:32:2]
+    Bt[sel[7], :, 1:32:2] = neg(Bt[sel[7], :, 0:32:2])
+    yield "mxf4_nan_scale", A, Bt, sfa, sfb, acc_from(_EDGE_ACC, n)
+
+    n = 128
+    v = np.arange(n) % 4
+    A, Bt = nz((n, 16, k), 5) & 7, nz((n, 8, k), 5) & 7          # |x| in {3, 4, 6}, positive: every block dot one sign
+    ca, cb = rng.integers(200, 255, (n, 16)), rng.integers(200, 255, (n, 8))
+    sel = v == 2                                                 # the residual 2^(ca+cb-256) inside binary32, each block outside
+    ca[sel], cb[sel] = rng.integers(187, 192, (int(sel.sum()), 16)), rng.integers(188, 193, (int(sel.sum()), 8))
+    sfa, sfb = np.repeat(ca[:, :, None], 2, 2).astype(np.uint8), np.repeat(cb[:, :, None], 2, 2).astype(np.uint8)
+    for s in (v == 0, v == 2):                                   # block 1 = -block 0
+        A[s, :, 32:] = A[s, :, :32]
+        Bt[s, :, 32:] = neg(Bt[s, :, :32])
+    A[v == 2, :, 0], Bt[v == 2, :, 0], A[v == 2, :, 32] = 0x1, 0x1, 0
+    sel = v == 1                                                 # group 1 = -group 0 inside block 0, block 1 empty
+    A[sel, :, 16:32] = A[sel, :, :16]
+    Bt[sel, :, 16:32] = neg(Bt[sel, :, :16])
+    A[sel, :, 32:] = 0
+    sel = v == 3                                                 # block 1: twice the codes under half the A scale
+    A[sel, :, :32] = rng.integers(1, 6, (int(sel.sum()), 16, 32))
+    A[sel, :, 32:] = np.array([0, 2, 4, 5, 6, 7], np.uint8)[A[sel, :, :32]]
+    Bt[sel, :, 32:] = neg(Bt[sel, :, :32])
+    sfa[sel, :, 1] = sfa[sel, :, 0] - 1
+    yield "mxf4_overflow_cancel", A, Bt, sfa, sfb, acc_from(_EDGE_ACC, n, zero_tiles=np.arange(n) < n // 2)
+
+    n = 256
+    v = np.arange(n) % 4
+    A, Bt = np.zeros((n, 16, k), np.uint8), np.zeros((n, 8, k), np.uint8)
+    sfa = np.broadcast_to((190 + np.arange(16))[None, :, None], (n, 16, nblk)).astype(np.uint8)
+    sfb = np.broadcast_to((164 + 2 * np.arange(8))[None, None, :].transpose(0, 2, 1), (n, 8, nblk)).astype(np.uint8)
+    negative = (np.arange(n) // 4) % 2 == 1
+    A[v == 0, :, 0] = 0x2                                        # 1 x 2^(ca+cb-254) = 2^(100 + i + 2j)
+    A[v == 1, :, 0], A[v == 1, :, 32] = 0x2, 0x2                 # two of them, one per block
+    A[v == 2, :, 0] = 0x3                                        # 1.5 x 2^(100 + i + 2j)
+    Bt[v != 3, :, 0], Bt[v == 1, :, 32] = 0x2, 0x2
+    Bt[negative & (v != 3), :, 0] = 0xA
+    Bt[negative & (v == 1), :, 32] = 0xA
+    sel = v == 3                                                 # random codes, sums straddling 2^128
+    A[sel], Bt[sel] = nz((int(sel.sum()), 16, k)), nz((int(sel.sum()), 8, k))
+    sfa, sfb = sfa.copy(), sfb.copy()
+    sfa[sel] = rng.integers(185, 200, (int(sel.sum()), 16, nblk))
+    sfb[sel] = rng.integers(170, 186, (int(sel.sum()), 8, nblk))
+    yield "mxf4_overflow_edge", A, Bt, sfa, sfb, acc_from(_TOP_ACC, n)
+
+    n = 64
+    v = np.arange(n) % 4
+    A, Bt = np.full((n, 16, k), 0x7, np.uint8), np.full((n, 8, k), 0x7, np.uint8)
+    Bt[v == 1] = 0xF                                             # every product -36
+    sfa, sfb = rng.integers(200, 255, (n, 16, nblk)).astype(np.uint8), rng.integers(200, 255, (n, 8, nblk)).astype(np.uint8)
+    sel = v == 2                                                 # block 1 = -block 0: overflowing blocks cancelling exactly
+    Bt[sel, :, 32:] = 0xF
+    sfa[sel, :, 1], sfb[sel, :, 1] = sfa[sel, :, 0], sfb[sel, :, 0]
+    sel = v == 3                                                 # moderate products
+    A[sel], Bt[sel] = nz((int(sel.sum()), 16, k)), nz((int(sel.sum()), 8, k))
+    sfa[sel], sfb[sel] = rng.integers(110, 145, (int(sel.sum()), 16, nblk)), rng.integers(110, 145, (int(sel.sum()), 8, nblk))
+    inf_nan = np.array([0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001, 0xFF800001], np.uint32)
+    yield "mxf4_inf_acc_overflow", A, Bt, sfa, sfb, acc_from(inf_nan, n)
 
 
 def families_bf16(rng, n_random: int):
@@ -980,6 +1114,8 @@ def main() -> int:
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--library", default=None, help="load this library (a build of the same source and arch on a host with the CUDA "
+                    "toolkit) instead of compiling")
     args = ap.parse_args()
     # the remote runner passes argv without a shell: `$RESEARCH_RUN_DIR` arrives literally and is expanded here
     args.replay_autoproof = [os.path.expandvars(p) for p in args.replay_autoproof]
@@ -993,7 +1129,7 @@ def main() -> int:
     if args.chain2 and not tcgen05:
         ap.error("--chain2 is a tcgen05 option")
 
-    so, nvcc = build(args.arch, out, SOURCE[instr])
+    so, nvcc = prebuilt(os.path.expandvars(args.library)) if args.library else build(args.arch, out, SOURCE[instr])
     probe = Probe(so)
     if tcgen05 and args.smem_strides:
         probe.smem = dict(zip(("lbo_a", "sbo_a", "lbo_b", "sbo_b"), (int(x) for x in args.smem_strides.split(","))))
