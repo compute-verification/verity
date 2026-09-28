@@ -17,7 +17,8 @@ tests read a little of a large dependency), the build outputs it lists under `ar
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
-and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the check code that runs the suites (`RUNNER`). The cache key hashes all
+and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -129,8 +130,10 @@ GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the runner itself, and check, which runs it.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/check/guard/verity_suite_guard.py",
+#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer (Daniel, 9 Oct). Not
+#: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
+#: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
