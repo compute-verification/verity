@@ -8,18 +8,20 @@ accept, same reject, same phase — on wrong values, roots and positions; missin
 obligations; invalid ranges and slot maps; and values supplied through a shared table that nothing
 authenticated.
 
-`vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) was **generated** by the predecessor
-implementation's Python reference (it decided every vector; `expected` is its verdict) and is frozen
-here; nothing in this repository regenerates it. It is **replayed** by
-`backends/sp1/common/tests/format3_equivalence.rs` on the guest kernel. Gate set
+`vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) is **generated** by
+`tests/veritor/protocol/proofs/test_format3_equivalence.py::test_write_vectors` (the Python
+reference decides every vector; `expected` is its verdict) and **replayed** by
+`zk/sp1/common/tests/format3_equivalence.rs` on the guest kernel. Gate set
 `veritor.word-arithmetic@2` at width 16; packed leaves of 8 `u16le` words under
 `verity-vllm/leaf/v1` framing; frame-v3 (`u16`) leaves for the multiproof family.
 
 ## Rerun
 
 ~~~sh
+# Python (the reference; regenerates vectors.json and asserts it is unchanged)
+.venv/bin/python -m pytest -q -p no:cacheprovider tests/veritor/protocol/proofs/test_format3_equivalence.py
 # Rust (the guest kernel; every path that can take a vector must agree exactly)
-cd backends/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test format3_equivalence -- --nocapture
+cd zk/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test format3_equivalence -- --nocapture
 ~~~
 
 ## Fields
@@ -99,3 +101,6 @@ cd backends/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test for
 | `multiproof/wrong-root` | 2 (+1) | root zeroed | reject:INVALID_OPENING |
 | `multiproof/two-obligations-share-a-leaf` | 2 (+1) | – (rank 2 authenticated once, used twice) | accept |
 | `multiproof/authenticated-values-fail-the-relation` | 2 (+1) | honest witness, `add` relation over values that do not satisfy it | reject:RELATION_REJECTED |
+
+Nothing in this directory is a historical record; regenerate it when the corpus in the Python
+test changes (the test asserts the file equals what it would write).

@@ -3,7 +3,8 @@
 //! Aeneas translates (lane L3, Target D assessment).
 //!
 //! Every function here mirrors one in `zk/sp1/common/src/{check,gateset}.rs`
-//! (named in its doc comment).  The changes from the production code:
+//! (named in its doc comment).  The changes from the production code, all
+//! recorded in `docs/verified-backend/guest-cost-and-first-optimisation.md`:
 //!
 //! * `no_std` + `alloc`; `Vec<T>` and slices stay (Aeneas models them).
 //! * No early `return` / `?` inside loops: every loop carries an

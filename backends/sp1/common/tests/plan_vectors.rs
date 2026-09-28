@@ -1,10 +1,14 @@
-//! The plan-layer vectors of `fixtures/lean-vectors/plan.json` (lane L4, Target C)
+//! The plan-layer vectors of `lean/vectors/plan.json` (lane L4, Target C)
 //! against the guest's `validate_plan`: every plan the file marks valid is
-//! accepted and every plan it marks invalid is rejected.  The file was generated
-//! by the predecessor implementation from its Python `encode_plan` (honest
-//! plans) and its tampered-plan corpus (negative plans), and is frozen.
+//! accepted and every plan it marks invalid is rejected.  The file is written
+//! by `lean/scripts/export_plan_vectors.py` from the Python `encode_plan`
+//! (honest plans) and `zk/campaign/plan_tests.tampered_plans` (negative
+//! plans); the Lean specification runs the same file with
+//! `lake exe plan_vectors`.
 //!
-//! The file is looked up at `$PLAN_VECTORS` or, failing that, at
+//! Drop-in for L3's crate (`origin/vb-l3-guest-opt`, targeted at commit
+//! `ca21f40`): copy to `zk/sp1/common/tests/plan_vectors.rs`.  The file is
+//! looked up at `$PLAN_VECTORS` or, failing that, at
 //! `<crate>/../../../fixtures/lean-vectors/plan.json`.
 
 use serde::Deserialize;

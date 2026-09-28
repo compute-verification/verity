@@ -123,7 +123,7 @@ def test_ada_fp8_has_two_groups_where_hopper_has_one() -> None:
     group of 32 the 1.0 is aligned to exponent 16 inside a 14-bit window and
     truncated away; on Ada it lands in the second group after the cancellation.
     Measured on the RTX 4090: Hawkeye's Hopper FP8 simulator disagreed with the
-    hardware on 17.6% of random-tile outputs.
+    hardware on 17.6% of random-tile outputs (see docs/hardware-semantics.md).
     """
 
     a = [0x78, 0x78] + [0] * 14 + [0x38] + [0] * 15  # 256, 256, ..., 1.0 at k = 16
