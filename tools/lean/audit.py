@@ -24,7 +24,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`) the definitions the pinned statements read, per module
+                 named assumptions, type hash, and (under `reads`) the definitions the pinned statements read, per module;
+                 the hashes are SHA-256 over a canonical form of the term that ignores what `Expr.hash` ignores (records
+                 written with its 32 bits are checked as they are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
