@@ -125,8 +125,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             else:
                 stats["stored"] += 1
         if log:
+            across = (r.get("partition") or {}).get("recomputed_across")
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"warnings={len(r['warnings'])} ({r['seconds']:.1f}s)")
+                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + f" ({r['seconds']:.1f}s)")
 
     todo = list(range(len(tasks)))
     if tracing:
@@ -224,7 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warn {k}: {w['total']} over {w['definitions']} target(s)")
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    across = s.get("recomputed_across") or {}
     print(f"circuit-check: {len(rep['targets'])} target(s), {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known"
+          + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", report {a.out}" if a.out else ""))
     failed = bool(s["new_failures"] or stale or (a.strict and s["known_failures"]) or (a.fail_on_warnings and s["warnings"]))
     return 1 if failed else 0

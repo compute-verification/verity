@@ -53,7 +53,7 @@ vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      #
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
 v = protocol.Verifier(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
 v.run(protocol.responder(scheme, blocks.__getitem__))
-print(v.profile().statement())                                                 # band_meets_64, given ChainExPostFactoG
+print(v.profile().statement())                                                 # Pous.Pinned.BandMultiMeetsFamily
 ~~~
 
 Tests: `uv run pytest protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.

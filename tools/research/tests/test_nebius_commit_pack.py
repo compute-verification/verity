@@ -92,6 +92,10 @@ def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
 @pytest.mark.parametrize("row, why", [
     (LLAMA_B8, None),
     ("smollm2-135m__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),
+    ("llama32-3b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", None),
+    ("qwen25-05b-instruct__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),
+    ("r1-distill-qwen-15b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", None),
+    ("llama31-8b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
     ("llama32-1b__bf16__rtxpro6000__tp1__b16__i256__o32__mixed__greedy__bi-eager", "batch 16"),
     ("llama32-1b__bf16__rtxpro6000__tp2__b8__i256__o32__mixed__greedy__bi-eager", "not TP1"),
     ("gemma2-2b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
