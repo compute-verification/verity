@@ -1,10 +1,11 @@
 """PoUW as a protocol option: every linear layer's GEMM computed as a `verity_pouw` scheme's honest work.
 
-The innermost option (`protocol_options` order).  `install` finds the linear layers by type (vLLM's ``LinearBase``,
-`linear_types`) and wraps each one's ``quant_method.apply`` through the composition's tagged `Hooks`.  Before it wraps
-anything it commits every layer's int7 weight rows (`verity_pouw.audit.commit_rows`) and derives the epoch salt from the
-beacon (`verity_pouw.audit.Epoch.start`): the weights are committed before the salt exists and before any outer option
-changes the model.  Each call of a wrapped ``apply(layer, x, bias)`` is one unit of the run's workload:
+The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
+composition's weight phase, with the model untouched and no beacon read, `commit_weights` finds the linear layers by
+type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity_pouw.audit.commit_rows`).
+`install` then derives the epoch salt from those roots and the beacon (`verity_pouw.audit.Epoch.start`) and replaces each
+``apply`` through the composition's tagged `Hooks`.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the
+run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and take the weight operands (`weight_operands`: the int7 weight per
    output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀).  The setting ``weight_operands`` says
@@ -15,10 +16,12 @@ changes the model.  Each call of a wrapped ``apply(layer, x, bias)`` is one unit
    digest (`ncp_tiles`, gated bit for bit against the scheme's reference in the tests); the digests join the transcript;
 3. return the useful output, the final checkpoint A·Bᵀ, dequantized by the row and column scales, plus the bias.
 
-`commitment` is the scheme, the salt, the weight roots and, once closed, the transcript root with its unit and tile
-counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s, after the run; sampled proofs' replay does not
-re-check PoUW's GEMMs (PoUW's tile audit only, pending the design's open question 2).  What is a placeholder is listed in
-`info` (``placeholder``).
+Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
+layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
+the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s,
+after the run.  Beside sampled proofs PoUW is refused until the int7 linear's Definition is registered (`traced_as`);
+sampled proofs' replay does not re-check PoUW's GEMMs (PoUW's tile audit only, pending the design's open question 2).
+What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
 
@@ -33,7 +36,8 @@ from typing import Any
 import numpy as np
 
 from verity_pouw import schemes as pouw_schemes
-from verity_pouw.audit import TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows, transcript_domain, weight_binding
+from verity_pouw.audit import (TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows, transcript_domain,
+                               weight_binding, weights_root)
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import ncp
@@ -43,6 +47,8 @@ from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"
+#: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
+EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired.
 EXECUTED = ("ncp-v1", "ncp-v1-shift24")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
@@ -230,7 +236,7 @@ class _Run:
         self.resident: dict[int, Operands] | None = None
         cert = scheme.certificate
         self.commits: dict[str, Any] = {
-            "scheme": scheme.name, "salt": salt.hex(), "weight_roots": {str(w): r.hex() for w, r in weight_roots.items()},
+            "scheme": scheme.name, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(),
             "quantizer": QUANTIZER, "transcript_root": None, "units": 0, "tiles": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
@@ -305,14 +311,21 @@ def _executor(run: _Run, w: int):
     return apply
 
 
-def install(scheme: str, target: Target) -> Option:
-    entry = f"{NAME}:{scheme}"
-    settings = Settings.of(target.context.settings_of(NAME))
-    s = pouw_schemes.get(scheme)
+def traced_as(scheme: str, ctx: Context) -> str | None:
+    """The Definition sampled proofs would trace an executed linear as: for ``ncp-v1``, the int7 linear (``QUANTIZER`` on
+    x and on the weight, the exact int32 GEMM, the FP32 dequantize).  None until that Definition is registered, so the
+    selector refuses PoUW beside sampled proofs; Pearl's output depends on its noise and has none for good."""
+    return None
+
+
+def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tuple[int, int]]]:
+    """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
+    with their (n, k); ValueError names every layer outside the scheme's domain or sharing a quant method."""
+    entry, s = f"{NAME}:{scheme}", pouw_schemes.get(scheme)
     types = linear_types()
     layers = [m for m in target.model.modules() if isinstance(m, types)]
     if not layers:
-        raise ValueError(f"{entry}: the model has no linear layer to wrap")
+        raise ValueError(f"{entry}: the model has no linear layer to execute")
     bad, seen, shapes = [], set(), {}
     for w, layer in enumerate(layers):
         n, k = _host(layer.weight).shape
@@ -326,10 +339,26 @@ def install(scheme: str, target: Target) -> Option:
         seen.add(id(layer.quant_method))
     if bad:
         raise ValueError(f"{entry} refused at install: " + "; ".join(bad))
+    return s, layers, shapes
+
+
+def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
+    """The composition's first phase, with the model untouched and no beacon read: every linear layer's int7 weight rows
+    committed (`verity_pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
+    _, layers, shapes = _layers(scheme, target)
     roots = {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
-        roots[w] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])]).commitment.root
+        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])]).commitment.root.hex()
+    return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
+
+
+def install(scheme: str, target: Target) -> Option:
+    entry = f"{NAME}:{scheme}"
+    settings = Settings.of(target.context.settings_of(NAME))
+    s, layers, shapes = _layers(scheme, target)
+    committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
+    roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
     run = _Run(s, entry, settings, roots, salt)

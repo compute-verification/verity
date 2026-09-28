@@ -13,7 +13,7 @@ import types
 
 import numpy as np
 import pytest
-from verity_pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding
+from verity_pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import Matmul, Shape, Tile
 from verity_pouw.schemes import SCHEMES, get
@@ -85,6 +85,13 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
+def test_pouw_executes_the_linear_apply_and_is_refused_beside_sampled_proofs_until_traced():
+    assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
+    assert pouw.traced_as("ncp-v1", _serve("pouw:ncp-v1")) is None
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v1", "sampled-proofs:vllm-v1"), settings={"pouw": {"beacon": BEACON}})
+    assert any("no Definition" in r for r in PO.refusals(commit))
+
+
 def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():
     model = Model(_rng().standard_normal((64, 64), np.float32))
     before = model.layers[0].quant_method.apply
@@ -106,8 +113,10 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
              for w, m in enumerate((w0, w1))}
     declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
     c = opt.commitment()
-    assert c["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
+    assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
+    assert c["weights_root"] == weights_root(roots).hex()
     assert c["salt"] == Epoch.start(declared, roots, bytes.fromhex(BEACON)).salt.hex()
+    assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
     assert opt.outside_program and len(hooks.live("pouw:ncp-v1")) == 2
 
     x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
