@@ -8,6 +8,7 @@ members = [
     "verity",
     "verity-circuit-check",
     "verity-flock",
+    "verity-network-timing",
     "verity-numerical",
     "verity-one-stage",
     "verity-pous",
@@ -1254,6 +1255,11 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-network-timing"
+version = "0.1.0"
+source = { editable = "protocols/network_timing" }
+
+[[package]]
 name = "verity-numerical"
 version = "0.1.0"
 source = { editable = "backends/numerical" }
@@ -1347,6 +1353,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-circuit-check" },
     { name = "verity-flock" },
+    { name = "verity-network-timing" },
     { name = "verity-numerical" },
     { name = "verity-one-stage" },
     { name = "verity-pous" },
@@ -1367,6 +1374,7 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "verity-circuit-check", editable = "tools/circuit_check" },
     { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-network-timing", editable = "protocols/network_timing" },
     { name = "verity-numerical", editable = "backends/numerical" },
     { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-pous", editable = "protocols/pous" },
