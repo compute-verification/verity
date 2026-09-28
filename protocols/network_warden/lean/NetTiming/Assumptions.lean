@@ -7,6 +7,10 @@ Each assumption is a named `Prop`, taken as a hypothesis by the theorems that us
 `docs/network-transparency/timing-channel.md` §1.2 and §2.4. `NetTiming.SecurityProofs.Sanity` gives a satisfiability
 witness for each.
 
+**The same `Prop`s serve ingress,** about the warden read inward (`NetTiming.Protocol.Ingress`): there `Regenerates` is
+W2 for what enters X, `Packed` and `Allocated` are W4 for the rows the ingress links release into X, and
+`JitterBounded` is J for their release times.
+
 **W1 (fixed parameters) has no `Prop`,** because it is structural here. The grid shape (`L`, `K`, `S`), the window
 structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emission map `view` are arguments fixed before
 any run. The `Warden` type has no input for the secret, and `view` reads only the step and the observation. So nothing
@@ -32,6 +36,13 @@ def Padded (w : Warden L K S In Act Wire) (B : ℕ) : Prop :=
 /-- **W4, packing (left-packed).** In every recorded row the occupied slots form a prefix. -/
 def Packed (w : Warden L K S In Act Wire) : Prop :=
   ∀ k xs as ℓ, RowLeftPacked fun s => ((w.obs k xs as).rows ℓ s).isSome
+
+/-- **W4, allocation.** Link `ℓ` releases at most `r ℓ` real frames per bucket: under constant-rate release a bucket
+carries `min(eligible queue, r ℓ)` real frames, and padding in the rest of its `r ℓ` slots. `Obs` gives every link the
+same `S` slots, so a link whose allocation is below `S` always leaves its last `S − r ℓ` slots empty; `r ℓ ≥ S` says
+nothing. -/
+def Allocated (w : Warden L K S In Act Wire) (r : Fin L → ℕ) : Prop :=
+  ∀ k xs as ℓ, (rowCount ((w.obs k xs as).rows ℓ) : ℕ) ≤ r ℓ
 
 /-- **W5, one untimed status per link-window.** Statuses are published only at the last step of each window
 (`winEnd k = k`). At every other step they are the constant `complete`, so a status never shows when within the

@@ -1,7 +1,7 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
-f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min and the E4M3 cast from
-`verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
-numerator scaling) and the sampler lane's compare, selects and integer add. Each is its IR primitive bit for bit
+f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
+and the E2M1 cast from `verity.ml.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
+numerator scaling) and the sampler lane's compare, selects, bit AND and integer add. Each is its IR primitive bit for bit
 (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
@@ -12,7 +12,7 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
-from verity.ml.boolean.scalar import f32_to_e4m3_sat, fmaxmin as _fmaxmin
+from verity.ml.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
 
@@ -581,6 +581,10 @@ PIECES = {
     "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
     "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
+    # NVFP4 quantization's casts and the bit AND (PoUW's units; verity_vllm.program.registry.nvfp4)
+    "E4m3ToF32_v1": e4m3_to_f32,
+    "F32ToE2m1Sat_v1": f32_to_e2m1_sat,
+    "BitAnd_v1": lambda C, a, b: [C.AND(a[0], b[0])],
     "F32Sub_v1": fp.f32_sub,
     "F32FmaRm_v1": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True),
     "F32AddFtz_v2": f32_add_ftz_v2,

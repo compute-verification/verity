@@ -43,6 +43,24 @@ def test_a_tp_commit_counts_its_lease_from_the_row_on_each_rank_it_released(tmp_
         "leases": 1, **{s: 0.0 for s in (*vc.LEASE_PHASES, "work")}, "other": round(145 * 2 / 3600, 3)}}
 
 
+def test_a_tp_commits_phase_spans_count_on_each_rank_and_an_open_one_runs_to_the_leases_end(tmp_path):
+    # cov-gm364 (03Z): circuits' tp-commit writes engine.build, warm-up and work.* spans, and still no gpu_lease.* span
+    name, a, b = "qwen3-14b__bf16__rtxpro6000__tp2__b8", T0 + 10, T0 + 250
+    spans = [("engine.build", "start", T0 + 20), ("engine.build", "end", T0 + 80), ("prep.warmup_instrumented", "start", T0 + 80),
+             ("prep.warmup_instrumented", "end", T0 + 100), ("work.pair0", "start", T0 + 100), ("work.pair0", "end", T0 + 200)]
+    p = row(tmp_path / "done", name, [*tp_commit(T0, None), *spans, ("commit.tp_commit", "end", T0 + 260),
+                                       ("stage.commit", "end", T0 + 260)], a, {"t": b, "ranks": [{"rank": 0}, {"rank": 1}]})
+    leases = vc.commit_leases([p], now=T0 + 300)
+    assert leases == [(a, b, [("engine.build", T0 + 20, T0 + 80), ("prep.warmup_instrumented", T0 + 80, T0 + 100),
+                              ("work", T0 + 100, T0 + 200)], 2)]
+    hour = vc.phases_by_hour(leases)["2026-10-02T23:00Z"]
+    assert (hour["engine.build"], hour["work"], hour["other"]) == (round(120 / 3600, 3), round(200 / 3600, 3), round(120 / 3600, 3))
+    now = T0 + 400
+    p = row(tmp_path / "open", name, [*tp_commit(T0, None), *spans[:4], ("work.pair0", "start", T0 + 100)], a)
+    assert vc.commit_leases([p], now) == [(a, now, [("engine.build", T0 + 20, T0 + 80), ("prep.warmup_instrumented", T0 + 80, T0 + 100),
+                                                    ("work", T0 + 100, now)], 2)]
+
+
 def test_a_commit_with_lease_spans_is_one_gpu_and_never_read_from_the_row(tmp_path):
     p = row(tmp_path, "qwen3-8b__bf16__rtxpro6000__tp1__b8", [
         ("stage.commit", "start", T0), ("gpu_lease.wait", "start", T0 + 1), ("gpu_lease.wait", "end", T0 + 10),

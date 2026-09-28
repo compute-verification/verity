@@ -158,7 +158,7 @@ def test_a_tp_rank_attaches_the_norm_tap_over_its_own_rows_and_the_driver_fails_
     row = {"family": NS.FAMILY, "op_path": "chain", "spec": "RsqrtF32_v1", "request_id": "r0", "step": 0, "rows": 2, "rank": 0}
     (tmp_path / "manifest.json").write_text(json.dumps({"identities": [row]}))
     taps = T.TapSources(norm_tap_so="/nonexistent/verity_norm_tap.so", vocab_range=False)
-    assert T.for_ranks(T.TapSources()) is None and T.for_ranks(taps).keywords == {"norm_tap_so": taps.norm_tap_so}
+    assert T.for_ranks(T.TapSources()).keywords == {} and T.for_ranks(taps).keywords == {"norm_tap_so": taps.norm_tap_so}
     com = Recorder()
     made = [{"rank": r, "tap_sources": T.for_ranks(taps)(com, model(), str(tmp_path / "manifest.json"), r)} for r in (0, 1)]
     assert made[0]["tap_sources"]["norm_scale_source"]["stats"]["modules"] == 1 and len(com.sources) == 1

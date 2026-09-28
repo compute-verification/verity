@@ -8,6 +8,10 @@ import NetTiming.SecurityProofs.Advice
   and fail the status.
 * `witnessProgram` satisfies both dataflow conditions of Theorem 3, in the left-packed count form, and its timing
   advice really changes its rows: the conditions don't force the Program to ignore timing.
+* `ingress_witness` meets every hypothesis of the ingress bound at once (W4's allocation `Allocated` among them), with
+  27 decoded messages, and `ingress_witness_tight` shows the bound is 27: it is met exactly.
+* `allocated_witness` meets them all again with an allocation of one frame on two slots (`r = 1 < S = 2`), and
+  `allocated_witness_tight` shows its 8 messages meet the bound exactly, below the 27 of `r = S`.
 * The toy of the September draft: `(2 + 1)^6 = 729` left-packed occupancies.
 -/
 
@@ -252,6 +256,112 @@ theorem joint_witness_bound :
   · rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
   · exact encard_decodable_le_blocks (U := fun _ : Fin 1 × Fin 3 => Fin (2 + 1)) (rI 3) (rP 3) 3 2 (fun _ o => o)
       hW2 hJ (fun c => (c.2 : ℕ)) (fun c => c.2) _ h1 h2 Set.univ (fun z _ => hacc z) rDec (fun z _ => hdec z)
+
+/-! ## A joint witness for the ingress bound
+
+Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
+at step `k`; X's device is `rOp`, reacting to the last count it saw. The warden is the witness warden without jitter,
+so J holds with `D = 1`, and W4's allocation is the full two slots. Every hypothesis of
+`Guarantees.EncardIngressDecodableLe` holds at once, and all `27 = (2 + 1)^3` messages are decoded: the bound is met
+exactly. -/
+
+/-- The witness warden read inward, with no jitter. -/
+def iWarden : Warden 1 1 2 (Fin 3) WAct (Obs 1 1 2) where
+  obs k _ as := { witnessObs k [] as with jitter := 0 }
+  wire k _ as := { witnessObs k [] as with jitter := 0 }
+  fault a := a.fault = true
+
+/-- The outside delivers `z k` frames at step `k`; X's device reacts to the last count. -/
+def iI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 3) (Fin 3) WAct (Obs 1 1 2) where
+  warden := iWarden
+  op := rOp
+  snd z k _ := ⟨if h : k < n then z ⟨k, h⟩ else 0, 0, false⟩
+
+instance {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
+  unfold StatusComplete; infer_instance
+
+theorem ingress_witness :
+    Regenerates iWarden (fun _ o => o) ∧ Packed iWarden ∧ Allocated iWarden (fun _ => 2) ∧
+      JitterBounded iWarden 1 ∧ (∀ z, StatusComplete 3 ((iI 3).obsRun z 3)) ∧
+      (∀ z ℓ, linkFrames ((iI 3).obsRun z 3) ℓ <+: List.replicate 6 [true]) ∧
+      (∀ z, rDec ((iI 3).wireRun z 3) = z) := by
+  refine ⟨fun _ _ _ => rfl, fun k _ as ℓ => witnessWarden_assumptions.2.2.1 k [] as ℓ,
+    fun _ _ _ _ => Nat.lt_succ_iff.mp (rowCount _).2, fun _ _ _ => Nat.zero_lt_one, ?_, ?_, ?_⟩
+  · decide +kernel
+  · decide +kernel
+  · decide +kernel
+
+/-- The ingress bound is met exactly by the witness: 27 decoded messages, under a bound of
+`(∏_ℓ (2 + 1))^3 · 1^3 = 27`. -/
+theorem ingress_witness_tight :
+    (Set.univ : Set (Fin 3 → Fin 3)).encard = (((∏ _ℓ : Fin 1, (2 + 1)) ^ 3 * 1 ^ 3 : ℕ) : ℕ∞) := by
+  rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
+
+/-! ## An allocation below the slot count
+
+The link has two slots and an allocation of one frame: the warden releases at most one frame per bucket, whatever the
+sender asks, and the outside asks for both slots to send a 1. Every hypothesis of `Guarantees.EncardIngressDecodableLe`
+holds with `r = 1 < S = 2`, and all `8 = (1 + 1)^3` messages are decoded: the bound is met exactly, and it is below the
+`(2 + 1)^3 = 27` that `r = S` gives. -/
+
+/-- The allocated warden's record: `min(count, 1)` frames `[true]`, left-packed, no jitter, complete statuses. -/
+def aObs (k : ℕ) (as : List WAct) : Obs 1 1 2 where
+  rows _ s := if (s : ℕ) < min ((as.getD k default).count : ℕ) 1 then some [true] else none
+  jitter := 0
+  status _ := Status.complete
+
+def aWarden : Warden 1 1 2 (Fin 3) WAct (Obs 1 1 2) where
+  obs k _ as := aObs k as
+  wire k _ as := aObs k as
+  fault a := a.fault = true
+
+/-- The outside asks for two frames at step `k` when `z k = 1`, none otherwise; X's device reacts to the last count. -/
+def aI (n : ℕ) : Interaction 1 1 2 (Fin n → Fin 2) (Fin 3) WAct (Obs 1 1 2) where
+  warden := aWarden
+  op := rOp
+  snd z k _ := ⟨if h : k < n then (if z ⟨k, h⟩ = 1 then 2 else 0) else 0, 0, false⟩
+
+/-- The decoder: whether each step's row holds a frame. -/
+def aDec (ws : List (Obs 1 1 2)) : Fin 3 → Fin 2 := fun k =>
+  match ws[(k : ℕ)]? with
+  | some x => if (rowCount (x.rows 0) : ℕ) = 0 then 0 else 1
+  | none => 0
+
+theorem allocated_witness :
+    Regenerates aWarden (fun _ o => o) ∧ Packed aWarden ∧ Allocated aWarden (fun _ => 1) ∧
+      JitterBounded aWarden 1 ∧ (∀ z, StatusComplete 3 ((aI 3).obsRun z 3)) ∧
+      (∀ z ℓ, linkFrames ((aI 3).obsRun z 3) ℓ <+: List.replicate 3 [true]) ∧
+      (∀ z, aDec ((aI 3).wireRun z 3) = z) := by
+  refine ⟨fun _ _ _ => rfl, ?_, ?_, fun _ _ _ => Nat.zero_lt_one, ?_, ?_, ?_⟩
+  · intro k xs as ℓ s s' hle h
+    simp only [aWarden, aObs] at h ⊢
+    split_ifs at h with hs'
+    · have hs : (s : ℕ) < min ((as.getD k default).count : ℕ) 1 := lt_of_le_of_lt (Fin.le_def.mp hle) hs'
+      simp only [hs, ↓reduceIte, Option.isSome_some]
+    · simp at h
+  · intro k xs as ℓ
+    show (univ.filter fun s => ((aWarden.obs k xs as).rows ℓ s).isSome).card ≤ 1
+    calc _ ≤ ({0} : Finset (Fin 2)).card := by
+          apply card_le_card
+          intro s hs
+          simp only [mem_filter, mem_univ, true_and] at hs
+          simp only [aWarden, aObs] at hs
+          split_ifs at hs with h1
+          · have := min_le_right ((as.getD k default).count : ℕ) 1
+            exact mem_singleton.mpr (Fin.ext (by simp only [Fin.val_zero]; omega))
+          · simp at hs
+      _ = 1 := card_singleton _
+  · decide +kernel
+  · decide +kernel
+  · decide +kernel
+
+/-- The allocated witness meets its bound exactly: 8 decoded messages, under a bound of `(∏_ℓ (1 + 1))^3 · 1^3 = 8`,
+which is below the `(∏_ℓ (2 + 1))^3 · 1^3 = 27` of an allocation equal to the slot count. -/
+theorem allocated_witness_tight :
+    (Set.univ : Set (Fin 3 → Fin 2)).encard = (((∏ _ℓ : Fin 1, (1 + 1)) ^ 3 * 1 ^ 3 : ℕ) : ℕ∞) ∧
+      (∏ _ℓ : Fin 1, (1 + 1)) ^ 3 * 1 ^ 3 < (∏ _ℓ : Fin 1, (2 + 1)) ^ 3 * 1 ^ 3 := by
+  refine ⟨?_, by decide⟩
+  rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin]; rfl
 
 /-! ## The draft's toy -/
 

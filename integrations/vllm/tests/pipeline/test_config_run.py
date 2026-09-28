@@ -34,6 +34,17 @@ def test_a_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkey
     assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
 
 
+def test_the_word_check_gets_the_row_s_allowed_max_gates(tmp_path):
+    from types import SimpleNamespace
+    seen = {}
+    env = {"VERITY_QWORD_MAX_GATES": "GumbelTopPTokenSelect_v2=30000000", "VERITY_QWORD_MAX_GATES_ALLOWED": "GumbelTopPTokenSelect_v2=30000000"}
+    row = SimpleNamespace(env=SimpleNamespace(environ=env), d=str(tmp_path), row=ROW, cli=lambda *a: list(a),
+                          run_tl=lambda name, to, log, cmd: seen.setdefault("cmd", cmd) and 0, verdict=lambda *a: None)
+    RC.word_check(row)
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--build-max-gates") + 1] == cmd[cmd.index("--allowed-max-gates") + 1] == "GumbelTopPTokenSelect_v2=30000000"
+
+
 def test_a_config_run_that_stops_still_writes_its_record(tmp_path, monkeypatch):
     r = _row(tmp_path, "--config-run", "1")
     calls = []
@@ -56,6 +67,10 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
     assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
+    assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform draw unless the row asks for family"
+    fam = _row(tmp_path / "fam", "--config-run", "1", "--replay-draw", "family")
+    fam.hidden_so, fam.B = "/x/verity_fa2_matReqG.so", 1
+    assert fam.commit_cmd([])[fam.commit_cmd([]).index("--replay-draw") + 1] == "family"
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
@@ -69,7 +84,8 @@ def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
     cmd = r.commit_cmd([])
     args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
-    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup) == ("instrumented", True, 128, 1, 1)
+    assert (args.only_arm, args.bounded_staging, args.replay_k, args.replay_draw, args.pairs, args.warmup) == ("instrumented", True, 128,
+                                                                                                                "uniform", 1, 1)
 
 
 @pytest.mark.parametrize("commit_pass,rc,expect", [(True, 0, None), (False, 0, 12), (True, 3, 12)])
@@ -435,6 +451,38 @@ def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
     assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
 
 
+def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["timing"]["slowdown"] is None, "no control arm: no baseline, no slowdown"
+    inst = json.loads((d / "commit" / "runs.jsonl").read_text())
+    inst.update(step_wall_prefill_s=0.30, step_wall_decode_mean_s=0.050)
+    ctrl = {"arm": "control", "pair": 0, "wall_s": 2.5, "engine_steps": 32, "step_wall_prefill_s": 0.02, "step_wall_decode_mean_s": 0.010}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(ctrl) + "\n" + json.dumps(inst) + "\n")
+    rec = CR.record(d, ROW)
+    assert rec["outcome"] == "PASS" and rec["commit"]["runs"] == 1, "the control arm is timing only; the decision is the instrumented run's"
+    sd = rec["timing"]["slowdown"]
+    assert sd["prefill"] == pytest.approx(15.0) and sd["decode"] == pytest.approx(5.0) and sd["wall"] == pytest.approx(5.0)
+    assert rec["timing"]["control"]["decode_mean_s"] == 0.010
+
+
+def test_the_record_carries_the_engine_s_cublas_workspace_pin(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["engine"] is None, "no engine facts recorded: none claimed"
+    run = json.loads((d / "commit" / "runs.jsonl").read_text())
+    run["commit"]["sampled_replay"]["engine_of_record"] = {"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":16:8",
+                                                           "CUBLASLT_WORKSPACE_SIZE": "1", "rule": "measured in the engine's process"}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    eng = CR.record(d, ROW)["engine"]
+    assert eng["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and eng["CUBLASLT_WORKSPACE_SIZE"] == "1" and "rule" not in eng
+
+
+def test_a_config_baseline_keeps_the_control_arm(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert "--only-arm" not in cmd and cmd[cmd.index("--pairs") + 1] == "1" and "--bounded-staging" in cmd
+
+
 # ---------------------------------------------------------------------------------------------------------------- the Program cache
 
 def _workload(tmp_path: Path, name: str, *, batch: int = 1, prompt: list[int] | None = None) -> Path:
@@ -462,6 +510,18 @@ def test_the_cache_key_is_the_derive_without_its_out_dir_and_workload_path(tmp_p
     b8 = _workload(tmp_path, "b8", batch=8)
     assert k != PC.key(_derive("/x/a/build_request", b8), workload=b8, tree="t1", device=DEV), "the sampler geometry's batch"
     assert PC.key(_derive("/x", a), workload=a, tree=None, device=DEV) is None, "no tree commit, no cache"
+
+
+def test_the_derive_key_s_target_is_the_declared_one_and_a_cpu_host_needs_no_nvidia_smi(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    def no_nvidia_smi(*a, **k):
+        raise FileNotFoundError("nvidia-smi")
+
+    monkeypatch.setattr(RC.subprocess, "run", no_nvidia_smi)
+    target = '{"compute_capability": [12, 0], "num_sms": 188}'
+    assert RC.device_id(SimpleNamespace(tgt=target)) == {"declared_target": target}
+    assert RC.device_id(SimpleNamespace(tgt="")) is None, "no target and no GPU: no key, the plain derive"
 
 
 def test_a_published_derive_is_restored_whole_and_the_first_publisher_stands(tmp_path):

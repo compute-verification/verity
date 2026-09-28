@@ -28,8 +28,8 @@ class Options:
     fd: str = option("fd", help="the Commit's end of the planner's connection (an inherited socket)")
 
 
-ARGS = ("workload", "programs_root", "program_dir", "program_digest", "required_manifest", "replay_k", "replay_per_stratum", "replay_max",
-        "replay_target", "window_slots", "window_mb")
+ARGS = ("workload", "programs_root", "program_dir", "program_digest", "required_manifest", "replay_k", "replay_draw", "replay_per_stratum",
+        "replay_max", "replay_target", "window_slots", "window_mb")
 
 
 class Planner:
@@ -112,7 +112,7 @@ def _serve(conn: Connection, args: Any) -> None:
 
     sr = SR.sampled_replay(progs, json.loads(Path(f["binding_map"]).read_text()), committed, None, arrivals=f["arrivals"], per_stratum=int(args.replay_per_stratum),
                            seed=f["seed"], seed_source=f["seed_source"], seed_challenge=f["seed_challenge"], max_evaluate=int(args.replay_max),
-                           targets=list(args.replay_target or []), replay_k=args.replay_k, ring_slots=ring, manifest=q, program_dirs=dirs, plan=True,
+                           targets=list(args.replay_target or []), replay_k=args.replay_k, replay_draw=C2.draw_of(args), ring_slots=ring, manifest=q, program_dirs=dirs, plan=True,
                            memo=memo, **f["sr_kw"])
     conn.send({"reads": list(dict.fromkeys(reads)), "plan": sr | {"reads_made": len(reads)}})
 

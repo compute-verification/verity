@@ -40,6 +40,17 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
 
 
+@pytest.fixture(autouse=True)
+def _isolated_git(monkeypatch, tmp_path_factory):
+    """Git reads neither the machine's system config nor its global one, but this file: a cloud VM's global config signs every
+    commit through an agent that can fail mid-suite (`git commit` exit 128, "Couldn't find key in agent?"), and sets
+    core.fsmonitor and push.autoSetupRemote, which a pod's doesn't. A repository's own config and `-c` still win over it."""
+    cfg = tmp_path_factory.mktemp("git") / "config"
+    cfg.write_text("[user]\n\tname = t\n\temail = t@t\n[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
 @pytest.fixture
 def reap(tmp_path):
     """However the test ends, SIGTERM the process group of every process whose argv names its tmp_path: the detached processes

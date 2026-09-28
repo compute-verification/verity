@@ -193,6 +193,34 @@ def test_the_other_rows_pieces_match_the_ir_primitives(name):
     assert [(v, g) for v, g in zip(vecs, got) if g != p.evaluate(*v)] == []
 
 
+def _e2m1_vectors(rng: random.Random) -> list[list[int]]:
+    from verity.ml.tc.cast import E2M1_UP
+    words = [b + d for b, _ in E2M1_UP for d in range(-4, 5)] + [b | 1 << i for b, _ in E2M1_UP for i in range(21)]
+    words += [0, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000] + [0x7F800000 | 1 << i for i in range(23)]
+    words += [e << 23 | rng.getrandbits(3) << 20 | rng.choice([0, 1, rng.getrandbits(20)]) for e in range(118, 134) for _ in range(16)]
+    words += [w & 0x7FFFFFFF for w in f32_words(rng, 4000)]
+    return [[w | s] for w in words for s in (0, 0x80000000)]
+
+
+#: NVFP4 quantization's casts and the bit AND (PoUW's units): (primitive, operand widths, result width, vectors)
+NVFP4 = [("E4m3ToF32_v1", (8,), 32, lambda rng: [[b] for b in range(256)]),
+         ("F32ToE2m1Sat_v1", (32,), 4, _e2m1_vectors),
+         ("BitAnd_v1", (1, 1), 1, lambda rng: [[a, b] for a in (0, 1) for b in (0, 1)])]
+
+
+@pytest.mark.parametrize("name,widths,out,gen", NVFP4, ids=[n[0] for n in NVFP4])
+def test_the_nvfp4_cast_and_bit_and_pieces_match_the_ir_primitives(name, widths, out, gen):
+    """Exact bits: the E4M3 widening on every byte (NaN 0x7FFFE000), the AND on every pair of bits, and the E2M1 cast on each
+    boundary of its grid (the six ties and 5, where saturation begins) within 4 ulps and with each of its low 21 bits set, on
+    ±0, subnormals, ±inf and a NaN per payload bit, across the exponents around the grid and on random words, both signs."""
+    import verity.ml.prims  # noqa: F401  (registers the casts)
+    import verity.ml.scalar  # noqa: F401  (registers BitAnd_v1)
+
+    vecs = gen(random.Random(name))
+    ref = REGISTRY[name].evaluate
+    assert [(v, g) for v, g in zip(vecs, run_piece(IL.PIECES[name], widths, out, vecs)) if g != ref(*v)] == []
+
+
 @pytest.mark.parametrize("name", ["HopperE4m3QgmmaDot32_v1", "BlackwellE4m3QmmaDot32_v1"])
 def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding(name):
     """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` and sm_120's ``BlackwellE4m3QmmaDot32`` (the total models): E4M3 NaNs (0x7F,

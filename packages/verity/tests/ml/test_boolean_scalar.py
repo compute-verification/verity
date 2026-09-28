@@ -1,7 +1,8 @@
-"""`verity.ml.boolean.scalar`: the bf16 comparator and the selects agree with their word primitives on every input (the
-comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 arithmetic, max / min and casts agree with
-theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 cast on every word, the E4M3 cast on every
-exponent around its range); each carries exactly its builder's live ANDs and is pinned by gate count and program digest."""
+"""`verity.ml.boolean.scalar`: the bf16 comparator, the selects and the bit AND agree with their word primitives on every input
+(the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 arithmetic, max / min and casts
+agree with theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 and E4M3 widenings on every
+word, the E4M3 cast on every exponent around its range, the E2M1 cast on every boundary of its grid and on all 2^32 words);
+each carries exactly its builder's live ANDs and is pinned by gate count and program digest."""
 from __future__ import annotations
 
 import itertools
@@ -18,13 +19,15 @@ from verity.ir import boolean as BL
 from verity.ir import codec
 from verity.ir.defs import REGISTRY, bind
 from verity.ir.types import Array
+from verity.ml import prims as P
 from verity.ml import scalar as S
 from verity.ml.boolean import scalar as BSC
 from verity.ml.boolean import trace as TR
 from verity.ml.boolean.forms import Circuit
+from verity.ml.tc.cast import E2M1_UP
 
 DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
-        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat]
+        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -40,6 +43,9 @@ PINS = {
     "F32Fminf_v2": (314, 574, 102, "eba9c1ccaeefcadc6d6567e7d8903e70b4831d6dcdc66d4302cb3378a148bde8"),
     "Bf16ToF32_v2": (0, 0, 0, "39168eff727f5ef51d263a418e3473c7037d1f03e3c93afc8d9a219958f21eaf"),
     "F32ToE4m3Sat_v2": (231, 376, 34, "e397be3ee5361aec4f561816c731220bfa101b1d777d0797731abcba3afbc361"),
+    "E4m3ToF32_v2": (15, 22, 4, "3bf9194e080d15053593179eb14117aa2a58ded2911bb01df2d9600e335abc36"),
+    "F32ToE2m1Sat_v2": (60, 86, 2, "6ac4002981fe5cfe28d638ab0642dadfd0bdcab373fd3e86dd8aa3d5514f220d"),
+    "BitAnd_v2": (1, 0, 0, "aee8be5dcd3a028f822fd2b61cb651e5daeb97b0493c24ebf046083b2ca18bf4"),
 }
 
 #: signed zeros, the smallest subnormals, the largest finite values, the smallest normals, ones, infinities and NaNs (quiet,
@@ -78,6 +84,22 @@ def _e4m3_range(rng) -> np.ndarray:
     return np.concatenate([w, w | np.uint32(0x80000000)])
 
 
+def _e2m1_edges(rng) -> np.ndarray:
+    """Each boundary of the E2M1 grid (`E2M1_UP`: the six rounding ties and 5, where saturation begins) within 4 ulps and with
+    each one of its low 21 bits set; ±0, the subnormals' ends, the largest finite word, ±inf and a NaN per payload bit; and
+    every exponent field from 118 (below the grid) to 133 (past 6) under each of the fraction's top three bits, its low 20 bits
+    0, 1, all ones or one of 32 random patterns; each word with both signs."""
+    near = [b + d for b, _ in E2M1_UP for d in range(-4, 5)] + [b | 1 << i for b, _ in E2M1_UP for i in range(21)]
+    special = [0x00000000, 0x00000001, 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0x7F800000, 0x7FFFFFFF]
+    special += [0x7F800000 | 1 << i for i in range(23)]
+    low = np.concatenate([np.array([0, 1, (1 << 20) - 1], np.uint32),
+                          rng.integers(0, 1 << 20, 32, dtype=np.uint64).astype(np.uint32)])
+    e = np.arange(118, 134, dtype=np.uint32)[:, None, None] << np.uint32(23)
+    grid = (e | np.arange(8, dtype=np.uint32)[None, :, None] << np.uint32(20) | low[None, None, :]).reshape(-1)
+    w = np.concatenate([np.array(near + special, np.uint32), grid])
+    return np.concatenate([w, w | np.uint32(0x80000000)])
+
+
 def _inputs(d, rng) -> list[np.ndarray]:
     if d is BSC.Bf16GtStrict:
         grid = np.array(list(itertools.product(range(len(BF16_SPECIALS)), repeat=2)), np.int64).T
@@ -87,7 +109,13 @@ def _inputs(d, rng) -> list[np.ndarray]:
         return [rng.integers(0, 2, 60_000, dtype=np.uint8), _words(w, 60_000, rng), _words(w, 60_000, rng)]
     if d is BSC.Bf16ToF32:
         return [np.arange(1 << 16, dtype=np.uint16)]
+    if d is BSC.E4m3ToF32:
+        return [np.arange(1 << 8, dtype=np.uint8)]
+    if d is BSC.BitAnd:
+        return [np.array([0, 0, 1, 1], np.uint8), np.array([0, 1, 0, 1], np.uint8)]
     inputs = _f32_inputs(len(d.signature(None)[0]), rng)
+    if d is BSC.F32ToE2m1Sat:
+        return [np.concatenate([inputs[0], _e2m1_edges(rng)])]
     return [np.concatenate([inputs[0], _e4m3_range(rng)])] if d is BSC.F32ToE4m3Sat else inputs
 
 
@@ -183,6 +211,38 @@ def test_bf16_gt_strict_on_every_pair_of_words() -> None:
         if diff.size:
             bad += [(hex(64 * hi + int(l)), hex(int(b))) for b in diff[:3] for l in range(64) if (int(got[b] ^ want[b]) >> l) & 1][:3]
     assert not bad, f"pairs (a, b) that differ from Bf16GtStrict_v1, first {bad[:5]}"
+
+
+# --- the E2M1 cast on every word -------------------------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_f32_to_e2m1_sat_on_every_f32_word() -> None:
+    """All 2^32 words, 64 across each packed word's lanes (bits 0..5), bits 6..20 across the words and bits 21..31 the chunk
+    (about 25 s): a wrong code on a word no boundary, edge or sampled word reaches, such as one input of the sticky OR below
+    the grid's resolution. Every boundary `F32ToE2m1Sat_v1` compares |x| with (`E2M1_UP` and the NaN test's 0x7F800000) has
+    its low 21 bits clear, so on each chunk it is one code at low bits 0 and one code at every other word, which
+    `evaluate_batch` gives."""
+    assert all(b & 0x1FFFFF == 0 for b, _ in E2M1_UP)
+    c = BS.compile(bind(BSC.F32ToE2m1Sat))
+    base = np.arange(1 << 11, dtype=np.uint32) << np.uint32(21)
+    at0 = E.evaluate_batch(P.F32ToE2m1Sat, base).astype(np.uint64).reshape(-1)
+    above = E.evaluate_batch(P.F32ToE2m1Sat, base | np.uint32(1)).astype(np.uint64).reshape(-1)
+    words, j = np.arange(1 << 15, dtype=np.uint64), np.arange(4, dtype=np.uint64)
+    args = np.empty((32, 1 << 15), np.uint64)
+    args[:6] = _LANE_BITS[:, None]
+    args[6:21] = _all_ones_where(words[None, :] >> np.arange(15, dtype=np.uint64)[:, None])
+    bad = []
+    for hi in range(1 << 11):
+        args[21:] = _all_ones_where(np.uint64(hi) >> np.arange(11, dtype=np.uint64))[:, None]
+        got = BS._run(c, args)
+        want = np.repeat(_all_ones_where(above[hi] >> j)[:, None], 1 << 15, axis=1)
+        want[:, 0] = want[:, 0] & ~np.uint64(1) | at0[hi] >> j & np.uint64(1)
+        diff = np.bitwise_or.reduce(got ^ want, axis=0)
+        w = np.flatnonzero(diff)
+        if w.size:
+            d = int(diff[w[0]])
+            bad.append(hex(hi << 21 | int(w[0]) << 6 | (d & -d).bit_length() - 1))
+    assert not bad, f"words that differ from F32ToE2m1Sat_v1, first per chunk {bad[:5]}"
 
 
 # --- f32_key ---------------------------------------------------------------------------------------------------------------
