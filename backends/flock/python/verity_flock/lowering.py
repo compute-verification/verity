@@ -45,6 +45,15 @@ class Pipe:
     floor: int
     epilogue: bool       # f32_to_bf16 in-circuit (GemmCoordinate) or the bare FP32 word (GemmAccumulator)
     model: str           # verity.ml.tc.models name
+    total: bool = False  # every encoding (unit_total, F2fpBf16 epilogue) rather than finite operands asserted
+
+    @property
+    def unit_log(self) -> int:
+        return K_LOG + 1 if self.total else K_LOG
+
+    @property
+    def domain(self) -> str:
+        return "total" if self.total else "finite-only"
 
     @property
     def k(self) -> int:
