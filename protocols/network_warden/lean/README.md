@@ -67,7 +67,10 @@ reading the wire. Both are proved: on the runs counted, a record sequence is det
 each link and its jitter class, since under W4 a row is its frames in slot order and the content fixes which frames
 come next. `Guarantees.EncardIngressObsDecodableLeContents` and `Guarantees.EncardIngressDecodableLeContents` drop the
 one prescribed content: messages whose frames follow some content assignment in a set `Cs` number at most `#Cs` times
-the timing bound, so content plus timing is a theorem.
+the timing bound: for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus the timing bits. The K accounting
+charges content bits, as reads, plus timing bits. Taking `log2 #Cs` to be those content bits is an accounting step, not
+part of the theorem. It is exact under fixed-length frames (W3): N frames of B bits have `2^(N·B)` contents, so for
+`Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
