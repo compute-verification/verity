@@ -57,7 +57,7 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
    (`target/`, `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.
 5. **Record what a job retains outside its run dir, and delete it only through `research retention rm`.** A job that keeps
    data on the node (PoUW's passes) runs `research keep DIR --owner @LANE --expires never --priority keep` as soon as `DIR`
-   exists; lowering it takes a yes from Daniel or top. A brief that deletes says `research retention rm PATH --approved-by
+   exists; lowering it takes top's yes. A brief that deletes says `research retention rm PATH --approved-by
    @OWNER --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed. A worker that hits "Permission denied" or a
    refusal stops and reports it: someone made that path read-only or kept it on purpose. On 6 Oct a stale step ran
    `chmod -R u+w` and `rm -rf` on serve `r20261006-201412-b28d`'s cited passes, about 27 GB on each node, and they are gone.
