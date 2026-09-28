@@ -232,7 +232,7 @@ def run_mode(args, mode: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "vllm.json")
     ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl")
     ap.add_argument("--decode-batches", type=lambda s: [int(x) for x in s.split(",")], default=[1, 8, 32])
     ap.add_argument("--prefill-tokens", type=lambda s: [int(x) for x in s.split(",")], default=[512, 2048])
@@ -267,6 +267,10 @@ def main() -> None:
         summary["ncp"]["tokens_equal_w7a7"] = results["ncp"]["tokens"] == results["w7a7"]["tokens"]
     args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v1", "summary": summary, "results": results}, indent=1))
     print(json.dumps(summary), flush=True)
+    import run_result
+    ok = summary.get("ncp", {}).get("tokens_equal_w7a7", True) is not False and len(results) == len(args.modes.split(","))
+    ms = [(f"{m}.{k}", v, "tok/s") for m, r in results.items() for k, v in r["timing"].items()]
+    run_result.write(args.out, ok, "vllm_bench: every mode ran, and NCP's greedy tokens equal W7A7's", json.dumps(summary), ms)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import random
 import statistics
@@ -178,7 +179,7 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "gemm.json")
     ap.add_argument("--workload", type=Path, default=Path(__file__).with_name("workloads.json"))
     args = ap.parse_args()
     ext = load()
@@ -194,6 +195,11 @@ def main() -> None:
         print(json.dumps(r), flush=True)
     env = {"device": torch.cuda.get_device_name(), "torch": torch.__version__, "cuda": torch.version.cuda}
     args.out.write_text(json.dumps({"schema": "verity-pouw/gemm-bench/v1", "env": env, "gates": gates, "rows": rows}, indent=1))
+    import run_result
+    ms = [(f"{key}@{'x'.join(map(str, r['shape']))}", r[key], "ratio") for r in rows if tuple(r["shape"]) in ((1, 2048, 2048), (2048, 2048, 2048), (4096, 4096, 4096))
+          for key in ("ncp_kernel_over_int8", "ncp_total_over_int8", "pearl_kernel_over_fp8", "pearl_total_over_fp8") if key in r]
+    run_result.write(args.out, gates["ncp"]["ok"] and gates["pearl"]["ok"], "gemm_bench gates",
+                     f"ncp {gates['ncp']}; pearl {gates['pearl']}", ms)
 
 
 if __name__ == "__main__":

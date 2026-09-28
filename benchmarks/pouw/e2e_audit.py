@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import hashlib
 import json
 import random
@@ -135,13 +136,19 @@ def run_pearl(ext, t: int) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "e2e.json")
     ap.add_argument("--t", type=int, default=8)
     args = ap.parse_args()
     ext = load()
     res = {"ncp": run_ncp(ext, args.t), "pearl": run_pearl(ext, max(2, args.t // 4))}
     print(json.dumps(res, indent=1))
     args.out.write_text(json.dumps({"schema": "verity-pouw/e2e-audit/v1", **res}, indent=1))
+    import run_result
+    ok = res["ncp"]["honest"]["accepted"] and not res["ncp"]["corrupt-50%"]["accepted"] and res["pearl"]["accepted"]
+    run_result.write(args.out, ok, "e2e_audit: honest provers accepted, the corrupting prover rejected",
+                     json.dumps({k: {kk: vv for kk, vv in v.items() if kk != "profile"} if isinstance(v, dict) else v for k, v in res.items()})[:2000],
+                     [("ncp.prove_s", res["ncp"]["honest"]["prove_s"], "s"), ("ncp.verify_s", res["ncp"]["honest"]["verify_s"], "s"),
+                      ("pearl.prove_s", res["pearl"]["prove_s"], "s"), ("pearl.verify_s", res["pearl"]["verify_s"], "s")])
 
 
 if __name__ == "__main__":
