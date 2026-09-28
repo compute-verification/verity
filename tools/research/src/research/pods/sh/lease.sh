@@ -113,8 +113,8 @@ lease_extend() {
   cur=$(lease_read) || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
   if cap=$(lease_cap); then
-    if [ "$want" -gt "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
-    if [ "$cur" -gt "$cap" ]; then cur=0; fi
+    if [ "$cur" -gt "$cap" ]; then cur=0; want=$cap; fi
+    if [ "$want" -ge "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
   fi
   if [ "$want" -gt "$cur" ]; then
     mkdir -p "$(dirname "$LEASE_FILE")" || return 1
