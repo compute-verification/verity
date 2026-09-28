@@ -123,7 +123,8 @@ passing `check` of that exact commit in the evidence store, or when `main` has m
 ## Lean
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
-  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib). New Lean goes into the
+  about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
+  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib). New Lean goes into the
   package whose dependencies it needs, in a subdirectory and namespace of its own. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
