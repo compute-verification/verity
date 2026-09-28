@@ -318,7 +318,7 @@ def test_lowering_is_the_pinned_one(template):
 
 @pytest.mark.parametrize("template", sorted(LOWERED))
 def test_pinned_rows_read_earlier_columns(template):
-    """What the soundness package's `Rows` needs beyond the parser's checks (`soundness/ASSUMPTIONS.md` §1.5): every computed
+    """What the soundness package's `Rows` needs beyond the parser's checks (`soundness/README.md` §1.5): every computed
     row reads only earlier columns or the constant, and never an input padding column (`A = B = 0`, forced zero)."""
     mod = REG.module(template)
     sub = TM.subcircuit(template, **LOWERED[template])
