@@ -2615,6 +2615,37 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
 
 
+def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
+    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    env = {"PATH": os.environ["PATH"], "CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all", "JOB_TOKEN": "dummy"}
+    p = subprocess.Popen(["cat"], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        p.stdin.write(b"up\n")
+        p.stdin.flush()
+        assert p.stdout.readline() == b"up\n"          # cat echoes once it has exec'd with `env`
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        ran = []
+
+        def denied(self):
+            raise PermissionError(str(self))
+
+        def sudo(cmd, **kw):
+            ran.append(cmd)
+            return real_run(cmd[2:], **kw)              # the same grep, without sudo
+
+        real_run = subprocess.run
+        monkeypatch.setattr(m.Path, "read_bytes", denied)
+        monkeypatch.setattr(m.subprocess, "run", sudo)
+        assert m.environ(p.pid) == {"CUDA_VISIBLE_DEVICES": "3", "NVIDIA_VISIBLE_DEVICES": "all"}
+        assert ran == [["sudo", "-n", "grep", "-zaE", "^(NVIDIA_VISIBLE_DEVICES|CUDA_VISIBLE_DEVICES)=", f"/proc/{p.pid}/environ"]]
+    finally:
+        p.communicate()
+
+
 def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_read(monkeypatch, tmp_path):
     """Node 1, 06:58Z Oct 2: a leased engine was still listed while its context reset, and its lease ended before the locks were
     read, so the probe blocked its pool. A second listing after the locks drops it."""

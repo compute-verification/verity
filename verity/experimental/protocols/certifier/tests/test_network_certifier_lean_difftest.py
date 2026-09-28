@@ -8,7 +8,7 @@ and `Accepted` of `constantRate` and `StatusComplete` by `decide`) and fails on 
 proves those definitions equal to `NetTiming`'s, which the guarantees read. The audit checks that data against the
 record's SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is
 still what this package computes: a change to the audit's verdicts changes the data, fails this test, and
-`audit.py --update` records the new data, which makes `check` run the Lean half on it. The tests here also check, on the
+`check.py --update` records the new data, which makes `check` run the Lean half on it. The tests here also check, on the
 first 200 instances, that the generator reaches what its docstring says, and that Python rejects what the generator
 never emits.
 """

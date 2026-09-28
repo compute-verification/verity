@@ -25,15 +25,15 @@ spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT 
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: a stand-in for tools/verity/lean/check.py --build PKG... --out O, run in the scratch tree: each named package fails when a file its
-#: policy names under "reads" is missing (an input the key would not cover) or a package it requires by path is not in the tree,
-#: fetches its git dependencies into .lake/packages, and notes what ran
+#: a stand-in for tools/verity/lean/check.py --build PKG... [--replay-cache D] --out O, run in the scratch tree: each named package
+#: fails when a file its policy names under "reads" is missing (an input the key would not cover) or a package it requires by
+#: path is not in the tree, fetches its git dependencies into .lake/packages, and notes what ran
 FAKE_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 reps, failed = [], []

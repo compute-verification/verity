@@ -12,7 +12,7 @@ thread once the preflight passes there again. Infra is the only reader, so each 
 Any other refusal (the machine held exclusively, ssh down) is only logged. A pass that passes leaves one Attempt (campaign
 `infra-probe`). It runs where `research run --on` and `research msg` work (infra's VM, tmux `preflight-probe`).
 
-Each pass also runs `research deploy drift` (research/deploy.py) and posts the same way whenever its findings change: the files on
+Each pass also runs `research deploy drift` (`ops deploy`) and posts the same way whenever its findings change: the files on
 the nodes that aren't main's, the processes still running old code, and the strays, with what's new since the last post.
 
   python3 preflight_probe.py --tree CHECKOUT [--machines vy-nebius-1 vy-nebius-2] [--every 3600] [--state PATH] [--once] [--dry-run]

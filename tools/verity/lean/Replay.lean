@@ -3,9 +3,11 @@ import Lean
 /-!
 # Kernel replay of a package's own declarations
 
-`lake env lean --run Replay.lean OUT M₁ M₂ …` reads every constant the modules `Mᵢ` declare from their `.olean` files,
-imports once the modules they import from outside that set, and sends each constant to the kernel
-(`Kernel.Environment.replay`). A declaration that never passed the kernel (`debug.skipKernelTC`, `addDeclWithoutChecking`,
+`lake env lean --run Replay.lean OUT M₁ M₂ … [--reused R₁ R₂ …]` reads every constant the modules `Mᵢ` and `Rⱼ` declare
+from their `.olean` files, imports once the modules they import from outside that set, and sends each constant of the
+`Mᵢ` to the kernel (`Kernel.Environment.replay`). A module `Rⱼ` passed this replay before with the same `.olean` files,
+its imports' included, on the same toolchain (`audit.py`'s replay cache): its constants go into the environment as an
+import adds them, unchecked, and are walked for axioms with the rest. A declaration that never passed the kernel (`debug.skipKernelTC`, `addDeclWithoutChecking`,
 a tampered `.olean`) is rejected here, which `#print axioms` cannot see.
 
 The constants go to the kernel side by side, on Lean's threads (`LEAN_NUM_THREADS`), one declaration at a time (an
@@ -98,8 +100,11 @@ def declOrder (decls : Array Name) (deps : Std.HashMap Name (Array Name)) : Exce
 
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
-  let some out := args.head? | throw <| IO.userError "usage: Replay.lean OUT MODULE..."
-  let mods := args.tail.toArray.map String.toName
+  let some out := args.head? | throw <| IO.userError "usage: Replay.lean OUT MODULE... [--reused MODULE...]"
+  let (checked, reused) := args.tail.span (· != "--reused")
+  let reusedMods := (reused.drop 1).toArray.map String.toName
+  let reusedSet := reusedMods.foldl NameSet.insert {}
+  let mods := checked.toArray.map String.toName ++ reusedMods
   let mut constants : Std.HashMap Name ConstantInfo := {}
   let mut moduleOf : Std.HashMap Name Name := {}
   let mut imports : Array Import := #[]
@@ -153,8 +158,14 @@ unsafe def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"replay: {d} (in {moduleOf[d]!}) is on a cycle of declarations that mention each other"
       return 1
   let mut tasks := #[]
+  let mut kept := 0
   for d in order do
     let cs := members.getD d #[]
+    if reusedSet.contains moduleOf[d]! then
+      kept := kept + cs.size
+      for c in cs do
+        kenv := addImported kenv c
+      continue
     let before := kenv
     tasks := tasks.push (d, ← IO.asTask do
       let t ← IO.monoMsNow
@@ -173,11 +184,12 @@ unsafe def main (args : List String) : IO UInt32 := do
   if rejected then
     return 1
   let names := axiomsIn kenv constants.keys.toArray |>.map toString
-  let sent := constants.size - skipped.size
-  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped.size),
+  let sent := constants.size - skipped.size - kept
+  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped.size), ("reused", toJson kept),
     ("axioms", toJson names)]).compress
   let slowest := took.qsort (fun a b => a.1 > b.1) |>.extract 0 3 |>.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
-  IO.println s!"replay: {sent} constants of {mods.size} modules accepted by the kernel ({skipped.size} more are \
-    unsafe or partial: compiled code, which the kernel does not check), as {order.size} declarations side by side \
+  IO.println s!"replay: {sent} constants of {mods.size - reusedMods.size} modules accepted by the kernel ({skipped.size} \
+    more are unsafe or partial: compiled code, which the kernel does not check; {kept} more, of {reusedMods.size} modules \
+    that passed before, added unchecked), as {tasks.size} declarations side by side \
     (slowest: {", ".intercalate slowest.toList}); axioms of their bodies: {", ".intercalate names.toList}"
   return 0

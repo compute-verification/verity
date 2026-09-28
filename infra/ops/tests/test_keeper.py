@@ -374,8 +374,8 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     """The CLI from a VM: `set` ships the tool snapshot and writes the target through the node's vy-keeper (here the repository's,
     reached through `sh -c` for ssh), `status` reads it back, `stop` stops it. The node's clock is real, so its 48 h bound is
     lifted and the target's until is far ahead; the CLI's own check runs on an injected clock."""
-    from research import cli
-    from research import keeper as K
+    from verity_ops import cli
+    from verity_ops import keeper as K
 
     root = tmp_path / "research"
     (tmp_path / "machines.toml").write_text(f'[machines.vy-nebius-2]\nprovider = "ssh"\nhost = "n2"\nuser = "research"\nproject = "verity"\n'
@@ -394,7 +394,7 @@ def test_research_keeper_set_status_and_stop_reach_the_nodes_keeper_over_ssh(tmp
     doc = json.loads((tmp_path / "keep" / "targets" / "sweep.json").read_text())
     req = doc["request"]
     assert (doc["owner"], doc["n"], doc["max_min"], doc["command"]) == ("@proofs", 2, 25, ["python3", "-m", "x", "--seed", "{seed}"])
-    assert req["runs_root"] == str(root / "runs") and (Path(req["tool"]) / "research" / "keeper.py").is_file()
+    assert req["runs_root"] == str(root / "runs") and (Path(req["tool"]) / "research" / "cli.py").is_file()
     assert req["harness_args"] == ["--stage", "run", "--project", "verity", "--lane", "proofs", "--declared-output", "out/*"]
     assert req["remote"]["machine"] == "vy-nebius-2" and req["remote"]["tool_identity"] == remote.tool_identity()
     assert cli.main(["keeper", "status", *on, "--json"]) == 0

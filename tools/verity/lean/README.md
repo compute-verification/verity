@@ -191,7 +191,7 @@ read from another module with the same content is counted on one line. A grant i
 (`lean_audit = ["guarantees", "reads"]`) would make such a change wait for a reviewer again.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
-`def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `audit.py --update`
+`def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`
 certifies the lift as the same statement when the type, with `G` unfolded once, hashes to the record's type hash and the
 named assumptions are the record's (`lifted_into`). `Facts.lean` (`liftOf`) unfolds by delta alone: the binders `xs` as they
 are, and in place of `G as` the value of `G` at the type's universe levels with its leading `fun`s instantiated by `as` (as
@@ -225,7 +225,7 @@ moves it into `G`, which prints as a change.
 
 **A move is not a change.** When declarations move (guarantees renamed, the definitions they read renamed or moved to other
 namespaces), write the moves as a JSON object of old names to new ones, each a declaration or a namespace (the longest prefix
-applies), and run `audit.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees
+applies), and run `check.py --update --moved MOVES.json PKG` on the record as it was before the move. The record's guarantees
 are renamed, and `Facts.lean` writes each guarantee's statement and each definition it reads once more with the build's names
 mapped back to the old ones, a lifted statement also with its definition unfolded. The review compares those texts with the
 records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
@@ -287,7 +287,7 @@ restatement both apply.
 It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
 a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
 since the record doesn't say which guarantees read it. A refusal is a conflict in git, with the entries named. Resolve it the
-old way: take either side and run `audit.py --update` on the merged tree.
+old way: take either side and run `check.py --update` on the merged tree.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
@@ -340,6 +340,9 @@ input hashes don't depend on the checkout's path: a build published from `/build
 module docstring has the layout and the rules. In short:
 - The client checks every file's sha256 against the commit's record before Lake sees it, and hands the files to Lake with
   `lake cache unstage`. Lake never reads the bucket itself, because its hashes aren't cryptographic.
+- A package's record also carries the build of each dependency that Mathlib's cache doesn't provide (ArkLib and the
+  packages it brings, for `Security/Proofs`), unstaged into that dependency's scope. A fresh machine then needs
+  `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
 - A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
 - The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
@@ -359,7 +362,7 @@ module docstring has the layout and the rules. In short:
 ## Using it from another repository
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
-package (`audit.py` prints a template when one is missing), run `audit.py --update` once on the trusted statements,
+package (`audit.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,
 review and commit the records, and run `audit.py --all --build` wherever the repository runs its checks.
 
 These records suit statements that are merged and reviewed. An external, untrusted submission still needs its theorem checked by

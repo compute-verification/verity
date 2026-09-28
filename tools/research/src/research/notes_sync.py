@@ -477,14 +477,15 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
     root = Path(root)
     if _out(root, "rev-parse", "--git-dir") is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
+    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
+    if not branch:
+        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
+                "error": "HEAD is detached; nothing committed: check out the notes branch"}
     rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
     if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:
         return {**rep, "note": f"no remote {remote!r}: committed locally only"}
-    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
-    if not branch:
-        return {**rep, "rc": 2, "error": "HEAD is detached; check out the notes branch"}
     secrets = _secret_values() if secrets is None else secrets
     tracking = f"refs/remotes/{remote}/{branch}"
     opts, where = remote_target(root, remote)
@@ -503,6 +504,9 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
             if rb.returncode:
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
                 _run(root, "rebase", "--abort")
+                if not _out(root, "symbolic-ref", "-q", "HEAD"):
+                    # an abort that lost its rebase-merge directory (NFS, 3 and 6 Oct) leaves HEAD detached at the remote branch
+                    _run(root, "checkout", "-q", branch)
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "
                                  + (", ".join(conflict) or rb.stderr.strip()[-200:]) + ", then sync again"}

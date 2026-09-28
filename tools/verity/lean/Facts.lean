@@ -8,7 +8,8 @@ initializers disabled and no environment extension loaded, so none of the packag
 attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
 judgement; `audit.py` holds the policy.
 
-- `modules`: the imported modules under the roots; `imports`: what each imports.
+- `modules`: the imported modules under the roots; `imports`: what each imports. `oleans`: the `.olean` file of every
+  imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
 - `declarations`: how many constants of each kind those modules declare.
 - `axioms`: every axiom any of them uses, found by walking the bodies; `offenders`: each one that uses an axiom outside
   `allowed`.
@@ -432,10 +433,14 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   let mut oleans := #[]
-  for m in mnames do
-    oleans := oleans.push (toString (← findOLean m))
+  let mut graph := #[]
+  for h : i in [0:mnames.size] do
+    let olean := toString (← findOLean mnames[i])
+    oleans := oleans.push olean
+    graph := graph.push (mnames[i].toString, Json.mkObj [("olean", toJson olean),
+      ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
-    ("oleans", toJson oleans),
+    ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),

@@ -144,9 +144,9 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `verity/ml/flock/`, less its README.md and PROTOCOL.md files; `--train --send FILE` ships what such a step
-needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached in
-the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
+`lean-agreement` for `verity/{ml,core/service}/flock/`, less README.md and PROTOCOL.md; `--train --send FILE` ships what such a
+step needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
+in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
 **Not live yet:** `main` still moves only by the trains the research coordinator lands with `research merge`, so a `ready`
@@ -215,7 +215,7 @@ each with its repository file and owner (a Slack handle), and goes there only th
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
-that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`research/deploy.py`). A new
+that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`). A new
 loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
