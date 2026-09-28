@@ -17,6 +17,7 @@ from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources import call_boundary_source, norm_scale_source, router_softmax_source, scale_products_source, vocab_range_source
 from verity_vllm.config import option
+from verity_vllm.program.registry.topp_split import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -55,6 +56,8 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                          explicit_classes=explicit_classes, model=model, programs=programs)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
+    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
+        com.prescribe_idle_splits = splits_for_v1            # a derived-S Program: a step vLLM ran without top-p binds its prescribed S
     return required_classes
 
 

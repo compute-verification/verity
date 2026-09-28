@@ -20,7 +20,7 @@
     {"file": "verity_vllm/check/verdict.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 837},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 997},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 405},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1893},
+    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1821},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2550},
     {"file": "verity_vllm/commit/padding_steps.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 912},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "function", "symbol": "run", "detail": "lines", "count": 162},
