@@ -175,11 +175,22 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
-/-- A registered value a recursive statement reads a round's commitment from: round `i`'s commitment `rec-c<i>`, which
-V*'s algebra reads, or level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads. -/
+/-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
+which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered
+opening's round `i`, `rec-opening-c<i>`, and R's level-`l` tops, `rec-top-stacked-L<l>`; and the sparse phase's messages
+`rec-sparse-pre<j>` and `rec-sparse-sc<j>`. -/
+def roundIndexed : List String :=
+  ["rec-c", "rec-top-L", "rec-opening-c", "rec-top-stacked-L", "rec-sparse-pre", "rec-sparse-sc"]
+
+/-- The sparse phase's other messages, each a round's commitment by its name. -/
+def roundNamed : List String := ["rec-sparse-v2", "rec-sparse-u", "rec-sparse-vt"]
+
+/-- A registered value a recursive statement reads a round's commitment from: a prefix of `roundIndexed` followed by an
+index's decimal digits, or one of `roundNamed`. The sparse phase's `rec-sparse-v`, `rec-sparse-zero` and `rec-sparse-tau`
+are no round's commitment. -/
 def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
-  (value.startsWith "rec-c" && index (value.drop 5).toString) || (value.startsWith "rec-top-L" && index (value.drop 9).toString)
+  roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
 /-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
 stratum draws all of its units (`k_s = n_s`). -/

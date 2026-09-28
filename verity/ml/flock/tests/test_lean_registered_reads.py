@@ -297,23 +297,26 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
     assert why(moved) == f"setup: registered reads: port cs: unit 5 reads position {POSITIONS[5]}, and the verifier's program reads 10"
 
 
-def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged):
+@pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
+def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
     """U4 (§16.10, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
-    committed tops `rec-top-L0`, which no other check reads; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
-    when the record's draw does not draw every unit reading it in full, with one table and with two (`buildSession`'s call:
-    `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no draw). The full draw passes setup and meets the subset law's refusal without `--zk`, which `verify` checks after
-    setup. U4's Lean test (`Flock.Test.Full`) checks the function; this checks that `verify` calls it."""
-    c = G.Registered.commit(P.program_digest(staged.program), "rec-top-L0",
+    committed tops `rec-top-L0`, which no other check reads, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows`
+    first) is refused at setup when the record's draw does not draw every unit reading it in full, with one table and with
+    two (`buildSession`'s call: `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path
+    serves `statement`, which has no draw). The full draw passes U4: `rec-top-L0` then meets the subset law's refusal
+    without `--zk`, which `verify` checks after setup, and R's tops meet `checkPubRows`, since the verifier holds no inner
+    transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this checks that `verify`
+    calls it."""
+    c = G.Registered.commit(P.program_digest(staged.program), value,
                             np.random.default_rng(20261010).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     rows, salts, e = c.statement(OUT_POSITIONS)
-    public = _stage(staged, "rec-top-L0", extra={"out": e}, outs=rows, out_salts=salts)
-    own = staged.dir / "own-rec-top-L0.json"
+    public = _stage(staged, value, extra={"out": e}, outs=rows, out_salts=salts)
+    own = staged.dir / f"own-{value}.json"
     own.write_text(json.dumps({**staged.own, "ports": {**staged.own["ports"],
                                                        "out": {**c.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}))
 
     def why(k: int, tables: int) -> str:
-        sess = staged.dir / f"session-rec-top-L0-{k}-{tables}"
+        sess = staged.dir / f"session-{value}-{k}-{tables}"
         sess.mkdir(exist_ok=True)
         draw = {"law": "subset", "population": len(OUT_POSITIONS), "k": k, "units": list(range(k))}
         (sess / "session.json").write_text(json.dumps({"unit_draw": draw}))
@@ -325,9 +328,10 @@ def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(st
         assert line["accepted"] is False
         return line["why"]
 
+    full = "refused: a subset draw without --zk: no soundness claim draws by this law" if value == "rec-top-L0" else "setup: rec-pub: "
     for tables in (1, 2):
-        assert why(len(OUT_POSITIONS), tables) == "refused: a subset draw without --zk: no soundness claim draws by this law", tables
-        assert why(2, tables) == ("setup: U4: unit 0 reads rec-top-L0, a round's commitment (port out), and the draw does not draw "
+        assert why(len(OUT_POSITIONS), tables).startswith(full), tables
+        assert why(2, tables) == (f"setup: U4: unit 0 reads {value}, a round's commitment (port out), and the draw does not draw "
                                   "it in full"), tables
 
 
