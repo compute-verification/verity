@@ -40,6 +40,32 @@ def _operand(w: int) -> int:
     return 0 if w == -1 else 1 if w == -2 else w + 2
 
 
+def _ungate(c: int) -> tuple[int, int, int | None]:
+    """`Rope.decGate`, in Python: the op and the operands (``-1`` / ``-2`` for the constants), NOT's second None."""
+    src = lambda n: -1 if n == 0 else -2 if n == 1 else n - 2
+    return c % 3, src(c // 3 % (1 << 17)), None if c % 3 == 2 else src(c // 3 // (1 << 17))
+
+
+def _gate_code(op: int, a: int, b: int) -> int:
+    x, y = _operand(a), _operand(b) if op != 2 else 0
+    assert x < 1 << 17 and y < 1 << 17, f"an operand of ({op}, {a}, {b}) is at or above 2^17, which a gate code cannot hold"
+    c = op + 3 * (x + (1 << 17) * y)
+    assert _ungate(c) == (op, a, None if op == 2 else b)
+    return c
+
+
+def _unpack(n: int) -> list[int]:
+    """`Rope.unpackRuns 512` then `runsList`, in Python."""
+    cols: list[int] = []
+    for _ in range(512):
+        if n == 0:
+            break
+        d = n % (1 << 22) - 1
+        cols.extend(range(d // 512, d // 512 + d % 512))
+        n >>= 22
+    return cols
+
+
 def _pack(cols: list[int]) -> int:
     runs: list[list[int]] = []
     for c in cols:
@@ -47,10 +73,13 @@ def _pack(cols: list[int]) -> int:
             runs[-1][1] += 1
         else:
             runs.append([c, 1])
+    assert len(runs) <= 512, f"{len(runs)} runs, more than Rope.unpackRuns' fuel of 512"
     n = 0
     for a, length in reversed(runs):
-        assert a < 8192 and length < 512
-        n = (n << 22) + a * 512 + length + 1
+        d = a * 512 + length + 1
+        assert a < 8192 and length < 512 and d < 1 << 22, f"the run ({a}, {length}) does not fit a base-2^22 digit"
+        n = (n << 22) + d
+    assert _unpack(n) == list(cols)
     return n
 
 
@@ -74,7 +103,7 @@ def rope() -> dict[str, str]:
     g, n_in, outs = gl["gates"], gl["inputs"], gl["outputs"]
     ops, A, B = g[0::3], g[1::3], g[2::3]
     G = len(ops)
-    codes = [op + 3 * (_operand(a) + (1 << 17) * (_operand(b) if op != 2 else 0)) for op, a, b in zip(ops, A, B)]
+    codes = [_gate_code(op, a, b) for op, a, b in zip(ops, A, B)]
     # the forms `GateRows.St.steps` gives each wire, in the layout's columns
     forms: list[tuple[int, int]] = [(1 << k, 0) for k in range(n_in)]
     ands = [0]
