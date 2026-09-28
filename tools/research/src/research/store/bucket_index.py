@@ -18,15 +18,21 @@ the newest indexed run id (`start-after`), and in full once `FULL_RUNS_EVERY` ha
 late. `index(public_remote, db, policy=PUBLIC, private=private_db)` rebuilds the public tables from the private index: the
 artifacts whose manifests are in the public bucket, each run that produced one (its doc cut to `PUBLIC_RUN_FIELDS`) and the
 `PUBLIC_LABEL_KEYS` labels on those targets (cut to `PUBLIC_LABEL_FIELDS`). Both are whitelists.
+
+`db` is a SQLite file (`SqliteIndex`) or a schema of a Postgres database (`PostgresIndex`, written through `psql` with the URL
+in libpq's environment). The public rebuild reads the private index one record at a time, cheap in SQLite only.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import time
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -222,11 +228,18 @@ class SqliteIndex:
                     self.db.executemany("INSERT OR IGNORE INTO edges VALUES (?,?,?)", edges(row))
         return n
 
-    def clear(self) -> None:
+    def replace(self, groups: list[tuple[list[Row], Callable[[Row], list[tuple]]]], listings: dict[str, tuple[str, int]]) -> None:
+        """Every row replaced by `groups` and `listings`, in one transaction (the public rebuild)."""
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             for t in ("records", "fields", "edges", "listings"):
                 self.db.execute(f"DELETE FROM {t}")
+            for rows, edges in groups:
+                for row in rows:
+                    if self.db.execute("INSERT OR IGNORE INTO records VALUES (?,?,?,?,?)", row.record()).rowcount:
+                        self.db.executemany("INSERT INTO fields VALUES (?,?,?)", row.fields())
+                        self.db.executemany("INSERT OR IGNORE INTO edges VALUES (?,?,?)", edges(row))
+            self.db.executemany("INSERT INTO listings VALUES (?,?,?)", [(p, t, n) for p, (t, n) in listings.items()])
 
     def set_listing(self, prefix: str, listed_at: str, keys: int) -> None:
         with self.db:
@@ -243,6 +256,137 @@ class SqliteIndex:
         return {"records": {"rows": rec[0], "doc_bytes": rec[1], "by_type": by_type}, "fields": {"rows": fld[0], "bytes": fld[1]},
                 "edges": {"rows": edg[0], "bytes": edg[1]},
                 "file_bytes": self.path.stat().st_size if self.path is not None and self.path.exists() else None}
+
+
+def pg_env(url: str) -> dict[str, str]:
+    """libpq's environment for a `postgresql://user:password@host/db?sslmode=...` URL, so the URL never sits on a command line."""
+    u = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qs(u.query)
+    if u.scheme not in ("postgres", "postgresql") or not (u.hostname or query.get("host")):
+        raise ValueError(f"not a postgres URL with a host (scheme {u.scheme!r})")
+    env = {"PGHOST": u.hostname or "", "PGPORT": str(u.port or 5432), "PGDATABASE": urllib.parse.unquote(u.path.lstrip("/")),
+           "PGUSER": urllib.parse.unquote(u.username or ""), "PGPASSWORD": urllib.parse.unquote(u.password or "")}
+    for key, var in (("host", "PGHOST"), ("sslmode", "PGSSLMODE"), ("channel_binding", "PGCHANNELBINDING"), ("options", "PGOPTIONS"),
+                     ("connect_timeout", "PGCONNECT_TIMEOUT")):
+        if v := query.get(key):
+            env[var] = v[-1]
+    return {k: v for k, v in env.items() if v}
+
+
+def _lit(s: str) -> str:
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _values(rows: Iterable[tuple]) -> str:
+    """Rows as SQL VALUES literals.  Postgres text and jsonb cannot hold NUL, so it becomes U+FFFD here only."""
+    return ",\n".join("(" + ",".join("NULL" if v is None else _lit(str(v).replace("\x00", "\ufffd")) for v in r) + ")" for r in rows)
+
+
+_UNCOPY = {"\\": "\\", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+
+
+def _uncopy(field: str) -> str | None:
+    return None if field == r"\N" else re.sub(r"\\(.)", lambda m: _UNCOPY.get(m.group(1), m.group(1)), field)
+
+
+_UTC = "to_char({col} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
+
+
+class PostgresIndex:
+    """The four tables in one schema of a Postgres database (Neon's `store`: `store_private`, `store_public`), written through
+    `psql` (stdlib only: no driver).  The schema is the database owner's; this creates the tables in it when they are missing and
+    otherwise only inserts and deletes rows, so the readers' grants on the schema survive a rebuild."""
+
+    def __init__(self, url: str, schema: str, psql: str = "psql", *, create: bool = True):
+        """`create=False` for a reader: Postgres checks CREATE on the schema even when every table exists."""
+        if not re.fullmatch(r"[a-z_][a-z0-9_]*", schema):
+            raise ValueError(f"bad schema name {schema!r}")
+        self.env, self.schema, self.psql, self.path = pg_env(url), schema, psql, None
+        if create:
+            self.run(POSTGRES_DDL.format(schema=schema))
+
+    def run(self, script: str) -> list[list[str]]:
+        r = subprocess.run([self.psql, "-X", "-q", "-A", "-t", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-f", "-"], input=script,
+                           env={**os.environ, **self.env}, capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            raise RuntimeError(f"psql ({self.schema}): {r.stderr.strip()[-2000:]}")
+        return [ln.split("\t") for ln in r.stdout.splitlines() if ln]
+
+    def select(self, query: str) -> list[tuple]:
+        """The rows of one SELECT, read through COPY's text format, so values may hold tabs and newlines; NULL is None."""
+        return [tuple(_uncopy(f) for f in row) for row in self.run(f"COPY ({query}) TO STDOUT;")]
+
+    def close(self) -> None:
+        pass
+
+    def ids(self) -> set[str]:
+        return {r[0] for r in self.select(f"SELECT id FROM {self.schema}.records")}
+
+    def newest_run(self) -> str | None:
+        r = self.select(f"SELECT max(id) FROM {self.schema}.records WHERE type='run'")
+        return r[0][0] if r else None
+
+    def listed_at(self, prefix: str) -> str | None:
+        r = self.select(f"SELECT {_UTC.format(col='listed_at')} FROM {self.schema}.listings WHERE prefix={_lit(prefix)}")
+        return r[0][0] if r else None
+
+    def row(self, rid: str) -> Row | None:
+        r = self.select(f"SELECT id, type, kind, {_UTC.format(col='time')}, doc::text FROM {self.schema}.records WHERE id={_lit(rid)}")
+        return Row(*r[0][:4], json.loads(r[0][4])) if r else None
+
+    def producers(self, art: str) -> list[str]:
+        return [r[0] for r in self.select(f"SELECT DISTINCT src FROM {self.schema}.edges WHERE dst={_lit(art)} AND name LIKE 'outputs.%' ORDER BY src")]
+
+    def labels_on(self, target: str, keys: Iterable[str]) -> list[str]:
+        return [r[0] for r in self.select(
+            f"SELECT e.src FROM {self.schema}.edges e JOIN {self.schema}.records r ON r.id = e.src WHERE e.dst={_lit(target)} "
+            f"AND e.name='target' AND r.kind IN ({','.join(_lit(k) for k in keys)}) ORDER BY e.src")]
+
+    def edges_of(self, rid: str) -> list[tuple[str, str, str]]:
+        return self.select(f"SELECT src, name, dst FROM {self.schema}.edges WHERE src={_lit(rid)} ORDER BY name, dst")
+
+    def _insert(self, rows: list[Row], edges: Callable[[Row], list[tuple]]) -> str:
+        """One statement inserting the records not yet present and the fields and edges of those only; it returns how many were new.
+        Plain VALUES rather than COPY: COPY cannot skip a present key, and the indexer may not create temporary tables."""
+        s = self.schema
+        fields = [x for row in rows for x in row.fields()]
+        links = [x for row in rows for x in edges(row)]
+        sql = (f"WITH new AS (INSERT INTO {s}.records SELECT id, type, kind, time::timestamptz, doc::jsonb FROM (VALUES\n"
+               f"{_values(row.record() for row in rows)}) v(id, type, kind, time, doc) ON CONFLICT (id) DO NOTHING RETURNING id)")
+        if fields:
+            sql += (f",\nf AS (INSERT INTO {s}.fields SELECT v.* FROM (VALUES\n{_values(fields)}) v(id, path, value) JOIN new USING (id) "
+                    "RETURNING 1)")
+        if links:
+            sql += (f",\ne AS (INSERT INTO {s}.edges SELECT v.* FROM (VALUES\n{_values(links)}) v(src, name, dst) "
+                    "JOIN new ON new.id = v.src ON CONFLICT DO NOTHING RETURNING 1)")
+        return sql + "\nSELECT count(*) FROM new;\n"
+
+    def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
+        """Insert the rows not already present, in one transaction.  How many were new."""
+        if not rows:
+            return 0
+        return int(self.run(self._insert(rows, edges))[-1][0])
+
+    def replace(self, groups: list[tuple[list[Row], Callable[[Row], list[tuple]]]], listings: dict[str, tuple[str, int]]) -> None:
+        """Every row replaced by `groups` and `listings`, in one transaction (the public rebuild); tables are kept, so grants are."""
+        s = self.schema
+        self.run("BEGIN;\n" + "".join(f"DELETE FROM {s}.{t};\n" for t in ("records", "fields", "edges", "listings"))
+                 + "".join(self._insert(rows, edges) for rows, edges in groups if rows)
+                 + "".join(f"INSERT INTO {s}.listings VALUES ({_lit(p)}, {_lit(t)}, {int(n)});\n" for p, (t, n) in listings.items())
+                 + "COMMIT;\n")
+
+    def set_listing(self, prefix: str, listed_at: str, keys: int) -> None:
+        self.run(f"INSERT INTO {self.schema}.listings VALUES ({_lit(prefix)}, {_lit(listed_at)}, {int(keys)}) "
+                 "ON CONFLICT (prefix) DO UPDATE SET listed_at = EXCLUDED.listed_at, keys = EXCLUDED.keys;")
+
+    def size(self) -> dict:
+        """SqliteIndex.size's shape; `bytes` is each table's with its indexes and `file_bytes` their sum."""
+        s = self.schema
+        out = {t: {"rows": int(n), "bytes": int(b)} for t, n, b in self.run("".join(
+            f"SELECT '{t}', (SELECT count(*) FROM {s}.{t}), pg_total_relation_size('{s}.{t}');\n"
+            for t in ("records", "fields", "edges", "listings")))}
+        out["records"]["doc_bytes"] = int(self.run(f"SELECT coalesce(sum(pg_column_size(doc)), 0) FROM {s}.records;")[0][0])
+        return {**out, "schema": s, "file_bytes": sum(t["bytes"] for t in out.values())}
 
 
 def _now(now: datetime | None) -> datetime:
@@ -276,7 +420,7 @@ def _read(remote, keys: list[tuple[str, str | None]], jobs: int) -> tuple[list[R
     return [rows[i] for i in sorted(rows)], sorted(errors)
 
 
-def _private(remote, idx: SqliteIndex, *, jobs: int, full: bool, now: datetime, batch: int, log) -> dict:
+def _private(remote, idx, *, jobs: int, full: bool, now: datetime, batch: int, log) -> dict:
     stamp = _stamp(now)
     have = idx.ids()
     newest = idx.newest_run()
@@ -306,7 +450,7 @@ def _private(remote, idx: SqliteIndex, *, jobs: int, full: bool, now: datetime, 
     return rep
 
 
-def _public(public_remote, idx: SqliteIndex, private: SqliteIndex, *, jobs: int, now: datetime) -> dict:
+def _public(public_remote, idx, private, *, jobs: int, now: datetime) -> dict:
     listed = public_remote.list_times(MANIFESTS)
     arts, missing = {}, []
     for key, modified in listed:
@@ -329,16 +473,15 @@ def _public(public_remote, idx: SqliteIndex, private: SqliteIndex, *, jobs: int,
             if (row := private.row(lid)) is not None:
                 labels[lid] = public_label(row)
     shown = set(arts) | set(runs)
-    idx.clear()
-    idx.add(list(arts.values()))
-    idx.add(list(runs.values()), edges=lambda r: [e for e in private.edges_of(r.id) if e[2] in shown])
-    idx.add(list(labels.values()))
-    idx.set_listing(MANIFESTS, _stamp(now), len(listed))
+    idx.replace([(list(arts.values()), Row.edges),
+                 (list(runs.values()), lambda r: [e for e in private.edges_of(r.id) if e[2] in shown]),
+                 (list(labels.values()), Row.edges)], {MANIFESTS: (_stamp(now), len(listed))})
     return {"listed": {MANIFESTS: len(listed)}, "read": len(fetched), "added": {"artifact": len(arts), "run": len(runs), "label": len(labels)},
             "errors": errors}
 
 
-def index(remote, db: Path | str | sqlite3.Connection | SqliteIndex, *, policy: str = PRIVATE, private: Path | str | SqliteIndex | None = None,
+def index(remote, db: Path | str | sqlite3.Connection | SqliteIndex | PostgresIndex, *, policy: str = PRIVATE,
+          private: Path | str | SqliteIndex | PostgresIndex | None = None,
           jobs: int = 32, full: bool = False, now: datetime | None = None, batch: int = 2000,
           log: Callable[[str], None] | None = None) -> dict:
     """Bring the index at `db` up to what `remote` holds (module docstring).  `remote` needs `list_times` and `get`.  PRIVATE reads only
@@ -346,14 +489,14 @@ def index(remote, db: Path | str | sqlite3.Connection | SqliteIndex, *, policy: 
     {"policy", "listed": {prefix: keys}, "read", "added": {type: n}, "errors", "seconds"}; a record that fails its check is in
     `errors` and is read again next pass."""
     t0 = time.monotonic()
-    idx = db if isinstance(db, SqliteIndex) else SqliteIndex(db)
+    idx = db if isinstance(db, (SqliteIndex, PostgresIndex)) else SqliteIndex(db)
     try:
         if policy == PRIVATE:
             rep = _private(remote, idx, jobs=jobs, full=full, now=_now(now), batch=max(1, batch), log=log)
         elif policy == PUBLIC:
             if private is None:
                 raise ValueError("index(policy=PUBLIC) derives from the private index: pass private=")
-            priv = private if isinstance(private, SqliteIndex) else SqliteIndex(private)
+            priv = private if isinstance(private, (SqliteIndex, PostgresIndex)) else SqliteIndex(private)
             try:
                 rep = _public(remote, idx, priv, jobs=jobs, now=_now(now))
             finally:
@@ -371,8 +514,14 @@ def default_path(store_root: Path | str, policy: str = PRIVATE) -> Path:
     return Path(store_root) / ("index.sqlite" if policy == PRIVATE else "index-public.sqlite")
 
 
-def dump(db: Path | str | SqliteIndex) -> dict[str, list[tuple]]:
+def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]:
     """Every row of records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
+    if isinstance(db, PostgresIndex):
+        s = db.schema
+        recs = [(*r[:4], canon.dumps(json.loads(r[4])).decode())
+                for r in db.select(f"SELECT id, type, kind, {_UTC.format(col='time')}, doc::text FROM {s}.records")]
+        return {"records": sorted(recs), "fields": sorted(db.select(f"SELECT * FROM {s}.fields")),
+                "edges": sorted(db.select(f"SELECT * FROM {s}.edges"))}
     idx = db if isinstance(db, SqliteIndex) else SqliteIndex(db)
     try:
         return {t: sorted(idx.db.execute(f"SELECT * FROM {t}")) for t in ("records", "fields", "edges")}
