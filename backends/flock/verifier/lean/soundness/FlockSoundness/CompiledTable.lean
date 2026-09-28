@@ -134,7 +134,7 @@ open Classical in
 /-- **Compiled soundness for any level-0 table** (the review's (A′)). For every compiled prover
 `P*` and every table `T`: `Pr[accepted ∧ no codeword near T packs a satisfying witness]` is at most
 `ε_c⁻` plus the probability that a run opens a level-0 position off `T`. -/
-theorem table_sound_compiled_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K)
+theorem table_sound_compiled_of_table (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -150,7 +150,7 @@ theorem table_sound_compiled_of_table (hMCA : Assumptions.BCHKS25Thm46) (A : Ari
   show ∀ σ : Strategy (Game.send (Cap D)
     (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)), _
   intro σ
-  have h1 := compiled_le_bad hMCA A hA H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hsch
+  have h1 := compiled_le_bad A hA H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hsch
     hm ptLocal mPts hlay T σ.1 σ.2
   have h2 := bad_le_gen A H E S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts T
     σ _ le_rfl

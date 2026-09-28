@@ -91,8 +91,8 @@ class Circuit:
         return w
 
     def lookup(self, table_name, idx, width):
-        """``table[idx]``'s low ``width`` bits as committed bits: a table read (no ANDs here; a Flock statement proves it with a
-        lookup slot)."""
+        """``table[idx]``'s low ``width`` bits as committed bits: a table read (no ANDs here; ``ir_lower.layout`` lays it out as
+        plain rows of the unit)."""
         g = len(self.lookups)
         self.lookups.append((table_name, list(idx), width))
         return [self._new("lookup", (g, j)) for j in range(width)]

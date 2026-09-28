@@ -90,7 +90,7 @@ theorem mcaA_nonneg (l : Level) (hl : l.Ok) : 0 ≤ l.mcaA := (mcaA_bounds l hl.
 /-- **A level's folds.** From a doomed claim before the folds, after them the claim is false for
 every fold of the level's list and no round was an MCA event, except with probability
 `foldError`. -/
-theorem phaseB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct) (n : ℕ)
+theorem phaseB (A : Arith F K) (hA : A.Correct) (n : ℕ)
     (b : ℕ → F) (initial : List K) (l : Level) (hl : l.Ok) (hf : l.Fits) (C : Oracle F) (e : ℕ)
     (st : LigState F K) (hpre : PreFold A n b initial l C e st) (hlanes : 1 ≤ l.lanes) :
     value (fun out : List K × K × Quad K => ¬ PostFold A hA n b initial l hf l.lanes C out.1
@@ -129,7 +129,7 @@ theorem phaseB (hMCA : Assumptions.BCHKS25Thm46) (A : Arith F K) (hA : A.Correct
       rfl
   have hmcaε : ∀ U : Fin 2 → Fin (2 ^ l.logLen) → K,
       prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤
-        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le hMCA A hA l hl hf
+        ENNReal.ofReal (l.mcaA / qK) := prCoin_level_mca_le A hA l hl hf
   have hsumε := value_foldRounds_sum_le A hA S u v l.lanes l.logCols st.s st.q hpre.sum
     (fun M hM => by rw [← hdim]; exact hpre.doom M hM)
   calc value _ (foldRounds A l.lanes st.s st.q)
