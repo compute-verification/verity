@@ -13,10 +13,12 @@ for pair in /root/.research:/data/state/root-research /root/.runpod:/data/state/
   [ -d "$l" ] && [ ! -L "$l" ] && rmdir "$l" 2>/dev/null
   ln -sfn "$t" "$l"
 done
-command -v rsync > /dev/null && command -v sqlite3 > /dev/null || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync sqlite3 git) > /dev/null 2>&1 &
+command -v rsync > /dev/null && command -v sqlite3 > /dev/null && command -v psql > /dev/null \
+  || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync sqlite3 git postgresql-client) > /dev/null 2>&1 &
 (cd /workspace/guard-src && PYTHONPATH=tools/research/src RESEARCH_MACHINES_D=/workspace/steward/research-notes/machines.d LC_ALL=C.UTF-8 \
   setsid -f python3 -m research pods guard --supervise --budgets /workspace/steward/research-notes \
   >> /root/.research/pods/guard-budgets.log 2>&1 < /dev/null)
 setsid -f /data/steward/run.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/tmp_sweep.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/console/console-loop.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/infra/store_index.sh > /dev/null 2>&1 < /dev/null

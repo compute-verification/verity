@@ -78,6 +78,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -632,10 +633,15 @@ def cmd_index(argv: list[str]) -> int:
     ap.add_argument("--public", action="store_true", help="then rebuild the public index from the export bucket's manifests")
     ap.add_argument("--public-db", type=Path, help="the public index (default <store>/index-public.sqlite)")
     ap.add_argument("--full", action="store_true", help="list every run, not only those after the newest indexed one")
+    ap.add_argument("--postgres", action="store_true",
+                    help="write the schemas store_private and store_public of the database $STORE_INDEXER_DATABASE_URL names, not SQLite files")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     root = store_root(ns.store)
+    if ns.postgres and not os.environ.get("STORE_INDEXER_DATABASE_URL"):
+        print("research data index: --postgres needs STORE_INDEXER_DATABASE_URL in the environment", file=sys.stderr)
+        return 2
     if ns.source:
         remote = FsRemote(ns.source)
     else:
@@ -645,17 +651,21 @@ def cmd_index(argv: list[str]) -> int:
             return 2
         remote = st.remote
     log = None if ns.json else (lambda m: print(m, file=sys.stderr))
-    db = ns.db or BI.default_path(root)
+    export = None
+    if ns.public and (export := load_export()) is None:
+        print("research data index: --public needs the export bucket (`research data export`'s config)", file=sys.stderr)
+        return 2
+    if ns.postgres:
+        url = os.environ["STORE_INDEXER_DATABASE_URL"]
+        db, public_db = BI.PostgresIndex(url, "store_private"), (BI.PostgresIndex(url, "store_public") if ns.public else None)
+    else:
+        db, public_db = ns.db or BI.default_path(root), ns.public_db or BI.default_path(root, BI.PUBLIC)
     reps = [BI.index(remote, db, jobs=ns.jobs, full=ns.full, log=log)]
     if ns.public:
-        export = load_export()
-        if export is None:
-            print("research data index: --public needs the export bucket (`research data export`'s config)", file=sys.stderr)
-            return 2
-        reps.append(BI.index(export, ns.public_db or BI.default_path(root, BI.PUBLIC), policy=BI.PUBLIC, private=db, jobs=ns.jobs))
-    for rep, path in zip(reps, (db, ns.public_db or BI.default_path(root, BI.PUBLIC))):
-        idx = BI.SqliteIndex(path)
-        rep["db"], rep["size"] = str(path), idx.size()
+        reps.append(BI.index(export, public_db, policy=BI.PUBLIC, private=db, jobs=ns.jobs))
+    for rep, where in zip(reps, (db, public_db)):
+        idx = where if isinstance(where, BI.PostgresIndex) else BI.SqliteIndex(where)
+        rep["db"], rep["size"] = (f"postgres {where.schema}" if isinstance(where, BI.PostgresIndex) else str(where)), idx.size()
         idx.close()
     if ns.json:
         _dump(reps)
@@ -668,7 +678,7 @@ def cmd_index(argv: list[str]) -> int:
                   + "; added " + ", ".join(f"{n} {t}s" for t, n in rep["added"].items()) + f" in {rep['seconds']}s"
                   + (f"; {len(rep['errors'])} error(s)" if rep["errors"] else "")
                   + f"; {s['records']['rows']} records ({s['records']['doc_bytes'] / 1e6:.1f} MB of doc), {s['fields']['rows']} fields, "
-                  f"{s['edges']['rows']} edges, file {(s['file_bytes'] or 0) / 1e6:.1f} MB")
+                  f"{s['edges']['rows']} edges, {(s['file_bytes'] or 0) / 1e6:.1f} MB on disk")
     return 1 if any(r["errors"] for r in reps) else 0
 
 

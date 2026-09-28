@@ -193,7 +193,9 @@ hourly), reads only what it lacks, checks each record against its key (a failure
 and never touches `objects/`. One pass and pass by pass give the same rows (tested). `index(public, db, policy=PUBLIC,
 private=db)` rebuilds the public tables: the artifacts whose manifests are in the public bucket, their producing runs cut to
 `PUBLIC_RUN_FIELDS`, and the `verified` / `verifier` / `proof_class` labels on them without `ref`; every cut is a whitelist.
-`research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket).
+`research data index` builds `<store>/index.sqlite` (`--public`: `index-public.sqlite`; `--from DIR`: a directory as bucket;
+`--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
+it every 5 minutes (`infra/control/store_index.sh`).
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
