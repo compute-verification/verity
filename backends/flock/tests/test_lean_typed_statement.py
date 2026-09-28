@@ -107,3 +107,33 @@ def test_a_typed_statement_carries_no_unit_rows(rope):
     (rope / "with-rows.circuit").write_text(text)
     r = _expand(rope / "with-rows.circuit")
     assert not r["ok"] and "carries no unit rows" in r["error"], r
+
+
+#: a typed RoPE (`rope-head/d64/neox-bf16`, a flat class, 4 instances) staged by `typed_statement.stage`, and every CPU
+#: selftest case of its flock-circuit (seed-injection build, #273 at 8505c540), recorded
+RUST_SESSIONS = "art:48f286b4"
+
+
+def test_it_gives_the_rust_provers_sessions_their_verdicts(tmp_path):
+    """On `flock-circuit`'s own recorded sessions for a flat class, the verifier gives every case its expected verdict: the
+    honest ones accepted (so its statement digest and Σ are the prover's) and every negative refused."""
+    import sys  # noqa: PLC0415
+
+    sys.path.insert(0, str(LEAN.parent))
+    import ci  # noqa: PLC0415
+
+    try:
+        root = ci.fetch(f"{RUST_SESSIONS}/stage", tmp_path / "store").parent
+    except (subprocess.CalledProcessError, OSError) as e:
+        pytest.skip(f"the evidence store is not reachable: {e}")
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run([sys.executable, str(LEAN.parent / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
+                   check=True, capture_output=True)
+    sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
+    p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit/types+seed-injection",
+                        "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
+                        "--session", *map(str, sessions)], capture_output=True, text=True)
+    got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
+    want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
+    assert {n: got[n]["accepted"] for n in want} == want, {n: got[n]["why"] for n in want if got[n]["accepted"] != want[n]}
+    assert sum(want.values()) == 3 and len(want) == 19
