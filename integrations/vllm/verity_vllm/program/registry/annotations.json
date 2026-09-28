@@ -81,6 +81,10 @@
       "name": "SiLU · mul"
     },
     {
+      "key": "def:SiluMul_v2",
+      "name": "SiLU · mul"
+    },
+    {
       "key": "def:SquareBf16_v1",
       "name": "Square"
     },

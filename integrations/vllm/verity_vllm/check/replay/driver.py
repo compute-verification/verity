@@ -145,7 +145,7 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
 
 #: spec family -> the C++ twin libraries its evaluator dlopens (built JIT on first use)
-_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "BiasAdd_v1": (),
+_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
                 "Embedding_v1": (), "TokenSelect_v1": (), "GumbelTopPTokenSelect_v1": (),
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",),
