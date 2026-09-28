@@ -1,0 +1,53 @@
+{
+ "sorry": {
+  "write": {"Control/Bad.lean": "theorem Control.bad : 1 = 2 := by sorry\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "sorry: sorryAx is used by Control.bad"
+ },
+ "axiom": {
+  "write": {"Control/Bad.lean": "axiom Control.magic : False\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "declared: `axiom Control.magic`"
+ },
+ "native_decide": {
+  "write": {"Control/Bad.lean": "theorem Control.big : 2 ^ 20 = 1048576 := by native_decide\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "native_decide: "
+ },
+ "escape": {
+  "write": {"Control/Bad.lean": "partial def Control.spin (n : Nat) : Nat := Control.spin (n + 1)\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "escape: Control.spin (opaque"
+ },
+ "orphan": {
+  "write": {"Control/Unused.lean": "theorem Control.unused : True := trivial\n"},
+  "fails": "orphan: Control/Unused.lean"
+ },
+ "closed_hypothesis": {
+  "replace": {"Control/Thms.lean": ["(h : Control.Hyp)", "(h : ∀ m : Nat, m + 0 = m)"]},
+  "fails": "pins: Control.main_thm assumes (h : "
+ },
+ "statement": {
+  "replace": {"Control/Thms.lean": ["double n = n + n", "double n ≥ n + n"]},
+  "fails": "pins: Control.main_thm's signature changed"
+ },
+ "layer": {
+  "replace": {"Control/Defs.lean": ["/-! What", "import Control.Assumptions\n/-! What"]},
+  "fails": "layers: Control.Defs imports Control.Assumptions"
+ },
+ "meaning": {
+  "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
+  "fails": "pins: definitions in Control.Defs that Control.main_thm read changed"
+ },
+ "kernel_option": {
+  "write": {"Control/Bad.lean": "set_option debug.skipKernelTC true in\ntheorem Control.unchecked : True := trivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "unchecked: Control/Bad.lean:1 names debug.skipKernelTC"
+ },
+ "kernel": {
+  "write": {"Control/Bad.lean": "import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Control.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "replay_only": true,
+  "fails": "replay: the kernel rejected a declaration under Control"
+ }
+}

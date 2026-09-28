@@ -21,19 +21,26 @@ from __future__ import annotations
 import argparse
 import bisect
 import dataclasses
+import gc
 import gzip
 import hashlib
 import inspect
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
 
-from . import fp, gf2, ir_lower as IL, unit as U
+from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from .gf2 import Circuit, L, const_bits
 
 SCHEMA = "verity-boolean-circuit/v1"
+#: how a gather from committed weights (the embedding's row, a MoE expert's weights) is sized: "mux", a multiplexer over the
+#: candidate rows, or "opening", a commitment opening of the committed table (no gates)
+GATHERS = "mux"
+#: a gather over at most this many candidates is traced as one circuit; a wider one is a composed Definition of its muxes
+GATHER_INLINE = 4096
 GATE_LIMIT = 20000
 OP = {"AND": 0, "XOR": 1, "NOT": 2}
 CONST0, CONST1 = -1, -2
@@ -42,31 +49,39 @@ CONST0, CONST1 = -1, -2
 DISPLAY = {
     "bf16_to_f32": "bf16→f32", "f32_to_bf16": "f32→bf16 (round)", "unpack": "unpack f32", "round_f32": "round",
     "specials": "specials (NaN/Inf)", "f32_mul": "f32 multiply", "f32_add": "f32 add", "f32_sub": "f32 subtract",
-    "f32_fma": "f32 fused multiply-add", "f32_div_const": "f32 divide by constant", "f32_neg": "f32 negate",
-    "tc_dot16": "tensor-core k-step (total)", "_tc_operand": "tensor-core operand decode",
+    "f32_fma": "f32 fused multiply-add", "f32_div": "f32 divide", "f32_neg": "f32 negate",
+    "tc_dot16": "tensor-core k-step (total)", "tc_dot_e4m3": "FP8 tensor-core k-step (total)", "_tc_operand": "tensor-core operand decode",
     "_classes": "classify (NaN/Inf)", "_finite_or_zero": "finite stand-in", "decode": "one-hot decode",
-    "lookup": "table lookup", "_normalize_sig": "normalize", "shl": "shift left", "shr_sticky": "align (shift right, sticky)",
+    "lookup": "table (plain gates)", "_normalize_sig": "normalize", "shl": "shift left", "shr_sticky": "align (shift right, sticky)",
     "min_u": "min", "neg_if": "conditional negate", "select": "select", "is_zero": "zero test", "add": "integer add",
     "sub": "integer subtract", "multiply": "integer multiply", "compress_columns": "carry-save compress",
     "lzc": "leading-zero count", "shr": "shift right", "shl_window": "shift left (window)", "mux": "mux",
     "or_reduce": "OR-reduce", "and_reduce": "AND-reduce", "group_sum": "group sum (align + add + normalize)",
     "saturated": "saturation test", "decode_operand": "operand decode", "max_tree": "max tree",
+    "table_read": "table read (plain gates)", "ftz": "flush to zero", "f32_gt": "f32 compare (>)",
+    "mufu_ex2": "MUFU.EX2", "mufu_rcp": "MUFU.RCP", "rcp_post": "MUFU.RCP exponent", "_rsq_post": "MUFU.RSQ exponent",
+    "_div_scale": "div.full range scaling", "_abs_gt_big": "|b| > 2^126", "_scale": "scale by a power of two",
+    "_parity_index": "rsq / sqrt table index", "_word": "special cases",
+    "tl_exp": "tl.exp (MUFU.EX2, non-ftz)", "tl_div": "div.full (scaled numerator times the reciprocal)", "f32_ge": "f32 compare (>=)",
+    "f32_near": "|a - b| < 1e-9", "py_max": "max (Python)", "py_min": "min (Python)", "nan_max": "max (numpy, NaN wins)",
+    "nan_min": "min (numpy, NaN wins)", "int_to_f32": "count to f32", "numkeep": "numkeep (truncate, clamp)",
+    "word_eq": "word compare (==)", "nv_logf": "__nv_logf",
 }
 KIND = {"multiply": "multiply", "f32_mul": "multiply", "shr_sticky": "align", "add": "add", "f32_add": "add",
         "sub": "add", "_normalize_sig": "normalize", "lzc": "normalize", "shl": "normalize", "round_f32": "round",
-        "f32_to_bf16": "round", "lookup": "lookup", "decode": "lookup", "bf16_to_f32": "convert", "tc_dot16": "dot-step",
+        "f32_to_bf16": "round", "lookup": "table", "decode": "table", "bf16_to_f32": "convert", "tc_dot16": "dot-step",
         "group_sum": "add", "compress_columns": "add", "f32_fma": "fma"}
 
 # --- tracing -----------------------------------------------------------------------------------------------------------
 
 class _Call:
-    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports", "label")
+    __slots__ = ("fn", "start", "end", "ins", "outs", "kids", "seq0", "seq1", "iports", "oports", "label", "table")
 
     def __init__(self, fn, start):
         self.fn, self.start, self.end, self.ins, self.outs, self.kids = fn, start, start, [], [], []
         self.seq0 = self.seq1 = _SEQ[0]
         self.iports = self.oports = ()
-        self.label = None
+        self.label = self.table = None
 
 
 _T: dict = {"C": None, "stack": None}
@@ -190,8 +205,13 @@ def _wrap(name, fn):
         else:
             outs = [("out", r)]
         node.oports = _ports(outs, node.outs)
+        if name == "table_read":
+            node.table = a[1]
+            node.label = f"{a[1]} table (plain gates)"
         if name == "tc_dot16":
             node.label = _tc_label(fn, a, k)
+        if name == "tc_dot_e4m3":
+            node.label = "tensor-core k-step (HopperE4m3QgmmaDot32, total)"
         return r
 
     w.__wrapped__ = fn
@@ -206,19 +226,22 @@ def _patch():
     if _PATCHED:
         return
     originals = {}
-    for mod in (gf2, fp, U):
+    for mod in (gf2, fp, U, TP, TW):
         for name in DISPLAY:
             f = getattr(mod, name, None)
             if callable(f) and not isinstance(f, type):
                 originals[id(f)] = (name, f)
     wrapped = {k: _wrap(n, f) for k, (n, f) in originals.items()}
-    for mod in (gf2, fp, U, IL):
+    for mod in (gf2, fp, U, IL, TP, TW):
         for name in dir(mod):
             f = getattr(mod, name)
             if callable(f) and id(f) in wrapped:
                 setattr(mod, name, wrapped[id(f)])
     for k, f in list(IL.PIECES.items()):
         IL.PIECES[k] = _wrap(k, f)
+    IL.PIECES.wrap = _wrap
+    for k, (f, ins, out) in list(TW.OPS.items()):
+        TW.OPS[k] = (wrapped.get(id(f), f), ins, out)
     L.__xor__, L.inv, Circuit._new = _xor, _inv, _new
     _PATCHED = True
 
@@ -240,6 +263,47 @@ def trace(build) -> tuple[Circuit, _Call]:
 
 
 # --- analysis: counts, structural ids, gate lists ----------------------------------------------------------------------
+
+#: low decoder bits of M0's table circuits (``live/src/lookup.rs``) per index width of its MUFU tables; the high decoder takes the rest
+LOOKUP_LO = {24: 14, 23: 13}
+_TABLE_GATES: dict[str, dict] = {}
+
+
+def _decode_ands(k: int) -> int:
+    return 0 if k == 1 else (1 << k) + _decode_ands(k // 2) + _decode_ands(k - k // 2)
+
+
+def _lo_bits(n: int, bits: int) -> int:
+    """M0's split for the MUFU tables' widths; for another table the split with the fewest ANDs."""
+    return LOOKUP_LO.get(n) or min(range(1, n), key=lambda lo: _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)))
+
+
+def table_gates(table: str) -> dict:
+    """The plain gate circuit that reads a pinned constant table (M0's, ``live/src/lookup.rs``): one-hot decoders of the index's
+    low and high bits (each minterm the AND of two half minterms, a NOT per index bit), per value bit j and high minterm h one
+    AND of h with the XOR of the low minterms whose table word has bit j set, each value bit the XOR of its products. The
+    table is constants in those XOR sums; the gates are counted over it, too many to list."""
+    if table not in _TABLE_GATES:
+        import numpy as np
+
+        n, bits = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
+        lo = _lo_bits(n, bits)
+        words = np.asarray(gf2.table(table), dtype=np.uint32).reshape(1 << (n - lo), 1 << lo)
+        xor = bits * ((1 << (n - lo)) - 1)
+        step = max(1, (1 << 22) >> lo)
+        for r in range(0, words.shape[0], step):
+            w = words[r:r + step]
+            for j in range(bits):
+                c = ((w >> j) & 1).sum(axis=1, dtype=np.int64)
+                xor += int(np.maximum(c - 1, 0).sum())
+        _TABLE_GATES[table] = {"and": _decode_ands(lo) + _decode_ands(n - lo) + bits * (1 << (n - lo)), "xor": xor, "not": n,
+                               "kind": "table", "table": table, "table_sha256": TP.table_sha256(table), "index_bits": n,
+                               "value_bits": bits, "low_index_bits": lo,
+                               "built_by": "M0's table circuit (backends/flock/live/src/lookup.rs, verity PR #83): one-hot decoders "
+                                           "of the index halves, an AND per value bit and high minterm, XOR-summed outputs, the "
+                                           "table as constants"}
+    return _TABLE_GATES[table]
+
 
 class Registry:
     """Node types by structural hash, across units, templates and rows."""
@@ -332,7 +396,7 @@ class Registry:
                 return (tuple(sorted(lab(t) for t in f.s)), f.c)
 
             h = hashlib.sha256()
-            h.update(json.dumps([node.fn, len(node.ins), len(node.outs), xor, nots]).encode())
+            h.update(json.dumps([node.fn, len(node.ins), len(node.outs), xor, nots] + ([node.label] if node.label else [])).encode())
             for v in own:
                 a, b = data[v]
                 h.update(repr((v - node.start, canon(a), canon(b))).encode())
@@ -341,7 +405,10 @@ class Registry:
             h.update(repr([canon(f) for f in node.outs]).encode())
             hid = "sc-" + h.hexdigest()[:16]
             hid_of[id(node)] = hid
+            slot = table_gates(node.table) if node.fn == "table_read" else None
             n_and, n_xor, n_not = len(own), xor, nots
+            if slot:
+                n_and, n_xor, n_not = n_and + slot["and"], n_xor + slot["xor"], n_not + slot["not"]
             children: dict[str, int] = {}
             for kh, (ka, kx, kn) in kid_ids:
                 n_and, n_xor, n_not = n_and + ka, n_xor + kx, n_not + kn
@@ -356,6 +423,9 @@ class Registry:
                     "in_ports": [list(p) for p in node.iports], "out_ports": [list(p) for p in node.oports],
                     "children": [{"ref": c, "count": n} for c, n in children.items()],
                     "own": {"and": len(own), "xor": xor, "not": nots}}
+                if slot:
+                    rec.update(own={k: n_and if k == "and" else n_xor if k == "xor" else n_not for k in ("and", "xor", "not")},
+                               **{k: v for k, v in slot.items() if k not in ("and", "xor", "not")})
                 if wires is not None:
                     at = {c: i for i, c in enumerate(children)}
                     rec["parts"] = [at[kh] for kh, _ in kid_ids]
@@ -414,7 +484,7 @@ class Registry:
             gl = gate_list(C, node, owner, hid_of)
             if vals is None:
                 vals = _evaluate_all(C, 64)
-            _check(gl, node, vals)
+            _check(gl, node, vals, C)
             self.verified += 1
             self.tag_scopes += len(gl["tag_scopes"])
             self.tag_and_differs += self._tag_ands(gl)
@@ -597,6 +667,7 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
     # the objects the outputs need, inside the node; everything else they reach is an input
     need_tl: dict[int, TL] = {}
     need_and: set[int] = set()
+    need_lk: dict[int, int] = {}
     ext: dict = {}
     stack = list(node.outs)
     while stack:
@@ -618,6 +689,9 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
                     need_and.add(t)
                     stack.extend(data[t])
             else:
+                if lo <= t < hi and kind[t] == "lookup" and data[t][0] not in need_lk:
+                    need_lk[data[t][0]] = t
+                    stack.extend(C.lookups[data[t][0]][1])
                 ext.setdefault(("b", t), L(frozenset((t,)), 0))
     order: dict = {}
     origin = []
@@ -629,7 +703,11 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
     for k, x in ext.items():
         if k not in order:
             order[k] = len(order)
-            origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
+            if k[0] == "b" and kind[k[1]] == "lookup":
+                g, j = data[k[1]]
+                origin.append(["table", C.lookups[g][0], j, k[1]])
+            else:
+                origin.append(["ext", k[1]] if k[0] == "b" else ["form", sorted(x.s), x.c])
     n_in = len(order)
     gates: list[int] = []
     tags: list[int] = []
@@ -678,30 +756,22 @@ def gate_list(C: Circuit, node: _Call, owner: list, hid_of: dict) -> dict:
                 wire_tl[id(x)] = emit("XOR", wire(x.p1), wire(x.p2))
             else:
                 wire_tl[id(x)] = emit("NOT", wire(x.p1))
+    tables = []
+    for g, t in sorted(need_lk.items()):
+        cur[0] = scope_of[id(owner[t])] if id(owner[t]) in scope_of else 0
+        tables.append({"table": C.lookups[g][0], "index": [wire(f) for f in C.lookups[g][1]],
+                        "value": [[data[v][1], order[("b", v)]] for v in range(t, t + C.lookups[g][2]) if ("b", v) in order]})
     cur[0] = 0
     outs = [wire(f) for f in node.outs]
-    return {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
+    gl = {"inputs": n_in, "input_origin": origin, "outputs": outs, "gates": gates, "tags": tags, "tag_scopes": scopes, "counts": cnt}
+    if tables:
+        gl["tables"] = tables
+    return gl
 
 
 def _evaluate_all(C: Circuit, T: int) -> list[int]:
     rng = random.Random(101)
-    mask = (1 << T) - 1
-    val = [0] * len(C.kind)
-    for name, bits in C.inputs.items():
-        for w in bits:
-            (v,) = tuple(w.s)
-            val[v] = rng.getrandbits(T)
-    for v, k in enumerate(C.kind):
-        if k == "and":
-            a, b = C.data[v]
-            x = mask if a.c else 0
-            for t in a.s:
-                x ^= val[t]
-            y = mask if b.c else 0
-            for t in b.s:
-                y ^= val[t]
-            val[v] = x & y
-    return val
+    return C.values({name: [rng.getrandbits(T) for _ in bits] for name, bits in C.inputs.items()}, T)[0]
 
 
 def _ev(f, val, mask):
@@ -711,7 +781,7 @@ def _ev(f, val, mask):
     return x
 
 
-def _check(gl, node, val, T: int = 64):
+def _check(gl, node, val, C: Circuit | None = None, T: int = 64):
     mask = (1 << T) - 1
     w = []
     for o in gl["input_origin"]:
@@ -719,6 +789,8 @@ def _check(gl, node, val, T: int = 64):
             w.append(_ev(node.ins[o[1]], val, mask))
         elif o[0] == "ext":
             w.append(val[o[1]])
+        elif o[0] == "table":
+            w.append(val[o[3]])
         else:
             w.append(_ev(L(frozenset(o[1]), o[2]), val, mask))
     g = gl["gates"]
@@ -730,6 +802,11 @@ def _check(gl, node, val, T: int = 64):
             continue
         vb = mask if b == CONST1 else 0 if b == CONST0 else w[b]
         w.append(va & vb if op == 0 else va ^ vb)
+    for lk in gl.get("tables", ()):
+        t = gl["input_origin"][lk["value"][0][1]][3] if lk["value"] else None
+        idx = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in lk["index"]]
+        if t is not None and idx != [_ev(f, val, mask) for f in C.lookups[C.data[t][0]][1]]:
+            raise AssertionError(f"gate list of {node.fn}: a table read's index wires disagree with the circuit")
     got = [mask if o == CONST1 else 0 if o == CONST0 else w[o] for o in gl["outputs"]]
     want = [_ev(f, val, mask) for f in node.outs]
     if got != want:
@@ -766,18 +843,29 @@ def parse_id(did: str) -> tuple[str, dict]:
 
 
 class DefStore:
-    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id."""
+    """The program graphs' Definitions (``definitions/index.json`` + ``<digest[:2]>.json.gz`` shards), by id, plus those a
+    graph carries inline (``definitions``: a graph not yet catalogued)."""
 
     def __init__(self, pg_dir: Path):
         self.dir = Path(pg_dir) / "definitions"
         self.ix = json.loads((self.dir / "index.json").read_text())["definitions"]
         self.shards: dict[str, dict] = {}
+        self.inline: dict[str, dict] = {}
         self.by_name: dict[str, list] = {}
         for did in self.ix:
             name, ps = parse_id(did)
             self.by_name.setdefault(name, []).append((did, ps))
 
+    def add_inline(self, defs: dict) -> None:
+        for did, d in defs.items():
+            if did not in self.ix and did not in self.inline:
+                self.inline[did] = d
+                name, ps = parse_id(did)
+                self.by_name.setdefault(name, []).append((did, ps))
+
     def get(self, did: str):
+        if did in self.inline:
+            return self.inline[did]
         e = self.ix.get(did)
         if e is None:
             return None
@@ -822,6 +910,19 @@ def prims() -> dict:
     return _PRIMS
 
 
+def _width_prim(pid: str):
+    """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
+    import re
+
+    from verity_vllm.program.registry import sampling
+
+    for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
+        m = re.fullmatch(pat, pid)
+        if m:
+            return make(int(m.group(1)))
+    return None
+
+
 def _words(t) -> list[int]:
     k = t[0]
     if k == "Value":
@@ -858,44 +959,62 @@ class Walker:
     def __init__(self, reg: Registry, store: DefStore, cache: dict):
         self.reg, self.store, self.cache = reg, store, cache
         self.defs: dict[str, dict] = {}
+        self.openings: set[str] = set()
 
     def tc_unit(self, pid: str) -> str:
         key = ("tc", pid)
         if key not in self.cache:
-            groups, W, F = IL.TC_STEPS[pid]
+            if pid in IL.TC_STEPS_FP8:
+                def build():
+                    C = Circuit(cse=True)
+                    acc = C.input("in0", 32)
+                    a = [C.input(f"in{1 + j}", 8) for j in range(32)]
+                    b = [C.input(f"in{33 + j}", 8) for j in range(32)]
+                    C.output("out0", fp.tc_dot_e4m3(C, acc, a, b, *IL.TC_STEPS_FP8[pid]))
+                    return C
+            else:
+                groups, W, F = IL.TC_STEPS[pid]
 
-            def build():
-                C = Circuit()
-                b = [C.input(f"in{j}", 16) for j in range(16)]
-                a = [C.input(f"in{16 + j}", 16) for j in range(16)]
-                acc = C.input("in32", 32)
-                C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
-                return C
+                def build():
+                    C = Circuit(cse=True)
+                    b = [C.input(f"in{j}", 16) for j in range(16)]
+                    a = [C.input(f"in{16 + j}", 16) for j in range(16)]
+                    acc = C.input("in32", 32)
+                    C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
+                    return C
             C, root = trace(build)
             self.cache[key] = self.reg.analyse(C, root, f"tensor-core k-step unit ({pid}, total)", "tc-step", list_root=True)
+            del C, root
+            gc.collect()
         return self.cache[key]
 
     def prim(self, pid: str, consts: tuple):
         """(child entry without count) for primitive ``pid`` with operand constants ``consts`` (None = free)."""
-        if pid in IL.TC_STEPS:
+        if pid in IL.TC_STEPS or pid in IL.TC_STEPS_FP8:
             return {"ref": self.tc_unit(pid)}
-        p = prims().get(pid)
+        if (m := re.fullmatch(r"GatherBf16x(\d+)_v1", pid)) and GATHERS == "mux":
+            return self.gather(int(m.group(1)))
+        p = prims().get(pid) or _width_prim(pid)
         if p is None:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
         widths = [w for _, t in p.params for w in t.leaf_widths()]
         consts = consts if len(consts) == len(widths) else (None,) * len(widths)
+        if (m := re.fullmatch(r"TopPMaskWordx(\d+)_v1", pid)):
+            return {"def": self.composed(pid, int(m.group(1)), consts[-2], consts[-1])}
         free = [w for c, w in zip(consts, widths) if c is None]
         if pid in IL.PIECES and free:
             ck = ("prim", pid, consts, tuple(widths))
             if ck not in self.cache:
                 def build():
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
                 try:
                     C, root = trace(build)
                     self.cache[ck] = self.reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                    del C, root
+                    gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     self.cache[ck] = str(e)
             got = self.cache[ck]
@@ -905,7 +1024,95 @@ class Walker:
         if not free:
             return None
         return {"not_yet_lowered": pid, "in_bits": sum(free), "out_bits": sum(p.ret.leaf_widths()),
-                "reason": "ir_lower has no piece for this primitive yet"}
+                "reason": next((r for f, r in NO_PIECE.items() if pid.startswith(f)), "ir_lower has no piece for this primitive yet")}
+
+    def gather(self, V: int) -> dict:
+        """``GatherBf16x{V}_v1`` as its multiplexer (``tail_pieces.gather_bf16``): one circuit up to GATHER_INLINE candidates, else a
+        composed Definition of its V - 1 candidate-pair muxes and its range select (the same gates, counted)."""
+        ck = ("gather", V)
+        if ck not in self.cache:
+            def traced(name, build):
+                C, root = trace(build)
+                rid = self.reg.analyse(C, root, name, "piece")
+                del C, root
+                gc.collect()
+                return rid
+
+            def whole():
+                C = Circuit(cse=True)
+                C.output("out0", TP.gather_bf16(C, C.input("in0", 32), *[C.input(f"in{1 + j}", 16) for j in range(V)]))
+                return C
+
+            def pair():
+                C = Circuit(cse=True)
+                C.output("out0", gf2.mux(C, C.input("in0", 1)[0], C.input("in1", 16), C.input("in2", 16)))
+                return C
+
+            def select():
+                C = Circuit(cse=True)
+                tok, w = C.input("in0", 32), C.input("in1", 16)
+                C.output("out0", gf2.mux(C, TP._ult_const(C, tok, V), w, const_bits(0x7FFF, 16)))
+                return C
+
+            if V <= GATHER_INLINE:
+                self.cache[ck] = {"ref": traced(f"GatherBf16x{V}_v1 (multiplexer)", whole)}
+            else:
+                rid = "def-" + hashlib.sha256(f"gather-mux:{V}".encode()).hexdigest()[:16]
+                rec = {"id": rid, "name": f"GatherBf16x{V}_v1 (multiplexer)", "kind": "definition", "in_bits": 32 + 16 * V, "out_bits": 16,
+                       "composed": "tail_pieces.gather_bf16: a tree of V - 1 candidate-pair muxes by the index's low bits, then the "
+                                   "range select (0x7FFF outside [0, V)); too wide to hold as one circuit",
+                       "children": [{"ref": traced("mux (candidate pair)", pair), "count": V - 1},
+                                    {"ref": traced(f"range select (index < {V}, else 0x7FFF)", select), "count": 1}]}
+                self.defs[rid] = rec
+                self._total(rec)
+                self.cache[ck] = {"def": rid}
+        return self.cache[ck]
+
+    def piece(self, name: str, key: tuple) -> str:
+        """The subcircuit of ``topp_word`` piece ``name`` with constant operands ``key``."""
+        ck = ("tw", name, key)
+        if ck not in self.cache:
+            C, root = trace(lambda: TW.build(name, key))
+            consts = ", ".join(f"operand {j} = 0x{c:x}" for j, c in enumerate(key) if c is not None)
+            self.cache[ck] = self.reg.analyse(C, root, TW.NAMES[name] + (f" ({consts})" if consts else ""), "piece")
+            del C, root
+            gc.collect()
+        return self.cache[ck]
+
+    def composed(self, pid: str, V: int, p, splits) -> str:
+        """A primitive too large to hold as one circuit (``TopPMaskWordx{V}_v1``: about 10^11 ANDs at V = 128256), as a tree of
+        its stages (``topp_word``'s paths) whose leaves are its pieces with instance counts."""
+        ck = ("composed", pid, p, splits)
+        if ck in self.cache:
+            return self.cache[ck]
+        counts = TW.count(V, p, splits)
+        tree: dict = {}
+        for (path, name, key), n in counts.items():
+            node = tree
+            for label in path:
+                node = node.setdefault(label, {})
+            leaf = node.setdefault(None, {})
+            ref = self.piece(name, key)
+            leaf[ref] = leaf.get(ref, 0) + n
+        tag = f"{pid} p={p} splits={splits}"
+
+        def make(label, node, where):
+            rid = "def-" + hashlib.sha256(f"composed:{tag}:{where}".encode()).hexdigest()[:16]
+            rec = {"id": rid, "name": label, "kind": "definition", "children": []}
+            for sub, kid in node.items():
+                if sub is not None:
+                    rec["children"].append({"def": make(sub, kid, f"{where}/{sub}"), "count": 1})
+            rec["children"] += [{"ref": r, "count": n} for r, n in node.get(None, {}).items()]
+            self.defs[rid] = rec
+            self._total(rec)
+            return rid
+
+        top = make(pid, tree, "")
+        self.defs[top].update(in_bits=V * 32 + 64, out_bits=V, composed=(
+            "topp_word: the split top-p pipeline per split count (stages, then pieces with instance counts), too large to hold "
+            "as one circuit; checked against sampling.topp_keep by evaluating every piece instance on test rows"))
+        self.cache[ck] = top
+        return top
 
     def walk(self, did: str) -> str:
         rid = "def-" + hashlib.sha256(did.encode()).hexdigest()[:16]
@@ -925,10 +1132,19 @@ class Walker:
         rec["in_bits"] = sum(_type_bits(prm[1]) for prm in d["body"]["params"])
         rec["out_bits"] = _type_bits(d["body"]["ret_type"])
         agg: dict = {}
+        opened = OPENED_IN.get(parse_id(did)[0]) if GATHERS == "opening" else None
+        if opened:
+            ps = d["body"]["params"]
+            opens = {"table": next(p[0] for p in ps if p[1][0] == "Array"), "index": next(p[0] for p in ps if p[1][0] == "Value"),
+                     "committed": "weights"}
         for n in nodes:
             fn, form = n["fn"], n["form"]
             count = n.get("n", 1) if form in ("batch", "scan") else 1
             if _const_value(fn) is not None:
+                continue
+            if opened and fn.startswith("Gather"):
+                self.openings.add(fn)
+                agg.setdefault(("open", fn), [{"commitment_opening": fn, "kind": "opening", "opens": opens, "reason": opened}, 0])[1] += count
                 continue
             if fn in self.store.ix and (self.store.get(fn) or {}).get("form") == "composite":
                 key = ("def", fn)
@@ -958,25 +1174,34 @@ class Walker:
 
     def _total(self, rec):
         t = {"and": 0, "xor": 0, "not": 0, "not_yet_lowered": 0}
+        opened = 0
         for c in rec["children"]:
             if "def" in c:
                 s = self.defs[c["def"]]
                 for k in t:
                     t[k] += s.get(k, 0) * c["count"]
+                opened += s.get("commitment_openings", 0) * c["count"]
                 if s["kind"] == "not-yet-lowered":
                     t["not_yet_lowered"] += c["count"]
             elif "ref" in c:
                 n = self.reg.nodes[c["ref"]]
                 for k in ("and", "xor", "not"):
                     t[k] += n[k] * c["count"]
+            elif "commitment_opening" in c:
+                opened += c["count"]
             else:
                 t["not_yet_lowered"] += c["count"]
         rec.update(t)
+        if opened:
+            rec["commitment_openings"] = opened
 
 
 # --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
+#: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
+#: lane its own constant index: GumbelNoiseLane, BitAtx)
+CONST_VARIANTS = 8
 UNIT_PARTS_LIMIT = 4096
 
 
@@ -995,6 +1220,7 @@ class Commitments:
     def __init__(self, walker: "Walker"):
         self.walker = walker
         self.records: dict[str, dict] = {}
+        self.openings = walker.openings
 
     def of(self, fn) -> str:
         from verity.ir.codec import _spec_id
@@ -1018,27 +1244,42 @@ class Commitments:
 
     def _boolean(self, gates: list[tuple[str, tuple]], pieces: dict) -> dict:
         """The gates' AND/XOR/NOT from their pieces (constant operands propagated), and each gate's index in ``pieces``
-        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``)."""
+        (``{"ref": subcircuit}``, ``{"not_yet_lowered": primitive}``, ``{"commitment_opening": primitive}`` for the
+        embedding's gather)."""
         t = {"and": 0, "xor": 0, "not": 0}
         nyl: dict[str, int] = {}
         parts: list[int] = []
         memo: dict = {}
+        variants: dict[str, int] = {}
+        generic = 0
         for sig in gates:
+            if sig not in memo and any(c is not None for c in sig[1]):
+                variants[sig[0]] = variants.get(sig[0], 0) + 1
+                if variants[sig[0]] > CONST_VARIANTS:
+                    generic += 1
+                    sig = (sig[0], (None,) * len(sig[1]))
             if sig not in memo:
                 memo[sig] = self.walker.prim(*sig)
             e = memo[sig]
-            if e is not None and "ref" in e:
+            if sig[0] in self.openings:
+                key = ("commitment_opening", sig[0])
+            elif e is not None and "ref" in e:
                 n = self.walker.reg.nodes[e["ref"]]
                 for k in t:
                     t[k] += n[k]
                 key = ("ref", e["ref"])
+            elif e is not None and "def" in e:
+                n = self.walker.defs[e["def"]]
+                for k in t:
+                    t[k] += n[k]
+                key = ("def", e["def"])
             elif e is not None:
                 nyl[sig[0]] = nyl.get(sig[0], 0) + 1
                 key = ("not_yet_lowered", sig[0])
             else:
                 key = ("constant", True)
             parts.append(pieces.setdefault(key, len(pieces)))
-        return {**t, "not_yet_lowered": nyl, "parts": parts}
+        return {**t, "not_yet_lowered": nyl, "parts": parts, "generic": generic}
 
     def _primitive(self, fn, fid, WQ) -> dict:
         rec = _empty(fid, 1)
@@ -1074,17 +1315,18 @@ class Commitments:
         from verity.ir.cut import call_scope
         c, call = call_scope(fn)
         lo = call.offset
-        leaves = [(name, w) for name, t in fn.signature()[0] for w in t.leaf_widths()]
+        leaves = _leaf_lookup(fn.signature()[0])
         scopes: dict[str, int] = {}
         pieces: dict = {}
         sid: dict[int, int] = {}
         cval: dict[int, int | None] = {}
+        computing = set(G.keep.tolist())
 
         def const(o):
             if o in cval:
                 return cval[o]
             cval[o] = None
-            if not 0 <= o - lo < fn.gates:
+            if not 0 <= o - lo < fn.gates or o - lo in computing:
                 return None
             g = c.gate(o)
             ops = g.operands
@@ -1115,6 +1357,7 @@ class Commitments:
             if u in members:
                 members[u].append(i)
         order = sorted(range(len(first)), key=lambda j: (-int(count[j]), int(keys[j][0]), int(keys[j][2])))
+        ireads = np.array(G.input_reads, dtype=np.int64).reshape(-1, 2)
         rank = {j: n for n, j in enumerate(order)}
         units = []
         for j in order:
@@ -1131,8 +1374,10 @@ class Commitments:
                  "out_bits": ob, "out_gates": og, "ok": bool(R["ok"][u]),
                  "nodes": dict(Counter(G.prim_names[int(G.prim[i])] for i in gates).most_common()),
                  **{x: b[x] for x in ("and", "xor", "not", "not_yet_lowered")}}
+            if b["generic"]:
+                e["constants_not_propagated"] = b["generic"]
             if ng <= UNIT_PARTS_LIMIT:
-                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, gates, info, leaves))
+                e.update(parts=b["parts"], **_unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads))
             units.append(e)
         marks: Counter = Counter()
         for i in np.flatnonzero(head >= 0).tolist():
@@ -1194,23 +1439,54 @@ def _empty(fid, gates) -> dict:
             "committed_interior_words": 0, "scopes": [], "pieces": [], "units": [], "committed": [], "structure": {}, "violations": []}
 
 
-def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
+def _leaf_lookup(params):
+    """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
+    parameter has over 10^8)."""
+    from verity.ir.types import Array, Record, Tuple
+
+    starts, names, types, o = [], [], [], 0
+    for name, t in params:
+        starts.append(o)
+        names.append(name)
+        types.append(t)
+        o += t.leaves
+
+    def leaf(k):
+        i = bisect.bisect_right(starts, k) - 1
+        t, k = types[i], k - starts[i]
+        while True:
+            if isinstance(t, Array):
+                t, k = t.elem, k % t.elem.leaves
+            elif isinstance(t, (Tuple, Record)):
+                for f in t.fields:
+                    f = f[1] if isinstance(t, Record) else f
+                    if k < f.leaves:
+                        t = f
+                        break
+                    k -= f.leaves
+            else:
+                return names[i], t.w
+
+    return leaf
+
+
+def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> dict:
     """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
     ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
     ``[unit class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
     ``outputs``: the parts whose value the cut commits (returned, or read by another unit)."""
+    import numpy as np
+
     at = {i: n for n, i in enumerate(gates)}
-    wiring, reads = [], []
-    for a, b in zip(G.src.tolist(), G.dst.tolist()):
-        if b in at:
-            if a in at:
-                wiring.append([at[a], at[b], int(G.width[a])])
-            else:
-                reads.append([rank[int(inv[owner[a]])], at[b], int(G.width[a])])
+    sel = np.flatnonzero(owner[G.dst] == u)
+    src, dst = G.src[sel], G.dst[sel]
+    inside = owner[src] == u
+    wiring = [[at[a], at[b], int(G.width[a])] for a, b in zip(src[inside].tolist(), dst[inside].tolist())]
+    reads = [[rank[int(inv[owner[a]])], at[b], int(G.width[a])] for a, b in zip(src[~inside].tolist(), dst[~inside].tolist())]
     inputs: dict[tuple, int] = {}
-    for inp, b in G.input_reads:
-        if b in at:
-            name, w = leaves[G.input_ids[inp]]
+    if len(ireads):
+        for inp, b in ireads[owner[ireads[:, 1]] == u].tolist():
+            name, w = leaves(G.input_ids[inp])
             inputs[(at[b], name)] = inputs.get((at[b], name), 0) + w
     reads += [[-1, d, w, name] for (d, name), w in inputs.items()]
     return {"part_nodes": [[s, k] for s, k, _g in info], "wiring": wiring, "reads": reads,
@@ -1222,10 +1498,21 @@ def _unit_graph(G, owner, head, inv, rank, gates, info, leaves) -> dict:
 #: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
-NOT_LOWERED = {
-    "Embedding_v1": "a row gather by token id (data movement from the committed table); no Boolean lowering yet",
-    "EmbeddingShard_v1": "a row gather by token id from a tensor-parallel shard of the table; no Boolean lowering yet",
-    "GumbelTopPTokenSelect_v1": "Gumbel noise, the top-p word and the sampling carries; no Boolean lowering yet",
+NOT_LOWERED: dict[str, str] = {}
+#: primitive families with no piece, and why (anything else: no piece yet)
+NO_PIECE: dict[str, str] = {}
+#: Definitions whose Gather primitives read a committed weight table at a computed index: checked by opening it, not as a circuit
+OPENED_IN = {
+    "MoeExpertRow_v1": "checked by opening the committed expert weight bank at the routed expert (a commitment opening, not a "
+                       "circuit), as the embedding's row gather: MoeExpertRow_v1 is the Embedding_v1 construction with the expert "
+                       "axis in the vocabulary's role; as a circuit it would be an E-way mux tree per weight element (1,008 ANDs at "
+                       "E = 64, 2,032 at E = 128)",
+}
+#: templates checked by opening the committed table, not as a circuit (census/subcircuits.json commitment_opening)
+OPENED = {
+    "Embedding_v1": "checked by opening the committed embedding table at the token's row (a commitment opening, not a circuit)",
+    "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "
+                         "(a commitment opening, not a circuit)",
 }
 DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
 
@@ -1267,13 +1554,15 @@ def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
             ck = (pid, consts, widths)
             if ck not in cache:
                 def build(pid=pid, consts=consts, widths=widths):
-                    C = Circuit()
+                    C = Circuit(cse=True)
                     ops = [const_bits(c, w) if c is not None else C.input(f"in{j}", w) for j, (c, w) in enumerate(zip(consts, widths))]
                     C.output("out0", IL.PIECES[pid](C, *ops))
                     return C
                 try:
                     C, root = trace(build)
                     cache[ck] = reg.analyse(C, root, f"{pid} (outside the units)", "piece")
+                    del C, root
+                    gc.collect()
                 except Exception as e:  # noqa: BLE001  (the piece does not take these operands)
                     cache[ck] = str(e)
             if not cache[ck].startswith("sc-"):
@@ -1303,6 +1592,8 @@ def _unit(reg: Registry, units, name: str, cache: dict) -> str:
     if key not in cache:
         C, root = trace(units.circuit)
         cache[key] = reg.analyse(C, root, name, "c-flock-unit")
+        del C, root
+        gc.collect()
     return cache[key]
 
 
@@ -1320,14 +1611,17 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
 
 
 def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
-             spec: str | None = None) -> dict:
+             spec: str | None = None, member: str | None = None) -> dict:
     """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
-    Definition tree (the walker: attention per T, GEMM coordinates, every other template)."""
+    Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
+    instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
-    rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range], sort_keys=True).encode()).hexdigest()[:16]
+    rid = "tpl-" + hashlib.sha256(json.dumps([tname, tp, T_range] + ([member] if member else []), sort_keys=True).encode()).hexdigest()[:16]
     base = {"id": rid, "template": tname, "params": tp}
     if tname.startswith(("Const32", "Const64")):
         return dict(base, name=tname, kind="constant", **{"and": 0, "xor": 0, "not": 0}, children=[])
+    if tname in OPENED and GATHERS == "opening":
+        return dict(base, name=tname, kind="commitment-opening", reason=OPENED[tname], children=[])
     if tname in NOT_LOWERED:
         return dict(base, name=tname, kind="not-yet-lowered", reason=NOT_LOWERED[tname], children=[])
     if tname in ("AttentionHead", "AttentionSoftcap_v1"):
@@ -1344,6 +1638,9 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
         return dict(base, name=f"{tname}{json.dumps(tp, sort_keys=True)} T∈[{T_range[0]},{T_range[1]}]", kind="template",
                     children=top.get("children", []), children_at=f"T={T_range[1]}", per_key_count=per_t,
                     in_bits=top.get("in_bits"), out_bits=top.get("out_bits"))
+    if member is not None:
+        name = f"{tname}{json.dumps(tp, sort_keys=True)}" if member.startswith("GemmCoordinate") else member
+        return _walked(base, walker, member, name)
     if tname == "GemmCoordinate":
         ids = (walker.store.find("GemmCoordinate_v2", K=str(tp["K"]), DOT=HOPPER_DOT) if tp.get("dot") == "HopperBF16WgmmaDot16_v1"
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
@@ -1369,6 +1666,31 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     return _walked(base, walker, spec, spec or tname)
 
 
+def _coordinate(store: DefStore, did: str | None) -> tuple[str, int] | None:
+    """(member Definition id, members per Call) when the Definition ``did`` is only batches of one composite Definition (a
+    GEMM's output coordinates, a MoE expert GEMM's, a block-scaled FP8 GEMM's), else None."""
+    d = store.get(did) if did else None
+    if not d or d.get("form") != "composite":
+        return None
+    nodes = d["body"]["nodes"]
+    fns = {n["fn"] for n in nodes}
+    if len(fns) != 1 or any(n["form"] != "batch" for n in nodes):
+        return None
+    (m,) = fns
+    if (store.get(m) or {}).get("form") != "composite":
+        return None
+    return m, sum(n.get("n", 1) for n in nodes)
+
+
+def _node_totals(node: dict, t: dict) -> dict:
+    """A program-graph node's AND / XOR / NOT: its instances times its template's, per T where the T varies."""
+    by_t = node.get("instances_by_T")
+    if by_t:
+        pk = t["per_key_count"]
+        return {k: sum(n * (pk[T].get(k) or 0) for T, n in by_t.items()) for k in ("and", "xor", "not")}
+    return {k: (node.get("instances") or 0) * (t.get(k) or 0) for k in ("and", "xor", "not")}
+
+
 def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
     if did is None:
         return dict(base, name=name, kind="not-yet-lowered", reason="its Definition is not in the program graphs' store", children=[])
@@ -1388,7 +1710,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
             n = reg.nodes[c["ref"]]
             for k in ("and", "xor", "not"):
                 t[k] += n[k] * c["count"]
-        else:
+        elif "commitment_opening" not in c:
             t["not_yet_lowered"] += c["count"]
     return t
 
@@ -1396,6 +1718,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
 def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
                checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
+    walker.store.add_inline(p.get("definitions") or {})
     row = p["row"]
     nodes, used = [], []
     into: dict[str, list[dict]] = {}
@@ -1405,10 +1728,17 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
     for g in p["groups"]:
         tname, tp = g["template"], g.get("template_params") or {}
         T_range = g.get("varying", {}).get("T") if tname in ("AttentionHead", "AttentionSoftcap_v1") else None
-        key = json.dumps([tname, tp, T_range], sort_keys=True)
+        member = None
+        if not T_range and g.get("instances") and g.get("calls") and g["instances"] != g["calls"]:
+            c = _coordinate(walker.store, g.get("spec"))
+            if c is None or g["instances"] != g["calls"] * c[1]:
+                raise ValueError(f"{g['id']} ({g.get('spec')}): {g['instances']} instances in {g['calls']} Calls, and the Call is "
+                                 f"not a batch of one Definition with that many members")
+            member = c[0]
+        key = json.dumps([tname, tp, T_range, member], sort_keys=True)
         if key not in tpl_cache:
             t0 = time.time()
-            rec = template(reg, tname, tp, T_range, cache, walker, g.get("spec"))
+            rec = template(reg, tname, tp, T_range, cache, walker, g.get("spec"), member)
             if rec["kind"] == "template":
                 rec.update(_totals(reg, rec["children"], walker.defs))
             tpl_cache[key] = rec
@@ -1418,18 +1748,52 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
         node = {"id": f"{row['row']}:{g['id']}", "name": g["module"] or "(request)", "kind": "program-node", "group": g["id"],
                 "definition": g.get("spec") or g.get("definition"), "template": rec["id"], "instances": g.get("instances"),
                 "calls": g.get("calls")}
+        if member:
+            node["instance"] = member
         if T_range:
-            n_t = T_range[1] - T_range[0] + 1
             node["varying"] = {"T": T_range}
-            if g.get("instances") and g["instances"] % n_t == 0:
-                node["instances_per_T"] = g["instances"] // n_t
-                node["instances_per_T_rule"] = "instances / (T range size): the program graph gives the range, not the histogram"
+            vc = g.get("varying_calls") or {}
+            heads, rest = divmod(g["instances"], g["calls"])
+            if rest or sum(vc.values()) != g["calls"]:
+                raise ValueError(f"{g['id']}: the T histogram ({sum(vc.values())} Calls) does not cover its {g['calls']} Calls")
+            node["instances_by_T"] = {str(T): n * heads for T, n in sorted(vc.items(), key=lambda kv: int(kv[0]))}
+        node["totals"] = _node_totals(node, rec)
         node.update(_roles(g, into.get(g["id"], []), tpl, walker.store))
         if cm is not None:
             node.update(_commitment(g, cm, checks))
         nodes.append(node)
+    totals = {k: sum(n["totals"][k] for n in nodes) for k in ("and", "xor", "not")}
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
-            "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
+            "program_graph": Path(pg_path).name, "totals": totals, "nodes": nodes, "edges": p.get("edges", []),
+            "templates": sorted(set(used))}
+
+
+#: a template's node ANDs and its Calls' unit ANDs agree within this; beyond CROSSCHECK_FAIL (a granularity-sized error) the export fails
+CROSSCHECK_AGREE, CROSSCHECK_FAIL = 0.02, 4.0
+
+
+def crosscheck(doc: dict, tpl: dict, records: dict) -> dict:
+    """Per template of a row: the nodes' ANDs (instances x the template's, per T) against the sum of their Calls' units under the
+    no-recompute cut (each unit class's ANDs x its count x the Calls), attention at the T values that have a record."""
+    out: dict = {}
+    for n in doc["nodes"]:
+        t = tpl[n["template"]]
+        e = out.setdefault(t["name"], {"nodes": 0, "units": 0})
+        if "commitment" in n:
+            e["nodes"] += n["totals"]["and"]
+            e["units"] += n["calls"] * sum((u.get("and") or 0) * u["count"] for u in records[n["commitment"]]["units"])
+        elif "commitment_by_T" in n:
+            heads = n["instances"] // n["calls"]
+            for T, rid in n["commitment_by_T"].items():
+                k = n["instances_by_T"].get(str(T), 0)
+                e["nodes"] += k * t["per_key_count"][str(T)]["and"]
+                e["units"] += k // heads * sum((u.get("and") or 0) * u["count"] for u in records[rid]["units"])
+    for e in out.values():
+        r = e["nodes"] / e["units"] if e["units"] else None
+        e["ratio"] = r
+        e["status"] = ("agree" if r is not None and abs(r - 1) <= CROSSCHECK_AGREE else
+                       "differs" if r is not None and 1 / CROSSCHECK_FAIL <= r <= CROSSCHECK_FAIL else "fail" if e["units"] else "no units")
+    return {k: v for k, v in out.items() if v["status"] != "no units"}
 
 
 _CHECKED = {"units_per_call": "units_per_call", "gates": "word_gates", "free_gates": "structure_gates",
@@ -1447,6 +1811,11 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
         return {}
     q = g.get("q_word_v1") or {}
     try:
+        if g["definition"] in OPENED and GATHERS == "opening":
+            from verity.ir.defs import PrimitiveDefinition
+
+            fn = specialization(g["definition"], g["statics"])
+            cm.openings.update(n.fn.id for n in fn.body.nodes if isinstance(n.fn, PrimitiveDefinition) and n.fn.id.startswith("Gather"))
         if g.get("varying") and len(g["varying"]) == 1 and g.get("varying_calls"):
             (a,) = g["varying"]
             vals = sorted(int(v) for v in g["varying_calls"])
@@ -1523,10 +1892,14 @@ def _git_head() -> str | None:
 
 
 def main(argv=None) -> int:
+    global GATHERS
     ap = argparse.ArgumentParser(prog="verity_flock.boolean_export")
     ap.add_argument("--program-graph", action="append", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--gathers", choices=("mux", "opening"), default=GATHERS,
+                    help="a gather from committed weights as a multiplexer (default) or as a commitment opening")
     a = ap.parse_args(argv)
+    GATHERS = a.gathers
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     reg = Registry(out)
@@ -1539,10 +1912,14 @@ def main(argv=None) -> int:
     for pg in a.program_graph:
         t0 = time.time()
         doc = export_row(Path(pg), out, reg, tpl_cache, cache, walker, cm, checks)
+        for name in [n for n, w in gf2._TABLE_WORDS.items() if len(w) > 1 << 24]:
+            del gf2._TABLE_WORDS[name]          # gemma's 2^27-word tanh tables: 512 MB each, reloaded on demand
+        gc.collect()
         f = out / (doc["row_key"] + ".boolean.json")
         f.write_text(json.dumps(doc, separators=(",", ":")))
+        xc = crosscheck(doc, {r["id"]: r for r in tpl_cache.values()}, cm.records)
         rows.append({"row": doc["row"], "row_key": doc["row_key"], "file": f.name, "bytes": f.stat().st_size, "nodes": len(doc["nodes"]),
-                     "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1)})
+                     "templates": len(doc["templates"]), "seconds": round(time.time() - t0, 1), **doc["totals"], "crosscheck": xc})
         print(f"row {doc['row']}: {len(doc['nodes'])} nodes, {len(doc['templates'])} templates, {time.time() - t0:.0f}s", flush=True)
     ntpl.write_text(json.dumps({"schema": SCHEMA + "/templates", "templates": {r["id"]: r for r in tpl_cache.values()},
                                 "definitions": walker.defs}, separators=(",", ":")))
@@ -1597,7 +1974,19 @@ def main(argv=None) -> int:
                                       f"interior words per Call): {len(checks['agree'])} agree, {len(checks['differ'])} differ",
                              "differ": checks["differ"][:50]},
              "not_yet_lowered": nyl}
+    if GATHERS == "opening":
+        index["commitment_openings"] = {**OPENED, **{f"{k} (its Gather primitives)": v for k, v in OPENED_IN.items()}}
+    fails = [(r["row"], k, v["ratio"]) for r in rows for k, v in r["crosscheck"].items() if v["status"] == "fail"]
+    index["crosscheck"] = {
+        "rule": f"per row and template: the nodes' ANDs against their Calls' units' ANDs under the no-recompute cut; agree within "
+                f"{CROSSCHECK_AGREE:.0%}, differs within x{CROSSCHECK_FAIL:g} (a template lowered as one hash-consed unit counts fewer "
+                f"ANDs than its primitives' pieces one by one), fail beyond (a granularity error: the export refuses)",
+        "agree": sum(v["status"] == "agree" for r in rows for v in r["crosscheck"].values()),
+        "differs": sorted([r["row"], k, round(v["ratio"], 4)] for r in rows for k, v in r["crosscheck"].items() if v["status"] == "differs"),
+        "fail": fails}
     (out / "index.json").write_text(json.dumps(index, indent=1))
+    if fails:
+        raise SystemExit(f"cross-check failed: {fails[:10]}")
     print(json.dumps({"rows": rows, "subcircuits": len(reg.nodes), "gate_lists_verified": reg.verified,
                       "wiring_compared": reg.wiring_compared, "wiring_differs": reg.wiring_differs,
                       "tag_and_differs": reg.tag_and_differs}))

@@ -6,12 +6,12 @@ The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAV
 pinned per I by :data:`PINS` (the frame statement's two-element unit by :data:`FRAME_PINS`)."""
 TEMPLATE = "silu-mul"
 UNIT = "silu-mul/bf16/element"
-PINS = {8192: "be5a090be33ef6ad7d8cc0242610d038c87adb11c93f4ba1328f19263a42f25b",
-        9728: "1747e5c5bd676392db03ec383fc3acf6655b6066619f748d26b6380e25062e0d",
-        14336: "20e14a658b21fff2e3dd001ccb64ec9ca67ff5e4e7a28b9ca311011404a15726"}
-FRAME_PINS = {8192: "823415f4d07973827c800d8bb64baedaeab62ca240ff8a5569f28a1beea12282",
-              9728: "5b903f64ceeb414a4528ab36ceafde474afc2a9a0594ac2fb9fd0bb71bf19ea9",
-              14336: "8291dc1369457102112b6fe221f245544e819411e16bf160ae3f04651d257a05"}
+PINS = {8192: "a698c50c235f36fbfac74a545158fcc2579a7645433560aa55f53fcf6eadb537",
+        9728: "049d020b1a37757a0af483157a7bf31c5e3fbc853fd8e956e00c96971e1f9639",
+        14336: "67ae5f764e08b0e4e3dc3e861158eaba8f4e437ea8c8eb9243ed63dc57361758"}
+FRAME_PINS = {8192: "973065fe03d854e63476a60f39dceaae530dc0a6f8851118f5c99e3a8baf1067",
+              9728: "6d5f25ce6290b113bad320974d69d82f8f66eaec747e8886063e7334a244ded2",
+              14336: "8b65ec7a9ef165c9184a0a27b6a84772808b955495fa34e0d12e6a8b86fb7e4d"}
 
 
 def definition(subcircuit):
