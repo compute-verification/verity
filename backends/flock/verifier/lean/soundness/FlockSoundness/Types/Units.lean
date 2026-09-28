@@ -3,7 +3,7 @@ import FlockSoundness.ComposeDag
 import FlockSoundness.Types.Flatten
 
 /-!
-# L1 for a partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
+# A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
 
 `RowsL1` (`E2E.lean`) says that at values with 1 on the units' constants, a unit wrong on the program's Boolean circuit `CB`
 is wrong on its rows, the audit's circuit `C`. `rowsL1_of_pairs` proves it from one `UnitPair` per unit:

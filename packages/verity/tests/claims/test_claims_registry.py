@@ -17,6 +17,7 @@ def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_st
     e = get("prf/sha-256")
     assert (e.name, e.label, e.standing) == ("Pseudorandom function of SHA-256", "PRF · SHA-256", "standard")
     assert get("uniform/python-secrets").name == "Independent uniform output of Python's secrets"
+    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's coin server"
     e = get("uniform/io-getrandombytes")
     assert (e.name, e.label, e.standing) == ("Independent uniform output of IO.getRandomBytes", "Uniform · IO.getRandomBytes",
                                              "standard")

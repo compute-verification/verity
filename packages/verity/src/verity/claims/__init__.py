@@ -78,6 +78,8 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("io-getrandombytes", "IO.getRandomBytes"),
     # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
     Instance("python-secrets", "Python's secrets"),
+    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
+    Instance("flock-coin-server", "Flock's coin server"),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (

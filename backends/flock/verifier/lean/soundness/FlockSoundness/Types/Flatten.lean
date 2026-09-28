@@ -13,7 +13,7 @@ import FlockSoundness.Types.Dag
   minterms whose word has the bit set (`bitsGates`), every value bit gated.
 
 **`flatten_eval`**: on inputs `x`, output `o`'s gate carries `evalT`'s output `o`, for every type, table and depth. So the
-type semantics the L1 pins are stated in (`Types.Dag.evalT`) is the Boolean circuit's.
+type semantics the rows' theorems are stated in (`Types.Dag.evalT`) is the Boolean circuit's.
 
 `GateRows.Gate` is RoPE's earlier gate model; this one keeps the constants as gates so that a callee's gates embed
 unchanged.
