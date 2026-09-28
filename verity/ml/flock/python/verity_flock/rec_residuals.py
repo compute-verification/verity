@@ -66,8 +66,8 @@ from . import circuit as FC
 from . import ir_lower as IL
 from .class_statement import ClassDefinition
 
-__all__ = ["InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words",
-           "regions", "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
+__all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
+           "opening_rows", "residual_forms", "residual_words", "slots", "spec", "stage_opening",
            "statement", "unit_circuit", "write", "write_rows"]
 
 U16 = Array(16, BL.BIT)
@@ -79,6 +79,9 @@ ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
 VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
+# the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
+# unit's name does not say, and the verifier (`Flock.RecResiduals.HOLO_KEY`) builds the one net it selects, absent meaning plain
+HOLO_KEY = "holo"
 # a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
 # (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 256 (`coin_spec_of`)
 MAX_REGIONS = 64
@@ -429,9 +432,9 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     return {"value": value, "root": root.hex(), "leaves": len(bcs), "words": int(words_), "domain": dom.domain_id.hex()}
 
 
-def statement(S: dict, name: str, n: int) -> SimpleNamespace:
-    """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n`` and ``S``
-    decide."""
+def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace:
+    """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n``, ``S`` and
+    ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     t0 = time.perf_counter()
@@ -441,7 +444,7 @@ def statement(S: dict, name: str, n: int) -> SimpleNamespace:
     prog = P.program_sha512(program)
     low = lowering(S, name)
     sub = subcircuit(S, name)
-    text = FC.compose(low, sub, partition=P.digest(part), program=prog)
+    text = FC.compose(low, sub, partition=P.digest(part), program=prog, extra_meta={HOLO_KEY: True} if holo else None)
     names = [nm for nm, _ in S["ports"]]
     ref = lambda rows, vw: residual_words(S, [rows[nm] for nm in names], elements(vw, S["gf"]["nv"]))
     return SimpleNamespace(S=S, n=n, defn=defn, program=program, part=part, prog=prog, low=low, sub=sub, text=text,

@@ -285,7 +285,7 @@ theorem decoded_sizes (sh : Shape) (w comb : Array F128) (cons : Nat → Nat →
 V*'s `v_C` for `final_c`, passes both `check`s of `bindAndZerocheck` at the points `verifierRows` returns. -/
 theorem zerocheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -294,7 +294,7 @@ theorem zerocheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat �
     {C : Nat → Array F128} (hC : ∀ i < sh.m - 6, (C i).getD 0 0 = info.zc.rho[i]!) :
     dot (lagrange nodesL den6Inv info.zc.z) p.round1c = p.finalC ∧
       zcFold info.zc.r p C (sh.m - 6) (zcStart p info.zc.z) = (p.finalA * p.finalB, info.zc.rho) := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨-, r0, r1, rsr, lgr, k1, -, -, h0, -, -, -, hrs⟩ := run_stages hrun

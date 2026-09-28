@@ -35,10 +35,10 @@ theorem map_range_get (n : ℕ) (f : ℕ → F128) {i : ℕ} (hi : i < n) : ((Ar
 
 /-! ## The coins `verifierRows` reads -/
 
-theorem coin_of_round {R : Array Round} {k n : ℕ} {c : Array F128}
+theorem coin_of_round {R : Array Round} {k n : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
     (h : (Coins.ofRounds (R.map (·.coins))).round k n = .ok c) : (R[k]!).coins = c ∧ c.size = n := by
   have h' : (R.map (·.coins))[k]? = some c ∧ c.size = n := by
-    simp only [Coins.ofRounds] at h
+    simp only [Coins.ofRounds, filter_noEmpty hne] at h
     split at h
     next r hr =>
       split at h
@@ -51,16 +51,16 @@ theorem coin_of_round {R : Array Round} {k n : ℕ} {c : Array F128}
   refine ⟨?_, hn⟩
   rw [getElem!_pos R k hk, ← he, Array.getElem_map]
 
-theorem coins_at {R : Array Round} {k k' n : ℕ} {c : Array F128}
+theorem coins_at {R : Array Round} {k k' n : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
     (h : (Coins.ofRounds (R.map (·.coins))).round k n = .ok c) (hk : k = k') : (R[k']!).coins = c := by
   subst hk
-  exact (coin_of_round h).1
+  exact (coin_of_round hne h).1
 
-theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128}
+theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
     (h : (Coins.ofRounds (R.map (·.coins))).round k 1 = .ok c) (hk : k = k') :
     (R[k']!).coins.getD 0 0 = c[0]! := by
   subst hk
-  obtain ⟨hc, hn⟩ := coin_of_round h
+  obtain ⟨hc, hn⟩ := coin_of_round hne h
   rw [hc, Array.getD_eq_getD_getElem?, getElem!_pos c 0 (by omega), Array.getElem?_eq_getElem (by omega),
     Option.getD_some]
 
@@ -101,7 +101,7 @@ theorem run_of_rows {sh : Shape} {rounds : Array (Array F128)} {extras : Array C
 theorem rows_coins {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hm : 14 ≤ sh.m) {t : Transcript}
-    (ht : t.k = 0) (hd : rounds = t.rounds.map (·.coins)) :
+    (ht : t.k = 0) (hd : rounds = t.rounds.map (·.coins)) (hne : NoEmpty rounds) :
     info.zc.r = pinned ++ (t.rounds[t.k + 1]!).coins ∧ info.zc.z = (t.rounds[t.k + 2]!).coins.getD 0 0 ∧
       info.zc.rho = rhoOf t sh.m ∧
       info.lc.fold.alpha = (t.rounds[t.k + 3 + (sh.m - 6)]!).coins.getD 0 0 ∧
@@ -120,25 +120,25 @@ theorem rows_coins {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cl
   rw [hls] at hcr htsz hts
   subst hk1
   refine ⟨?_, ?_, ?_, ?_, ?_, hlw, hrin, ?_, ?_⟩
-  · rw [hr, coins_at (k' := t.k + 1) hc₁ (by omega)]
-  · rw [hz, coin_one (k' := t.k + 2) hc₂ (by omega)]
+  · rw [hr, coins_at hne (k' := t.k + 1) hc₁ (by omega)]
+  · rw [hz, coin_one hne (k' := t.k + 2) hc₂ (by omega)]
   · apply Array.ext
     · rw [hrs]; simp [rhoOf]
     · intro j hj₁ hj₂
       obtain ⟨c, hc, he⟩ := hrho j (by omega)
       rw [← getElem!_pos info.zc.rho j hj₁, ← getElem!_pos (rhoOf t sh.m) j hj₂, he, rhoOf,
         map_range_get (sh.m - 6) _ (i := j) (by omega)]
-      exact (coin_one (k' := t.k + 3 + j) hc (by omega)).symm
-  · rw [hα, coin_one (k' := t.k + 3 + (sh.m - 6)) hcα (by omega)]
-  · rw [hβ, coin_one (k' := t.k + 3 + (sh.m - 6) + 1) hcβ (by omega)]
+      exact (coin_one hne (k' := t.k + 3 + j) hc (by omega)).symm
+  · rw [hα, coin_one hne (k' := t.k + 3 + (sh.m - 6)) hcα (by omega)]
+  · rw [hβ, coin_one hne (k' := t.k + 3 + (sh.m - 6) + 1) hcβ (by omega)]
   · apply Array.ext
     · rw [htsz]; simp [tsOf]
     · intro j hj₁ hj₂
       obtain ⟨c, hc, he⟩ := hts j (by omega)
       rw [← getElem!_pos info.lc.fold.ts j hj₁, ← getElem!_pos (tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog) j hj₂, he,
         tsOf, map_range_get (sh.kLog - 6) _ (i := j) (by omega)]
-      exact (coin_one (k' := t.k + 3 + (sh.m - 6) + 2 + j) hc (by omega)).symm
-  · rw [hrp, coin_one (k' := t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)) hcr (by omega)]
+      exact (coin_one hne (k' := t.k + 3 + (sh.m - 6) + 2 + j) hc (by omega)).symm
+  · rw [hrp, coin_one hne (k' := t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)) hcr (by omega)]
 
 /-! ## The checks -/
 
@@ -151,10 +151,10 @@ transcript's coins: `r = pinned ++ coins(1)`, `z = coins(2)[0]`, `ρ = rhoOf t m
 `k₁ = t.k + 3 + (m − 6)` the challenges `ts = tsOf t k₁ k_log`, and `comb = d.comb`. -/
 theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
     (st : Setup) (p : Proof) (t : Transcript) (ht : t.k = 0) (hd : d.rounds = t.rounds.map (·.coins))
-    (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
+    (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
-    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
+    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck) (hpl : sh.holo = false)
     (hfoldPts : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
         .ok d.comb) :
@@ -174,11 +174,11 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
   obtain ⟨v, info, kappa, S, rs, hrows, hS, hw, hc, hres, hzero⟩ := halg
   have hacc' := hacc v info kappa hrows
   have hzp' := hzp v info kappa hrows
-  obtain ⟨hr, hz, hrho, hα, hβ, hlw, hrin, hts, -⟩ := rows_coins hrows (by omega) ht hd
-  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hrows hS hw hc hacc' hres hzero hzp'
+  obtain ⟨hr, hz, hrho, hα, hβ, hlw, hrin, hts, -⟩ := rows_coins hrows (by omega) ht hd hne
+  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hzp'
     (C := fun i => (t.rounds[t.k + 3 + i]!).coins) (fun i hi => by
       rw [hrho, rhoOf, map_range_get _ _ hi])
-  have hlf := lincheck_of_residuals hrows hS hw hc hacc' hres hzero hlp
+  have hlf := lincheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hlp
     (C := fun j => (t.rounds[t.k + 3 + (sh.m - 6) + 2 + j]!).coins) (fun j hj => by
       rw [hts, tsOf, map_range_get _ _ hj])
   rw [hm, hkL]
@@ -193,7 +193,8 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
 `prog_of_checks` takes them, at those points. -/
 theorem prog_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
     (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras : Array Claim) (t : Transcript) (ht : t.k = 0)
-    (hd : d.rounds = t.rounds.map (·.coins)) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
+    (hd : d.rounds = t.rounds.map (·.coins)) (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m)
+    (hkL : st.fold.kLog = sh.kLog) (hpl : sh.holo = false)
     (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
     (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
@@ -233,7 +234,7 @@ theorem prog_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc
         .ok ((), t₄)) :
     repProg st sch p extras t = .ok ((), t₄) := by
   obtain ⟨hpc, hfold, hlfold, hcomb, hsize⟩ :=
-    zclc_of_residuals sh d halg hacc st p t ht hd hm hm14 hkL hzp hlp hfoldPts
+    zclc_of_residuals sh d halg hacc st p t ht hd hne hm hm14 hkL hzp hlp hpl hfoldPts
   exact prog_of_checks st sch p extras t hm14 hn₀ hn₁ hn₂ hnr ha₀ ha₁ ha₂ har (r := _) (z := _)
     (rho := rhoOf t st.m) (C := fun i => (t.rounds[t.k + 3 + i]!).coins) rfl rfl (fun _ _ => rfl) hpc hfold
     (k₁ := t.k + 3 + (st.m - 6)) rfl hlc (ts := tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog) (comb := d.comb)

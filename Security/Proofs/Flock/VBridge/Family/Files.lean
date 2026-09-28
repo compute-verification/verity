@@ -380,11 +380,11 @@ def Encodes : Prop :=
   ∀ r, ∃ b, decodeProof (shapeOf s.st s.sch (2 * s.S.regions.length)) b = .ok (s.proof r)
 
 /-- **Each rep's coin counts** (`CoinsShaped`), for the statement's `2 · |regions|` extra claims and the rep's Ligerito
-rounds. -/
+rounds, and none of its rounds empty. -/
 def Coins : Prop :=
   ∀ r : Fin 2, CoinsShaped s.st.m s.st.fold.kLog (2 * s.S.regions.length)
     (chunks (ligFrames s.sch (valOf s.sh (s.d r).w (s.d r).comb (s.d r).cons .T) (s.proofAt r).cap
-      (s.proofAt r).ligerito)).1.length (s.d r).rounds
+      (s.proofAt r).ligerito)).1.length (s.d r).rounds ∧ Flock.RecAlgebra.NoEmpty (s.d r).rounds
 
 theorem extrasAt_of {P : Array (Array F128)} {e : Array Claim} (h : s.st.extra P = .ok e) : s.extrasAt P = e := by
   unfold extrasAt; rw [h]
@@ -399,7 +399,7 @@ theorem stream_wf (n r : ℕ) : RoundsWF (s.stream n r).rounds := streamRounds_w
 coins and retain `frameAt`'s bytes. -/
 theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hsh : ShapeIs s.sh s.st s.sch)
-    (halg : ∀ r, AlgebraHolds s.sh (s.d r) ∧ AccHolds s.sh (s.d r))
+    (hpl : s.sh.holo = false) (halg : ∀ r, AlgebraHolds s.sh (s.d r) ∧ AccHolds s.sh (s.d r))
     (hxs : ∀ (r : Fin 2) P, PointsOK s.st s.S cls.ptLocal cls.mPts pts P → s.st.extra P = .ok (s.d r).extras)
     (henc : s.Encodes) (hcoins : s.Coins) (hcomb : ∀ r, CombFolds s.st s.sh (s.d r))
     (hopen : ∀ r, OpenedAll s.st s.sch s.sh (s.proofAt r) (s.d r)) :
@@ -424,7 +424,7 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
   rw [← hsz] at hb
   have hco : CoinsShaped s.st.m s.st.fold.kLog (2 * s.S.regions.length)
       (chunks (ligFrames s.sch (valOf s.sh (s.d (fin2 r)).w (s.d (fin2 r)).comb (s.d (fin2 r)).cons .T)
-        (s.proof r).cap (s.proof r).ligerito)).1.length (s.d (fin2 r)).rounds := hcoins (fin2 r)
+        (s.proof r).cap (s.proof r).ligerito)).1.length (s.d (fin2 r)).rounds := (hcoins (fin2 r)).1
   obtain ⟨hcs, hc0, hc1, hc2, hcz, hcl, hcr, hcg⟩ := hco
   rw [← hsz] at hcs hcr hcg
   obtain ⟨t, htdef⟩ : ∃ t, t = Transcript.init (s.stream e.size r).rounds (s.spec.domain s.spec.tables[0]! r).toUTF8 :=
@@ -455,9 +455,10 @@ theorem runs_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → 𝔽)
     ⟨hN j 1 (by omega) (hcl' j h₁ h₂), answers_of_retains (hL ▸ hR j (by omega))⟩
   obtain ⟨t₄, hrun, hk⟩ := FlockVBridge.Runs.run_of_frames s.sh (s.d (fin2 r)) (halg (fin2 r)).1 (halg (fin2 r)).2
     s.st s.sch
-    (s.proof r) b e t htk (by rw [htr, streamRounds_coins]) (by rw [htr]; exact streamRounds_wf _ _) hshm.symm hm14
-    (hkL.trans hshk.symm) hshk.symm hkm hxe hes hshs hf hb (fun _ _ _ h => proofOf_zc h) ⟨rfl, rfl⟩ rfl rfl rfl rfl
-    (beq_self_eq_true _) (hcomb (fin2 r)) (hopen (fin2 r))
+    (s.proof r) b e t htk (by rw [htr, streamRounds_coins]) (hcoins (fin2 r)).2
+    (by rw [htr]; exact streamRounds_wf _ _) hshm.symm hm14
+    (hkL.trans hshk.symm) hshk.symm hkm hxe hes hshs hf hb (fun _ _ _ h => proofOf_zc h) ⟨rfl, rfl⟩ hpl
+    rfl rfl rfl rfl (beq_self_eq_true _) (hcomb (fin2 r)) (hopen (fin2 r))
     (by rw [htk]; exact hN 0 6 (by omega) hc0)
     (by rw [htk, Nat.zero_add]; exact hN 1 _ (by omega) hc1)
     (by rw [htk, Nat.zero_add]; exact hN 2 _ (by omega) hc2)
@@ -526,11 +527,12 @@ def TableSrc.ExtrasAre (s : TableSrc) (cls : HClass) (tr : List (List (SMsg T) �
 
 theorem TableSrc.runs (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hsh : ShapeIs s.sh s.st s.sch)
+    (hpl : s.sh.holo = false)
     (halg : ∀ r, AlgebraHolds s.sh (s.d r) ∧ AccHolds s.sh (s.d r)) (hxs : s.ExtrasAre T CT cls tr)
     (henc : s.Encodes) (hcoins : s.Coins) (hcomb : ∀ r, CombFolds s.st s.sh (s.d r))
     (hopen : ∀ r, OpenedAll s.st s.sch s.sh (s.proofAt r) (s.d r)) :
     (s.files (cls := cls) T CT tr).Runs :=
-  s.runs_filesAt (ptsOf T CT tr) hset hsh halg hxs henc hcoins hcomb hopen
+  s.runs_filesAt (ptsOf T CT tr) hset hsh hpl halg hxs henc hcoins hcomb hopen
 
 /-- **The table files are valid for the inner transcript `tr`** (`TableFiles.Valid`) once `tr` is theirs at some link
 points (`TranscriptIs`). -/
@@ -672,8 +674,8 @@ theorem hRuns_of (hF : F.files = F.filesOf spec st cap lig)
   rw [hF]
   exact TableSrc.runs T CT (F.tableSrc spec st cap lig R ω t (layers F.zs dg N k Rw R ω t R₂ τ))
     ((F.wmsg (layers F.zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) (hset R ω) (hsh R ω)
-    halg (hxs R ω t R₂ τ o hacc) (henc R ω t R₂ τ o hacc) (hcoins R ω t R₂ τ o hacc) (hcomb R ω t R₂ τ o hacc)
-    (hopen R ω t R₂ τ o hacc)
+    (FlockVBridge.OfVStar.shape?_holo F.hsh) halg (hxs R ω t R₂ τ o hacc) (henc R ω t R₂ τ o hacc)
+    (hcoins R ω t R₂ τ o hacc) (hcomb R ω t R₂ τ o hacc) (hopen R ω t R₂ τ o hacc)
 
 end VStarFamily
 

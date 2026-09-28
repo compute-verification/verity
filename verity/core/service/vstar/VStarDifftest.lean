@@ -10,7 +10,8 @@ circuits on the parameters it is given: a part's rows as a laid-out netlist (`sh
 SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
 (`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
 `spec`, `parts`), and V*'s statements over an inner session's shape (`statements`). `verifier_parts` holds the Lean
-verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units.
+verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
+(`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`.
 -/
 
 namespace VStar.DT
@@ -161,6 +162,57 @@ def verifierPartsFn (j : Json) : Except String Json := do
       out := out.push (Json.mkObj [("name", (name : Json)), ("equal", (decide (mine = theirs) : Json))])
   pure (Json.mkObj [("parts", Json.arr out), ("past_refused", ((Flock.RecResiduals.part fsh n).toOption.isNone : Json))])
 
+def recTerm : Flock.RecOpen.Term → Term
+  | .w i => .w i
+  | .v i => .v i
+  | .wt i u => .wt i u
+
+def algTerm : Flock.RecAlgebra.Term → Term
+  | .w i => .w i
+  | .v i => .v i
+  | .wt i u => .wt i u
+
+/-- The verifier's whole S (`RecAlgebra.structureOf`) in `gf2k`'s form. -/
+def algGfS (S : Flock.RecAlgebra.GfS) : GfS :=
+  { nw := S.nw, nv := S.nv, ops := (S.ops.map fun o => (o.map algTerm).toList).toList,
+    res := (S.res.map fun r => ({ mul := r.mul.toList, add := (r.add.map algTerm).toList } : Res)).toList }
+
+/-- A row port's name in `rec_residuals.spec`: `m<i>` for round `i`, then the running sums'. -/
+def portName (rounds p : Nat) : String :=
+  if p < rounds then s!"m{p}" else if p == rounds then "acc0" else "acc1"
+
+/-- The Lean verifier's own algebra at `Shape(m, k_log, claims, holo)` (`Flock.RecAlgebra`, `Flock.RecResiduals`), as
+`rec_residuals.spec` and `parts` give it: the whole S's summary, and per part its S as `InnerRepCheck`'s (row ports named
+as `spec` names them), its residuals and v elements, and with `units` the net `RecResiduals.check` holds a unit to, as
+`rec_residuals.lowering(p.S, name)` writes it. -/
+def verifierAlgebraFn (j : Json) : Except String Json := do
+  let o ← input' j ["m", "k_log", "claims", "holo", "units"]
+  let (m, k, cl) := (← jNat (o "m") "m", ← jNat (o "k_log") "k_log", ← jNat (o "claims") "claims")
+  let holo ← match o "holo" with | .bool b => pure b | _ => throw "holo: not a boolean"
+  let units ← match o "units" with | .bool b => pure b | _ => throw "units: not a boolean"
+  let some sh0 := Flock.RecResiduals.shape? m k cl | throw "the verifier refuses the shape"
+  let sh := { sh0 with holo }
+  let S ← Flock.RecAlgebra.structureOf sh
+  let sizes := Flock.RecResiduals.portSizes sh
+  let gs ← Flock.RecResiduals.groups S sizes
+  let nr := (Flock.RecAlgebra.rounds sh).size
+  let mut out : Array Json := #[]
+  for i in [0:gs.size] do
+    let (R, P, Vs) := gs[i]!
+    let (pS, ns, nv) ← Flock.RecResiduals.part sh i
+    let rep : RepS := { gf := { nw := ns.foldl (· + ·) 0, nv, ops := pS.ops.map (·.map recTerm),
+                                res := pS.res.map fun r => ({ mul := r.mul, add := r.add.map recTerm } : Res) },
+                        ports := (P.toList.zip ns).map fun (p, n) => (portName nr p, n) }
+    let name := Flock.RecResiduals.unitName m k cl i
+    let unit ← if units then do
+        let r := (Flock.RecResiduals.unitNet' pS ns nv).run St.empty
+        unitJson { name, inPorts := Flock.RecResiduals.portWords ns nv, outPorts := [Flock.RecResiduals.RES_OUT_WORDS],
+                   st := r.2, outs := r.1.toArray }
+      else pure Json.null
+    out := out.push (Json.mkObj [("name", (name : Json)), ("S", ← jsonSha256 rep.toJson), ("res", natsJson R.toList),
+      ("v", natsJson Vs.toList), ("unit", unit)])
+  pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
+
 end VStar.DT
 
 open VStar.DT in
@@ -168,4 +220,4 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("sha", sha), ("climb", climb), ("residuals", residuals), ("rec_open_unit", recOpenLowering),
   ("rec_open_circuit", recOpenCircuit), ("inner_unit", innerLowering), ("inner_circuit", innerCircuit),
   ("structure", structureFn), ("spec", specFn), ("parts", partsFn), ("statements", statementsFn),
-  ("verifier_parts", verifierPartsFn)])
+  ("verifier_parts", verifierPartsFn), ("verifier_algebra", verifierAlgebraFn)])

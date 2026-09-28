@@ -195,10 +195,11 @@ section Build
 
 variable (sh : Shape) (comb0 : Nat)
 
-/-- The op table's operands for message elements: each is the element's term alone; v's names and values align. -/
+/-- The op table's operands for message elements: each is the element's operand (`atomOp`); v's names and values
+align. -/
 def OpsOk (st : BSt) : Prop :=
   st.vNames.size = st.vVals.size ∧
-    ∀ k i, st.opOf.lookup k = some i → ∃ t, atomTerm sh comb0 k = .ok t ∧ st.ops[i]? = some #[t]
+    ∀ k i, st.opOf.lookup k = some i → ∃ op, atomOp sh comb0 k = .ok op ∧ st.ops[i]? = some op
 
 /-- Operands `F` and v values `V` extend `st`'s. -/
 def ExtTo (st : BSt) (F : Array (Array Term)) (V : Array F128) : Prop :=
@@ -267,10 +268,35 @@ theorem mulSum_cons (S : GfS) (v : Array F128) (p : Nat × Nat) (ps : Array (Nat
     mulSum w S v (#[p] ++ ps) = opValue S w v p.1 * opValue S w v p.2 + mulSum w S v ps := by
   simp only [mulSum, afoldl_append, afoldl_single]
 
+/-- A message element's operand is its term, or at a holo shape a comb's term and its `h`. -/
+theorem atomOp_cases {k : Key} {op : Array Term} (h : atomOp sh comb0 k = .ok op) :
+    ∃ t, atomTerm sh comb0 k = .ok t ∧ (op = #[t] ∨ sh.holo = true ∧ ∃ i, op = #[t, .w i]) := by
+  unfold atomOp at h
+  cases ht : atomTerm sh comb0 k with
+  | error e => rw [ht] at h; cases h
+  | ok t =>
+    rw [ht] at h
+    refine ⟨t, rfl, ?_⟩
+    simp only [bind, Except.bind] at h
+    split at h
+    · split at h
+      · cases h
+        exact .inr ⟨by assumption, _, rfl⟩
+      · cases h
+    · cases h
+      exact .inl rfl
+
+/-- Off a holo shape, a message element's operand is its term alone. -/
+theorem atomOp_plain {k : Key} {op : Array Term} (hp : sh.holo = false) (h : atomOp sh comb0 k = .ok op) :
+    ∃ t, atomTerm sh comb0 k = .ok t ∧ op = #[t] := by
+  obtain ⟨t, ht, h1 | ⟨h2, -⟩⟩ := atomOp_cases h
+  · exact ⟨t, ht, h1⟩
+  · rw [hp] at h2; cases h2
+
 theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
     (hr : varOp sh comb0 k st = .ok (o, st')) :
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.vNames = st.vNames ∧ st'.vVals = st.vVals ∧ st'.kappa = st.kappa ∧
-      ∃ t, atomTerm sh comb0 k = .ok t ∧ st'.ops[o]? = some #[t] := by
+      ∃ op, atomOp sh comb0 k = .ok op ∧ st'.ops[o]? = some op := by
   unfold varOp at hr
   obtain ⟨st0, st1, hg, hr⟩ := bm_bind hr
   cases hg
@@ -287,7 +313,7 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
     obtain ⟨_, st3, hs, hr⟩ := bm_bind hr
     cases hs
     cases hr
-    refine ⟨⟨hi.1, fun k' i' hk' => ?_⟩, ⟨⟨#[#[t']], Array.push_eq_append⟩, ⟨#[], by simp⟩⟩, rfl, rfl,
+    refine ⟨⟨hi.1, fun k' i' hk' => ?_⟩, ⟨⟨#[t'], Array.push_eq_append⟩, ⟨#[], by simp⟩⟩, rfl, rfl,
       rfl, t', ha, by simp⟩
     simp only [List.lookup_append] at hk'
     cases hk'' : st.opOf.lookup k' with
@@ -295,7 +321,7 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
       rw [hk''] at hk'
       cases hk'
       obtain ⟨t2, h2, h3⟩ := hi.2 k' _ hk''
-      exact ⟨t2, h2, (Ext.push st (.const 0) 0 #[t']).ops? h3⟩
+      exact ⟨t2, h2, (Ext.push st (.const 0) 0 t').ops? h3⟩
     | none =>
       rw [hk''] at hk'
       simp only [List.lookup, Option.none_or] at hk'
@@ -310,11 +336,11 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
 theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (ps : Array (Nat × Nat)),
     OpsOk sh comb0 st → coefOps sh comb0 ri l st = .ok (ps, st') →
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.kappa = st.kappa ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        mulSum w S (V ++ comb) ps = tEval (valOf sh w comb cons) l
+      (sh.holo = false → ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        mulSum w S (V ++ comb) ps = tEval (valOf sh w comb cons) l)
   | [], st, st', ps, hi, hr => by
     cases hr
-    exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ => rfl⟩
+    exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ _ => rfl⟩
   | (k, x) :: rest, st, st', ps, hi, hr => by
     obtain ⟨st0, st1, hg, hr⟩ := bm_bind hr
     cases hg
@@ -324,10 +350,11 @@ theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (p
     obtain ⟨ps', st4, hc, hr⟩ := bm_bind hr
     cases hr
     have hA := hi.push (.coef ri k) x #[.v st.vNames.size]
-    obtain ⟨h3i, h3e, h3n, h3v, h3k, t, ht, ho⟩ := varOp_spec hA hv
+    obtain ⟨h3i, h3e, h3n, h3v, h3k, op, hop, ho⟩ := varOp_spec hA hv
     obtain ⟨h4i, h4e, h4k, hval⟩ := coefOps_spec ri rest st3 st' ps' h3i hc
-    refine ⟨h4i, (Ext.push st _ _ _).trans (h3e.trans h4e), by rw [h4k, h3k], fun S V hSV hV => ?_⟩
-    rw [mulSum_cons, hval S V hSV hV, tEval]
+    refine ⟨h4i, (Ext.push st _ _ _).trans (h3e.trans h4e), by rw [h4k, h3k], fun hp S V hSV hV => ?_⟩
+    obtain ⟨t, ht, rfl⟩ := atomOp_plain hp hop
+    rw [mulSum_cons, hval hp S V hSV hV, tEval]
     have hslot : S.ops[st.ops.size]? = some #[Term.v st.vNames.size] := (h3e.trans (h4e.trans hSV)).ops? (by simp)
     have hx : V[st.vNames.size]? = some x := (h3e.trans (h4e.trans hSV)).vVals? (by simp [hi.1])
     have hlt : st.vNames.size < V.size := by
@@ -340,11 +367,11 @@ theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (p
 theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' : BSt) (ps : Array (Nat × Nat)),
     OpsOk sh comb0 st → prodOps sh comb0 ri l st = .ok (ps, st') →
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.kappa = st.kappa ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        mulSum w S (V ++ comb) ps = tEval (fun ab => valOf sh w comb cons ab.1 * valOf sh w comb cons ab.2) l
+      (sh.holo = false → ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        mulSum w S (V ++ comb) ps = tEval (fun ab => valOf sh w comb cons ab.1 * valOf sh w comb cons ab.2) l)
   | [], st, st', ps, hi, hr => by
     cases hr
-    exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ => rfl⟩
+    exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ _ => rfl⟩
   | ((a, b), x) :: rest, st, st', ps, hi, hr => by
     simp only [prodOps] at hr
     split at hr
@@ -355,12 +382,14 @@ theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' 
       obtain ⟨ob, st3, hb, hr⟩ := bm_bind hr
       obtain ⟨ps', st4, hc, hr⟩ := bm_bind hr
       cases hr
-      obtain ⟨h2i, h2e, -, -, h2k, ta, hta, hoa⟩ := varOp_spec hi ha
-      obtain ⟨h3i, h3e, -, -, h3k, tb, htb, hob⟩ := varOp_spec h2i hb
+      obtain ⟨h2i, h2e, -, -, h2k, opa, hopa, hoa⟩ := varOp_spec hi ha
+      obtain ⟨h3i, h3e, -, -, h3k, opb, hopb, hob⟩ := varOp_spec h2i hb
       obtain ⟨h4i, h4e, h4k, hval⟩ := prodOps_spec ri rest st3 st' ps' h3i hc
-      refine ⟨h4i, h2e.trans (h3e.trans h4e), by rw [h4k, h3k, h2k], fun S V hSV hV => ?_⟩
+      refine ⟨h4i, h2e.trans (h3e.trans h4e), by rw [h4k, h3k, h2k], fun hp S V hSV hV => ?_⟩
+      obtain ⟨ta, hta, rfl⟩ := atomOp_plain hp hopa
+      obtain ⟨tb, htb, rfl⟩ := atomOp_plain hp hopb
       have hx : x = 1 := by simpa using hx1
-      rw [mulSum_cons, hval S V hSV hV, tEval, hx, opValue_single w _ ((h3e.trans (h4e.trans hSV)).ops? hoa),
+      rw [mulSum_cons, hval hp S V hSV hV, tEval, hx, opValue_single w _ ((h3e.trans (h4e.trans hSV)).ops? hoa),
         opValue_single w _ ((h4e.trans hSV).ops? hob), atom_val w comb cons hta hV, atom_val w comb cons htb hV]
       (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_one]; ring)
 
@@ -529,9 +558,9 @@ theorem buildRes_spec {fin ri : Nat} {f : Lin} {st st' : BSt} {res : Res} (hi : 
       (∀ r', kapSum st'.kappa r' cons =
         kapSum st.kappa r' cons + (if ri = fin + r' then tEval (valOf sh w comb cons) (consOf f) else 0)) ∧
       (consOf f ≠ [] → ri = fin ∨ ri = fin + 1) ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+      (sh.holo = false → ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
         resValue S w (V ++ comb) res = noCons (valOf sh w comb cons) f + (if consOf f = [] then 0 else
-          valOf sh w comb cons (.acc1 (ri - fin)) + valOf sh w comb cons (.acc0 (ri - fin))) := by
+          valOf sh w comb cons (.acc1 (ri - fin)) + valOf sh w comb cons (.acc0 (ri - fin)))) := by
   unfold buildRes at hr
   obtain ⟨acc, st1, h1, hr⟩ := bm_bind hr
   obtain ⟨a1, a2, a3, a4, aks, afin, aval⟩ := accTerms_spec w comb cons h1
@@ -549,12 +578,12 @@ theorem buildRes_spec {fin ri : Nat} {f : Lin} {st st' : BSt} {res : Res} (hi : 
   obtain ⟨h2i, h2e, h2k, h2val⟩ := coefOps_spec w comb cons ri l1 st1 st2 cm hi1 h2
   obtain ⟨h3i, h3e, h3k, h3val⟩ := prodOps_spec w comb cons ri l2 st2 st3 pm h2i h3
   obtain ⟨h4i, h4e, h4k, h4val⟩ := constTerm_spec w comb h3i h4
-  refine ⟨h4i, (Ext.of_eq a1 a2).trans (h2e.trans (h3e.trans h4e)), fun r' => ?_, afin, fun S V hSV hV => ?_⟩
+  refine ⟨h4i, (Ext.of_eq a1 a2).trans (h2e.trans (h3e.trans h4e)), fun r' => ?_, afin, fun hp S V hSV hV => ?_⟩
   · have hc := consOf_val (sh := sh) w comb cons f
     simp only [consOf] at hc ⊢
     rw [h4k, h3k, h2k, aks, hc]
   · rw [resValue_eq, afoldl_append, mulSum_append, aval, h4val S.ops V hSV,
-      h2val S V (h3e.trans (h4e.trans hSV)) hV, h3val S V (h4e.trans hSV) hV,
+      h2val hp S V (h3e.trans (h4e.trans hSV)) hV, h3val hp S V (h4e.trans hSV) hV,
       tEval_perm _ (sortBy_perm hl1), tEval_perm _ (sortBy_perm hl2), noCons]
     simp only [consOf]
     by_cases hc : List.filter (fun x => x.1.isCons) f.t = [] <;> simp only [hc, ite_true, ite_false]
@@ -571,11 +600,11 @@ theorem buildAll_spec {fin : Nat} : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt
       (∀ r', kapSum st'.kappa r' cons = kapSum st.kappa r' cons +
         (if ri ≤ fin + r' then tEval (valOf sh w comb cons) (consOf (fs.getD (fin + r' - ri) {})) else 0)) ∧
       (∀ fi ∈ fs.zipIdx ri, consOf fi.1 ≠ [] → fi.2 = fin ∨ fi.2 = fin + 1) ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        rs.toList.map (resValue S w (V ++ comb)) = (fs.zipIdx ri).map (resForm (valOf sh w comb cons) fin)
+      (sh.holo = false → ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        rs.toList.map (resValue S w (V ++ comb)) = (fs.zipIdx ri).map (resForm (valOf sh w comb cons) fin))
   | [], ri, st, st', rs, hi, hr => by
     cases hr
-    refine ⟨hi, Ext.refl _, fun r' => ?_, by simp, fun _ _ _ _ => rfl⟩
+    refine ⟨hi, Ext.refl _, fun r' => ?_, by simp, fun _ _ _ _ _ => rfl⟩
     have : tEval (valOf sh w comb cons) (consOf (([] : List Lin).getD (fin + r' - ri) {})) = 0 := rfl
     split <;> simp only [this, f128_add_zero]
   | f :: rest, ri, st, st', rs, hi, hr => by
@@ -584,7 +613,7 @@ theorem buildAll_spec {fin : Nat} : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt
     cases hr
     obtain ⟨h1i, h1e, h1k, h1fin, h1val⟩ := buildRes_spec w comb cons hi h1
     obtain ⟨h2i, h2e, h2k, h2fin, h2val⟩ := buildAll_spec rest (ri + 1) st1 st' rs' h1i h2
-    refine ⟨h2i, h1e.trans h2e, fun r' => ?_, fun fi hfi => ?_, fun S V hSV hV => ?_⟩
+    refine ⟨h2i, h1e.trans h2e, fun r' => ?_, fun fi hfi => ?_, fun hp S V hSV hV => ?_⟩
     · rw [h2k, h1k]
       rcases Nat.lt_trichotomy ri (fin + r') with hlt | heq | hgt
       · rw [show fin + r' - ri = (fin + r' - (ri + 1)) + 1 by omega, List.getD_cons_succ]
@@ -601,9 +630,9 @@ theorem buildAll_spec {fin : Nat} : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt
       rcases hfi with rfl | hfi
       · exact h1fin
       · exact h2fin fi hfi
-    · rw [List.zipIdx_cons, List.map_cons, Array.toList_append, List.map_append, h2val S V hSV hV]
+    · rw [List.zipIdx_cons, List.map_cons, Array.toList_append, List.map_append, h2val hp S V hSV hV]
       show [resValue S w (V ++ comb) r] ++ _ = _
-      rw [h1val S V (h2e.trans hSV) hV]
+      rw [h1val hp S V (h2e.trans hSV) hV]
       rfl
 
 theorem kapSum_zero {K : Array (Array (Array F128))}

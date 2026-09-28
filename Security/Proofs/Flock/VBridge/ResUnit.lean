@@ -216,11 +216,12 @@ theorem inWords_unitLaid {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {nam
   simp [inRowsOf, partIn]
 
 /-- **What `RecResiduals.check` accepted**: a unit named `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` at a shape the
-verifier accepts is the net the verifier builds for part `j` of that shape's algebra. -/
-theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
+verifier accepts is the net the verifier builds for part `j` of that shape's algebra, holo as the statement's META says
+(`holoOf`). -/
+theorem check_part_at {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
-    (hsh : RecResiduals.shape? m k cl = some sh) :
-    ∃ S ns nv, RecResiduals.part sh j = .ok (S, ns, nv) ∧
+    (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo) :
+    ∃ S ns nv, RecResiduals.part { sh with holo } j = .ok (S, ns, nv) ∧
       netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit := by
   unfold RecResiduals.check at h
   rw [hp] at h
@@ -229,7 +230,9 @@ theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k 
   dsimp only at h
   split at h
   · cases h
-  · split at h
+  · rw [hh] at h
+    dsimp only at h
+    split at h
     · cases h
     · rename_i S ns nv hpart
       split at h
@@ -241,6 +244,64 @@ theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k 
           · rename_i hcg
             exact ⟨S, ns, nv, hpart, by rw [hcg]; exact hg⟩
           · cases h
+
+/-- `shape?`'s shape is plain. -/
+theorem shape?_holo {m k cl : ℕ} {sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh) :
+    sh.holo = false := by
+  unfold RecResiduals.shape? at hsh
+  cases hf : Flock.fast100 m with
+  | none => rw [hf] at hsh; cases hsh
+  | some s =>
+    rw [hf] at hsh
+    simp at hsh
+    obtain ⟨-, rfl⟩ := hsh
+    rfl
+
+/-- **`check_part_at` on a plain statement**: META says no `holo`, so the unit is the plain part's net. -/
+theorem check_part {c : Flock.Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok false) :
+    ∃ S ns nv, RecResiduals.part sh j = .ok (S, ns, nv) ∧
+      netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit := by
+  obtain ⟨S, ns, nv, hpart, hn⟩ := check_part_at h hp hsh hh
+  have e : { sh with holo := false } = sh := by
+    have h0 := shape?_holo hsh
+    cases sh
+    simp only at h0
+    subst h0
+    rfl
+  rw [e] at hpart
+  exact ⟨S, ns, nv, hpart, hn⟩
+
+/-- Part `j`'s plain and holo nets differ. They need not: at (25,22,8), part 1's holo net is its plain one. -/
+def NetsDiffer (m k cl j : ℕ) (sh : Flock.Shape) : Prop :=
+  ∀ S ns nv S' ns' nv' g g', RecResiduals.part sh j = .ok (S, ns, nv) →
+    RecResiduals.part { sh with holo := true } j = .ok (S', ns', nv') →
+    netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok g →
+    netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S' ns' nv') = .ok g' → g ≠ g'
+
+/-- **A holo statement on a plain part refuses**: where part `j`'s plain and holo nets differ, `check` fails on a unit
+that is the plain net under META `holo: true`. -/
+theorem check_refuses_holo_on_plain {c : Flock.Circuit} {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok true) (hd : NetsDiffer m k cl j sh)
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : RecResiduals.part sh j = .ok (S, ns, nv))
+    (hn : netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit) :
+    RecResiduals.check c ≠ .ok () := fun h => by
+  obtain ⟨S', ns', nv', hpart', hn'⟩ := check_part_at h hp hsh hh
+  exact hd S ns nv S' ns' nv' _ _ hpart hpart' hn hn' rfl
+
+/-- **A plain statement on a holo part refuses**: where part `j`'s plain and holo nets differ, `check` fails on a unit
+that is the holo net under META without `holo` (or `holo: false`). -/
+theorem check_refuses_plain_on_holo {c : Flock.Circuit} {m k cl j : ℕ}
+    (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Flock.Shape}
+    (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok false) (hd : NetsDiffer m k cl j sh)
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecResiduals.part { sh with holo := true } j = .ok (S, ns, nv))
+    (hn : netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit) :
+    RecResiduals.check c ≠ .ok () := fun h => by
+  obtain ⟨S', ns', nv', hpart', hn'⟩ := check_part h hp hsh hh
+  exact hd S' ns' nv' S ns nv _ _ hpart' hpart hn' hn rfl
 
 /-! ## The part's residuals fit -/
 
@@ -368,6 +429,7 @@ theorem decode_check {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
     (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
     {sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok false)
     (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128)
     (w : ℕ → Flock.F128) (wI V : Array ℕ) (hwI : wI.size ≤ ns.sum) (hV : V.size ≤ nv)
     (hw : ∀ q < 128 * ns.sum, RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub wI w) q))
@@ -375,7 +437,7 @@ theorem decode_check {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
     ∃ w' v' : ℕ → Flock.F128, (∀ k (hk : k < wI.size), w' k = w wI[k]) ∧
       (∀ k (hk : k < V.size), v' k = vOf sh rounds extras comb V[k]) ∧
       PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
-  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part hc hp hsh
+  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part hc hp hsh hh
   rw [hpart] at hpart'
   cases hpart'
   exact ⟨sub wI w, sub V (vOf sh rounds extras comb), sub_lt wI w, sub_lt V _,

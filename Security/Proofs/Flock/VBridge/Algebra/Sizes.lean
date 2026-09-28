@@ -25,15 +25,23 @@ theorem SameSizes.get {r r' : Array (Array F128)} (h : SameSizes r r') (k : Nat)
     r[k]?.map Array.size = r'[k]?.map Array.size := by
   simpa [List.getElem?_map] using congrArg (·[k]?) h
 
+/-- Two records' rounds of some coins, which `Coins.ofRounds` reads, hold as many coins each when the records' do. -/
+theorem SameSizes.filter {r r' : Array (Array F128)} (h : SameSizes r r') :
+    SameSizes (r.filter (·.size ≠ 0)) (r'.filter (·.size ≠ 0)) := by
+  have e : ∀ l : List (Array F128), (l.filter (·.size ≠ 0)).map Array.size = (l.map Array.size).filter (· ≠ 0) :=
+    fun l => (List.filter_map (f := Array.size) (p := fun n => decide (n ≠ 0)) (l := l)).symm
+  unfold SameSizes at h ⊢
+  rw [Array.toList_filter, Array.toList_filter, e, e, h]
+
 theorem round_sizes {r r' : Array (Array F128)} (h : SameSizes r r') {k n : Nat} {v : Array F128}
     (hv : (Coins.ofRounds r).round k n = .ok v) : ∃ v', (Coins.ofRounds r').round k n = .ok v' := by
-  have hk := h.get k
+  have hk := h.filter.get k
   simp only [Coins.ofRounds] at hv ⊢
-  cases h1 : r[k]? with
+  cases h1 : (r.filter (·.size ≠ 0))[k]? with
   | none => rw [h1] at hv; cases hv
   | some a =>
     rw [h1] at hv hk
-    cases h2 : r'[k]? with
+    cases h2 : (r'.filter (·.size ≠ 0))[k]? with
     | none => rw [h2] at hk; cases hk
     | some a' =>
       rw [h2] at hk
@@ -110,7 +118,9 @@ theorem read' : RF (fun s s' : Coins => ∀ k, s.drawnAll k = s'.drawnAll k) (re
   have e : ∀ src : Coins, (read : CM Coins) k src = .ok (src, k) := fun _ => rfl
   rw [e] at hx
   cases hx
-  exact ⟨_, e _, fun k => by simp [Coins.ofRounds, hr.size]⟩
+  exact ⟨_, e _, fun k => by
+    show (k == (r.filter (·.size ≠ 0)).size) = (k == (r'.filter (·.size ≠ 0)).size)
+    rw [hr.filter.size]⟩
 
 theorem get' : RF (· = ·) (get : CM Nat) get := by
   intro r r' hr k a j hx

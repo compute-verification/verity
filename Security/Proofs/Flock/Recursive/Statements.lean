@@ -235,6 +235,11 @@ class's functions) and the owed outputs `o`, give every event probabilities with
 $$\varepsilon + \varepsilon_o + n_h \cdot \delta_{K^*}$$
 of each other, both ways.
 
+The audits it speaks of are those whose inner session's circuits are private: the verifier's own `--hide` sets the inner
+shape's `RecVStar.Inner.holo`, and every `VERDICT` line verified with `--rec-inner` carries it as `"private_circuit"`. A
+verdict with `"private_circuit": false` claims no circuit privacy. `RecVStar.statements` refuses a holo inner shape
+until V*'s circuit writer writes holo parts (`statements_holo`), so no audit the verifier accepts says true yet.
+
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and

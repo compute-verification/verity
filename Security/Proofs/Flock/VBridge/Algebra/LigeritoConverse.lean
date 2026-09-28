@@ -311,10 +311,13 @@ theorem vnextOod_bind {M : Messages F128} {f : F128 → RecAlgebra.LM F128 β} {
 
 end VStar
 
+-- V*'s rounds hold no round of no coins, so `Coins.ofRounds` reads them as recorded.
+variable [hne : Fact (NoEmpty c)]
+
 /-- A round of the record that V* drew `n` coins from. -/
 theorem ofRounds_round {k n : ℕ} {v : Array F128} (h : (Coins.ofRounds c).round k n = .ok v) :
     c[k]! = v ∧ v.size = n := by
-  simp only [Coins.ofRounds] at h
+  simp only [Coins.ofRounds, filter_noEmpty hne.out] at h
   cases hc : c[k]? with
   | none => rw [hc] at h; cases h
   | some r =>
@@ -361,6 +364,7 @@ theorem vcoinK2_bind {f : F256 → RecAlgebra.LM F128 β} {st : LSt F128} {k : �
   rw [getElem!_eq_getD, getElem!_eq_getD] at h₂
   exact ⟨hs, h₂⟩
 
+omit hne in
 theorem vthrow {e : String} {f : α → RecAlgebra.LM F128 β} {st : LSt F128} {k : ℕ} {r : (β × LSt F128) × ℕ}
     (h : ((throw e : RecAlgebra.LM F128 α) >>= f) st k (Coins.ofRounds c) = .ok r) : False := by
   cases h
@@ -614,6 +618,7 @@ end Conv
 def qPush (st : LSt F128) (b : F128) (e : KV F128) (cs : Flock.ConsCtx) : LSt F128 :=
   { st with s := kadd st.s (fk b e), conss := st.conss.push cs }
 
+omit hne in
 theorem RunsL.run {y : Flock.LM β} {st st' : LState} {k k' : ℕ} {b : β} (h : RunsL c y st k k' b st') :
     RunsT c (y.run st) k k' (b, st') := h
 

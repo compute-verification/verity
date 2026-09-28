@@ -56,9 +56,9 @@ theorem Zero.get {rounds : Array (Array F128)} (hz : Zero rounds) {k : Nat} {r :
   obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.mp h
   exact hz k hk
 
-theorem ofRounds_get? {rounds : Array (Array F128)} {k n : Nat} {v : Array F128}
+theorem ofRounds_get? {rounds : Array (Array F128)} (hne : NoEmpty rounds) {k n : Nat} {v : Array F128}
     (h : (Coins.ofRounds rounds).round k n = .ok v) : rounds[k]? = some v ∧ v.size = n := by
-  simp only [Coins.ofRounds] at h
+  simp only [Coins.ofRounds, filter_noEmpty hne] at h
   cases hr : rounds[k]? with
   | none => rw [hr] at h; cases h
   | some r =>
@@ -71,12 +71,15 @@ theorem ofRounds_get? {rounds : Array (Array F128)} {k n : Nat} {v : Array F128}
       cases h
 
 /-- `x` at the zero coins and at records of zero coins: whenever it succeeds at the zero coins, drawing the sizes `ns`
-from round `k`, it succeeds alike at every record of zero rounds of those sizes holding `t` rounds more, and wherever
-it succeeds at a record of zero coins it returns alike, having drawn rounds of the sizes `ns`. -/
+(none of them 0) from round `k`, it succeeds alike at every record of zero rounds of those sizes holding `t` rounds
+more, and wherever it succeeds at a record of zero coins it returns alike, having drawn rounds of the sizes `ns`; both
+at records with no round of no coins (`NoEmpty`). -/
 def Z {A : Type} (t : Nat) (x : CM A) : Prop :=
-  ∀ k a j, x k Coins.zeros = .ok (a, j) → ∃ ns : List Nat, j = k + ns.length ∧
-    (∀ rounds, Fits0 rounds k ns → rounds.size = j + t → x k (Coins.ofRounds rounds) = .ok (a, j)) ∧
-    ∀ rounds b j', Zero rounds → x k (Coins.ofRounds rounds) = .ok (b, j') → b = a ∧ j' = j ∧ FitsSz rounds k ns
+  ∀ k a j, x k Coins.zeros = .ok (a, j) → ∃ ns : List Nat, j = k + ns.length ∧ (∀ n ∈ ns, n ≠ 0) ∧
+    (∀ rounds, NoEmpty rounds → Fits0 rounds k ns → rounds.size = j + t →
+      x k (Coins.ofRounds rounds) = .ok (a, j)) ∧
+    ∀ rounds b j', NoEmpty rounds → Zero rounds → x k (Coins.ofRounds rounds) = .ok (b, j') →
+      b = a ∧ j' = j ∧ FitsSz rounds k ns
 
 /-- `x` draws no coin and reads no source. -/
 def NZ {A : Type} (x : CM A) : Prop :=
@@ -156,26 +159,27 @@ theorem guard_eq {A : Type} {err : String} {rest : CM A} (k : Nat) (src : Coins)
       if (!s.drawnAll k) = true then (throw err : CM A) else rest) k src =
       (if (!src.drawnAll k) = true then (throw err : CM A) else rest) k src := rfl
 
-/-- Whenever `x` succeeds at a record, it has drawn every round of the record. -/
-def E {A : Type} (x : CM A) : Prop := ∀ rounds k b j, x k (Coins.ofRounds rounds) = .ok (b, j) → rounds.size = j
+/-- Whenever `x` succeeds at a record with no round of no coins, it has drawn every round of the record. -/
+def E {A : Type} (x : CM A) : Prop :=
+  ∀ rounds k b j, NoEmpty rounds → x k (Coins.ofRounds rounds) = .ok (b, j) → rounds.size = j
 
 namespace E
 
 variable {A B : Type}
 
 theorem bind {x : CM A} {f : A → CM B} (hf : ∀ a, E (f a)) : E (x >>= f) := by
-  intro rounds k c j h
+  intro rounds k c j hne h
   obtain ⟨a, k₁, -, h₂⟩ := cm_bind h
-  exact hf a rounds k₁ c j h₂
+  exact hf a rounds k₁ c j hne h₂
 
 theorem bind_nd {x : CM A} {f : A → CM B} (hx : E x) (hf : ∀ a, ND (f a)) : E (x >>= f) := by
-  intro rounds k c j h
+  intro rounds k c j hne h
   obtain ⟨a, k₁, h₁, h₂⟩ := cm_bind h
   rw [hf a _ _ _ _ h₂]
-  exact hx _ _ _ _ h₁
+  exact hx _ _ _ _ hne h₁
 
 theorem throw' (e : String) : E (throw e : CM A) := by
-  intro _ _ _ _ h
+  intro _ _ _ _ _ h
   cases h
 
 theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → E x₁) (h₂ : ¬c → E x₂) :
@@ -188,13 +192,17 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → E x₁) (
 theorem guardDrawn {err : String} {rest : CM A} (h : ND rest) :
     E (read >>= fun s : Coins => get >>= fun k : Nat =>
       if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
-  intro rounds k b j hx
+  intro rounds k b j hne hx
   rw [guard_eq] at hx
   split at hx
   · cases hx
   · rename_i hc
     rw [h _ _ _ _ hx]
-    simp [Coins.ofRounds] at hc
+    have e : (Coins.ofRounds rounds).drawnAll k = (k == rounds.size) := by
+      show (k == (rounds.filter (·.size ≠ 0)).size) = _
+      rw [filter_noEmpty hne]
+    rw [e] at hc
+    simp at hc
     omega
 
 end E
@@ -206,14 +214,15 @@ variable {A B : Type} {t : Nat}
 theorem bind {x : CM A} {f : A → CM B} (hx : ∀ {t}, Z t x) (hf : ∀ a, Z t (f a)) : Z t (x >>= f) := by
   intro k c j h
   obtain ⟨a, k₁, h₁, h₂⟩ := cm_bind h
-  obtain ⟨ns₂, rfl, H₂, C₂⟩ := hf a k₁ c j h₂
-  obtain ⟨ns₁, rfl, H₁, C₁⟩ := hx (t := ns₂.length + t) k a k₁ h₁
-  refine ⟨ns₁ ++ ns₂, by simp [Nat.add_assoc], fun rounds hr hs => ?_, fun rounds c' j' hz h' => ?_⟩
-  · rw [cm_bind_of (H₁ rounds hr.left (by omega))]
-    exact H₂ rounds hr.right hs
+  obtain ⟨ns₂, rfl, N₂, H₂, C₂⟩ := hf a k₁ c j h₂
+  obtain ⟨ns₁, rfl, N₁, H₁, C₁⟩ := hx (t := ns₂.length + t) k a k₁ h₁
+  refine ⟨ns₁ ++ ns₂, by simp [Nat.add_assoc], fun n hn => (List.mem_append.mp hn).elim (N₁ n) (N₂ n),
+    fun rounds hne hr hs => ?_, fun rounds c' j' hne hz h' => ?_⟩
+  · rw [cm_bind_of (H₁ rounds hne hr.left (by omega))]
+    exact H₂ rounds hne hr.right hs
   · obtain ⟨b, k₁', h₁', h₂'⟩ := cm_bind h'
-    obtain ⟨rfl, rfl, F₁⟩ := C₁ rounds b k₁' hz h₁'
-    obtain ⟨rfl, rfl, F₂⟩ := C₂ rounds c' j' hz h₂'
+    obtain ⟨rfl, rfl, F₁⟩ := C₁ rounds b k₁' hne hz h₁'
+    obtain ⟨rfl, rfl, F₂⟩ := C₂ rounds c' j' hne hz h₂'
     exact ⟨rfl, by simp [Nat.add_assoc], F₁.append F₂⟩
 
 theorem bind_nz {x : CM A} {f : A → CM B} (hx : Z t x) (hf : ∀ a, NZ (f a)) : Z t (x >>= f) := by
@@ -221,11 +230,11 @@ theorem bind_nz {x : CM A} {f : A → CM B} (hx : Z t x) (hf : ∀ a, NZ (f a)) 
   obtain ⟨a, k₁, h₁, h₂⟩ := cm_bind h
   obtain ⟨hj, H₂⟩ := hf a k₁ c j h₂
   subst hj
-  obtain ⟨ns, rfl, H₁, C₁⟩ := hx k a _ h₁
-  refine ⟨ns, rfl, fun rounds hr hs => by rw [cm_bind_of (H₁ rounds hr hs)]; exact H₂ _,
-    fun rounds c' j' hz h' => ?_⟩
+  obtain ⟨ns, rfl, N, H₁, C₁⟩ := hx k a _ h₁
+  refine ⟨ns, rfl, N, fun rounds hne hr hs => by rw [cm_bind_of (H₁ rounds hne hr hs)]; exact H₂ _,
+    fun rounds c' j' hne hz h' => ?_⟩
   obtain ⟨b, k₁', h₁', h₂'⟩ := cm_bind h'
-  obtain ⟨rfl, rfl, F⟩ := C₁ rounds b k₁' hz h₁'
+  obtain ⟨rfl, rfl, F⟩ := C₁ rounds b k₁' hne hz h₁'
   rw [H₂] at h₂'
   cases h₂'
   exact ⟨rfl, rfl, F⟩
@@ -233,7 +242,8 @@ theorem bind_nz {x : CM A} {f : A → CM B} (hx : Z t x) (hf : ∀ a, NZ (f a)) 
 theorem pure' {a : A} : Z t (Pure.pure a : CM A) := by
   intro k a' j h
   cases cm_pure h
-  exact ⟨[], rfl, fun _ _ _ => rfl, fun _ b j' _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
+  exact ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl,
+    fun _ b j' _ _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
 
 theorem throw' (e : String) : Z t (throw e : CM A) := by
   intro _ _ _ h
@@ -243,7 +253,8 @@ theorem liftE' {e : Except String A} : Z t (liftE e) := by
   intro k a j h
   obtain ⟨a₁, rfl, hr⟩ := liftE_ok h
   cases hr
-  exact ⟨[], rfl, fun _ _ _ => rfl, fun _ b j' _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
+  exact ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl,
+    fun _ b j' _ _ h' => by cases h'; exact ⟨rfl, rfl, FitsSz.nil⟩⟩
 
 theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → Z t x₁) (h₂ : ¬c → Z t x₂) :
     Z t (if c then x₁ else x₂) := by
@@ -262,9 +273,12 @@ theorem guardDrawn {err : String} {rest : CM A} (h : NZ rest) :
   simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hx
   obtain ⟨hj, H⟩ := h k a j hx
   subst j
-  refine ⟨[], rfl, fun rounds _ hs => ?_, fun rounds b j' _ h' => ?_⟩
+  refine ⟨[], rfl, (fun _ h => by simp at h), fun rounds hne _ hs => ?_, fun rounds b j' _ _ h' => ?_⟩
   · rw [guard_eq]
-    have hd : (Coins.ofRounds rounds).drawnAll k = true := by simp [Coins.ofRounds, hs]
+    have hd : (Coins.ofRounds rounds).drawnAll k = true := by
+      show (k == (rounds.filter (·.size ≠ 0)).size) = true
+      rw [filter_noEmpty hne, hs]
+      simp
     rw [hd]
     simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
     exact H _
@@ -280,20 +294,21 @@ end Z
 theorem coinVec_z {t : Nat} (n : Nat) : Z t (coinVec n) := by
   intro k v j h
   rcases coinVec_ok h with ⟨rfl, rfl, rfl⟩ | ⟨hn, hv, rfl⟩
-  · refine ⟨[], rfl, fun _ _ _ => rfl, fun rounds b j' _ h' => ?_⟩
+  · refine ⟨[], rfl, (fun _ h => by simp at h), fun _ _ _ _ => rfl, fun rounds b j' _ _ h' => ?_⟩
     rcases coinVec_ok h' with ⟨-, rfl, rfl⟩ | ⟨hn, -, -⟩
     · exact ⟨rfl, rfl, FitsSz.nil⟩
     · exact absurd rfl hn
   · cases hv
-    refine ⟨[n], rfl, fun rounds hr _ => coinVec_of hn ?_, fun rounds b j' hz h' => ?_⟩
+    refine ⟨[n], rfl, fun n' h => by rw [List.mem_singleton.mp h]; exact hn,
+      fun rounds hne hr _ => coinVec_of hn ?_, fun rounds b j' hne hz h' => ?_⟩
     · have := hr 0 (by simp)
       simp only [Nat.add_zero, List.getElem_cons_zero] at this
-      simp only [Coins.ofRounds]
+      simp only [Coins.ofRounds, filter_noEmpty hne]
       rw [this]
       simp
     · rcases coinVec_ok h' with ⟨hn', -, -⟩ | ⟨-, hb, rfl⟩
       · exact absurd hn' hn
-      · obtain ⟨hk, hsz⟩ := ofRounds_get? hb
+      · obtain ⟨hk, hsz⟩ := ofRounds_get? hne hb
         refine ⟨?_, rfl, fun i hi => ?_⟩
         · rw [hz.get hk, hsz]
         · have hi0 : i = 0 := by simp at hi; omega
@@ -514,32 +529,46 @@ theorem verifierRows_claims {sh : Shape} {rounds : Array (Array F128)} {extras :
   obtain ⟨j, hj⟩ := residualLins_run hp
   exact run_claims hj
 
+theorem noEmpty_zeroRounds {ns : List Nat} (hn : ∀ n ∈ ns, n ≠ 0) : NoEmpty (zeroRounds ns) := fun r hr => by
+  simp only [zeroRounds, List.mem_toArray, List.mem_map] at hr
+  obtain ⟨n, hn', rfl⟩ := hr
+  simpa using hn n hn'
+
+theorem sizes_filter_ne {rounds : Array (Array F128)} :
+    ∀ n ∈ (rounds.filter (·.size ≠ 0)).toList.map Array.size, n ≠ 0 := fun n hn => by
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hn
+  exact noEmpty_filter rounds r (Array.mem_toList_iff.mp hr)
+
 /-- **The rounds `verifierRows` returns at** (RecAlgebra.lean:824–829, 915–921): whenever `structureOf` does, there is
-one list `ns` of round sizes, those `run` draws at the zero coins, such that `verifierRows` returns at a record, extra
-claims and comb exactly when the record's rounds have the sizes `ns` and the extra claims are the statement's number. -/
+one list `ns` of round sizes, none of them 0, those `run` draws at the zero coins, such that `verifierRows` returns at a
+record, extra claims and comb exactly when the record's rounds of some coins have the sizes `ns` (`Coins.ofRounds`
+skips a round of none) and the extra claims are the statement's number. -/
 theorem verifierRows_schedule {sh : Shape} {S : GfS} (hS : structureOf sh = .ok S) :
-    ∃ ns : List Nat, ∀ (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128),
+    ∃ ns : List Nat, (∀ n ∈ ns, n ≠ 0) ∧ ∀ (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128),
       (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
-        rounds.toList.map Array.size = ns ∧ sh.claims = 2 + extras.size := by
+        (rounds.filter (·.size ≠ 0)).toList.map Array.size = ns ∧ sh.claims = 2 + extras.size := by
   have hS' := hS
   unfold structureOf at hS'
   cases hz : residualLins sh Coins.zeros (extrasLike sh) with
   | error e => rw [hz] at hS'; cases hS'
   | ok p =>
     obtain ⟨j, hj⟩ := residualLins_run hz
-    obtain ⟨ns, rfl, H, C⟩ := run_z (M := symbolic sh) sh (extrasLike sh) 0 p j hj
-    refine ⟨ns, fun rounds extras comb => ⟨fun ⟨x, hx⟩ => ?_, fun ⟨hr, hx⟩ => ?_⟩⟩
+    obtain ⟨ns, rfl, N, H, C⟩ := run_z (M := symbolic sh) sh (extrasLike sh) 0 p j hj
+    refine ⟨ns, N, fun rounds extras comb => ⟨fun ⟨x, hx⟩ => ?_, fun ⟨hr, hx⟩ => ?_⟩⟩
     · have hc := verifierRows_claims hx
       obtain ⟨-, p', hp'⟩ := verifierRows_ok_iff.mp ⟨x, hx⟩
+      rw [← ofRounds_filter] at hp'
       have hsz : extras.size = (extrasLike sh).size := by simp [extrasLike]; omega
       obtain ⟨p'', hp''⟩ := residualLins_sizes (sameSizes_zeroRounds rfl).symm hsz hp'
       obtain ⟨j', hj'⟩ := residualLins_run hp''
-      obtain ⟨-, rfl, hF⟩ := C _ _ j' (zero_zeroRounds _) hj'
-      exact ⟨eq_of_fitsSz hF (by simpa using run_e (M := symbolic sh) sh _ _ _ _ _ hj'), hc⟩
-    · have hns := residualLins_of_run (H (zeroRounds ns) (fun i hi => by simp [zeroRounds, hi])
-        (by simp [zeroRounds]))
+      have hneZ := noEmpty_zeroRounds (sizes_filter_ne (rounds := rounds))
+      obtain ⟨-, rfl, hF⟩ := C _ _ j' hneZ (zero_zeroRounds _) hj'
+      exact ⟨eq_of_fitsSz hF (by simpa using run_e (M := symbolic sh) sh _ _ _ _ _ hneZ hj'), hc⟩
+    · have hns := residualLins_of_run (H (zeroRounds ns) (noEmpty_zeroRounds N)
+        (fun i hi => by simp [zeroRounds, hi]) (by simp [zeroRounds]))
       have hsz : (extrasLike sh).size = extras.size := by simp [extrasLike]; omega
       obtain ⟨p', hp'⟩ := residualLins_sizes (sameSizes_zeroRounds hr) hsz hns
+      rw [ofRounds_filter] at hp'
       exact verifierRows_ok_iff.mpr ⟨⟨S, hS⟩, p', hp'⟩
 
 end Flock.RecAlgebra

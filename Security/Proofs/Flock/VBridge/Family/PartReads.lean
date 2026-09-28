@@ -133,7 +133,8 @@ theorem rowColOf_lt {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array 
   have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
     (hname _ p nm pt hj).trans (statements_name F.hstmts _ hj)
   have hchk : RecResiduals.check (F.Vs j).c = .ok () := (parse_facts (F.zs R ω t R₂ j).hc).recResiduals
-  obtain ⟨S, ns, nv, hpart, hn⟩ := FlockVBridge.OfVStar.check_part hchk (resParams_of_check hchk hnm) F.hsh
+  obtain ⟨S, ns, nv, hpart, hn⟩ :=
+    FlockVBridge.OfVStar.check_part hchk (resParams_of_check hchk hnm) F.hsh (F.hplain j)
   obtain ⟨-, hns, hnv⟩ := FlockVBridge.OfVStar.part_eq hst.1 hst.2 hpg hpart
   have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [hP, getElem!_pos gs p hpg]
   have hnsp : nsOf F.sh p = ns := by rw [nsOf, hgp, hns]

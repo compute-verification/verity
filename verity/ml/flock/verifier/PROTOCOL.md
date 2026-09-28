@@ -1240,6 +1240,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
     the structure;
+  - META `holo` (`RecResiduals.HOLO_KEY`: `true`, or absent for false; any other value refuses) says whether the parts
+    are a private circuit's (`rec_algebra.Shape.holo`: each comb operand also reads its `h`). The shape is at that
+    `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
+    holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
+    `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
+    carries it as `private_circuit`. The verifier refuses an inner shape with `holo` true until V*'s circuit writer
+    writes holo parts;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
@@ -1371,7 +1378,11 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
-  stage's message is read off a sample.
+  stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
+  `rec-opening-c<i>` is round `i` of `RecOpening.rounds` (each claim's ring switch, then Ligerito's rounds in
+  `ligRounds` order), and its ports are the `c<i>`, then `acc0`, `acc1`, then the claims. U4 does not name these yet
+  (`Registered.roundCommitment` recognises only `rec-c<i>` and `rec-top-L<l>`), so no drawn statement is yet held to
+  draw them in full.
 - **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are

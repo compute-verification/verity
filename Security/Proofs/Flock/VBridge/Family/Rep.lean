@@ -529,7 +529,7 @@ theorem hStruct_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hsome : F.HSomePart
   have hchk := (parse_facts (F.zs R ω [] R₂ j).hc).recResiduals
   have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
     (hname j p nm pt hj).trans (statements_name F.hstmts j hj)
-  exact F.hStruct_of_check hchk (resParams_of_check hchk hnm) F.hsh
+  exact F.hStruct_of_check hchk (resParams_of_check hchk hnm) F.hsh (F.hplain j)
 
 /-- **`HShape` at `repOf`**: the verifier rows at the coins (`HFit`) have S's `nv` elements, since the comb has 64
 (`combOf_size`, `verifierRows_v_size`), and `w` has S's `nw` (`wOf`). -/
@@ -579,7 +579,7 @@ theorem hResL_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.
   have hpar := resParams_of_check hchk hnm
   have hupv : ∀ p', 0 < (F.Vs (F.sess p')).c.upv := fun p' =>
     upv_pos (F.zs R ω t R₂ (F.sess p')).hc (F.Vs (F.sess p')).hscope
-  obtain ⟨S, ns, nv, hpart, -⟩ := FlockVBridge.OfVStar.check_part hchk hpar F.hsh
+  obtain ⟨S, ns, nv, hpart, -⟩ := FlockVBridge.OfVStar.check_part hchk hpar F.hsh (F.hplain _)
   obtain ⟨-, hns, hnv⟩ := FlockVBridge.OfVStar.part_eq hst.1 hst.2 hp hpart
   have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [hP, getElem!_pos gs p hp]
   have hnsp : nsOf F.sh p = ns := by rw [nsOf, hgp, hns]
@@ -589,8 +589,8 @@ theorem hResL_of {tf : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin F.
     show (F.rep₀ R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).w = _
     rw [hrep]
     rfl
-  refine ⟨hp, hupv p, hone R ω t R₂ τ o h r p hpP, hchk, unitLog_le (F.Vs (F.sess p)).hscope, _, _, _, hpar, F.hsh,
-    S, ns, nv, hpart, ?_, ?_, ?_⟩
+  refine ⟨hp, hupv p, hone R ω t R₂ τ o h r p hpP, hchk, F.hplain _, unitLog_le (F.Vs (F.sess p)).hscope, _, _, _,
+    hpar, F.hsh, S, ns, nv, hpart, ?_, ?_, ?_⟩
   · intro q hq hrd
     show RegBit (F.zs R ω t R₂ (F.sess p)) (F.un p r) 0 _ _
     rw [hW, ← hwI]
