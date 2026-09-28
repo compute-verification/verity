@@ -45,17 +45,24 @@ def word_check(row: Any) -> None:
         raise Stop(20)
 
 
-def commit_verdict(row: Any, rck: int, wall: int) -> None:
+def commit_verdict(row: Any, rck: int, wall: int) -> bool:
     """The Commit's decision by its one instrumented run (`commit/summary.json`, only-arm): there is no control arm or Match for `verdict
-    from-record` to grade."""
+    from-record` to grade.  True when the run's C2 replay was deferred to its sealed bundle (`--replay-deferred`): PENDING, and the row
+    writes no `config_record.json` until `row stage replay` decides it."""
     sm = R.load_json(f"{row.d}/commit/summary.json") or {}
-    ok = "PASS" if rck == 0 and sm.get("commit_pass") is True else "FAIL"
-    row.verdict("commit", ok, f"rc={rck} wall={wall}s config run: 1 instrumented run, commit_pass={sm.get('commit_pass')}")
+    bundles = ((R.load_json(f"{row.d}/commit/verdict.json") or {}).get("replay_deferred") or {}).get("bundles") or []
+    pending = rck == 0 and sm.get("commit_pass") is None and len(bundles) == 1
+    ok = "PASS" if rck == 0 and sm.get("commit_pass") is True else "PENDING" if pending else "FAIL"
+    tail = f", replay bundle {bundles[0]['path']} (manifest sha256 {bundles[0]['manifest_sha256'][:16]})" if pending else ""
+    row.verdict("commit", ok, f"rc={rck} wall={wall}s config run: 1 instrumented run, commit_pass={sm.get('commit_pass')}{tail}")
     row.tl("stage.commit", "end", ("ok", ok), ("wall_s", wall))
+    if pending:
+        return True
     if ok != "PASS":
         row.log("COMMIT FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
         raise Stop(12)
+    return False
 
 
 def config_record(row: Any) -> dict[str, Any]:

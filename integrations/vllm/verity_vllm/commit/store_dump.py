@@ -1,0 +1,266 @@
+"""The committed store of a GPU-tree committer on disk, and back as a CPU store that opens and verifies like the committer.
+
+`dump(com, rc, d)` writes what the committer's range openings read (`native_ranges.NativeRangeOpenings`): per packed step its metas, its
+retained bytes (the byte ranges the host copy holds) and its tree levels, plus the run commitment (step roots, leaf counts, run root).
+`load(d)` returns `(store, run)`: `store` is a `NativeRangeOpenings` over the dumped state with the committer's own leaf, layout and
+context rules, so an `OpenedReader(store, run)` recomputes every leaf it returns and folds it to the step root and the run root of record,
+exactly as the committer does.  A dumped byte that differs from the committed one does not verify.  Only packed GPU-tree steps with
+vllm-v1 leaves and no padding steps are dumped; any other store is refused by name.
+
+    store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, gpu_tree_src, run_root, steps: [...]}
+    raw/s<step>.bin             the retained bytes of the step, the ranges `steps[i].ranges` ([lo, hi) of the step stream) back to back
+    levels/s<step>.bin          the step tree's levels, leaves first, 32 bytes per node (`steps[i].levels` = the widths)
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import mmap
+import os
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from verity_vllm.commit import hiding
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
+from verity_vllm.commit.native_ranges import NativeRangeOpenings
+
+SCHEMA = "verity-vllm/committed-store/v1"
+NODE = 32
+#: bytes written between flushes: the dirty pages of a dump are charged to the writer's memory cgroup, beside a pinned store
+FLUSH = 1 << 30
+
+
+def _ranges(blk: Any) -> list[tuple[int, int, Any]]:
+    """The byte ranges of a step stream a retained block holds: (lo, hi, uint8 view of hi - lo bytes)."""
+    if blk is None:
+        return []
+    if hasattr(blk, "wins"):                                    # _HostWindows: window k covers [k W, k W + n)
+        return [(k * blk.W, k * blk.W + n, hv[:n]) for k, (hv, n) in sorted(blk.wins.items())]
+    if hasattr(blk, "ranges"):                                  # _HostRanges
+        return [(lo, hi, hv) for lo, hi, hv in blk.ranges]
+    return [(0, int(blk.numel()), blk)]
+
+
+def _as_bytes(t: Any) -> memoryview:
+    if getattr(t, "is_cuda", False):
+        t = t.cpu()
+    a = t.numpy() if hasattr(t, "numpy") else t
+    return memoryview(a.reshape(-1) if hasattr(a, "reshape") else a).cast("B")
+
+
+def _refusal(com: Any) -> str | None:
+    if getattr(com, "hiding", None) is not None:
+        return f"{com.leaf_scheme} leaves (salted): not dumped"
+    if getattr(com, "_padding", None):
+        return "padding steps: not dumped"
+    if getattr(com, "_streams", None):
+        return "host-path step streams: not dumped (GPU-tree committers only)"
+    missing = sorted(s for s in com._layouts if s not in com._gpu_blocks)
+    if missing:
+        return f"steps {missing[:8]} are not packed GPU-tree blocks: not dumped"
+    return None
+
+
+def write_file(p: Path, chunks: Iterable[memoryview]) -> str:
+    """Writes ``chunks`` to ``p`` back to back, flushed and dropped from the page cache every `FLUSH` bytes; the sha256 of what was
+    written."""
+    h = hashlib.sha256()
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        dirty = 0
+        for mv in chunks:
+            h.update(mv)
+            dirty += len(mv)
+            while mv:
+                mv = mv[os.write(fd, mv):]
+            if dirty >= FLUSH:
+                os.fdatasync(fd)
+                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+                dirty = 0
+        os.fdatasync(fd)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    finally:
+        os.close(fd)
+    return h.hexdigest()
+
+
+def _dump_step(com: Any, sc: Any, d: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    s = int(sc.step)
+    blk, used = com._gpu_blocks[s]
+    rs = _ranges(blk)
+    lvs = list(com._gpu_levels[s])
+    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
+               f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", (_as_bytes(lv.contiguous()) for lv in lvs))}
+    return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
+             "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [int(lv.shape[0]) for lv in lvs],
+             "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
+                       for m in com._layouts[s]]}, digests)
+
+
+def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None) -> dict[str, Any]:
+    """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`
+    document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`)."""
+    why = _refusal(com)
+    if why:
+        raise ValueError(f"committed store not dumpable: {why}")
+    d = Path(d)
+    (d / "raw").mkdir(parents=True, exist_ok=True)
+    (d / "levels").mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(max(1, threads)) as pool:
+        done = list(pool.map(lambda sc: _dump_step(com, sc, d), rc.steps))
+    steps = [e for e, _ in done]
+    if digests is not None:
+        for _, dg in done:
+            digests.update(dg)
+    doc = {"schema": SCHEMA, "chunk": int(com.chunk), "program_digest": com.program_digest.hex(), "geo_digest": com._geo_digest.hex(),
+           "run_id": com.run_id, "layout_v2": bool(getattr(com, "layout_v2", False)), "gpu_tree_src": int(com.GPU_TREE_SRC),
+           "run_root": rc.run_root.hex(), "steps": steps}
+    (d / "store.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    return doc
+
+
+class _Seg:
+    """A slice of retained bytes, in the shape `open_range` reads (`.numpy().tobytes()`)."""
+
+    def __init__(self, b: bytes) -> None:
+        self._b = b
+
+    def numpy(self) -> _Seg:
+        return self
+
+    def tobytes(self) -> bytes:
+        return self._b
+
+
+class _Block:
+    """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers."""
+
+    is_cuda = False
+
+    def __init__(self, buf: memoryview, ranges: list[list[int]], used: int, chunk: int) -> None:
+        self.buf, self.used = buf, int(used)
+        self.n = -(-self.used // chunk) * chunk
+        self.ranges, off = [], 0
+        for lo, hi in ranges:
+            self.ranges.append((int(lo), int(hi), off))
+            off += int(hi) - int(lo)
+
+    def numel(self) -> int:
+        return self.n
+
+    def _cover(self, lo: int, hi: int) -> list[tuple[int, int, int]] | None:
+        out, pos = [], lo
+        for rlo, rhi, off in self.ranges:
+            if rhi <= pos:
+                continue
+            if rlo > pos:
+                return None
+            out.append((rlo, rhi, off))
+            pos = rhi
+            if pos >= hi:
+                return out
+        return None
+
+    def holds(self, lo: int, hi: int) -> bool:
+        lo, hi = int(lo), int(min(hi, self.n))
+        return hi <= lo or self._cover(lo, hi) is not None
+
+    def __getitem__(self, sl: slice) -> _Seg:
+        lo, hi = int(sl.start or 0), int(min(sl.stop if sl.stop is not None else self.n, self.n))
+        if hi <= lo:
+            return _Seg(b"")
+        cov = self._cover(lo, hi)
+        if cov is None:
+            raise KeyError(f"bytes [{lo}, {hi}) of the step stream are not in the dumped store")
+        return _Seg(b"".join(bytes(self.buf[off + max(lo, rlo) - rlo:off + min(hi, rhi) - rlo]) for rlo, rhi, off in cov))
+
+
+class _Level:
+    """One tree level of a dumped step: `len()` nodes, `lv[i]` the i-th 32-byte node."""
+
+    def __init__(self, buf: memoryview, off: int, width: int) -> None:
+        self.buf, self.off, self.width = buf, off, width
+
+    def __len__(self) -> int:
+        return self.width
+
+    def __getitem__(self, i: int) -> bytes:
+        if not 0 <= i < self.width:
+            raise IndexError(i)
+        return bytes(self.buf[self.off + i * NODE:self.off + (i + 1) * NODE])
+
+
+@dataclass
+class DumpedStep:
+    step: int
+    root: bytes
+    n_leaves: int
+    n_bytes: int
+    n_tensors: int
+
+
+@dataclass
+class DumpedRun:
+    run_root: bytes
+    steps: list[DumpedStep]
+
+
+class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
+    """The committer's openings over a dumped store (`load`)."""
+
+    name = "dumped-store"
+    hiding = None
+    retain = "host"
+    layout_digest = staticmethod(NativeHostCommitter.layout_digest)
+    _block_holds = staticmethod(NativeHostCommitter._block_holds)
+    _ctx_digest = NativeHostCommitter._ctx_digest
+    _gpu_layout = NativeHostCommitter._gpu_layout
+    _padding_leaf = NativeHostCommitter._padding_leaf
+
+    def __init__(self, doc: dict[str, Any], d: Path) -> None:
+        self.chunk = int(doc["chunk"])
+        self.program_digest = bytes.fromhex(doc["program_digest"])
+        self._geo_digest = bytes.fromhex(doc["geo_digest"])
+        self.run_id = str(doc["run_id"])
+        self.layout_v2 = bool(doc["layout_v2"])
+        self.GPU_TREE_SRC = int(doc["gpu_tree_src"])
+        self._salts: dict[int, bytes] = {}
+        self._padding: dict[int, Any] = {}
+        self._streams: dict[int, Any] = {}
+        self._levels: dict[int, Any] = {}
+        self._layouts: dict[int, list[TensorMeta]] = {}
+        self._gpu_blocks: dict[int, tuple[_Block, int]] = {}
+        self._gpu_levels: dict[int, list[_Level]] = {}
+        self._maps: list[mmap.mmap] = []
+        for st in doc["steps"]:
+            s = int(st["step"])
+            self._layouts[s] = [TensorMeta(o, n, dt, tuple(sh), nb, c, fl, nl, stream_off=so) for o, n, dt, sh, nb, c, fl, nl, so in st["metas"]]
+            self._gpu_blocks[s] = (_Block(self._map(d / "raw" / f"s{s}.bin"), st["ranges"], st["used"], self.chunk), int(st["used"]))
+            lv_buf, off, lvs = self._map(d / "levels" / f"s{s}.bin"), 0, []
+            for w in st["levels"]:
+                lvs.append(_Level(lv_buf, off, int(w)))
+                off += int(w) * NODE
+            self._gpu_levels[s] = lvs
+
+    def _map(self, p: Path) -> memoryview:
+        if p.stat().st_size == 0:
+            return memoryview(b"")
+        with open(p, "rb") as f:
+            m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        self._maps.append(m)
+        return memoryview(m)
+
+
+def load(d: str | os.PathLike) -> tuple[DumpedStore, DumpedRun]:
+    d = Path(d)
+    doc = json.loads((d / "store.json").read_text())
+    if doc.get("schema") != SCHEMA:
+        raise ValueError(f"{d / 'store.json'}: schema {doc.get('schema')!r} is not {SCHEMA}")
+    run = DumpedRun(bytes.fromhex(doc["run_root"]), [DumpedStep(int(s["step"]), bytes.fromhex(s["root"]), int(s["n_leaves"]), int(s["n_bytes"]),
+                                                                int(s["n_tensors"])) for s in doc["steps"]])
+    if [s.step for s in run.steps] != list(range(len(run.steps))):
+        raise ValueError(f"{d / 'store.json'}: steps are not numbered densely from 0")
+    return DumpedStore(doc, d), run
