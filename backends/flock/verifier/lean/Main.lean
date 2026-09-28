@@ -297,44 +297,78 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
-/-- `draw --population N (--k K | --p NUM/DEN) [--stream HEX]`: the unit draw (§7.3), from the operating system's randomness,
-or from the given bytes (a test). Prints `DRAW {…}`, the object the verifier sends in the clear. -/
+/-- `--program P --partition Q --stratified K`: the stratified law the verifier derives from its own program and partition
+object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
+def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
+  let some k := argOf args "--stratified" | return .ok none
+  let some k := k.toNat? | return .error "--stratified K: K is a natural number"
+  let program ← match ← programInput args with
+    | .ok (some p) => pure p
+    | .ok none => return .error "--stratified needs --program (the verifier derives the strata itself)"
+    | .error e => return .error e
+  let obj ← match ← partitionInput args with
+    | .ok (some o) => pure o
+    | .ok none => return .error "--stratified needs --partition"
+    | .error e => return .error e
+  return (HmRow.stratifiedLaw obj program k).map some
+
+/-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q --stratified K) [--stream HEX | --stream-file F]`:
+the unit draw (§7.3), from the operating system's randomness (a stratified draw: one stream per stratum), or from the
+given bytes (a test; a stratified draw's streams are its consecutive segments). The stratified law's strata are the verifier's own,
+derived from its program and partition object. Prints `DRAW {…}`, the object the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
-  let some pop := (argOf args "--population").bind String.toNat? | IO.eprintln "draw: --population N"; return 2
-  let law ← match argOf args "--k", argOf args "--p" with
-    | some k, none => match k.toNat? with
-      | some k => if k ≤ pop then pure (Draw.Law.subset k) else IO.eprintln "draw: k > population"; return 2
-      | none => IO.eprintln "draw: --k K"; return 2
-    | none, some p => match p.splitOn "/" with
-      | [a, b] => match a.toNat?, b.toNat? with
-        | some a, some b => if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
-        | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
-      | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
-    | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
-  let d ← match argOf args "--stream" with
+  let (law, pop) ← match ← stratifiedInput args with
+    | .error e => IO.eprintln s!"draw: {e}"; return 2
+    | .ok (some lp) => pure lp
+    | .ok none =>
+      let some pop := (argOf args "--population").bind String.toNat?
+        | IO.eprintln "draw: --population N, or --program P --partition Q --stratified K"; return 2
+      match argOf args "--k", argOf args "--p" with
+      | some k, none => match k.toNat? with
+        | some k => if k ≤ pop then pure (Draw.Law.subset k, pop) else IO.eprintln "draw: k > population"; return 2
+        | none => IO.eprintln "draw: --k K"; return 2
+      | none, some p => match p.splitOn "/" with
+        | [a, b] => match a.toNat?, b.toNat? with
+          | some a, some b =>
+            if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b, pop) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
+          | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+        | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
+      | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
+  let stream ← match argOf args "--stream", argOf args "--stream-file" with
+    | none, none => pure none
+    | some hex, none => match unhex hex with | .ok b => pure (some b) | .error e => IO.eprintln s!"draw: {e}"; return 2
+    | none, some f => pure (some (← IO.FS.readBinFile f))
+    | some _, some _ => IO.eprintln "draw: at most one of --stream, --stream-file"; return 2
+  let d ← match stream with
     | none => Draw.drawOS law pop
-    | some hex =>
-      let src ← match unhex hex with | .ok b => pure b | .error e => IO.eprintln s!"draw: {e}"; return 2
-      let r := match law with
-        | .subset k => Draw.subset k pop src
-        | .bernoulli a b => Draw.bernoulli a b pop src
-      match r with
-      | some units => pure { law, population := pop, units : Draw.UnitDraw }
+    | some src =>
+      match Draw.drawOn law pop src with
+      | some d => pure d
       | none => IO.eprintln "draw: the stream ran out"; return 1
   IO.println s!"DRAW {d.toJson.compress}"
   return 0
 
-/-- `draw-test FILE`: U1–U3 (§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one
-`DRAWCHECK {"ok", "why"}` line per case. -/
-def drawTest (path : String) : IO UInt32 := do
+/-- `draw-test FILE [--program P --partition Q --stratified K]`: U1–U3 (§7.3) on each case `{"record", "statement",
+"instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With the stratified law's flags, the
+statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and `population`). -/
+def drawTest (path : String) (args : List String) : IO UInt32 := do
   let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
+  let own ← match ← stratifiedInput args with
+    | .ok o => pure o
+    | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   for c in cases do
     let side := fun (k : String) => match c.getObjVal? k with
       | .ok .null => none
       | .ok v => some v
       | .error _ => none
     let n := (c.getObjValAs? Nat "instances").toOption.getD 0
-    let (ok, why) := match Draw.check (side "record") (side "statement") n with
+    let r : V Unit := do
+      Draw.check (side "record") (side "statement") n
+      if let (some (law, pop), some s) := (own, side "statement") then
+        let d ← Draw.UnitDraw.ofJson s
+        if d.population != pop then throw s!"U2: the draw's population {d.population} is not the verifier's {pop}"
+        if d.law != law then throw "U2: the draw's law is not the verifier's own (its program and query)"
+    let (ok, why) := match r with
       | .ok () => (true, "")
       | .error e => (false, e)
     IO.println s!"DRAWCHECK {(Lean.Json.mkObj [("ok", Lean.Json.bool ok), ("why", Lean.Json.str why)]).compress}"
@@ -526,7 +560,7 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "draw" :: rest => drawCmd rest
-  | ["draw-test", path] => drawTest path
+  | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

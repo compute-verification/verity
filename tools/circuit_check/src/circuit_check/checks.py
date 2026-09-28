@@ -280,6 +280,25 @@ def _piece_status(pid: str, opts: Options, pins: dict, memo: dict) -> None:
     whole_lowering(prim, params, arrays, ref, opts, Findings(), pins, memo)
 
 
+def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
+    """The top-p keep word through ``verity_flock.topp_word``: a composition of pieces too large to build as one circuit, every
+    piece instance evaluated on the correspondence vectors."""
+    from verity_flock import topp_word as TW
+
+    rows = [i for i, r in enumerate(ref) if r is not None]
+    if not rows:
+        return {"lowered": True, "via": "c-flock:topp_word", "compared": 0}
+    fin = flat(arrays)[rows]
+    V = fin.shape[1] - 2
+    keep, _E = TW.evaluate(fin[:, :V], fin[:, V], fin[:, V + 1])
+    got = [int.from_bytes(np.packbits(k, bitorder="little").tobytes(), "little") for k in keep]
+    bad = [(i, g, ref[i][0]) for i, g in zip(rows, got) if g != ref[i][0]]
+    if bad:
+        F.fail("lowering", "lowering-mismatch", t.id, f"[topp_word]: {len(bad)} of {len(rows)} vectors", via="c-flock:topp_word",
+               examples=[{"instance": i, "lowering": hex(g), "reference": hex(r)} for i, g, r in bad[:_EXAMPLES]])
+    return {"lowered": True, "via": "c-flock:topp_word", "compared": len(rows), "mismatches": len(bad)}
+
+
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
     """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
@@ -295,6 +314,8 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if isinstance(t, PrimitiveDefinition):
         if not t.params:
             return {"lowered": False, "reason": "a constant: circuit structure, no gates"}
+        if t.id.startswith("TopPMaskWordx") and t.id not in IL.PIECES:
+            return _topp_word(t, arrays, ref, F)
         if t.id not in IL.PIECES:
             return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
     elif t.gates > opts.lower_max_gates:
