@@ -486,6 +486,9 @@
   "NvLogf_v3": {
    "and": 43280
   },
+  "PousModSquare_v1{W=128,C0=21065}": {
+   "and": 10601
+  },
   "PouwBf16Neg_v2": {
    "and": 0
   },
