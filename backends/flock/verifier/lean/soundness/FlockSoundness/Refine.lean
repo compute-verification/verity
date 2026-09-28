@@ -8,3 +8,4 @@ import FlockSoundness.Refine.Arith
 import FlockSoundness.Refine.Zerocheck
 import FlockSoundness.Refine.Realizes
 import FlockSoundness.Refine.Lincheck
+import FlockSoundness.Refine.Opening

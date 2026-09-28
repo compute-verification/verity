@@ -48,6 +48,20 @@ structure ClaimRel (m : ℕ) (c : Flock.Claim) (c' : Model.Claim 𝔽 m) : Prop 
   x_size : c.x.size = m - 6
   x : ∀ i, c'.x i = fOf c.x[i.val]!
 
+/-- **The ring switches** (PROTOCOL.md §12.2): one `ŝ` of 128 words per claim, in claim order (O3). -/
+def opMsgs (n : ℕ) (rs : Array (Array F128)) : List Msg :=
+  (List.range n).map fun k => ⟨Fin 128 → 𝔽, vecOf 128 rs[k]!⟩
+
+/-- The executable's opening output is the model's (§12.5): the batched value `T`, and the batched basis `b`, which
+the executable keeps as each switched claim's batching coin, ring-switch coins `r''` and suffix point `x[1 …]`. -/
+structure OpenRel (m n : ℕ) (T : F128) (sws : Array Switched) (op : Model.OpenOut 𝔽) : Prop where
+  T : op.T = fOf T
+  size : sws.size = n
+  rpp_size : ∀ k < n, (sws[k]!).rpp.size = 7
+  z_size : ∀ k < n, (sws[k]!).z.size = m - 7
+  b : ∀ y, op.b y = ∑ k : Fin n, fOf (sws[k.val]!).gamma *
+    Model.phi execArith (vecOf 7 (sws[k.val]!).rpp) (Model.eqAt (vecOf (m - 7) (sws[k.val]!).z) y)
+
 /-- The executable's zerocheck output is the model's (§9.2): the skip point, the residual challenges, the zerocheck
 vector and the three claimed values. -/
 structure ZcRel (m : ℕ) (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) : Prop where
