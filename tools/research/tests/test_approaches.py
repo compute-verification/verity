@@ -60,10 +60,26 @@ def test_claim_writes_the_record_and_its_labels_through_to_the_remote(env):
     assert A.exists(elsewhere, NAME) and not A.exists(elsewhere, OTHER)
 
 
-def test_a_claim_needs_a_visible_remote(env, tmp_path, monkeypatch):
-    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
-    with pytest.raises(A.Refused, match="a claim nobody else can see"):
+def test_without_a_remote_the_claim_is_a_pending_file_the_steward_records(env, tmp_path, monkeypatch, capsys):
+    root = env / "notes"
+    with pytest.raises(A.NoRemote):
         A.claim(LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml"), NAME, "pous-mvp", **NEW)
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    assert notes.main(["claim", NAME, "--lane", "pous-mvp", "--title", NEW["title"], "--hypothesis", NEW["hypothesis"], "--type",
+                       "scheme", "--cite", "verity#166", "--root", str(root), "--store", str(tmp_path / "s")]) == 4
+    assert "PENDING: no usable remote" in capsys.readouterr().err
+    [p] = (root / "lanes/pous-mvp").glob("*-claim-pous--band-d12.md")
+    assert A.read_pending(p)["approach"] == NAME and A.read_pending(p)["cites"] == "verity#166"
+    assert notes.main(["claim", "pous/other", "--lane", "pous-ec", "--root", str(root), "--store", str(tmp_path / "s")]) == 4
+    done: list[str] = []
+    now = dt.datetime(2026, 9, 28, 6, 0, tzinfo=dt.timezone.utc)
+    lines = A.import_pending(store(env), root, now, done)
+    assert lines[0].startswith("06:00Z CLAIM-REFUSED lanes/pous-ec/") and "refused: pous/other is new" in lines[0]
+    assert lines[1].startswith("06:00Z CLAIM lanes/pous-mvp/") and "claimed pous/band-d12 for pous-mvp" in lines[1]
+    assert list((root / "lanes/pous-ec").glob("*-handoff-steward-claim.md"))
+    a = A.fold(NAME, A.current_labels(store(env), A.record_id(NAME)))
+    assert (a.status, a.owner, a.cites) == ("live", "pous-mvp", ["verity#166"])
+    assert A.import_pending(store(env), root, now, done) == []        # recorded once
 
 
 def test_a_new_name_needs_title_hypothesis_and_type(env):
@@ -92,6 +108,14 @@ def test_killed_needs_a_reason_and_reopening_needs_why(env):
     assert [(h["status"], h["owner"], h["reason"]) for h in a.history] == [
         ("live", "pous-mvp", None), ("killed", "pous-mvp", "window attack beats it at 128 KB"),
         ("live", "pous-ec", "five layers instead of four")]
+
+
+def test_merged_names_its_evidence(env):
+    st = store(env)
+    A.claim(st, NAME, "pous-mvp", **NEW)
+    with pytest.raises(A.Refused, match="merged needs evidence"):
+        A.set_status(st, NAME, "merged", "pous-mvp", reason="landed")
+    A.set_status(st, NAME, "merged", "pous-mvp", reason="landed", cites=["verity#166"])
 
 
 def test_a_parked_approach_can_be_claimed_as_it_is(env):

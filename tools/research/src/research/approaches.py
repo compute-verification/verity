@@ -24,9 +24,11 @@ and adopted (landed in main, chosen, or an attack's finding accepted and acted o
 The state is a fold over the labels in ts order, one change per (ts, by): the newest value of each key wins, `cites` accumulate,
 and a change that makes a live approach live under another lane without a `reason` is ignored (the loser of a claim race; `check`
 warns about it).  Every command refuses (exit 2, nothing written) what the fold would reject: a missing field, a non-live status
-without a reason, a `superseded_by` / `attacks` that names no approach, an evidence token of no known form, a field over
-`MAX_FIELD` characters or with a line break.  Claims and changes go through to the remote at once (a claim nobody can see is not a
-claim): `claim` refuses without a usable remote, and after writing re-reads the remote, exiting 3 when another claim landed first.
+without a reason, a merged one without evidence, a `superseded_by` / `attacks` that names no approach, an evidence token of no
+known form, a field over `MAX_FIELD` characters or with a line break.  Claims and changes go through to the remote at once (a
+claim nobody can see is not a claim), and `claim` re-reads the remote after writing, exiting 3 when another claim landed first.
+Without a usable remote, `claim` writes a pending claim file into the lane's own folder (`lanes/<lane>/<stamp>-claim-….md`, exit
+4) and the steward's rule records it at its next pass, handing a refusal back to the lane.
 
 The public view is one generated file per campaign in the notes, `campaigns/<c>/APPROACHES.md`: `render` writes it (the steward's
 `[approaches]` rule, every `every_min`), and the campaign's `BRIEF.md` front matter `registry: full | titles` says what it shows:
@@ -78,6 +80,10 @@ CLAIM_SETTLE_S = 2.0
 
 class Refused(Exception):
     """A write the registry's rules reject; nothing was written."""
+
+
+class NoRemote(Exception):
+    """No usable remote: a claim nobody else can see is not a claim (the CLI falls back to a pending claim file)."""
 
 
 @dataclass
@@ -191,6 +197,8 @@ def problems(a: Approach, known=lambda name: True) -> list[str]:
         out.append(f"owner {a.owner!r} is not a lane name")
     if a.status == SUPERSEDED and not a.superseded_by:
         out.append("superseded needs superseded_by")
+    if a.status == MERGED and not a.cites:
+        out.append("merged needs evidence: cite the PR, commit, note or artifact that shows it")
     if a.type == ATTACK and not a.attacks:
         out.append("an attack needs attacks (its target)")
     if a.attacks and a.type != ATTACK:
@@ -287,12 +295,65 @@ def _write(store: LocalStore, name: str, labels: list[Label], change: dict[str, 
     return after
 
 
+def pending_claim(root: Path, name: str, lane: str, fields: dict[str, object], why: str) -> Path:
+    """The folder fallback: without a usable remote, the claim goes into the lane's own folder as `<stamp>-claim-….md`, which
+    the steward's rule records in the store at its next pass (a pending claim is not a claim until then)."""
+    parse_name(name)
+    if not LANE_RE.match(lane or ""):
+        raise Refused(f"{lane!r} is not a lane name")
+    for k, v in fields.items():
+        if isinstance(v, str) and (len(v) > MAX_FIELD or "\n" in v):
+            raise Refused(f"{k} must be one line of at most {MAX_FIELD} characters")
+    bad = [c for c in fields.get("cites") or [] if not EVIDENCE_RE.match(str(c))]
+    if bad:
+        raise Refused(f"evidence {bad[0]!r} is of no known form")
+    now = dt.datetime.now(dt.timezone.utc)
+    d = root / "lanes" / lane
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{now:%Y%m%dT%H%M%SZ}-claim-{name.replace('/', '--')}.md"
+    front = {"kind": "claim", "approach": name, "lane": lane, "created": f"{now:%Y-%m-%dT%H:%M:%SZ}",
+             **{k: (" ".join(v) if isinstance(v, list) else v) for k, v in fields.items() if v}}
+    p.write_text("---\n" + "".join(f"{k}: {v}\n" for k, v in front.items()) + "---\n\n"
+                 f"Pending claim of `{name}` by `{lane}`: `research notes claim` found no usable remote ({why}). The steward records "
+                 f"it at its next pass; until `research notes approaches` shows it, it is not a claim.\n")
+    return p
+
+
+def read_pending(p: Path) -> dict[str, str]:
+    text = p.read_text(errors="replace")
+    end = text.find("\n---\n", 4)
+    if not text.startswith("---\n") or end < 0:
+        return {}
+    return {k.strip(): v.strip() for k, _, v in (line.partition(":") for line in text[4:end].splitlines()) if k.strip()}
+
+
+def import_pending(store: LocalStore, root: Path, now: dt.datetime, done: list[str]) -> list[str]:
+    """Record every pending claim file not yet in `done` (the steward's memory); one line each, and a handoff to a refused lane."""
+    lines = []
+    for p in sorted((root / "lanes").glob("*/*Z-claim-*--*.md")):
+        rel = str(p.relative_to(root))
+        if rel in done:
+            continue
+        done.append(rel)
+        f = read_pending(p)
+        try:
+            rc, line = claim(store, f.get("approach", ""), f.get("lane", ""), title=f.get("title"), hypothesis=f.get("hypothesis"),
+                             type_=f.get("type"), attacks=f.get("attacks"), cites=(f.get("cites") or "").split(), reopen=f.get("reopen"))
+        except Refused as e:
+            rc, line = 2, f"refused: {e}"
+        lines.append(f"{now:%H:%MZ} {'CLAIM' if rc == 0 else 'CLAIM-REFUSED'} {rel}: {line}")
+        if rc != 0 and LANE_RE.match(f.get("lane", "")):
+            h = root / "lanes" / f["lane"] / f"{now:%Y%m%dT%H%MZ}-handoff-steward-claim.md"
+            h.write_text(f"---\nlane: {f['lane']}\nkind: handoff\nfrom: steward\ncreated: {now:%Y-%m-%dT%H:%MZ}\n---\n\n"
+                         f"# your pending claim of {f.get('approach')} was not recorded: {line}\n\nFrom `{rel}`.\n")
+    return lines
+
+
 def claim(store: LocalStore, name: str, lane: str, *, title: str | None = None, hypothesis: str | None = None,
           type_: str | None = None, attacks: str | None = None, cites: list[str] = (), reopen: str | None = None) -> tuple[int, str]:
     """(exit code, one line).  0 claimed (or already yours), 2 refused, 3 lost a race to another claim."""
     if store.remote is None or not store.write_through:
-        raise Refused("no usable remote with write-through (" + (getattr(store, "remote_error", None) or "write-through off")
-                      + "): a claim nobody else can see is not a claim")
+        raise NoRemote("no usable remote with write-through (" + (getattr(store, "remote_error", None) or "write-through off") + ")")
     art = record_id(name)
     labels = current_labels(store, art)
     cur = fold(name, labels) if labels else None
@@ -455,10 +516,12 @@ def steward_lines(root: Path, now: dt.datetime, state: dict, config: Path | None
         return []
     state["approaches_at"] = now.timestamp()
     store = LocalStore(Path(str(conf["store"])).expanduser() if conf.get("store") else None)
+    lines = []
     if store.remote is not None:
         store.refresh()
+        lines += import_pending(store, root, now, state.setdefault("approach_claims", []))
     changed = render(store, root)
-    return [f"{now:%H:%MZ} RENDERED {p.relative_to(root)}" for p in changed]
+    return lines + [f"{now:%H:%MZ} RENDERED {p.relative_to(root)}" for p in changed]
 
 
 # ---- CLI -------------------------------------------------------------------------------------------------------------------------
@@ -513,8 +576,15 @@ def main(argv: list[str], default_root: Path) -> int:
     root = ns.root or default_root
     try:
         if cmd == "claim":
-            rc, line = claim(LocalStore(ns.store), ns.name, ns.lane, title=ns.title, hypothesis=ns.hypothesis, type_=ns.type,
-                             attacks=ns.attacks, cites=ns.cite, reopen=ns.reopen)
+            try:
+                rc, line = claim(LocalStore(ns.store), ns.name, ns.lane, title=ns.title, hypothesis=ns.hypothesis, type_=ns.type,
+                                 attacks=ns.attacks, cites=ns.cite, reopen=ns.reopen)
+            except NoRemote as e:
+                p = pending_claim(root, ns.name, ns.lane, {"type": ns.type, "title": ns.title, "hypothesis": ns.hypothesis,
+                                                           "attacks": ns.attacks, "reopen": ns.reopen, "cites": ns.cite}, str(e))
+                print(f"PENDING: {e}; wrote {p} for the steward to record at its next pass (sync your lane folder). It is not a "
+                      f"claim until `research notes approaches --refresh` shows it", file=sys.stderr)
+                return 4
             print(line, file=sys.stdout if rc == 0 else sys.stderr)
             if rc == 0 and ns.title:
                 st = LocalStore(ns.store)
