@@ -322,7 +322,33 @@ def _cgroup_cpu() -> dict[str, int]:
     return {k: int(v) for k, v in zip(rows[::2], rows[1::2]) if k in ("nr_periods", "nr_throttled", "throttled_usec")}
 
 
-def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple[Path, int, int] | None = None) -> dict[str, Any]:
+def pass_matches_reference(c, decoded, segs, blks, salt: bytes, workers: int) -> dict[str, Any]:
+    """Sampled blocks of the timed pass's own output (the kernels that were timed) against the reference's decode of them:
+    blocks 0, 1, window and window + 1 of the first segment, the last block of every fourth segment, and the pass's last."""
+    b = SCHEME[0].geometry.blocks_per_segment
+    w = SCHEME[0].window
+    n = len(blks)
+    picks = sorted({0, 1, min(w, n - 1), min(w + 1, n - 1), n - 1, *(min(k * b + b - 1, n - 1) for k in range(0, -(-n // b), 4))})
+    jobs = []
+    for k in picks:
+        s, i = int(segs[k]), int(blks[k])
+        rows = c[s * b + max(0, i - w):s * b + i + 1].cpu().numpy()
+        jobs.append((SCHEME[0].name, salt, s, i, [bytes(r) for r in rows], max(0, i - w)))
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        ref = list(pool.map(_reference_window, jobs))
+    got = decoded[picks].cpu().numpy()
+    same = [got[j].tobytes() == ref[j] for j in range(len(picks))]
+    return {"blocks": picks, "equal": same, "passed": all(same)}
+
+
+def _reference_window(job) -> bytes:
+    name, salt, s, i, rows, first = job
+    blocks = [b""] * first + rows
+    return _reference_block((name, salt, s, i, blocks))
+
+
+def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple[Path, int, int] | None = None,
+              workers: int = 12) -> dict[str, Any]:
     """One model pass per repetition: decode every tile's blocks from `C` (`dense.decode_blocks`, all at once), then each
     shape's GEMM at each T on its freshly decoded weight; and the same GEMMs from plaintext weights.  Also the latency of one
     small tile and of one full-segment tile decoded alone."""
@@ -357,6 +383,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
 
     torch.cuda.synchronize()
     decode_reps = _timed(decode_pass, reps, warmup=False)
+    checked = pass_matches_reference(c, held[0].view(-1, width), segs, blks, salt, workers)
     weights = views(held.pop())
     audited = live_audit(c, segments, salt, decode_pass, *audit) if audit else None
     held.clear()
@@ -377,6 +404,7 @@ def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple
                "segment_s": _timed(lambda: dense.decode_blocks(c, tags, seg0 // b, seg0 % b, b, window), 1, warmup=False)[0]}
     print(json.dumps({"model": name, "decode_reps_s": [round(x, 2) for x in decode_reps], **latency}), flush=True)
     return {"model": name, "segments": segments, "blocks": nblocks, "calls": calls, "weight_bytes": total, "audit": audited,
+            "pass_matches_reference": checked,
             "decode_reps_s": decode_reps, "gemm_s": gemm, "plain_gemm_s": base, "latency": latency,
             **summarize(m, total, statistics.median(decode_reps), calls, gemm, base)}
 
@@ -458,7 +486,8 @@ def main(a: Options) -> int:
     doc["models"] = {}
     for i, name in enumerate(a.models.split(",") if a.models else list(table)):
         audit = (out, a.audit, a.audit_k) if a.audit and i == 0 else None
-        doc["models"][name] = run_model(name, table[name], a.reps, salt, audit)
+        doc["models"][name] = run_model(name, table[name], a.reps, salt, audit, a.workers)
+        doc["gates"][f"pass_matches_reference/{name}"] = {"passed": doc["models"][name]["pass_matches_reference"]["passed"]}
         if audit:
             doc["gates"]["timed_audit"] = {"passed": doc["models"][name]["audit"]["accepted"]}
     import torch
