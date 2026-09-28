@@ -26,6 +26,7 @@ from .. import resolver
 NAME = "step_segmentation"
 TIER = "T0"          # inputs: build_workload/ + the components' descriptors (MBs); the decode is CPU-seconds to minutes per component
 STRENGTH = "strong"
+REBUILD = True       # every component decoded with the current code (#73: 9 descriptors, 228 MB, 542 s): the post-train job's, like a rebuild
 INPUTS = ("build_workload/workload_program.json", "build_workload/chronology.json", "build_request*/result.json", "build_request*/descriptor.json.gz")
 
 _KEYS = ("requests", "component_steps_equal_cap", "unsegmented_members")

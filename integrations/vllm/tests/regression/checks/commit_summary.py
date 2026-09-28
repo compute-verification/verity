@@ -12,6 +12,7 @@ excluded: they are measurements, not reproducible facts.
 A candidate row written after the flip has no `commit_summary.json`: its `actual` is the same reader run over the candidate's own
 `commit/summary.json` + `commit/runs.jsonl` + `commit.log` with `rc` = its `verdict.json` `compat.rc` -- the execution-configuration
 facts (committer, collector, engine settings, run counts) must still agree with the reference; `pass` is then `rc == 0 and tokens_equal`.
+A reference row recorded after the flip (#73's epoch record) is read the same way in self-check.
 """
 from __future__ import annotations
 
@@ -108,8 +109,18 @@ def summarize(d: str, rc: int) -> dict:
     return out
 
 
+def _post_flip(row: resolver.Row) -> bool:
+    """A reference row recorded after the flip (#73's epoch record): `verdict.json` and `commit/summary.json`, no `commit_summary.json`."""
+    return not row.has("commit_summary.json") and row.has("verdict.json") and row.has("commit/summary.json")
+
+
+def _rc(vr: dict) -> int:
+    rc = (vr.get("compat") or {}).get("rc")
+    return int(rc) if rc is not None else (0 if vr.get("outcome") == "PASS" else 1)
+
+
 def applies(row: resolver.Row) -> str | None:
-    if not row.has("commit_summary.json"):
+    if not row.has("commit_summary.json") and not _post_flip(row):
         return "no commit_summary.json on this row (Commit never closed)"
     return None
 
@@ -124,9 +135,10 @@ def _lift(cs: dict, verdict: dict | None) -> dict:
 
 
 def expected(row: resolver.Row) -> dict:
-    cs = row.json("commit_summary.json")
     v = row.json("commit/verdict.json") if row.has("commit/verdict.json") else None
-    return _lift(cs, v)
+    if _post_flip(row):                                     # no summary file was ever written: the reader over the record is the lift
+        return _lift(summarize(str(row.path("commit/summary.json").parents[1]), _rc(row.json("verdict.json"))), v)
+    return _lift(row.json("commit_summary.json"), v)
 
 
 def actual(row: resolver.Row) -> dict:
@@ -136,11 +148,15 @@ def actual(row: resolver.Row) -> dict:
         return dict(_lift(json.load(open(croot / "commit_summary.json")), v), source="candidate")
     if croot is not None and (croot / "commit" / "summary.json").is_file():   # a post-flip candidate: no summary file; read its evidence
         vr = json.load(open(croot / "verdict.json")) if (croot / "verdict.json").is_file() else {}
-        rc_c = (vr.get("compat") or {}).get("rc")
-        if rc_c is None:
-            rc_c = 0 if vr.get("outcome") == "PASS" else 1
         v = json.load(open(croot / "commit" / "verdict.json")) if (croot / "commit" / "verdict.json").is_file() else None
-        return dict(_lift(summarize(str(croot), int(rc_c)), v), source="candidate")
+        return dict(_lift(summarize(str(croot), _rc(vr)), v), source="candidate")
+    if _post_flip(row):                                     # a post-flip reference row: the same reader over its own evidence
+        row_dir = row.path("commit/summary.json").parents[1]
+        for rel in ("commit/runs.jsonl", "commit.log"):
+            if row.has(rel) and not (row_dir / rel).is_file():
+                raise resolver.NotResolvable(f"{row.key}: {rel} is not beside commit/summary.json at {row_dir}")
+        v = row.json("commit/verdict.json") if row.has("commit/verdict.json") else None
+        return dict(_lift(summarize(str(row_dir), _rc(row.json("verdict.json"))), v), source="recomputed")
     rc = int(row.json("commit_summary.json").get("rc", 0))
     row_dir = row.path("commit_summary.json").parent
     if not (row_dir / "commit" / "summary.json").is_file():

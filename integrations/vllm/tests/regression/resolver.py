@@ -52,6 +52,27 @@ ENGINE = "v2"                                  # the builder that recomputes `ac
 ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
 ORACLES = ("expected", "frozen")
 RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
+REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that recompute from a row's Programs (`REBUILD = True`: a manifest rebuild, step_segmentation's decode; CPU minutes to half an hour a row)
+STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
+REGISTRY = HERE.parents[3] / "fixtures" / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
+
+
+def store_required() -> bool:
+    return os.environ.get(STORE_REQUIRED_ENV) == "1"
+
+
+def rebuilds() -> bool:
+    return os.environ.get(REBUILD_ENV) == "1"
+
+
+def registered(p: Path) -> str | None:
+    """The `art:` id `fixtures/artifacts.json` registers for `p` (a fixture git does not track), else None."""
+    try:
+        reg = json.loads(REGISTRY.read_text())
+    except (OSError, ValueError):
+        return None
+    rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
+    return next((art for art, path in reg.items() if path == rel), None)
 
 
 def oracle() -> str:
@@ -136,7 +157,8 @@ class Row:
         return self._fetch(art, role)
 
     def _fetch(self, art: str, label: str) -> Path:
-        if art not in self._fetched:
+        # the store's trees/ is a cache its eviction may clear under a running suite: a tree that went is fetched again
+        if art not in self._fetched or not self._fetched[art].is_dir():
             from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
@@ -246,7 +268,8 @@ class Row:
         """A directory holding the row's request Programs (`build_request*/instances.json.gz` beside the derive's `result.json`) -- the
         live row dir, or, when the Programs and the records live in different trees (the store's `programs` / `records` artifacts,
         the pod's staged programs dir: `instances.json.gz` + `manifest.json` only), a merged view assembled under the scratch dir: one
-        symlink per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()` (sha / size checked).  None when no
+        hard link (a symlink across filesystems) per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()`
+        (sha / size checked).  None when no
         Programs are reachable.  Both engines read `result.json` (attention impls observed) beside the instances, so a split layout
         must be re-joined here, from the frozen index, never by guessing."""
         root: Path | None = None
@@ -282,7 +305,10 @@ class Row:
             dst.parent.mkdir(parents=True, exist_ok=True)
             if dst.is_symlink() or dst.exists():
                 dst.unlink()
-            dst.symlink_to(src)
+            try:
+                os.link(src, dst)        # the store's trees/ is a cache eviction may clear under a rebuild that reads for an hour
+            except OSError:
+                dst.symlink_to(src)
             n += 1
         if not any(view.glob("build_request*/instances.json.gz")) and not any(view.glob("build/rank*/build_request*/instances.json.gz")):
             raise NotResolvable(f"{self.key}: merged Programs view has no instances.json.gz ({n} files linked under {view})")
@@ -332,8 +358,11 @@ class Row:
         return [d for d in candidate_attempt_docs() if (d.get("params") or {}).get("row") == self.key]
 
     # ---- expected -------------------------------------------------------------------------------------------------------------
+    def expected_path(self) -> Path:
+        return EXPECTED_DIR / f"{self.key}.json"
+
     def expected(self) -> dict[str, Any]:
-        p = EXPECTED_DIR / f"{self.key}.json"
+        p = self.expected_path()
         if not p.is_file():
             return {}
         with open(p) as f:
@@ -344,14 +373,22 @@ class Row:
         difference from the v1 reference is sanctioned only by a recorded decision naming the finding or the changed policy)."""
         return [d for d in (self.spec.get("decisions") or []) if isinstance(d, dict) and d.get("check") == check]
 
+    def retired(self, check: str) -> dict[str, Any] | None:
+        """`[rows.<row>.retired.<check>]` of fixtures.toml: the check cannot run on this row's record with the current code, and why
+        (`reason`), since which change (`since`), and what would bring it back (`needs`).  The test skips it by that reason; nothing
+        else lets a check that does not resolve skip under VERITY_STORE_REQUIRED=1."""
+        r = (self.spec.get("retired") or {}).get(check)
+        return r if isinstance(r, dict) else None
+
 
 SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
 
 
 def scratch(row: Row) -> Path:
-    """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>` (default: the system temp dir): rebuilt manifests, their logs, the merged Programs view."""
+    """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>/<pid>` (default: the system temp dir): rebuilt manifests, their logs, the merged
+    Programs view.  One per process: xdist workers rebuilding one row (#57's manifest and its refusal) never share a file."""
     import tempfile
-    p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key
+    p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key / str(os.getpid())
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -455,6 +492,8 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 
 
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
+#: what `[rows.<row>.retired.<check>]` must state (`Row.retired`)
+RETIREMENT_FIELDS = ("reason", "since", "needs")
 #: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it) or `pending_review` (labelled by a lane, not yet
 #: confirmed); both sanction.
 DECISION_STATUSES = ("accepted", "pending_review")
