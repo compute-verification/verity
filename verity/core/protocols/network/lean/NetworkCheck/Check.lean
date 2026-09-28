@@ -130,18 +130,16 @@ structure Profile where
 def bitsOfBytes (b : ByteArray) : List Bool :=
   b.data.toList.flatMap fun x => (List.range 8).map fun i => (x.toNat >>> (7 - i)) % 2 == 1
 
-def bytesOfBits (bits : List Bool) : ByteArray := Id.run do
-  let mut out := ByteArray.empty
-  let mut acc := 0
-  let mut k := 0
-  for b in bits do
-    acc := 2 * acc + b.toNat
-    k := k + 1
-    if k = 8 then
-      out := out.push acc.toUInt8
-      acc := 0
-      k := 0
-  return out
+/-- Eight bits as a byte, most significant first. -/
+def byteOfBits (bits : List Bool) : UInt8 := (bits.foldl (fun (a : Nat) (b : Bool) => 2 * a + b.toNat) 0).toUInt8
+
+/-- The bytes of whole groups of eight bits, most significant first; a last group of fewer is dropped. -/
+def bytesOfBitsList : List Bool → List UInt8
+  | b0 :: b1 :: b2 :: b3 :: b4 :: b5 :: b6 :: b7 :: rest =>
+    byteOfBits [b0, b1, b2, b3, b4, b5, b6, b7] :: bytesOfBitsList rest
+  | _ => []
+
+def bytesOfBits (bits : List Bool) : ByteArray := ⟨(bytesOfBitsList bits).toArray⟩
 
 /-! ## Decoding -/
 
@@ -317,47 +315,57 @@ def screen (p : Params) (found : Array Certified) : Except String Certified :=
       | none => .ok r
   | _ => .error "duplicate"
 
+/-- The sync read where none is declared; the evidence's shape is checked first, so no verdict reads it. -/
+def noSync : ClockSync := ⟨0, 1, by decide⟩
+
 /-- `expected_grids(frames, syncs, params)[w]`: the Program's grid of the link in window `w`, each bucket's row
 `expectedRow` at its global bucket. -/
 def expectedGrid (g : Grid) (W : Nat) (l : Link) (w : Nat) : Array (Array (Option ByteArray)) :=
-  let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 ⟨0, 1, by decide⟩
+  let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 noSync
   (List.range g.buckets).toArray.map fun i =>
     (List.ofFn (expectedRow g.allocation g.buckets W syncs l.frames (w * g.buckets + i))).toArray.map
       (·.map bytesOfBits)
 
+/-- The unit's records of a link-window. -/
+def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Certified :=
+  c.records.filter fun r => r.head.direction == d && r.head.link == l && r.head.window == (w : Int)
+
+/-- The spatial unit's clock in window `w`: the sync the first egress link declares. -/
+def unitSync (e : Evidence) (w : Nat) : ClockSync := ((e.links[0]?).map (·.syncs.getD w noSync)).getD noSync
+
+/-- An egress link-window's violation (`check_link`), none when it is accepted. -/
+def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : Link)
+    (w : Nat) : Option String :=
+  match screen p (found c .egress l w) with
+  | .error v => some v
+  | .ok r =>
+    let s := link.syncs.getD w noSync
+    if !(inSyncSet p.syncSet s && sameSync s (unitSync e w)) then some "advice"
+    else match recordHead l .egress w (expectedGrid p.grid p.windows link w) none p.grid egressDigest true >>=
+        RecordHead.digest with
+      | .ok d => if r.certificate.digest == d then none else some "mismatch"
+      | .error _ => some "mismatch"
+
+/-- An ingress link-window's violation (`check_ingress_link`), none when it is accepted. -/
+def ingressVerdict (p : Params) (c : Commitment) (ingressDigest : ByteArray) (l : String) (w : Nat) : Option String :=
+  match screen p (found c .ingress l w) with
+  | .error v => some v
+  | .ok r =>
+    let h := r.head
+    let g := p.ingressGrid
+    if h.buckets == g.buckets && h.allocation == g.allocation && h.frameBytes == g.frameBytes &&
+        h.bucketMs == g.bucketMs && h.parameters == ingressDigest then none
+    else some "mismatch"
+
 /-- Every link-window's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. `egressDigest`
 and `ingressDigest` are `parameters_digest` of the egress grid with Σ_sync and of the ingress grid. -/
 def verdicts (p : Params) (c : Commitment) (e : Evidence) (egressDigest ingressDigest : ByteArray) : Array LinkWindow :=
-  Id.run do
-  let found (d : Direction) (l : String) (w : Nat) : Array Certified :=
-    c.records.filter fun r => r.head.direction == d && r.head.link == l && r.head.window == (w : Int)
-  let none' : ClockSync := ⟨0, 1, by decide⟩
-  let unit (w : Nat) : ClockSync := ((e.links[0]?).map (·.syncs.getD w none')).getD none'
-  let mut out := #[]
-  for (l, link) in p.egress.zip e.links do
-    for w in [0:p.windows] do
-      let s := link.syncs.getD w none'
-      let v := match screen p (found .egress l w) with
-        | .error v => some v
-        | .ok r =>
-          if !(inSyncSet p.syncSet s && sameSync s (unit w)) then some "advice"
-          else match recordHead l .egress w (expectedGrid p.grid p.windows link w) none p.grid egressDigest true >>=
-              RecordHead.digest with
-            | .ok d => if r.certificate.digest == d then none else some "mismatch"
-            | .error _ => some "mismatch"
-      out := out.push ⟨.egress, l, w, v⟩
-  let g := p.ingressGrid
-  for l in p.ingress do
-    for w in [0:p.windows] do
-      let v := match screen p (found .ingress l w) with
-        | .error v => some v
-        | .ok r =>
-          let h := r.head
-          if h.buckets == g.buckets && h.allocation == g.allocation && h.frameBytes == g.frameBytes &&
-              h.bucketMs == g.bucketMs && h.parameters == ingressDigest then none
-          else some "mismatch"
-      out := out.push ⟨.ingress, l, w, v⟩
-  return out
+  (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) => (List.range p.windows).map fun w =>
+      ({ direction := .egress, link := l, window := w, violation := egressVerdict p c e egressDigest l link w } :
+        LinkWindow)) ++
+    p.ingress.toList.flatMap fun l => (List.range p.windows).map fun w =>
+      ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
+        LinkWindow)).toArray
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Profile :=
   if e.links.size ≠ p.egress.size then

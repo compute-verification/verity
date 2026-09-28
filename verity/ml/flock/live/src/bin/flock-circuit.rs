@@ -386,6 +386,8 @@ struct CircuitVerifier {
     lincheck: sverify::Lincheck,
     /// the last `verify` call's phase timers
     phases: Mutex<Option<Value>>,
+    /// `proved_scope::check` of the statement: the refusal of a form the soundness proof does not cover
+    scope: Result<(), String>,
 }
 
 impl StatementVerifier for CircuitVerifier {
@@ -409,11 +411,17 @@ impl StatementVerifier for CircuitVerifier {
     fn take_phases(&self) -> Option<Value> {
         self.phases.lock().unwrap_or_else(PoisonError::into_inner).take()
     }
+
+    fn refusal(&self) -> Option<String> {
+        self.scope.clone().err()
+    }
 }
 
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
-        CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None) }
+        let t0 = &tabs.list[0];
+        let scope = proved_scope::check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
+        CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None), scope }
     }
 
     /// The verifier of one-table sessions.
@@ -1686,7 +1694,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                          ("dummy", Plan { zero_witness: true, ..Plan::default() })] {
         for run in 0..n {
             let (v, proofs, rec) = one(&plan);
-            assert!(v["accepted"] == true || kind == "dummy", "{kind} session {run} rejected: {}", v["why"]);
+            assert!(verified(&v) || kind == "dummy", "{kind} session {run} rejected: {}", v["why"]);
             let t = ((0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect::<Vec<_>>(), record_points(&rec));
             match &tape {
                 None => tape = Some(t),
@@ -1871,7 +1879,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let gpu = flag("--gpu");
     let (v, proofs, rec) = run(&Plan { gpu, ..Plan::default() });
     let (vc, proofs_c, recc) = run(&Plan { gpu, zk_zero_pads: true, ..Plan::default() });
-    assert!(v["accepted"] == true && vc["accepted"] == true, "the audit's sessions must be accepted");
+    assert!(verified(&v) && verified(&vc), "the audit's sessions must be accepted");
     let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|h| {
         let b = hexb(h.as_str().unwrap()).unwrap();
         F128::new(u64::from_be_bytes(b[8..16].try_into().unwrap()), u64::from_be_bytes(b[..8].try_into().unwrap()))
@@ -1958,7 +1966,7 @@ fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
     let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-    let mut pass = v["accepted"] == true && proofs.len() == 2;
+    let mut pass = verified(&v) && proofs.len() == 2;
     let mut reps = Vec::new();
     for (rep, proof) in proofs.iter().enumerate() {
         let stream = rep_stream(TABLE, rep);
@@ -3255,7 +3263,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used, and OS coins
     // commit to nothing
-    let step0 = if v["accepted"] == true && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
+    let step0 = if verified(&v) && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
@@ -3271,7 +3279,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && v["accepted"] == true && (is_zk(st) || seed_coins())}),
+               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || seed_coins())}),
         proofs,
     )
 }
@@ -3502,6 +3510,18 @@ fn false_statement(st: &Stmt, what: &str) -> Instances {
     v
 }
 
+/// A verdict as it would be were the statement's form one the soundness proof covers: a refused one's `without_refusal`
+/// (`proved_scope`), else itself. `v` is a server's verdict or a session's result holding it; the selftest's checks of
+/// anything but the refusal read this.
+fn in_scope(v: &Value) -> &Value {
+    let w = if v["without_refusal"].is_object() { &v["without_refusal"] } else { &v["verdict"]["without_refusal"] };
+    if w.is_object() && v["why"].as_str().is_some_and(proved_scope::is_refusal) { w } else { v }
+}
+
+fn verified(v: &Value) -> bool {
+    in_scope(v)["accepted"] == true
+}
+
 fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Value {
     let want = CASES.iter().find(|c| c.0 == name).expect("case");
     if name == "relabelled_circuit_refused_at_load" {
@@ -3688,7 +3708,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
             let plan = Plan { gpu, zk_shared_pair: shared_pair, ..Plan::default() };
             let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &plan, ProverSeed::from_os());
-            if v["accepted"] != !shared_pair {
+            if verified(&v) != !shared_pair {
                 return Err(format!("the session's verdict: {}", v["why"]));
             }
             let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -3745,7 +3765,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default();
         let roots = rec["link"]["root_b"].as_object().map(|m| m.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
         let barrier = barrier_holds(&order.lock().unwrap_or_else(PoisonError::into_inner));
-        let accepted = v["accepted"] == true && reps.len() == 4 && reps.iter().all(|r| r["ok"] == true) && roots == table_names(2) && proofs.len() == 4;
+        let accepted = verified(&v) && reps.len() == 4 && reps.iter().all(|r| r["ok"] == true) && roots == table_names(2) && proofs.len() == 4;
         return json!({"case": name, "expect": if early { "accepted, and the order check finds a proof before the last coin" } else { "accepted, every proof after the last coin" },
                       "accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "committed_roots": roots,
                       "tables_m": tabs.list.iter().map(|t| t.st.m).collect::<Vec<_>>(), "reps_ok": reps.iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect::<Vec<_>>(),
@@ -3763,7 +3783,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         bad["streams"][1]["rounds"][1]["g"] = a;
         let tampered = flock_live::replay_coin_seed(&bad);
         return json!({"case": name, "expect": "the record replays; swapped indices do not", "accepted": v["accepted"], "requests": honest.as_ref().ok(),
-                      "pass": v["accepted"] == true && honest.is_ok() && tampered.is_err(), "why": honest.err().or(tampered.err())});
+                      "pass": verified(&v) && honest.is_ok() && tampered.is_err(), "why": honest.err().or(tampered.err())});
     }
     if name == "record_replays_offline" {
         // G2 offline: the verifier's record and the two proofs re-verified by Server::from_record + finish (the reference of the
@@ -3777,7 +3797,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             Ok(Server::from_record(config(st, inst), v, &rec, map)?.finish())
         };
         let (honest, swapped) = (replay([&proofs[0], &proofs[1]]), replay([&proofs[1], &proofs[0]]));
-        let accepted = |r: &Result<Value, String>| matches!(r, Ok(x) if x["accepted"] == true);
+        let accepted = |r: &Result<Value, String>| matches!(r, Ok(x) if verified(x));
         // a retained round's bytes altered in the record: refused (they no longer hash to the round's msg_sha256)
         let mut bad = rec.clone();
         let m = bad["streams"][0]["rounds"][0]["msg"].as_str().unwrap_or("").to_string();
@@ -3793,7 +3813,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let sigma_refused = Server::from_record(config(st, inst), v3, &bad_sigma, map).err();
         return json!({"case": name, "expect": "the honest record replays offline; swapped proofs, altered round bytes and another Σ do not",
                       "accepted": v["accepted"], "altered_bytes_refused": altered, "sigma_refused": sigma_refused,
-                      "pass": v["accepted"] == true && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some()
+                      "pass": verified(&v) && accepted(&honest) && !accepted(&swapped) && !m.is_empty() && altered.is_some()
                           && sigma_refused.is_some(),
                       "why": honest.as_ref().map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e)),
                       "why_swapped": swapped.map(|x| x["why"].clone()).unwrap_or_else(|e| json!(e))});
@@ -3833,7 +3853,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let s = Arc::new(Mutex::new(srv));
         let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-        let pass = v["accepted"] == true && rec["unit_draw"] == draw;
+        let pass = verified(&v) && rec["unit_draw"] == draw;
         return json!({"case": name, "gpu": gpu, "accepted": v["accepted"], "pass": pass, "unit_draw": rec["unit_draw"], "why": v["why"]});
     }
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
@@ -3843,14 +3863,14 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
         let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-        let acc = v["accepted"] == true;
+        let acc = verified(&v);
         let draw = rec["unit_draw"].clone();
         // offline: the record rebuilt under the drawn statement (U1), and refused under the population's
         let replay = if acc {
             let (ds, di) = drawn(st, inst, &draw).unwrap();
             let map: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
             let ok = Server::from_record(config(&ds, &di), Box::new(CircuitVerifier::one(&ds, &di)), &rec, map.clone())
-                .map(|mut x| x.finish()).map(|v| v["accepted"] == true);
+                .map(|mut x| x.finish()).map(|v| verified(&v));
             // under the population's statement Σ differs (the draw is under Σ); with the record's draw altered, U1
             let pop = Server::from_record(config(st, inst), Box::new(CircuitVerifier::one(st, inst)), &rec, map.clone()).err();
             let mut bad = rec.clone();
@@ -3863,7 +3883,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                 && replay["population_refused"].as_str().is_some_and(|w| w.contains("R7"))
                 && replay["altered_draw_refused"].as_str().is_some_and(|w| w.contains("U1"))
         } else {
-            !acc && v["why"].as_str().is_some_and(|w| w.contains("R7"))
+            !acc && in_scope(&v)["why"].as_str().is_some_and(|w| w.contains("R7"))
         };
         return json!({"case": name, "gpu": gpu, "accepted": acc, "pass": pass, "unit_draw": draw, "why": v["why"], "replay": replay});
     }
@@ -3968,12 +3988,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-    record_case(st.c.statement(), name, want.1, &v, &rec, &proofs);
+    // a statement form the soundness proof does not cover: an honest session's verdict is the refusal, and only that refuses it
+    let refusal = proved_scope::check(&st.c, &vinst, is_zk(st), 1).err();
+    let want_acc = want.1 && refusal.is_none();
+    record_case(st.c.statement(), name, want_acc, &v, &rec, &proofs);
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
     let both = reps.len() == 2 && reps.iter().all(|r| r[1] == false);
     let stopped = v["prover_stopped"].as_str().is_some_and(|x| x.contains("level-0 root"));
-    let pass = acc == want.1 && (!want.2 || both) && (name != "reps_differ_prover_stops" || stopped);
-    json!({"case": name, "gpu": plan.gpu, "expect": if want.1 {"accept"} else {"reject"}, "accepted": acc, "pass": pass,
+    let pass = acc == want_acc && verified(&v) == want.1 && (want_acc == want.1 || v["why"].as_str() == refusal.as_deref())
+        && (!want.2 || both) && (name != "reps_differ_prover_stops" || stopped);
+    json!({"case": name, "gpu": plan.gpu, "expect": if want_acc {"accept"} else {"reject"}, "refusal": refusal, "accepted": acc, "pass": pass,
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"],
            "witness_s": v["witness_s"]})
 }
@@ -4035,7 +4059,7 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
     let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-    if v["accepted"] != true || proofs.len() != 2 {
+    if !verified(&v) || proofs.len() != 2 {
         return json!({"case": "lincheck_modes_agree", "accepted": v["accepted"], "pass": false, "why": v["why"]});
     }
     let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
@@ -4062,21 +4086,21 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
-        let ver = CircuitVerifier { tabs: Tables::one(st, inst), lincheck: m, phases: Mutex::new(None) };
+        let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
         match Server::from_record(config(st, inst), Box::new(ver), &rec_for(ps), map) {
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "verify_s": f["verify_s"],
-                       "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
+                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
+                       "verify_s": f["verify_s"], "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
             Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
         }
     }).collect())).collect();
     let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
-    let same_why = runs.iter().all(|r| r.1.iter().all(|x| x["why"] == r.1[0]["why"]));
-    let lincheck_rejects = |x: &Value| x["accepted"] == false && x["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
-    let pass = reencoded && same_why && all("honest", &|x| x["accepted"] == true) && all("z_partial", &lincheck_rejects)
+    let same_why = runs.iter().all(|r| r.1.iter().all(|x| in_scope(x)["why"] == in_scope(&r.1[0])["why"]));
+    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
     json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
            "gpu": gpu, "accepted": v["accepted"], "reencoded_identical": reencoded, "same_why": same_why,
@@ -4095,7 +4119,7 @@ fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected(pseed));
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]});
-        (v["accepted"] == true, proofs, Sha512::digest(t.to_string().as_bytes()).to_vec())
+        (verified(&v), proofs, Sha512::digest(t.to_string().as_bytes()).to_vec())
     };
     let (a, b, c) = (run([1; 32]), run([1; 32]), run([2; 32]));
     let same = a.1 == b.1 && a.2 == b.2;
@@ -4212,7 +4236,7 @@ fn gpu_cpu_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected([1; 32]));
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
-        (v["accepted"] == true, proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
+        (verified(&v), proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
     };
     let (c, g) = (run(false), run(true));
     let proof_diff: Vec<Value> = c.1.iter().zip(&g.1).map(|(x, y)| json!({"lengths": [x.len(), y.len()], "first_differing_byte": x.iter().zip(y).position(|(p, q)| p != q)}))
@@ -4247,7 +4271,7 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let b = run(pb);
     let used = |k: &str| b.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let used_a = |k: &str| a.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
-    let accepted = a.0["accepted"] == true && b.0["accepted"] == true;
+    let accepted = verified(&a.0) && verified(&b.0);
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
@@ -4300,7 +4324,7 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         (got, recs, wall_s)
     };
     let (a, b) = (run(0, 1, "serial"), run(SESSIONS - 1, 2, "ahead"));
-    let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| v["accepted"] == true && v["step0_checked"] == true);
+    let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| verified(v) && v["step0_checked"] == true);
     let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|(_, p)| !p.is_empty());
     let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
     let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);

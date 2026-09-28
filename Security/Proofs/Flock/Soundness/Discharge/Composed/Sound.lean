@@ -20,6 +20,10 @@ it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each 
 one table (no `--session-tables`), `TagsOk I` and `I.tags.typed = false` hold by `decide`. Under the default
 `--statement` (`verity/flock-circuit`, hidden outputs) and the typed statements they fail, so the bound covers
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --zk` sessions of one table.
+
+flock-verify refuses every statement failing one of its hypotheses on the statement's form (`I.tags.typed = false`, the
+parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: PROTOCOL.md §16.15), so
+`FailClosed.zk_session_sound` states this bound over what it accepts (`LiveVerifiesZK`) without them.
 -/
 
 namespace FlockSoundness.Discharge.Composed

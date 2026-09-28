@@ -18,6 +18,10 @@ openings, single coins, no final messages and `capOfRoot` at the values the deco
 * `headline_tables_subset_dec`: `headline_tables_subset` at the tables flock-verify sets up (`planJ`) with #867's
   `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the law's draws. The decoder at `J`
   tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
+
+`FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
+(`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which flock-verify refuses a statement
+failing (PROTOCOL.md §16.15).
 -/
 
 namespace FlockSoundness.Discharge.HdecCor

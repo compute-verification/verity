@@ -71,8 +71,8 @@ slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit
 the record. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
 refuse.
 
-To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python
-tools/verity/lean/check.py --build --update PKG` with no wrapper around it. It exits 0 when the Lean check passes, whether or not the
+To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python3
+tools/verity/lean/check.py --build --update PKG` with no wrapper around it (vy-nebius-1 has no `python`, exit 127). It exits 0 when the Lean check passes, whether or not the
 record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
 in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
 the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live Lean check.

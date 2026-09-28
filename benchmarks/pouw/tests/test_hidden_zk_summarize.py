@@ -22,7 +22,13 @@ def _staged(out: Path) -> Path:
     return d
 
 
-def _proved(d: Path, verdicts: dict[str, bool | None]) -> None:
+#: a tile's verdict when every check has passed: its rows are a form the soundness proof does not cover
+TILE_FORM = ("refused: a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk: a statement form the "
+             "soundness proof does not cover")
+
+
+def _proved(d: Path, verdicts: dict[str, bool | str | None]) -> None:
+    """``verdicts``: each check's accepted, or its refusal's reason, or None for no verdict."""
     live = {"accepted": True, "instances": 2, "ands_per_vu": 10, "k_log": 10, "proof_bytes": [100], "prove_total_s": 1.0,
             "prove_s": [0.5], "witness_s": 0.1, "verdict": {"verify_s": 0.2}, "e2e_s": 1.2, "wire_sent": 1, "wire_recv": 1,
             "statement_digest": "cd", "circuit_sha512": "ab"}
@@ -31,7 +37,8 @@ def _proved(d: Path, verdicts: dict[str, bool | None]) -> None:
     for name in ("prove", "serve", "selftest-honest"):
         (d / f"{name}.time").write_text(TIME)
     for tag, accepted in verdicts.items():
-        (d / f"lean-{tag}.out").write_text("" if accepted is None else "VERDICT " + json.dumps({"accepted": accepted, "why": ""}))
+        v = {"accepted": False, "why": accepted} if isinstance(accepted, str) else {"accepted": accepted, "why": ""}
+        (d / f"lean-{tag}.out").write_text("" if accepted is None else "VERDICT " + json.dumps(v))
         (d / f"lean-{tag}.time").write_text(TIME)
 
 
@@ -43,14 +50,19 @@ def _summary(out: Path, **env: str) -> dict:
 
 def test_each_lean_check_is_held_to_its_verdict(tmp_path):
     d = _staged(tmp_path)
-    _proved(d, {"honest-own": True, "st-honest": True, "st-output_claim_false": False})
+    _proved(d, {"honest-own": TILE_FORM, "st-honest": TILE_FORM, "st-output_claim_false": False})
     s = _summary(tmp_path, HZ_LEAN="st-* tile-k64/honest-own")
     assert s["all_pass"] is True and s["lean_checks"] == "st-* tile-k64/honest-own" and "stage_only" not in s
     assert {t: (c["expect"], c["pass"]) for t, c in s["lean"].items()} == {
-        "honest-own": ("ACCEPT", True), "st-honest": ("ACCEPT", True), "st-output_claim_false": ("REJECT", True)}
+        "honest-own": ("REFUSED", True), "st-honest": ("REFUSED", True), "st-output_claim_false": ("REJECT", True)}
     _proved(d, {"st-output_claim_false": True})
     s = _summary(tmp_path)
     assert s["all_pass"] is False and s["lean"]["st-output_claim_false"]["pass"] is False and s["lean_checks"] == "*"
+    # a negative that passes every check (its form's refusal) and an honest check that a check rejects both fail
+    _proved(d, {"st-output_claim_false": TILE_FORM, "honest-own": False})
+    s = _summary(tmp_path)
+    assert {t: s["lean"][t]["pass"] for t in ("st-output_claim_false", "honest-own")} == {
+        "st-output_claim_false": False, "honest-own": False}
     _proved(d, {"st-output_claim_false": None})
     s = _summary(tmp_path)
     assert s["all_pass"] is False and s["lean"]["st-output_claim_false"]["verdict"] is None
