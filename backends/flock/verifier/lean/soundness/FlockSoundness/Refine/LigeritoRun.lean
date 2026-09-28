@@ -138,6 +138,7 @@ structure LoopRel (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteAr
   levels : stM.levels = v.2.2.1.toList.map fun l => l.toList.map gOf
   oods : stM.oods = stE.oods.toList.map oodOf
   cons : stM.cons = stE.conss.toList.map consOf
+  pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
   level : stM.level = i + 1
   caps : stM.caps = (List.range (i + 1)).map fun j => capD p.recursiveCaps[j]!
   reqs : ∀ req ∈ stM.reqs, ReqOK ms sch cap p req
@@ -157,6 +158,7 @@ structure LoopFinal (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array Byte
     (yrOf p sch.ext) (gOf stE.s)
   caps : pend.caps = (List.range (sch.levels.size - 1)).map fun j => capD p.recursiveCaps[j]!
   reqs : ∀ req ∈ pend.reqs, ReqOK ms sch cap p req
+  pos : ∀ cs ∈ stE.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
 
 /-! ## Helpers -/
 
@@ -231,6 +233,23 @@ theorem consValueO_congr (α : List 𝔽) (ch : List 𝕂) (rows rows' : ℕ →
   have := (List.mem_zipIdx hm).2.1
   simp only at this ⊢
   rw [h j (by omega)]
+
+/-- A level's queries fit its consistency coins' table: `q ≤ 2^(⌊log2 (q − 1)⌋ + 1)`. -/
+theorem pos_le_alpha (lv : Flock.Level) (hl : LevelSeam lv) (cw cα : Array F128)
+    (hcα : cα.size = Nat.log2 (lv.q - 1) + 1) : (Flock.positions lv cw).size ≤ 2 ^ cα.size := by
+  rw [positions_size lv hl cw, hcα]
+  have := @Nat.lt_log2_self (lv.q - 1)
+  have := hl.q_ne_zero
+  omega
+
+theorem conss_push_pos {cs : Array Flock.ConsCtx} {c : Flock.ConsCtx}
+    (h : ∀ x ∈ cs.toList, x.pos.size ≤ 2 ^ x.alpha.size) (hc : c.pos.size ≤ 2 ^ c.alpha.size) :
+    ∀ x ∈ (cs.push c).toList, x.pos.size ≤ 2 ^ x.alpha.size := by
+  intro x hx
+  rw [Array.toList_push, List.mem_append, List.mem_singleton] at hx
+  rcases hx with hx | rfl
+  · exact h x hx
+  · exact hc
 
 /-- **The consistency value at the openings** (§13.3 step 10): the model's, reading the openings of level `ℓ`, is the
 executable's `consE` on the proof's rows, when the openings are those rows and the Merkle check passed. -/
@@ -434,7 +453,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.recursiveCaps[j]!) ∧
       (∀ req ∈ pend.reqs, ReqOK ms sch cap p req) ∧
       initCh.size = sch.k0 ∧ levels.size = sch.levels.size - 1 ∧ (∀ l ∈ levels.toList, l.size = 4) ∧
-      p.finalProof.yr.size = 2 ^ (sch.ext + 1) ∧
+      p.finalProof.yr.size = 2 ^ (sch.ext + 1) ∧ (∀ cs ∈ stF.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size) ∧
       finalProg p basisAt sch.n initCh levels sch.ext stF tF = .ok (((), stF'), t') ∧
       pend.verdict o = Model.finalCheck execArith (sch.m - 7) b (initCh.toList.map gOf)
         (levels.toList.map fun l => l.toList.map gOf) (stF.oods.toList.map oodOf) (stF.conss.toList.map consOf)
@@ -541,7 +560,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   rw [hopen0] at hqs hqq
   have hrel₀ : LoopRel ms sch cap p capD o 0 (sch.n - sch.k0 + 1, p.recursiveCaps[0]!, #[], 0) stL t₁₇ stM₀ := by
     rw [hstM₀]
-    refine ⟨er₁₇ ▸ hwf, ?_, ?_, ?_, rfl, rfl, by simp, ?_, ?_, ?_, rfl, rfl, ?_⟩
+    refine ⟨er₁₇ ▸ hwf, ?_, ?_, ?_, rfl, rfl, by simp, ?_, ?_, ?_, ?_, rfl, rfl, ?_⟩
     · dsimp only
       rw [hqs, hstL, hstQ]
       dsimp only
@@ -570,6 +589,11 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       dsimp only
       rw [hconss₁₀, hc0]
       simp
+    · rw [hstL]
+      dsimp only
+      rw [hconss₁₀]
+      exact conss_push_pos (fun x hx => by simp at hx) (pos_le_alpha _ hlv0 _ _
+        (by rw [RoundsWF.get (er₁₃ ▸ hwf), hnQ']))
     · intro req hreq
       rcases hqr req hreq with h | h
       · rw [hstQ] at h; cases h
@@ -584,7 +608,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   case hstep =>
     clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv ho
     intro i v stE tE bv stE' tE' stM hi hrel hb
-    obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hlevel, hcaps, hreqs⟩ := hrel
+    obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hposE, hlevel, hcaps, hreqs⟩ := hrel
     have hc1 := hcols (i + 1) (by omega)
     have hl1 := hl4 (i + 1) (by omega) (by omega)
     have hl2 := hl4 (i + 1 + 1) (by omega) (by omega)
@@ -665,7 +689,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
           kMsg p.messages[stE.msg + 5]!] ++ [kMsg p.messages[stE.msg + 6]!],
       rfl, ?rel, er₈, by omega, ?tape, ?plays⟩
     case rel =>
-      refine ⟨er₈ ▸ hwfE, ?_, ?_, ?_, rfl, by simp [hsize], ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      refine ⟨er₈ ▸ hwfE, ?_, ?_, ?_, rfl, by simp [hsize], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
       · show qb.s o = _
         rw [hqs]
         simp only [hstQ, hsT, gOf_add, gOf_smul]
@@ -690,6 +714,9 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       · show qb.cons = _
         rw [hqc, hstQ, hlen]
         simp [hcons, hconss₁, hsplit]
+      · dsimp only
+        rw [hconss₁]
+        exact conss_push_pos hposE (pos_le_alpha _ hlvi _ _ (by rw [RoundsWF.get (er₄ ▸ hwfE), hnQ']))
       · show stM.level + 1 = _
         rw [hlevel]
       · show stM.caps ++ _ = _
@@ -737,7 +764,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   case hlast =>
     clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv ho
     intro i v stE tE bv stE' tE' stM hi hrel hb
-    obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hlevel, hcaps, hreqs⟩ := hrel
+    obtain ⟨hwfE, hsE, hqE, hsplit, hprev, hsize, hlanes, hlevels, hoods, hcons, hposE, hlevel, hcaps, hreqs⟩ := hrel
     have hl1 := hl4 (i + 1) (by omega) (by omega)
     dsimp only at hb
     rw [ite_eq_right (show ¬ v.1 < 4 by omega)] at hb
@@ -828,7 +855,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     simp only [recMsgs]
     refine ⟨_, _, rfl, er₅, by omega, hmain, ?_⟩
     subst hstN
-    refine ⟨by simp [hsize]; omega, ?_, by simp only; omega, hyr', ?_, ?_, ?_⟩
+    refine ⟨by simp [hsize]; omega, ?_, by simp only; omega, hyr', ?_, ?_, ?_, ?_⟩
     · intro l hl
       simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hl
       rcases hl with hl | rfl
@@ -848,7 +875,10 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       rcases hqr req hreq with h | h
       · exact hreqs req h
       · exact h
-  obtain ⟨pend, hrL, hkL, hplL, hsizeL, hlanesL, hextL, hyrL, hverL, hcapsL, hreqsL⟩ := hL
+    · dsimp only
+      rw [hconss₁]
+      exact conss_push_pos hposE (pos_le_alpha _ hlvR _ _ (by rw [RoundsWF.get (er₂ ▸ hwfE), hnQ']))
+  obtain ⟨pend, hrL, hkL, hplL, hsizeL, hlanesL, hextL, hyrL, hverL, hcapsL, hreqsL, hposL⟩ := hL
   clear hcont h₄ hloop
   have er₃ : t₃.rounds = t.rounds := by rw [k₃.2, k₂.2, k₁.2]
   have ek₃ : t₃.k = t.k := by rw [k₃.1, k₂.1, k₁.1]
@@ -900,7 +930,7 @@ theorem ligerito_refines (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   have hLmsg : stL.msg = sch.k0 + 4 := by rw [hstL]; simp only [hmsg₁₀]; omega
   have hLood : stL.ood = 3 := by rw [hstL]; simp only [hood₁₀]
   refine ⟨pend, initCh, out.2.2.1, st₁₈, stF, t₁₈, hrL.trans er₁₇, by rw [er₁₇] at hrL; omega, ?_, hcapsL,
-    hreqsL, by rw [hsz₁₀]; simp, hsizeL, hlanesL, hyrL, by rw [← hextL]; exact hfin, hverL⟩
+    hreqsL, by rw [hsz₁₀]; simp, hsizeL, hlanesL, hyrL, hposL, by rw [← hextL]; exact hfin, hverL⟩
   rw [hcs]
   unfold ligMsgs
   rw [hLmsg, hLood, Nat.sub_zero] at hmain

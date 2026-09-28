@@ -197,18 +197,19 @@
     "                levels.size = sch.levels.size - 1 ∧",
     "                  (∀ l ∈ levels.toList, l.size = 4) ∧",
     "                    p.finalProof.yr.size = 2 ^ (sch.ext + 1) ∧",
-    "                      FlockSoundness.Refine.finalProg p basisAt sch.n initCh levels sch.ext stF tF =",
-    "                          Except.ok (((), stF'), t') ∧",
-    "                        pend.verdict o =",
-    "                          FlockSoundness.Model.finalCheck FlockSoundness.execArith (sch.m - 7) b",
-    "                            (List.map FlockSoundness.Refine.gOf initCh.toList)",
-    "                            (List.map (fun l => List.map FlockSoundness.Refine.gOf l.toList) levels.toList)",
-    "                            (List.map FlockSoundness.Refine.oodOf stF.oods.toList)",
-    "                            (List.map FlockSoundness.Refine.consOf stF.conss.toList) sch.ext",
-    "                            (FlockSoundness.Refine.yrOf p sch.ext) (FlockSoundness.Refine.gOf stF.s)"
+    "                      (∀ cs ∈ stF.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size) ∧",
+    "                        FlockSoundness.Refine.finalProg p basisAt sch.n initCh levels sch.ext stF tF =",
+    "                            Except.ok (((), stF'), t') ∧",
+    "                          pend.verdict o =",
+    "                            FlockSoundness.Model.finalCheck FlockSoundness.execArith (sch.m - 7) b",
+    "                              (List.map FlockSoundness.Refine.gOf initCh.toList)",
+    "                              (List.map (fun l => List.map FlockSoundness.Refine.gOf l.toList) levels.toList)",
+    "                              (List.map FlockSoundness.Refine.oodOf stF.oods.toList)",
+    "                              (List.map FlockSoundness.Refine.consOf stF.conss.toList) sch.ext",
+    "                              (FlockSoundness.Refine.yrOf p sch.ext) (FlockSoundness.Refine.gOf stF.s)"
    ],
    "assumptions": [],
-   "type_hash": "00000000656b5984"
+   "type_hash": "000000003aa6e0f2"
   },
   "FlockSoundness.Refine.lincheck_refines": {
    "signature": [
