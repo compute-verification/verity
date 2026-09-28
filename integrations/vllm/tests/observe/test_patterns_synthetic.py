@@ -340,7 +340,7 @@ def test_decode_step_resolves_every_root():
         "Gemm_v1{K=576,N=960}": 1, "Gemm_v1{K=576,N=576}": 1, "Gemm_v1{K=576,N=3072}": 1, "Gemm_v1{K=1536,N=576}": 1,
         "Gemm_v1{K=576,N=49152}": 1, "RoPE_v1{NHEADS=9,D=64}": 1, "RoPE_v1{NHEADS=3,D=64}": 1,
         "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}": 1, "RMSNormFusedCuda_v2{N=576,EPS=1e-05}": 2,
-        "SiluMul_v1{I=1536}": 1, "TokenSelect_v1{V=49152}": 1,
+        "SiluMul_v2{I=1536}": 1, "TokenSelect_v1{V=49152}": 1,
     }
     assert {k: len(v) for k, v in specs.items()} == expected
     assert all(c.rows == 1 for cs in specs.values() for c in cs)
@@ -653,7 +653,7 @@ def test_silu_embedding_tokenselect_gather():
     se = step_events(events)
     res = resolve_step(se, context(start, se.sample))
     specs = by_spec(res)
-    s = specs["SiluMul_v1{I=1536}"][0]
+    s = specs["SiluMul_v2{I=1536}"][0]
     assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, I))),)
     e = specs["Embedding_v1{V=49152,H=576}"][0]
     # the token operand is the step's input_ids view (int32), not the int64 copy vLLM made of it
@@ -664,6 +664,25 @@ def test_silu_embedding_tokenselect_gather():
     gathers = [r for r in res if isinstance(r, Transparent) and r.pattern == "sample.logits_gather"]
     assert len(gathers) == 1 and gathers[0].effect == "move"
     assert gathers[0].src == Gather(bf(308, (1, H)), (0,)) and gathers[0].dst == PerRow(bf(309, (1, H)))
+
+
+@pytest.mark.parametrize("numerics", ["b1-eager-v3", "b1-eager"])
+def test_silu_is_the_builders_silu_mul_kind_under_the_record_targets_numerics_profile(numerics):
+    """`_C.silu_and_mul` folds to the Definition the record target's numerics vocabulary binds `silu_mul` to, the kind the builder's
+    `SiluAndMulRule` asks for: `SiluMul_v2` under b1-eager-v3, `SiluMul_v1` under the older vocabularies."""
+    import dataclasses
+
+    from verity_vllm.program.frontend.rules.vocab import vocabulary_for
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    events, start = decode_step()
+    se = step_events(events)
+    ctx = context(start, se.sample)
+    doc = {**ctx.header.profile, "target": TargetProfile(numerics_profile=numerics).to_json()}
+    ctx = dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc))
+    (s,) = [c for k, v in by_spec(resolve_step(se, ctx)).items() if k.startswith("SiluMul") for c in v]
+    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=I)
+    assert s.spec.base_id == {"b1-eager-v3": "SiluMul_v2", "b1-eager": "SiluMul_v1"}[numerics]
 
 
 def test_transparent_set_alias_alloc_noop():

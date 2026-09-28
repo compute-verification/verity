@@ -1,4 +1,4 @@
-"""`tools/check/lean_changed.py --records`: a lane's records audited without the kernel replay in a Lean slot of pool `build`, on
+"""`tools/lean/lean_changed.py --records`: a lane's records audited without the kernel replay in a Lean slot of pool `build`, on
 that slot's tree, with its own copy of the audit's dependencies; its result is of kind `lean-fast/v1`, which check and research
 merge refuse."""
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_changed_records", ROOT / "tools" / "check" / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("check_lean_changed_records", ROOT / "tools" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "tools" / "check" / "check.py")
@@ -44,7 +44,7 @@ with open(os.path.join(out, "audit.json"), "w") as f:
     json.dump({"passed": not rc, "failed": [pkg] if rc else [], "packages": [rep]}, f)
 if "--update" in sys.argv:
     with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
-        f.write('{"pins": {"A.t": {}}}')
+        f.write('{"guarantees": {"A.t": {}}}')
 sys.exit(rc)
 """
 
@@ -110,7 +110,7 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
 
     assert LC.audit_records("a", deps, tree, update=True) == 0
     assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--update", "--out", "OUT", str(tree / "a")]
-    assert (repo / "a" / "lean-audit.json").read_text() == '{"pins": {"A.t": {}}}', "the record comes back to the checkout"
+    assert (repo / "a" / "lean-audit.json").read_text() == '{"guarantees": {"A.t": {}}}', "the record comes back to the checkout"
     out = capsys.readouterr().out
     assert f"lean-records: wrote {repo / 'a' / 'lean-audit.json'}" in out
     assert "dependencies copied" not in out, "the tree keeps its copy while the manifest and toolchain stay"
@@ -310,4 +310,4 @@ def test_it_takes_no_check_slot(repo, tmp_path, monkeypatch):
     assert seen == [("a", None, (True, None, None))]
     with pytest.raises(SystemExit):
         LC.main(["--update"])
-    assert not hasattr(LC, "SLOT") and '"slot.py"' not in (ROOT / "tools" / "check" / "lean_changed.py").read_text()
+    assert not hasattr(LC, "SLOT") and '"slot.py"' not in (ROOT / "tools" / "lean" / "lean_changed.py").read_text()

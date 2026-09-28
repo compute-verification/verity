@@ -1,6 +1,6 @@
-"""`tools/check/lean_changed.py`: what it builds (each package whose audit misses, what it requires first), the tree it keeps
+"""`tools/lean/lean_changed.py`: what it builds (each package whose audit misses, what it requires first), the tree it keeps
 built, dependencies as read-only hard links to the audit's, and a failure only on a Lean error in the tree's own files or on
-a pin the audit fails on that build."""
+a guarantee the audit fails on that build."""
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("check_lean_changed", ROOT / "tools" / "check" / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("check_lean_changed", ROOT / "tools" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
@@ -187,7 +187,7 @@ def test_it_skips_where_it_cannot_build_and_when_another_check_holds_the_tree(tm
 
 
 def _facts(definition: str) -> dict:
-    """What `Facts.lean` writes for package `c`, whose one pin `C.c_eq` reads the definition `c` (canonical form
+    """What `Facts.lean` writes for package `c`, whose one guarantee `C.c_eq` reads the definition `c` (canonical form
     ``definition``)."""
     pin = {"kind": "theorem", "axioms": [], "hypotheses": [], "signature": "theorem C.c_eq : c = 1",
            "reads": [{"name": "c", "module": "C", "kind": "defn", "lines": [1, 1],
@@ -205,10 +205,10 @@ def _recorded(facts: dict) -> dict:
         p["type_sha256"] = sha[f"pin:{name}"]
         for r in p["reads"]:
             r["sha256"] = sha[f"read:{r['name']}"]
-    return LC.AUDIT.judge({"roots": ["C"], "pins": {"C.c_eq": {}}}, f, {}, update=True)[1]
+    return LC.AUDIT.judge({"roots": ["C"], "guarantees": {"C.c_eq": {}}}, f, {}, update=True)[1]
 
 
-def test_a_pinned_record_a_merge_left_stale_fails_it_and_an_unreadable_build_skips_it(tmp_path, monkeypatch, capsys):
+def test_a_guarantee_s_record_a_merge_left_stale_fails_it_and_an_unreadable_build_skips_it(tmp_path, monkeypatch, capsys):
     root, files = _tree(tmp_path, monkeypatch)
     log, _ = _fake_sandbox(tmp_path, monkeypatch)
     cache, deps, tree, facts = tmp_path / "cache", tmp_path / "deps", tmp_path / "tree", tmp_path / "facts.json"
@@ -217,30 +217,31 @@ def test_a_pinned_record_a_merge_left_stale_fails_it_and_an_unreadable_build_ski
     (root / "c" / "lean-audit.json").write_text(json.dumps(_recorded(_facts("def c := 1"))))
     assert LC.run(cache, deps, tree) == 0
     out = capsys.readouterr().out
-    assert "lean-changed: c: its pins match their records" in out
-    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the pins of 1" in out
+    assert "lean-changed: c: its guarantees match their records" in out
+    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the guarantees of 1" in out
     calls = Path(f"{log}.args").read_text().splitlines()
-    assert calls[:2] == ["build", "build +C"], "a package with pins has its roots built, as the audit builds them"
+    assert calls[:2] == ["build", "build +C"], "a package with guarantees has its roots built, as the audit builds them"
     assert calls[2].split()[:4] == ["env", "lean", "--run", str(tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean")]
     assert (tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean").read_bytes() == (
         LC.AUDIT.TOOL / "Facts.lean").read_bytes(), "the audit's own `Facts.lean`, copied where the sandbox shows it"
-    assert not (tree / "p" / ".lake" / "lean-changed-facts").exists(), "a package without pins is only built"
+    assert not (tree / "p" / ".lake" / "lean-changed-facts").exists(), "a package without guarantees is only built"
 
     facts.write_text(json.dumps(_facts("def c := 2")))
-    assert LC.run(cache, deps, tree) == 1, "the definition the pin reads changed and its record did not"
+    assert LC.run(cache, deps, tree) == 1, "the definition the guarantee reads changed and its record did not"
     out = capsys.readouterr().out
-    assert "lean-changed: c: FAILED" in out and "pins: definitions in C that C.c_eq read changed (changed: c)" in out
+    assert "lean-changed: c: FAILED" in out and "guarantees: definitions in C that C.c_eq read changed (changed: c)" in out
     assert "lean-changed: FAIL (c)" in out
 
     facts.unlink()
     assert LC.run(cache, deps, tree) == 0
     out = capsys.readouterr().out
-    assert "lean-changed: c: its pins are not compared here: `Facts.lean` failed (exit 1" in out
-    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the pins of 0" in out
+    assert "lean-changed: c: its guarantees are not compared here: `Facts.lean` failed (exit 1" in out
+    assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the guarantees of 0" in out
 
 
-def test_only_the_pins_failures_fail_it(tmp_path, monkeypatch):
-    """The audit's other failures (an orphan file, an unlisted escape, a sorry outside the pins) are the audit's to report."""
+def test_only_the_guarantees_failures_fail_it(tmp_path, monkeypatch):
+    """The audit's other failures (an orphan file, an unlisted escape, a sorry outside the guarantees) are the audit's to
+    report."""
     _tree(tmp_path, monkeypatch)
     _, lake = _fake_sandbox(tmp_path, monkeypatch)
     tree, facts = tmp_path / "tree", tmp_path / "facts.json"
@@ -254,8 +255,8 @@ def test_only_the_pins_failures_fail_it(tmp_path, monkeypatch):
     (tree / "c" / "lean-audit.json").write_text(json.dumps(policy))
     (tree / "c" / "Orphan.lean").write_text("def o := 1\n")
     assert LC.records("c", tree, str(lake)) == []
-    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy | {"pins": {**policy["pins"], "C.gone": {}}}))
-    assert LC.records("c", tree, str(lake)) == ["pins: C.gone is missing"]
+    (tree / "c" / "lean-audit.json").write_text(json.dumps(policy | {"guarantees": {**policy["guarantees"], "C.gone": {}}}))
+    assert LC.records("c", tree, str(lake)) == ["guarantees: C.gone is missing"]
 
 
 def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):

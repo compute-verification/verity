@@ -32,7 +32,8 @@ def test_the_nebius_description_loads():
     assert cpuset.format(share.cpus) == "48-95" and share.max_job_memory_gib == 256 and share.max_gpus is None
     assert share.until == model.instant("2026-10-07T12:00:00Z")
     assert cpuset.format(c.share("pous", "vy-nebius-1").cpus) == "96-191"
-    assert cpuset.format(n1.pools["checks"]) == "8-95" and cpuset.format(n1.pools["provers"]) == "128-191" and n2.pools == {}
+    assert cpuset.format(n1.pools["checks"]) == "8-95,128-159" and cpuset.format(n1.pools["provers"]) == "160-191"
+    assert n2.pools == {}
     assert [(w.name, w.gpus, w.borrow_gpus) for w in c.workstreams] == [("provers", 2, 6), ("deployments-gpu", 6, 2)]
     order = sorted(c.priorities, key=c.priorities.get, reverse=True)
     # kueue.yaml's order is policy (the steward, 30 Sep 19:40Z)

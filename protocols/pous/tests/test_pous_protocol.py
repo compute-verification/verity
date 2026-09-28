@@ -287,13 +287,13 @@ def test_certificates_at_their_points():
         protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
-def test_certificates_name_proved_pins():
-    """A certificate's `theorem` is the pinned proof `Pous.SecurityProofs.X` it rests on (in `lean/lean-audit.json`), of
-    the guarantee `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's pin is
+def test_certificates_name_proved_guarantees():
+    """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in `lean/lean-audit.json`,
+    of the statement `Pous.Guarantees.X` (`lean/Pous/Guarantees.lean`).  Experimental schemes are exempt: P2's is
     proposed."""
     lean = Path(__file__).parents[1] / "lean"
     statements = set(re.findall(r"^def (\w+) : Prop", (lean / "Pous" / "Guarantees.lean").read_text(), re.M))
-    pins = json.loads((lean / "lean-audit.json").read_text())["pins"]
+    guarantees = json.loads((lean / "lean-audit.json").read_text())["guarantees"]
     checked = 0
     for name in schemes.REGISTRY:
         sch = schemes.get(name)
@@ -303,7 +303,7 @@ def test_certificates_name_proved_pins():
         for cert in sch.certificates:
             x = cert.theorem.removeprefix("Pous.SecurityProofs.")
             assert cert.theorem == f"Pous.SecurityProofs.{x}" and x in statements, name
-            assert cert.theorem in pins, name
+            assert cert.theorem in guarantees, name
             checked += 1
     assert checked == 5
 

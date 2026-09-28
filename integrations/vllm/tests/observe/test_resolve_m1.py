@@ -50,7 +50,7 @@ def test_instance_counts_per_step(resolved):
             "RMSNormFusedCuda_v2": 2 * NL * R,
             "RoPE_v1": 2 * NL * R,                 # q and k
             "Attention_v3": NL * R,
-            "SiluMul_v1": NL * R,
+            "SiluMul_v2": NL * R,
             "Embedding_v1": R,
             "TokenSelect_v1": L,
         }

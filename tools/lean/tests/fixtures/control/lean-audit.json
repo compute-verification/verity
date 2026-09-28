@@ -7,5 +7,5 @@
  "escapes": {"Control.loop": "partial def: the controls' listed escape",
              "Control.loop'": "partial def, calling `loop` as `loop` calls it"},
  "layers": {"Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
- "pins": {"Control.main_thm": {}}
+ "guarantees": {"Control.main_thm": {}}
 }

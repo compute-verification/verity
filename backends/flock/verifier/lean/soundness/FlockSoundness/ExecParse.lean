@@ -75,7 +75,7 @@ fit its words, inside the input rows. -/
 theorem ofRows_groups {name : String} {useful constPos : ℕ} {ig og : Array Group} {ra rb : Array (Array ℕ)} {n : Net}
     (h : Net.ofRows name useful constPos ig og ra rb = .ok n) :
     constPos + 1 = useful ∧ ∀ g ∈ ig.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ n.inWords := by
-  have hiw := (Net.ofRows_ok h).2.2.2.2.2.2.2.2.2.2.2.2.2
+  have hiw := (Net.ofRows_ok h).2.2.2.2.2.2.2.2.2.2.2.2.2.1
   unfold Net.ofRows at h
   simp only at h
   replace h := ite_throw_ok (ite_throw_ok h)

@@ -136,11 +136,15 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
   if !inputsOk inGroups ra rb then throw "flock-ir-unit/v2: the input groups overlap, or an input port bit has no self row"
   let a ← Sparse.ofRows ra (2 ^ unitLog)
   let b ← Sparse.ofRows rb (2 ^ unitLog)
+  -- D11: an output group lies inside its unit's slot, so a region at its column (`Circuit.outRegion`) stays in the slot
+  if let some g := outGroups.find? (fun g => g.col + g.words > 2 ^ unitLog / WORD) then
+    throw s!"flock-ir-unit/v2: output group at word {g.col} ({g.words} words) overruns its unit's {2 ^ unitLog / WORD} words (D11)"
   return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
 
 /-- A net `ofRows` builds holds exactly the rows it was given: its A and B are theirs at its slot size, and its size,
 constant and port groups are the ones given. And the checks it ran hold: the input rows end before the constant, each is
-a self row or empty, the constant row is `[const]·[const]`, and the row order (`checkOrder`) passed; it has no lookup. -/
+a self row or empty, the constant row is `[const]·[const]`, and the row order (`checkOrder`) passed; it has no lookup; and
+every output group lies inside the unit's slot (D11). -/
 theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
     (h : ofRows name useful constPos ig og ra rb = .ok n) :
     n.unitLog = max 7 (log2ceil useful) ∧ Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a ∧
@@ -149,15 +153,23 @@ theorem ofRows_ok {name : String} {useful constPos : Nat} {ig og : Array Group} 
       rb.getD constPos #[] = #[constPos] ∧ checkOrder "flock-ir-unit/v2" (n.inWords * WORD) constPos ra rb = .ok () ∧
       (∀ i < n.inWords * WORD,
         ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = true) ∧
-      n.lookup = none ∧ n.inWords = (ig.back?.map fun g => g.col + g.words).getD 0 := by
+      n.lookup = none ∧ n.inWords = (ig.back?.map fun g => g.col + g.words).getD 0 ∧
+      ∀ g ∈ og.toList, g.col + g.words ≤ 2 ^ n.unitLog / WORD := by
   unfold ofRows at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat' (first | split at h | (injection h with h; subst h))
   all_goals first
     | exact absurd h (by simp)
-    | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ _ ha _ _ hb
+    | (rename_i _ _ _ _ hreach _ hfind hconst _ _ hord _ _ _ ha _ _ hb _ hd3
        simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hconst
-       refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_, rfl, rfl⟩
+       have hslot : ∀ g ∈ og.toList, g.col + g.words ≤ 2 ^ max 7 (log2ceil useful) / WORD := fun g hg =>
+         Nat.not_lt.mp fun hc => by
+           have hs : (og.find? fun g => decide (g.col + g.words > 2 ^ max 7 (log2ceil useful) / WORD)).isSome :=
+             Array.find?_isSome.mpr ⟨g, Array.mem_toList_iff.mp hg, decide_eq_true hc⟩
+           obtain ⟨g', hg'⟩ := Option.isSome_iff_exists.mp hs
+           exact hd3 g' hg'
+       refine ⟨rfl, ha, hb, rfl, rfl, rfl, rfl, Nat.not_lt.mp hreach, hconst.1, hconst.2, hord, fun i hi => ?_, rfl, rfl,
+         hslot⟩
        have := List.find?_eq_none.mp hfind i (List.mem_range.mpr hi)
        revert this
        generalize ((ra.getD i #[] == #[i] && rb.getD i #[] == #[i]) || ((ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty)) = b
@@ -176,7 +188,7 @@ theorem ofRows_inputs {name : String} {useful constPos : Nat} {ig og : Array Gro
     repeat' (first | split at h | (injection h with h; subst h))
     all_goals first
       | exact absurd h (by simp)
-      | (rename_i _ _ _ _ _ _ _ _ _ _ _ h1 h2 h3 _ _ _ _
+      | (rename_i _ _ _ _ _ _ _ _ _ _ _ h1 h2 h3 _ _ _ _ _ _
          first | simpa using h1 | simpa using h2 | simpa using h3)
   unfold inputsOk at hin
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, decide_eq_true_eq, Array.all_eq_true', beq_iff_eq] at hin

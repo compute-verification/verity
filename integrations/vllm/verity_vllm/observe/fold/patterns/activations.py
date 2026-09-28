@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ir.defs import bind
-from verity_vllm.program.registry import b1
+from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import bound_args, first, op_name
 from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
 
 @dataclass
 class SiluAndMul:
-    """`_C.silu_and_mul(result!, input)` → `Compute(SiluMul_v1{I}, rows=M, (PerRow(gu[M,2I]),), (PerRow(out[M,I]),))`."""
+    """`_C.silu_and_mul(result!, input)` → `Compute(<silu_mul>{I}, rows=M, (PerRow(gu[M,2I]),), (PerRow(out[M,I]),))`, where `<silu_mul>`
+    is the Definition the record target's `numerics_profile` vocabulary binds the Build's `silu_mul` kind to (`SiluMul_v2` under
+    b1-eager-v3)."""
 
     name: str = "act.silu_and_mul"
 
@@ -32,7 +34,14 @@ class SiluAndMul:
         if x.rank != 2 or out.rank != 2 or x.shape[0] != out.shape[0] or x.shape[1] != 2 * out.shape[1] or not is_row_major(x) or not is_row_major(out):
             return unsupported(node, "silu_and_mul views are not row-major [M,2I] -> [M,I]", x=repr(x), out=repr(out))
         if not (x.dtype == out.dtype == "bfloat16"):
-            return unsupported(node, "SiluMul_v1 is bf16", dtypes=[x.dtype, out.dtype])
+            return unsupported(node, "SiluMul is bf16", dtypes=[x.dtype, out.dtype])
         M, I = out.shape
-        return Compute(bind(b1.SiluMul, I=I), M, (PerRow(x),), (PerRow(out),), (node.id,), hint=hint_of(node, "silu_and_mul"),
+        numerics = target_of(ctx)[0].numerics_profile
+        try:
+            spec = vocabulary_for("profile", numerics).kind("silu_mul", I=I)
+        except ValueError as e:
+            return unsupported(node, f"the record target's numerics profile has no vocabulary: {e}", numerics_profile=numerics)
+        if spec is None:
+            return unsupported(node, "the record target's numerics profile binds no silu_mul kind", numerics_profile=numerics)
+        return Compute(spec, M, (PerRow(x),), (PerRow(out),), (node.id,), hint=hint_of(node, "silu_and_mul"),
                        kernels=("act_and_mul_kernel",), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)

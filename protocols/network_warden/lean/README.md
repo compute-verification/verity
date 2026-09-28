@@ -35,15 +35,15 @@ NetTiming/Difftest.lean        tested: the definitions evaluated on an instance 
 NetTimingDifftest.lean         the difftest's run (`runs` in lean-audit.json): every instance against the Python audit's
                                results
 scripts/difftest_vectors.py    the difftest's data: 10,000 random instances and the Python audit's results on them
-lean-audit.json                the policy and pin records for tools/lean/audit.py
-CheckAxioms.lean               one #print axioms line per pin, then the three proved but unpinned lemmas
+lean-audit.json                the policy and guarantee records for tools/lean/audit.py
+CheckAxioms.lean               one #print axioms line per guarantee, then the three proved lemmas without a record
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the axioms of the 51 pins and the 3 unpinned
+lake env lean CheckAxioms.lean                              # the axioms of the 51 guarantees and the 3 lemmas
 # the difftest, which the audit runs: its data from this checkout's Python audit, then the Lean side on it
 uv run python scripts/difftest_vectors.py ../../.. --out /tmp/dt
 lake env lean --run NetTimingDifftest.lean /tmp/dt/difftest/instances.jsonl /tmp/dt/difftest/python.jsonl 10000
@@ -57,9 +57,9 @@ as `docs/…` and `internal/…` name the network-transparency project store, wh
 **The audit.** `tools/lean/audit.py` audits every declaration under `NetTiming`: allowed axioms (only `propext`,
 `Classical.choice` and `Quot.sound`), named assumptions, escapes, orphan files, the import layers (`NetTiming.Protocol`,
 `NetTiming.Assumptions` and `NetTiming.Guarantees` import only one another and Mathlib, never a proof), the dependency
-record, a kernel replay, and the 51 pins' records, whose meaning it follows through those three (`meaning`). It then
+record, a kernel replay, and the 51 guarantees' records, whose meaning it follows through those three (`meaning`). It then
 runs the difftest (`runs`): on 10,000 random instances, the definitions give what the Python audit gives.
-A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
+When a changed record lands on `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
 ## The model
 
@@ -122,10 +122,11 @@ of `Guarantees.EncardIngressDecodableLe` at once, with a bound it meets exactly 
 `allocated_witness` meets them again with an allocation below the slot count (`r = 1 < S = 2`): its 8 messages meet
 that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `Allocated` has content.
 
-## The pins
+## The records
 
-The 51 records in `lean-audit.json`. The 35 guarantees are pinned as `NetTiming.SecurityProofs.G`, each proved by the
-lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by `card_free`):
+The 51 guarantees in `lean-audit.json`. The 35 from `NetTiming.Guarantees` are listed as `NetTiming.SecurityProofs.G`,
+each proved by the lemma of the same statement whose name it spells in UpperCamelCase (`SecurityProofs.CardFree` by
+`card_free`):
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `FillInjective`,
   `ExistsFillOfLeftPacked`, `CardCountsEqLe`, `CardCountsLeLe`, `SumReleasedLe`, `EncardFifoGridsLeOfAvailable`,
@@ -143,7 +144,7 @@ lemma of the same statement whose name it spells in UpperCamelCase (`SecurityPro
   `EncardDecodableLeConstantRatePerWindow`, `EncardIngressObsDecodableLePerWindow`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
 
-The 16 witnesses are pinned as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`, and the last three in
+The 16 witnesses are listed as lemmas, under their own names (`NetTiming.SecurityProofs.Sanity`, and the last three in
 `NetTiming.SecurityProofs.Schedule`):
 `witnessWarden_assumptions`, `witnessWarden_jitter_varies`, `witnessProgram_conditions`,
 `witnessProgram_timing_matters`, `joint_witness`, `joint_witness_bound`, `zP_accepts_one`, `zP_constOp_accepts_one`,
@@ -151,21 +152,22 @@ The 16 witnesses are pinned as lemmas, under their own names (`NetTiming.Securit
 `constantRate_not_framesRead_counts`, `constantRate_not_windowBlocks`, `constantRate_joint_witness`. Their witness definitions are outside `meaning`, so the audit records each witness's statement but
 does not follow it into the definitions it constructs.
 
-**Proved and audited, not pinned:** `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`
+**Proved and audited, not guarantees:** `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`
 (`NetTiming.SecurityProofs.Occupancy`).
 The audit checks them like every declaration, and they use only the three axioms. But they have no record in
-`lean-audit.json`, so no citation may call them pinned. Pinning them needs a statement reviewer.
+`lean-audit.json`, so no citation may call them guarantees. Listing one is an `--update` like any other.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them (danielreuter/verity#894), and the review of the content versions is on the one stacked on it. The
-constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and pinned before
+constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
-`n ≤ W·T`. All 51 pins are proved. The reference
-implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the pins and the three unpinned
-lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
+`n ≤ W·T`. All 51 guarantees are proved. The reference
+implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 19 of the guarantees and the three
+lemmas without a record by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
+counterpart.
 
-## Modelling choices a statement reviewer checks
+## Modelling choices a reader of the statements checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole

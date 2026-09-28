@@ -15,11 +15,17 @@
                                                         # the node, wrappers and kind as JSON; exit 3 with {"refused"}
   cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
                                                         # bundles, read over SSH (status.py); exit 1 if a node can't be read
+  cluster policy show [--description D] [--node N|all] [--key K] [--log L] [--json]   # the policy in force: each key, its
+                                                        # owner and source, with the overrides in force from the local log
+  cluster policy diff [--description D] [--node N|all] [--json]   # every key whose live value differs, read over SSH
+                                                        # (policy.py); exit 1 drift, 3 a value unread, 2 a bad description
+  cluster policy override KEY VALUE --until T --by WHO --reason R [--log L] [--apply] [--json]   # on KEY's node: KEY is
+                                                        # VALUE until T (UTC); a dry run without --apply; exit 2 refused
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Only `agent` reads a clock or touches a node (`agent.py`), and `status`, which only reads them; `shadow replay` runs the
-same planner over a day's copied logs.
+Only `agent` reads a clock or touches a node (`agent.py`), and `status` and `policy diff`, which only read them;
+`policy override --apply` writes nothing but its log. `shadow replay` runs the same planner over a day's copied logs.
 """
 from __future__ import annotations
 
@@ -118,7 +124,35 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
     st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
     st.add_argument("--json", action="store_true")
+    po = sub.add_parser("policy", help="the declared policy, and every key where a node's live value differs")
+    posub = po.add_subparsers(dest="pcmd", required=True)
+    from .policy import OVERRIDES
+    for name in ("show", "diff", "override"):
+        pp = posub.add_parser(name)
+        pp.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
+        pp.add_argument("--json", action="store_true")
+        if name != "override":
+            pp.add_argument("--node", choices=("nebius-1", "nebius-2", "all"), default="all")
+        if name != "diff":
+            pp.add_argument("--log", default=OVERRIDES, help="the override log (this node's)")
+        if name == "show":
+            pp.add_argument("--key", help="only this key and the keys under it (exit 2 when there are none)")
+        if name == "override":
+            pp.add_argument("key")
+            pp.add_argument("value")
+            pp.add_argument("--until", required=True, help="when it ends: an absolute UTC time, 2026-10-04T10:30:00Z")
+            pp.add_argument("--by", required=True, help="the handle who decided it")
+            pp.add_argument("--reason", required=True)
+            pp.add_argument("--apply", action="store_true", help="record it (else print what would be recorded)")
     a = ap.parse_args(argv)
+
+    if a.cmd == "policy":
+        from . import policy
+        if a.pcmd == "show":
+            return policy.main_show(a.description, a.node, a.json, a.key, a.log)
+        if a.pcmd == "override":
+            return policy.main_override(a.description, a.key, a.value, a.until, a.by, a.reason, a.log, a.apply, a.json)
+        return policy.main_diff(a.description, a.node, a.json)
 
     if a.cmd == "status":
         from . import status

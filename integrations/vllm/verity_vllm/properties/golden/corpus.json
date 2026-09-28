@@ -5,8 +5,8 @@
    "name": "smollm2-135m-m1",
    "log": "data/logs/m1.jsonl.gz",
    "profile": "vllm_d9105ea80_sm89_eager",
-   "digest": "d72cd7ad71fbf73854c8fc9af5d8fa51fa71ec4a65bcad396fbcc5834fb0e8e1",
-   "attribution_sha": "099bfe628971c29d913d1e2eda16b2cab93322da0bbc73f7077c32ec47868f0a",
+   "digest": "ad0913df37d88de8c7e742683019e407885e1574cf77add9de0c7011579bccc2",
+   "attribution_sha": "4538a6cb8edbb5c6a83f33f97e683c6ba153c159bcc6abd76e915be02f54add2",
    "n_instances": 14226,
    "n_steps": 16,
    "patterns": [
@@ -19,8 +19,8 @@
     "rope.rotary_embedding",
     "sample.gumbel_two_stage"
    ],
-   "recorded_utc": "2026-09-28T09:05:28Z",
-   "decision": "rebaseline-2026-09-28 (Daniel: re-baseline epoch; AmpereBF16TcDot16_v1 -> core v2 re-key, G0c)"
+   "recorded_utc": "2026-10-04T15:57:47Z",
+   "decision": "fold-binds-the-build-vocabulary-2026-10-04 (#961: _C.silu_and_mul binds the record target vocabulary silu_mul, SiluMul_v2 under b1-eager-v3; 1410 instances SiluMul_v1{I=1536} -> SiluMul_v2{I=1536}, nothing else moves)"
   },
   {
    "name": "qwen2.5-1.5b-m6",

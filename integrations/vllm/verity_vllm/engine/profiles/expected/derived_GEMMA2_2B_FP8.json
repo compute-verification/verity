@@ -173,28 +173,6 @@
   {
    "__type__": "AttentionScopeSoftcap",
    "bn": 64,
-   "body": {
-    "__type__": "CompositeDefinition",
-    "body": {
-     "__callable__": "verity_vllm.program.registry.dense.AttentionSoftcap"
-    },
-    "conformance": "quarantine (lane gemma): difftest vs vLLM FA2 flash_attn_varlen_func(softcap=CAP) 25/25 cases bitwise (43,520 bf16 words; T 5/17/64/65/130, D 128/256, CAP 30/50, all edge kinds; job 0917T223335-9ad747, RTX 4090 sm_89 driver 595.91.07, vllm 0.28.1rc1.dev472); MufuTanh from the in-tree measured table; not yet reached by the capture patterns (AttentionScope softcap branch)",
-    "doc": "`Attention_v3`'s body over `AttentionHeadSoftcap_v1{T, D, BN, CAP}` (GQA: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]`).\nGemma-2-2B: NH = 8, KVH = 4, D = 256, CAP = 50.0, BN = `fa2_kblock_n(256)`; sliding-window layers need nothing more below 4096\ntokens (FA2 `Is_local = false` there).",
-    "name": "AttentionSoftcap",
-    "register": true,
-    "signature": {
-     "__callable__": "verity_vllm.program.registry.dense.<lambda>"
-    },
-    "statics": [
-     "T",
-     "NH",
-     "KVH",
-     "D",
-     "BN",
-     "CAP"
-    ],
-    "version": 1
-   },
    "name": "attention.fa2_varlen_fwd.softcap",
    "num_splits": 1
   },

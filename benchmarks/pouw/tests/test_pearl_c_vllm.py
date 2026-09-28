@@ -6,6 +6,7 @@ from __future__ import annotations
 import ctypes
 import importlib.util
 import json
+import math
 import shutil
 import sys
 import types
@@ -37,6 +38,7 @@ from verity_pouw.audit import (
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
+from verity_pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
@@ -444,6 +446,11 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7]) == 0
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
+    fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1)
+    assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
+    assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
+    assert C.form_v1 is SD.FT._SCALAR["form_v1"]
+    assert VR.main([str(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
 
 @pytest.mark.slow
@@ -458,6 +465,8 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     rows.write_bytes(bytes(bad))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
     assert not r["accepted"] and "weight opening" in r["line"] and r["line"].startswith("REJECT") and RUN in r["line"]
+    assert {k: VR.verify(path, 3, 1, "test", b"verifier" * 4, fast=True, cross_check=1)[k] for k in ("accepted", "verdicts")} == \
+        {k: r[k] for k in ("accepted", "verdicts")}
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 0
     rows.write_bytes(good)
     man["matmuls"][0]["excluded_a"] = []
@@ -471,7 +480,7 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
     assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
-    assert PW._debit_cap is SD._DEBIT_CAP
+    assert PW._debit_cap is SD._DEBIT_CAP and PW.D.chain_debit is SD._CHAIN_DEBIT
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
     assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
@@ -491,7 +500,371 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         credit = PW.cell_credit(s, rec) * len(rows) * len(cols)
         assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
         assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
+        pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
+        a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
+        assert (t["atoms"], t["later_zero_promotions"]) == PW.D.chain_debit(a_codes, b_codes, s.device)
         assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
+    assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
+
+
+@pytest.mark.slow
+def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_path):
+    """Per-input mode (lean's ruling on #923): each chosen input is one matmul of the pass, measured in full or by
+    work-weighted draws, with its own failures, `W`, `w_max` and a simultaneous upper limit; nothing is pooled."""
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    out = tmp_path / "out"
+    assert SD.main([str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--out", str(out)]) == 0
+    doc = json.loads((out / "inputs.json").read_text())
+    refs = Verifier(PW._TileRuleView(s), epoch).refs
+    assert doc["m"] == len(doc["inputs"]) == 2 and doc["delta_per_input"] == 0.05 / 2
+    for row in doc["inputs"]:
+        ids = [r.id for r in refs if r.matmul == row["matmul"]]
+        area = [len(refs[t].tile.rows) * len(refs[t].tile.cols) for t in ids]
+        assert (row["NT"], row["W"], row["w_max"]) == (len(ids), sum(area), max(area))
+        assert row["drawn"] == (len(ids) if row["method"] == "census" else 3) and row["openings_failed"] == 0
+        assert 0 < row["upper"] <= 1 and (row["k"], row["n"]) == (records[row["matmul"]].matmul.shape.k, records[row["matmul"]].matmul.shape.n)
+    assert doc["cited_upper"] == max(r["upper"] for r in doc["inputs"])
+    lines = (out / f"{path.parent.name}.input-tiles.jsonl").read_text().splitlines()
+    for d in ("calls", "weights"):
+        shutil.rmtree(path.parent / d)
+    again = tmp_path / "again"
+    args = [str(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--resumed-only"]
+    assert SD.main([*args, "--out", str(again), "--resume", str(out / f"{path.parent.name}.input-tiles.jsonl")]) == 0
+    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
+    census = next(r for r in doc["inputs"] if r["method"] == "census")
+    drop = next(x for x in lines if json.loads(x)["matmul"] == census["matmul"])
+    (tmp_path / "short.jsonl").write_text("\n".join(x for x in lines if x != drop) + "\n")
+    with pytest.raises(ValueError, match="unmeasured"):
+        SD.main([*args, "--out", str(tmp_path / "short"), "--resume", str(tmp_path / "short.jsonl")])
+
+
+@pytest.mark.slow
+def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
+    """`--fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
+    source, every trial the tile rule on the committed rows under that salt, bounded by Clopper–Pearson; a resume with the
+    same source measures nothing again, and another source's trials are refused."""
+    path, s, epoch, prover, tr, splits, records = honest_pass
+    out, src = tmp_path / "out", "ab" * 32
+    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2"]
+    assert SD.main([*args, "--out", str(out)]) == 0
+    doc = json.loads((out / "inputs.json").read_text())
+    assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
+    lines = [json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()]
+    assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
+    assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] and t["ok"] for t in lines)
+    for row in doc["inputs"]:
+        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == 0
+        assert row["upper"] == SD.clopper_pearson_upper(0, 4, 0.025) and row["bound_method"].startswith("fresh")
+    t = lines[0]
+    ref = Verifier(PW._TileRuleView(s), epoch).refs[t["tile"]]
+    op = prover.open(epoch, ref.id)
+    a, b = [o.value for o in op.a], [o.value for o in op.b]
+    u = epoch.workload.matmuls[ref.matmul]
+    ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+    ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
+    rows, cols = records[ref.matmul].credited(ref.tile)
+    debit, cap = PW._debit_cap(s, records[ref.matmul], ref.tile, ops, rows, cols)
+    assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
+    again = tmp_path / "again"
+    resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
+    assert SD.main([*args, "--out", str(again), *resume]) == 0
+    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
+    with pytest.raises(ValueError, match="another salt"):
+        SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
+
+
+def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
+    """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
+    (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
+    and the source is given in the command, never drawn inside the run."""
+    from verity.randomness import derive
+
+    src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
+    got = SD.fresh_trials(job, row, 50, src)
+    key = derive(src, "verity/pouw/fp8-served-table-fresh-trials/v1", {"manifest": job["sha256"], "matmul": 7, "use": "tiles"})
+    cum = [4096, 8192, 10240]
+    assert [t for t, *_ in got] == [[40, 41, 42][sum(key.uniform(10240, d) >= c for c in cum)] for d in range(50)]
+    assert [d for _, _, d, _ in got] == list(range(50)) and len({s for *_, s in got}) == 50
+    assert SD.fresh_trials(job | {"sha256": "cd" * 32}, row, 50, src) != got
+    with pytest.raises(SystemExit):
+        SD.main(["m.json", "--per-input", "1", "--fresh-draws", "4", "--out", str(tmp_path)])
+
+
+ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_table.py")
+
+
+def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
+    """Every input is re-bounded at δ = 0.05/m, m every input the table measures: both models' and a model's fresh trials."""
+    row = lambda run, i, nt, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
+                                       "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "census", "drawn": nt,
+                                       "openings_failed": 0, "failures": fails, "share_max": 5e-5}
+    doc = lambda run, nts: {"m": len(nts), "inputs": [row(run, i, nt) for i, nt in enumerate(nts)]}
+    verify = lambda run, label, ok: {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
+                                     "transcript_sha256": "00", "tiles": [1, 2], "line": f"{'ACCEPT' if ok else 'REJECT'} x", "replay": "batch",
+                                     "cross_checked": [1]}
+    trial = lambda i, fails: row("rq", i, 1) | {"method": "fresh", "drawn": 320, "failures": fails}
+    files = {}
+    for name, obj in {"q": doc("rq", [64, 32]), "l": doc("rl", [48]), "v1": verify("rq", "decode", True),
+                      "v2": verify("rq", "control", False), "bad": verify("rq", "control", True),
+                      "fresh": {"fresh_draws": 320, "fresh_source": "cd", "m": 2, "inputs": [trial(0, 0), trial(1, 1)]}}.items():
+        files[name] = tmp_path / f"{name}.json"
+        files[name].write_text(json.dumps(obj))
+    out = tmp_path / "out"
+    assert ST.main(["--model", "qwen", str(files["q"]), str(files["v1"]), str(files["v2"]), "--model", "llama", str(files["l"]),
+                    "--fresh", "qwen", str(files["fresh"]), "--out", str(out)]) == 0
+    table = json.loads((out / "table.json").read_text())
+    q, l = table["models"]
+    assert table["m"] == 5 and q["delta_per_input"] == 0.01 and (q["m_model"], q["failures"]) == (2, 0)
+    assert q["epsilon"] == pytest.approx(math.log(100) / 32) and q["epsilon_input"]["matmul"] == 1
+    assert l["epsilon"] == pytest.approx(math.log(100) / 48)
+    assert q["fresh"]["epsilon"] == SD.clopper_pearson_upper(1, 320, 0.01) and q["fresh"]["trials"] == 640 and "fresh" not in l
+    assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
+    assert q["tile_draws"] == 96 and "m = 5" in (out / "table.md").read_text()
+    assert ST.main(["--model", "qwen", str(files["q"]), "--absent", "llama", "its pass is gone", "--out", str(out)]) == 0
+    table = json.loads((out / "table.json").read_text())
+    assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)
+    assert table["models"][1] == {"model": "llama", "absent": "its pass is gone"}
+    assert "| llama | — | — | — | — | — | none | its pass is gone |" in (out / "table.md").read_text()
+    assert ST.main(["--model", "qwen", str(files["q"]), "--model", "llama", str(files["l"]), "--pending", "llama", "1", "rp",
+                    "--fresh", "qwen", str(files["fresh"]), "--out", str(out)]) == 0
+    table = json.loads((out / "table.json").read_text())
+    assert table["m"] == 6 and table["models"][1]["fresh_pending"] == {"m_model": 1, "run": "rp"}
+    assert table["models"][1]["epsilon"] == pytest.approx(math.log(120) / 48) and "pending (`rp`)" in (out / "table.md").read_text()
+    with pytest.raises(SystemExit):
+        ST.main(["--model", "qwen", str(files["q"]), "--pending", "qwen", "2", "rp", "--fresh", "qwen", str(files["fresh"]),
+                 "--out", str(out)])
+    with pytest.raises(ValueError, match="committed list"):
+        files["fresh"].write_text(json.dumps({"fresh_draws": 320, "fresh_source": "cd", "m": 1, "inputs": [trial(0, 0)]}))
+        ST.main(["--model", "qwen", str(files["q"]), "--fresh", "qwen", str(files["fresh"]), "--out", str(out)])
+    with pytest.raises(ValueError, match="control"):
+        ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])
+    with pytest.raises(ValueError, match="one served pass"):
+        files["q"].write_text(json.dumps(doc("rq", [64]) | {"inputs": [row("rq", 0, 64), row("rl", 1, 64)]}))
+        ST.main(["--model", "qwen", str(files["q"]), "--out", str(out)])
+
+
+FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "forming_headroom.py")
+
+
+def test_forming_headroom_on_a_recorded_line(tmp_path):
+    """A real decode line (Qwen3-8B's down projection, pass r20261003-210254-47a3) recomputes at Prices.sm120, and at the
+    cited Prices.sm120Loop its verdict flips only past 11.0% salt-dead elements, by hand."""
+    line = {"tile": 1769828, "matmul": 7179, "m": 32, "k": 12288, "n": 4096, "credited_rows": 32, "credited_cols": 64,
+            "ok": True, "atoms": 14, "later_zero_promotions": 0, "debit_exact": "476", "cap": 27426.816}
+    path = tmp_path / "q" / "decode.input-tiles.jsonl"
+    path.parent.mkdir()
+    path.write_text(json.dumps(line) + "\n" + json.dumps(line | {"tile": 1, "atoms": 200, "debit_exact": "6800"}) + "\n")
+    cell = 12288 + Fraction(12288 * 1047, 125 * 128) + 96 + 128 + 120 - Fraction(1047, 125)
+    want = ((cell * 2048 / 1000 - (32 + Fraction(1047, 500)) * 14) * 4096 / (40 * 64)) / (32 * 12288)
+    assert FH.dead_to_flip(line) == want and 0.1099 < want < 0.1100
+    out = tmp_path / "fh.json"
+    assert FH.main([str(path), "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["tiles"] == 2 and doc["unit_rows_covered_by_rho_D"] and doc["inputs"][0]["worst_tile"] == 1
+    inputs = tmp_path / "inputs.json"
+    inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 7179,
+                                                     "k": 12288, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
+                                                     "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
+    assert ST.main(["--model", "qwen", str(inputs), "--forming", "qwen", str(out), "--out", str(tmp_path / "t")]) == 0
+    assert json.loads((tmp_path / "t" / "table.json").read_text())["models"][0]["forming"]["tiles"] == 2
+    assert "flips only if at least" in (tmp_path / "t" / "table.md").read_text()
+    quality = {"run": "rp", "model": "/m/q", "dataset": {}, "windows": 2, "window_tokens": 9, "gates": {"fp8": True, "v1": True},
+               "summary": {"bf16": {"perplexity": 7.5, "top1_agreement_vs_bf16": 1.0, "greedy_token_agreement_vs_bf16": 1.0},
+                           "pearlc-v1": {"scheme": "pearl-c-sm120-v1-h1", "perplexity": 7.75, "top1_agreement_vs_bf16": 0.9,
+                                         "greedy_token_agreement_vs_bf16": 0.6}}}
+    qpath = tmp_path / "quality.json"
+    qpath.write_text(json.dumps(quality))
+    assert ST.main(["--model", "qwen", str(inputs), "--quality", "qwen", str(qpath), "--out", str(tmp_path / "t")]) == 0
+    md = (tmp_path / "t" / "table.md").read_text()
+    assert "| qwen | `rp` | pearlc-v1 | pearl-c-sm120-v1-h1 | 7.7500 | 0.9000 | 0.6000 |" in md
+    assert "| qwen | `rp` | bf16 | — | 7.5000 |" in md and "differ only in their Merkle trees" in md
+    qpath.write_text(json.dumps(quality | {"gates": {"fp8": True, "v1": False}}))
+    with pytest.raises(ValueError, match="gates"):
+        ST.main(["--model", "qwen", str(inputs), "--quality", "qwen", str(qpath), "--out", str(tmp_path / "t")])
+    flagged = line | {"atoms": 200, "debit_exact": "6800"}
+    assert FH.dead_to_flip(flagged) < want - Fraction(32 * 3, 32 * 12288)
+    path.write_text(json.dumps(line | {"debit_exact": "477"}) + "\n")
+    with pytest.raises(ValueError, match="not Prices.sm120"):
+        FH.main([str(path), "--out", str(out)])
+
+
+FD = load("pearl_c_vllm_forming_domain", KERNEL.parent / "pearl_c_vllm" / "forming_domain.py")
+
+
+def test_forming_domain_on_a_synthetic_pass(tmp_path, monkeypatch):
+    """The domain check's numpy rows agree with s5_stats and an all-Fraction count on every credited row, skip filler and
+    excluded rows, and find a row with α·s > 444 (no stride energy: ρ = 0, α·s = 448, so every element of it is loud and its
+    unit fails liveness too), a row through the subnormal fallback, and a unit whose loud elements break liveness at 8ρ_max.
+    Its pool forks: under forkserver (Python 3.14's default) a worker can't import this file's module to unpickle a task."""
+    rng = np.random.default_rng(7)
+    k = 256
+    bf16 = lambda a: (np.asarray(a, np.float32).view(np.uint32) >> 16).astype("<u2")
+    a = rng.normal(0, 1, (64, k)).astype(np.float32)
+    a[5, ::8] = 0
+    a[7, 8] = 2.0 ** -70
+    b = rng.normal(0, 1, (4, k)).astype(np.float32)
+    b[:, 1:80:8] = 40.0
+    split = tmp_path / "decode"
+    (split / "calls").mkdir(parents=True)
+    mats = []
+    for i, (rows, real, excl) in enumerate([(a, 60, [3, 5 + 64]), (b, 4, [])]):
+        data = bf16(rows).tobytes()
+        (split / "calls" / f"{i}.rows.bf16").write_bytes(data)
+        mats.append({"index": i, "m": rows.shape[0], "k": k, "n": 64, "real_rows": real, "excluded_a": excl,
+                     "rows": {"path": f"calls/{i}.rows.bf16", "bytes": len(data)}})
+    (split / "manifest.json").write_text(json.dumps({"matmuls": mats}))
+
+    def by_fractions(words):
+        s_w, _, alpha_w, _ = C.s5_stats(words)
+        alpha, s = Fraction(P.f32_of_bits(alpha_w)), Fraction(P.f32_of_bits(s_w))
+        loud = sum(1 for w in words if abs(Fraction(P.f32_of_bits(w))) * alpha >= 2 * (448 - alpha * s))
+        return alpha * s, loud
+
+    want = []
+    for rows, real, excl in [(a, 60, {3}), (b, 4, set())]:
+        words = (bf16(rows).astype(np.uint32) << 16)
+        want.append([by_fractions(words[i].tolist()) for i in range(real) if i not in excl])
+    unit = FD.check_matmul((str(split), mats[0], list(range(64))))
+    assert unit["m_cred"] == 59 and unit["sampled"] == 59 and unit["fallback"] == 1 and unit["exact"] >= 1
+    assert unit["rows_out"] == sum(1 for a_s, _ in want[0] if a_s > 444) == 1 and unit["min_margin_row"] == 5
+    assert unit["loud"] == sum(n for _, n in want[0]) and unit["max_out_per_tile"] == 1
+    out = tmp_path / "fd.json"
+    methods, get_context = [], FD.multiprocessing.get_context
+    monkeypatch.setattr(FD.multiprocessing, "get_context", lambda method=None: methods.append(method) or get_context(method))
+    assert FD.main([str(tmp_path), "--splits", "decode", "--jobs", "2", "--out", str(out)]) == 0
+    assert methods == ["fork"]
+    doc = json.loads(out.read_text())
+    r = doc["splits"]["decode"]
+    assert r["rows_checked"] == 63 and r["rows_out_of_domain"] == 1 and r["units_failing_live"] == 2
+    assert r["min_slack"] == 4 * k - 64 * sum(n for _, n in want[1]) < 0
+    assert r["hn_fail"] == 1 and not (doc["hfloor_holds"] or doc["hlive_holds"] or doc["hn_holds"])
+
+
+def test_clopper_pearson_upper():
+    assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) == pytest.approx(1 - (0.05 / 16) ** (1 / 320))
+    assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) < 0.02 < math.log(20 * 16) / 64
+    up = SD.clopper_pearson_upper(3, 100, 0.05)
+    p_at = lambda p: sum(math.comb(100, i) * p ** i * (1 - p) ** (100 - i) for i in range(4))
+    assert p_at(up) == pytest.approx(0.05, abs=1e-9) and 0.03 < up < 0.1
+    assert SD.clopper_pearson_upper(5, 5, 0.05) == 1.0
+
+
+def test_served_debit_input_bounds():
+    """The per-input limits (lean's rulings on #923): the work-weighted rule of three for a census and for n draws at no
+    failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
+    row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
+    assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)
+    a = 4096 / (2048 * 4096)
+    drawn = {"method": "sampled", "failures": 0, "W": 2048 * 4096, "w_max": 4096, "drawn": 64}
+    assert SD.input_bound(drawn, 0.05)[0] == pytest.approx(math.log(20) * a / (1 - math.exp(-64 * a)))
+    assert SD.input_bound(drawn, 0.05)[0] > math.log(20) / 64 > SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0]
+    assert SD.input_bound(drawn | {"drawn": 10 ** 6}, 0.05)[0] == pytest.approx(math.log(20) * a)
+    assert SD.input_bound(drawn | {"failures": 1, "failures_weighted": 4096}, 0.05) == (1.0, "sampled with failures: measure this input in full")
+    up = SD._bernstein_upper(3 * 4096, 4096, 64 * 4096, 0.05)
+    assert 3 / 64 < up < 1
+    assert SD.input_bound(row | {"failures": 3, "failures_weighted": 3 * 4096}, 0.05)[0] == up
+
+
+def test_served_debit_rebound_recomputes_an_inputs_json(tmp_path):
+    """`--rebound` rewrites a recorded inputs.json's bounds from its counts alone, at δ = 0.05/m, with no manifest."""
+    rows = [{"pass": "decode", "run": "r", "manifest_sha256": "0", "matmul": i, "weight": i, "m": 1, "k": 4096, "n": 4096,
+             "NT": nt, "W": nt * 4096, "w_max": 4096, "method": method, "drawn": drawn, "openings_failed": 0, "failures": 0,
+             "failures_weighted": 0, "share_max": None, "reasons": [], "upper": 0.0, "bound_method": "old"}
+            for i, (nt, method, drawn) in enumerate([(64, "census", 64), (2048, "sampled", 64)])]
+    src = tmp_path / "inputs.json"
+    src.write_text(json.dumps({"seed": 7, "census_max": 128, "draws": 64, "inputs": rows}))
+    assert SD.main(["--rebound", str(src), "--out", str(tmp_path / "out")]) == 0
+    doc = json.loads((tmp_path / "out" / "inputs.json").read_text())
+    assert doc["m"] == 2 and doc["delta_per_input"] == 0.025 and doc["seed"] == 7
+    assert [r["upper"] for r in doc["inputs"]] == [SD.input_bound(r, 0.025)[0] for r in rows]
+    assert doc["cited_upper"] == doc["inputs"][1]["upper"] and doc["cited_input"]["matmul"] == 1
+
+
+def _debit_codes(rng, rows: int, k: int, zero_first: bool) -> list[list[int]]:
+    """E4M3 code rows whose words flag atoms: small codes with some large 32-code slices (the small ones' atoms then round
+    away), and the first promotion group zero when `zero_first` (a later promotion into a +0 total)."""
+    c = rng.integers(1, 0x10, (rows, k))
+    for t in range(0, k, 32):
+        if rng.random() < 0.3:
+            c[:, t:t + 32] = rng.integers(0x50, 0x7E, (rows, 32))
+    if zero_first:
+        c[:, :128] = 0
+    return [[int(x) for x in row] for row in c | rng.integers(0, 2, (rows, k)) << 7]
+
+
+def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejection():
+    FT, s = SD.FT, PPD.scheme_of("pearl-c-sm120-v1-h2")
+    rng, seen = np.random.default_rng(3), set()
+    for trial in range(8):
+        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
+        want = PW.D.chain_debit(a, b, s.device)
+        assert FT.chain_debit(a, b, s.device) == want
+        seen.add(want[1] > 0)
+        assert want[0] > 0
+    assert seen == {True, False}
+    a[0][5] = 0x7F
+    with pytest.raises(Exception) as want:
+        PW.D.chain_debit(a, b, s.device)
+    with pytest.raises(type(want.value), match=str(want.value)):
+        FT.chain_debit(a, b, s.device)
+
+
+def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
+    """`fast_tile.install`'s forms (forming, the peel factors, G, C̃ and U, the debit, native BLAKE3) give a tile's encoding,
+    check and debit field for field as the scalar reference, and its undo puts every scalar function back."""
+    FT, s = SD.FT, PPD.scheme_of("pearl-c-sm120-v1-h2")
+    rng = np.random.default_rng(5)
+    shape = Shape(8, 256, 64)
+    mm, tile = Matmul(0, shape, 0), s.tiles(shape)[0]
+    a = [x.tobytes() for x in bf16_words(rng, len(tile.rows), shape.k)]
+    b = [x.tobytes() for x in bf16_words(rng, len(tile.cols), shape.k, 0.02)]
+    ctx = Context(bytes(range(32)), mm, bytes(32), bytes(range(1, 33)))
+
+    def run():
+        ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+        return ops, s.checked(ctx, ops), PW.D.chain_debit(ops.a.codes, ops.b.codes, s.device)
+
+    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3)
+    undo = FT.install(s)
+    assert C.form_v1 is FT.form_v1 and PW.D.chain_debit is FT.chain_debit
+    fast = run()
+    undo()
+    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3) == before
+    ref = run()
+    for side in ("a", "b"):
+        for field in ("codes", "alpha", "beta", "s", "rho", "ep", "x"):
+            assert getattr(getattr(fast[0], side), field) == getattr(getattr(ref[0], side), field), (side, field)
+    assert (fast[0].pa, fast[0].pb) == (ref[0].pa, ref[0].pb)
+    assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2] == ref[2]
+    with pytest.raises(ValueError):
+        FT.install(PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h1"))
+
+
+@pytest.mark.slow
+def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pass, tmp_path):
+    """The batch replay writes the scalar replay's tile lines (all of them cross-checked here), and `--resume` on them
+    measures nothing again and writes the same summary."""
+    path, *_ = honest_pass
+    lines = {}
+    for name, extra in (("scalar", ["--scalar"]), ("batch", ["--cross-check", "1"])):
+        out = tmp_path / name
+        assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), *extra]) == 0
+        lines[name] = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
+    drop = ("seconds", "replay", "cross_checked", "resumed_from")
+    strip = lambda ts: sorted(({k: v for k, v in t.items() if k not in drop} for t in ts), key=lambda t: t["tile"])
+    assert strip(lines["scalar"]) == strip(lines["batch"]) and all(t["cross_checked"] for t in lines["batch"])
+    assert {t["replay"] for t in lines["batch"]} == {"batch"} and {t["replay"] for t in lines["scalar"]} == {"scalar"}
+    out = tmp_path / "resumed"
+    src = tmp_path / "batch" / f"{path.parent.name}.tiles.jsonl"
+    assert SD.main([str(path), "--tiles", "3", "--jobs", "1", "--out", str(out), "--resume", str(src)]) == 0
+    again = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
+    assert strip(again) == strip(lines["batch"]) and all(t["resumed_from"] == str(src) for t in again)
+    summary = lambda d: {k: v for k, v in json.loads((d / "summary.json").read_text())["passes"][0].items() if k != "cpu_seconds"}
+    assert summary(out) == summary(tmp_path / "batch")
+    unstamped = tmp_path / "unstamped.jsonl"
+    unstamped.write_text("".join(json.dumps({k: v for k, v in t.items() if k != "manifest_sha256"}) + "\n" for t in lines["batch"]))
+    assert SD.resumed([str(unstamped)], lines["batch"][0]["manifest_sha256"]) == {}
+    assert len(SD.resumed([f"{unstamped}={lines['batch'][0]['manifest_sha256']}"], lines["batch"][0]["manifest_sha256"])) == len(lines["batch"])
 
 
 def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
@@ -575,6 +948,34 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
     blocks = E2E.schedule(3, "blocks")
     assert [{E2E.GROUP[m] for m in b} for b in blocks] == [{"base"}, {"arm"}, {"base"}, {"arm"}]
     assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
+
+
+def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_none(monkeypatch):
+    """Qwen3-8B's tokenizer has no BOS (vLLM refused its windows' None id); its config's `bos_token_id` stands in."""
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+
+    class Tok:
+        def __init__(self, bos):
+            self.bos_token_id = bos
+
+        def __call__(self, text, add_special_tokens):
+            return {"input_ids": list(range(100, 100 + 2 * E2E.WINDOW))}
+
+    configs = {"qwen": 151643, "llama": 128000, "none": None}
+    transformers = types.SimpleNamespace(
+        AutoTokenizer=types.SimpleNamespace(from_pretrained=lambda m: Tok(128000 if m == "llama" else None)),
+        AutoConfig=types.SimpleNamespace(from_pretrained=lambda m: types.SimpleNamespace(bos_token_id=configs[m])))
+    table = types.SimpleNamespace(column=lambda c: types.SimpleNamespace(to_pylist=lambda: ["a", "b"]))
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", types.SimpleNamespace(hf_hub_download=lambda *a, **k: "x"))
+    parquet = types.SimpleNamespace(read_table=lambda p: table)
+    monkeypatch.setitem(sys.modules, "pyarrow", types.SimpleNamespace(parquet=parquet))
+    monkeypatch.setitem(sys.modules, "pyarrow.parquet", parquet)
+    qwen = E2E.wikitext_windows("qwen", None)
+    assert [w[0] for w in qwen] == [151643, 151643] and all(len(w) == E2E.WINDOW for w in qwen)
+    assert [w[0] for w in E2E.wikitext_windows("llama", 1)] == [128000]
+    with pytest.raises(ValueError, match="BOS"):
+        E2E.wikitext_windows("none", None)
 
 
 def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_once():

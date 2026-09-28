@@ -60,13 +60,13 @@ theorem ofRows_cols_lt {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h 
 
 theorem shaNet_inRows {c : Circuit} (h : Flock.HmNets.check c = .ok ()) :
     (c.nets.getD c.shaNet default).2.inWords * Flock.WORD = 8192 := by
-  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw⟩ := Net.ofRows_ok (shaNet_ofRows h)
+  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw, -⟩ := Net.ofRows_ok (shaNet_ofRows h)
   rw [hw, ← hi, (shaNet_groups h).1]
   decide
 
 theorem hmNet_inRows {c : Circuit} (h : Flock.HmNets.check c = .ok ()) :
     (c.nets.getD c.hmNet default).2.inWords * Flock.WORD = 4096 := by
-  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw⟩ := Net.ofRows_ok (hmNet_ofRows h)
+  obtain ⟨-, -, -, -, -, hi, -, -, -, -, -, -, -, hw, -⟩ := Net.ofRows_ok (hmNet_ofRows h)
   rw [hw, ← hi, (hmNet_groups h).1]
   decide
 

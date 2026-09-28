@@ -419,16 +419,9 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
     if scale_input:
         spec = attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows, cap)
         return bind(_SCALE_INPUT[spec.base_id], **{k: v for k, v in spec.bindings.items() if k != "CAP"})
-    g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if cap is not None:
-        from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
-        if uses_accepted_kinds(profile):
-            return bind(DN.AttentionSoftcap, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap))
-        if not fa2_check_inf(profile) or row is None or own_rows is None:
-            raise UnregisteredTarget("a softcapped row off the accepted target is registered only under FA2's per-iteration Check_inf, "
-                                     "with the row's index among its sequence's query rows and their number")
-        return bind(F2S.AttentionSoftcapV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap), DOT=g["DOT"],
-                    INV=g["INV"], MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
+        return softcapped(attention_spec(profile, T, NH, KVH, D, seqlen_q, row, own_rows), cap)
+    g = attention_geometry(profile, D, seqlen_q, NH, KVH)
     if uses_accepted_kinds(profile):
         return bind(b1.AttentionV3, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
     if fa3_check_inf(profile):
@@ -443,6 +436,18 @@ def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, ro
         return bind(F2.AttentionV5, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"],
                     MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
     return bind(b1.AttentionV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], DOT=g["DOT"], INV=g["INV"])
+
+
+def softcapped(spec, cap: float):
+    """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
+    for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
+    chain has a registered softcapped form (UnregisteredTarget)."""
+    from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+    body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
+    if body is None:
+        raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "
+                                 f"and under FA2's per-iteration Check_inf")
+    return bind(body, **spec.bindings, CAP=float(cap))
 
 
 def describe(profile) -> dict[str, Any]:

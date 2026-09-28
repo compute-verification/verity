@@ -456,7 +456,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
                         "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
                                         f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}",
-                                        f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v1{{I={I}}} (base)", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}",
+                                        f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}",
                                         f"MoeSum_v1{{TOPK={T},H={H}}}"] + ([f"AllReduce2_v1{{N={H}}} (the block's TP all-reduce, in or after the scope)"] if world > 1 else []),
                         "pins": {"fused_moe_kernel": {**FUSED_MOE_NUMERIC_PINS, **moe.fused_pins, "num_warps": moe.fused_num_warps, "num_stages": moe.fused_num_stages,
                                                       "source": "gen_ov_moe_patterns.FUSED_MOE_PINS (vLLM BI default, M-invariant)" if fused_moe_pins is None

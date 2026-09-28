@@ -75,6 +75,14 @@ def test_the_scan_matches_statements_not_docstrings_proofs_or_other_names(tmp_pa
     assert hits == {"Lib.proved_one": True, "Lib.open_one": False, "Lib.by_cases": True}
 
 
+def test_the_scan_reads_a_file_whose_name_git_quotes(tmp_path):
+    """`git ls-tree --name-only` quotes a name with bytes outside ASCII (`"Lib/D\\303\\251fs.lean"`), which doesn't end in `.lean`,
+    so the scan never read such a file, and a theorem there proving a watched assumption went unseen and the audit passed."""
+    repo, rev = dependency(tmp_path, {"Lib/Défs.lean": LIB, "scripts/axiom_baseline.json": json.dumps({"sorry": ["Lib.open_one"]})})
+    scanned = {"baseline": "scripts/axiom_baseline.json", "sources": ["Lib"]}
+    assert {h["name"] for h in U.scan(repo, rev, scanned, WATCH)["mca"]} == {"Lib.proved_one", "Lib.open_one", "Lib.by_cases"}
+
+
 def test_new_is_proved_and_not_acknowledged():
     hits = {"mca": [{"name": "a", "proved": True}, {"name": "b", "proved": True}, {"name": "c", "proved": False}]}
     assert U.new(hits, {"mca": {"ack": ["a"]}}) == {"mca": ["b"]}

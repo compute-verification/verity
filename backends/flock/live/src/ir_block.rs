@@ -212,8 +212,12 @@ impl IrUnitNet {
         let leaves = tagged("LEAVES ");
         let cut = tagged("CUT ");
         assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES and CUT lines, in that order");
-        let unit_log = useful.next_power_of_two().trailing_zeros() as usize;
-        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log: unit_log.max(7), sha256,
+        let unit_log = (useful.next_power_of_two().trailing_zeros() as usize).max(7);
+        // D11: an output group lies inside its unit's slot, so a region at its column stays in the slot
+        if let Some(g) = out_groups.iter().find(|g| g.col + g.words > (1 << unit_log) / WORD) {
+            panic!("flock-ir-unit/v2: output group at word {} ({} words) overruns its unit's {} words (D11)", g.col, g.words, (1usize << unit_log) / WORD);
+        }
+        IrUnitNet { name: h[1].to_string(), useful, const_pos, in_groups, out_groups, in_words, out_cols, a, b, unit_log, sha256,
                     leaves, cut, flat: FlatCache::default() }
     }
 
