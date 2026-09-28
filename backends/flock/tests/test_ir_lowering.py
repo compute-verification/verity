@@ -222,14 +222,27 @@ def test_bit_at_selects_the_bit_or_zero():
     assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
 
 
-def test_a_lookup_is_never_laid_out():
-    """A table read is a lookup, which a Flock unit's expanded circuit does not express: the layout refuses it."""
+#: the pinned rcp table read inline: 8,444 + 1,120 decoder rows, 25,133 nonempty product rows, 31 copy rows; its 143,860,467 set bits
+READ_ROWS, READ_NNZ = 34_728, 143_860_467
+
+
+def test_a_table_read_is_laid_out_as_plain_rows():
+    """A table read is laid out inline as rows of the unit (``ir_lower._Read``), no slot: the rcp table's decoders, a product row
+    per nonempty (value bit, high minterm) and a copy row per live value bit, its set bits in the product rows' forms."""
     C = gf2.Circuit()
     x = C.input("in0", 32)
     C.output("out0", IL.PIECES["MufuRcpFtz_v1"](C, x))
     assert C.counts()["lookups"] == 1
-    with pytest.raises(AssertionError):
-        IL.layout(C, ["in0"], ["out0"])
+    lay = IL.layout(C, ["in0"], ["out0"])
+    assert (lay.counts["reads"], lay.counts["read_rows"], lay.counts["read_nnz_a"]) == (1, READ_ROWS, READ_NNZ)
+
+    def latest(r):
+        cols = np.asarray(r, dtype=np.int64)
+        cols = cols[cols != lay.const]
+        return int(cols.max()) if len(cols) else -1
+
+    first = lay.in_words * IL.WORD
+    assert all(latest(lay.rows_a[i]) < i and latest(lay.rows_b[i]) < i for i in range(first, lay.useful) if i != lay.const)
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])
