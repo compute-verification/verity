@@ -273,8 +273,9 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
     a = max(1, n // 2)
     b = max(1, n - a)
     # vLLM's suite is not in the gate yet: 12 of its 4,400 CPU tests fail with torch 2.14 and it takes 20 minutes on one core
+    commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
     pytest = [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
-              "--skip", "verity-vllm", "--jobs", str(a), *([] if cache else ["--fresh"])]
+              "--skip", "verity-vllm", *commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out)]

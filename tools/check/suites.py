@@ -11,7 +11,8 @@ A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.i
 the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
 `[tool.verity.tests] inputs`, and the environment: the installed distributions, Python, the platform, whether `lake`, `cargo`
 and `nvidia-smi` are on the PATH, and the `VERITY_*` and `FLOCK_*` variables tests switch on. The cache key hashes all of them,
-read from git's view of the working tree, so uncommitted edits count. A pass is kept under its key in `~/.cache/verity/tests`
+read from git's view of the working tree, so uncommitted edits count; a tree without .git (what `research run --source` ships)
+is keyed from the sha256 of every file in it. A pass is kept under its key in `~/.cache/verity/tests`
 (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged.
 
 Every run loads `suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs, so a cached
@@ -55,8 +56,66 @@ def _requirement_name(req: str) -> str:
     return _norm(re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", req).group(1))
 
 
+def cpus() -> int:
+    """The CPUs this process may use: its affinity (a container's cpuset) and its cgroup's quota. A pod's `os.cpu_count()` is the
+    host's (384 on the check pods, which have 8)."""
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 2
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+        if quota != "max":
+            n = min(n, max(1, int(quota) // int(period)))
+    except (OSError, ValueError):
+        pass
+    return n
+
+
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, env=env, input=stdin, capture_output=True, text=True, check=True).stdout
+
+
+#: What a machine adds to a shipped tree (`research run --source` ships a `git archive`: no .git) besides the commit's files.
+_NOT_SOURCE = {".git", ".venv", "__pycache__", ".lake", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules"}
+
+
+def _in_git() -> bool:
+    p = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=ROOT, capture_output=True, text=True)
+    return p.returncode == 0 and Path(p.stdout.strip()).resolve() == ROOT
+
+
+#: Whether this tree is a git checkout; a shipped tree is keyed from its files instead.
+GIT = _in_git()
+
+
+def _files(path: str) -> list[str]:
+    """The source files under `path` (relative to the root) in a tree without git."""
+    base = ROOT / path
+    if base.is_file():
+        return [path]
+    out = []
+    for d, dirs, files in os.walk(base):
+        dirs[:] = sorted(x for x in dirs if x not in _NOT_SOURCE)
+        out += [os.path.relpath(os.path.join(d, f), ROOT) for f in sorted(files)]
+    return [f for f in out if f != "READY.json"]
+
+
+def digests() -> dict[str, str]:
+    """Every source file's sha256, in a tree without git. Files .gitignore covers count too: eight tracked fixtures match it."""
+    return {f: hashlib.sha256((ROOT / f).read_bytes()).hexdigest() for f in _files(".")}
+
+
+def changed(before: dict[str, str]) -> list[str]:
+    """In a tree without git, what a run changed since `before` (its `digests()`): files modified or removed, and new files the
+    tree's .gitignore files do not cover, as git's view of a checkout would show them."""
+    after = digests()
+    new = sorted(set(after) - set(before))
+    ignored: set[str] = set()
+    if new:
+        with tempfile.TemporaryDirectory() as tmp:        # a repository with nothing tracked answers from the ignore rules alone
+            subprocess.run(["git", "init", "-q", tmp], capture_output=True, check=True)
+            p = subprocess.run(["git", f"--git-dir={tmp}/.git", f"--work-tree={ROOT}", "check-ignore", "--stdin"], cwd=ROOT,
+                               input="\n".join(new) + "\n", capture_output=True, text=True)
+            ignored = set(p.stdout.splitlines())
+    return sorted({f for f in before if after.get(f) != before[f]} | (set(new) - ignored))
 
 
 @dataclass(frozen=True)
@@ -90,7 +149,10 @@ def members() -> dict[str, str]:
 
 def metadata() -> list[str]:
     """The workspace's metadata, an input of every suite: every pyproject.toml, and the lockfile."""
-    listed = _git("ls-files", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml", "*/pyproject.toml").split()
+    if GIT:
+        listed = _git("ls-files", "--cached", "--others", "--exclude-standard", "--", "pyproject.toml", "*/pyproject.toml").split()
+    else:
+        listed = [f for f in _files(".") if os.path.basename(f) == "pyproject.toml"]
     return sorted(set(listed)) + ["uv.lock"]
 
 
@@ -122,8 +184,11 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     return sorted(p for p in seen.values() if p != suite.path)
 
 
-def worktree() -> str:
-    """The tree git would commit now: tracked files as they are on disk, plus untracked files that aren't ignored."""
+def worktree() -> str | None:
+    """The tree git would commit now: tracked files as they are on disk, plus untracked files that aren't ignored. None
+    without git."""
+    if not GIT:
+        return None
     with tempfile.TemporaryDirectory() as tmp:
         index = Path(tmp) / "index"
         real = ROOT / _git("rev-parse", "--git-path", "index").strip()
@@ -134,7 +199,14 @@ def worktree() -> str:
         return _git("write-tree", env=env).strip()
 
 
-def object_ids(tree: str, paths: list[str]) -> dict[str, str]:
+def object_ids(tree: str | None, paths: list[str], files: dict[str, str] | None = None) -> dict[str, str]:
+    """Each path's git object id in `tree`, or without git a sha256 over the digests (`files`) of the files under it."""
+    if tree is None:
+        out = {}
+        for p in paths:
+            under = sorted(f for f in files if p == "." or f == p or f.startswith(p + "/"))
+            out[p] = hashlib.sha256("".join(f"{f}\0{files[f]}\n" for f in under).encode()).hexdigest() if under else "absent"
+        return out
     specs = [tree if p == "." else f"{tree}:{p}" for p in paths]
     out = _git("cat-file", "--batch-check=%(objectname)", stdin="\n".join(specs) + "\n").splitlines()
     return {p: ("absent" if line.endswith(" missing") else line) for p, line in zip(paths, out)}
@@ -235,9 +307,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
-    ap.add_argument("--jobs", "-j", type=int, default=os.cpu_count() or 2, help="suites run at once (default: the CPU count)")
+    ap.add_argument("--jobs", "-j", type=int, default=cpus(), help="suites run at once (default: the CPUs this process may use)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
+    ap.add_argument("--commit", help="the commit these files are, in a tree without git (check passes RESEARCH_SOURCE_SHA)")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
 
@@ -246,11 +319,12 @@ def main(argv: list[str] | None = None) -> int:
     chosen = [s for s in select(suites, a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
     tree, env = worktree(), environment()
+    files = None if GIT else digests()
     plan = []
     meta = metadata()
     for s in chosen:
         paths = inputs_of(s, pkgs)
-        ids = object_ids(tree, sorted(set(paths) | set(meta) | set(RUNNER)))
+        ids = object_ids(tree, sorted(set(paths) | set(meta) | set(RUNNER)), files)
         keys = [key(s, ids, env, args)] + ([key(s, ids, env, extra)] if a.quick else [])   # a full pass also covers --quick
         plan.append((s, paths, keys, next((c for c in map(cached, keys) if c), None)))
 
@@ -262,8 +336,8 @@ def main(argv: list[str] | None = None) -> int:
 
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
     logs.mkdir(parents=True, exist_ok=True)
-    head = _git("rev-parse", "HEAD").strip()
-    dirty = bool(_git("status", "--porcelain").strip())
+    head = _git("rev-parse", "HEAD").strip() if GIT else a.commit or "unknown"
+    dirty = bool(_git("status", "--porcelain").strip()) if GIT else False
     results: list[Result] = [Result(s, "cached", since=hit, key=hit["key"]) for s, _, _, hit in plan if hit and not a.fresh]
     todo = [(s, paths, keys) for s, paths, keys, hit in plan if a.fresh or not hit]
     known = _durations()
@@ -294,7 +368,12 @@ def main(argv: list[str] | None = None) -> int:
                 print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
     CACHE.mkdir(parents=True, exist_ok=True)
     (CACHE / "durations.json").write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
-    written = _git("diff-tree", "-r", "--name-only", tree, worktree()).split() if todo else []
+    if not todo:
+        written = []
+    elif GIT:
+        written = _git("diff-tree", "-r", "--name-only", tree, worktree()).split()
+    else:
+        written = changed(files)
     if written:
         print(f"\nthe tests changed {len(written)} files in the repository (tests write under tmp_path):\n  " + "\n  ".join(written[:20]))
 

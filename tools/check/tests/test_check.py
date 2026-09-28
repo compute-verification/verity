@@ -122,6 +122,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     (pt,), (cc,), (lean,) = CHECK.groups(tmp_path, 16)
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "abc123")                          # a shipped tree: suites.py gets the commit
+    shipped = CHECK.groups(tmp_path, 16)[0][0][1]
+    assert shipped[shipped.index("--commit") + 1] == "abc123"
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
 
