@@ -22,6 +22,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import importlib.util
+import json
 import os
 import pwd
 import shlex
@@ -109,8 +110,12 @@ def log_tail(d: Path, name: str, limit: int = 4096) -> str:
 
 
 def deps_key(pkg: Path) -> str:
-    """`tools/verity/lean/lean_audit.py`'s: what a package's fetched dependencies are a function of."""
-    return hashlib.sha256((pkg / "lake-manifest.json").read_bytes() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
+    """`tools/verity/lean/lean_audit.py`'s: what a package's fetched dependencies are a function of, its manifest's fetched
+    entries and its toolchain (a test holds the two equal)."""
+    doc = json.loads((pkg / "lake-manifest.json").read_text())
+    fetched = [d for d in doc.get("packages", []) if d.get("type") != "path"]
+    canon = json.dumps({"packagesDir": doc.get("packagesDir"), "packages": fetched}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode() + b"\0" + (pkg / "lean-toolchain").read_bytes()).hexdigest()
 
 
 def readable_copy(src: Path, dst: Path) -> None:
