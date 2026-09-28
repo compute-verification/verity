@@ -19,6 +19,7 @@ rows in the runtime's order: per token or one per request, the two splits of the
 from __future__ import annotations
 
 import math
+import re
 import time
 from typing import Any, Callable, Collection, Mapping, Sequence
 
@@ -28,6 +29,7 @@ from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
+WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
 
 #: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
 #: that source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
@@ -188,13 +190,20 @@ class CallBoundarySource:
             return None
         from verity_vllm.commit.binding import logical_request
 
-        got = [(logical_request(rid, self.plan.order), int(hi) - int(lo)) for rid, lo, hi in rows]
+        got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
         declared = self.plan.composition.get(e) or {}
         if sorted(got) != sorted(declared.items()):
             self.error(f"call boundaries: engine step {e} ran (request, rows) {got} in this order; the manifest declares "
                        f"{sorted(declared.items())}: nothing of the step is committed")
             return None
         return [r for r, _n in got]
+
+    def _request(self, rid: str) -> str:
+        """An engine row id no workload id resolves: a warm-up request (`vllm_adapter.throwaway_requests`: `warmup-<i>`, vLLM's
+        `-<8 hex>` suffix or not) is workload request i's stand-in -- same prompt length, same schedule -- so it takes that request's
+        rows.  Anything else stays raw (a collector error naming it)."""
+        m = WARMUP_ID.fullmatch(rid)
+        return self.plan.by_index.get(int(m.group(1)), rid) if m else rid
 
     def per_request(self, body: Body, order: Sequence[str], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
         """Each request's rows of the packed operands `ops`, in the runtime's `order`, evaluated with its own template; the targets
