@@ -40,14 +40,16 @@ theorem foldl_inv {α β : Type _} (P : β → Prop) {l : Array α} {b : β} {f 
 
 /-! ## Quiet steps -/
 
-/-- The egress shaper, faulted at most, at the same tick, having handed and queued as many frames. -/
+/-- The egress shaper, faulted at most, at the same tick, having handed and queued as many frames, at the same handing
+bucket and with the same syncs. -/
 def ShRel (s s' : Shaper) : Prop := CertRel s.certifier s'.certifier ∧ s'.t = s.t ∧ s'.next = s.next ∧
-  s'.queued = s.queued
+  s'.queued = s.queued ∧ s'.h = s.h ∧ s'.syncs = s.syncs
 
-theorem ShRel.refl (s : Shaper) : ShRel s s := ⟨CertRel.refl _, rfl, rfl, rfl⟩
+theorem ShRel.refl (s : Shaper) : ShRel s s := ⟨CertRel.refl _, rfl, rfl, rfl, rfl, rfl⟩
 theorem ShRel.trans {s s' s'' : Shaper} (h : ShRel s s') (h' : ShRel s' s'') : ShRel s s'' :=
-  ⟨h.1.trans h'.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.trans h.2.2.2⟩
-theorem ShRel.fault (s : Shaper) (r : Reason) : ShRel s (s.fault r) := ⟨Or.inr ⟨r, rfl⟩, rfl, rfl, rfl⟩
+  ⟨h.1.trans h'.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.1.trans h.2.2.2.1,
+    h'.2.2.2.2.1.trans h.2.2.2.2.1, h'.2.2.2.2.2.trans h.2.2.2.2.2⟩
+theorem ShRel.fault (s : Shaper) (r : Reason) : ShRel s (s.fault r) := ⟨Or.inr ⟨r, rfl⟩, rfl, rfl, rfl, rfl, rfl⟩
 theorem ShRel.arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int) :
     ShRel s (s.arrive position frame ready) := by
   unfold Shaper.arrive
@@ -55,7 +57,7 @@ theorem ShRel.arrive (s : Shaper) (position : Nat) (frame : Frame) (ready : Int)
   · exact ShRel.fault _ _
   · split
     · exact ShRel.fault _ _
-    · exact ⟨CertRel.refl _, rfl, rfl, rfl⟩
+    · exact ⟨CertRel.refl _, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem ShGood.rel {link : String} {p : Params} {s s' : Shaper} (h : ShGood link p s) (hr : ShRel s s') :
     ShGood link p s' :=
@@ -106,7 +108,7 @@ theorem init_good (c : Config) : Good c (init c) := by
         if c.windows > 0 then l.start else l,
       windows := c.windows }
   refine ShGood.rel ⟨⟨rfl, rfl, by simp, by simp⟩, by simp, by simp, by simp⟩
-    ⟨hr, checkAdvice_t _, by rw [e], by rw [e]⟩
+    ⟨hr, checkAdvice_t _, by rw [e], by rw [e], by rw [e], by rw [e]⟩
 
 /-! ## The handlers -/
 
@@ -402,7 +404,7 @@ theorem startAt_config (p : Params) (t : Nat) (st : State) : (startAt p t st).co
 
 theorem startAt_quiet (p : Params) (t : Nat) (st : State) : Quiet st (startAt p t st) := by
   obtain ⟨l, hl⟩ := startAt_shaper p t st
-  refine ⟨startAt_config p t st, by rw [hl]; exact ⟨CertRel.refl _, rfl, rfl, rfl⟩, ?_, ?_⟩
+  refine ⟨startAt_config p t st, by rw [hl]; exact ⟨CertRel.refl _, rfl, rfl, rfl, rfl, rfl⟩, ?_, ?_⟩
   all_goals unfold startAt; split
   all_goals first | rfl | split <;> rfl
 

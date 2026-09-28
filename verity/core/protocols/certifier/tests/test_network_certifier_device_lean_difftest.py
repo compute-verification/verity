@@ -65,8 +65,11 @@ def test_the_generator_covers_what_it_says():
             refused["monitor-unavailable" in statuses] += 1
     assert {p for p, _ in outcomes} == set(vectors.PATHS)
     assert refused[True] > refused[False]
-    for path in set(vectors.PATHS) - {"honest", "prover", "link-garbage", "slow-server"}:
+    for path in set(vectors.PATHS) - {"honest", "prover", "link-garbage"}:
         assert outcomes[path, "faulted"] > outcomes[path, "accepted"], path
+    late = [{a[1]["status"] for a in r["actions"] if a[0] == "publish"} - {None}
+            for i, r in zip(insts, results, strict=True) if i["path"] == "slow-server"]
+    assert all(s <= {"coverage-never-established"} for s in late)  # a frame handed after its h(k) fails closed
     reasons = {a[1]["status"] for r in results for a in r["actions"] if a[0] == "publish"}
     assert reasons == {None} | {r.value for r in vectors.Reason} - {"dropped"}
     assert all(r["actions"] for r in results)

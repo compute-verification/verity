@@ -96,27 +96,55 @@ def feed_shaper(frames, ready, syncs, params, sync_set, arrive_bucket=None, prov
     return shaper, records, rows
 
 
+def check_late_frames(records, frames, hands, syncs, params, ready=None):
+    """Egress records against the shaper's hand times: each window a frame is handed in after its h(k) is faulted
+    `coverage-never-established`, and each complete one is the Program's grid on the frames handed by its close. Given
+    the frames' ready buckets, each complete one is also `run_shaper`'s record, and with no frame late the records are
+    `run_shaper`'s. Returns the windows a frame was handed in late."""
+    logical = handing_buckets(frames, syncs, params.buckets)
+    late = {a // params.buckets for a, h in zip(hands, logical) if a > h}
+    honest = None if ready is None else run_shaper(frames, ready, syncs, Certifier("responses", params))
+    for record in records:
+        w = record.window
+        if w in late:
+            assert record.status.reason is Reason.COVERAGE_NEVER_ESTABLISHED
+        if record.status.complete:
+            by_close = frames[: sum(a < (w + 1) * params.buckets for a in hands)]
+            assert record.grid == expected_grids(by_close, syncs, params)[w]
+            assert honest is None or record == honest[w]
+    if not late and honest is not None:
+        assert records == honest
+    return late
+
+
 def test_the_shaper_is_run_shapers_rule():
-    """On random instances, frames arriving in any order at their ready buckets give `run_shaper`'s records exactly,
-    and the shaper's hand times are its `max(h(k), ready(k), last)`."""
+    """On random instances, frames arriving in any order at their ready buckets: the shaper's hand times are
+    `run_shaper`'s `max(h(k), ready(k), last)`. A window a frame is handed in late (after its h(k)) is faulted
+    `coverage-never-established`; every other is complete, and is `run_shaper`'s record and the Program's grid on the
+    frames handed by its close. Without a late frame the records are `run_shaper`'s."""
     P = GridParams(buckets=4, allocation=2, frame_bytes=1)
     sync_set = SyncSet((0, 1, 2), (1, 2, 1 / 2))
     rng = random.Random(7)
+    seen = set()
     for _ in range(300):
         frames, ready, syncs = random_instance(rng)
         shaper, records, _ = feed_shaper(frames, ready, syncs, P, sync_set)
-        assert records == run_shaper(frames, ready, syncs, Certifier("responses", P))
         hands, last = [], 0
         for h, r in zip(handing_buckets(frames, syncs, P.buckets), ready, strict=True):
             last = max(h, r, last)
             hands.append(last)
         assert shaper.hands == [h for h in hands if h < len(syncs) * P.buckets]
+        late = check_late_frames(records, frames, shaper.hands, syncs, P, ready)
+        assert all(r.status.reason in (None, Reason.COVERAGE_NEVER_ESTABLISHED) for r in records)
+        seen.add(bool(late))
+    assert seen == {False, True}
 
 
 @pytest.mark.parametrize("name", ["last", "cover-2-1", "cover-2-0-fallback", "sticky-2-1-2"])
 def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
     """Frames arriving in any order at their ready buckets: the shaper's prover declares each window's sync at its
-    first tick, the values `online.declare` gives on the whole run, and the records are `run_shaper`'s under them."""
+    first tick, the values `online.declare` gives on the whole run, and the records are `run_shaper`'s under them but
+    in a window a frame is handed in late, which fails closed (`check_late_frames`)."""
     P = GridParams(buckets=4, allocation=2, frame_bytes=1)
     sync_set = SyncSet((0, 1, 2), (1, 2, 1 / 2))
     envelope = ClockSync(2, 1 / 2)
@@ -130,7 +158,7 @@ def test_a_shaper_with_an_online_prover_declares_what_it_declares_offline(name):
         shaper, records, _ = feed_shaper(frames, ready, [], P, sync_set, prover=prover, windows=4)
         want, _, _ = online.declare([(frames, ready)], sync_set, P.buckets, online.rule(name), 4, envelope)
         assert shaper.syncs == want
-        assert records == run_shaper(frames, ready, want, Certifier("responses", P))
+        check_late_frames(records, frames, shaper.hands, want, P, ready)
 
 
 def test_out_of_set_advice_duplicates_and_overflow_fail_closed():
@@ -387,8 +415,10 @@ def test_a_sender_that_signals_by_its_write_times_leaves_the_wire_identical(hone
 
 def test_a_frame_late_past_every_sync_is_rejected(honest_run):
     """A sender holds session b's first frame, and so the rest of its stream, past the hand time the most lenient
-    sync gives it. The wire changes, but the windows it reaches are mismatches, raw and committed, so the run is
-    rejected; the ingress links are unaffected."""
+    sync gives it. The wire changes. Each window a frame is handed in late fails closed (`coverage-never-established`),
+    and a window that closed complete before the held frame was handed is the Program's on the frames handed by its
+    close but a mismatch against the Program's frames, raw and committed, so the run is rejected; the ingress links are
+    unaffected."""
     _, wire = honest_run
     lenient = [ClockSync(max(SYNC_SET.deltas), min(SYNC_SET.rhos))] * WINDOWS
     p = 3
@@ -397,11 +427,13 @@ def test_a_frame_late_past_every_sync_is_rejected(honest_run):
     late, late_wire = asyncio.run(replay(in_stream_order(honest() | {p: hold})))
     raw, committed = audit(late, FRAMES, SYNCS)
     assert raw == committed
+    egress = [r for r in late.records if r.link == "responses"]
+    assert check_late_frames(egress, FRAMES, late.shaper.hands, SYNCS, EGRESS)
     expected = expected_grids(FRAMES, SYNCS, EGRESS)
-    changed = [r.window for r in late.records if r.link == "responses" and r.grid != expected[r.window]]
-    assert changed
-    assert raw == [("responses", w, "mismatch" if w in changed else None) for w in range(WINDOWS)] + \
-        [("requests", w, None) for w in range(WINDOWS)]
+    verdicts = ["status:coverage-never-established" if not r.status.complete else
+                "mismatch" if r.grid != expected[r.window] else None for r in egress]
+    assert "mismatch" in verdicts and None not in verdicts
+    assert raw == [("responses", w, v) for w, v in enumerate(verdicts)] + [("requests", w, None) for w in range(WINDOWS)]
     assert late_wire != wire
 
 
@@ -456,8 +488,9 @@ def test_a_choice_not_ready_at_its_window_declares_the_envelope():
 @pytest.mark.parametrize("name", ["last", "cover-2-1", "sticky-2-1-2"])
 def test_with_every_choice_ready_the_proxy_declares_what_online_declare_does(name):
     """On the injected clock every choice is ready by its tick (`InlineExecutor`): under each lag the proxy declares
-    `online.declare`'s syncs with the same lag on the frames as read, and its records are `run_shaper`'s under them.
-    Some lag declares other than the choice at the tick would."""
+    `online.declare`'s syncs with the same lag on the frames as read, and its records are `run_shaper`'s under them but
+    in a window a frame is handed in late, which fails closed. Some lag declares other than the choice at the tick
+    would."""
     rule = online.rule(name)
     at_tick, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE)
     differs = False
@@ -467,8 +500,8 @@ def test_with_every_choice_ready_the_proxy_declares_what_online_declare_does(nam
         want, _, _ = online.declare([(FRAMES, READY)], SYNC_SET, EGRESS.buckets, rule, WINDOWS, ENVELOPE, lag=lag)
         assert proxy.shaper.syncs == want and proxy.choices.log["unready"] == []
         assert len(proxy.choices.log["choose_ms"]) == WINDOWS
-        assert [r for r in proxy.records if r.link == "responses"] == \
-            run_shaper(FRAMES, READY, want, Certifier("responses", EGRESS))
+        egress = [r for r in proxy.records if r.link == "responses"]
+        check_late_frames(egress, FRAMES, proxy.shaper.hands, want, EGRESS, READY)
         differs |= want != at_tick
     assert differs
 
