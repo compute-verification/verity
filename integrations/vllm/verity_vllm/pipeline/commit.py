@@ -75,6 +75,7 @@ from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
 from verity_vllm.commit import challenge as CH  # noqa: E402
+from verity_vllm.pipeline import admission_planner as AP, replay_bundle as RB  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -963,7 +964,7 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append(f"--compiled-taps {args.compiled_taps} (Inductor hooks / runner patches are process-wide)")
     if args.arms:
         why.append("--arms (multi-committer arms)")
-    if args.only_arm:
+    if args.only_arm == "control" or (args.only_arm and args.compiled_taps != "off"):
         why.append(f"--only-arm {args.only_arm} (paired-process protocol)")
     if args.late_read:
         why.append("--late-read (mutates native_collect.GATHER_FLUSH_LEAVES)")
@@ -1072,6 +1073,7 @@ class Options:
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
     replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default OFF until coord rules)")
+    replay_deferred: bool = option("--replay-deferred", default=False, action="store_true", help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
@@ -1128,6 +1130,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if _unsafe:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
+    RB.refuse(args)
     compiled_src = None
     fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
@@ -1834,6 +1837,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
     replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    deferred: dict[int, dict[str, Any]] = {}          # --replay-deferred: pair -> its replay bundle's context
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)
@@ -2268,7 +2272,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
-                if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
+                if args.replay_deferred:
+                    row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"], deferred[pair] = RB.defer(
+                        out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes)
+                elif getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
                     # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
                     # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.kernels.derived_rows), compare with the
@@ -2667,7 +2674,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     # R13 p0b diagnostic: per-tensor digests of the retained (host) bytes, compared across paired instrumented runs to say
                     # WHICH identities differ when run roots disagree (values vs permutation vs schedule)
                     row["commit"]["fa2_zero_rows"] = tensor_digests(com, out, pair, prev_digests)
-                row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = commit_verdict(
+                row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = (RB.pending_verdict if pair in deferred else commit_verdict)(
                     row["commit"], row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=d, required_classes=required_classes)
                 if compiled_kernels is not None and row["commit"]["commit_pass"]:
                     ckc = row["commit"]["value_correspondence"]["compiled_check"]
@@ -2684,7 +2691,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled ring refused acquisitions: refused_capture_alloc {cs['refused_capture_alloc']} "
                                                                                                     f"shape_mismatch {cs['shape_mismatch']} oversize_in_capture {cs['oversize_in_capture']}")
                 if not row["commit"]["commit_pass"]:
-                    print(f"[delta] COMMIT FAIL (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
+                    print(f"[delta] COMMIT {'FAIL' if row['commit']['commit_pass'] is False else 'PENDING'} (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
                 row["root_equal_expected"] = (rc.run_root.hex() == args.expect_root) if args.expect_root else None
                 if args.expect_root and rc.run_root.hex() != args.expect_root:
                     print(f"[delta] ROOT MISMATCH: run root {rc.run_root.hex()} != expected {args.expect_root}", flush=True)
@@ -2736,7 +2743,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.only_arm:
         # [R15 compiled] one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
         summary = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
-                   "wall_s": [r["wall_s"] for r in rows], "commit_pass": (all(bool((r.get("commit") or {}).get("commit_pass")) for r in rows) if args.only_arm == "instrumented" else None),
+                   "wall_s": [r["wall_s"] for r in rows], "commit_pass": (RB.pass_of(rows) if args.only_arm == "instrumented" else None),
                    "table_md": f"only-arm {args.only_arm}: {len(rows)} runs, wall {[round(r['wall_s'], 4) for r in rows]}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
         (out / "summary.md").write_text(summary["table_md"] + "\n")
@@ -2778,8 +2785,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] wrote {out}", flush=True)
     # X-03 fail-closed: Commit PASS only if every instrumented run passed `commit_verdict` (manifest count == bound count, no collector
     # error, openings all verified, tokens equal); otherwise the first reason is printed and recorded and the process exits 3
-    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")]
-    verdict = {"commit_pass": not fails and any(r["arm"] != "control" for r in rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
+    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass") and not RB.awaits_replay(r["commit"])]
+    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(r.get("commit") or {})]
+    verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
                    f"program/query manifest {required_manifest['manifest_digest']} (R14 MAN-01; classes kept as a secondary check)" if required_manifest is not None else
@@ -2838,24 +2846,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"admission {_a.get('admission_utc')} printed_before_run={_pbr}, first run {(_RUN0 or {}).get('utc')}; "
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
     PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
+    RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
-    # [COORD R17-29 planner, calibration] measured vs predicted for the record-only plan printed before the run: one calibration ENTRY per
-    # Commit (VmHWM / footprint peaks / the peak step's staged bytes) -- exec collects these; the table in tests/fixtures/admission grows by name
-    for _pp in sorted(out.glob("admission_planner_*.json")):
-        try:
-            from verity_vllm.pipeline.admission_planner import calibrate as _planner_calibrate
-            _cal = _planner_calibrate(json.loads(_pp.read_text()), out, row=str(getattr(args, "row_id", None) or Path(args.out).name))
-            (out / _pp.name.replace("admission_planner_", "planner_calibration_")).write_text(json.dumps(_cal, indent=1, default=str) + "\n")
-            print(f"[delta] PLANNER CALIBRATION ({_pp.name}): measured {(_cal.get('measured_bytes') or 0) >> 20} MiB ({_cal.get('measured_by')}) / predicted "
-                  f"{_cal['predicted_bytes'] >> 20} MiB = {_cal.get('ratio')}; ratios {_cal.get('ratios')}; ENTRY {json.dumps(_cal['entry'])}", flush=True)
-        except Exception as _ce:
-            print(f"[delta] PLANNER CALIBRATION not computed for {_pp.name}: {type(_ce).__name__}: {_ce}", flush=True)
+    AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
     TL.event("process.end", "mark", rc=(3 if fails else 0), s=round(time.time() - _T_PROCESS0, 3), commit_pass=verdict["commit_pass"])
     if fails:
         print(f"[delta] COMMIT FAIL: {len(fails)}/{verdict['runs_instrumented']} instrumented runs failed the fail-closed check; first: pair {fails[0][0]} {fails[0][1]}: {fails[0][2]}", flush=True)
         sys.exit(3)
-    print(f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
+    print(f"[delta] COMMIT PENDING: {len(pending)}/{verdict['runs_instrumented']} instrumented runs pass every check of this process; their C2 replay runs from {[b['path'] for b in verdict['replay_deferred']['bundles']]}" if pending else
+          f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
 
 
 def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: dict, decl: dict | None) -> dict:
@@ -2920,7 +2920,7 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
             "abs_wall_ms": abs_wall_ms, "spans_mean_s": spans, "root_ready_delay_s": rr, "steady_hashing_by_step_s": steady, "steady_growth": growth,
             "backlog_max": backlog_max, "tokens_equal": tokens_eq, "versions": versions, "declaration": decl, "table_md": "\n".join(lines),
             # X-03 fail-closed verdict over the instrumented runs (see commit_verdict)
-            "commit_pass": bool(rows) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in rows if r["arm"] != "control") and any(r["arm"] != "control" for r in rows),
+            "commit_pass": RB.pass_of(rows),
             "commit_fail_reasons": [(r.get("commit") or {}).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")],
             "expected_tensors": [(r.get("commit") or {}).get("expected_tensors") for r in rows if r["arm"] != "control"],
             "committed_tensors": [(r.get("commit") or {}).get("committed_tensors") for r in rows if r["arm"] != "control"],

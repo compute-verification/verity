@@ -1168,10 +1168,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if mode != "host":
             from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
-        roots: list[bytes] = []
-        n_bytes = 0
-        names = []
-        checked = 0
+        roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
         items = list(self.model.named_parameters()) + list(self.model.named_buffers())
         for name, p in items:
@@ -1198,6 +1195,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             n_bytes += nb
             names.append([name, _dtype_name(p), list(p.shape), nb])
         root = scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots)
+        # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
+        self.weights_tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root.hex(), "chunk": self.chunk,
+                             "geo_digest": self._geo_digest.hex()}
         self.weights = {"root": root.hex(), "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
                         **({"device_checked_tensors": checked} if mode == "device-checked" else {})}

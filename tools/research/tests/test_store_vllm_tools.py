@@ -89,6 +89,9 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
     assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--pairs", "3", "--retain", "host", "--window-mb", "2048"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--pairs", "5"))
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--extra-engine-args", "max_num_batched_tokens=512"))
+    assert _drv(c, _argv("commit")) != _drv(c, _argv("commit", "--replay-deferred", "1")), "a deferred Commit's outputs differ"
+    assert _drv(c, _argv("commit")) == _drv(c, _argv("commit", "--replay-deferred", "0"))
+    assert "replay_deferred" not in c.resolve_params(_argv("commit"))[1], "off, it leaves the derivation of every earlier Commit as it was"
     build_art = "art:" + "1" * 64
     assert _drv(c, _argv("commit")) != _drv(c, _argv("commit"), inputs={"build": build_art}), "the consumed Build is part of the derivation"
     assert _drv(m, _argv("match")) != _drv(c, _argv("commit")), "different tools, different derivations"
