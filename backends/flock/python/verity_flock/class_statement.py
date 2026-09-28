@@ -311,6 +311,22 @@ def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
     return out
 
 
+#: evaluations of flat Definitions this large are kept for the next shape of the same Definition (the sampler's keep word is one flat
+#: Definition of about 10^8 gates, and all of its ~86 shapes read the same evaluations)
+KEEP_EVALUATIONS_ABOVE = 1 << 20
+_EVALUATIONS: dict = {}
+
+
+def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]:
+    if act.fn.gates <= KEEP_EVALUATIONS_ABOVE:
+        return PU.evaluate(act, words)
+    if key not in _EVALUATIONS:
+        if len(_EVALUATIONS) >= 2:
+            _EVALUATIONS.pop(next(iter(_EVALUATIONS)))
+        _EVALUATIONS[key] = PU.evaluate(act, words)
+    return _EVALUATIONS[key]
+
+
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
     evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
@@ -336,7 +352,7 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
         raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
         grp = PU.synthetic_words(key, f"{act.fn.id}#call{call}", widths, 1)[0]
         words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
-        run = PU.evaluate(act, words)
+        run = _evaluation(act, (act.fn.id, t, call), words)
         for uc, per in zip(mine, reads):
             if have >= n:
                 break
