@@ -9,8 +9,11 @@
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
-the directories of the workspace packages it depends on (its `[project]` dependencies, transitively), the paths it lists under
-`[tool.verity.tests] inputs`, the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
+the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
+transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
+`[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
+`[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
+tests read a little of a large dependency), the build outputs it lists under `artifacts` (each file's digest: git ignores them), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
@@ -216,17 +219,20 @@ class Suite:
     parallel: bool = False       # [tool.verity.tests] parallel: its tests may run in several processes at once
     artifacts: tuple[str, ...] = ()   # [tool.verity.tests] artifacts: build outputs its tests run or skip on
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
+    inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
 
 
 def _pyproject(path: str) -> dict:
     return tomllib.loads((ROOT / path / "pyproject.toml").read_text())
 
 
-def _requires(project: dict, data: dict) -> tuple[str, ...]:
+def _requires(project: dict, data: dict, groups: bool = True) -> tuple[str, ...]:
+    """The distributions a member names: its dependencies and extras, and with ``groups`` its dependency groups (its own tests'
+    tooling, which code that imports it never reads)."""
     reqs = list(project.get("dependencies", []))
     for extra in project.get("optional-dependencies", {}).values():
         reqs += extra
-    for group in data.get("dependency-groups", {}).values():
+    for group in data.get("dependency-groups", {}).values() if groups else ():
         reqs += [r for r in group if isinstance(r, str)]
     return tuple(sorted({_requirement_name(r) for r in reqs}))
 
@@ -242,11 +248,14 @@ def members() -> dict[str, str]:
 
 
 def shipped(path: str) -> list[str]:
-    """The directories a workspace package's dependents key on: its directory, or for the root, which holds the whole tree, the
-    packages its wheel ships."""
+    """The paths a workspace package's dependents key on: those it lists under `[tool.verity.tests] exports`, else its directory,
+    or for the root, which holds the whole tree, the packages its wheel ships."""
+    data = _pyproject(path)
+    if (exports := data.get("tool", {}).get("verity", {}).get("tests", {}).get("exports")) is not None:
+        return list(exports)
     if path != ".":
         return [path]
-    return list(_pyproject(".")["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    return list(data["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
 
 def tests_pythonpath() -> str:
@@ -336,7 +345,7 @@ def discover() -> list[Suite]:
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
-                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0))))
+                            tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True))
     return suites
 
 
@@ -355,7 +364,8 @@ def artifact_ids(suite: Suite) -> dict[str, str]:
 
 
 def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
-    """Directories of the workspace packages `suite` depends on, directly or through another."""
+    """Directories of the workspace packages `suite` depends on, directly (its dependencies, extras and dependency groups) or
+    through another's dependencies and extras: a dependency's groups are its own tests' tooling, not what code importing it reads."""
     seen: dict[str, str] = {}
     todo = [r for r in suite.requires if r in pkgs]
     while todo:
@@ -364,7 +374,7 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
             continue
         seen[name] = pkgs[name]
         data = _pyproject(pkgs[name])
-        todo += [r for r in _requires(data["project"], data) if r in pkgs]
+        todo += [r for r in _requires(data["project"], data, groups=False) if r in pkgs]
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
@@ -523,8 +533,9 @@ def environment() -> dict:
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
-    declared too."""
-    return sorted({suite.path, *closure(suite, pkgs), *suite.inputs})
+    declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
+    its tests read of them, which the guard holds it to."""
+    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -1614,7 +1625,8 @@ def main(argv: list[str] | None = None) -> int:
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
             print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
-                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml")
+                  f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
+                  f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
             print(f"        xdist workers {', '.join(r.unguarded)} sent the guard no record of what they read\n        log: {r.log}")
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above

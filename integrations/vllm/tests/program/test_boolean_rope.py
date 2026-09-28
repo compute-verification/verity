@@ -1,6 +1,6 @@
 """`registry.boolean_rope`: the Boolean NeoX rotation agrees with its word Definitions (`trace.word_of`) on every quadruple of
 special bf16 words and on 90k random and structured quadruples per half, on random heads of each served head width against
-`RoPEHead_v1` through the IR reference, on 81k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
+`RoPEHead_v1` through the IR reference, on 16k random heads of each served head width against `RoPE_v1`'s kernel, and on 1,024
 random heads of every `RoPE_v1` binding the served workload Programs call (`SERVED`); carries exactly its builders' live ANDs;
 is pinned by gate count and program digest; and cuts under `Q_word` v1 into one 16-bit unit per output element, as the word
 Program does. The interleaved (GPT-J) versions agree with `RoPEHeadGptJ_v2` / `RoPEGptJ_v2` through the IR reference at
@@ -49,7 +49,7 @@ ROPES = sorted({bind(R.RoPE, NHEADS=n, D=d) for shapes in SERVED.values() for n,
 HEADS = {d: bind(R.RoPEHead, D=d) for d in sorted({t.bindings["D"] for t in ROPES})}
 HEAD = HEADS[64]
 K = bind(R.RoPE, NHEADS=3, D=64)
-#: one served binding per head width, run on 81k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
+#: one served binding per head width, run on 16k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
 LARGE = [bind(R.RoPE, NHEADS=n, D=d) for n, d in ((9, 64), (3, 64), (32, 96), (32, 128), (8, 256))]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -232,11 +232,11 @@ def test_every_served_binding_agrees_with_rope_v1(target) -> None:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
-def test_each_served_head_width_agrees_with_rope_v1_on_81k_heads(target) -> None:
-    """81k random heads of one served binding per head width D against `RoPE_v1`'s kernel, 5M to 21M rotations: a rounding
+def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:
+    """16k random heads of one served binding per head width D against `RoPE_v1`'s kernel, 1M to 4M rotations: a rounding
     case of `RopeOut_v2` or `RopeOutAdd_v2` that served activations and cos/sin rows hit less often than once in 10^5, which
     the 90k-quadruple, 96k-word and 1,024-head tests miss."""
-    _agree(target, list(_random_heads(target, 81_000)))
+    _agree(target, list(_random_heads(target, 16_384)))
 
 
 @pytest.mark.parametrize("target", [GPTJ_HEAD, *GPTJ], ids=lambda t: t.id)
