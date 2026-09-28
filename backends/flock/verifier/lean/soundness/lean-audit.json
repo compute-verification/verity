@@ -146,6 +146,30 @@
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.Refine.fast100_dims": {
+   "signature": [
+    "FlockSoundness.Refine.fast100_dims (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :",
+    "  FlockSoundness.Refine.DimSeam s ∧ s.m = m"
+   ],
+   "assumptions": [],
+   "type_hash": "000000002624f06a"
+  },
+  "FlockSoundness.Refine.fast100_level": {
+   "signature": [
+    "FlockSoundness.Refine.fast100_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) (lv : Flock.Level) :",
+    "  lv ∈ s.levels → FlockSoundness.Refine.LevelSeam lv"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000081767256"
+  },
+  "FlockSoundness.Refine.fast100_schedOf": {
+   "signature": [
+    "FlockSoundness.Refine.fast100_schedOf (m : ℕ) :",
+    "  Option.map FlockSoundness.Refine.schedOf (Flock.fast100 m) = FlockSoundness.Accounting.fast100 m"
+   ],
+   "assumptions": [],
+   "type_hash": "000000009e113cd0"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
@@ -439,6 +463,7 @@
     "FlockSoundness.Accounting.tableError": "9f0c445d3f517528"
    },
    "pins": [
+    "FlockSoundness.Refine.fast100_level",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -484,6 +509,8 @@
     "FlockSoundness.Accounting.queriesAt": "1f62ee663f3e17b3"
    },
    "pins": [
+    "FlockSoundness.Refine.fast100_level",
+    "FlockSoundness.Refine.fast100_schedOf",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -768,7 +795,7 @@
     "FlockSoundness.Model.tableC": "c12cf7196e132c19",
     "FlockSoundness.Model.twoOodC": "78dfd131e6d68b4e"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": ["FlockSoundness.Refine.fast100_level", "FlockSoundness.table_sound_compiled"]
   },
   "FlockSoundness.Model.Ligerito": {
    "digest": "7fc3a806055498d6e804461c35306af5",
@@ -815,6 +842,7 @@
     "FlockSoundness.Model.twoOod": "ef721c561532de41"
    },
    "pins": [
+    "FlockSoundness.Refine.fast100_level",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -921,6 +949,20 @@
     "FlockSoundness.table_sound_exec_fast100_34_35",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Refine.Schedule": {
+   "digest": "3455aff5e67c638cc45ed3896c8135f0",
+   "definitions": {
+    "FlockSoundness.Refine.DimSeam": "39dc79845cc65380",
+    "FlockSoundness.Refine.LevelSeam": "c001829f5259d857",
+    "FlockSoundness.Refine.levelOf": "e8359298de4f7f24",
+    "FlockSoundness.Refine.schedOf": "641e0ff429ff1407"
+   },
+   "pins": [
+    "FlockSoundness.Refine.fast100_dims",
+    "FlockSoundness.Refine.fast100_level",
+    "FlockSoundness.Refine.fast100_schedOf"
    ]
   },
   "FlockSoundness.Rewinding": {
