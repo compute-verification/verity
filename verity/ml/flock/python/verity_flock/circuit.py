@@ -918,25 +918,27 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
-          public_inputs: dict | None = None, identifier: dict | None = None) -> Path:
+          public_inputs: dict | None = None, identifier: dict | None = None, leaf_scheme: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
     (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
     ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
     stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
-    :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`)."""
+    :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`). ``leaf_scheme``
+    (:func:`compose`): the proof's own Merkle leaves."""
     if public_only and salt_key is None:
         raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
-    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs)
+    text = compose(low, input_set.subcircuit, partition=partition, program=program, statics=statics, public_inputs=public_inputs,
+                   leaf_scheme=leaf_scheme)
     (out / "circuit.txt").write_text(text)
     if low.units.cut:
         IL.write_tables(out / "tables")
         if not (out / "circuit-forged.txt").exists():
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
-                                                            statics=statics, public_inputs=public_inputs))
+                                                            statics=statics, public_inputs=public_inputs, leaf_scheme=leaf_scheme))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
     write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, identifier=identifier)
     if public_inputs:
