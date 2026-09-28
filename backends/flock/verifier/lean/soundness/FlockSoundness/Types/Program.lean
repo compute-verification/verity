@@ -5,7 +5,7 @@ import FlockSoundness.Lowering
 # A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)
 
 A program (`UProg`) is `k` inputs, input `one` the constant, then units in order. A unit (`UnitSpec`) is the verifier's
-derivation for its layout, `deriveChecked` on a type `t`, with distinct output columns. Each input bit of a unit reads a
+derivation for its layout, `deriveChecked` on a type `t`. Each input bit of a unit reads a
 source (`Src`): a program input other than the constant, or an earlier unit's output. From it:
 - `toRows`, its rows circuit `C` (a `Lowering.Prog`): each unit's composed rows, its input columns on their sources' output
   rows, its constant on `one`;
@@ -227,7 +227,7 @@ end Types.Flatten
 /-! ## A unit, and its output columns -/
 
 /-- **One unit of a program**: the verifier's derivation for its layout (`deriveChecked` on layout `idx`, of type `t`),
-whose output columns are distinct, and the depth and read split its gates are flattened at. -/
+and the depth and read split its gates are flattened at. -/
 structure UnitSpec where
   types : String → Option CircuitType
   ls : Array Layout
@@ -238,7 +238,6 @@ structure UnitSpec where
   hd : deriveChecked types ls info words idx = .ok done
   t : CircuitType
   ht : (ls.getD idx default).type.bind types = some t
-  nodup : (done.getD idx default).outCols.toList.Nodup
   loOf : ℕ → ℕ
   F : ℕ
   hF : idx ≤ F
@@ -254,6 +253,15 @@ theorem Audit.Partition.mem_committed_iff {C : Audit.Circuit} {n : ℕ} (P : Par
 namespace UnitSpec
 
 variable (s : UnitSpec)
+
+/-- **A unit's output columns are distinct**: they end its logical order, which `deriveChecked` checks has no repeat
+(`order_sound`). -/
+theorem outCols_nodup : (s.done.getD s.idx default).outCols.toList.Nodup := by
+  have hn := (order_sound s.hd 0).1
+  generalize s.done.getD s.idx default = u at hn ⊢
+  unfold order at hn
+  rw [DeriveAll.segment] at hn
+  exact List.Nodup.of_map _ hn.of_append_right.of_append_right
 
 /-- The unit's rows, in logical order. -/
 abbrev R : Rows := Rows.compose (ofBlock s.words s.done (s.done.getD s.idx default)) (ofBlock_ordered s.hd)
@@ -331,7 +339,7 @@ theorem out_inj {o o' : ℕ} (ho : o < s.t.outputs.size) (ho' : o' < s.t.outputs
   rw [getD_of_lt hlt, getD_of_lt hlt'] at hc
   have hc' : (s.done.getD s.idx default).outCols.toList[o]'(by simpa using hlt) =
       (s.done.getD s.idx default).outCols.toList[o']'(by simpa using hlt') := by simpa using hc
-  exact (List.Nodup.getElem_inj_iff s.nodup).1 hc'
+  exact (List.Nodup.getElem_inj_iff s.outCols_nodup).1 hc'
 
 end UnitSpec
 

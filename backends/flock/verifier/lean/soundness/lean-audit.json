@@ -2140,7 +2140,7 @@
    "pins": ["FlockSoundness.UProg.rowsL1"]
   },
   "FlockSoundness.Types.Program": {
-   "digest": "95aa4491a5731d9677f1b7a9ef02e978",
+   "digest": "a938d3f7398ee4d445c34463b646ee2d",
    "definitions": {
     "FlockSoundness.Src": "0f56bf598e4dacbd",
     "FlockSoundness.Src.Valid": "efeed902f7ccaab1",
@@ -2171,14 +2171,14 @@
     "FlockSoundness.UProg.unitB": "fc6f5c570b356d95",
     "FlockSoundness.UProg.wireB": "dc5c5b760f75e35d",
     "FlockSoundness.UProg.wireF": "3b3568adbaa29ac9",
-    "FlockSoundness.UnitSpec": "5f510a9b6de453f7",
-    "FlockSoundness.UnitSpec.F": "2335185ebb407880",
+    "FlockSoundness.UnitSpec": "5eef2480c840f260",
+    "FlockSoundness.UnitSpec.F": "f148de303c269033",
     "FlockSoundness.UnitSpec.R": "39796f16ee186054",
     "FlockSoundness.UnitSpec.done": "cc41abf071170ff5",
     "FlockSoundness.UnitSpec.fsize": "44911c3c2ef0f696",
     "FlockSoundness.UnitSpec.gs": "ea583d47a4f27bc5",
     "FlockSoundness.UnitSpec.idx": "5d0bee216dc6227a",
-    "FlockSoundness.UnitSpec.loOf": "62a6f848c5b8440b",
+    "FlockSoundness.UnitSpec.loOf": "cd38327583d7ceb3",
     "FlockSoundness.UnitSpec.out": "0a5ec45707722116",
     "FlockSoundness.UnitSpec.t": "b8bde2a01d31ba22",
     "FlockSoundness.UnitSpec.types": "ecb44d422e69f065",
