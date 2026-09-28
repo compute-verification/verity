@@ -58,6 +58,8 @@ class Options:
     chunked_threads: int = option("--chunked-threads", type=int, default=128, help="threads per block of chunk-major launches")
     fused_x: bool = option("--fused-x", action="store_true", default=False,
                            help="unsplit chunk-major launches read each step's parents themselves (dense.CHUNKED_FUSED_X)")
+    overlap: bool = option("--overlap-study", action="store_true", default=False,
+                           help="SECONDARY, not the frozen metric: per-layer decode overlapped with the matmuls, first model")
     whole: bool = option("--whole-chain", action="store_true", default=False,
                          help="unsplit chunk-major decodes run every row's whole chain in one launch (dense.CHUNKED_WHOLE)")
     split: bool = option("--split", action="store_true", default=False,
@@ -328,6 +330,104 @@ def _cgroup_cpu() -> dict[str, int]:
     return {k: int(v) for k, v in zip(rows[::2], rows[1::2]) if k in ("nr_periods", "nr_throttled", "throttled_usec")}
 
 
+def overlap_study(name: str, m: dict[str, Any], reps: int, salt: bytes) -> dict[str, Any]:
+    """SECONDARY, not the frozen metric: an emulated vLLM forward over the model's decoder layers, with its real shapes and
+    the benchmark's kernels, decoding each layer's weights per layer.  Three schedules, on the device clock:
+
+    - `serial`: decode layer N, then run its matmuls; next layer.
+    - `overlapped`: layer N + 1 decoded on a side stream while layer N's matmuls run (the next layer's weights decoded during the
+      current matmuls); decodes stay one after another.
+    - `batched`: every layer's weights decoded in one batch, then all matmuls (the frozen pass's scheduling).
+
+    `hidden_s` = serial - overlapped is the decode the overlap hides."""
+    import torch
+
+    from verity_vllm.engine.pous import codec, dense
+
+    params = SCHEME[0].geometry
+    window = SCHEME[0].window
+    b, width = params.blocks_per_segment, params.block_bytes
+    shapes = placements(model_shapes(m))
+    per_layer = len(m["layer"])
+    layers = [shapes[i * per_layer:(i + 1) * per_layer] for i in range(m["measured_layers"])]
+    total = shapes[-1][3] + shapes[-1][4]
+    segments = -(-total // params.segment_bytes)
+    c = torch.empty(segments * b, width, dtype=torch.uint8, device="cuda")
+    fill(c, f"dense-bench/overlap/{name}")
+    tags = codec.segment_tags(salt, list(range(segments)), "cuda")
+
+    def layer_blocks(layer):
+        first, last = layer[0][3] // width, (layer[-1][3] + layer[-1][4] - 1) // width
+        blocks = torch.arange(first, last + 1, device="cuda")
+        return blocks, first
+
+    plans = [layer_blocks(layer) for layer in layers]
+
+    def decode_layer(i):
+        blocks, first = plans[i]
+        flat = dense.decode_blocks(c, tags, blocks // b, blocks % b, b, window).view(-1)
+        return [flat[off - first * width:off - first * width + nb].view(torch.bfloat16).view(o, k)
+                for _, o, k, off, nb in layers[i]]
+
+    def gemms(i, ws, xs):
+        for x, w in zip(xs[i], ws):
+            torch.nn.functional.linear(x, w)
+
+    out: dict[str, Any] = {"label": "SECONDARY -- not the frozen metric: emulated vLLM forward, per-layer decode",
+                           "model": name, "decoder_layers": len(layers)}
+    for t in (1, 2048):
+        xs = [[torch.randn(t, k, dtype=torch.bfloat16, device="cuda") for _, _, k, _, _ in layer] for layer in layers]
+
+        def serial():
+            for i in range(len(layers)):
+                gemms(i, decode_layer(i), xs)
+
+        def overlapped():
+            side, main = torch.cuda.Stream(), torch.cuda.current_stream()
+            cur = decode_layer(0)
+            keep = [cur]
+            for i in range(len(layers)):
+                nxt = None
+                if i + 1 < len(layers):
+                    side.wait_stream(main)
+                    with torch.cuda.stream(side):
+                        nxt = decode_layer(i + 1)
+                    keep.append(nxt)
+                gemms(i, cur, xs)
+                main.wait_stream(side)
+                cur = nxt
+            torch.cuda.synchronize()
+            keep.clear()
+
+        def batched():
+            blocks = torch.cat([p[0] for p in plans])
+            flat = dense.decode_blocks(c, tags, blocks // b, blocks % b, b, window).view(-1)
+            base = plans[0][1] * width
+            for i, layer in enumerate(layers):
+                ws = [flat[off - base:off - base + nb].view(torch.bfloat16).view(o, k) for _, o, k, off, nb in layer]
+                gemms(i, ws, xs)
+
+        def gemm_only():
+            ws_all = [decode_layer(i) for i in range(len(layers))]
+            torch.cuda.synchronize()
+            return ws_all
+
+        ws_all = gemm_only()
+        gemm_s = statistics.median(_timed(lambda: [gemms(i, ws_all[i], xs) for i in range(len(layers))], reps))
+        del ws_all
+        row = {"gemm_only_s": gemm_s}
+        for key, fn in (("serial_s", serial), ("overlapped_s", overlapped), ("batched_s", batched)):
+            torch.cuda.synchronize()
+            row[key] = statistics.median(_timed(fn, reps))
+        row["hidden_s"] = row["serial_s"] - row["overlapped_s"]
+        row["hidden_fraction_of_serial_decode"] = row["hidden_s"] / max(row["serial_s"] - gemm_s, 1e-9)
+        out[f"T{t}"] = row
+        print(json.dumps({"overlap_study": name, "T": t, **{k: round(v, 4) for k, v in row.items()}}), flush=True)
+    del c
+    torch.cuda.empty_cache()
+    return out
+
+
 def pass_matches_reference(c, decoded, segs, blks, salt: bytes, workers: int) -> dict[str, Any]:
     """Sampled blocks of the timed pass's own output (the kernels that were timed) against the reference's decode of them:
     blocks 0, 1, window and window + 1 of the first segment, the last block of every fourth segment, and the pass's last."""
@@ -509,6 +609,9 @@ def main(a: Options) -> int:
     fill(c_probe, "dense-bench/G2")
     doc["gates"]["reference_decode"] = gate_reference(SCHEME[0], c_probe, codec.segment_tags(salt, list(range(a.gate_segments)), "cuda"), salt,
                                         list(range(a.gate_segments)), a.workers)
+    if a.overlap:
+        first = (a.models.split(",") if a.models else list(table))[0]
+        doc["secondary_overlap_study"] = overlap_study(first, table[first], a.reps, salt)
     if a.segment_sets_from:
         doc["vllm_prediction"] = predict_vllm(json.loads(Path(a.segment_sets_from).read_text()), a.reps, salt)
     clock_mhz = float(doc["device"]["nvidia_smi"].split(",")[3].split()[0])
