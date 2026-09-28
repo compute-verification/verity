@@ -161,10 +161,36 @@ def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
     hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
     assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
                                                         "compile-time: P/B.lean:1"]
-    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why", "P.C": "why"}}) == [
-        "compile-time: `compile_time` lists P.C, which matches no file; remove the entry"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why"}}) == []
+    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 3
     (tmp_path / "lakefile.lean").write_text("import Lake\n")
     assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
+
+
+def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_pins_read(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => pure ()\n')
+    (tmp_path / "P" / "Defs.lean").write_text('macro "m" : term => `(1)\ndef f := 1\n')
+    files = A.lean_modules(tmp_path)
+    pins = {"pins": {"P.t": {"module": "P.Thms", "reads": [{"name": "P.f", "module": "P.Defs"}]}}}
+    listed = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    fails, now, notes = A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins)
+    assert [f.split(":")[1] for f in fails] == [" the listing of P.Tac records no digest of P/Tac.lean"]
+    assert now == listed and notes[0].startswith("compile_time P.Tac (P/Tac.lean): listed; a reviewer reads")
+    assert A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins, update=True)[0] == []
+    assert A.listings(tmp_path, files, {"compile_time": listed}, pins) == ([], listed, [])
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => do IO.println "now it does IO"\n')
+    fails, _, notes = A.listings(tmp_path, files, {"compile_time": listed}, pins)
+    assert fails[0].startswith("compile-time: the listing of P.Tac was reviewed against another version of P/Tac.lean")
+    assert notes[0].startswith("compile_time P.Tac (P/Tac.lean): the file changed since its listing was reviewed")
+    read = {"P.Defs": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Defs.lean")}}
+    assert A.listings(tmp_path, files, {"compile_time": read}, pins)[0][0].startswith(
+        "compile-time: P.Defs is listed under `compile_time`, and pinned statements are declared or read there (P.t)")
+    declared = {"pins": {"P.t": {"module": "P.Tac", "reads": []}}}
+    tac = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    assert "(P.t)" in A.listings(tmp_path, files, {"compile_time": tac}, declared)[0][0]
+    assert A.listings(tmp_path, files, {"compile_time": {"P": "a prefix"}}, pins)[0] == [
+        "compile-time: `compile_time` lists P, which is not a module of the package; list modules one by one"]
 
 
 def test_a_package_without_a_policy_gets_a_template(tmp_path):

@@ -29,8 +29,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
   option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings may);
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
-  definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason, and the package
-  has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
+  definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
+  its file as it was reviewed. No listed module may declare a pinned theorem or a definition a pinned statement reads.
+  The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
@@ -77,7 +78,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "assumptions": ["Pkg.Assumptions"],
  "meaning": ["Pkg"],
  "escapes": {"Pkg.loop": "why compiled code no proof sees is acceptable here"},
- "compile_time": {"Pkg.Tactic": "why this module must run code while it compiles"},
+ "compile_time": {"Pkg.Tactic": {"why": "why this module must run code while it compiles", "digest": "…"}},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
  "pins": {"Pkg.main_theorem": {}}
 }
@@ -87,6 +88,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
 - `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
+- `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
+  adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
+  compile-time code and `--update` records the new digest, and `--update` lists the module among what a reviewer reads.
+  No listed module may declare a pinned theorem or a definition a pinned statement reads: a term elaborator, a notation
+  or a macro there could change what a statement means. A proof-only tactic belongs in a module of its own.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
