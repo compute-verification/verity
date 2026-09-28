@@ -43,6 +43,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..notes_sync import remote_target
+
 FILE = "budgets.toml"
 GUARD_HOST = "vy-control-verity"
 GUARD_STATE = "/root/.research/pods/guard-budgets.json"
@@ -179,8 +181,8 @@ def parse(text: str) -> Budgets:
                    terminate_uncovered=tu, uncovered_grace_min=float(grace))
 
 
-def _git(root: Path, *args: str, timeout: float = 60) -> str:
-    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=timeout)
+def _git(root: Path, *args: str, timeout: float = 60, opts: list[str] | None = None) -> str:
+    r = subprocess.run(["git", "-C", str(root), *(opts or []), *args], capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0:
         raise OSError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-300:]}")
     return r.stdout
@@ -192,7 +194,8 @@ def read(source: Path) -> tuple[str, str]:
         return source.read_text(), str(source)
     branch = _git(source, "symbolic-ref", "--short", "HEAD").strip()
     ref = f"refs/remotes/origin/{branch}"
-    _git(source, "fetch", "-q", "origin", f"+refs/heads/{branch}:{ref}", timeout=120)
+    opts, where = remote_target(source)
+    _git(source, "fetch", "-q", where, f"+refs/heads/{branch}:{ref}", timeout=120, opts=opts)
     sha = _git(source, "rev-parse", ref).strip()
     return _git(source, "show", f"{ref}:{FILE}"), f"{source} origin/{branch} {sha[:12]}"
 

@@ -37,6 +37,14 @@ under.  Exit 1 when it finds anything; run it before the first push and after (a
 
 With `RESEARCH_NOTES_SYNC=1`, `research notes checkpoint | bind | relaunch` run `sync` for the lane directories they wrote once
 they succeed (a cloud agent's default; the laptop keeps the watcher's snapshot until the switch-over).
+
+With `RESEARCH_NOTES_TOKEN` set, every fetch, pull and push of a github.com notes remote (`remote_target`: `sync`, the standby
+steward's pull, budgets.toml's fetch) goes to its explicit-user URL `https://x-access-token@github.com/<owner>/<repo>.git` with a
+credential helper that reads the token from the environment.  A cloud VM's global `url.<cursor[bot] token>.insteadOf
+https://github.com/` matches only the plain URL, so it no longer turns the request into the bot's, which the notes repo refuses;
+the token itself is never in a URL, an argument or a message.  Unset, nothing changes.  With the token set, a notes command (and
+machine resolution, which reads `<notes>/machines.d`) on a machine without the notes clone clones `NOTES_URL` there first
+(`ensure_clone`).
 """
 from __future__ import annotations
 
@@ -46,6 +54,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -53,6 +62,12 @@ import time
 from pathlib import Path
 
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
+TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
+NOTES_URL = "https://github.com/danielreuter/research-notes.git"
+GITHUB_URL_RE = re.compile(r"^(?:https://(?:[^@/]+@)?github\.com/|(?:(?:git\+)?ssh://)?git@github\.com(?::22)?[:/])"
+                           r"(?P<repo>[\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+#: the shell expands the variable when git asks for the password: the token's value is never in git's arguments or config
+CREDENTIAL_HELPER = f'!f(){{ echo username=x-access-token; echo "password=${TOKEN_ENV}"; }}; f'
 MAX_BYTES = 1 << 20
 FUTURE_RC = 5
 FUTURE_TOLERANCE = dt.timedelta(minutes=5)
@@ -95,6 +110,55 @@ def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None)
 def _out(root: Path, *args: str) -> str | None:
     r = _run(root, *args)
     return r.stdout if r.returncode == 0 else None
+
+
+def token_url(url: str) -> tuple[list[str], str] | None:
+    """(git options, explicit-user URL) that reach the github.com repository `url` names with RESEARCH_NOTES_TOKEN (module
+    docstring); None when the token is unset or `url` is not github.com's."""
+    m = GITHUB_URL_RE.match(url.strip())
+    if not (os.environ.get(TOKEN_ENV) and m):
+        return None
+    return ["-c", "credential.helper=", "-c", f"credential.helper={CREDENTIAL_HELPER}"], f"https://x-access-token@github.com/{m['repo']}.git"
+
+
+def remote_target(root: Path, remote: str = "origin") -> tuple[list[str], str]:
+    """(git options, what to name as the repository) for a fetch, pull or push of the notes clone's `remote`: `token_url` of its
+    URL as configured (`remote get-url` prints it rewritten by insteadOf), else ([], remote) as before."""
+    url = _out(root, "config", "--get", f"remote.{remote}.url")
+    return (token_url(url) if url else None) or ([], remote)
+
+
+def pull(root: Path, remote: str = "origin") -> subprocess.CompletedProcess:
+    """`git pull --ff-only` of the current branch from `remote` (`remote_target`), its remote-tracking branch updated as a plain
+    pull does."""
+    opts, where = remote_target(root, remote)
+    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
+    if not opts or not branch:
+        return _run(root, "pull", "-q", "--ff-only", timeout=300)
+    return _run(root, *opts, "pull", "-q", "--ff-only", where, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}", timeout=300)
+
+
+def ensure_clone(root: Path) -> str | None:
+    """Clone NOTES_URL to `root` when `root` is missing and RESEARCH_NOTES_TOKEN is set (a fresh cloud VM), its `origin` the plain
+    URL: a line saying it did, or why it failed; None when there was nothing to do."""
+    root = Path(root).expanduser()
+    if root.exists() or not (t := token_url(NOTES_URL)):
+        return None
+    opts, url = t
+    root.parent.mkdir(parents=True, exist_ok=True)
+    tmp = root.with_name(f".{root.name}.clone-{os.getpid()}")
+    shutil.rmtree(tmp, ignore_errors=True)
+    r = subprocess.run(["git", *opts, "clone", "-q", url, str(tmp)], capture_output=True, text=True, errors="replace", timeout=900)
+    if r.returncode == 0:
+        _run(tmp, "remote", "set-url", "origin", NOTES_URL)
+        try:
+            tmp.rename(root)
+        except OSError:
+            pass                                            # another command cloned it first
+    shutil.rmtree(tmp, ignore_errors=True)
+    if not root.is_dir():
+        return f"notes: clone of {NOTES_URL} into {root} failed: {r.stderr.strip()[-300:]}"
+    return f"notes: cloned {NOTES_URL} into {root}"
 
 
 def _secret_values(environ: dict | None = None) -> list[str]:
@@ -400,9 +464,10 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         return {**rep, "rc": 2, "error": "HEAD is detached; check out the notes branch"}
     secrets = _secret_values() if secrets is None else secrets
     tracking = f"refs/remotes/{remote}/{branch}"
+    opts, where = remote_target(root, remote)
     for n in range(retries + 1):
         rep["attempts"] = n + 1
-        f = _run(root, "fetch", "-q", remote, f"+refs/heads/{branch}:{tracking}", timeout=300)
+        f = _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
         has_remote = f.returncode == 0
         if not has_remote and "couldn't find remote ref" not in f.stderr:
             return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {f.stderr.strip()[-300:]}"}
@@ -421,9 +486,9 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         if keys:
             return {**rep, "rc": 4, "keys": keys, "error": "key material in outgoing commits; nothing pushed: " + "; ".join(keys[:5])}
         cites = outgoing_citations(root, base) if cite_check_on() else {}
-        p = _run(root, "push", "-q", remote, f"HEAD:refs/heads/{branch}", timeout=300)
+        p = _run(root, *opts, "push", "-q", where, f"HEAD:refs/heads/{branch}", timeout=300)
         if p.returncode == 0:
-            _run(root, "fetch", "-q", remote, f"+refs/heads/{branch}:{tracking}", timeout=300)
+            _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
             return {**rep, "pushed": True, "warn": rep["warn"] + citation_warnings(cites)}
         if not any(k in p.stderr for k in ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")):
             return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}"}
