@@ -37,7 +37,7 @@ def KEY_SHA512 : String :=
 /-- `circuit.LEAF_SCHEME`: `hm96-sha512/v1` over the column digest, under the default key. -/
 def leafScheme : Json := Json.mkObj [
   ("id", "hm96-sha512/v1"), ("inner", "sha512 column digest"), ("salt_bytes", (192 : Nat)),
-  ("salt_source", "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored"),
+  ("salt_source", "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored"),
   ("key", "default_key, a statement constant for every tree"), ("key_sha512", KEY_SHA512)]
 
 /-- What `compose` reads of a subcircuit: its id, its template's, and its ports' names. -/
