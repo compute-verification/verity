@@ -35,6 +35,19 @@ def zcMsgs (m : ℕ) (p : ZerocheckProof) : List Msg :=
     ((List.range (m - 6)).map fun i => ⟨𝔽 × 𝔽, pairOf p.rounds[i]!⟩) ++
     [⟨𝔽 × 𝔽, (fOf p.finalA, fOf p.finalB)⟩]
 
+/-- **The lincheck's messages** (PROTOCOL.md §10), in the model's order: the `k_log − 6` rounds' `(q(1), q(∞))` (L3),
+then `z_partial` (L4). -/
+def lcMsgs (kLog : ℕ) (p : LincheckProof) : List Msg :=
+  ((List.range (kLog - 6)).map fun j => ⟨𝔽 × 𝔽, pairOf p.rounds[j]!⟩) ++ [⟨Fin 64 → 𝔽, vecOf 64 p.zPartial⟩]
+
+/-- An executable claim is the model's (§11): the value, the 64 skip weights and the `m − 6` coordinates. -/
+structure ClaimRel (m : ℕ) (c : Flock.Claim) (c' : Model.Claim 𝔽 m) : Prop where
+  value : c'.value = fOf c.value
+  skip_size : c.skip.size = 64
+  skip : ∀ s, c'.skip s = fOf c.skip[s.val]!
+  x_size : c.x.size = m - 6
+  x : ∀ i, c'.x i = fOf c.x[i.val]!
+
 /-- The executable's zerocheck output is the model's (§9.2): the skip point, the residual challenges, the zerocheck
 vector and the three claimed values. -/
 structure ZcRel (m : ℕ) (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) : Prop where

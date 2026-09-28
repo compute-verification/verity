@@ -6,3 +6,5 @@ import FlockSoundness.Refine.Exec
 import FlockSoundness.Refine.Tapes
 import FlockSoundness.Refine.Arith
 import FlockSoundness.Refine.Zerocheck
+import FlockSoundness.Refine.Realizes
+import FlockSoundness.Refine.Lincheck

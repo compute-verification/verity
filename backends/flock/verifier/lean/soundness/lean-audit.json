@@ -170,6 +170,24 @@
    "assumptions": [],
    "type_hash": "000000009e113cd0"
   },
+  "FlockSoundness.Refine.lincheck_refines": {
+   "signature": [
+    "FlockSoundness.Refine.lincheck_refines (S : FlockSoundness.Model.Statement) (c : Flock.CircuitFold)",
+    "  (hc : FlockSoundness.Refine.FoldRealizes c S) (zc : Flock.ZcOut)",
+    "  (zc' : FlockSoundness.Model.ZcOut FlockLevel3.GF128 S.m) (hzc : FlockSoundness.Refine.ZcRel S.m zc zc')",
+    "  (p : Flock.LincheckProof) (t t' : Flock.Transcript) (lc : Flock.LcOut) (hwf : FlockSoundness.Refine.RoundsWF t.rounds)",
+    "  (h : Flock.lincheck c zc p t = Except.ok (lc, t')) :",
+    "  t'.rounds = t.rounds ∧",
+    "    t.k ≤ t'.k ∧",
+    "      ∃ ab,",
+    "        FlockSoundness.Game.Plays FlockSoundness.Refine.fOf",
+    "            (FlockSoundness.Model.lincheck FlockSoundness.execArith S zc') (FlockSoundness.Refine.lcMsgs S.kLog p)",
+    "            (FlockSoundness.Refine.consumed t.rounds t.k t'.k) (some ab) ∧",
+    "          FlockSoundness.Refine.ClaimRel S.m (Flock.abcClaims S.m S.kLog zc lc)[0]! ab"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000077bd9194"
+  },
   "FlockSoundness.Refine.zerocheck_refines": {
    "signature": [
     "FlockSoundness.Refine.zerocheck_refines (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p : Flock.ZerocheckProof)",
@@ -327,6 +345,7 @@
     "FlockLevel3.unpack": "33c9bd21c8216137"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -341,6 +360,7 @@
     "FlockLevel3.natPoly": "5162bcc1ce64f198"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -357,6 +377,7 @@
     "FlockLevel3.w128": "74a2d7f0bc29b87a"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -372,6 +393,7 @@
     "FlockLevel3.instFieldGF128": "d78105b3c29f09dd"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -386,6 +408,7 @@
     "FlockLevel3.toAdj": "dacfbc5be315f0f6"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -406,6 +429,7 @@
     "FlockLevel3.xK": "3c5829f32f812106"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -421,6 +445,7 @@
     "FlockLevel3.lagΛ": "4bc831a2c07c9734"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -436,6 +461,7 @@
     "FlockLevel3.sPoly": "97b19d0ec8fd900f"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -451,6 +477,7 @@
     "FlockLevel3.u": "2b76b486951e7592"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -635,6 +662,7 @@
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -702,6 +730,7 @@
     "FlockSoundness.execArith": "614e3e3f08e4cd94"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
@@ -767,6 +796,7 @@
     "FlockSoundness.Model.eqAt": "2cc1488397babdef"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
@@ -908,6 +938,7 @@
     "FlockSoundness.Model.zerocheck": "8138b662477225cc"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -970,6 +1001,7 @@
     "FlockSoundness.Model.witnessOf": "f422b8c5d9c2023b"
    },
    "pins": [
+    "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -978,6 +1010,13 @@
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
    ]
+  },
+  "FlockSoundness.Refine.Realizes": {
+   "digest": "0b5160f9a91b928dcd8506df54b44633",
+   "definitions": {
+    "FlockSoundness.Refine.FoldRealizes": "0b5160f9a91b928d"
+   },
+   "pins": ["FlockSoundness.Refine.lincheck_refines"]
   },
   "FlockSoundness.Refine.Run": {
    "digest": "e553fa3b42e4296cefef94fc4365422d",
@@ -991,7 +1030,7 @@
     "FlockSoundness.Refine.RoundsWF": "76a5fa8326483928",
     "FlockSoundness.Refine.consumed": "a9b84328aa926dc7"
    },
-   "pins": ["FlockSoundness.Refine.zerocheck_refines"]
+   "pins": ["FlockSoundness.Refine.lincheck_refines", "FlockSoundness.Refine.zerocheck_refines"]
   },
   "FlockSoundness.Refine.Schedule": {
    "digest": "3455aff5e67c638cc45ed3896c8135f0",
@@ -1008,15 +1047,17 @@
    ]
   },
   "FlockSoundness.Refine.Tapes": {
-   "digest": "cc51b7d25cf75ecd6a335959da20dffa",
+   "digest": "ce437a39ed56b23bec8335f133820b7e",
    "definitions": {
+    "FlockSoundness.Refine.ClaimRel": "78f3358dade59d62",
     "FlockSoundness.Refine.ZcRel": "26693c3f26321daa",
     "FlockSoundness.Refine.fOf": "658c1f0f359adea5",
+    "FlockSoundness.Refine.lcMsgs": "78fa0f2b601e8165",
     "FlockSoundness.Refine.pairOf": "9e1f1dce16c57d9e",
     "FlockSoundness.Refine.vecOf": "acace70964c7a1bd",
     "FlockSoundness.Refine.zcMsgs": "3c177667a905f6a8"
    },
-   "pins": ["FlockSoundness.Refine.zerocheck_refines"]
+   "pins": ["FlockSoundness.Refine.lincheck_refines", "FlockSoundness.Refine.zerocheck_refines"]
   },
   "FlockSoundness.Rewinding": {
    "digest": "4d9e617c66a3a0138f1cedde8348aa39",
