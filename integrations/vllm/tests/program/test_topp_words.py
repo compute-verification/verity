@@ -1,14 +1,18 @@
 """The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the IR's
 evaluator computes it from its word gates, including #169's constructed rows whose warp halves disagree on stopping;
-`GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; `Q_word` cuts the keep word into word-sized units with no recomputed
-value; the new word gates are exact."""
+`GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; the program codec round-trips them; `Q_word` cuts the keep word into
+word-sized units with no recomputed value; the new word gates are exact."""
 from __future__ import annotations
+
+import json
 
 import numpy as np
 import pytest
 
 from verity.evaluation import evaluate
-from verity.ir.defs import CompositeDefinition, bind
+from verity.ir.codec import decode_program, encode_program
+from verity.ir.defs import REGISTRY, CompositeDefinition, bind
+from verity.ir.program import Program
 from verity.ir.types import Array
 from verity_vllm.program.registry import sampling as SM
 from verity_vllm.program.registry import topp_split as TS
@@ -91,6 +95,19 @@ def test_the_select_at_a_constant_split_count_is_v1_there():
         for spl in (4, 3):                                       # the constant S, and a count no launch has (v1 masks every lane)
             assert evaluate(bind(TWG.GumbelTopPTokenSelectV2, V=V, S=4), *args, spl) == \
                 evaluate(bind(SM.GumbelTopPTokenSelect, V=V), *args, spl)
+
+
+@pytest.mark.parametrize("fam,V,S", [("TopPKeepWord", 300, 8), ("TopPKeepWord", 1025, 32), ("GumbelTopPTokenSelectV2", 300, 8)])
+def test_the_codec_round_trips_it(fam, V, S):
+    """The Definition as one Call of a Program, through `encode_program` and `decode_program` as a Build's workload compose reads it.
+    Its NaN tests (`x == x`) read one multi-part sequence twice: the writer must not alias a node's second argument to its first.
+    (At V = 16, S = 4 each such sequence is one run, so the smallest shapes never exercised the alias.)"""
+    fn = bind(getattr(TWG, fam), V=V, S=S)
+    params, ret = fn.signature()
+    P = Program(CompositeDefinition(f"OneCall[{fn.id}]", 1, (), lambda st: (tuple(params), ret), lambda B, st, *x: B.call(fn, *x),
+                                    register=False))
+    D = decode_program(json.loads(json.dumps(encode_program(P))), REGISTRY)
+    assert D.gates == P.gates and D.root.id == P.root.id
 
 
 def test_q_word_cuts_it_into_word_units():

@@ -595,16 +595,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     step_rows = getattr(com, "step_rows", None) or {}
 
     def _logical(rid: str) -> str:
-        """Engine row id -> workload `r<i>`.  vLLM v1 suffixes the external request id with `-<8 hex>` internally; match exact, then
-        with the suffix stripped, then by prefix.  Unmapped ids stay raw (-> coverage FAILS for that request, fail-closed)."""
-        rid = str(rid)
-        if rid in order:
-            return order[rid]
-        base = rid.rsplit("-", 1)[0]
-        if base in order:
-            return order[base]
-        hits = [v for k, v in order.items() if rid.startswith(k)]
-        return hits[0] if len(hits) == 1 else rid
+        return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
@@ -1394,7 +1385,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli)
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the

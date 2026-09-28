@@ -1,0 +1,784 @@
+diff --git a/crates/flock-core/src/lincheck.rs b/crates/flock-core/src/lincheck.rs
+index 0030fd7..82ef254 100644
+--- a/crates/flock-core/src/lincheck.rs
++++ b/crates/flock-core/src/lincheck.rs
+@@ -567,6 +567,10 @@ pub struct LincheckProof {
+     /// [`LincheckGrinding::disabled`].
+     #[serde(default)]
+     pub grinding_nonces: Vec<u64>,
++    /// Verity M1: the prover's `comb` folded to its length-`2^k_skip` collapse (what the final check pairs with
++    /// `z_partial`), kept for the prover's own replay of its checks. Never serialized: a verifier always folds its own.
++    #[serde(skip)]
++    pub comb_partial: Vec<F128>,
+ }
+ 
+ /// Fiat--Shamir grinding policy for the Boolean lincheck.
+@@ -1974,6 +1978,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
+         z_partial,
+         matrix_evals: Vec::new(),
+         grinding_nonces: take(grinding_nonces),
++        comb_partial: comb_vec,
+     };
+     let claim = LincheckClaim {
+         r_inner_skip,
+diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
+index c36ce18..5281a68 100644
+--- a/crates/flock-core/src/pcs.rs
++++ b/crates/flock-core/src/pcs.rs
+@@ -35,7 +35,7 @@ use jagged::{
+ };
+ use ligerito::{
+     BasisWindowFn, FoldLookahead, LigeritoProof, ProverConfig, VerifierConfig, VirtualEqBasis,
+-    extension::recursive_verifier_with_basis_succinct, lookahead_accum_group, lookahead_finish,
++    lookahead_accum_group, lookahead_finish,
+     recursive_prover_with_basis_precomputed_round0_lanes, xor_acc8,
+ };
+ pub use pack::{LOG_PACKING, pack_witness};
+@@ -282,6 +282,28 @@ pub fn open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding<Ch: Chall
+     lig_config: &ProverConfig,
+     grinding: OpeningGrinding,
+     challenger: &mut Ch,
++) -> BatchOpeningProofLigerito {
++    open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding_zk(
++        packed_witness, prover_data, commitment, x_outers, precomputed_s_hat_v, packed_direct, padding, lig_config, grinding, None,
++        challenger,
++    )
++}
++
++/// [`open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding`] with Verity M1's level-0 hiding
++/// ([`ligerito::zk`]): `prover_data` is then [`commit::commit_zk`]'s (the witness's lanes and the extra ones).
++#[allow(clippy::too_many_arguments)]
++pub fn open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding_zk<Ch: Challenger>(
++    packed_witness: Vec<F128>,
++    prover_data: &ProverData,
++    commitment: &Commitment,
++    x_outers: &[&[F128]],
++    precomputed_s_hat_v: &[Option<&[F128]>],
++    packed_direct: &[PackedDirectClaim],
++    padding: &PaddingSpec,
++    lig_config: &ProverConfig,
++    grinding: OpeningGrinding,
++    zk0: Option<&ligerito::zk::Level0Zk>,
++    challenger: &mut Ch,
+ ) -> BatchOpeningProofLigerito {
+     open_batch_mixed_ligerito_seeded(
+         packed_witness,
+@@ -294,6 +316,7 @@ pub fn open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding<Ch: Chall
+         lig_config,
+         grinding,
+         None,
++        zk0,
+         challenger,
+     )
+ }
+@@ -316,6 +339,7 @@ pub fn open_batch_mixed_ligerito_seeded<Ch: Challenger>(
+     lig_config: &ligerito::ProverConfig,
+     grinding: OpeningGrinding,
+     seeded_stats: Option<Vec<F128>>,
++    zk0: Option<&ligerito::zk::Level0Zk>,
+     challenger: &mut Ch,
+ ) -> BatchOpeningProofLigerito {
+     // Belt-and-braces on the cap-depth derivation: the commit-time cap
+@@ -354,7 +378,7 @@ pub fn open_batch_mixed_ligerito_seeded<Ch: Challenger>(
+     // merged transport's inner-open configuration (no RS claims, one
+     // EqPoint claim): the eq basis folds honestly over the zero-padding
+     // lanes (live-block skip disabled) and the round-0 prime pairs blocks.
+-    let l0_num_lanes = commitment.params.num_ntts();
++    let l0_num_lanes = commitment.params.num_ntts() + if zk0.is_some() { ligerito::zk::EXTRA_LANES } else { 0 };
+     let lane_major = l0_num_lanes < 1usize << lig_config.initial_k;
+     let log_n = commitment.params.m - LOG_PACKING;
+     if lane_major {
+@@ -447,6 +471,7 @@ pub fn open_batch_mixed_ligerito_seeded<Ch: Challenger>(
+         jit,
+         vbasis,
+         seeded_stats,
++        zk0,
+         challenger,
+     );
+     if trace {
+@@ -1243,6 +1268,27 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding<Ch: Challenger>(
+     grinding: OpeningGrinding,
+     challenger: &mut Ch,
+ ) -> Result<(), PcsError> {
++    verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, claims, skip_weights, x_outers, packed_direct, proof, lig_config,
++                                                         grinding, None, challenger)
++    .map(|_| ())
++}
++
++/// [`verify_opening_batch_ligerito_mixed_with_grinding`] with Verity M1's level-0 hiding ([`ligerito::zk`]; `zk0`: the padding
++/// per lane and the repetition whose pair of extra lanes the rows are checked against): returns the lane phase's record, whose
++/// checks are the caller's.
++#[allow(clippy::too_many_arguments)]
++pub fn verify_opening_batch_ligerito_mixed_with_grinding_zk<Ch: Challenger>(
++    commitment: &Commitment,
++    claims: &[F128],
++    skip_weights: &[&[F128]],
++    x_outers: &[&[F128]],
++    packed_direct: &[PackedDirectClaimRef<'_>],
++    proof: &BatchOpeningProofLigerito,
++    lig_config: &VerifierConfig,
++    grinding: OpeningGrinding,
++    zk0: Option<ligerito::zk::Level0Params>,
++    challenger: &mut Ch,
++) -> Result<Option<ligerito::zk::Level0ZkRecord>, PcsError> {
+     let n_rs = claims.len();
+     let n_pd = packed_direct.len();
+     assert_eq!(skip_weights.len(), n_rs);
+@@ -1401,20 +1447,24 @@ pub fn verify_opening_batch_ligerito_mixed_with_grinding<Ch: Challenger>(
+ 
+     // 5. Drive ligerito SUCCINCT verifier — eval_b_residual is called ONCE
+     //    at the residual check (returns all yr_len values in one batch).
+-    let ok = recursive_verifier_with_basis_succinct(
++    let mut rec = None;
++    let lanes = commitment.params.num_ntts() + if zk0.is_some() { ligerito::zk::EXTRA_LANES } else { 0 };
++    let ok = ligerito::extension::recursive_verifier_with_basis_succinct_zk(
+         lig_config,
+         &proof.ligerito,
+         log_n,
+         target_combined,
+         &commitment.cap,
+-        commitment.params.num_ntts(),
++        lanes,
+         eval_b_residual,
++        zk0,
++        &mut rec,
+         challenger,
+     );
+     if !ok {
+         return Err(PcsError::Ligerito);
+     }
+-    Ok(())
++    Ok(rec)
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -2308,6 +2358,7 @@ pub fn open_batch_merged<Ch: Challenger>(
+                 lig_config,
+                 grinding,
+                 seeded_stats,
++                None,
+                 challenger,
+             )
+         },
+diff --git a/crates/flock-core/src/pcs/commit.rs b/crates/flock-core/src/pcs/commit.rs
+index 83a6207..68455c7 100644
+--- a/crates/flock-core/src/pcs/commit.rs
++++ b/crates/flock-core/src/pcs/commit.rs
+@@ -837,6 +837,36 @@ fn commit_encode_finish(
+     codeword
+ }
+ 
++/// Verity M1: the level-0 commitment with Ligerito's level-0 hiding ([`super::ligerito::zk`]): every witness lane's
++/// codeword plus its padding polynomial's, then the two padded uniform lanes; `num_ntts + 2` lanes per leaf, one tree over
++/// the same positions (and so the same hm96 level-0 salts).
++pub fn commit_zk(z_packed: &[F128], params: &PcsParams, zk: &super::ligerito::zk::Level0Zk) -> (Commitment, ProverData) {
++    use rayon::prelude::*;
++    use super::ligerito::zk::{EXTRA_LANES, lane_codeword};
++    params.validate();
++    let (w, n) = (params.num_ntts(), params.n_positions());
++    let lanes = w + EXTRA_LANES;
++    let log_msg = params.k_code() - params.log_inv_rate;
++    assert_eq!(zk.pads.len(), lanes);
++    assert!(zk.extra.iter().all(|x| x.len() == 1 << log_msg));
++    let base = commit_encode(z_packed, params);
++    let pads: Vec<Vec<F128>> = (0..lanes).into_par_iter()
++        .map(|l| lane_codeword(&zk.pads[l], (l >= w).then(|| zk.extra[l - w].as_slice()), log_msg, params.log_inv_rate))
++        .collect();
++    let mut codeword = crate::scratch::take_f128(n * lanes);
++    codeword.par_chunks_mut(lanes).enumerate().for_each(|(pos, row)| {
++        for (l, x) in row.iter_mut().enumerate() {
++            *x = pads[l][pos] + if l < w { base[pos * w + l] } else { F128::ZERO };
++        }
++    });
++    give_f128(base);
++    let bytes: &[u8] = unsafe { from_raw_parts(codeword.as_ptr() as *const u8, codeword.len() * size_of::<F128>()) };
++    let merkle_tree = merkle_tree(bytes, params.n_leaves(), params.merkle_hash);
++    let cfg = super::ligerito::zk::prover_config(params.ligerito_prover_config().expect("Ligerito config"), zk.queries0);
++    let cap = cap_layer(&merkle_tree, params.n_leaves(), cfg.level_zero_cap_depth()).to_vec();
++    (Commitment { cap, params: params.clone() }, ProverData { codeword, merkle_tree })
++}
++
+ /// Stage 2 of the commit: Merkle tree over the encoded codeword.
+ pub fn commit_merkle(codeword: Vec<F128>, params: &PcsParams) -> (Commitment, ProverData) {
+     let timing = std::env::var_os("FLOCK_COMMIT_TIMING").is_some();
+diff --git a/crates/flock-core/src/pcs/ligerito.rs b/crates/flock-core/src/pcs/ligerito.rs
+index 31b6d20..a25080b 100644
+--- a/crates/flock-core/src/pcs/ligerito.rs
++++ b/crates/flock-core/src/pcs/ligerito.rs
+@@ -64,6 +64,137 @@ use crate::{
+ 
+ pub(crate) mod extension;
+ 
++/// Verity (lane flock-zk, M1): VEIL's hiding for Ligerito's level 0 (ePrint 2026/683 Figs. 8–9; verity's
++/// `backends/flock/live/PROTOCOL.md` §8). Every lane's message is padded by the polynomial `(Ŵ_n + c)·μ` (`μ` of degree
++/// `< t_pad` uniform, `Ŵ_n = X_L` the novel basis's vanishing polynomial of the message subspace, `c` outside GF(2)):
++/// `X_L` alone vanishes on half the codeword's positions, `X_L + c` on none, so any `t_pad` opened positions of a lane are
++/// uniform. Four uniform lanes (padded too) follow the witness's, a pair per repetition: every repetition opens the one
++/// level-0 codeword, and rep `r`'s fold takes only its own pair, `ρ_0 R_{2r} + ρ_1 R_{2r+1}` (`ρ` fresh F256 coins,
++/// F128-independent), so its level 1 commits a uniform table. A pair shared by two reps would leak: their two folds and
++/// two padding combinations eliminate it. Before `ρ` the prover sends the pair's sums `e` against the folded basis (exposed:
++/// masked by the caller's pads; VEIL Fig. 9 step 1), after it the blinded claim `T' = claim + ρ_0 e_0 + ρ_1 e_1` and the
++/// padding's combination `ybar`.
++pub mod zk {
++    use rayon::prelude::*;
++
++    use super::{AdditiveNttF128, F128, F256, ProverConfig, VerifierConfig};
++
++    pub const LABEL_OPEN: &[u8] = b"verity-flock-zk-l0-open-v0";
++    pub const LABEL_CLOSE: &[u8] = b"verity-flock-zk-l0-close-v0";
++    /// Extra lanes in the level-0 codeword: [`REP_LANES`] per repetition, for two repetitions.
++    pub const EXTRA_LANES: usize = 4;
++    pub const REP_LANES: usize = 2;
++
++    /// Rep `rep`'s pair among the extra lanes.
++    pub fn rep_lanes(rep: usize) -> [usize; REP_LANES] {
++        [REP_LANES * rep, REP_LANES * rep + 1]
++    }
++
++    /// The padding polynomial's constant `c` (the element `x`, outside GF(2)).
++    pub const PAD_C: F128 = F128::new(2, 0);
++
++    /// The padded level-0 code `RS[2L, L + t_pad]` has rate above the profile's, so level 0 takes the caller's query count
++    /// `queries0` (the level-0 tree's cap depth follows it): both sides' configs with it, restratified.
++    pub fn prover_config(mut cfg: ProverConfig, queries0: usize) -> ProverConfig {
++        cfg.queries[0] = queries0;
++        cfg.with_default_stratified()
++    }
++
++    pub fn verifier_config(mut cfg: VerifierConfig, queries0: usize) -> VerifierConfig {
++        cfg.queries[0] = queries0;
++        cfg.with_default_stratified()
++    }
++
++    /// The prover's level-0 randomness, drawn once per session: `pads[l]` (`t_pad` words) for every lane `l` (the witness's,
++    /// then the extra ones), and the extra lanes' messages; and the repetition this opening is for.
++    #[derive(Clone)]
++    pub struct Level0Zk {
++        /// level 0's query count ([`prover_config`])
++        pub queries0: usize,
++        pub t_pad: usize,
++        /// this opening's repetition: it folds, sums and pads only its own pair ([`rep_lanes`])
++        pub rep: usize,
++        pub extra: [Vec<F128>; EXTRA_LANES],
++        pub pads: Vec<Vec<F128>>,
++        /// a dishonest prover (the negatives): 1 folds another first extra lane than the committed one, 2 sends another
++        /// `T'`, 3 another `ybar`, 4 another `e_0` (with the honest `T'`)
++        pub tamper: u8,
++    }
++
++    /// Sent after the lane rounds (see the module docs).
++    #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
++    pub struct Level0ZkProof {
++        pub e: [F256; REP_LANES],
++        pub t_prime: F256,
++        pub ybar: Vec<F256>,
++    }
++
++    /// The lane phase as either side saw it (never serialized): what a caller needs to rebuild its checks as constraints.
++    #[derive(Clone, Debug, Default, PartialEq, Eq)]
++    pub struct Level0ZkRecord {
++        pub target: F128,
++        /// `(β, y)` per level-0 OOD sample (`y` as sent)
++        pub ood: Vec<(F128, F128)>,
++        pub challenges: Vec<F256>,
++        pub rho: [F256; REP_LANES],
++        /// level 0's and level 1's query positions
++        pub queries0: Vec<usize>,
++        pub queries1: Vec<usize>,
++    }
++
++    /// The verifier's level-0 parameters: the padding per lane, and the repetition whose pair the rows are checked against.
++    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
++    pub struct Level0Params {
++        pub t_pad: usize,
++        pub rep: usize,
++    }
++
++    /// Whether `ρ_0 R_0 + ρ_1 R_1` is uniform on F256 for uniform F128 lanes: `ρ_0, ρ_1` independent over F128.
++    pub fn rho_independent(rho: [F256; REP_LANES]) -> bool {
++        rho[0].c0 * rho[1].c1 + rho[0].c1 * rho[1].c0 != F128::ZERO
++    }
++
++    /// One lane's padding codeword: the RS encoding of `base + (c·pad ‖ 0) ‖ pad ‖ 0` minus that of `base ‖ 0` for a
++    /// witness lane (`base = None`), or of the whole padded extra lane.
++    pub fn lane_codeword(pad: &[F128], base: Option<&[F128]>, log_msg: usize, log_inv_rate: usize) -> Vec<F128> {
++        let (l, n) = (1usize << log_msg, 1usize << (log_msg + log_inv_rate));
++        assert!(pad.len() <= l, "t_pad exceeds the lane's message length");
++        let mut v = vec![F128::ZERO; n];
++        if let Some(b) = base {
++            v[..l].copy_from_slice(b);
++        }
++        for (i, &p) in pad.iter().enumerate() {
++            v[i] += PAD_C * p;
++            v[l + i] = p;
++        }
++        AdditiveNttF128::standard(log_msg + log_inv_rate).forward_transform(&mut v);
++        v
++    }
++
++    /// `Enc(c·ybar ‖ ybar)` at every position (by coordinates): the padding's part of the folded level-0 row.
++    pub fn pad_codeword(ybar: &[F256], log_msg: usize, log_inv_rate: usize) -> Vec<F256> {
++        let [a, b] = [0, 1].map(|k| lane_codeword(&ybar.iter().map(|y| y.coordinates()[k]).collect::<Vec<_>>(), None, log_msg, log_inv_rate));
++        a.into_par_iter().zip(b).map(|(x, y)| F256::new(x, y)).collect()
++    }
++
++    /// Rep `z.rep`'s padding combination `ybar = Σ_l w_l pad_l + ρ_0 pad_{R_{2r}} + ρ_1 pad_{R_{2r+1}}` over the witness's
++    /// `lanes` lanes, `w = eq(r̄)` the lane rounds' weights.
++    pub fn ybar(z: &Level0Zk, lanes: usize, w: &[F256], rho: [F256; REP_LANES]) -> Vec<F256> {
++        let p = rep_lanes(z.rep).map(|i| &z.pads[lanes + i]);
++        (0..z.t_pad).into_par_iter().map(|i| (0..lanes).fold(rho[0] * p[0][i] + rho[1] * p[1][i], |acc, l| acc + w[l] * z.pads[l][i])).collect()
++    }
++
++    /// The level-0 enforced sum's extra terms for rep `rep`: `Σ_q w_q (ρ_0 row_q[L + 2r] + ρ_1 row_q[L + 2r + 1] +
++    /// Enc(c·ybar ‖ ybar)(q))` for row weights `w = eq(α)`, `L` the witness's lane count.
++    pub fn enforced_extra(rows: &[Vec<F128>], queries: &[usize], row_weights: &[F128], lanes: usize, rep: usize, rho: [F256; REP_LANES],
++                          padcw: &[F256]) -> F256 {
++        let p = rep_lanes(rep);
++        rows.iter().zip(queries).zip(row_weights).map(|((row, &q), &w)| {
++            (rho[0] * row[lanes + p[0]] + rho[1] * row[lanes + p[1]] + padcw[q]) * w
++        }).fold(F256::ZERO, |a, b| a + b)
++    }
++}
++
+ // ===================================================================
+ // Config
+ // ===================================================================
+@@ -2201,6 +2332,12 @@ pub struct LigeritoProof {
+     /// queried consistency equations.
+     #[serde(default)]
+     pub consistency_batch_grinding_nonces: Vec<u64>,
++    /// Verity M1: level 0's hiding messages (`zk`), when the commitment carries them.
++    #[serde(default)]
++    pub zk_level0: Option<zk::Level0ZkProof>,
++    /// The prover's record of the lane phase (never serialized).
++    #[serde(skip)]
++    pub zk_record: Option<zk::Level0ZkRecord>,
+ }
+ 
+ impl LigeritoProof {
+@@ -4763,6 +4900,7 @@ pub fn recursive_prover_with_basis<Ch: Challenger>(
+         None,
+         None,
+         None,
++        None,
+         challenger,
+     )
+ }
+@@ -4801,6 +4939,7 @@ pub fn recursive_prover_with_basis_precomputed_round0<Ch: Challenger>(
+         }),
+         round1_lookahead,
+         None,
++        None,
+         challenger,
+     )
+ }
+@@ -4830,6 +4969,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+     l0_jit_basis: Option<BasisWindowFn<'_>>,
+     l0_virtual_basis: Option<VirtualEqBasis>,
+     seeded_stats: Option<Vec<F128>>,
++    zk0: Option<&zk::Level0Zk>,
+     challenger: &mut Ch,
+ ) -> LigeritoProof {
+     recursive_prover_with_basis_impl(
+@@ -4849,6 +4989,7 @@ pub(crate) fn recursive_prover_with_basis_precomputed_round0_lanes<Ch: Challenge
+         }),
+         round1_lookahead,
+         seeded_stats,
++        zk0,
+         challenger,
+     )
+ }
+@@ -5035,6 +5176,8 @@ fn recursive_prover_inner<Ch: Challenger>(
+                 fold_grinding_nonces: Vec::new(),
+                 claim_batch_grinding_nonces: Vec::new(),
+                 consistency_batch_grinding_nonces: Vec::new(),
++                zk_level0: None,
++                zk_record: None,
+             };
+         }
+ 
+diff --git a/crates/flock-core/src/pcs/ligerito/extension.rs b/crates/flock-core/src/pcs/ligerito/extension.rs
+index 195c44a..b90ae6a 100644
+--- a/crates/flock-core/src/pcs/ligerito/extension.rs
++++ b/crates/flock-core/src/pcs/ligerito/extension.rs
+@@ -1690,6 +1690,22 @@ impl SumcheckProver256 {
+         }
+     }
+ 
++    /// Verity M1 (`super::zk`): fold the extra uniform lanes into the level-0 fold before its code switch,
++    /// `f += ρ_0 R_0 + ρ_1 R_1`. Returns `e_i = Σ_x b[x] R_i[x]` and the blinded implicit claim `T' = Σ_x b[x] f[x]`.
++    /// Verity M1 (`super::zk`): the extra lanes' sums against the folded basis, `e_i = Σ_x b[x] R_i[x]` (sent before `ρ`).
++    pub(super) fn zk_extra_sums(&self, lanes: [&[F128]; 2]) -> [F256; 2] {
++        assert!(self.pending.is_none() && self.initial_f.is_none());
++        assert!(lanes.iter().all(|l| l.len() == self.f.len()) && self.combined_basis.len() == self.f.len());
++        [0, 1].map(|i| self.combined_basis.par_iter().zip(lanes[i].par_iter()).map(|(&b, &r)| b * r).reduce(|| F256::ZERO, |a, b| a + b))
++    }
++
++    /// Verity M1: fold the extra lanes into the level-0 fold before its code switch, `f += ρ_0 R_0 + ρ_1 R_1`; returns the
++    /// blinded implicit claim `T' = Σ_x b[x] f[x]`.
++    pub(super) fn zk_blind(&mut self, lanes: [&[F128]; 2], rho: [F256; 2]) -> F256 {
++        self.f.par_iter_mut().zip(lanes[0].par_iter().zip(lanes[1].par_iter())).for_each(|(f, (&r0, &r1))| *f += rho[0] * r0 + rho[1] * r1);
++        self.f.par_iter().zip(self.combined_basis.par_iter()).map(|(&f, &b)| f * b).reduce(|| F256::ZERO, |a, b| a + b)
++    }
++
+     pub(super) fn f(&self) -> &[F256] {
+         &self.f
+     }
+@@ -2075,6 +2091,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     // (the merged transport: its sumcheck's folded witness at the lane-block
+     // round); `None` sweeps for them.
+     seeded_stats: Option<Vec<F128>>,
++    // Verity M1: level 0's hiding (`super::zk`); the codeword then has the two extra lanes.
++    zk0: Option<&super::zk::Level0Zk>,
+     challenger: &mut Ch,
+ ) -> LigeritoProof {
+     let log_n = packed_witness.len().trailing_zeros() as usize;
+@@ -2117,6 +2135,15 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     let cap_depth = |level: usize| config.stratified[level].cap_depth();
+     let initial_cap = cap_layer(l0_tree, block_len_0, cap_depth(0)).to_vec();
+     challenger.observe_bytes(initial_cap.as_flattened().as_flattened());
++    let zk_target = target;
++    let mut zk_ood: Vec<(F128, F128)> = Vec::new();
++    let mut zk_out: Option<(super::zk::Level0ZkProof, [F256; 2])> = None;
++    if let Some(z) = zk0 {
++        assert_eq!(l0_num_lanes, (1usize << initial_k) + super::zk::EXTRA_LANES, "zk: level 0 has the witness's lanes and the extra ones");
++        assert!(z.rep < super::zk::EXTRA_LANES / super::zk::REP_LANES, "zk: a pair of extra lanes per repetition");
++        assert!(z.pads.len() == l0_num_lanes && z.pads.iter().all(|p| p.len() == z.t_pad));
++        challenger.observe_label(super::zk::LABEL_OPEN);
++    }
+ 
+     let claim_bits = |level: usize| config.claim_batch_grinding_bits[level] as u32;
+     let consistency_bits = |level: usize| config.consistency_batch_grinding_bits[level] as u32;
+@@ -2142,7 +2169,8 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     // (len ≥ 8·d). FLOCK_NO_FOLD_LOOKAHEAD=1 / FOLD_LOOKAHEAD_OVERRIDE is
+     // the A/B knob — value-identical either way (exact polynomial
+     // identity), so proofs are byte-equal.
+-    let alternation = match FOLD_LOOKAHEAD_OVERRIDE.load(Ordering::Relaxed) {
++    // Verity M1: the plain schedule under `zk0` (value-identical), so the last lane round is a plain fold before the switch.
++    let alternation = zk0.is_none() && match FOLD_LOOKAHEAD_OVERRIDE.load(Ordering::Relaxed) {
+         1 => true,
+         2 => false,
+         _ => var_os("FLOCK_NO_FOLD_LOOKAHEAD").is_none(),
+@@ -2151,6 +2179,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     // the factored basis. The combine skipped its O(L) sweep under the same
+     // gate, so `first_msg`/`round1_lookahead` carry nothing here.
+     let stats_path = virtual_basis.is_some() && l0_lane_major && crate::pcs::stats_ladder_enabled();
++    assert!(zk0.is_none() || !(stats_path || factored || l0_lane_major), "zk: the materialized level-0 path only");
+     let (mut sumcheck, lane_challenges) = if stats_path {
+         let seeded = virtual_basis.take().expect("gated on Some");
+         let _t = std::time::Instant::now();
+@@ -2215,6 +2244,7 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+             ood_values.push(y);
+             let (nonce, beta) = challenger.grind_pow_and_sample_f128(claim_bits(0));
+             claim_batch_grinding_nonces.push(nonce);
++            zk_ood.push((beta, y));
+             target += beta * y;
+             if let Some(msg) = first_msg.as_mut() {
+                 msg.u_0 += beta * ood_msg.u_0;
+@@ -2332,6 +2362,39 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+                         } else {
+                             sumcheck.fold_materialized(challenge, fold_block)
+                         };
++                        if let Some(z) = zk0 {
++                            // e before rho (VEIL Fig. 9 step 1: the extra row's evaluation precedes the combination's coins); this
++                            // rep's own pair only
++                            let [p0, p1] = super::zk::rep_lanes(z.rep);
++                            let forged;
++                            let lane0: &[F128] = if z.tamper == 1 {
++                                forged = { let mut v = z.extra[p0].clone(); v[0] += F128::ONE; v };
++                                &forged
++                            } else {
++                                &z.extra[p0]
++                            };
++                            let mut e = sumcheck.zk_extra_sums([&z.extra[p0], &z.extra[p1]]);
++                            if z.tamper == 4 {
++                                e[0] += F256::ONE;
++                            }
++                            challenger.observe_f256(e[0]);
++                            challenger.observe_f256(e[1]);
++                            let rho = [challenger.sample_f256(), challenger.sample_f256()];
++                            assert!(super::zk::rho_independent(rho), "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128");
++                            let mut t_prime = sumcheck.zk_blind([lane0, &z.extra[p1]], rho);
++                            if z.tamper == 2 {
++                                t_prime += F256::ONE;
++                            }
++                            challenger.observe_label(super::zk::LABEL_CLOSE);
++                            challenger.observe_f256(t_prime);
++                            let w = build_eq_table256(&lane_challenges);
++                            let mut ybar = super::zk::ybar(z, 1usize << initial_k, &w, rho);
++                            if z.tamper == 3 {
++                                ybar[0] += F256::ONE;
++                            }
++                            challenger.observe_f128_slice(&ybar.iter().flat_map(|y| y.coordinates()).collect::<Vec<_>>());
++                            zk_out = Some((super::zk::Level0ZkProof { e, t_prime, ybar }, rho));
++                        }
+                         let msg = sumcheck.code_switch_and_replace_message();
+                         observe_message(challenger, msg);
+                     }
+@@ -2492,7 +2555,16 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+     }
+     let _t = Instant::now();
+     let basis_0 = induced_basis(n1, log_inv_rate_0, &queries_0, &alpha_0);
+-    let enforced_0 = induce_enforced_sum(&opened_rows_0, &lane_challenges, &alpha_0);
++    let enforced_0 = match &zk_out {
++        None => induce_enforced_sum(&opened_rows_0, &lane_challenges, &alpha_0),
++        Some((zp, rho)) => {
++            let lanes = 1usize << initial_k;
++            let rows: Vec<Vec<F128>> = opened_rows_0.iter().map(|r| r[..lanes].to_vec()).collect();
++            let padcw = super::zk::pad_codeword(&zp.ybar, log_msg_cols_0, log_inv_rate_0);
++            induce_enforced_sum(&rows, &lane_challenges, &alpha_0)
++                + super::zk::enforced_extra(&opened_rows_0, &queries_0, &build_eq_table(&alpha_0), lanes, zk0.map_or(0, |z| z.rep), *rho, &padcw)
++        }
++    };
+     let msg = sumcheck.introduce_presplit_basis(basis_0, enforced_0);
+     observe_message(challenger, msg);
+     let (nonce, beta) = challenger.grind_pow_and_sample_f128(claim_bits(1));
+@@ -2661,6 +2733,11 @@ pub(super) fn recursive_prover_with_basis_impl<Ch: Challenger>(
+                 fold_grinding_nonces: Vec::new(),
+                 claim_batch_grinding_nonces,
+                 consistency_batch_grinding_nonces,
++                zk_record: zk_out.as_ref().map(|(_, rho)| super::zk::Level0ZkRecord {
++                    target: zk_target, ood: zk_ood.clone(), challenges: lane_challenges.clone(), rho: *rho, queries0: queries_0.clone(),
++                    queries1: Vec::new(),
++                }),
++                zk_level0: zk_out.take().map(|x| x.0),
+             };
+         }
+ 
+@@ -2858,6 +2935,7 @@ fn eq_residual(point: &[F128], fixed: &[F256], residual_log: usize, scale: F256)
+ }
+ 
+ #[allow(clippy::too_many_arguments)]
++#[allow(dead_code)]
+ pub(crate) fn recursive_verifier_with_basis_succinct<Ch, F>(
+     config: &VerifierConfig,
+     proof: &LigeritoProof,
+@@ -2868,6 +2946,30 @@ pub(crate) fn recursive_verifier_with_basis_succinct<Ch, F>(
+     eval_b_residual: F,
+     challenger: &mut Ch,
+ ) -> bool
++where
++    Ch: Challenger,
++    F: Fn(&[F256], usize) -> Vec<F256>,
++{
++    recursive_verifier_with_basis_succinct_zk(config, proof, log_n, target, expected_initial_cap, l0_num_lanes, eval_b_residual,
++                                              None, &mut None, challenger)
++}
++
++/// [`recursive_verifier_with_basis_succinct`] with level 0's hiding (`super::zk`, `zk0`'s padding per lane and repetition): the lane
++/// phase's messages are masked, so its checks are the caller's (from `rec`); from the blinded claim `T'` on, everything is
++/// checked here, the level-0 rows against the extra lanes and the padding's combination too.
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn recursive_verifier_with_basis_succinct_zk<Ch, F>(
++    config: &VerifierConfig,
++    proof: &LigeritoProof,
++    log_n: usize,
++    target: F128,
++    expected_initial_cap: &[Hash],
++    l0_num_lanes: usize,
++    eval_b_residual: F,
++    zk0: Option<super::zk::Level0Params>,
++    rec: &mut Option<super::zk::Level0ZkRecord>,
++    challenger: &mut Ch,
++) -> bool
+ where
+     Ch: Challenger,
+     F: Fn(&[F256], usize) -> Vec<F256>,
+@@ -2881,6 +2983,10 @@ where
+         || !proof.fold_grinding_nonces.is_empty()
+         || config.fold_grinding_bits.iter().any(|&bits| bits != 0)
+         || config.recursive_ks.iter().any(|&k| k < 2)
++        || zk0.is_some() != proof.zk_level0.is_some()
++        || zk0.is_some_and(|z| proof.zk_level0.as_ref().is_some_and(|p| p.ybar.len() != z.t_pad))
++        || zk0.is_some_and(|z| z.rep >= super::zk::EXTRA_LANES / super::zk::REP_LANES)
++        || zk0.is_some() && l0_num_lanes != (1usize << initial_k) + super::zk::EXTRA_LANES
+     {
+         return false;
+     }
+@@ -2888,6 +2994,10 @@ where
+     challenger.observe_label(b"flock-ligerito-basis-f256-split-v0");
+     challenger.observe_f128(target);
+     challenger.observe_bytes(proof.initial_cap.as_flattened().as_flattened());
++    let mut zk_rec = super::zk::Level0ZkRecord { target, ..Default::default() };
++    if zk0.is_some() {
++        challenger.observe_label(super::zk::LABEL_OPEN);
++    }
+     let log_cols_0 = log_n - initial_k;
+     let block_len_0 = 1usize << (log_cols_0 + config.log_inv_rates[0]);
+     let strat = |level: usize| &config.stratified[level];
+@@ -2926,6 +3036,7 @@ where
+         };
+         claim_nonce += 1;
+         claim += F256::from(beta * y);
++        zk_rec.ood.push((beta, y));
+         ood_contexts.push(OodResidualContext {
+             point,
+             beta,
+@@ -2940,10 +3051,27 @@ where
+     observe_message(challenger, first);
+     let mut quad = RoundQuad256::from_msg(first, claim);
+     let mut initial_challenges = Vec::with_capacity(initial_k);
+-    for _ in 0..initial_k {
++    for j in 0..initial_k {
+         let challenge = challenger.sample_f256();
+         claim = quad.eval(challenge);
+         initial_challenges.push(challenge);
++        if j + 1 == initial_k
++            && let Some(zp) = proof.zk_level0.as_ref()
++        {
++            // the lane phase's claim is masked (the caller's constraints); the blinded claim T' takes over
++            challenger.observe_f256(zp.e[0]);
++            challenger.observe_f256(zp.e[1]);
++            let rho = [challenger.sample_f256(), challenger.sample_f256()];
++            if !super::zk::rho_independent(rho) {
++                return false;
++            }
++            challenger.observe_label(super::zk::LABEL_CLOSE);
++            challenger.observe_f256(zp.t_prime);
++            challenger.observe_f128_slice(&zp.ybar.iter().flat_map(|y| y.coordinates()).collect::<Vec<_>>());
++            claim = zp.t_prime;
++            zk_rec.rho = rho;
++            zk_rec.challenges = initial_challenges.clone();
++        }
+         let Some(&msg) = proof.sumcheck_transcript_f256.get(tx) else {
+             return false;
+         };
+@@ -3027,11 +3155,21 @@ where
+     ) {
+         return false;
+     }
+-    let enforced_0 = induce_enforced_sum(
+-        &proof.initial_proof.opened_rows,
+-        &initial_challenges,
+-        &alpha_0,
+-    );
++    let enforced_0 = match &proof.zk_level0 {
++        None => induce_enforced_sum(&proof.initial_proof.opened_rows, &initial_challenges, &alpha_0),
++        Some(zp) => {
++            let lanes = 1usize << initial_k;
++            let rows: Vec<Vec<F128>> = proof.initial_proof.opened_rows.iter().map(|r| r[..lanes].to_vec()).collect();
++            let padcw = super::zk::pad_codeword(&zp.ybar, log_cols_0, config.log_inv_rates[0]);
++            induce_enforced_sum(&rows, &initial_challenges, &alpha_0)
++                + super::zk::enforced_extra(&proof.initial_proof.opened_rows, &queries_0, &build_eq_table(&alpha_0), lanes,
++                                            zk0.map_or(0, |z| z.rep), zk_rec.rho, &padcw)
++        }
++    };
++    if zk0.is_some() {
++        zk_rec.queries0 = queries_0.clone();
++        *rec = Some(zk_rec.clone());
++    }
+     let Some(&msg) = proof.sumcheck_transcript_f256.get(tx) else {
+         return false;
+     };
+@@ -3277,6 +3415,11 @@ where
+             return false;
+         };
+         query_nonce += 1;
++        if level == 1
++            && let Some(r) = rec.as_mut()
++        {
++            r.queries1 = queries.clone();
++        }
+         let Some(&nonce) = proof
+             .consistency_batch_grinding_nonces
+             .get(consistency_nonce)
+diff --git a/crates/flock-core/src/verifier.rs b/crates/flock-core/src/verifier.rs
+index c1c6d04..7f3c0d6 100644
+--- a/crates/flock-core/src/verifier.rs
++++ b/crates/flock-core/src/verifier.rs
+@@ -1622,6 +1622,7 @@ mod tests {
+             z_partial: Vec::new(),
+             matrix_evals: Vec::new(),
+             grinding_nonces: Vec::new(),
++            comb_partial: Vec::new(),
+         };
+         let mut ch = FsChallenger::new(b"non-identity-c-test");
+         assert!(matches!(
+diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
+index f53418c..34a7baa 100644
+--- a/crates/flock-prover/src/prover.rs
++++ b/crates/flock-prover/src/prover.rs
+@@ -1850,6 +1850,7 @@ fn prove_fast_core_with_codeword<Ch: Challenger>(
+         lincheck_circuit,
+         prefaulted_codeword,
+         &mut |_| {},
++        None,
+         challenger,
+     )
+ }
+@@ -1868,10 +1869,33 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+     lincheck_circuit: &dyn LincheckCircuit,
+     hook: &mut dyn FnMut(&Commitment) -> Vec<Vec<F128>>,
+     challenger: &mut Ch,
++) -> (R1csProofLigerito, Commitment) {
++    prove_fast_ligerito_from_witness_extra_zk(r1cs, pcs_params, z_packed, a_packed_f128, b_packed_f128, z_packed_lincheck, lincheck_circuit,
++                                              hook, None, challenger)
++}
++
++/// Verity M1: [`prove_fast_ligerito_from_witness_extra`] with Ligerito's level-0 hiding (`pcs::ligerito::zk`): the
++/// commitment is [`pcs::commit::commit_zk`]'s and the opening folds in its extra lanes.
++#[allow(clippy::too_many_arguments)]
++pub fn prove_fast_ligerito_from_witness_extra_zk<Ch: Challenger>(
++    r1cs: &BlockR1cs,
++    pcs_params: &PcsParams,
++    z_packed: Vec<F128>,
++    a_packed_f128: Vec<F128>,
++    b_packed_f128: Vec<F128>,
++    z_packed_lincheck: Vec<u8>,
++    lincheck_circuit: &dyn LincheckCircuit,
++    hook: &mut dyn FnMut(&Commitment) -> Vec<Vec<F128>>,
++    zk0: Option<&pcs::ligerito::zk::Level0Zk>,
++    challenger: &mut Ch,
+ ) -> (R1csProofLigerito, Commitment) {
+     let lig_config = pcs_params
+         .ligerito_prover_config()
+         .expect("Ligerito default config; bump m for tiny instances");
++    let lig_config = match zk0 {
++        Some(z) => pcs::ligerito::zk::prover_config(lig_config, z.queries0),
++        None => lig_config,
++    };
+     let mut extra: Vec<Vec<F128>> = Vec::new();
+     let ProveCore {
+         zc_proof,
+@@ -1893,6 +1917,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+         lincheck_circuit,
+         None,
+         &mut |cm| extra = hook(cm),
++        zk0,
+         challenger,
+     );
+     let padding = r1cs.padding_spec();
+@@ -1901,7 +1926,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+     let x_refs: Vec<&[F128]> = x_fulls.iter().map(|v| v.as_slice()).collect();
+     let mut pre: Vec<Option<&[F128]>> = vec![s_hat_v_ab.as_deref(), Some(s_hat_v_c.as_slice())];
+     pre.resize(x_refs.len(), None);
+-    let pcs_open = open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding(
++    let pcs_open = pcs::open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding_zk(
+         z_packed,
+         &prover_data,
+         &commitment,
+@@ -1911,6 +1936,7 @@ pub fn prove_fast_ligerito_from_witness_extra<Ch: Challenger>(
+         &padding,
+         &lig_config,
+         pcs_params.opening_grinding(),
++        zk0,
+         challenger,
+     );
+     (
+@@ -1934,11 +1960,13 @@ fn prove_fast_core_hooked<Ch: Challenger>(
+     lincheck_circuit: &dyn LincheckCircuit,
+     prefaulted_codeword: Option<Vec<F128>>,
+     hook: &mut dyn FnMut(&Commitment),
++    zk0: Option<&pcs::ligerito::zk::Level0Zk>,
+     challenger: &mut Ch,
+ ) -> ProveCore {
+-    let (commitment, prover_data) = match prefaulted_codeword {
+-        Some(buf) => commit_into(&z_packed, pcs_params, buf),
+-        None => commit(&z_packed, pcs_params),
++    let (commitment, prover_data) = match (prefaulted_codeword, zk0) {
++        (_, Some(z)) => pcs::commit::commit_zk(&z_packed, pcs_params, z),
++        (Some(buf), None) => commit_into(&z_packed, pcs_params, buf),
++        (None, None) => commit(&z_packed, pcs_params),
+     };
+     hook(&commitment);
+     bind_statement(challenger, r1cs, &commitment);
