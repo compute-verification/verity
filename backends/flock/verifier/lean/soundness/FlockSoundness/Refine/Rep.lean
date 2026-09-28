@@ -52,6 +52,53 @@ theorem consumed_all (rs : Array Round) : consumed rs 0 rs.size = rs.toList.map 
   simp only [List.getElem_map, List.getElem_range', Nat.sub_zero, Nat.zero_add, one_mul, Array.getElem_toList]
   rw [getElem!_pos rs i (by simpa using h₂)]
 
+/-- A passed Merkle check had a cap of `2^c` entries, each of the scheme's digest width. -/
+theorem merkleCheck_cap {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
+    {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
+    (h : merkleCheck ms cap c d pos rows sibs salts lanes = .ok ()) :
+    cap.size = 2 ^ c ∧ ∀ b ∈ cap.toList, b.size = ms.digestLen := by
+  unfold merkleCheck at h
+  split at h
+  · cases h
+  rename_i h₁
+  split at h
+  · cases h
+  rename_i h₂
+  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at h₁
+  simp only [Bool.or_eq_true, not_or, Array.any_eq_true, not_exists, bne_iff_ne, ne_eq, not_not] at h₂
+  refine ⟨h₁.1.1.1, fun b hb => ?_⟩
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hb)
+  exact h₂.1 i hi
+
+/-- **The table's cap** (§14): an accepting Ligerito run's level-0 cap has `2^c` entries of the digest width, since its
+level-0 queries passed their Merkle check. -/
+theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
+    (basisAt : Array F256 → ℕ → Array F256) (hq : (sch.levels.getD 0 default).q ≠ 0) {t t' : Transcript}
+    (h : Flock.ligerito ms sch T cap p basisAt t = .ok ((), t')) :
+    cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧ ∀ b ∈ cap.toList, b.size = ms.digestLen := by
+  unfold Flock.ligerito at h
+  obtain ⟨_, h⟩ := check_bind h
+  obtain ⟨_, h⟩ := check_bind h
+  obtain ⟨_, _, h⟩ := label_bind h
+  obtain ⟨_, _, h⟩ := absorbF_bind h
+  obtain ⟨_, _, h⟩ := absorbBytes_bind h
+  obtain ⟨_, _, h₄, -⟩ := bind_ok h
+  rw [StateT.run] at h₄
+  obtain ⟨_, _, _, h₄⟩ := lift_bind h₄
+  obtain ⟨_, _, h₄⟩ := nextOod_bind h₄
+  obtain ⟨_, _, _, h₄⟩ := lift_bind h₄
+  obtain ⟨_, _, h₄⟩ := claimPow_bind h₄
+  obtain ⟨_, _, _, h₄⟩ := lift_bind h₄
+  have h₄ := lmodify_bind h₄
+  obtain ⟨_, _, _, _, h₄⟩ := nextMsg_bind h₄
+  have h₄ := lmodify_bind h₄
+  obtain ⟨_, _, _, _, h₄⟩ := lbind_ok h₄
+  obtain ⟨_, _, _, h₄⟩ := lift_bind h₄
+  obtain ⟨-, -, _, _, _, _, _, _, _, h₄⟩ := oodIntro_bind (by omega) h₄
+  obtain ⟨-, -, _, _, _, _, _, _, _, h₄⟩ := oodIntro_bind (by omega) h₄
+  obtain ⟨-, -, hmc, -⟩ := queryLevel_bind hq h₄
+  exact merkleCheck_cap hmc
+
 /-- **One rep refines the model's** (§9–§14). When the executable's `verifyRep` accepts rep `r`, on a statement whose
 `m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra`, and on a schedule whose dimensions and
 levels are the model's, the record carries the rep's stream and the proof decodes. Then at the proof's openings `o`,
@@ -67,6 +114,7 @@ theorem rep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S
       sess.streams.find? (fun x => x.name == toString st.spec.table ++ toString "/rep" ++ toString r) = some stream ∧
       decodeProof (shapeOf st sch extra.length) bytes = .ok p ∧
       cap = p.cap.foldl (· ++ ·) ByteArray.empty ∧ (cap == sess.rootB) = true ∧
+      p.cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧ (∀ b ∈ p.cap.toList, b.size = st.merkle.digestLen) ∧
       ∀ (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D),
         (∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
           (o r ℓ j).1 = ((openAt p.ligerito (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf) →
@@ -102,7 +150,14 @@ theorem rep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S
         · exact absurd (by simp [bne, hb]) c3
         · rfl
       obtain ⟨hlenx, hcx⟩ := hext extras hex
-      refine ⟨stream, p, rfl, by rw [← hlenx]; exact hp, rfl, c3', fun capD o ho => ?_⟩
+      have hcapE : p.cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧
+          ∀ b ∈ p.cap.toList, b.size = st.merkle.digestLen := by
+        rw [StateT.run] at hrun
+        obtain ⟨_, _, _, hrun⟩ := bind_ok hrun
+        obtain ⟨_, _, _, hrun⟩ := bind_ok hrun
+        obtain ⟨⟨_, _⟩, _, _, hlig⟩ := bind_ok hrun
+        exact ligerito_cap _ _ _ _ _ _ (hlv 0 (by have := hdim.2.1; omega)).q_ne_zero hlig
+      refine ⟨stream, p, rfl, by rw [← hlenx]; exact hp, rfl, c3', hcapE.1, hcapE.2, fun capD o ho => ?_⟩
       have hwf₀ : RoundsWF stream.rounds := hwf stream (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs))
       rw [StateT.run] at hrun
       obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
