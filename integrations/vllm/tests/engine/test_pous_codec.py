@@ -176,6 +176,29 @@ def test_the_gpu_twin_is_chosen_by_reference_codec():
 
 
 @needs_cuda
+def test_band_twin_matches_the_reference_band_codec(ext):
+    """The band GPU twin (`twins.twin(band.BAND12)`) against `verity_pous.band.BAND12` on a short segment past the window
+    (block 13 onwards absorb exactly 12 parents): encode, decode, and decode of arbitrary bytes, at the 64 KiB width."""
+    from verity_pous import band as ref
+
+    from verity_vllm.engine.pous import codec, twins
+
+    params = ref.BandParams(15, 65_536 * 8, 12, segments=4)
+    prims = ref.reference(params)
+    encode, decode = twins.twin(ref.BAND12)
+    g = torch.Generator().manual_seed(8)
+    w = torch.randint(0, 256, (1, 15, 65_536), dtype=torch.uint8, generator=g)
+    salt = bytes(range(13, 13 + codec.SALT_BYTES))
+    tags = codec.segment_tags(salt, [2], "cuda")
+    c = encode(w.cuda(), tags)
+    assert _rows(c[0]) == ref.BAND12.encode_segment(params, prims, salt, 2, w[0].numpy().tobytes())
+    assert decode(c, tags).cpu().numpy().tobytes() == w[0].numpy().tobytes()
+    junk = torch.randint(0, 256, (1, 15, 65_536), dtype=torch.uint8, generator=g)
+    assert (decode(junk.cuda(), tags).cpu().numpy().tobytes()
+            == ref.BAND12.decode_segment(params, prims, salt, 2, [bytes(r) for r in junk[0].tolist()]))
+
+
+@needs_cuda
 def test_band_window_round_trips(ext):
     """On the band graph (chain over the last `window` blocks), per-block decode inverts the encode, in any block order, and a
     window of at least B - 1 is the complete DAG."""

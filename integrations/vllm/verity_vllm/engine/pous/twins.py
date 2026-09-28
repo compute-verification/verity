@@ -1,7 +1,9 @@
 """Which GPU twin computes a reference codec: `engine/pous/codec.py` for `scheme.P3`, `engine/pous/dense.py` for
-`dense.DENSE`, and the geometry each is served at.  Any other codec fails closed."""
+`dense.DENSE` and for `band.BAND12` (the same chain over the band of in-degree 12), and the geometry each is served at.  Any
+other codec fails closed."""
 from __future__ import annotations
 
+from verity_pous import band as band_ref
 from verity_pous import dense as dense_ref
 from verity_pous.codec import Codec, Geometry
 from verity_pous.params import OPERATING_POINT
@@ -15,7 +17,9 @@ def reference(name: str) -> tuple[Codec, Geometry]:
         return P3, OPERATING_POINT
     if name == dense_ref.DENSE.name:
         return dense_ref.DENSE, dense_ref.POINT_64K
-    raise NotImplementedError(f"no reference codec {name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r})")
+    if name == band_ref.BAND12.name:
+        return band_ref.BAND12, band_ref.SECURE_FIRST
+    raise NotImplementedError(f"no reference codec {name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r}, {band_ref.BAND12.name!r})")
 
 
 def twin(ref: Codec):
@@ -25,4 +29,8 @@ def twin(ref: Codec):
         return codec.encode, codec.decode
     if ref.name == dense_ref.DENSE.name:
         return dense.encode, dense.decode
-    raise NotImplementedError(f"no GPU twin of the codec {ref.name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r})")
+    if ref.name == band_ref.BAND12.name:
+        d = band_ref.SECURE_FIRST.d
+        return (lambda w, tags: dense.encode(w, tags, d)), (lambda c, tags: dense.decode_segments(c, tags, d))
+    raise NotImplementedError(f"no GPU twin of the codec {ref.name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r}, "
+                              f"{band_ref.BAND12.name!r})")

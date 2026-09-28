@@ -2,8 +2,9 @@
 
     verity-vllm pous-dense-bench --out DIR --shapes workloads/dense_decode_shapes.json --build-dir DIR [--models M] [--reps 3]
 
-Scheme: the reference codec `--codec` at its secure point (`twins.reference`): `dense-chain/v1` (`dense.DENSE` at
-`dense.SECURE_FIRST`, 512 blocks of 64 KiB per segment, the complete DAG), or a band graph on the same chain.  Workload: each model's linear
+Scheme: the reference codec `--codec` at its point (`twins.reference`): `dense-chain/v1` (`dense.DENSE` at `dense.POINT_64K`,
+512 blocks of 64 KiB per segment, the complete DAG) or `band-chain/d12/v1` (`band.BAND12` at `band.SECURE_FIRST`, the same
+chain over the band of in-degree 12).  Workload: each model's linear
 weights (vLLM's merged shapes, bf16) laid out back to back into segments; one model pass decodes every tile's blocks of `C`
 (`dense.decode_blocks`, on the device clock), then runs each shape's `y = x W^T` at T = 1, 8, 32 and 2048 tokens on its fresh
 weight, against the same GEMMs from plaintext weights.  `C` is pseudo-random bytes (any `C` is the encoding of its decode) under a fixed salt.
@@ -55,6 +56,8 @@ class Options:
     workers: int = option("--workers", type=int, default=12, help="processes for the reference side of G2")
     chunked: bool = option("--chunked", action="store_true", default=False, help="chunk-major decode state (dense.CHUNKED)")
     chunked_threads: int = option("--chunked-threads", type=int, default=128, help="threads per block of chunk-major launches")
+    segment_vector: bool = option("--segment-vector", action="store_true", default=False,
+                                  help="also GPU-encode the codec's whole-segment vector (<prefix>/64kb/segment), timed")
     audit: int = option("--audit", type=int, default=0,
                         help="timed audits (pous-dense-audit, a separate process) of the first model's C while its passes run")
     audit_k: int = option("--audit-k", type=int, default=111, help="challenges per audit")
@@ -122,7 +125,7 @@ def _vectors_module():
     return mod, json.loads((path.parent / "fixtures" / "vectors.json").read_text())
 
 
-VECTORS = {"dense-chain/v1": ("dense", "dense-small-w", "dense-w")}
+VECTORS = {"dense-chain/v1": ("dense", "dense-small-w", "dense-w"), "band-chain/d12/v1": ("band", "band-small-w", "band-w")}
 """Per codec: the prefix of its known-answer vectors in #166's `vectors.json` (`<prefix>/small/blocks` at its small point,
 `<prefix>/64kb/prefix16` the first 16 blocks of segment 0 at the secure point), and the `pous_vectors._bytes` labels of their
 inputs."""
@@ -132,6 +135,8 @@ def small_point(scheme: Scheme):
     """The small geometry of the codec's `<prefix>/small/blocks` vector (`pous_vectors.vectors`)."""
     if scheme.name == "dense-chain/v1":
         return scheme.module.DenseParams(8, 64, 2)
+    if scheme.name == "band-chain/d12/v1":
+        return scheme.module.BandParams(16, 64, 4, 2)
     raise NotImplementedError(f"no known-answer small point for {scheme.name!r}")
 
 
@@ -171,6 +176,31 @@ def gate_vectors(scheme: Scheme) -> dict[str, Any]:
             "prefix16_encode_s": enc_s, "encode_per_call_s": per_call,
             "encode_segment_s_extrapolated": per_call * sum(scheme.calls(i) for i in range(sf.blocks_per_segment)),
             "passed": small_ok and small_back and prefix_ok and prefix_back}
+
+
+def gate_segment_vector(scheme: Scheme) -> dict[str, Any]:
+    """One whole segment at the codec's point, GPU-encoded from `pous_vectors.band_segment_input()`'s bytes and hashed
+    against `<prefix>/64kb/segment`: the full encode, timed, and the known answer."""
+    import torch
+
+    from verity_vllm.engine.pous import codec, dense
+
+    mod, fixtures = _vectors_module()
+    prefix = VECTORS[scheme.name][0]
+    w, salt = mod.band_segment_input()
+    geo = scheme.geometry
+    wt = torch.frombuffer(bytearray(w), dtype=torch.uint8).cuda().view(1, geo.blocks_per_segment, geo.block_bytes)
+    tags = codec.segment_tags(salt, [0], "cuda")
+    torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    c = dense.encode(wt, tags, scheme.window)
+    torch.cuda.synchronize()
+    enc_s = time.perf_counter() - t0
+    ok = hashlib.sha256(c.cpu().numpy().tobytes()).hexdigest() == fixtures[f"{prefix}/64kb/segment"]
+    blocks = torch.arange(geo.blocks_per_segment, device="cuda")
+    back = torch.equal(dense.decode_blocks(c.view(-1, geo.block_bytes), tags, blocks * 0, blocks, geo.blocks_per_segment,
+                                           scheme.window), wt.view(-1, geo.block_bytes))
+    return {"segment": ok, "decodes_back": back, "encode_segment_s": enc_s, "passed": ok and back}
 
 
 def _reference_block(job: tuple[str, bytes, int, int, list[bytes]]) -> bytes:
@@ -407,6 +437,8 @@ def main(a: Options) -> int:
     SCHEME[:] = [Scheme.of(a.codec)]
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors(SCHEME[0])},
                            "scheme": {"codec": a.codec, "geometry": SCHEME[0].geometry.manifest(), "window": SCHEME[0].window}}
+    if a.segment_vector:
+        doc["gates"]["segment_vector"] = gate_segment_vector(SCHEME[0])
     salt = bytes(range(24))
     table = models(a.shapes)
     doc["models"] = {}

@@ -204,6 +204,13 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     return out
 
 
+def decode_segments(c: torch.Tensor, tags: torch.Tensor, window: int | None = None) -> torch.Tensor:
+    """`W` of `G` whole segments from `C` (`[G, B, L]`) by `decode_blocks` (every block at once)."""
+    g, b, width = c.shape
+    blocks = torch.arange(g * b, device=c.device)
+    return decode_blocks(c.reshape(g * b, width), tags, blocks // b, blocks % b, b, window).view(g, b, width)
+
+
 def encode(w: torch.Tensor, tags: torch.Tensor, window: int | None = None) -> torch.Tensor:
     """`C` of `G` segments from `W` (`[G, B, L]`), block by block (`window` as in `decode_blocks`)."""
     g, b, width = w.shape
