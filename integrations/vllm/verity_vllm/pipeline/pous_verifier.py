@@ -24,7 +24,6 @@ from typing import Any
 from verity_pous import audit
 from verity_pous.codec import Codec, Geometry, split
 from verity_pous.layout import Layout, decode_tensor
-from verity_pous.primitives import reference
 from verity_pous.scheme import P3
 from verity_pous.verifier import VerifierKey
 
@@ -48,9 +47,17 @@ def _codec(name: str) -> Codec:
     return twins.reference(name)[0]
 
 
+def _prims(codec: Codec, params: Geometry):
+    """The codec's own reference primitives (`engine/pous/twins.primitives`): P3's are not the band's."""
+    from verity_vllm.engine.pous import twins
+
+    return twins.primitives(codec, params)
+
+
 def _encode_one(job: tuple[str, Geometry, bytes, int, bytes]) -> list[bytes]:
     name, params, salt, s, w_seg = job
-    return _codec(name).encode_segment(params, reference(params), salt, s, w_seg)
+    codec = _codec(name)
+    return codec.encode_segment(params, _prims(codec, params), salt, s, w_seg)
 
 
 def encode(params: Geometry, w: bytes, salt: bytes, workers: int, codec: Codec = P3) -> list[list[bytes]]:
@@ -62,7 +69,8 @@ def encode(params: Geometry, w: bytes, salt: bytes, workers: int, codec: Codec =
 
 def _decode_one(job: tuple[str, Layout, bytes, str, dict[int, bytes]]) -> tuple[str, bytes]:
     codec_name, lay, salt, name, blocks = job
-    return name, decode_tensor(lay, reference(lay.params), salt, name, blocks.__getitem__, _codec(codec_name))
+    codec = _codec(codec_name)
+    return name, decode_tensor(lay, _prims(codec, lay.params), salt, name, blocks.__getitem__, codec)
 
 
 def reference_decode(lay: Layout, segments: list[list[bytes]], salt: bytes, names: list[str], workers: int,

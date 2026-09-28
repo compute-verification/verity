@@ -107,9 +107,8 @@ def cmd_commit(a) -> None:
 
 def cmd_vk(a) -> None:
     from verity_pous import setup
-    from verity_pous.primitives import reference
 
-    from verity_vllm.engine.pous import layout
+    from verity_vllm.engine.pous import layout, twins
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
@@ -126,7 +125,7 @@ def cmd_vk(a) -> None:
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
     segments = pv.encode(ck.params, w, salt, a.workers, ref_codec)
-    vk = setup.verifier_key(ck.params, reference(ck.params), w, commitment, salt, encoded=segments, codec=ref_codec)
+    vk = setup.verifier_key(ck.params, twins.primitives(ref_codec, ck.params), w, commitment, salt, encoded=segments, codec=ref_codec)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
@@ -197,7 +196,7 @@ def serve_spec(a, out: Path) -> dict[str, Any]:
     """The `engine/pous/quant.py` spec of the served store: the codec, the checkpoint, the verifier's salt, the drop."""
     return {"codec": reference_codec(a.codec)[0].name, "safetensors": checkpoint_files(a.case), "build_dir": a.build_dir,
             "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex(),
-            "layers_per_decode": a.layers_per_decode}
+            "layers_per_decode": a.layers_per_decode, **(json.loads(a.kernels) if a.kernels else {})}
 
 
 def cmd_serve(a) -> None:
@@ -268,7 +267,7 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 def _base(a) -> list[str]:
     return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec, "--prefill", a.prefill,
-            "--decode-tokens", str(a.decode_tokens)]
+            "--decode-tokens", str(a.decode_tokens), "--kernels", a.kernels]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -400,6 +399,8 @@ class _Common:
                           help="prefill configurations the plain and honest serve roles time, length x batch, comma separated (e.g. 2048x4)")
     decode_tokens: int = option("--decode-tokens", type=int, default=0,
                                 help="decode steps the honest serve role times at batch 1 (plain: 64); 0 times no decode")
+    kernels: str = option("--kernels", default="",
+                          help="GPU kernel flags merged into the serve spec (engine/pous/quant.py's keys), as JSON; default the kernels' defaults")
     codec: str = option("--codec", default="p3/v1",
                         help="the reference codec served and audited (engine/pous/twins.reference): p3/v1, dense-chain/v1, band-chain/d12/v1")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")

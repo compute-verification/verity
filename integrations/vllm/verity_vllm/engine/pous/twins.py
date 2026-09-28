@@ -21,6 +21,21 @@ def reference(name: str) -> tuple[Codec, Geometry]:
     raise NotImplementedError(f"no reference codec {name!r} (have {P3.name!r}, {dense_ref.DENSE.name!r}, {band_ref.BAND12.name!r})")
 
 
+def primitives(ref: Codec, params: Geometry):
+    """The reference primitives of the codec `ref` at `params`: P3's overwrite chain and `P_T`, or the band's and dense's
+    chain (`dense.DenseChain`), which absorbs a block's parents.  Encoding one with the other's primitives gives another
+    codeword of the same `W`, which decodes, but is not the one the GPU twin computes."""
+    from verity_pous import primitives as p3_prims
+
+    if ref.name == P3.name:
+        return p3_prims.reference(params)
+    if ref.name == dense_ref.DENSE.name:
+        return dense_ref.reference(params)
+    if ref.name == band_ref.BAND12.name:
+        return band_ref.reference(params)
+    raise NotImplementedError(f"no reference primitives of the codec {ref.name!r}")
+
+
 def twin(ref: Codec):
     """The GPU `(encode, decode)` of the reference codec `ref`, on `[G, blocks per segment, block bytes]` segments and
     `[G, 32]` tags."""

@@ -11,6 +11,8 @@ import types
 
 import pytest
 from verity_pous import band
+from verity_pous.codec import encode_segments
+from verity_pous.verifier import VerifierKey
 
 from tests.pipeline.test_pous_verifier import _run
 from verity_vllm.pipeline import pous_run
@@ -33,9 +35,9 @@ def _checkpoint(path) -> bytes:
     return data
 
 
-def _args(out, codec: str = BAND, prefill: str = "", decode_tokens: int = 0) -> types.SimpleNamespace:
+def _args(out, codec: str = BAND, prefill: str = "", decode_tokens: int = 0, kernels: str = "") -> types.SimpleNamespace:
     return types.SimpleNamespace(out=str(out), case="TOY", build_dir=str(out), codec=codec, workers=2, tag="honest",
-                                 drop_fraction=0.0, layers_per_decode=1, prefill=prefill, decode_tokens=decode_tokens)
+                                 drop_fraction=0.0, layers_per_decode=1, prefill=prefill, decode_tokens=decode_tokens, kernels=kernels)
 
 
 @pytest.fixture
@@ -58,8 +60,11 @@ def test_the_verifier_roles_encode_and_audit_under_the_band(toy):
     loaded, vk = pous_run.load_vk(out)
     assert loaded == doc and vk.root.hex() == doc["root"] and vk.params == SMALL.with_segments(2)
 
-    salt = bytes.fromhex(doc["salt"])
-    blocks = [b for seg in pv.encode(vk.params, data + bytes(vk.params.w_bytes - len(data)), salt, 2, band.BAND12) for b in seg]
+    salt, w = bytes.fromhex(doc["salt"]), data + bytes(vk.params.w_bytes - len(data))
+    canonical = list(encode_segments(band.BAND12, vk.params, band.reference(vk.params), w, salt))   # the band's own primitives
+    assert pv.encode(vk.params, w, salt, 2, band.BAND12) == canonical            # not P3's overwrite chain
+    assert vk == VerifierKey.from_segments(vk.params, salt, canonical)
+    blocks = [b for seg in canonical for b in seg]
     assert _run(blocks, vk)["audit_of_record"]["accepted"]                        # the server's encoding, as the twin makes it
     dropped = [bytes(len(b)) if i % 4 == 0 else b for i, b in enumerate(blocks)]
     assert not _run(dropped, vk)["audit_of_record"]["accepted"]
@@ -68,9 +73,10 @@ def test_the_verifier_roles_encode_and_audit_under_the_band(toy):
 def test_every_role_is_handed_the_codec_and_the_default_stays_p3(toy):
     out, _ = toy
     (out / "salt.json").write_text(json.dumps({"salt": "00" * 24}))
-    assert pous_run.serve_spec(_args(out), out)["codec"] == BAND
-    assert pous_run._base(_args(out, prefill="2048x4", decode_tokens=4))[-6:] == [
-        "--codec", BAND, "--prefill", "2048x4", "--decode-tokens", "4"]
+    spec = pous_run.serve_spec(_args(out, kernels='{"chunked": true, "thread_rows": 500}'), out)
+    assert spec["codec"] == BAND and spec["chunked"] is True and spec["thread_rows"] == 500
+    assert pous_run._base(_args(out, prefill="2048x4", decode_tokens=4))[-8:] == [
+        "--codec", BAND, "--prefill", "2048x4", "--decode-tokens", "4", "--kernels", ""]
     default = {f.name: f.default for f in dataclasses.fields(pous_run.COMMANDS["e2e"])}["codec"]
     assert default == "p3/v1" == pous_run.reference_codec(default)[0].name
 
