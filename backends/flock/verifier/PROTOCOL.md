@@ -1281,8 +1281,8 @@ The lowering theorems are proved about a certified checker, over all inputs. The
 files at setup and refuses a circuit it cannot certify. So no proof evaluates a pinned file in the kernel, and no proof
 uses `native_decide`.
 
-Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
-`Classical.choice` and `Quot.sound`):
+Level-3 status (`lean/FlockProofs`, kernel-checked; the Lean audit, `tools/lean/audit.py` with `lean/lean-audit.json`,
+allows only `propext`, `Classical.choice` and `Quot.sound`):
 - **1b, Merkle: an explicit collision extractor.** A fixed hash with 32- or 64-byte digests has collisions by counting, so
   a proposition "a collision exists" holds outright and says nothing about the verifier. The statements therefore carry the
   reduction as computable functions from the verifier's accepted checks to an explicit pair of inputs, with theorems that
@@ -1310,7 +1310,7 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
 - **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its
-  own `CheckAxioms.lean` under the same test):
+  own `lean-audit.json` under the same audit):
   - `F128.poly_mul`, `F128.poly_add`: the executable's product (carry-less multiply, Karatsuba, the GHASH reduction) and sum
     are polynomial multiplication and addition over GF(2) modulo `G = X^128 + X^7 + X^2 + X + 1`. `toAdj` is a bijection
     `F128 ≅ GF(2)[X]/(G)` that preserves both.

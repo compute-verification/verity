@@ -1,7 +1,6 @@
 {
  "roots": ["Flock", "FlockProofs", "Main"],
  "exempt": {
-  "CheckAxioms": "the #print axioms list backends/flock/tests/test_lean_verifier.py reads; superseded by this audit"
  },
  "meaning": ["FlockProofs"],
  "escapes": {

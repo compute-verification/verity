@@ -157,7 +157,7 @@ link term per audit.
 | L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named | evidence: the IR comparison tests; discharge by a verified lowering |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`lake env lean FlockSoundness/Check.lean` to check.
+`python tools/lean/audit.py backends/flock/verifier/lean/soundness` to check every declaration (`lean-audit.json`).
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 
