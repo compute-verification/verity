@@ -594,16 +594,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     step_rows = getattr(com, "step_rows", None) or {}
 
     def _logical(rid: str) -> str:
-        """Engine row id -> workload `r<i>`.  vLLM v1 suffixes the external request id with `-<8 hex>` internally; match exact, then
-        with the suffix stripped, then by prefix.  Unmapped ids stay raw (-> coverage FAILS for that request, fail-closed)."""
-        rid = str(rid)
-        if rid in order:
-            return order[rid]
-        base = rid.rsplit("-", 1)[0]
-        if base in order:
-            return order[base]
-        hits = [v for k, v in order.items() if rid.startswith(k)]
-        return hits[0] if len(hits) == 1 else rid
+        return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
