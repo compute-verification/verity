@@ -1098,6 +1098,8 @@ pub struct Server {
     aborted: Option<String>,
     verdict: Option<Value>,
     urandom: Option<File>,
+    /// rebuilt from a record ([`Server::from_record`]): it replays `Hello` without drawing coins (it has no OS source)
+    replaying: bool,
     /// step 0: (seed, nonce, commitment, the coin key once `Hello` is accepted, coin requests issued)
     seed: Option<([u8; 32], [u8; 32], [u8; 64], Option<[u8; 32]>, u64)>,
     /// the global index of the last seed-derived coin request, and of the link points' request
@@ -1165,6 +1167,7 @@ impl Server {
             aborted: None,
             verdict: None,
             urandom: Some(File::open("/dev/urandom").expect("/dev/urandom")),
+            replaying: false,
             seed: None,
             last_g: None,
             points_g: None,
@@ -1377,6 +1380,11 @@ impl Server {
                 };
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
+                }
+                // a live server draws the session's key and coins from the OS: without a source it refuses, rather than answer
+                // Ok and leave the prover to fail on a missing commitment
+                if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
+                    return self.refuse("coin tree: no OS random source to draw the session's key and coins".into());
                 }
                 if let (Some(spec), Some(nonce)) = (self.cfg.coin_tree.clone(), nonce)
                     && self.urandom.is_some()
@@ -1793,6 +1801,7 @@ impl Server {
                        proofs: BTreeMap<(String, usize), Vec<u8>>) -> Result<Server, String> {
         let mut s = Server::try_new(cfg, verifier)?;
         s.urandom = None;
+        s.replaying = true;
         let bad = |w: &str| format!("record: {w}");
         let hx = |v: &Value, w: &str| -> Result<Vec<u8>, String> {
             let t = v.as_str().ok_or_else(|| bad(&format!("{w} is not a hex string")))?;
@@ -2214,5 +2223,40 @@ mod replay_tests {
         assert!(replay_round(&mut b, &r0[..r0.len() - 16], 1).is_err(), "no squeeze");
         assert!(replay_round(&mut b, &[r1.clone(), r1].concat(), 2).is_err(), "a squeeze mid-round");
         assert!(replay_round(&mut b, &r0[..20], 1).is_err(), "truncated");
+    }
+}
+
+#[cfg(test)]
+mod coin_server_tests {
+    use super::*;
+
+    struct NoProofs;
+
+    impl StatementVerifier for NoProofs {
+        fn verify(&self, _: &str, _: usize, _: &[u8], _: &mut ReplayChallenger, _: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+            Err("no proofs in this test".into())
+        }
+        fn domain(&self, _: &str, _: usize) -> Vec<u8> {
+            Vec::new()
+        }
+    }
+
+    fn cfg() -> SessionConfig {
+        let mut c = SessionConfig::flock_128_r2(vec![TableSpec { name: "t".into(), binding: Binding::R1cs { statement_digest: [0; 32] } }]);
+        c.coin_tree = Some(coin_tree::Spec { streams: vec![coin_tree::SESSION.into(), rep_stream("t", 0), rep_stream("t", 1)], rounds_log: 2, block: 3 });
+        c
+    }
+
+    /// A coin-tree server answers `Hello` with the root and its session key (20 words), once per session; without an OS
+    /// random source (and not replaying a record) it refuses.
+    #[test]
+    fn a_coin_tree_server_answers_hello_once_and_refuses_without_an_os_source() {
+        let hello = cfg().hello_with_nonce(&[7; coin_tree::NONCE_BYTES]);
+        let mut s = Server::try_new(cfg(), Box::new(NoProofs)).unwrap();
+        assert!(matches!(s.handle(Req::Hello(hello.clone())), Resp::Coins(ref w) if w.len() == 20));
+        assert!(matches!(s.handle(Req::Hello(hello.clone())), Resp::Refused(ref e) if e.contains("a second Hello")));
+        let mut s = Server::try_new(cfg(), Box::new(NoProofs)).unwrap();
+        s.urandom = None;
+        assert!(matches!(s.handle(Req::Hello(hello)), Resp::Refused(ref e) if e.contains("no OS random source")));
     }
 }
