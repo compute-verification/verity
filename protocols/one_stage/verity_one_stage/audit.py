@@ -1,16 +1,17 @@
-"""What a one-stage audit established: the integrity profile, and the audit record that cites what it is about.
+"""What a one-stage audit established: its integrity profile, and the audit record that cites what it is about.
 
-Two forms of the profile, from the same facts:
-* the core form: for `subset` and `bernoulli`, the `IntegrityProfile` of one level `unit` (the partition's units,
-  `sizes = (population,)`) drawn by the verifier's law, with the count drawn and delta; for `stratified`, core's `Stratified`
-  law (one stratum per template) with delta and the count drawn in each stratum. It counts wrong units: under `Subset(k)`
-  a transcript with m wrong units passes with probability C(N - m, k) / C(N, k), and under the stratified law with
-  prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with probability delta, an accepted transcript has at most `wrong_units`
-  wrong units: core's exact `count_bound` for `subset` and `stratified` (with each template's own bound for `stratified`),
-  `worst_case` (the linear relaxation) for `bernoulli`;
-* `verity/integrity-profile/v1` (`docs/audit-protocols.md` §0.2): the partition, the registration it counts against, the
-  law and which units were drawn and proved, and the evidence by digest. Its non-sampling terms (ε) come from the
-  soundness analysis, not from the run, so the run leaves them null.
+The profile (`profile`) is core's `IntegrityProfile` of one level `unit`, the partition's units (`sizes = (population,)`),
+drawn by the verifier's law (`Subset`, `Bernoulli`, or a `Stratified` law with one stratum per template), with the count
+drawn and delta. It bounds wrong units and weights nothing: under `Subset(k)` a transcript with m wrong units passes with
+probability C(N - m, k) / C(N, k), and under the stratified law with prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with
+probability delta, an accepted transcript has at most `bound()` wrong units, and at most `stratum_bounds()[t]` in template
+t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. Applications read it through `consumers`.
+
+The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
+law's in its v0 form: the law's JSON with delta and the count drawn per template); `wrong_units`, its bounds; and
+`integrity_profile`, `verity/integrity-profile/v1` (`docs/audit-protocols.md` §0.2): the partition, the registration it
+counts against, the law and which units were drawn and proved, and the evidence by digest. The v1 form's non-sampling
+terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 
 The audit record carries the registration and its receipt, the draw, the proved units, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
@@ -41,24 +42,23 @@ def _sha512(obj: Any) -> str:
 
 
 def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
-    """The core `IntegrityProfile` of a `subset` or `bernoulli` draw (a stratified draw's core form is `core_law`)."""
-    if draw["law"] not in ("subset", "bernoulli"):
-        raise ValueError(f"a {draw['law']!r} draw's core form is core_law, not an IntegrityProfile")
-    law = Subset(draw["k"]) if draw["law"] == "subset" else Bernoulli(Fraction(draw["p"]))
+    """The audit's integrity profile under any of the three laws."""
+    if draw["law"] == "subset":
+        law = Subset(draw["k"])
+    elif draw["law"] == "bernoulli":
+        law = Bernoulli(Fraction(draw["p"]))
+    elif draw["law"] == "stratified":
+        law = core_law(law_of(draw), registration["population"])
+    else:
+        raise ValueError(f"no profile for a {draw['law']!r} draw")
     return IntegrityProfile(levels=(Level(LEVEL, registration["partition"]),), sizes=(registration["population"],),
                             draws={LEVEL: law}, delta=delta, programs=(registration["program"],),
                             drawn={LEVEL: len(draw["units"])})
 
 
-def wrong_units_bound(p: IntegrityProfile) -> float:
-    """The most wrong units an accepted transcript can hold except with probability delta: core's `worst_case` with
-    utility m (the linear relaxation, rounded upward)."""
-    return p.worst_case(lambda m: float(m))
-
-
 def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
-    """The law as core's `Stratified`, whose `count_bound` is the audit's wrong-unit bound: the uniform k-subset is one
-    stratum, and a stratified law has one per template (named by its descriptor id). None for `bernoulli`."""
+    """The law as core's `Stratified`: the uniform k-subset is one stratum, and a stratified law has one per template
+    (named by its descriptor id). None for `bernoulli`."""
     if law.get("law") == "subset":
         return Stratified.uniform(population, law["k"])
     if law.get("law") == "stratified":
@@ -67,19 +67,13 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
 
 
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
-    """The audit's bound on wrong units at delta: core's exact `count_bound` for `subset` and `stratified` (with each
-    template's own bound for `stratified`), the profile's `worst_case` for `bernoulli`."""
-    n = registration["population"]
-    law = core_law(law_of(draw), n)
-    out: dict[str, Any] = {"delta": delta, "of": n}
-    if law is None:
-        out["bound"] = wrong_units_bound(profile(registration, draw, delta))
-        out["rule"] = "except with probability delta, an accepted transcript has at most `bound` wrong units"
-        return out
-    out["bound"] = law.count_bound(delta)
-    out["rule"] = "except with probability delta, an accepted transcript has at most `bound` wrong units"
+    """The profile's bounds on wrong units at delta, as the record states them: `bound`, and for `stratified` each
+    template's own (`per_template`)."""
+    p = profile(registration, draw, delta)
+    out: dict[str, Any] = {"delta": delta, "of": registration["population"], "bound": p.bound(),
+                           "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
     if draw["law"] == "stratified":
-        out["per_template"] = {s.name: law.stratum_bound(s.name, delta) for s in law.strata}
+        out["per_template"] = p.stratum_bounds()
         out["rule"] += ", and at most `per_template[t]` of them in template t"
     return out
 
@@ -128,13 +122,13 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         "accepted": accepted, "complete": len(ran) == len(verdicts), "profile": None, "integrity_profile": None,
         "wrong_units": None}
     if accepted:
+        p = profile(registration, draw, delta)
         if draw["law"] == "stratified":
-            core = core_law(law_of(draw), registration["population"])
             drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
                      for s in draw["strata"]}
-            rec["profile"] = {**core.to_json(), "delta": delta, "drawn": drawn}
+            rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": drawn}
         else:
-            rec["profile"] = profile(registration, draw, delta).to_json()
+            rec["profile"] = p.to_json()
         digests = [v.get("digest") for v in of_record]
         rec["integrity_profile"] = integrity_profile(registration, receipt, draw, sessions,
                                                      digests[0] if len(digests) == 1 else digests)
@@ -142,5 +136,4 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "wrong_units",
-           "wrong_units_bound"]
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "wrong_units"]

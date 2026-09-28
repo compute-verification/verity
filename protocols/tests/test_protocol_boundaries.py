@@ -27,11 +27,19 @@ def test_every_protocol_is_checked():
     assert "sampled_proofs" in PROTOCOLS
 
 
+def _sources(name: str) -> list[Path]:
+    """A protocol's own Python files: not its tests, and nothing under a dot-directory (a Lean package's `.lake`, a
+    `.venv`), where only build outputs and fetched dependencies live."""
+    base = ROOT / name
+    return [p for p in sorted(base.rglob("*.py"))
+            if "tests" not in (parts := p.relative_to(base).parts) and not any(x.startswith(".") for x in parts)]
+
+
 @pytest.mark.parametrize("name", PROTOCOLS)
 def test_protocol_imports_only_the_core(name):
     package = f"verity_{name}"
     allowed = set(sys.stdlib_module_names) | {"verity", package}
     offenders = [f"{path.relative_to(ROOT)}:{line}: {mod}"
-                 for path in sorted((ROOT / name).rglob("*.py")) if "tests" not in path.relative_to(ROOT / name).parts
+                 for path in _sources(name)
                  for mod, line in _imports(path) if mod.split(".")[0] not in allowed]
     assert not offenders, "\n".join(offenders)
