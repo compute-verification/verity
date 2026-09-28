@@ -393,6 +393,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             res["unsupported"] = geo_refusal
             raise _Refused()
         res["sampling"] = sampling
+        if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
+            from verity_vllm.program.frontend.export_compat import select_cuda_platform
+            print(f"[derive_step] declared target {target.sm_arch}: vLLM platform {select_cuda_platform()}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch)
     except _Refused:
