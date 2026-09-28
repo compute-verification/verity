@@ -34,9 +34,13 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
-    `gemm`), with numpy kernels beside them (`kernels`; numpy is a core
-    dependency, kept out of `verity.ir` and `verity.ml.tc` by
-    `tests/test_boundaries.py`). `verity.ml.tc.relation` restates the step as witness columns +
+    `gemm`), the other IR primitives (`scalar`: integer, bit, select and
+    comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
+    flush-to-zero forms, and BF16 element-wise arithmetic), the library of
+    hardware and protocol objects core owns (`library`), and numpy kernels
+    beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
