@@ -81,7 +81,7 @@ def install(model, mode: str) -> dict:
             Wq, sw = int7(W, 1)
             st["sw"] = sw.view(1, n)
             if mode == "w7a7":
-                st["Wt"] = Wq.T.contiguous().T
+                st["Wt"] = Wq.contiguous()
             else:
                 if k not in perms:
                     from verity_pouw.schemes.ncp import word_perm
@@ -124,7 +124,7 @@ def install(model, mode: str) -> dict:
                 mp = max(32, (m + 7) // 8 * 8)
                 if mp != m:
                     Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
-                C = torch._int_mm(Aq, st["Wt"])[:m]
+                C = torch._int_mm(Aq, st["Wt"].T)[:m]
                 y = (C.float() * sx * st["sw"]).to(x.dtype)
             elif mode == "ncp":
                 Aq, sx = int7(x2, 1)
@@ -236,12 +236,26 @@ def main() -> None:
     ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl")
     ap.add_argument("--decode-batches", type=lambda s: [int(x) for x in s.split(",")], default=[1, 8, 32])
     ap.add_argument("--prefill-tokens", type=lambda s: [int(x) for x in s.split(",")], default=[512, 2048])
+    ap.add_argument("--single", help="run one mode in this process and write its result to --out (vLLM keeps device memory "
+                                     "until the process exits, so each mode gets its own process)")
     args = ap.parse_args()
+    if args.single:
+        args.out.write_text(json.dumps(run_mode(args, args.single)))
+        return
+    import subprocess
     results = {}
     for mode in args.modes.split(","):
-        results[mode] = run_mode(args, mode)
+        part = args.out.with_suffix(f".{mode}.json")
+        subprocess.run([sys.executable, __file__, "--model", args.model, "--out", str(part), "--single", mode,
+                        "--decode-batches", ",".join(map(str, args.decode_batches)),
+                        "--prefill-tokens", ",".join(map(str, args.prefill_tokens))], check=False)
+        if not part.exists():
+            results[mode] = {"mode": mode, "error": "the mode's process wrote no result"}
+            continue
+        results[mode] = json.loads(part.read_text())
         print(json.dumps({k: v for k, v in results[mode].items() if k != "tokens"}), flush=True)
         args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v1", "results": results}, indent=1))
+    results = {m: r for m, r in results.items() if "tokens" in r}
     ref = results.get("bf16")
 
     def agree(a, b):
