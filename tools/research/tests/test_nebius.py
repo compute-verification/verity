@@ -1045,6 +1045,7 @@ def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quie
             ]}) + "\n")
     monkeypatch.setenv("UTIL_OUT_DIR", str(util))
     monkeypatch.setenv("FILL_DIR", str(fill))
+    monkeypatch.setenv("LEASE_USAGE", str(tmp_path / "lease-usage.jsonl"))
     spec = importlib.util.spec_from_file_location("publish_pool_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pp)
