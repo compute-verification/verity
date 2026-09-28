@@ -1282,6 +1282,43 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
 
 
+def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    status = [405]
+
+    class Route(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(status[0])
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Route)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    box, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z",
+              "url": f"http://127.0.0.1:{srv.server_address[1]}/api/agent-slack/events", "owner": "top"}
+    for d in routes_dirs[:2]:
+        (d / "router.json").write_text(json.dumps(router))
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "answered")
+    assert rc == 0 and "route: the router rings @circuits" in err and bells(fake, box) == [] and bells(fake, top) == []
+    status[0] = 404
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "not answered")
+    assert rc == 0 and "route @circuits: rang" in err and "route @top: alerted, the router's events route doesn't answer (HTTP 404)" in err
+    alert = bells(fake, top)
+    assert len(bells(fake, box)) == 1 and len(alert) == 1 and alert[0]["text"].startswith("from router (URGENT), thread ")
+    assert router["url"] in alert[0]["text"] and "routes.d/router.json" in alert[0]["text"]
+    status[0] = 503
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--to", "@circuits", "--text", "still down")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang; already alerted" in err
+    assert len(bells(fake, box)) == 2 and len(bells(fake, top)) == 1
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@circuits", "--text", "from its owner")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang" in err
+    assert len(bells(fake, box)) == 3 and len(bells(fake, top)) == 1
+    srv.shutdown()
+
+
 def notes_clone(tmp_path) -> Path:
     import subprocess
     bare, clone = tmp_path / "notes.git", tmp_path / "notes"

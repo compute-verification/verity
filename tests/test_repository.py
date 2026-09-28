@@ -303,6 +303,16 @@ def test_owned_paths_exist() -> None:
     assert not stale, "registry `owns` entries that match no tracked path; update them:\n" + "\n".join(stale)
 
 
+def test_every_path_has_owner() -> None:
+    """`research msg owners` names a handle for every tracked path, so a report about any directory reaches someone."""
+    from research.slack import owner
+
+    reg = json.loads((ROOT / ".agents/skills/using-slack/registry.json").read_text())
+    unowned = sorted({os.path.dirname(p) + "/" for p in _tracked() if owner(reg, p) is None})
+    assert not unowned, ("directories holding tracked files no handle owns; add each to its owner's `owns` in "
+                         ".agents/skills/using-slack/registry.json:\n" + "\n".join(unowned))
+
+
 def test_tracked_data_within_budget() -> None:
     total = 0
     for p in _tracked():
