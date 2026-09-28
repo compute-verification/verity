@@ -983,15 +983,15 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
 
 def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
                                sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
-    carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
-    reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
+    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
+    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
+    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as MF
+    from verity_vllm.query.required import QUERIES
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
-        return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
+    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
+        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
     t0 = time.monotonic()
     labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     if getattr(args, "programs_root", None):
@@ -1011,7 +1011,7 @@ def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] 
     bad = sorted(k for k, d in digs.items() if d not in of_record)
     if bad:
         return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"))
+    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
     del loaded
     return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
                    "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),

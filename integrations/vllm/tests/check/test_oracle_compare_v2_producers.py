@@ -10,6 +10,9 @@ no selector; `member_bytes` resolves a member through the Value when the fold ha
 from __future__ import annotations
 
 import json
+import types
+
+import pytest
 
 from verity.proofs.query import ValueRef as R
 from verity_vllm.check import oracle_compare as OC
@@ -63,6 +66,26 @@ def test_program_facts_name_the_selector_and_the_consumers_by_dataflow():
     named = {(r["op_path"], r["output_member"]) for r in man["identities"] if r["family"] == "instance_outputs"}
     assert set(facts) == named, (sorted(facts), sorted(named))
     assert all(OC.producers_of(man)[k]["spec"] == facts[k]["spec"] for k in named)
+
+
+def test_the_commit_derives_the_facts_of_a_manifest_of_either_query_under_that_query():
+    """A Q_word manifest (the record since S1) carries no producer annotations either: the Commit derives its facts from the Programs,
+    keyed as that manifest names its instance outputs, and the handed-down `model/out` is promoted; a manifest the query path did not
+    build keeps its own entries."""
+    pytest.importorskip("torch")
+    from verity_vllm.pipeline import commit as C
+    from verity_vllm.query.required import QUERIES
+    P = gemma_like_program()
+    corr = Correspondence(P)
+    for query in QUERIES:
+        man = request_manifest(P, corr, RES, request_id="r0", query=query).manifest
+        facts = OC.program_producer_facts(P, corr, query=query)
+        assert set(facts) == {(r["op_path"], r["output_member"]) for r in man["identities"] if r["family"] == "instance_outputs"}, query
+        assert OC.promote_handed_down(man, facts)["members"] == {"model/out": [NORM]}, query
+        why = C.oracle_producers_of_record(types.SimpleNamespace(), man, [], {})[1]["why"]
+        assert why.startswith("no --programs-root / --program-dir"), (query, why)                  # past the query gate
+    why = C.oracle_producers_of_record(types.SimpleNamespace(), {"query": {"engine": "traversal"}, "identities": []}, [], {})[1]["why"]
+    assert why.startswith("manifest is not the query path's"), why
 
 
 def test_program_facts_that_disagree_across_programs_carry_no_selector():
