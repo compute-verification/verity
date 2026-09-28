@@ -43,7 +43,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     `gemm`), the other IR primitives (`scalar`: integer, bit, select and
     comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
     flush-to-zero forms, and BF16 element-wise arithmetic), the library of
-    hardware and protocol objects core owns (`library`), and numpy kernels
+    hardware and protocol objects core owns (`library`), the pinned list of
+    operations with the guard that a program holds no data (`operations`), and numpy kernels
     beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
     and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.boolean` is
     the word library as Boolean Definitions: C-Flock's linear-form builder and
