@@ -646,15 +646,16 @@ LAWS = ("d3s", "d3m")
 SUMS = ("f32", "f16")
 
 
-def d3_trace(law: str, route: str, weight_copy: bool, prices: dict[str, Fraction], chain: int,
+def d3_trace(law: str, route: str, prices: dict[str, Fraction], chain: int,
              sums: str = "f32") -> tuple[tuple[tuple[str, Fraction], ...], tuple[tuple[str, Fraction], ...]]:
-    """The honest per-element trace of each side (schedule M4 with f32 block values, or M2 with f16 ones; the D-3m
-    strike, Phase 17f for D-3s): (activation operations, weight operations per unit).  The weight side's statistics,
-    cell widths, partner and floor maxima are functions of the static codes and the fixed P, registered offline, and so
-    is its f32 copy when ``weight_copy``."""
+    """The honest per-element trace of each side, per unit (schedule M4 with f32 block values, or M2 with f16 ones):
+    (activation operations, weight operations).  No weight copy or weight table is registered (Daniel, 20:31Z): each
+    unit decodes its weight codes and forms their statistic and amplitudes as the activation side does, so on X_q the
+    two sides price alike."""
     h2, mx, i = prices["half2"] / 2, prices["hmnmx2"] / 2, prices["int"] / 2
     source = (("unpack X_q: cvt e4m3x2 -> f16x2", prices["unpack"] / 2) if route == "xq"
               else ("pack Y16 = f16(A/s): F2FP f16x2 from the model's f32 A/s", prices["f16pack"] / 2))
+    decode = ("decode the weight codes: cvt e4m3x2 -> f16x2", prices["unpack"] / 2)
     if sums == "f32":
         cast = (("three block values h + e_b in f32", 3 * prices["block_f32"]),
                 ("three casts f32 -> e4m3 (F2FP x2)", 3 * prices["f2fp"] / 2))
@@ -663,19 +664,17 @@ def d3_trace(law: str, route: str, weight_copy: bool, prices: dict[str, Fraction
         cast = (("three block values h + e_b in f16 (HADD2)", 3 * h2),
                 ("three casts f16 -> e4m3 (F2FP.F16 + PRMT)", 3 * prices["f2fp_f16"] / 2))
         widen = ()
+    statistic = (("prescale h·2^-8 (HMUL2 a·K; 448² overflows f16)", prices["hmul2_imm"] / 2),
+                 ("sum of squares (HFMA2; a widen and an FADD per chain)",
+                  h2 + (prices["hadd2_f32"] + prices["fadd"]) / chain))
+    amplitude = ((("cell width: exponent mask (LOP3 on half2)", i),) if law == "d3m" else ()) + \
+        ((("partner and floor max, |.| folded (one VHMNMX)", prices["max3"] / 2),) if "max3" in prices
+         else (("partner max (HMNMX2)", mx), ("floor max (HMNMX2)", mx)))
     noise = (("noise field (one LOP3, 0x3C003C00 in a register; two f16 lanes per XOF word)", i),
              ("centre (2t − 3)/8 (HFMA2 t·K + c, c in a register: split)", h2),
              ("scale A·u (HMUL2)", h2), ("s = e + e∘P (HADD2)", h2), *cast)
-    act = (source,
-           ("prescale h·2^-8 (HMUL2 a·K; 448² overflows f16)", prices["hmul2_imm"] / 2),
-           ("sum of squares (HFMA2; a widen and an FADD per chain)", h2 + (prices["hadd2_f32"] + prices["fadd"]) / chain),
-           *((("cell width: exponent mask (LOP3 on half2)", i),) if law == "d3m" else ()),
-           *((("partner and floor max, |.| folded (one VHMNMX)", prices["max3"] / 2),) if "max3" in prices
-             else (("partner max (HMNMX2)", mx), ("floor max (HMNMX2)", mx))),
-           *widen,
-           *noise)
-    weight = ((() if weight_copy else (("decode the weight codes: cvt e4m3x2 -> f16x2", prices["unpack"] / 2),
-                                         *widen)) + noise)
+    act = (source, *statistic, *amplitude, *widen, *noise)
+    weight = (decode, *statistic, *amplitude, *widen, *noise)
     return tuple(x for x in act if x[1]), tuple(x for x in weight if x[1])
 
 
@@ -684,10 +683,8 @@ class D3Family:
     per-entry amplitude that covers at least one E4M3 cell of the entry and of its NCP partner.  Parameters:
 
     - ``law``: **"d3s"** (Phase 17f, the lead) or "d3m" (the D-3m strike);
-    - ``route``: **"xq"**, the model's FP8 codes X_q (the §0 input), or "y16", Y16 = f16(A/s) with the model's own row
-      scale s (quality-safer; Daniel's ruling (i));
-    - ``weight_copy``: Daniel's ruling (ii), whether a registered FP16 weight copy is free offline data (True) or the
-      codes are decoded every unit (False).  Only the price depends on it;
+    - ``route``: **"xq"**, the model's FP8 codes X_q (the §0 input and Daniel's target), or "y16", Y16 = f16(A/s) with
+      the model's own row scale s (a comparison row);
     - ``prices``: a `PRICES` row;
     - ``sums``: **"f32"** (schedule M4) or "f16" (M2), the format of the block values h + e_b.
 
@@ -705,13 +702,15 @@ class D3Family:
 
     With f32 sums a block value h + e_b is f32(h) + f32(e_b) rounded once in f32 (sm_90 has no two-source HADD2.F32, so
     it is a widen and an FADD) and Q is cvt.rn.satfinite.e4m3x2.f32; with f16 sums it is HADD2 (one f16 rounding) and Q
-    is cvt.rn.satfinite.e4m3x2.f16x2.  Either way a block value at or beyond ±464 saturates to ±448.  For normal h, |h|/8 lies in [cell(h), 2·cell(h)), and rms′ ≥ 2^−6
-    gives every entry (the zeros of an all-zero row, and E4M3 subnormals) at least one subnormal cell 2^−9: D-3s's
-    amplitude is never below D-3m's.  E₁'s row i is SHAKE256("verity/pouw/fp8-is/<tag>/E1", salt, index, root_A,
-    weight, i) and each weight column j has its own stream per unit, SHAKE256("verity/pouw/fp8-is/<tag>/F1", salt,
-    index, root_A, weight, j), 2k bytes each: B̃ is re-formed for every unit (r = 1, X-D3-3), and neither stream exists
-    before the unit's activations are committed (X-R9-2: with F₁ known first, X-D3-3 recurs at r = 1).  Weights are E4M3 codes quantized
-    offline per column.  A Y16 row is k little-endian f16 words, finite and at most 448 in magnitude.
+    is cvt.rn.satfinite.e4m3x2.f16x2.  Either way a block value at or beyond ±464 saturates to ±448.  For normal h,
+    |h|/8 lies in [cell(h), 2·cell(h)), and rms′ ≥ 2^−6 gives every entry (the zeros of an all-zero row, and E4M3
+    subnormals) at least one subnormal cell 2^−9: D-3s's amplitude is never below D-3m's.  E₁'s row i is
+    SHAKE256("verity/pouw/fp8-is/<tag>/E1", salt, index, root_A, weight, i) and each weight column j has its own stream
+    per unit, SHAKE256("verity/pouw/fp8-is/<tag>/F1", salt, index, root_A, weight, j), 2k bytes each: B̃ is re-formed
+    for every unit (r = 1, X-D3-3), and neither stream exists before the unit's activations are committed (X-R9-2: with
+    F₁ known first, X-D3-3 recurs at r = 1).  Weights are E4M3 codes quantized offline per column, and each unit decodes
+    them: no weight copy or table is registered (Daniel, 20:31Z).  A Y16 row is k little-endian f16 words, finite and
+    at most 448 in magnitude.
     """
 
     blocks = 3
@@ -719,18 +718,17 @@ class D3Family:
     credited = (0, 0)
     LANES, CHAIN = 64, 256
 
-    def __init__(self, law: str = "d3s", route: str = "xq", weight_copy: bool = True, prices: str = DEFAULT_PRICES,
-                 sums: str = "f32"):
+    def __init__(self, law: str = "d3s", route: str = "xq", prices: str = DEFAULT_PRICES, sums: str = "f32"):
         if law not in LAWS or route not in ROUTES or sums not in SUMS:
             raise ValueError(f"law is one of {LAWS}, route one of {ROUTES} and sums one of {SUMS}")
-        self.law, self.route, self.weight_copy, self.prices, self.sums = law, route, weight_copy, prices, sums
+        self.law, self.route, self.prices, self.sums = law, route, prices, sums
         self.tag = f"{law}-v0" + ("-y16" if route == "y16" else "") + ("-f16" if sums == "f16" else "")
-        self.name = self.tag + ("" if weight_copy else "-decode")
+        self.name = self.tag
         self.P_SEED = f"verity/pouw/fp8-is/{law}/P".encode()
-        self.trace = d3_trace(law, route, weight_copy, PRICES[prices], self.CHAIN, sums)
+        self.trace = d3_trace(law, route, PRICES[prices], self.CHAIN, sums)
         self.units = tuple(sum(u for _, u in side) for side in self.trace)
         self.parameters = (("law_d3s", int(law == "d3s")), ("route_y16", int(route == "y16")),
-                           ("sums_f16", int(sums == "f16")), ("weight_copy", int(weight_copy)),
+                           ("sums_f16", int(sums == "f16")),
                            ("form_units_a_ceil", -(-self.units[0] // 1)), ("form_units_b_ceil", -(-self.units[1] // 1)))
 
     def check(self, shape: Shape) -> None:
@@ -821,19 +819,19 @@ class D3Family:
         return Stack(x, y, [b""] * len(x), [b""] * len(y))
 
 
-def D3s(weight_copy: bool = True, prices: str = DEFAULT_PRICES, route: str = "xq", sums: str = "f32") -> D3Family:
-    return D3Family("d3s", route, weight_copy, prices, sums)
+def D3s(route: str = "xq", prices: str = DEFAULT_PRICES, sums: str = "f32") -> D3Family:
+    return D3Family("d3s", route, prices, sums)
 
 
-def D3m(weight_copy: bool = True, prices: str = DEFAULT_PRICES, route: str = "xq", sums: str = "f32") -> D3Family:
-    return D3Family("d3m", route, weight_copy, prices, sums)
+def D3m(route: str = "xq", prices: str = DEFAULT_PRICES, sums: str = "f32") -> D3Family:
+    return D3Family("d3m", route, prices, sums)
 
 
 #: name -> factory taking a `PRICES` row name; layers with fixed unit counts ignore it
 FORMINGS: dict[str, Callable[..., Forming]] = {
-    f"{law}-v0{'-y16' if route == 'y16' else ''}{'-f16' if sums == 'f16' else ''}{'' if copy else '-decode'}":
-    (lambda prices=DEFAULT_PRICES, law=law, route=route, copy=copy, sums=sums: D3Family(law, route, copy, prices, sums))
-    for law in LAWS for route in ROUTES for sums in SUMS for copy in (True, False)}
+    f"{law}-v0{'-y16' if route == 'y16' else ''}{'-f16' if sums == 'f16' else ''}":
+    (lambda prices=DEFAULT_PRICES, law=law, route=route, sums=sums: D3Family(law, route, prices, sums))
+    for law in LAWS for route in ROUTES for sums in SUMS}
 FORMINGS.update({layer.name: (lambda prices=DEFAULT_PRICES, layer=layer: layer()) for layer in (D3, FpNcpV0, D2Draft)})
 
 
@@ -841,7 +839,7 @@ FORMINGS.update({layer.name: (lambda prices=DEFAULT_PRICES, layer=layer: layer()
 
 class FP8IS:
     """Fresh-step split-K FP8 on the H100 over a forming layer.  The domain is 64 | m, 64 | n, 32 | k and
-    ``mnk_min`` <= m, k, n <= 2^16 (8,192 by default; 16,384 for the D-3 family's cells, 32,768 for Track D's D-4), on
+    ``mnk_min`` <= m, k, n <= 2^16 (8,192 by default; any size of the frontier 2,048 … 32,768; 32,768 is Track D's D-4), on
     64 x 64 tiles: one m64n64k32 atom per slice, since Round 7 measured the atom at 32 per word only at N >= 64 (m64n8
     runs at 22% of peak).  Smaller bounds or tiles make a test instance.  ``prices`` names the `PRICES` row of the core's
     FADD; a priced forming layer must use the same row.  No certificate names a γ_0 yet (``PROTOCOL.md``)."""

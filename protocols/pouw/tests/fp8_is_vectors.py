@@ -16,11 +16,14 @@ from verity_pouw.schemes import fp8_is
 
 OUT = Path(__file__).with_name("vectors") / "fp8_is.json"
 #: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes and one lead-domain k
+#: (case, forming, shape, tile rows, tile cols, index, weight): test-instance shapes, the lead cell (D-3s on X_q, f16
+#: sums) at every size of the reporting frontier, and lead-domain k for the earlier layers
 CASES = (("small-d3s", "d3s-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
+         ("small-d3s-f16", "d3s-v0-f16", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3s-y16", "d3s-v0-y16", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3s-y16-f16", "d3s-v0-y16-f16", (64, 128, 64), (0, 2), (8, 10), 7, 3),
-         ("lead-k-d3s", "d3s-v0", (16384, 16384, 16384), (0, 1), (0, 1), (1 << 64) - 1, 11),
-         ("d4-d3s-y16-f16", "d3s-v0-y16-f16", (32768, 32768, 32768), (0, 1), (0, 1), (1 << 64) - 1, 11),
+         *((f"frontier-{n}-d3s-f16", "d3s-v0-f16", (n, n, n), (0, 1), (0, 1), (1 << 64) - 1, 11)
+           for n in (2048, 4096, 8192, 16384, 32768)),
          ("small-d3m", "d3m-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("small-d3", "d3-v0", (64, 128, 64), (0, 2), (8, 10), 7, 3),
          ("lead-k-d3", "d3-v0", (8192, 8192, 8192), (0, 1), (0, 1), (1 << 64) - 1, 11),
@@ -57,7 +60,7 @@ def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> C
 
 def scheme(forming: str, shape: tuple[int, int, int]) -> fp8_is.FP8IS:
     layer = fp8_is.FORMINGS[forming]()
-    return fp8_is.FP8IS(layer, mnk_min=min(shape) if min(shape) >= 8192 else 16)
+    return fp8_is.FP8IS(layer, mnk_min=min(shape) if min(shape) >= 2048 else 16)
 
 
 def case_vector(case, forming, shape, r, c, index, weight) -> dict:

@@ -158,7 +158,7 @@ checked   the layer's words, then every I_τ and every checked R_τ; useful = R_
 digest    SHAKE256("verity/pouw/<name>/tile" ‖ 0 ‖ layer words of the tile's rows, then columns ‖ core words)[:32];
           core words little-endian, step-major, row-major over cells within a step, I_τ before R_τ
 tiles     64 × 64 (one m64n64k32 atom per slice: Round 7 measured 32 per word at N ≥ 64, and m64n8 at 22% of peak)
-domain    64 | m, 64 | n, 32 | k, N ≤ m, k, n ≤ 2^16 (N = `mnk_min`: 8,192 by default, 32,768 for track D's D-4)
+domain    64 | m, 64 | n, 32 | k, N ≤ m, k, n ≤ 2^16 (N = `mnk_min`: 8,192 by default, or any frontier size)
 wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom word per cell per slice at 32, an FADD per checked R_τ at
           the price table's rate (n_R = T − 1 unseeded, T seeded), and the layer's trace
 Ω*        (32T + p_FADD·n_R + f_A + f_B)/(32T + 32·n_R + c_A + c_B) at m = n = k = N (the scheme's `mnk_min`), c being
@@ -175,37 +175,60 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
 - **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,
   conversions, the uniform datapath and memory-side arithmetic (`red`/`atom`, `cp.reduce.async.bulk`, texture
   filtering), each priced per 32-bit word it writes; it is a measurement on an H100 SXM, not yet made.
-- **The D-3 family** (`D3Family(law, route, weight_copy, prices, sums)`), registered for every cell as
-  `fp8-is-h100-<law>-v0[-y16][-f16][-decode]`. It is C-2's three NCP blocks formed on the unit's committed activation input,
+- **The D-3 family** (`D3Family(law, route, prices, sums)`), registered for every cell as
+  `fp8-is-h100-<law>-v0[-y16][-f16]`. It is C-2's three NCP blocks formed on the unit's committed activation input,
   with one f16 noise field per side and per-entry amplitudes that cover one E4M3 cell of the entry and of its NCP
   partner.
   - **`law`:** **`d3s`**, the lead (Phase 17f), with amplitude max(|x|, |x_partner|, rms′)/8, δ = 1/8 and
     rms′ = max(rms, 2^−6) for all-zero rows. The alternative is `d3m`, with max(σ, cell(x), cell(x_partner)), δ = 1/16
     and σ ≥ 28/√k.
-  - **`route`:** `xq` (the model's FP8 codes, the §0 input) or `y16` (Y16 = f16(A/s) with the model's own row scale; k
-    little-endian f16 words, finite and at most 448).
-  - **`weight_copy`:** whether a registered FP16 weight copy is free (Daniel's ruling (ii)). The cells differ only in
-    price and share one digest tag per law, route and `sums`.
-  - **`sums`:** the block values h + e_b in `f32` (schedule M4: f32(h) + f32(e_b) rounded once, a widen of h shared by
-    the three blocks, a widen of each e_b and an FADD, then `cvt.rn.satfinite.e4m3x2.f32`) or `f16` (schedule M2: HADD2,
-    then `cvt.rn.satfinite.e4m3x2.f16x2`). Either way a block value at or beyond ±464 saturates to ±448. The two differ
-    by double rounding, so they are different checked functions with different tags.
+  - **`route`:** **`xq`** (the model's FP8 codes: the §0 input and Daniel's target) or `y16`, a comparison row
+    (Y16 = f16(A/s) with the model's own row scale; k little-endian f16 words, finite and at most 448).
+  - **Weights (Daniel, 20:31Z: no extra weight copies, FP16 or f32).** Each unit decodes the offline E4M3 codes and
+    forms their statistic and amplitudes as the activation side does. So on `xq` the two sides' traces are equal.
+    - Nothing per element is registered: an amplitude table is one f16 per weight element, the size of the withdrawn
+      FP16 copy.
+    - Keeping each column's rms′ between units (one word per column) would save 34.46 per weight element. It is a
+      deployment requirement, so it is left to Daniel, not assumed.
+  - **`sums`:** the format of the block values h + e_b.
+    - `f32` (schedule M4): f32(h) + f32(e_b), rounded once, then `cvt.rn.satfinite.e4m3x2.f32`. It costs a widen of h
+      shared by the three blocks, then a widen of each e_b and an FADD.
+    - `f16` (schedule M2): HADD2, then `cvt.rn.satfinite.e4m3x2.f16x2`.
+    - Either way a block value at or beyond ±464 saturates to ±448. The two differ by double rounding, so they are
+      different checked functions with different tags.
   - **The streams.** E₁'s row i and F₁'s column j are SHAKE256("verity/pouw/fp8-is/<tag>/E1" or "/F1", salt, index,
-    root_A, weight, i or j): per unit and per column (r = 1, X-D3-3), and both read com(A_u), so no stream that forms
-    the unit's operands exists before its activations are committed (X-R9-2: with F₁ known from the salt, X-D3-3
-    recurs at r = 1, ε ≈ 6.8%). #218's lifecycle order is unchanged.
+    root_A, weight, i or j). They are per unit and per column (r = 1, X-D3-3).
+    - Both read com(A_u), so no stream that forms the unit's operands exists before its activations are committed.
+    - Without that, X-R9-2 applies: with F₁ known from the salt, X-D3-3 recurs at r = 1, ε ≈ 6.8%.
+    - #218's lifecycle order is unchanged.
   - **The price** is the cell's per-element trace (`d3_trace`) from one `PRICES` row, which prices the forming layer and
-    the core's FADD together (`get(name, prices=…)`; `FP8IS` rejects a layer priced from another row).
-  - **Round 8** reproduces Phase 17f: at 16,384³, `d3s` gives γ = 0.940% (copy) and 0.972% (decoded).
-  - **Round 9** (the default): FADD 32.11, HADD2.F32 64, the four-code unpack 48 per code, HMNMX2 64. **Nothing clears
-    at 16,384³**; the best cell, `d3s-v0-y16-f16`, is 1.218%. Track D's **D-4** (`mnk_min=32768`, so
-    32,768 ≤ m, k, n ≤ 65,536) at 32,768³ clears on `y16` with the copy (0.992%) and in every `f16` cell (0.821–0.853%),
-    and at 65,536³ in every `d3s` cell (0.622–0.739%).
-  - **`round9-sass`** is Round 9 with the code ptxas emits for three forms whose Round 9 kernels differed from the honest
-    schedule's: the four-code X_q unpack is two `UNPACK_B`, the second reading `.H1`, with no PRMT (ptxas 12.4 and 12.9);
-    the four-code f16 → e4m3 cast is two `F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C` with no PRMT (ptxas 12.9; 12.4 adds
-    one per pair); and the amplitude's two maxima are one `VHMNMX` per register with |·| folded, assumed at HMNMX2's 64
-    until timed. Then `d3s-v0[-y16]-f16` gives 0.995% at 16,384³ and 0.709% at 32,768³ on either route.
+    the core's FADD together (`get(name, prices=…)`). `FP8IS` rejects a layer priced from another row.
+  - **The rows.**
+    - **`round9`**, the default: Round 9 as measured. FADD 32.11, HADD2.F32 64, the four-code unpack 48 per code,
+      HMNMX2 64, HMUL2 a·K 32.17, and the f16 → e4m3 cast 64 per code (with PRMT).
+    - **`round9-sass`**: the code ptxas ≥ 12.9 emits for the honest kernel (approved, Daniel 20:31Z).
+      - The four-code unpack is two `UNPACK_B`, the second reading `.H1`.
+      - The four-code f16 → e4m3 cast is two `F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C`.
+      - Neither has a PRMT.
+      - The amplitude's maxima are one `VHMNMX` per register, with |·| folded.
+      - All three rates are untimed: each is priced at its pipe's 64 per instruction until Round 10 times it.
+  - **γ over the reporting frontier** (Daniel, 20:41Z), N³ with r = 1 and FADD 32.11. The figures are computed from
+    class prices; the honest kernel has not been run at any size:
+
+    | Cell | Row | 2,048³ | 4,096³ | 8,192³ | 16,384³ | 32,768³ |
+    |---|---|---:|---:|---:|---:|---:|
+    | `d3s-v0-f16` (X_q, f16 sums) | `round9` | 7.621% | 4.151% | 2.321% | 1.380% | **0.903%** |
+    | `d3s-v0-f16` | `round9-sass` | 5.566% | 3.058% | 1.757% | 1.093% | **0.758%** |
+    | `d3s-v0` (X_q, f32 sums) | `round9` | 10.362% | 5.646% | 3.102% | 1.780% | 1.105% |
+    | `d3s-v0` | `round9-sass` | 9.727% | 5.296% | 2.918% | 1.685% | 1.057% |
+    | `d3s-v0-y16-f16` (comparison) | `round9` | 7.509% | 4.091% | 2.290% | 1.364% | **0.895%** |
+    | `d3m-v0-f16` | `round9` | 8.066% | 4.391% | 2.445% | 1.443% | **0.935%** |
+
+    - **Nothing clears at 16,384³, the security target, or below.**
+    - **At 32,768³ only f16 sums clear.** The FADD thresholds are 32.173 (`round9`) and 32.267 (`round9-sass`).
+    - **γ depends on m and n; k drops out** (under 0.001 points over the frontier's k). On an m × n grid under
+      `round9-sass`, 16,384 × 32,768 gives 0.926%.
+    - `mnk_min` selects any frontier size as the domain's floor; 32,768 is Track D's D-4.
 - **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
   noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
   reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
@@ -226,12 +249,18 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
   a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
 - **Prices.** `PRICES` holds Round 7 as measured, Round 8 loop-free, Round 9 (the default; `gpu-constants.md` §14)
   and `round9-sass`. Rounds 7 and 8 carry the red team's assumptions for the X_q unpack and HADD2.F32.
-- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`): every layer on a test instance, `d3-v0`
-  and `d2-draft` at k = 8,192, `d3s-v0` at k = 16,384 and `d3s-v0-y16-f16` at 32,768³ (D-4). The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's
-  exact algebra (before any rounding) against A·Bᵀ.
+- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`):
+  - every layer on a test instance;
+  - `d3-v0` and `d2-draft` at k = 8,192;
+  - the lead cell `d3s-v0-f16` at every frontier size, 2,048³ to 32,768³, one output cell each (bit-exact, CPU).
+
+  The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's exact algebra (before any
+  rounding) against A·Bᵀ.
 
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- The honest `fp8-is-h100` kernel on an H100: not run at any frontier size. `fp8-is-h100`'s γ figures come from class
+  prices (Rounds 8 and 9), and Round 10 times `round9-sass`'s three forms.
