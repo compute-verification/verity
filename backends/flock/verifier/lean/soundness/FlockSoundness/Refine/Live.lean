@@ -1,5 +1,4 @@
 import FlockSoundness.Refine.Tapes
-import FlockSoundness.Game.Interleave
 
 /-!
 # The live session, and simulating it in the model
@@ -94,37 +93,6 @@ theorem Out.of_map {γ : Type} {f : β → γ} {g : Game β} {c : γ} (h : Out (
   cases hc
   exact ⟨b, hb, rfl⟩
 
-theorem Out.of_interleaveWith {g₁ : Game α} {adv : Game β → Game (α × β)} {fin : β → Game (α × β)}
-    (hadv : ∀ g₂ c, Out (adv g₂) c → Out g₁ c.1 ∧ Out g₂ c.2) (hfin : ∀ b c, Out (fin b) c → Out g₁ c.1 ∧ c.2 = b) :
-    ∀ {g₂ : Game β} {c : α × β}, Out (interleaveWith adv fin g₂) c → Out g₁ c.1 ∧ Out g₂ c.2
-  | .ret b, c, h => let ⟨h₁, h₂⟩ := hfin b c h; ⟨h₁, h₂ ▸ .ret b⟩
-  | .send _ _, c, .send true h => hadv _ c h
-  | .send _ _, _, .send false (.send m h) =>
-      let ⟨h₁, h₂⟩ := Out.of_interleaveWith hadv hfin h; ⟨h₁, .send m h₂⟩
-  | @Game.coin _ _ _ _ _, c, .send true h => hadv _ c h
-  | @Game.coin _ _ _ _ _, _, .send false (.coin x h) =>
-      let ⟨h₁, h₂⟩ := Out.of_interleaveWith hadv hfin h; ⟨h₁, .coin x h₂⟩
-
-/-- An outcome of two interactions run concurrently is a pair of their outcomes. -/
-theorem Out.of_interleave : ∀ {g₁ : Game α} {g₂ : Game β} {c : α × β}, Out (interleave g₁ g₂) c → Out g₁ c.1 ∧ Out g₂ c.2
-  | .ret a, _, _, h => by
-      obtain ⟨b, hb, rfl⟩ := Out.of_map h
-      exact ⟨.ret a, hb⟩
-  | .send M k, _, _, h =>
-      Out.of_interleaveWith (adv := fun g₂ => .send M fun m => interleave (k m) g₂)
-        (fin := fun b => (Game.send M k).map fun a => (a, b))
-        (fun _ _ h => by
-          cases h with
-          | send m h => exact ⟨.send m (Out.of_interleave h).1, (Out.of_interleave h).2⟩)
-        (fun _ _ h => by obtain ⟨a, ha, rfl⟩ := Out.of_map h; exact ⟨ha, rfl⟩) h
-  | @Game.coin _ C iF iN k, _, _, h =>
-      Out.of_interleaveWith (adv := fun g₂ => @Game.coin _ C iF iN fun c => interleave (k c) g₂)
-        (fin := fun b => (@Game.coin _ C iF iN k).map fun a => (a, b))
-        (fun _ _ h => by
-          cases h with
-          | coin x h => exact ⟨.coin x (Out.of_interleave h).1, (Out.of_interleave h).2⟩)
-        (fun _ _ h => by obtain ⟨a, ha, rfl⟩ := Out.of_map h; exact ⟨ha, rfl⟩) h
-
 end FlockSoundness.Game
 
 namespace FlockSoundness.Refine
@@ -138,14 +106,25 @@ coins, and the bytes themselves, which the unsalted path's server retains (PROTO
 def roundOf (dg : ByteArray → ByteArray) (b : ByteArray) (n : ℕ) (c : Fin n → 𝔽) : Round :=
   { n, sha := dg b, coins := Array.ofFn fun i => (c i).val, bytes := some b }
 
-/-- **One stream on the coin server** (PROTOCOL.md §7.1). The prover submits a round's framed bytes and coin count, or
-stops, at most `N` times; the server draws the round's coins uniformly once its bytes are fixed. The output is the
-stream's rounds, in order. -/
-def liveStream (dg : ByteArray → ByteArray) : ℕ → List Round → Game (List Round)
+/-- A round the prover submits to the coin server (PROTOCOL.md §7.1): its stream (rep `0` or `1`), the framed bytes,
+and the coin count. -/
+structure Submit where
+  rep : Fin 2
+  bytes : ByteArray
+  n : ℕ
+
+/-- Append a round to rep `r`'s stream. -/
+def addRound (acc : List Round × List Round) (r : Fin 2) (rd : Round) : List Round × List Round :=
+  if r = 0 then (acc.1 ++ [rd], acc.2) else (acc.1, acc.2 ++ [rd])
+
+/-- **The coin server's rounds** (PROTOCOL.md §7.1). The prover submits a round on either rep's stream, or stops, at
+most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed, and appends the round to that
+stream. The output is the two streams' rounds, in order. -/
+def liveRounds (dg : ByteArray → ByteArray) : ℕ → List Round × List Round → Game (List Round × List Round)
   | 0, acc => .ret acc
-  | N + 1, acc => .send (Option (ByteArray × ℕ)) fun
+  | N + 1, acc => .send (Option Submit) fun
     | none => .ret acc
-    | some (b, n) => .coin (Fin n → 𝔽) fun c => liveStream dg N (acc ++ [roundOf dg b n c])
+    | some s => .coin (Fin s.n → 𝔽) fun c => liveRounds dg N (addRound acc s.rep (roundOf dg s.bytes s.n c))
 
 /-- A live table session's outcome: the root `Commit` sent, the link points, each rep's stream, and the proof files. -/
 structure LiveOut (mPts : ℕ) where
@@ -155,14 +134,12 @@ structure LiveOut (mPts : ℕ) where
   rep1 : List Round
   proofs : Array ByteArray
 
-/-- **One table's live session** (PROTOCOL.md §5, §7). `Commit` sends the root `root_B`, then the server draws the two
-link points, the prover runs the two reps' streams, then it sends the two proof files. `interleave` lets the prover pick
-the stream at every step, as the server does. It also lets a prover leave a submitted round's coin for later, which the
-server doesn't: a stronger prover, so a bound here covers the server's. -/
+/-- **One table's live session** (PROTOCOL.md §5, §7): `Commit` sends the root `root_B`, the server draws the two link
+points, the prover runs its rounds on the two reps' streams, then sends the two proof files. -/
 def liveTable (dg : ByteArray → ByteArray) (mPts N : ℕ) : Game (LiveOut mPts) :=
   .send ByteArray fun rootB =>
   .coin (Fin 2 → Fin mPts → 𝔽) fun pts =>
-  (interleave (liveStream dg N []) (liveStream dg N [])).bind fun rs =>
+  (liveRounds dg N ([], [])).bind fun rs =>
   .send (Array ByteArray) fun proofs => .ret ⟨rootB, pts, rs.1, rs.2, proofs⟩
 
 theorem roundOf_coins (dg : ByteArray → ByteArray) (b : ByteArray) (c : Array F128) :
@@ -173,12 +150,16 @@ theorem roundOf_coins (dg : ByteArray → ByteArray) (b : ByteArray) (c : Array 
   rw [getElem!_pos c i h₂]
   rfl
 
-/-- A stream's outcome extends the rounds it had. -/
-theorem liveStream_out (dg : ByteArray → ByteArray) : ∀ (N : ℕ) (acc : List Round) {rs : List Round},
-    Out (liveStream dg N acc) rs → ∃ l, rs = acc ++ l
-  | 0, acc, _, .ret _ => ⟨[], by simp⟩
-  | N + 1, acc, _, .send none (.ret _) => ⟨[], by simp⟩
-  | N + 1, acc, _, .send (some (b, n)) (.coin c h) =>
-      let ⟨l, hl⟩ := liveStream_out dg N _ h; ⟨roundOf dg b n c :: l, by rw [hl]; simp⟩
+/-- A live run's streams extend the rounds they had. -/
+theorem liveRounds_out (dg : ByteArray → ByteArray) : ∀ (N : ℕ) (acc : List Round × List Round)
+    {rs : List Round × List Round}, Out (liveRounds dg N acc) rs → ∃ l₀ l₁, rs = (acc.1 ++ l₀, acc.2 ++ l₁)
+  | 0, acc, _, .ret _ => ⟨[], [], by simp⟩
+  | N + 1, acc, _, .send none (.ret _) => ⟨[], [], by simp⟩
+  | N + 1, acc, _, .send (some s) (.coin c h) => by
+      obtain ⟨l₀, l₁, rfl⟩ := liveRounds_out dg N _ h
+      unfold addRound
+      split_ifs
+      · exact ⟨roundOf dg s.bytes s.n c :: l₀, l₁, by simp⟩
+      · exact ⟨l₀, roundOf dg s.bytes s.n c :: l₁, by simp⟩
 
 end FlockSoundness.Refine
