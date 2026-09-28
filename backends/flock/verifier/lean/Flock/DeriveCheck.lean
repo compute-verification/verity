@@ -375,4 +375,17 @@ def archiveCheck (j : Json) : V String := do
   let _ ← deriveChecked types ls info words unit
   return "ok\n"
 
+/-- The part of an archive's derivation that `part` names: `unit`, `delta`, `logical` or a layout's digest, from the rows
+`deriveChecked` accepts, the ones the pins cover. -/
+def archivePart (j : Json) (part : String) : V String := do
+  let (types, ls, info, words, unit, ds) ← load j
+  let done ← deriveChecked types ls info words unit
+  let u := done.getD unit default
+  if part == "unit" then return netlist u ((ds.getD unit "").take 16).toString
+  if part == "delta" then return deltaText ls ds u
+  if part == "logical" then return logicalText done u
+  match ds.findIdx? (· == part) with
+  | some i => return netlist (done.getD i default) (part.take 16).toString
+  | none => throw s!"archive: no layout {part.take 16}"
+
 end Flock.DeriveAll

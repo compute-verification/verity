@@ -446,16 +446,4 @@ def load (j : Json) : V ((String → Option CircuitType) × Array Layout × (Str
   let words := fun (x : String) => (wordsOf.find? (·.1 == x)).map (·.2)
   return (types, ls, info, words, unit, ← ls.mapM Layout.digest)
 
-/-- The part of an archive's derivation that `part` names: `unit`, `delta`, `logical` or a layout's digest. -/
-def archivePart (j : Json) (part : String) : V String := do
-  let (types, ls, info, words, unit, ds) ← load j
-  let done ← deriveAll types ls info words unit
-  let u := done.getD unit default
-  if part == "unit" then return netlist u ((ds.getD unit "").take 16).toString
-  if part == "delta" then return deltaText ls ds u
-  if part == "logical" then return logicalText done u
-  match ds.findIdx? (· == part) with
-  | some i => return netlist (done.getD i default) (part.take 16).toString
-  | none => throw s!"archive: no layout {part.take 16}"
-
 end Flock.DeriveAll
