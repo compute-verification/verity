@@ -8,7 +8,8 @@
 
 Per call: fresh salts (a new OS salt key), every row's ``sha512/row/v1`` digest, ``b || c`` and ``frame-v3-sha512`` leaf, every
 output word's leaf, and one tree per port (``serving_rows.commit``).  The rows are the set's own row ports, one row per instance
-and port as M0's per-instance statement reads them (no shared rows).  The first call is ``commit.cold_seconds``; ``commit.seconds``
+and port as M0's per-instance statement reads them (no shared rows); consecutive instances with the same row widths are one member
+(an attention class set spans key counts, so it is one member per T).  The first call is ``commit.cold_seconds``; ``commit.seconds``
 is the median of the next ``--reps`` (the renderer's ``views.COMMIT``).  The window's binding fields name the input set, not a
 served run: they enter each port's domain id once, so they do not move the time.  Validation recomputes two rows' ``b || c`` with
 core (``hm96.SHA512.commit_string`` over ``sha512_row_layout``) and compares them with what the hook committed.
@@ -51,21 +52,34 @@ def parse(argv: list[str]) -> argparse.Namespace:
 
 
 def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.ndarray]]]]:
+    """One member per run of consecutive instances with the same row widths (an attention class set: one per key count T, as
+    serving commits each template instance's rows)."""
     sub = s.subcircuit
-    rows = {p.name: np.asarray(s.port(p.name, 0, n), dtype=np.uint16).reshape(n, -1) for p in sub.inputs}
-    outs = {p.name: np.asarray(s.port(p.name, 0, n), dtype=np.uint16).reshape(n, -1) for p in sub.outputs}
-    member = SR.Member(sub.id, tuple((p, int(a.shape[1])) for p, a in rows.items()), tuple((p, int(a.shape[1])) for p, a in outs.items()), n)
-    window = SR.Window({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", (member,))
-    return window, [{"rows": rows, "outs": outs}]
+    names = [p.name for p in sub.inputs], [p.name for p in sub.outputs]
+    arrays = {p: [np.asarray(x, dtype=np.uint16).reshape(-1) for x in s.port(p, 0, n)] for p in names[0] + names[1]}
+    shape = [tuple(arrays[p][i].size for p in names[0] + names[1]) for i in range(n)]
+    members, data, lo = [], [], 0
+    while lo < n:
+        hi = lo
+        while hi < n and shape[hi] == shape[lo]:
+            hi += 1
+        rows = {p: np.stack(arrays[p][lo:hi]) for p in names[0]}
+        outs = {p: np.stack(arrays[p][lo:hi]) for p in names[1]}
+        members.append(SR.Member(f"{sub.id}#{len(members)}", tuple((p, int(a.shape[1])) for p, a in rows.items()),
+                                 tuple((p, int(a.shape[1])) for p, a in outs.items()), hi - lo, lo))
+        data.append({"rows": rows, "outs": outs})
+        lo = hi
+    window = SR.Window({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", tuple(members))
+    return window, data
 
 
-def check_rows(c: SR.Committed, member: SR.Member, n: int) -> list[str]:
+def check_rows(c: SR.Committed, member: SR.Member) -> list[str]:
     bad = []
     inst = hm96.SHA512
     for p, words in member.rows:
         port = member.port(p)
         lay = sha512_row_layout(ROLE_X, 16, words)
-        for i in (0, n // 2):
+        for i in sorted({0, member.n // 2}):
             row = np.ascontiguousarray(c.rows[port][i], dtype="<u2").tobytes()
             salt = c.salts[port][i * SR.SALT_BYTES:(i + 1) * SR.SALT_BYTES]
             want = inst.commit_string(inst.default_key, lay.digest(row), salt)
@@ -81,18 +95,20 @@ def main(argv: list[str] | None = None) -> int:
     if ns.n > s.n:
         raise SystemExit(f"--n {ns.n} exceeds the set's {s.n} instances")
     window, data = batch(s, ns.n)
-    member = window.members[0]
+    ms = window.members
     calls = []
     for _ in range(1 + ns.reps):
         c = SR.commit(window, data, workers=ns.workers)
         calls.append(c.seconds)
-    bad = check_rows(c, member, ns.n)
+    checked = [ms[0]] + ([ms[-1]] if len(ms) > 1 else [])
+    bad = [x for m in checked for x in check_rows(c, m)]
     warm = calls[1:]
     med = {k: statistics.median(x[k] for x in warm) for k in ("total_s", "salts_s", "commit_s")}
-    row_bytes = sum(2 * w for _, w in member.rows)
-    summary = {"set": s.name, "n": ns.n, "workers": ns.workers, "cold_s": calls[0]["total_s"], "warm_median_s": med["total_s"],
-               "warm_s": [x["total_s"] for x in warm], "rows": ns.n * len(member.rows), "row_bytes_per_instance": row_bytes,
-               "roots": {p: r.hex() for p, r in c.roots.items()}, "rows_checked": 2 * len(member.rows), "rows_bad": bad}
+    rows = sum(m.n * len(m.rows) for m in ms)
+    row_bytes = sum(m.n * sum(2 * w for _, w in m.rows) for m in ms) / ns.n
+    summary = {"set": s.name, "n": ns.n, "workers": ns.workers, "members": len(ms), "cold_s": calls[0]["total_s"], "warm_median_s": med["total_s"],
+               "warm_s": [x["total_s"] for x in warm], "rows": rows, "row_bytes_per_instance": row_bytes,
+               "roots": {p: r.hex() for p, r in c.roots.items()}, "rows_checked": sum(len(m.rows) * len({0, m.n // 2}) for m in checked), "rows_bad": bad}
     print(json.dumps({k: v for k, v in summary.items() if k != "roots"}))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
     if out:
@@ -106,7 +122,9 @@ def main(argv: list[str] | None = None) -> int:
             "workload_fingerprint": {"workload": "serving_commit_cost", "scheme": SR.SCHEME, "row_schema": SR.ROW_SCHEMA,
                                      "input_set": {"id": s.name, "art": ns.input_set_art, "content_digest": s.content_digest,
                                                    "manifest_sha256": s.manifest_sha256(), "subcircuit": s.subcircuit.id, "range": [0, ns.n]},
-                                     "rows": "one row per instance and row port (M0's per-instance statement, no shared rows)",
+                                     "rows": "one row per instance and row port (M0's per-instance statement, no shared rows); one member "
+                                             "per run of instances with the same row widths (an attention class set: one per key count)",
+                                     "members": len(ms),
                                      "implementation": "verity_vllm.commit.serving_rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
                                      "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
                                      "nproc": os.cpu_count(), "python": sys.version.split()[0]},
@@ -120,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
                 {"name": "commit.salts_seconds", "value": med["salts_s"], "unit": "s"},
                 {"name": "commit.tree_seconds", "value": med["commit_s"], "unit": "s"},
                 {"name": "commit.workers", "value": ns.workers, "unit": "count"},
-                {"name": "commit.rows", "value": ns.n * len(member.rows), "unit": "count"},
+                {"name": "commit.rows", "value": rows, "unit": "count"},
                 {"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"},
             ],
             "measurement_files": ["serving_commit_cost.json"],
