@@ -222,8 +222,9 @@ def test_bit_at_selects_the_bit_or_zero():
     assert [int(x) for x in IL.unslice_words(outs["o"], len(vecs))] == [bit_at(W).evaluate(*v) for v in vecs]
 
 
-#: the pinned rcp table read inline: 8,444 + 1,120 decoder rows, 25,133 nonempty product rows, 31 copy rows; its 143,860,467 set bits
-READ_ROWS, READ_NNZ = 34_728, 143_860_467
+#: the pinned rcp table read inline: 16,712 + 584 decoder rows (14 low and 9 high index bits), 9,753 nonempty product rows and
+#: 24 copy rows, its 7 constant value bits wired to the constant; its 93,528,819 set bits
+READ_ROWS, READ_NNZ = 27_073, 93_528_819
 
 
 def test_a_table_read_is_laid_out_as_plain_rows():
@@ -243,6 +244,57 @@ def test_a_table_read_is_laid_out_as_plain_rows():
 
     first = lay.in_words * IL.WORD
     assert all(latest(lay.rows_a[i]) < i and latest(lay.rows_b[i]) < i for i in range(first, lay.useful) if i != lay.const)
+
+
+def _rows_eval(lay, words: list[int]) -> tuple[list[int], bool]:
+    """The laid-out rows run on 64 lanes of one 32-bit input port (numpy, for rows with millions of set bits): the output
+    words and whether every row holds."""
+    T, mask = 64, np.uint64(0xFFFFFFFFFFFFFFFF)
+    z = np.zeros(lay.useful, dtype=np.uint64)
+    at = lay.in_port_cols[0]
+    for b in range(32):
+        z[at + b] = np.uint64(sum(((w >> b) & 1) << t for t, w in enumerate(words)))
+    z[lay.const] = mask
+
+    def ev(r):
+        a = np.asarray(r, dtype=np.int64)
+        return np.bitwise_xor.reduce(z[a]) if len(a) else np.uint64(0)
+
+    for i in range(lay.in_words * IL.WORD, lay.useful):
+        if i != lay.const:
+            z[i] = ev(lay.rows_a[i]) & ev(lay.rows_b[i])
+    holds = all(ev(lay.rows_a[i]) & ev(lay.rows_b[i]) == z[i] for i in range(lay.useful))
+    o, nb = lay.out_port_cols[0], lay.out_bits[0]
+    return [sum(((int(z[o + b]) >> t) & 1) << b for b in range(nb)) for t in range(T)], holds
+
+
+@pytest.mark.parametrize("prim", ["MufuRcpFtz_v1", "MufuEx2Ftz_v1", "MufuSqrtFtz_v1", "RsqrtApprox_v1"])
+def test_a_library_reads_rows_compute_its_piece(prim):
+    """A read of a library table, its constant value bits wired to the constant and 14 low index bits: the laid-out rows give
+    the gate circuit's outputs on random and edge words, and every row holds."""
+    C = gf2.Circuit()
+    x = C.input("in0", 32)
+    C.output("out0", IL.PIECES[prim](C, x))
+    lay = IL.layout(C, ["in0"], ["out0"])
+    rng = random.Random(12)
+    words = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 1, 0x00800000, 0x3F800000] + [rng.getrandbits(32) for _ in range(56)]
+    outs, _ = C.evaluate({"in0": IL.slice_words(words, 32)}, 64)
+    got, holds = _rows_eval(lay, words)
+    assert holds and got == [int(v) for v in IL.unslice_words(outs["out0"], 64)]
+
+
+def test_a_program_table_keeps_a_row_for_every_live_bit(monkeypatch):
+    """A table off core's library list keeps its constant bits as rows, so its layout shows nothing of its content."""
+    words = [(i * 2654435761) & 0x7 | 0x8 for i in range(1 << 6)]
+    monkeypatch.setitem(gf2.TABLES, "toy_program", lambda: words)
+    monkeypatch.setitem(gf2._TABLE_WORDS, "toy_program", words)
+    C = gf2.Circuit()
+    x = C.input("in0", 6)
+    v = C.lookup("toy_program", x, 4)
+    C.output("out0", v)
+    assert IL._library_table("rcp") and not IL._library_table("toy_program")
+    r = IL._Read(C, 0, [0, 1, 2, 3], 0)
+    assert r.const_bits == {} and r.bits == [0, 1, 2, 3]
 
 
 @pytest.mark.parametrize("prim", ["Bf16Add_v1", "Bf16AddF2fp_v1"])

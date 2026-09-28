@@ -546,6 +546,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
         in_groups.append((c, words, bits))
     ands = []
     reads: dict[int, _Read] = {}
+    const_bit: dict[int, int] = {}
     value_bit = {C.data[v]: v for v in live if C.kind[v] == "lookup"}
     for v in range(len(C.kind)):
         if v not in live or C.kind[v] == "in":
@@ -561,11 +562,14 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
             reads[g] = r = _Read(C, g, sorted(jj for (gg, jj) in value_bit if gg == g), len(rows_a))
             rows_a.extend([None] * r.rows)
             rows_b.extend([None] * r.rows)
-        col[v] = reads[g].out_col[j]
+        if j in reads[g].const_bits:
+            const_bit[v] = reads[g].const_bits[j]
+        else:
+            col[v] = reads[g].out_col[j]
 
     def form(Lf: L):
-        s = [col[v] for v in Lf.s]
-        if Lf.c:
+        s = [col[v] for v in Lf.s if v not in const_bit]
+        if (Lf.c + sum(const_bit.get(v, 0) for v in Lf.s)) & 1:
             s.append("C")
         return s
 
@@ -612,31 +616,54 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     return lay
 
 
-#: a read's low index bits by index width: the lookup slot's split (``circuit.LOOKUP_LO``), so an inline read is its rows
-READ_LO = {24: 14, 23: 13}
+#: a read's low index bits by index width, for the measured MUFU tables' widths (Project doc `compile-time-constants.md`
+#: §2.4: 14 low bits for both, once a library table's constant bits are wired)
+READ_LO = {24: 14, 23: 14}
 
 
 def _decode_count(n: int) -> int:
     return 0 if n <= 1 else (1 << n) + _decode_count(n // 2) + _decode_count(n - n // 2)
 
 
+@lru_cache(maxsize=None)
+def _library_table(name: str) -> bool:
+    """Whether the table ``name`` loads is on core's library list, by the SHA-512 of its raw little-endian words."""
+    from verity.ml import library
+
+    from . import gf2
+
+    raw = np.ascontiguousarray(np.asarray(gf2.table(name), dtype="<u4")).tobytes()
+    return library.table_label(hashlib.sha512(raw).hexdigest()) == library.LIBRARY
+
+
 class _Read:
     """A table read ``out = table[idx]`` laid out inline as plain rows of the unit (the one-hot construction of
     :func:`fp.lookup`): the low and high index halves decode to one-hot minterms (each an AND of two half-minterms, recursively),
     row ``(j, h)`` is ``hi_h AND (XOR of the low minterms l with bit j of table[h * 2^lo + l] set)`` (omitted when that XOR is
-    empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows. Every row
-    reads earlier rows, the index forms or the constant, so the index fixes every row."""
+    empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows, and a
+    library table's bits that are constant over the whole table get none: they are wired to the constant (``const_bits``).
+    A program table keeps a row for every live bit, so its layout shows nothing of its content. Every row reads earlier rows,
+    the index forms or the constant, so the index fixes every row."""
 
     def __init__(self, C: Circuit, g: int, bits: Sequence[int], at: int):
         from . import gf2
 
         self.table, self.idx, _width = C.lookups[g]
         n = len(self.idx)
+        words = np.asarray(gf2.table(self.table), dtype=np.uint32)
+        assert len(words) == 1 << n
+        self.const_bits: dict[int, int] = {}
+        if _library_table(self.table):
+            for j in bits:
+                col = (words >> np.uint32(j)) & np.uint32(1)
+                if not col.any():
+                    self.const_bits[j] = 0
+                elif col.all():
+                    self.const_bits[j] = 1
+        bits = [j for j in bits if j not in self.const_bits]
         self.lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
         self.hi = n - self.lo
         assert self.lo >= 2 and self.hi >= 2, "a read's index halves are decoded to rows"
-        words = np.asarray(gf2.table(self.table), dtype=np.uint32)
-        assert len(words) == 1 << n
         self.bits = list(bits)
         self.at = at
         self.lo_first = at + _decode_count(self.lo) - (1 << self.lo)
@@ -656,9 +683,11 @@ class _Read:
             self.products.append(per)
         n_prod = sum(len(per) for per in self.products)
         self.out_col = {j: p + n_prod + t for t, j in enumerate(self.bits)}
-        self.rows = _decode_count(self.lo) + _decode_count(self.hi) + n_prod + len(self.bits)
+        self.rows = _decode_count(self.lo) + _decode_count(self.hi) + n_prod + len(self.bits) if self.bits else 0
 
     def fill(self, rows_a: list, rows_b: list, form: Callable) -> None:
+        if not self.bits:
+            return
         at = [self.at]
 
         def emit(a, b) -> int:
