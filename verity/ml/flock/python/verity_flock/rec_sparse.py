@@ -60,10 +60,16 @@ the reads of ``claim`` and ``tau`` are the statement's row reads, outside this D
 of u16 words per port, one output row. Its ANDs are ``ands`` and `copy_rows`' (leaf sums and committed product operands).
 `stage` writes one statement over a session's reps (`session_rows`, read at `reads`' rows), as `rec_vstage` stages
 InnerRepCheck's parts (`rec_residuals.write_rows`).
+
+**The prover** (`prove`, T = 1: one hidden circuit, the slots' factor ``Ũ`` its range's layout) runs a rep's phase on coins it
+draws one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
+out as R's cells (cell ``k + 2^NU p``, byte ``i >> 3``, bit ``i & 7``, zero cells to fast100's least m). It checks every sum it
+sends against the claim before it, and its registered claim is R's value at the coins' point (`table_value`).
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import multiprocessing
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import reduce
 
@@ -77,10 +83,10 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 
-__all__ = ["Coins", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "inner_points",
-           "lowering", "message_ports", "out_words", "port_words", "ports", "products", "products_structure", "reads",
-           "registered_claim", "registrations", "rows", "session_rows", "sparse_ref", "stage", "statement", "subcircuit",
-           "unit_circuit", "unit_name", "v_layout", "verifier_row"]
+__all__ = ["Coins", "PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "entries",
+           "inner_points", "layout_factors", "lowering", "message_ports", "out_words", "port_words", "ports", "products",
+           "products_structure", "prove", "reads", "registered_claim", "registrations", "rows", "session_rows", "sparse_ref",
+           "stage", "statement", "subcircuit", "table", "table_value", "unit_circuit", "unit_name", "v_layout", "verifier_row"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -89,6 +95,8 @@ ROW_BLOCK = 64
 #: H2's rounds: the univariate skip's 6 low row bits
 PRE_ROUNDS = 6
 SKIP = 1 << PRE_ROUNDS
+#: fast100's least m (`rec_algebra.fast100`): `registered_claim` pads a shorter point to it (under --zk, 25: ``pad_to``)
+PAD_TO = 22
 
 
 @dataclass(frozen=True)
@@ -328,20 +336,28 @@ class RegisteredClaim:
     """The claim rep r's instance hands the registered opening: its value is row ``row`` (= r) of the prover's ``claim``
     registration, which the opening reads as a witness element, never as a public value (it depends on the templates), so
     it has no ``value`` and `rec_algebra.run` refuses it as an extra claim; its point is the coins': skip weights
-    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order."""
+    ``eq(point[:6], ·)`` and ``x = point[6:]``, ``point = (r_k, ζ_p, ρ_t)``, the stacked table's variables in order, then
+    ``pad`` coordinates the shape fixes at zero (`registered_claim`)."""
 
     row: int
     skip: tuple[int, ...]
     x: tuple[int, ...]
     port: str = "claim"
+    pad: int = 0
     value = None
 
 
-def registered_claim(sh: Shape, c: Coins, row: int) -> RegisteredClaim:
+def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
+    """Rep ``row``'s claim at the coins' point. A point of fewer than ``pad_to`` coordinates (the stacked table of fewer than
+    fast100's least m variables) is padded with zeros in new high variables, the table with zero rows: ``eq(x || 0, b || c)``
+    vanishes off ``c = 0``, so the claim is the table's at the unpadded point. How many is the shape's, never the prover's,
+    and the opening refuses a padded coordinate that is not zero (`rec_algebra._registered`)."""
     point = list(c.rounds[:sh.NU]) + list(c.zeta_p) + list(c.rho)
     if len(point) < PRE_ROUNDS:
         raise ValueError(f"{sh}: a claim point of {len(point)} coordinates, fewer than the skip's {PRE_ROUNDS}")
-    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]))
+    pad = max(0, pad_to - len(point))
+    point += [0] * pad
+    return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]), pad=pad)
 
 
 def verifier_row(sh: Shape, c: Coins) -> list[int]:
@@ -742,8 +758,10 @@ def statement(sh: Shape, n: int):
 
 def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]]], salts: Mapping | None = None) -> dict:
     """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
-    rep r's, but ``tau``, the session's one row. ``salts``: per port, its rows' salts (default fresh)."""
+    rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
+    opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from .rec_outer import CLAIM_VALUE
 
     sh = _shape(sh)
     out = {}
@@ -751,7 +769,7 @@ def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]
         if nm == "v":
             continue
         rows = [list(inst[0][nm])] if nm == "tau" else [list(r[nm]) for r in inst]
-        out[nm] = RG.Registered.commit(program, f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
+        out[nm] = RG.Registered.commit(program, CLAIM_VALUE if nm == "claim" else f"rec-sparse-{nm}", rows, (salts or {}).get(nm))
     return out
 
 
@@ -777,3 +795,264 @@ def stage(sh: Shape, inst: Sequence[Mapping[str, list[int]]], out_dir, program: 
     return {"template": st.defn.id, "unit": unit_name(sh), "instances": n, "products": products(sh), "ands": ands(sh),
             "nonzero_residuals": hits, **s}
 
+
+
+# --- the prover at T = 1 -----------------------------------------------------------------------------------------------------
+
+#: `entries` lays a circuit's entries out in this many runs, each followed by zero entries, so that `prove`'s workers (each a
+#: contiguous share of the runs) share H3's work evenly
+BLOCKS = 64
+
+
+def entries(sh: Shape, a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], blocks: int = BLOCKS
+            ) -> list[tuple[int, int, int, int]]:
+    """A hidden circuit's 2^NU entries ``(row, column, a, b)`` from its A and B rows (`rec_session.hidden_circuits`' ``a`` and
+    ``b``): one a cell of A or B, ``a`` and ``b`` its parity in each (a cell held an even number of times in both is none), in
+    row then column order, in ``blocks`` runs each followed by zero entries (Φ is zero on them)."""
+    par: dict[tuple[int, int], int] = {}
+    for side, rows_ in enumerate((a, b)):
+        for i, row in enumerate(rows_):
+            for c in row:
+                par[(i, c)] = par.get((i, c), 0) ^ (1 << side)
+    ents = [(i, c, f & 1, f >> 1) for (i, c), f in sorted(par.items()) if f]
+    n = 1 << sh.NU
+    if len(ents) > n or any(max(i, c) >> sh.ELL for i, c, _, _ in ents):
+        raise ValueError(f"{sh}: {len(ents)} entries, not at most 2^NU entries of 2^ELL rows and columns")
+    blocks = max(1, min(blocks, n >> 1))
+    size, per = n // blocks, -(-len(ents) // blocks)
+    out: list[tuple[int, int, int, int]] = []
+    for j in range(blocks):
+        run = ents[j * per:(j + 1) * per]
+        out += run + [(0, 0, 0, 0)] * (size - len(run))
+    return out
+
+
+def _planes(sh: Shape, e: tuple[int, int, int, int]) -> tuple[int, ...]:
+    row, col, a, b = e
+    return tuple((row >> j) & 1 for j in range(sh.ELL)) + tuple((col >> j) & 1 for j in range(sh.ELL)) + (a, b)
+
+
+def table_m(sh: Shape, pad_to: int = PAD_TO) -> int:
+    """R's variables: its cells' (``NU + P_LOG + T_LOG``), at least ``pad_to`` (`registered_claim`'s padded point)."""
+    return max(pad_to, sh.NU + sh.P_LOG + sh.T_LOG)
+
+
+def table(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pad_to: int = PAD_TO) -> bytes:
+    """R's bytes (``flock-circuit stacked --table``): cell ``k + 2^NU p`` is entry k's plane p (its row bits, column bits, a and
+    b, then zero planes to P'), cell i at byte ``i >> 3``, bit ``i & 7``, then zero cells to ``2^pad_to`` (`registered_claim`'s
+    padded point)."""
+    import numpy as np
+
+    n = 1 << sh.NU
+    if sh.stacked or len(ents) != n:
+        raise ValueError(f"{sh}: R of one template's 2^NU entries, not {len(ents)}")
+    m = table_m(sh, pad_to)
+    e = np.array(ents, dtype=np.int64).reshape(n, 4)
+    bits = np.zeros((1 << (m - sh.NU), n), np.uint8)
+    for j in range(sh.ELL):
+        bits[j], bits[sh.ELL + j] = (e[:, 0] >> j) & 1, (e[:, 1] >> j) & 1
+    bits[2 * sh.ELL], bits[2 * sh.ELL + 1] = e[:, 2], e[:, 3]
+    return np.packbits(bits.reshape(-1), bitorder="little").tobytes()
+
+
+def table_value(raw: bytes, point: Sequence[int]) -> int:
+    """R's multilinear extension at ``point`` (one coordinate a bit of the cell index, low first): ``Σ_i eq(point, i) R_i``,
+    the value the registered opening at `registered_claim`'s point proves."""
+    import numpy as np
+
+    m = len(point)
+    if len(raw) * 8 != 1 << m:
+        raise ValueError(f"{len(raw)} bytes of R, a point of {m} coordinates")
+    lo = min(m, 12)
+    cells = np.unpackbits(np.frombuffer(raw, np.uint8), bitorder="little").reshape(1 << (m - lo), 1 << lo)
+    e = np.frombuffer(b"".join(x.to_bytes(16, "little") for x in eq_table(point[:lo])), np.uint8)
+    e = np.unpackbits(e, bitorder="little").reshape(1 << lo, 128).astype(np.float32)
+    rows = np.packbits((cells.astype(np.float32) @ e).astype(np.int64).astype(np.uint8) & 1, axis=1, bitorder="little")
+    return reduce(lambda x, y: x ^ y, (mul(w, int.from_bytes(r.tobytes(), "little")) for w, r in zip(eq_table(point[lo:]), rows)), 0)
+
+
+def layout_factors(sh: Shape, x_rest: Sequence[int], y_rest: Sequence[int], rng: Mapping) -> list[int]:
+    """``U``: slot σ's ``eq(x_hi, q) eq(y_hi, q)`` at its position ``q = pos0 + σ`` for σ below the hidden circuit's range's
+    count (META's range, `rec_session.hidden_circuits`), zero past it; ``x_hi`` and ``y_hi`` the points' coordinates past
+    ELL - 6. Their sum is `rec_session.hidden_fold`'s weight."""
+    k = sh.ELL - PRE_ROUNDS
+    ex, ey = eq_table(x_rest[k:]), eq_table(y_rest[k:])
+    if rng["slot_log"] != sh.ELL or rng["count"] > sh.S or rng["pos0"] + rng["count"] > min(len(ex), len(ey)):
+        raise ValueError(f"{sh}: the range {dict(rng)} is not at most S slots of 2^ELL rows inside the block")
+    return [mul(ex[q], ey[q]) for q in range(rng["pos0"], rng["pos0"] + rng["count"])] + [0] * (sh.S - rng["count"])
+
+
+def _xor(xs) -> int:
+    return reduce(lambda x, y: x ^ y, xs, 0)
+
+
+def _sc(alpha: int, q: int) -> int:
+    return alpha if q == 1 else 0 if q == 0 else mul(alpha, q)
+
+
+def _lin(P: list[int], a: int, d: int) -> list[int]:
+    """``P · (a + d X)``, coefficients lowest first."""
+    if d == 1:
+        return [mul(a, P[0])] + [mul(a, P[i]) ^ P[i - 1] for i in range(1, len(P))] + [P[-1]]
+    return [mul(a, P[0])] + [mul(a, P[i]) ^ mul(d, P[i - 1]) for i in range(1, len(P))] + [mul(d, P[-1])]
+
+
+def _poly(T: Sequence[tuple[int, ...]], alpha: int, ax: Sequence[int], ay: Sequence[int]) -> list[int]:
+    """``Σ_i Φ`` on the line through entries 2i and 2i + 1 of ``T`` (each its P planes), coefficients c_0 .. c_d: a pair's d
+    linear factors multiplied out, those constant on its line multiplied in as one scalar."""
+    E = len(ax)
+    fa = [*ax, *ay]
+    acc = [0] * (2 * E + 2)
+    for i in range(0, len(T), 2):
+        e0, e1 = T[i], T[i + 1]
+        qa, qb = e0[2 * E], e0[2 * E + 1]
+        f0, d0 = _sc(alpha, qa) ^ qb, _sc(alpha, qa ^ e1[2 * E]) ^ qb ^ e1[2 * E + 1]
+        if not (f0 or d0):
+            continue
+        c, P = (1, [f0, d0]) if d0 else (f0, [1])
+        for j in range(2 * E):
+            x, y = e0[j], e1[j]
+            f = fa[j] ^ x
+            if x != y:
+                P = _lin(P, f, x ^ y)
+            elif not f:
+                break
+            else:
+                c = f if c == 1 else mul(c, f)
+        else:
+            for k, p in enumerate(P):
+                acc[k] ^= p if c == 1 else mul(c, p)
+    return acc
+
+
+def _fold(T: Sequence[tuple[int, ...]], r: int) -> list[tuple[int, ...]]:
+    """``T`` with its lowest variable bound to ``r``: each pair's planes on their line at r."""
+    out = []
+    for i in range(0, len(T), 2):
+        e0, e1 = T[i], T[i + 1]
+        out.append(e0 if e0 == e1 else tuple(x if x == y else x ^ (r if x ^ y == 1 else mul(r, x ^ y)) for x, y in zip(e0, e1)))
+    return out
+
+
+def _slice(conn, T, alpha, ax, ay) -> None:
+    """A worker of `prove`: its share of the entries' rounds until one entry is left, which it sends."""
+    while len(T) > 1:
+        conn.send(_poly(T, alpha, ax, ay))
+        T = _fold(T, conn.recv())
+    conn.send(T[0])
+
+
+def _eval(poly: Sequence[int], r: int) -> int:
+    out = 0
+    for c in reversed(poly):
+        out = mul(out, r) ^ c
+    return out
+
+
+def _entry_rounds(T, alpha, ax, ay, W, claim, draw, workers):
+    nu = len(T).bit_length() - 1
+    lw = max(0, min(workers.bit_length() - 1, nu - 2))
+    msgs, rs, conns, procs = [], [], [], []
+    try:
+        if lw:
+            ctx, size = multiprocessing.get_context("fork"), len(T) >> lw
+            for i in range(1 << lw):
+                a, b = ctx.Pipe()
+                p = ctx.Process(target=_slice, args=(b, T[i * size:(i + 1) * size], alpha, ax, ay), daemon=True)
+                p.start()
+                b.close()
+                conns.append(a)
+                procs.append(p)
+        for j in range(nu):
+            if conns and j == nu - lw:
+                T, conns = [c.recv() for c in conns], []
+            if conns:
+                poly = reduce(lambda p, q: [x ^ y for x, y in zip(p, q)], (c.recv() for c in conns))
+            else:
+                poly = _poly(T, alpha, ax, ay)
+            if claim != mul(W, _xor(poly[1:])):
+                raise AssertionError(f"H3 entry round {j}: the entries' sum is not the claim")
+            msg = [mul(W, poly[0])] + [mul(W, x) for x in poly[2:]]
+            (r,) = draw(msg, 1)
+            for c in conns:
+                c.send(r)
+            if not conns:
+                T = _fold(T, r)
+            claim = mul(W, _eval(poly, r))
+            msgs.append(msg)
+            rs.append(r)
+        return T[0], msgs, rs, claim
+    finally:
+        for p in procs:
+            p.kill()
+            p.join()
+
+
+def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U: Sequence[int], h: Sequence[int],
+          draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[Coins, dict]:
+    """One rep's sparse phase at T = 1 (the module docstring): ``ents`` the hidden circuit's `entries`, ``pts`` the rep's
+    `inner_points` (``alpha``, ``z``, ``x_rest``, ``y_rest``), ``U`` its slots' `layout_factors`, ``h`` the 64 elements of the
+    rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's round none);
+    ``workers`` processes share H3's entry rounds. Returns the coins and the messages as `rows` takes them (``claim`` the
+    registered claim's value). AssertionError if a sum the phase sends is not the claim before it (``ents`` are not the
+    circuit h was folded from)."""
+    from .rec_algebra import skip_weights
+
+    if sh.stacked or len(ents) != 1 << sh.NU or len(U) != sh.S or len(h) != SKIP:
+        raise ValueError(f"{sh}: the prover runs T = 1 on 2^NU entries, S layout factors and h's {SKIP} elements")
+    E, k, alpha, W = sh.ELL, sh.ELL - PRE_ROUNDS, pts["alpha"], _xor(U)
+    x_rest, y_rest = tuple(pts["x_rest"]), tuple(pts["y_rest"])
+    zeta_c = tuple(draw([], PRE_ROUNDS))
+    eqx, eqy = eq_table(x_rest[:k]), eq_table(list(zeta_c) + list(y_rest[:k]))
+    side: dict[int, tuple[int, int]] = {}
+    for row, col, a, b in ents:
+        if a or b:
+            sa, sb = side.get(row, (0, 0))
+            side[row] = (sa ^ (eqy[col] if a else 0), sb ^ (eqy[col] if b else 0))
+    V = [0] * SKIP
+    for row, (sa, sb) in side.items():
+        V[row % SKIP] ^= mul(eqx[row >> PRE_ROUNDS], mul(alpha, sa) ^ sb)
+    V, L = [mul(W, v) for v in V], skip_weights(pts["z"])
+    claim = _dot(eq_table(zeta_c), h)
+    if claim != _dot(L, V):
+        raise AssertionError("H1: h is not the entries' fold at the rep's points")
+    pre, pre_msgs = [], []
+    for j in range(PRE_ROUNDS):
+        c0 = _xor(mul(L[i], V[i]) for i in range(0, len(V), 2))
+        g1 = _xor(mul(L[i], V[i]) for i in range(1, len(V), 2))
+        c2 = _xor(mul(L[i] ^ L[i + 1], V[i] ^ V[i + 1]) for i in range(0, len(V), 2))
+        if claim != c0 ^ g1:
+            raise AssertionError(f"H2 round {j}: the sum is not the claim")
+        (r,) = draw([c0, c2], 1)
+        claim = c0 ^ mul(claim, r) ^ mul(c2, r ^ mul(r, r))
+        L = [x ^ mul(r, x ^ y) for x, y in zip(L[0::2], L[1::2])]
+        V = [x ^ mul(r, x ^ y) for x, y in zip(V[0::2], V[1::2])]
+        pre.append(r)
+        pre_msgs.append((c0, c2))
+    (v2,) = V
+    if claim != mul(L[0], v2):
+        raise AssertionError("H2: the claim is not ŵ(ζ_r) v2")
+    draw([v2], 0)
+    ax = [1 ^ x for x in pre + list(x_rest[:k])]
+    ay = [1 ^ y for y in list(zeta_c) + list(y_rest[:k])]
+    last, sc, rk, claim = _entry_rounds([_planes(sh, e) for e in ents], alpha, ax, ay, W, v2, draw, workers)
+    u = list(last) + [0] * (sh.PP - sh.P)
+    phi = mul(alpha, u[2 * E]) ^ u[2 * E + 1]
+    for j in range(E):
+        phi = mul(mul(phi, ax[j] ^ u[j]), ay[j] ^ u[E + j])
+    Ut, rs = list(U), []
+    for j in range(sh.S_LOG):
+        a0, a1 = _xor(Ut[0::2]), _xor(Ut[1::2])
+        if claim != mul(phi, a0 ^ a1):
+            raise AssertionError(f"H3 slot round {j}: the sum is not the claim")
+        msg = [mul(phi, a0)] + [0] * sh.d
+        (r,) = draw(msg, 1)
+        claim = mul(phi, a0 ^ mul(r, a0 ^ a1))
+        Ut = [x ^ mul(r, x ^ y) for x, y in zip(Ut[0::2], Ut[1::2])]
+        sc.append(msg)
+        rs.append(r)
+    if claim != mul(Ut[0], phi):
+        raise AssertionError("H3: the claim is not Ũ(r_s) Φ(u)")
+    zeta_p = tuple(draw(u, sh.P_LOG))
+    coins = Coins(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
+    return coins, {"h": list(h), "pre": pre_msgs, "v2": v2, "sc": sc, "u": u, "claim": _dot(eq_table(zeta_p), u)}

@@ -146,7 +146,8 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     # H4: the plane batch, the types' values at (ζ_p, r_k), and the registered claim at ρ_t
     r_k = rounds[:sh.NU]
     zeta_p = [g.getrandbits(128) for _ in range(sh.P_LOG)]
-    vt = [_mle([_mle(P[p], r_k) for p in range(sh.PP)], zeta_p) for P in tables]
+    eqk, eqp = eq_table(r_k), eq_table(zeta_p)
+    vt = [RS._dot(eqp, [_xor(e for e, bit in zip(eqk, P[p]) if bit) for p in range(sh.PP)]) for P in tables]
     rho = [g.getrandbits(128) for _ in range(sh.T_LOG)]
     coins = RS.Coins(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
                      tuple(rho), tuple(U))
@@ -428,3 +429,103 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     assert line["registered"] == {nm: {"value": e["value"], "root": e["root"]} for nm, e in reads.items()}
     p = _lean_statement(tmp_path / "forged")
     assert p.returncode == 1 and "sc0" in p.stdout, p.stdout + p.stderr
+
+
+# --- the prover at T = 1 -----------------------------------------------------------------------------------------------------
+
+TOY = RS.Shape(10, 7, 2, 0)
+
+
+class _Replay:
+    """`_sumcheck`'s generator, answering the coins a run drew."""
+
+    def __init__(self, coins):
+        self.coins = iter(coins)
+
+    def getrandbits(self, _n):
+        return next(self.coins)
+
+
+def _toy(seed: int, sh: RS.Shape = TOY, pos0: int = 2, count: int = 3):
+    """A hidden circuit of 100 rows (one cell in both A and B, one held twice in A), its range of ``count`` slots at
+    ``pos0`` in a block of 2^(ELL + 3) rows, the rep's fold points drawn, and h as the relay folds it
+    (`rec_session.hidden_fold`): ``(entries, points, U, h)``."""
+    from verity_flock.rec_session import hidden_fold
+
+    g, E = random.Random(seed), sh.ELL
+    a = [[g.randrange(1 << E) for _ in range(g.randrange(4))] for _ in range(100)]
+    b = [[g.randrange(1 << E) for _ in range(g.randrange(4))] for _ in range(100)]
+    a[0], b[0], a[1] = [5, 9], [5], [7, 7, 3]
+    rng = {"type": "unit", "net": "unit", "slot_log": E, "pos0": pos0, "count": count}
+    alpha, z = g.getrandbits(128), g.getrandbits(128)
+    rho, ts = ([g.getrandbits(128) for _ in range(E - 3)] for _ in range(2))
+    h = hidden_fold({"unit": {"unit_log": E, "a": a, "b": b}}, [rng], alpha, skip_weights(z), rho, ts)
+    pts = {"alpha": alpha, "z": z, "x_rest": rho, "y_rest": ts[::-1]}
+    return RS.entries(sh, a, b), pts, RS.layout_factors(sh, rho, ts[::-1], rng), h
+
+
+def _draws(seed: int):
+    g, drawn = random.Random(seed), []
+
+    def draw(elems, n):
+        drawn.append((list(elems), n))
+        return [g.getrandbits(128) for _ in range(n)]
+
+    return draw, drawn
+
+
+def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
+    """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
+    rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG and u's P_LOG; the registered claim is
+    R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
+    B is one entry, the one held twice in A none."""
+    sh = TOY
+    ents, pts, U, h = _toy(0)
+    assert (0, 5, 1, 1) in ents and (0, 9, 1, 0) in ents and (1, 3, 1, 0) in ents and not any(e[:2] == (1, 7) for e in ents)
+    draw, drawn = _draws(1)
+    coins, msgs = RS.prove(sh, ents, pts, U, h, draw)
+    assert RS.sparse_ref(sh, RS.rows(sh, msgs, RS.verifier_row(sh, coins))) == [0] * RS.out_words(sh)
+    shape = [(len(e), n) for e, n in drawn]
+    assert shape == [(0, 6)] + [(2, 1)] * 6 + [(1, 0)] + [(d, 1) for d in sh.degrees] + [(sh.PP, sh.P_LOG)]
+    point = list(coins.rounds[:sh.NU]) + list(coins.zeta_p)
+    assert RS.table_value(RS.table(sh, ents, pad_to=0), point) == msgs["claim"]
+    c = RS.registered_claim(sh, coins, 0, pad_to=16)
+    assert c.pad == 2 and RS.table_value(RS.table(sh, ents, pad_to=16), point + [0, 0]) == msgs["claim"]
+    assert RS.table_value(RS.table(sh, ents, pad_to=0), point[:-1] + [point[-1] ^ 1]) != msgs["claim"]
+
+
+def test_the_provers_h3_rounds_are_the_generic_provers():
+    """H3's messages are `_sumcheck`'s on the same coins, over Q (each slot the template's planes, the entry bits low) and the
+    slots' Ũ; with 4 workers the messages are the same."""
+    sh, n = TOY, 1 << TOY.NU
+    ents, pts, U, h = _toy(2)
+    draw, _ = _draws(3)
+    coins, msgs = RS.prove(sh, ents, pts, U, h, draw)
+    E = sh.ELL
+    planes = [list(RS._planes(sh, e)) + [0] * (sh.PP - sh.P) for e in ents]
+    Q = [[planes[k][p] for _ in range(sh.S) for k in range(n)] for p in range(sh.PP)]
+    x_lo, y_lo = coins.x_lo(sh), coins.y_lo(sh)
+
+    def factors(t):
+        q = t[:-1]
+        return ([t[-1], mul(pts["alpha"], q[2 * E]) ^ q[2 * E + 1]] + [x_lo[j] ^ 1 ^ q[j] for j in range(E)]
+                + [y_lo[j] ^ 1 ^ q[E + j] for j in range(E)])
+
+    sc, rounds, _, _ = _sumcheck(_Replay(coins.rounds), Q + [[U[j // n] for j in range(n * sh.S)]], factors, msgs["v2"],
+                                 sh.degrees)
+    assert sc == msgs["sc"] and tuple(rounds) == coins.rounds
+    replay = iter([c for c in [coins.zeta_c, *[(r,) for r in coins.pre], (), *[(r,) for r in coins.rounds], coins.zeta_p]])
+    coins4, msgs4 = RS.prove(sh, ents, pts, U, h, lambda _e, _n: list(next(replay)), workers=4)
+    assert msgs4 == msgs and coins4 == coins
+
+
+def test_the_prover_refuses_entries_that_are_not_hs_circuit():
+    """Entries with one cell's B side flipped are not the circuit h was folded from: H1's sum fails before any message."""
+    ents, pts, U, h = _toy(4)
+    i = next(i for i, e in enumerate(ents) if e[2])
+    bad = list(ents)
+    bad[i] = bad[i][:3] + (bad[i][3] ^ 1,)
+    draw, drawn = _draws(5)
+    with pytest.raises(AssertionError, match="H1"):
+        RS.prove(TOY, bad, pts, U, h, draw)
+    assert drawn == [([], 6)]

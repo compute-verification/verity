@@ -268,8 +268,8 @@ def reps(public: dict) -> list[int]:
 def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> list[Query]:
     """Every opening of every rep, in rep, level and query order, with its public part from ``public``, the top's node it
     climbs to from ``private`` (`tops`) and the rest of its witness from the proof. Refused by name unless every declared rep
-    (`reps`) has its stream and its proof, and nothing else does."""
-    want = reps(public)
+    (`reps`; the stacked table R, `rec_live.STACKED`, its one) has its stream and its proof, and nothing else does."""
+    want = [0] if table == RL.STACKED else reps(public)
     if not want or sorted(proofs) != want or any(f"{table}/rep{r}" not in public["streams"] for r in want):
         raise ValueError(f"FIREWALL-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
                          f"{sorted(public['streams'])} and proofs of reps {sorted(proofs)}")
@@ -335,7 +335,11 @@ def main(argv=None) -> int:
     ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
     a = ap.parse_args(argv)
     try:
-        res = check(*load(Path(a.inner)))
+        public, private, proofs = load(Path(a.inner))
+        res = check(public, private, proofs)
+        if RL.STACKED in public["link"]["roots"]:
+            res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
+            res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:
         if not str(e).startswith("FIREWALL-REFUSED"):
             raise
