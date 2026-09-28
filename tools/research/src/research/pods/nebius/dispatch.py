@@ -7,6 +7,9 @@
     dispatch.py pack-stops | pack-lift MODEL --by circuits --why TEXT    models stopped from packing; lift one (circuits only)
 
 Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/python`) and research's kubeconfig.
+Every invocation reads its settings (the VY_* and PACK_* below) from `$VY_DISPATCH_ROOT/dispatch.env` (`KEY=VALUE` lines, `#`
+comments), under any the caller's environment sets: a one-off `submit`, such as n2_build.sh's and n2_commit.sh's over ssh from
+node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults.
 
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
@@ -43,8 +46,9 @@ VY_LEASE_MAX_MIN, 120), which sets CUDA_VISIBLE_DEVICES. `"lease": "self"` sets 
 the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can release the GPU for a CPU phase and lease one again.
 At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
 A leased pod's GPUs come from its queue's pool: VY_LEASE_HOSTDIRS (`QUEUE=DIR,...`, one n1_lease.py per pool) names the host
-directory mounted at `/run/gpu-lease`, e.g. `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders in
-their own quota; any other queue mounts /run/gpu-lease, the `provers` pool.
+directory mounted at `/run/gpu-lease`, by default `deployments-gpu=/run/gpu-lease-circuits` so circuits' Commits lease from holders
+in their own quota; any other queue mounts /run/gpu-lease, the `provers` pool. The default holds for every caller (the loop, a
+`dispatch.py submit` over ssh, a script that imports this module); set the variable empty to map no queue.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall), and an `exists` line when the
 task's Job was already created, as this task and try, by another path; `done.jsonl` one per ended item.
@@ -123,6 +127,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
+
+
+def load_settings(path: Path) -> None:
+    """`KEY=VALUE` lines of `path` into os.environ, each only where the caller's environment doesn't set it; no file, no change."""
+    try:
+        lines = path.read_text().splitlines()
+    except FileNotFoundError:
+        return
+    for line in lines:
+        k, sep, v = line.strip().partition("=")
+        if sep and k and not k.startswith("#"):
+            os.environ.setdefault(k.strip(), v.strip())
+
+
+load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
@@ -137,7 +156,8 @@ DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
 LEASE_DIR = "/run/gpu-lease"
-LEASE_HOSTDIRS = dict(kv.split("=", 1) for kv in os.environ.get("VY_LEASE_HOSTDIRS", "").split(",") if "=" in kv)
+LEASE_HOSTDIRS = dict(kv.split("=", 1) for kv in os.environ.get("VY_LEASE_HOSTDIRS", "deployments-gpu=/run/gpu-lease-circuits")
+                      .split(",") if "=" in kv)
 LEASE_BIN = os.environ.get("VY_GPU_LEASE", "/workspace/verity-guest/bin/gpu-lease")
 PACK_COMMITS = os.environ.get("PACK_COMMITS", "0") == "1"
 PACK_ADOPT = os.environ.get("PACK_ADOPT", "1") == "1"
