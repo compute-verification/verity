@@ -56,6 +56,20 @@ SALT = bytes(range(24))
 BATCHES = ("1", "8", "32")
 
 
+def cpus() -> int:
+    """The CPUs this process may use: its affinity, capped by a cgroup CPU quota (v2 `cpu.max`, v1 `cpu.cfs_quota_us`)."""
+    n = len(os.sched_getaffinity(0))
+    for path, parse in (("/sys/fs/cgroup/cpu.max", lambda t: t.split()),
+                        ("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", lambda t: [t.strip(), Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text()])):
+        try:
+            quota, period = parse(Path(path).read_text())
+        except (OSError, ValueError):
+            continue
+        if quota not in ("max", "-1"):
+            n = min(n, max(1, int(quota) // int(period)))
+    return n
+
+
 def weight_set(ws_id: str) -> dict[str, Any]:
     doc = json.loads(WEIGHT_SETS.read_text())
     for ws in doc["weight_sets"]:
@@ -243,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20)
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the verifier's round-trip allowance")
-    ap.add_argument("--workers", type=int, default=os.cpu_count() or 1, help="reference: CPU processes")
+    ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference: decode only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
