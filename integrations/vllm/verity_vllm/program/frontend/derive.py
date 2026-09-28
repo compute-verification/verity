@@ -37,14 +37,13 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ir.codec import _spec_id, canonical_json, program_digest
+from verity.ir.codec import _spec_id, canonical_json, encode_program, program_digest
 from verity.ir.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 from verity.ir.defs import bind as ir_bind
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll
 from verity.ir.refs import runs as _refs_runs
-from verity.ir.liveness import DeadGateReport
-from verity.ir.liveness import dead_gates as _dead_gates
+from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
@@ -491,6 +490,7 @@ class DeriveReport:
     family: dict | None = None
     flat_definition: Any = None  # the flat leaf-level SpecializedDefinition (rules' direct output)
     correspondence_digest: str | None = None  # sha256 of the runtime correspondence document (`annotations["correspondence"]`), digested apart from the Program
+    descriptor: dict | None = None  # the flat Program's descriptor its digest was taken over (`program` is the flat one), for the writer
 
     @property
     def result(self) -> Program | Unsupported:
@@ -555,7 +555,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         corr_digest = correspondence_digest(corr_doc)
         flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc})
         check_identity(flat_program, check_registry=check_registry)
-        flat_digest = program_digest(flat_program)
+        flat_digest = program_digest(flat_desc := encode_program(flat_program))
         program, family_report = flat_program, None
         for fam in ruleset.families:
             if fam.modes is not None and mode not in fam.modes:
@@ -583,7 +583,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                           "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
                                              "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
         return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
-                            prov.get("family"), flat_sd, corr_digest if corr_applies else None)
+                            prov.get("family"), flat_sd, corr_digest if corr_applies else None, flat_desc if corr_applies else None)
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
         _record_partial(prov, holder)
