@@ -37,8 +37,6 @@ KNOWN_FAILURES = {
         "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
     "tests/check/test_compiled_autotune.py::test_unknown_kernel_is_not_shown_and_does_not_raise":
         "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
-    "tests/observe/test_patterns_synthetic.py::test_gumbel_two_stage_sampler_is_one_token_select":
-        "the observer refuses the sampler's bf16 [1, V] logits view as not a row-contiguous float32 [R, V] view",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
