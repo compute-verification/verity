@@ -382,8 +382,14 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
                 s0 = bad[0]["step"]
                 out["perm"][s0] = perm_match(A, P, s0, ops.dag_hashes(A), ops.dag_hashes(P))
         local_addr = [list(range(len(loc))) for loc in P.steps]
-    if P.xreq:
-        fails.append(("G3", f"{rid}: cross-request reads"))
+    sv = cmp.get("splits_values")
+    why = ["cross-request reads"] if P.xreq else []
+    if sv and not sv["equal"]:   # a single-request component's own Const32[S]: neither criterion above sees its value
+        ent["splits_values"] = sv
+        why.append(f"the component's constant S differs from the fold's at {len(sv['mismatches'])} event(s) "
+                   f"(first [event, component S, fold S] = {sv['mismatches'][0]})")
+    if why:
+        fails.append(("G3", f"{rid}: " + "; ".join(why)))
     out.update({"P_steps": P.steps, "local_addr": local_addr, "A_steps_len": [len(s) for s in A.steps],
                 "exec_pop": sum(len(A.steps[s]) for s in range(min(n_exec, len(A.steps))))})
     return out

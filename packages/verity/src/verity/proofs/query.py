@@ -1,6 +1,6 @@
 """Queries over a Program and the values they require (vLLM integration v2, Draft 3.1 §12; Phase 2).
 
-A *query* ``Q`` partitions the Calls of a Program ``P`` into *verification units*; the values a verifier must be able to
+A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof units*; the values a verifier must be able to
 open are the values that cross a unit boundary, plus what the protocol prescribes beside them::
 
     Q(P)                      -> a sequence of VerificationUnit (a stable id + a set of Call ids)
@@ -90,7 +90,7 @@ class VerificationUnit:
 
     def __post_init__(self) -> None:
         if not self.calls:
-            raise ValueError(f"unit {self.id!r}: a verification unit has at least one Call")
+            raise ValueError(f"unit {self.id!r}: a proof unit has at least one Call")
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.

@@ -132,7 +132,7 @@ def frozen_relation(target: str, n: int, root=None):
     Past the frozen 4,096 the ref is the synthetic stream (generator, seed, n); a fixture with no stream (A100) refuses."""
     relchain, RELATIONS, FROZEN = _runner()
     if target not in FROZEN:
-        raise SystemExit(f"{target}: no frozen instance set (tables.FROZEN_INSTANCES)")
+        raise SystemExit(f"{target}: no frozen input set (tables.FROZEN_INSTANCES)")
     hits, whys = [], set()
     for r in RELATIONS.values():
         if r.target.name != target:
