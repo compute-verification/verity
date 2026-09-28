@@ -91,7 +91,7 @@ class Scheme:
         for i in range(b):
             if list(geometry.parents(i)) != list(range(max(0, i - window), i)):
                 raise NotImplementedError(f"{name}: block {i}'s parents are not the band of in-degree {window}")
-        return cls(name, importlib.import_module(ref.encode.__module__), geometry, window)
+        return cls(name, importlib.import_module(ref.encode_segment.__module__), geometry, window)
 
     def calls(self, i: int) -> int:
         return len(self.geometry.parents(i)) + 1
