@@ -165,10 +165,10 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "select_bf16": lambda: P.SelectBf16,
     },
     notes={
-        "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v1}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
+        "gemm": "Gemm_v2{K,N,DOT=AmpereBF16TcDot16_v2}: batch(GemmCoordinate_v2) — Serve_v2/v3's linear",
         "bias_add": "BiasAdd_v1{N}", "rmsnorm": "norm_bundle(C)['L0'] = RMSNormTriton_v1{N,EPS}",
         "rmsnorm_fused": "norm_bundle(C)['FUSED'] = RMSNormFusedCuda (b1's default fused norm){N,EPS}",
-        "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v1,INV=Fa2InvSum_v1} (FA2)",
+        "rope": "RoPE_v1{NHEADS,D}", "attention": "Attention_v2{T,NH,KVH,D,BN=64,DOT=AmpereBF16TcDot16_v2,INV=Fa2InvSum_v1} (FA2)",
         "silu_mul": "SiluMul_v1{I}", "embedding": "Embedding_v1{V,H}", "token_select": "TokenSelect_v1{V}", "residual_add": "ResidualAdd_v1{N}",
         "const": "Const<W>[bits]: a constant gate (b1.const)", "i32_eq": "I32Eq_v1", "bit_not": "BitNot_v1 (pad_prims)",
         "bit_and": "BitAnd_v1 (pad_prims; absorbing)", "select_i32": "SelectI32_v1", "select_bf16": "SelectBf16_v1",

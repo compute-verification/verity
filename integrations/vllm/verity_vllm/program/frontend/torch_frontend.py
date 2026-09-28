@@ -763,7 +763,7 @@ def scan(step: _Callable, init, xs: Sequence[Any] = (), shared: Sequence[Any] = 
 
 
 class Ops:
-    """`ops.Bf16Add`, `ops["AmpereBF16TcDot16_v1"]`, `ops.const(32, 0)`, `ops.Gemm(K=.., N=..)`; role names
+    """`ops.Bf16Add`, `ops["AmpereBF16TcDot16_v2"]`, `ops.const(32, 0)`, `ops.Gemm(K=.., N=..)`; role names
     (`ops.dot`, `ops.rmsnorm`) come from a configuration: `Ops(dot=ops.AmpereBF16TcDot16, ...)`."""
 
     def __init__(self, registry=REGISTRY, **roles: _Callable) -> None:
@@ -771,7 +771,7 @@ class Ops:
 
     @property
     def id(self) -> str:
-        """`Ops{dot=AmpereBF16TcDot16_v1,...}`: the bundle is identified by its role bindings only."""
+        """`Ops{dot=AmpereBF16TcDot16_v2,...}`: the bundle is identified by its role bindings only."""
         return "Ops{" + ",".join(f"{k}={_fmt(v)}" for k, v in sorted(self._roles.items())) + "}"
 
     @property

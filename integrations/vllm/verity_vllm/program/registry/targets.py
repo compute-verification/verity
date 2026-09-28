@@ -46,7 +46,7 @@ DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16Wgm
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
-    "ampere": {"dot_id": "AmpereBF16TcDot16_v1",
+    "ampere": {"dot_id": "AmpereBF16TcDot16_v2",
                "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (Triton tl.dot on sm_80/sm_89; FA2 CUTLASS)",
                "pipeline": "veritor.core.silicon_total.AMPERE_BF16_DOT16_TOTAL (groups 8+8, width 25, floor -132; A100 + RTX 4090 conform)",
                "flash_attn_versions": (2,),
