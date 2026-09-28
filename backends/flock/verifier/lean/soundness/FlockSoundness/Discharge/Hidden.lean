@@ -36,5 +36,9 @@ import FlockSoundness.Discharge.Hidden.Wide.Theorems
 * `Wide.RowBc`: a row's `b ‖ c` under its own prefix for any rows (`row_bc_tgt`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
-  (`outputs_committed_wide'`, `outputs_binding_wide_of`).
+  (`outputs_committed_wide'`, `outputs_binding_wide_of`);
+* `Wide.Upv`: a unit per VU from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check` refuses
+  `units_per_vu = 0`;
+* `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
+  (`…_checked`).
 -/
