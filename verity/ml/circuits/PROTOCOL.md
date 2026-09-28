@@ -202,6 +202,7 @@ have):
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
+- a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
 - an input node (§5.2) in a definition other than the root;
 - a node form other than the four, or keys other than its form's;
@@ -245,8 +246,9 @@ parameters are registered.
 
 A node is an Input node (a run input) exactly when its callee's id matches `^Input([1-9][0-9]*)_v1$` (`program.INPUT_ID`),
 and a registered-input node exactly when it matches `^RegisteredInput([1-9][0-9]*)_v1$` (`program.REGISTERED_ID`); an *input
-node* is either (`program.is_input`, `program.input_id`). w is in canonical decimal, so `Input016_v1`, `Input0_v1`,
-`Input16_v2` and `Input16` are not Input ids, nor are `RegisteredInput016_v1` and `RegisteredInput16_v2` registered-input ids.
+node* is either (`program.is_input`, `program.input_id`). The whole id matches (`re.fullmatch`), and w is in canonical decimal,
+so `Input016_v1`, `Input0_v1`, `Input16_v2`, `Input16` and `Input16_v1\n` are not Input ids, nor are `RegisteredInput016_v1`,
+`RegisteredInput16_v2` and `RegisteredInput16_v1\n` registered-input ids.
 Each input primitive of width w has no parameters and returns `Value<w>`: a gate whose value is prescribed (asserted equal to
 the claimed input), not computed, and never held by the program. The decoder materializes it from the id, ahead of any
 registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
@@ -404,6 +406,16 @@ materialises from its id like the constant family; `And2_v1` and `Xor2_v1` are t
 `WIDE_FAN_IN` inputs is a wide gate under `Q_word` v1 (§8). The constant bits are the 1-bit members of the constant family (`Const<w>[0x<hex>]_v1`): primitives without
 parameters, so structure under `Q_word` v1 (§8), computed in no unit.
 
+**Ids of the families.** A family member has one id, which the decoder materialises (§4.6) and nothing else does: the whole id
+matches its family's pattern, and the member it denotes carries exactly that id. `And<n>_v1` and `Xor<n>_v1` match
+`^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`. The constant of width w ≥ 1 and value v, 0 ≤ v < 2^w, is
+`Const<w>[0x<h>]_v1` (`verity.ml.circuits.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
+v zero-padded to ⌊w/4⌋ digits, at least one (Python's `f"{v:0{w // 4}x}"`): `Const32[0x3f800000]_v1`, `Const16[0x3f80]_v1`,
+`Const5[0x5]_v1`, `Const5[0x1f]_v1`, `Const1[0x0]_v1`. So `And02_v1`, `And1_v1`, `And2_v1\n`, `Const32[0x0]_v1`,
+`Const32[0x03f800000]_v1`, `Const32[0x3F800000]_v1`, `Const5[0x05]_v1`, `Const032[0x3f800000]_v1`, `Const0[0x0]_v1` and
+`Const1[0x00]_v1` denote nothing (`KeyError`), and `Const1[0x2]_v1` and `Const8[0x100]_v1`, whose values are 2^w or more,
+are refused (`ValueError`).
+
 **Elements.** An *element* of a Boolean type is an innermost `Array<w, Value<1>>`, whose leaf j is bit j of a w-bit word (least
 significant first), or a `Value<1>` that is not inside one. `elements(T)` lists the element widths in leaf order;
 `word_type(T)` replaces every element by `Value<w>`. The *word view* of a Boolean Definition is its signature under
@@ -411,7 +423,8 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 the word view does not read it.
 
 Vectors (`verity/ml/circuits/tests/boolean_vectors.json`, written by `python verity/ml/circuits/tests/test_boolean.py --write`): `gates` (id,
-kind, parameters, return type, truth table), `constants`, `word_view` (type, element widths, word type), and `program`: a 2-bit
+kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
+its width and value, or null), `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
 descriptor, digest, gate table and truth table on words.
 
