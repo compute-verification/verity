@@ -148,12 +148,12 @@ link term per audit.
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` **to write**; required for sampled audits (§4) |
-| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step proved; for flat types, the placement from the block matrices and L1 proved; the placement from `setupH` and the type DAG remain |
+| The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the derived rows' placement `Compose.lean`, the placement `ExecSetup.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for flat types, the placement from the block matrices and L1 proved; the placement of a template's rows from `setupH` and the type DAG remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
 | Sampled audits: the integrity profile over any partition and draw law, two-stage and its relations, minimax, tightness and insecurity (`FlockSoundness/Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
-| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit` | proved, given the placement |
+| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | L1: each template's rows compute its gates (`ASSUMPTIONS.md`) | (meaning) | named; proved for RoPE | RoPE: `Rope.rope_sound`, a verified lowering; the rest: the IR comparison tests |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
@@ -172,9 +172,24 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
       of `Rows`.
     - Its computed rows lie between the input region and the constant, its last column.
-  - The parser checks the input rows and the constant. `test_pinned_rows_read_earlier_columns`
-    (`backends/flock/tests/test_ir_lowering.py`) checks the rest on the pinned RoPE and SiLU files: every computed row
-    reads only earlier columns or the constant, and never a padding column.
+  - The parser checks the input rows, the constant and, since PR #147, the row order (`Net.checkOrder`): every computed
+    row reads only earlier columns or the constant, and never a padding column. So `Rows.topo` for a parsed net is
+    proved, not assumed (`ExecRows.lean`):
+    - `parse_rowOrder`: `Net.parse` accepted means the check passed on the very rows stored as `A` and `B`;
+    - `ofRows_row`: the stored sparse rows read back as those rows (columns below `2^32`);
+    - `Rows.ofNet`: the audit's `Rows` for a parsed net, whose computed rows are `net.a.row` and `net.b.row`.
+
+    `test_pinned_rows_read_earlier_columns` stays as a check on the pinned files.
+  - **An instance's rows** (`Rows.stack`): a template instance is its VU's `upv` unit slots, so its `Rows` are `upv`
+    copies of the net's, stacked in `Rows`' order. Each copy's constant is a computed row reading the shared constant,
+    and precedes the copy's rows, which read it as their net rows read their slot's constant.
+  - **Placing an instance** (`placement_stack`): `Placement` for the stacked rows at `stackPlace` (copy `u` at slot
+    base `base u`, the shared constant at the pin) follows from three facts about the level-0 matrices: at each copy's
+    computed rows they are the net's rows shifted to the slot, and each copy's constant row and the pin's own row read
+    the pin. Those facts are what the verifier's matrices (L3-A's `placedA`/`placedB`) and Δ give, next.
+  - **Δ's rows** (`delta_rows`, `ExecDelta.lean`): every row `HmRow.delta` writes is a slot constant other than the pin,
+    or an input-port bit of a net slot (a row's first `cv`, an hm96 `pad`, a unit's leaf or leaf-cut bit, a wire's
+    destination). That none is a unit's computed row follows from the layout checks (`delta_split`, `deltaIn_inBit`).
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the transcript decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
@@ -184,8 +199,23 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     The decoded transcript then carries `true` on the constant (`UnitPlace.decode_one`).
   - `UnitPlace.correct` gives the audit's lowering hypothesis with one decoder per drawn unit. Two drawn units that
     share a wire hold it in different columns. The link, not the lowering, makes them agree.
-- **The placement is the statement builder's job.** `Placement` states it. Proving it for the executable's statement
-  (the slots with Δ XORed in, spec §16.1) is part of the level-3 refinement (`assumptions/trusted-components.md`).
+- **The placement, from the executable's accept step** (`placement_of_setupH`, `ExecSetup.lean`). When `Stmt.setupH`
+  accepts, VU `g`'s stacked unit slots are placed at `ur.slot (g·upv + u)`, the shared constant at the pin, in the model
+  statement of the matrices the verifier folds (flock-verifier's `placedA`/`placedB`, PR #156; `Layout.model`).
+  `unitPlace_of_setupH` is the `UnitPlace` that `loweringSoundB_of_place` takes, given the unit's instance in the audit
+  circuit (`IsRowsUnit`, the circuit side).
+  - `Layout.placement` (`ExecPlacement.lean`) proves `Placement` from the layout facts `Layout` names. At a unit copy's
+    computed rows only its slot has entries (pairwise-apart spans, `rangesEntry_of_covers`) and Δ has none. At its
+    constant Δ's `(k, k)` cancels the row's own entry and `(k, pin)` reads the pin. The pin's row reads itself.
+  - `setupH_layout` derives `Layout`:
+    - `HmRow.parse` gives text nets and lookup slots only (`parse_facts`);
+    - `HmRow.check` gives the layout (`check_facts`);
+    - `HmRow.pin` gives the pin's range;
+    - `HmRow.delta`'s first loop writes exactly the slot constants' pairs, and every later pair is an input bit of a
+      net slot (`delta_split`, `deltaIn_inBit`).
+  - It needs two executable checks (PR #147): `Net.parse` refuses a net whose input rows reach its constant, and
+    `HmRow.pin` refuses a pin range with no slot. Otherwise an input port can cover a slot's constant column and Δ's
+    copies rewrite that row, or the pin's row is empty or lands inside another range.
 - **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`). For RoPE it is proved
   (`Rope.rope_sound`, `assumptions/l1-template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
@@ -199,7 +229,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - Over the type DAG (`ComposeDag.lean`), the unit's rows as the block holds them (`Compose.ofBlock`: `deriveChecked`'s
     order, Δ's constant copies copying `one`) are in that order (`ofBlock_ordered`, from `Types.Dag.order_sound`), and
     satisfied composed rows carry the unit type's outputs (`Rows.compose_eval_unit`, from `Types.Dag.unit_sound`).
-  - Still to prove: the matrices' reads from the executable's `setupH` (1e), and reads (S3c-2).
+  - Still to prove: a template's matrices' reads from the executable's `setupH` (1e).
 
 ### 1.6 Proved from the libraries, not assumed
 
@@ -261,8 +291,8 @@ term below 2^-170.
     extracted (§1.3).
 - **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
-  step, for every template, is proved here (§1.5). The placement for the executable's statement and L1 (proved for
-  RoPE) remain.
+  step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
+  (`placement_of_setupH`). L1 (proved for RoPE) remains.
 
 ## 3. Zero knowledge (planned; not yet proved)
 

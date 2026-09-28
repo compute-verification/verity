@@ -73,6 +73,14 @@ import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
 import FlockSoundness.Compose
 import FlockSoundness.ComposeDag
+import FlockSoundness.ExecRows
+import FlockSoundness.ExecDelta
+import FlockSoundness.ExecPlacement
+import FlockSoundness.ExecParse
+import FlockSoundness.ExecCircuit
+import FlockSoundness.ExecCheck
+import FlockSoundness.ExecLookup
+import FlockSoundness.ExecSetup
 import FlockSoundness.Game.Prob
 import FlockSoundness.Audit.Law
 import FlockSoundness.Audit.Circuit
