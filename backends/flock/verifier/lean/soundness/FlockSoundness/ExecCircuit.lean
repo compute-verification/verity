@@ -81,32 +81,6 @@ theorem array_mapM_ok {α β : Type} {f : α → Except String β} {xs : Array �
 theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h : xs.findIdx? p = some i) : i < xs.size :=
   (Array.findIdx?_eq_some_iff_findIdx_eq.1 h).1
 
-/-- Lift the top-level `have`s of `h` (the `do` block's join points and values) into local definitions. -/
-syntax "lets" (ppSpace colGt ident)+ : tactic
-macro_rules
-  | `(tactic| lets $a) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident at $(Lean.mkIdent `h):ident)
-  | `(tactic| lets $a $b) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident $b:ident at $(Lean.mkIdent `h):ident)
-  | `(tactic| lets $a $b $c) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident $b:ident $c:ident at $(Lean.mkIdent `h):ident)
-  | `(tactic| lets $a $b $c $d) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident $b:ident $c:ident $d:ident at $(Lean.mkIdent `h):ident)
-  | `(tactic| lets $a $b $c $d $e) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident $b:ident $c:ident $d:ident $e:ident at $(Lean.mkIdent `h):ident)
-  | `(tactic| lets $a $b $c $d $e $f) =>
-    `(tactic| (try beta_reduce at $(Lean.mkIdent `h):ident); extract_lets (config := { underBinder := false, onlyGivenNames := true }) $a:ident $b:ident $c:ident $d:ident $e:ident $f:ident at $(Lean.mkIdent `h):ident)
-
-/-- Peel one bind off `h : (x >>= f) = .ok v`: `x`'s value and `h : f x = .ok v`. -/
-syntax "bindok" (ppSpace colGt rcasesPat) (ppSpace colGt rcasesPat) : tactic
-macro_rules
-  | `(tactic| bindok $x $hx) =>
-    `(tactic| (have hh := except_bind_ok $(Lean.mkIdent `h); clear $(Lean.mkIdent `h); obtain ⟨$x, $hx, $(Lean.mkIdent `h):ident⟩ := hh))
-
-/-- Unfold the join point `j` in `h`, keeping its body's own join points. -/
-macro "unjp " j:ident : tactic =>
-  `(tactic| simp (config := { zeta := false }) only [$j:ident] at $(Lean.mkIdent `h):ident)
-
 /-! ## What `HmRow.parse` accepted -/
 
 /-- **What `HmRow.parse` accepted.** -/
@@ -124,109 +98,109 @@ set_option maxHeartbeats 4000000 in
 theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c := by
   unfold HmRow.parse at h
-  lets sha jp0
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
   split at h
   swap
   · obtain ⟨_, hte, -⟩ := except_bind_ok h; cases hte
-  bindok text hte
+  (have hh := except_bind_ok h; clear h; obtain ⟨text, hte, h⟩ := hh)
   cases hte
-  unjp jp0
-  lets lines0 lines head jp1
+  simp (config := { zeta := false }) only [jp0] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) lines0 lines head jp1 at h)
   replace h := ite_throw_ok h
-  unjp jp1
-  lets name metaLine jp2
+  simp (config := { zeta := false }) only [jp1] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) name metaLine jp2 at h)
   replace h := ite_throw_ok h
-  unjp jp2
-  lets jp3
+  simp (config := { zeta := false }) only [jp2] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp3 at h)
   split at h
   swap
   · obtain ⟨_, hte, -⟩ := except_bind_ok h; cases hte
-  bindok mj hte
+  (have hh := except_bind_ok h; clear h; obtain ⟨mj, hte, h⟩ := hh)
   cases hte
-  unjp jp3
-  bindok f1 hf1
-  bindok f2 hf2
-  lets jp4
+  simp (config := { zeta := false }) only [jp3] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨f1, hf1, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨f2, hf2, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h)
   replace h := ite_throw_ok h
-  unjp jp4
-  lets jp5 jp6
+  simp (config := { zeta := false }) only [jp4] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp5 jp6 at h)
   obtain ⟨classSha, h⟩ : ∃ classSha, jp5 classSha = .ok c := by
     split at h
     · replace h := ite_throw_ok h
-      unjp jp6
-      lets part rule jp7
+      simp (config := { zeta := false }) only [jp6] at h
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) part rule jp7 at h)
       replace h := ite_throw_ok h
-      unjp jp7
+      simp (config := { zeta := false }) only [jp7] at h
       obtain ⟨cs, -, h⟩ := except_bind_ok h
       exact ⟨cs, h⟩
     · obtain ⟨cs, -, h⟩ := except_bind_ok h
       exact ⟨cs, h⟩
-  unjp jp5
-  lets nets0 at0
-  bindok s1 hwhile
-  lets nets1
-  bindok u1 -
-  lets jpL
+  simp (config := { zeta := false }) only [jp5] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets0 at0 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨s1, hwhile, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets1 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨u1, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpL at h)
   obtain ⟨lks, h⟩ : ∃ lks, jpL lks = .ok c := by
     split at h <;> (obtain ⟨l, -, h⟩ := except_bind_ok h; exact ⟨l, h⟩)
-  unjp jpL
-  bindok s2 hlook
-  lets nets2
-  bindok _ -
-  bindok _ -
-  lets jpS
+  simp (config := { zeta := false }) only [jpL] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨s2, hlook, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets2 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpS at h)
   replace h := ite_throw_ok h
-  unjp jpS
-  bindok _ -
-  bindok ports -
-  bindok _ hpcheck
-  bindok listed -
-  lets jpR
+  simp (config := { zeta := false }) only [jpS] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨ports, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, hpcheck, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨listed, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpR at h)
   replace h := ite_throw_ok h
-  unjp jpR
-  bindok _ -
-  bindok _ -
-  lets jpK
+  simp (config := { zeta := false }) only [jpR] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h)
   replace h := ite_throw_ok h
-  unjp jpK
-  bindok g -
-  bindok upv -
+  simp (config := { zeta := false }) only [jpK] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨g, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨upv, -, h⟩ := hh)
   split at h
   swap
   · cases h
   rename_i unitNet hunit
-  lets netOf
-  bindok _ -
-  bindok ranges hranges
-  bindok leavesIn -
-  bindok _ -
-  bindok leavesOut -
-  bindok dummy -
-  bindok _ -
-  bindok dummyDigests -
-  bindok _ -
-  bindok dummyOutputs -
-  bindok _ -
-  bindok outPorts -
-  lets perVu0 jpP
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) netOf at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨ranges, hranges, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨leavesIn, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨leavesOut, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨dummy, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨dummyDigests, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨dummyOutputs, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨outPorts, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) perVu0 jpP at h)
   obtain ⟨pv, h⟩ : ∃ pv, jpP () pv = .ok c := by
     split at h
     · obtain ⟨p', -, h⟩ := except_bind_ok h
       exact ⟨_, h⟩
     · exact ⟨_, h⟩
-  unjp jpP
-  bindok shaNet hsha
-  bindok hmNet hhm
-  bindok outNet -
-  lets jpO
+  simp (config := { zeta := false }) only [jpP] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨shaNet, hsha, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨hmNet, hhm, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨outNet, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpO at h)
   obtain ⟨onp, h⟩ : ∃ x, jpO x = .ok c := by
     split at h <;> (obtain ⟨l, -, h⟩ := except_bind_ok h; exact ⟨l, h⟩)
-  unjp jpO
-  lets jpC
+  simp (config := { zeta := false }) only [jpO] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at h)
   obtain ⟨lc, h⟩ : ∃ x, jpC x = .ok c := by
     split at h <;> (obtain ⟨l, -, h⟩ := except_bind_ok h; exact ⟨l, h⟩)
-  unjp jpC
-  lets jpW
+  simp (config := { zeta := false }) only [jpC] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpW at h)
   obtain ⟨wires, h⟩ : ∃ x, jpW x = .ok c := by
     split at h
     · obtain ⟨_, -, h⟩ := except_bind_ok h
@@ -234,18 +208,18 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       exact ⟨l, h⟩
     · obtain ⟨l, -, h⟩ := except_bind_ok h
       exact ⟨l, h⟩
-  unjp jpW
-  lets derived rowNet jpD
+  simp (config := { zeta := false }) only [jpW] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) derived rowNet jpD at h)
   replace h := ite_throw_ok h
-  unjp jpD
-  bindok ls -
-  bindok leafId -
-  lets jpF
+  simp (config := { zeta := false }) only [jpD] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨ls, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨leafId, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpF at h)
   replace h := ite_throw_ok h
-  unjp jpF
-  bindok kLog -
-  lets c0
-  bindok w hcheck
+  simp (config := { zeta := false }) only [jpF] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨kLog, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) c0 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w, hcheck, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by
@@ -259,24 +233,24 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
     refine loop_inv (fun b : Array (String × Net) × ℕ => ∀ x ∈ b.1.toList, ∃ lines, Net.parse lines = .ok x.2)
       (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (by simp [nets0]) hwhile
     intro b hb s h
-    lets nets at_
+    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at_ at h)
     split at h
     · rename_i hlt
-      lets hh jp
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) hh jp at h)
       replace h := ite_throw_ok h
-      unjp jp
+      simp (config := { zeta := false }) only [jp] at h
       split at h
       · rename_i n hn
-        lets jp'
+        ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp' at h)
         obtain ⟨hnot, h⟩ := ite_throw_ok' h
-        unjp jp'
-        lets jp''
+        simp (config := { zeta := false }) only [jp'] at h
+        ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp'' at h)
         split at h
         · rename_i v hv
-          bindok net hnet
+          (have hh := except_bind_ok h; clear h; obtain ⟨net, hnet, h⟩ := hh)
           cases hnet
-          unjp jp''
-          lets nets' at'
+          simp (config := { zeta := false }) only [jp''] at h
+          ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at' at h)
           have hs := Except.ok.inj h
           subst hs
           refine Or.inr ⟨_, rfl, ?_, ?_⟩
@@ -286,9 +260,9 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
             · exact hb x hx
             · exact ⟨_, hv⟩
           · simp only [at', at_]; omega
-        · bindok net hnet
+        · (have hh := except_bind_ok h; clear h; obtain ⟨net, hnet, h⟩ := hh)
           cases hnet
-      · bindok w hw
+      · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
         cases hw
     · have hs := Except.ok.inj h
       subst hs
@@ -302,26 +276,26 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       _ ?_ nets1 s2 (fun x hx => Or.inl (htext x hx)) hlook
     intro a _ b hb s h
     obtain ⟨lname, spec⟩ := a
-    lets nets
+    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at h)
     split at h
-    · lets size
-      bindok _ -
-      bindok _ -
-      bindok _ -
-      lets jpA
+    · ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) size at h)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at h)
       replace h := ite_throw_ok h
-      unjp jpA
-      bindok n -
-      bindok lo -
-      lets jpB
+      simp (config := { zeta := false }) only [jpA] at h
+      (have hh := except_bind_ok h; clear h; obtain ⟨n, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨lo, -, h⟩ := hh)
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at h)
       replace h := ite_throw_ok h
-      unjp jpB
+      simp (config := { zeta := false }) only [jpB] at h
       split at h
-      · lets jpC
+      · ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at h)
         replace h := ite_throw_ok h
-        unjp jpC
-        bindok net hbuild
-        lets nets'
+        simp (config := { zeta := false }) only [jpC] at h
+        (have hh := except_bind_ok h; clear h; obtain ⟨net, hbuild, h⟩ := hh)
+        ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at h)
         have hs := Except.ok.inj h
         subst hs
         refine ⟨_, Or.inl rfl, ?_⟩
@@ -330,9 +304,9 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
         rcases hx with hx | rfl
         · exact hb x hx
         · exact Or.inr ⟨_, _, _, _, _, hbuild⟩
-      · bindok w hw
+      · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
         cases hw
-    · bindok w hw
+    · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
   -- the ports
   have hports : ∀ p ∈ ports.toList, 0 < p.chunks := by
@@ -350,33 +324,33 @@ theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × 
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
     obtain ⟨x, -, h⟩ := array_mapM_ok hranges r hr
-    bindok _ -
-    lets jpK
+    (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpK at h)
     split at h
-    · bindok kind hk
+    · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
-      unjp jpK
-      lets packed
-      bindok _ -
-      bindok _ -
-      bindok _ -
+      simp (config := { zeta := false }) only [jpK] at h
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) packed at h)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
       have hs := Except.ok.inj h
       subst hs
       cases hi
-    · bindok nm -
-      bindok i' hi'
-      bindok kind hk
+    · (have hh := except_bind_ok h; clear h; obtain ⟨nm, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨i', hi', h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
-      unjp jpK
-      lets packed
-      bindok _ -
-      bindok _ -
-      bindok _ -
+      simp (config := { zeta := false }) only [jpK] at h
+      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) packed at h)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+      (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
       have hs := Except.ok.inj h
       subst hs
       cases hi
       exact hnetOf _ _ hi'
-    · bindok kind hk
+    · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
   exact { nets := hnets, ports := hports, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩ }

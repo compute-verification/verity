@@ -15,22 +15,22 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       st.da = (HmRow.delta st.c st.pin).1 ∧ st.db = (HmRow.delta st.c st.pin).2 ∧
       st.m = st.c.kLog + st.nbl ∧ st.c.kLog ≤ 26 := by
   unfold Stmt.setupH at h
-  bindok c hc
-  lets jpA
+  (have hh := except_bind_ok h; clear h; obtain ⟨c, hc, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at h)
   obtain ⟨f0, h⟩ : ∃ f0, jpA f0 = .ok st := by
     split at h
     · obtain ⟨f, -, h⟩ := except_bind_ok h; exact ⟨f, h⟩
     · split at h <;> (obtain ⟨f, -, h⟩ := except_bind_ok h; exact ⟨f, h⟩)
-  unjp jpA
+  simp (config := { zeta := false }) only [jpA] at h
   split at h
   swap
   · cases h
-  bindok pop -
-  lets jpB
+  (have hh := except_bind_ok h; clear h; obtain ⟨pop, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at h)
   obtain ⟨pub, h⟩ : ∃ pub, jpB pub = .ok st := by
     split at h <;> (obtain ⟨p, -, h⟩ := except_bind_ok h; exact ⟨p, h⟩)
-  unjp jpB
-  lets jpU
+  simp (config := { zeta := false }) only [jpB] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpU at h)
   obtain ⟨u0, h⟩ : ∃ u, jpU u = .ok st := by
     split at h
     · split at h
@@ -38,12 +38,12 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
         exact ⟨(), ite_throw_ok h⟩
       · exact ⟨(), h⟩
     · exact ⟨(), h⟩
-  unjp jpU
-  bindok _ -
-  lets jpC
+  simp (config := { zeta := false }) only [jpU] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at h)
   obtain ⟨finding, h⟩ : ∃ f, jpC f = .ok st := by
     split at h
-    · lets q
+    · ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) q at h)
       split at h
       · obtain ⟨_, -, h⟩ := except_bind_ok h
         obtain ⟨_, -, h⟩ := except_bind_ok h
@@ -53,20 +53,20 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
         exact ⟨f, h⟩
       · obtain ⟨f, -, h⟩ := except_bind_ok h; exact ⟨f, h⟩
     · obtain ⟨f, -, h⟩ := except_bind_ok h; exact ⟨f, h⟩
-  unjp jpC
-  lets n blocksReal nbl m jpD
+  simp (config := { zeta := false }) only [jpC] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) n blocksReal nbl m jpD at h)
   obtain ⟨hk, h⟩ := ite_throw_ok' h
-  unjp jpD
-  bindok pin hpin
-  bindok _ -
-  bindok _ -
-  bindok _ -
-  lets h0
-  bindok _ -
-  lets h1
-  bindok _ -
-  lets h2 digest sigma
-  bindok _ -
+  simp (config := { zeta := false }) only [jpD] at h
+  (have hh := except_bind_ok h; clear h; obtain ⟨pin, hpin, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h2 digest sigma at h)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   have hs := Except.ok.inj h
   subst hs
   refine ⟨hc, hpin, rfl, rfl, rfl, ?_⟩
