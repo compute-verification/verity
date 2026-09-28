@@ -96,10 +96,12 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
 
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net, #307): its nets are `pre`'s,
-then the file's own, and its unit is the first named `unit`. -/
-theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
+theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
-    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
+      (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2) ∧
+      c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
       (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET := by
   unfold HmRow.parse at h
   simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
@@ -359,9 +361,18 @@ theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
       simpa using hp
     · cases hi
-  refine ⟨?_, ⟨more, hm⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
+  refine ⟨?_, ⟨more, hm, hmore⟩, hunit, hname _ _ hsha, hname _ _ hhm⟩
   exact { nets := hbuilt, unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩, typed := rfl }
+
+/-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
+the first named `unit`. -/
+theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+    {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
+    ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧
+      (c.nets.getD c.shaNet default).1 = HmRow.SHA_NET ∧ (c.nets.getD c.hmNet default).1 = HmRow.HM_NET :=
+  let ⟨P, ⟨more, hm, _⟩, hu, hs, hh⟩ := parse_facts_nets hpre h
+  ⟨P, ⟨more, hm⟩, hu, hs, hh⟩
 
 theorem parse_facts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ParseFacts tags c :=

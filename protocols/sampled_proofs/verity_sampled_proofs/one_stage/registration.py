@@ -17,9 +17,9 @@
 * **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
-  "domain"}, ...]`, the program's weights, constants and tables committed once under hiding leaves (`registered`), and R7
-  holds them to the verifier's own list and to the roots the log's earlier records registered. A record registers values
-  exactly when it is v2; v1's bytes are unchanged.
+  "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
+  tables committed once under hiding leaves (`registered`), and R7 holds them to the verifier's own list and to the roots
+  the log's earlier records registered. A record registers values exactly when it is v2; v1's bytes are unchanged.
 """
 from __future__ import annotations
 
@@ -74,7 +74,8 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
     if registered:
-        rec["registered"] = [{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS} for e in registered]
+        rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in G.ENTRY_KEYS},
+                              **G.width_entry(int(e.get(G.WIDTH_KEY, G.WORD_BITS)))} for e in registered]
     return rec
 
 
@@ -193,7 +194,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
-    if not isinstance(got, list) or not all(isinstance(e, Mapping) and set(e) == set(G.ENTRY_KEYS) for e in got):
+    keys = set(G.ENTRY_KEYS)
+    if not isinstance(got, list) or not all(isinstance(e, Mapping) and keys <= set(e) <= keys | {G.WIDTH_KEY} for e in got):
         c.fail("R7-registered", got)
         return
     by_value = {e["value"]: e for e in got}
@@ -205,9 +207,14 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             continue
         if not (isinstance(e["root"], str) and len(e["root"]) == 128 and _HEX.match(e["root"])):
             c.fail("R7-root", v)
+        # a count is an int, never a float or bool equal to it, and 16 is named by leaving word_bits out: one record
+        # digest per registration
         for k in ("leaves", "words", "domain"):
-            if e[k] != want[k]:
+            if e[k] != want[k] or (k != "domain" and type(e[k]) is not int):
                 c.fail(f"R7-{k}", {"value": v, "registered": e[k], "verifier": want[k]})
+        width = e.get(G.WIDTH_KEY, G.WORD_BITS)
+        if type(width) is not int or width != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
+            c.fail("R7-word_bits", {"value": v, "registered": width, "verifier": want["word_bits"]})
         if v in held and e["root"] != held[v]:
             c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})
 

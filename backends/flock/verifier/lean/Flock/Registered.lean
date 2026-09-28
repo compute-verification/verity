@@ -13,13 +13,16 @@ open Lean (Json)
 def FORMAT : String := "verity/registered-reads/v0"
 
 /-- A port of the verifier's own `--registered` file: the value its rows are rows of, the value's registered root, leaf
-count and frame-v3-sha512 domain, and the position every unit of the population reads (none: a unit of another
-template). -/
+count, row width and frame-v3-sha512 domain, and the position every unit of the population reads (none: a unit of
+another template). A row is `words` leaves of `wordBits` bits (16 or 32); a file that names neither (`words` none,
+`wordBits` 16) has rows of 16-bit words, the port's own. -/
 structure Port where
   name : String
   value : String
   root : ByteArray
   leaves : Nat
+  words : Option Nat
+  wordBits : Nat
   domain : ByteArray
   reads : Array (Option Nat)
   deriving Inhabited
@@ -35,10 +38,21 @@ def ofJson (j : Json) : V (Array Port) := do
     let leaves ← J.nat e "leaves" ctx
     if root.size != 64 || domain.size != 64 || leaves == 0 then
       throw s!"{ctx}: port {name}: a 64-byte root and domain, and at least one leaf"
+    let wordBits ← if J.has e "word_bits" then J.nat e "word_bits" ctx else pure 16
+    let words ← if J.has e "words" then some <$> J.nat e "words" ctx else pure none
+    if !(wordBits == 16 || wordBits == 32) || words == some 0 || (words.isNone && wordBits != 16) then
+      throw s!"{ctx}: port {name}: leaves of 16 or 32 bits, at least one to a row, and a row's words when they are 32"
     let reads ← (← J.arr e "reads" ctx).mapM fun r => match r with
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
-    return { name, value := ← J.str e "value" ctx, root, leaves, domain, reads }
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, reads }
+
+/-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
+each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
+def rowWords (words wordBits : Nat) : Nat := (words * (wordBits / 16) + 63) / 64 * 64
+
+/-- The circuit's port rows, of `n` u16 words, are `reg`'s registered rows. -/
+def Port.fits (reg : Port) (n : Nat) : Bool := reg.words.all fun w => n == rowWords w reg.wordBits
 
 /-- The frame-v3-sha512 node over `l` and `r` at index `idx` of level `d`. -/
 def node (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray :=
@@ -110,12 +124,15 @@ def badInstance (reg : Port) (t : Tables) (np p rows n : Nat) (positions indices
   (List.range n).find? fun i =>
     !(decide (ref t np p i < rows) && decide (reg.reads[indices.getD i 0]? = some (some (positions.getD (ref t np p i) 0))))
 
-/-- One port of the verifier's registered reads: a port of the circuit, whose table rows all open the registered root, and
-whose instances each read the row at the position the verifier's program reads for their unit. -/
+/-- One port of the verifier's registered reads: a port of the circuit, whose rows are the registered rows (`Port.fits`),
+whose table rows all open the registered root, and whose instances each read the row at the position the verifier's
+program reads for their unit. -/
 def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (reg : Port) : V Unit := do
   let np := c.ports.size
   let some p := (List.range np).find? (fun p => c.ports[p]!.name == reg.name)
     | throw s!"registered reads: {reg.name} is not an input port of the circuit"
+  if !reg.fits c.ports[p]!.words then
+    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.words} u16 words, not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
   let (positions, paths) ← entry pub reg
   let rows := t.counts.getD p 0
   if positions.size != rows || paths.size != rows then
