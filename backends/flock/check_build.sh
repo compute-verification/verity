@@ -6,16 +6,21 @@
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
 # CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the five crates the
 # patches change (the live crate's features don't reach them, so one run).
-# env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs)
+# env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs),
+# RUST_TOOLCHAIN (default the pin below, installed through rustup when missing: a machine's default toolchain doesn't decide it,
+# and an agent VM's, 1.83, can't parse upstream's edition-2024 manifests)
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 F=${FLOCK_CHECKOUT:-$HOME/.cache/verity/flock-b684b12}
-command -v cargo >/dev/null || [ -x "$HOME/.cargo/bin/cargo" ] \
-  || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
+RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}
 export PATH="$HOME/.cargo/bin:$PATH"
 mkdir -p "$(dirname "$F")"
 exec 9>"$F.lock"
 flock 9
+command -v rustup >/dev/null \
+  || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null
+rustup toolchain list | grep -q "^$RUST_TOOLCHAIN-" || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal >/dev/null
+export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
 [ -d "$F/.git" ] || git clone -q https://github.com/succinctlabs/flock "$F"
 cd "$F"
 git checkout -q b684b12 && git checkout -q -- . && git clean -qfd -e target

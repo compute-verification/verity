@@ -67,8 +67,9 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
-    flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit, the patches, the live crate, the Rust
-                    toolchain, the environment), so only a change to those pays for the Rust tests
+    flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
+                    the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
+                    tests
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
@@ -559,16 +560,23 @@ def rust_tests_inputs(files: list[str]) -> list[str]:
             or (f.startswith(pre + "flock-") and f.endswith("-b684b12.patch"))]
 
 
+def rust_toolchain() -> str | None:
+    """The Rust toolchain `check_build.sh` pins: its `RUST_TOOLCHAIN` default (check passes no `RUST_TOOLCHAIN` of its own)."""
+    p = ROOT / "backends" / "flock" / "check_build.sh"
+    m = re.search(r"^RUST_TOOLCHAIN=\$\{RUST_TOOLCHAIN:-([^}]+)\}$", p.read_text(), re.M) if p.is_file() else None
+    return m and m.group(1)
+
+
 def rust_tests_key(e: dict[str, str]) -> str | None:
-    """What flock-rust-tests reads: `rust_tests_inputs`, the Rust toolchain the script finds (`rustc -vV`, ~/.cargo/bin first),
-    the platform and the environment.  None when the tree's files cannot be listed or there is no rustc yet (the script installs
-    one; that run stores nothing)."""
-    files = tracked_files()
+    """What flock-rust-tests reads: `rust_tests_inputs`, the Rust toolchain the script pins (`rustc -vV` under
+    `RUSTUP_TOOLCHAIN`, ~/.cargo/bin first), the platform and the environment.  None when the tree's files cannot be listed, the
+    script pins no toolchain, or that toolchain isn't installed yet (the script installs it; that run stores nothing)."""
+    files, toolchain = tracked_files(), rust_toolchain()
     path = f"{Path(e.get('HOME') or Path.home()) / '.cargo' / 'bin'}{os.pathsep}{e.get('PATH', '')}"
     rustc = shutil.which("rustc", path=path)
-    if files is None or rustc is None:
+    if files is None or toolchain is None or rustc is None:
         return None
-    r = subprocess.run([rustc, "-vV"], env={**e, "PATH": path}, capture_output=True, text=True)
+    r = subprocess.run([rustc, "-vV"], env={**e, "PATH": path, "RUSTUP_TOOLCHAIN": toolchain}, capture_output=True, text=True)
     if r.returncode:
         return None
     h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
