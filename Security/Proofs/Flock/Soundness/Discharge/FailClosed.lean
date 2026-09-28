@@ -5,6 +5,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
+import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegisteredTags
 
 /-!
 # The headlines over what the verifier accepts
