@@ -41,8 +41,11 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   # one build at a time per FLOCK_WORK (runs in parallel share its checkout); the second finds the first's binaries
   exec 8>$W/build.lock; flock 8
-  # binaries this environment can't load (another machine's glibc) are rebuilt
-  if [ -x $BIN/flock-circuit ] && ldd $BIN/flock-circuit $BIN/flock-circuit-selftest 2>&1 | grep -q 'not found'; then rm -rf $BIN; fi
+  # binaries this environment can't load (another machine's glibc) are rebuilt. ldd exits nonzero on them, so its output is
+  # matched (a pipe into grep is false under pipefail), and a copy another user owns stops the run rather than being used
+  if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit $BIN/flock-circuit-selftest 2>&1) == *"not found"* ]]; then
+    rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
+  fi
   if [ ! -x $BIN/flock-circuit-selftest ]; then
     MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
     mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
