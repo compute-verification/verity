@@ -169,6 +169,43 @@ pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, le
     }
 }
 
+/// Every live round through the caller's handler instead of the rep's `LiveChallenger` (M1: the masking challenger in front of
+/// it, `crate::replay_round`). The device aborts on a refused coin, so a failed round is kept here instead: its message is
+/// recorded, the device gets zero coins, and no later round reaches the handler (nothing more is sent); the caller raises
+/// `failed` when the device returns.
+pub struct Rounds<'a> {
+    pub handler: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128>,
+    pub failed: Option<String>,
+}
+
+unsafe extern "C" fn rounds_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
+    let r = unsafe { &mut *(ctx as *mut Rounds<'_>) };
+    let c = unsafe { from_raw_parts(content, len) };
+    let coins = match r.failed {
+        Some(_) => vec![F128::ZERO; n as usize],
+        None => catch_unwind(AssertUnwindSafe(|| (r.handler)(c, n as usize))).unwrap_or_else(|e| {
+            r.failed = Some(e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "a live round failed".into()));
+            vec![F128::ZERO; n as usize]
+        }),
+    };
+    for (i, x) in coins.iter().enumerate() {
+        unsafe {
+            *out.add(2 * i) = x.lo;
+            *out.add(2 * i + 1) = x.hi;
+        }
+    }
+    0
+}
+
+impl ProveParams {
+    pub(crate) fn with_rounds(mut self, r: &mut Rounds<'_>) -> Self {
+        self.live_cb = Some(rounds_cb);
+        self.live_ctx = r as *mut Rounds<'_> as *mut c_void;
+        self
+    }
+}
+
 type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
 
 pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m: i32, x_out: *mut u64, max: i32) -> i32 {
@@ -433,6 +470,14 @@ pub(crate) struct Sched {
     ood_samples: Vec<i32>,
 }
 
+impl Sched {
+    /// Level 0's query count (M1: its padded code's, `zk::prover_config`).
+    pub(crate) fn with_queries0(mut self, q: usize) -> Self {
+        self.queries[0] = q as i32;
+        self
+    }
+}
+
 pub(crate) fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
     let cfg = pcs.ligerito_prover_config().unwrap_or_else(|_| panic!("no ligerito config for m={}", pcs.m));
     let to_i32 = |v: &[usize]| -> Vec<i32> { v.iter().map(|&x| x as i32).collect() };
@@ -452,7 +497,7 @@ pub(crate) fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::Pro
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
-                k_log: usize, pin: usize, ch: &mut LiveChallenger) -> ProveParams {
+                k_log: usize, pin: usize, ch: Option<&mut LiveChallenger>) -> ProveParams {
     let m = pcs.m;
     let zc = pcs.zerocheck_grinding();
     let lc = pcs.lincheck_grinding();
@@ -494,8 +539,8 @@ pub(crate) fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::lige
         rs_bits: og.ring_switch_bits as i32,
         gamma_bits: og.claim_batch_bits as i32,
         dump_z_path: null(),
-        live_cb: Some(live_cb),
-        live_ctx: ch as *mut LiveChallenger as *mut c_void,
+        live_cb: ch.is_some().then_some(live_cb as LiveCb),
+        live_ctx: ch.map_or(null_mut(), |c| c as *mut LiveChallenger as *mut c_void),
     }
 }
 
@@ -528,7 +573,7 @@ pub fn prove_pure(
     let s = statics_for(st.lay.comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), Some(ch));
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << st.ul;
@@ -691,7 +736,7 @@ pub fn prove_vllm(
     let s = statics_for(vb::sha_comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), vb::PIN, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), vb::PIN, Some(ch));
     let n_comp = st.blocks() * st.lay.comp_slots();
     let (mut cv, mut msg, mut zeros32, mut zeros64) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let (mut hz, mut ha, mut hb, mut uin): (*const u64, *const u64, *const u64, *const u64) = (null(), null(), null(), null());
@@ -797,6 +842,13 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
 
 /// The FFI's proof stream as a proof and its commitment.
 pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commitment) {
+    decode_with(bytes, pcs, false)
+}
+
+/// [`decode`]; `zk`: the stream ends in M1's zk section (the circuit prover's `fc_write_zk`): level 0's hiding messages, the
+/// lane phase's record and lincheck's folded comb, as the CPU prover leaves them in the proof (never serialized: the record and
+/// the comb are the prover's own).
+pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool) -> (R1csProofLigerito, Commitment) {
     let mut r = Reader { b: bytes, o: 0 };
     let cap = r.hashes();
     let round1_ab = r.f128s();
@@ -827,6 +879,26 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
     let grinding_nonces = r.u64s();
     let claim_batch_grinding_nonces = r.u64s();
     let consistency_batch_grinding_nonces = r.u64s();
+    #[cfg(feature = "sha512")]
+    let (zk_level0, zk_record, comb_partial) = if zk {
+        use flock_prover::pcs::ligerito::zk::{Level0ZkProof, Level0ZkRecord};
+        let (e, t_prime) = ([r.f256(), r.f256()], r.f256());
+        let n = r.u64() as usize;
+        let ybar = (0..n).map(|_| r.f256()).collect();
+        let target = r.f128();
+        let n = r.u64() as usize;
+        let ood = (0..n).map(|_| (r.f128(), r.f128())).collect();
+        let n = r.u64() as usize;
+        let challenges = (0..n).map(|_| r.f256()).collect();
+        let rho = [r.f256(), r.f256()];
+        let queries0 = r.u64s().into_iter().map(|q| q as usize).collect();
+        let comb = r.f128s();
+        (Some(Level0ZkProof { e, t_prime, ybar }), Some(Level0ZkRecord { target, ood, challenges, rho, queries0, queries1: Vec::new() }), comb)
+    } else {
+        (None, None, Vec::new())
+    };
+    #[cfg(not(feature = "sha512"))]
+    assert!(!zk, "M1's zk section needs the SHA-512 build");
     assert_eq!(r.o, bytes.len(), "trailing bytes in the FFI stream");
     let (initial_rows, initial_mp, _initial_salts) = opens.remove(0);
     let (final_rows, final_mp, _final_salts) = opens.pop().expect("final open");
@@ -843,7 +915,7 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
         zerocheck: ZerocheckProof { round1_ab, round1_c, multilinear_rounds, final_a_eval, final_b_eval, final_c_eval, grinding_nonces: zc_nonces },
         lincheck: LincheckProof { rounds: lc_rounds, z_partial, matrix_evals: Vec::new(), grinding_nonces: lc_nonces,
                                   #[cfg(feature = "sha512")]
-                                  comb_partial: Vec::new() },
+                                  comb_partial },
         pcs_open: BatchOpeningProofLigerito {
             ring_switches,
             batching_nonces,
@@ -872,9 +944,9 @@ pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commi
                 claim_batch_grinding_nonces,
                 consistency_batch_grinding_nonces,
                 #[cfg(feature = "sha512")]
-                zk_level0: None,
+                zk_level0,
                 #[cfg(feature = "sha512")]
-                zk_record: None,
+                zk_record,
             },
         },
     };
@@ -930,7 +1002,7 @@ pub fn prove_slots(
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
     assert_eq!(z.len(), 1 << (m - 7));
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.k_log, st.pin, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.k_log, st.pin, Some(ch));
     type U8 = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>);
     static U: OnceLock<U8> = OnceLock::new();
     let u = U.get_or_init(|| {

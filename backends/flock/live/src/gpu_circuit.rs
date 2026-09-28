@@ -15,7 +15,7 @@ use rayon::prelude::*;
 use crate::{
     LiveChallenger,
     chunk::comp,
-    gpu::{ChunkParams, ProveParams, csc_from_rows, decode, link_cb, prove_params, sched, statics_for},
+    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, decode_with, link_cb, prove_params, sched, statics_for},
     ir_block::IrUnitNet,
     circuit::{Kind, Stmt},
 };
@@ -86,6 +86,30 @@ struct CircuitParams {
     hm96_prefixes: *const u8,
     hm96_tables: *const u64,
     hm96_level0_leaves: i64,
+    /// M1 (`zk_on`): Ligerito level 0's hiding (backends/flock/cuda/prove_circuit.cuh): the rep whose pair the lane phase folds,
+    /// the padding per lane, the negatives' tamper code, every lane's padding (lane-major, t_pad words) and the 4 extra lanes
+    /// (L words each)
+    zk_on: i32,
+    zk_rep: i32,
+    zk_t_pad: i32,
+    zk_tamper: i32,
+    zk_pads: *const u64,
+    zk_extra: *const u64,
+}
+
+#[cfg(feature = "sha512")]
+type Level0 = flock_prover::pcs::ligerito::zk::Level0Zk;
+#[cfg(not(feature = "sha512"))]
+type Level0 = ();
+
+/// Where a rep's live rounds go.
+pub enum Live<'a> {
+    /// M0: straight to the rep's stream
+    Stream(&'a mut LiveChallenger),
+    /// M1: through `rounds` (the masking challenger in front of the rep's stream, `crate::replay_round`), with level 0's hiding
+    /// (`level0`: the session's padding and extra lanes, this rep's pair)
+    #[cfg(feature = "sha512")]
+    Zk { level0: &'a Level0, rounds: &'a mut dyn FnMut(&[u8], usize) -> Vec<F128> },
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32) -> i64;
@@ -328,7 +352,9 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
-/// ligerito, total; seconds), plus the device witness's own split (compressions, units).
+/// ligerito, total; seconds), plus the device witness's own split (compressions, units). Under M1 (`Live::Zk`) the proof is the
+/// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
+/// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -336,13 +362,25 @@ pub fn prove_circuit(
     pcs: &PcsParams,
     domain: &[u8],
     mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
-    ch: &mut LiveChallenger,
+    live: Live<'_>,
     salts: Option<&std::sync::Mutex<crate::zk_hooks::LeafSalts>>,
 ) -> (R1csProofLigerito, Commitment, [f64; 8], [f64; 3]) {
     let s = statics_for(comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, ch);
+    let (params, mut rounds, level0): (ProveParams, Option<Rounds<'_>>, Option<&Level0>) = match live {
+        Live::Stream(ch) => (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, Some(ch)), None, None),
+        #[cfg(feature = "sha512")]
+        Live::Zk { level0, rounds } => {
+            let sc = sc.with_queries0(level0.queries0);
+            (prove_params(s, &sc, &cfg, pcs, &st.flock_digest, domain, st.c.k_log, st.pin, None), Some(Rounds { handler: rounds, failed: None }),
+             Some(level0))
+        }
+    };
+    let params = match rounds.as_mut() {
+        Some(r) => params.with_rounds(r),
+        None => params,
+    };
     let t = types(st);
     let unit = st.c.unit();
     let n_claims = 2 + 2 * st.regions.len();
@@ -451,7 +489,27 @@ pub fn prove_circuit(
         hm96_prefixes: std::ptr::null(),
         hm96_tables: std::ptr::null(),
         hm96_level0_leaves: 0,
+        zk_on: 0,
+        zk_rep: 0,
+        zk_t_pad: 0,
+        zk_tamper: 0,
+        zk_pads: null(),
+        zk_extra: null(),
     };
+    #[cfg(feature = "sha512")]
+    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.map(|z| {
+        let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
+        assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
+        assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
+        (z.pads.concat(), z.extra.concat())
+    });
+    #[cfg(feature = "sha512")]
+    if let (Some(z), Some((pads, extra))) = (level0, &zk_words) {
+        (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
+        (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+    }
+    #[cfg(not(feature = "sha512"))]
+    let _ = level0;
     #[cfg(feature = "sha512")]
     let hm96_prefixes: Vec<u8> = {
         let c = flock_merkle::hm96::consts();
@@ -490,9 +548,16 @@ pub fn prove_circuit(
     drop(mctx);
     #[cfg(feature = "sha512")]
     drop(key_guard);
+    if let Some(why) = rounds.and_then(|r| r.failed) {
+        if rc == 0 {
+            unsafe { flock_cuda_free(out) };
+        }
+        panic!("{why}");
+    }
+    assert!(rc != 240, "PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128");
     assert_eq!(rc, 0, "CUDA circuit prover returned error {rc} at m={m}");
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
-    let (proof, commitment) = decode(&bytes, pcs);
+    let (proof, commitment) = decode_with(&bytes, pcs, level0.is_some());
     (proof, commitment, phase, wphase)
 }

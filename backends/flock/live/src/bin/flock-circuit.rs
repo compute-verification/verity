@@ -424,6 +424,9 @@ struct Wit {
     nets: Arc<BTreeMap<usize, &'static flock_live::ir_block::IrUnitNet>>,
     /// write these public regions into the witness (a dummy witness whose region claims are the public ones)
     regions: Option<Arc<Instances>>,
+    /// the mask slot's words are not the device's zero fill (M1's uniform words): a device witness takes them as host slots
+    #[cfg_attr(not(feature = "gpu"), allow(dead_code))]
+    mask_host: bool,
 }
 
 type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
@@ -441,9 +444,21 @@ enum WitData {
 }
 
 /// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
-/// units' input words, the hm96 slots computed here); otherwise the packed host witness.
+/// units' input words, the hm96 slots computed here, and M1's mask slot); otherwise the packed host witness.
 fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
+    // the mask slot's words where the device's fill is not zero: z = a = b (its circuit is the identity on the slot)
+    #[cfg(feature = "gpu")]
+    let mask_slots = || -> Vec<flock_live::gpu_circuit::HostSlot> {
+        if !w.mask_host {
+            return Vec::new();
+        }
+        let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
+        (0..st.blocks()).map(|b| {
+            let m = (w.mask)(b);
+            ((b << (st.c.k_log - 7)) + (r.start() >> 7), m.clone(), m.clone(), m)
+        }).collect()
+    };
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs interleaves with the units round by round: the device's two passes cannot follow it
     if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && st.c.out_net == st.c.unit_net {
@@ -452,7 +467,8 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
         let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
-        let host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
+        let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
+        host.extend(mask_slots());
         let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             return (WitData::DevCut(rows, host, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
@@ -473,6 +489,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
         for ni in (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net && n != c.unit_net) {
             host.extend(flock_live::gpu_circuit::host_slots(st, ni, &ins[ni]));
         }
+        host.extend(mask_slots());
         let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
         return (WitData::Dev(rows, host, inputs), t.elapsed().as_secs_f64());
     }
@@ -567,18 +584,14 @@ fn claim_word_points(st: &Stmt, lay: &Layout, coins: &[F128]) -> Result<[Vec<F12
     Ok([zkv::point_parts(&ab).1[1..].to_vec(), zkv::point_parts(&c).1[1..].to_vec()])
 }
 
-/// M1's CPU prover: upstream's prover under the masking challenger, the masked proof, the constraints replayed from the
-/// logged coins, and the inner proof on the rep's stream after the opening.
-fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep) -> (Vec<u8>, Value) {
-    #[allow(irrefutable_let_patterns)]
-    let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1 proves on the CPU from a host witness") };
-    let tp = Instant::now();
-    let root = zk.ic.root();
+/// A rep's masking challenger (M1) in front of its live stream: the pads it adds (a dishonest prover's other ones), and the
+/// rank check at the opening's label (the prover stops on degenerate coins).
+fn zk_masking<'a>(st: &Arc<Stmt>, ch: &'a mut LiveChallenger, zk: &ZkRep) -> (zkv::Masking<ByRef<'a, LiveChallenger>>, zkv::Pads) {
     let mut sent = zkv::Pads { h: zk.pads.h.clone(), mu: vec![], pad_h: vec![], pad_mu: vec![], tau_salt: vec![] };
     if zk.pad_mismatch {
         sent.h[zk.lay.ml(0, 0)] += F128::ONE;
     }
-    let mut mch = zkv::Masking::new(ByRef(ch), &zk.lay, &sent, root);
+    let mut mch = zkv::Masking::new(ByRef(ch), &zk.lay, &sent, zk.ic.root());
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
         let tr = Instant::now();
@@ -588,16 +601,33 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
         eprintln!("ZKRANK\t{}", json!({"points": all.len(), "mask_words": words.len(), "rank": rank, "need": 128 * all.len(), "s": tr.elapsed().as_secs_f64()}));
         if ok { Ok(()) } else { Err(format!("degenerate coins: the mask slot's weights have rank {rank} < {} over {} claim points", 128 * all.len(), all.len())) }
     }));
-    let (mut proof, commitment) = prove_fast_ligerito_from_witness_extra_zk(
+    (mch, sent)
+}
+
+/// M1's CPU prover: upstream's prover under the masking challenger, then [`zk_finish`].
+fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep) -> (Vec<u8>, Value) {
+    #[allow(irrefutable_let_patterns)]
+    let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1's CPU prover takes a host witness") };
+    let tp = Instant::now();
+    let (mut mch, sent) = zk_masking(st, ch, zk);
+    let (proof, commitment) = prove_fast_ligerito_from_witness_extra_zk(
         &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
         &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() },
         Some(&zk.level0), &mut mch,
     );
     let t_upstream = tp.elapsed().as_secs_f64();
+    zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, json!({}))
+}
+
+/// After upstream's prover (the CPU's, or the device's with the same unmasked proof, level-0 record and folded comb): the
+/// masked proof, the constraints replayed from the logged coins, and the inner proof on the rep's stream after the opening.
+#[allow(clippy::too_many_arguments)]
+fn zk_finish(st: &Stmt, zk: &ZkRep, mut proof: R1csProofLigerito, commitment: Commitment, mch: zkv::Masking<ByRef<'_, LiveChallenger>>,
+             sent: &zkv::Pads, tp: Instant, t_upstream: f64, mut bk: Value) -> (Vec<u8>, Value) {
     let (inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let (zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
-    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &root, Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
+    let rp = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &zk.lay, &zk.ic.root(), Some(&proof.lincheck.comb_partial), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
@@ -618,10 +648,13 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, hook: Hook<'
     let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, cons, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     let t_zk = tz.elapsed().as_secs_f64();
     let masked = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: proof.pcs_open };
-    (bincode::serialize(&(commitment, masked, inner)).unwrap(),
-     json!({"t.prove": tp.elapsed().as_secs_f64(), "t.upstream": t_upstream, "t.zk_inner": t_zk, "t.zk_replay": t_replay,
-            "t.zk_pads_commit": zk.t_commit, "constraints_failing_on_pads": fails,
-            "zk_coins": f128s_hex(&coins), "zk_inner_coins": f128s_hex(&lch.coins)}))
+    let o = bk.as_object_mut().expect("buckets");
+    for (k, v) in [("t.prove", json!(tp.elapsed().as_secs_f64())), ("t.upstream", json!(t_upstream)), ("t.zk_inner", json!(t_zk)),
+                   ("t.zk_replay", json!(t_replay)), ("t.zk_pads_commit", json!(zk.t_commit)), ("constraints_failing_on_pads", json!(fails)),
+                   ("zk_coins", json!(f128s_hex(&coins))), ("zk_inner_coins", json!(f128s_hex(&lch.coins)))] {
+        o.insert(k.into(), v);
+    }
+    (bincode::serialize(&(commitment, masked, inner)).unwrap(), bk)
 }
 
 fn f128s_hex(v: &[F128]) -> Vec<String> {
@@ -1563,10 +1596,10 @@ fn zkaudit(_: &Arc<Stmt>, _: &Arc<Instances>) {
     refuse("zkaudit needs the test harness's seed-injection feature".into());
 }
 
+/// The device prover's witness source for a rep's witness data, handed to `f`.
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
-             salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
-    use flock_live::gpu_circuit::{CircuitSrc, prove_circuit};
+fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circuit::CircuitSrc<'_>) -> R) -> R {
+    use flock_live::gpu_circuit::CircuitSrc;
     let sched = flock_live::gpu_circuit::schedule(st.c.unit());
     let (cut_rows, late_rows): (Vec<usize>, Vec<usize>) = (sched.cut_rows.iter().map(|&r| r as usize).collect(), sched.late_rows.iter().map(|&r| r as usize).collect());
     let mut mid_fn;
@@ -1578,17 +1611,58 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
             CircuitSrc::DeviceCut { rows: r, host: h, inputs: i, mid: &mut mid_fn }
         }
     };
-    let (proof, commitment, ph, wph) = prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, ch, Some(salts));
-    let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
-                    "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
-                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
+    f(src)
+}
+
+#[cfg(feature = "gpu")]
+fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3]) -> Value {
+    json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
+           "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
+           "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))})
+}
+
+#[cfg(feature = "gpu")]
+fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
+             salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
+    use flock_live::gpu_circuit::{Live, prove_circuit};
+    let (proof, commitment, ph, wph) =
+        with_gpu_src(st, wt, |src| prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Stream(ch), Some(salts)));
+    let bk = gpu_buckets(wt, ph, wph);
     eprintln!("GPUPHASE\t{bk}");
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
+}
+
+/// M1 on the device: every live round the device frames is made again through the rep's masking challenger
+/// (`flock_live::replay_round`), so the verifier sees what M1's CPU prover sends; level 0's hiding runs on the device; then
+/// [`zk_finish`] as on the CPU.
+#[cfg(feature = "gpu")]
+#[allow(clippy::too_many_arguments)]
+fn prove_gpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
+                salts: &Mutex<flock_live::zk_hooks::LeafSalts>, zk: &ZkRep) -> (Vec<u8>, Value) {
+    use flock_live::gpu_circuit::{Live, prove_circuit};
+    let tp = Instant::now();
+    let (mut mch, sent) = zk_masking(st, ch, zk);
+    let mut rounds = |content: &[u8], n: usize| flock_live::replay_round(&mut mch, content, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
+    let (proof, commitment, ph, wph) = with_gpu_src(st, wt, |src| {
+        prove_circuit(st, src, &params(st.m, lig), &domain(rep), hook, Live::Zk { level0: &zk.level0, rounds: &mut rounds }, Some(salts))
+    });
+    let t_upstream = tp.elapsed().as_secs_f64();
+    let (bytes, bk) = zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, gpu_buckets(wt, ph, wph));
+    eprintln!("GPUPHASE\t{}", json!({"t.prove": bk["t.prove"], "t.upstream": t_upstream, "t.zk_inner": bk["t.zk_inner"], "t.zk_replay": bk["t.zk_replay"],
+                                      "t.encoding_commitment": ph[1], "t.ligerito": ph[6], "t.total": ph[7]}));
+    (bytes, bk)
 }
 
 #[cfg(not(feature = "gpu"))]
 fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
              _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> (Vec<u8>, Value) {
+    panic!("built without the gpu feature")
+}
+
+#[cfg(not(feature = "gpu"))]
+#[allow(clippy::too_many_arguments)]
+fn prove_gpu_zk(_: &Arc<Stmt>, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger,
+                _: &Mutex<flock_live::zk_hooks::LeafSalts>, _: &ZkRep) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -1675,7 +1749,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let cut_flip = (plan.cut_flip && unit.in_groups.len() > 1).then(|| (st.c.unit_net, 0, unit.in_groups[1].col * 128 + 3));
     let nets = if plan.tail_swapped { forged_stages(st) } else { BTreeMap::new() };
     Wit { rowin, inputs, mask, flip_z: plan.unit_flip.then_some(ur.slot(ur.count.min(6) - 1) + st.c.unit().in_words * 128 + 40), cut_flip,
-          nets: Arc::new(nets), regions: (zero && plan.zero_witness).then(|| inst.clone()) }
+          nets: Arc::new(nets), regions: (zero && plan.zero_witness).then(|| inst.clone()), mask_host: random }
 }
 
 /// The tail stages of the forged circuit (`--forged`: the same template with every positive tail constant x 4, staged by
@@ -1744,12 +1818,12 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
         let zk_points = Arc::new(Mutex::new(Vec::new()));
         let tl0 = Instant::now();
-        let zk_level0 = (is_zk(st) && !plan.gpu).then(|| Arc::new(level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)));
+        let zk_level0 = is_zk(st).then(|| Arc::new(level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)));
         let t_level0 = tl0.elapsed().as_secs_f64();
         for rep in 0..2 {
             // M1: this rep's pads and their commitment (a fresh salt tree id), drawn before anything of the rep is sent
             let tz0 = Instant::now();
-            let zkrep = (is_zk(st) && !plan.gpu).then(|| {
+            let zkrep = is_zk(st).then(|| {
                 let lay = zk_layout(st);
                 let mut pads = zkv::Pads::draw(&mut prng, &lay, rep);
                 if plan.zk_zero_pads {
@@ -1818,7 +1892,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             let proved = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu {
                     let wt = if rep == 0 { wt0.as_ref() } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
-                    prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts)
+                    match &zkrep {
+                        Some(z) => prove_gpu_zk(st, wt, lig, rep, &mut hook, &mut lch, &salts, z),
+                        None => prove_gpu(st, wt, lig, rep, &mut hook, &mut lch, &salts),
+                    }
                 } else if let Some(z) = &zkrep {
                     prove_cpu_zk(st, &own(&mut wt0, &mut wt1), lig, &mut hook, &mut lch, z)
                 } else {
@@ -1916,6 +1993,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("unit_draw_from_file", true, false),
     ("unit_draw_ignored_refused", false, false),
     ("prover_is_deterministic", true, false),
+    ("gpu_proofs_match_cpu", true, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_level0_folds_another_extra_lane", false, true),
     ("zk_level0_blinded_claim_forged", false, true),
@@ -2021,6 +2099,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
+    }
+    if name == "gpu_proofs_match_cpu" {
+        return gpu_cpu_case(st, inst);
     }
     #[cfg(feature = "seed-injection")]
     if name == "zk_verifier_coin_off_its_commitment" || name == "zk_verifier_commits_beta_zero" {
@@ -2353,6 +2434,48 @@ fn determinism_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
     json!({"case": "prover_is_deterministic", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
+/// The first place two JSON values differ (a path, and the two values there).
+fn first_diff(a: &Value, b: &Value, path: String) -> Option<String> {
+    match (a, b) {
+        (Value::Object(x), Value::Object(y)) => {
+            x.keys().chain(y.keys()).find_map(|k| first_diff(x.get(k).unwrap_or(&Value::Null), y.get(k).unwrap_or(&Value::Null), format!("{path}.{k}")))
+        }
+        (Value::Array(x), Value::Array(y)) if x.len() == y.len() => x.iter().zip(y).enumerate().find_map(|(i, (u, v))| first_diff(u, v, format!("{path}[{i}]"))),
+        _ if a == b => None,
+        _ => {
+            let (u, v) = (a.to_string(), b.to_string());
+            let at = u.bytes().zip(v.bytes()).position(|(p, q)| p != q).unwrap_or(u.len().min(v.len()));
+            Some(format!("{path} (lengths {} / {}, first differing char {at}: {:?} / {:?})", u.len(), v.len(),
+                         &u[at.saturating_sub(40)..(at + 40).min(u.len())], &v[at.saturating_sub(40)..(at + 40).min(v.len())]))
+        }
+    }
+}
+
+/// The device prover against the CPU prover (M0 or M1, the statement's mode): equal seeds and verifier coins give byte-identical
+/// proofs and transcripts, so the CPU prover's statistics, audit and exact checks cover the device's proofs.
+#[cfg(feature = "seed-injection")]
+fn gpu_cpu_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
+    let run = |gpu: bool| {
+        let s0 = Arc::new(Mutex::new(server(st, inst)));
+        fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
+        let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected([1; 32]));
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+        (v["accepted"] == true, proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
+    };
+    let (c, g) = (run(false), run(true));
+    let proof_diff: Vec<Value> = c.1.iter().zip(&g.1).map(|(x, y)| json!({"lengths": [x.len(), y.len()], "first_differing_byte": x.iter().zip(y).position(|(p, q)| p != q)}))
+        .collect();
+    let (pe, te) = (c.1 == g.1, c.2 == g.2);
+    json!({"case": "gpu_proofs_match_cpu", "expect": "the device's proofs and transcripts are the CPU prover's, byte for byte", "gpu": true, "zk": is_zk(st),
+           "accepted": c.0 && g.0, "proofs_equal": pe, "transcripts_equal": te, "proofs": proof_diff,
+           "transcript_first_difference": first_diff(&c.2, &g.2, String::new()), "pass": c.0 && g.0 && pe && te})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
+    json!({"case": "gpu_proofs_match_cpu", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
 /// The same circuit with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
@@ -2371,11 +2494,13 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1))) {
+        if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts.iter().any(|&r| r > 1)))
+            || (name == "gpu_proofs_match_cpu" && !gpu) {
             continue;
         }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(if zk_mode() { &["--zk"][..] } else { &[] })
                 .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                        "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name, "--record-dir", &arg("--record-dir", "")])
                 .output()
@@ -2465,9 +2590,6 @@ fn main() {
         return;
     }
     let tb = Instant::now();
-    if zk_mode() && flag("--gpu") {
-        refuse("M1's masked protocol (--zk) is CPU-only".into());
-    }
     let c = load_composite(&arg("--circuit", "circuit.txt"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {

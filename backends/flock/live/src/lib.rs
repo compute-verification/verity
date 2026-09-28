@@ -105,6 +105,64 @@ pub fn frame_domain(domain: &[u8]) -> Vec<u8> {
     v
 }
 
+/// One round a framed challenger elsewhere absorbed (the CUDA prover's `FsChallenger`: every item since the last squeeze,
+/// then the squeeze), made again through `ch`: each item by the call that frames it (an observe's kind picks
+/// `observe_f128` or `observe_f128_slice`), then the squeeze. So a wrapper in front of the live stream (M1's masking) sees
+/// the calls the CPU prover makes. The stream's domain frame is `ch`'s own. Returns the round's `n` coins.
+pub fn replay_round<C: Challenger>(ch: &mut C, content: &[u8], n: usize) -> Result<Vec<F128>, String> {
+    let body = |at: usize, w: usize| content.get(at..at + w).ok_or_else(|| "a frame overruns its round".to_string());
+    let mut at = 0usize;
+    while at < content.len() {
+        let h = body(at, 16).map_err(|_| "a truncated frame header".to_string())?;
+        let (op, kind, len) = (h[0], h[1], u64::from_le_bytes(h[8..].try_into().unwrap()) as usize);
+        at += 16;
+        let padded = len.div_ceil(16) * 16;
+        match op {
+            OP_DOMAIN => {
+                body(at, padded)?;
+                at += padded;
+            }
+            OP_LABEL => {
+                ch.observe_label(body(at, len)?);
+                at += padded;
+            }
+            OP_BYTES => {
+                ch.observe_bytes(body(at, len)?);
+                at += padded;
+            }
+            OP_OBSERVE => {
+                let vs: Vec<F128> = body(at, 16 * len)?.chunks_exact(16)
+                    .map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap())))
+                    .collect();
+                match kind {
+                    KIND_SCALAR if len == 1 => ch.observe_f128(vs[0]),
+                    KIND_SLICE => ch.observe_f128_slice(&vs),
+                    _ => return Err(format!("an observe of kind {kind} and length {len}")),
+                }
+                at += 16 * len;
+            }
+            OP_SQUEEZE if len == 0 && kind == KIND_SLICE => {
+                ch.sample_f128_vec(0);
+            }
+            OP_SQUEEZE => {
+                if at != content.len() {
+                    return Err("a squeeze before the round's end".into());
+                }
+                if len != n {
+                    return Err(format!("the round squeezes {len} coins, the caller asked for {n}"));
+                }
+                return match kind {
+                    KIND_SCALAR if n == 1 => Ok(vec![ch.sample_f128()]),
+                    KIND_SLICE => Ok(ch.sample_f128_vec(n)),
+                    _ => Err(format!("a squeeze of kind {kind} and length {n}")),
+                };
+            }
+            x => return Err(format!("unknown frame op {x}")),
+        }
+    }
+    Err("a round without its squeeze".into())
+}
+
 pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
@@ -2073,5 +2131,57 @@ impl Challenger for RecordingChallenger {
 
     fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
         unreachable!("the single-table path does not fork")
+    }
+}
+
+#[cfg(test)]
+mod replay_tests {
+    use super::*;
+
+    fn f(x: u64) -> F128 {
+        F128::new(x, !x)
+    }
+
+    /// Every call shape the provers make, framed by one challenger, is framed identically by another replaying its rounds.
+    #[test]
+    fn replayed_rounds_frame_what_the_original_framed() {
+        let coins: Vec<Vec<F128>> = [1usize, 3, 2, 1, 5].iter().enumerate().map(|(k, &n)| (0..n).map(|i| f(100 * k as u64 + i as u64)).collect()).collect();
+        let mut a = RecordingChallenger::new(b"domain", coins.clone());
+        a.observe_label(b"label");
+        a.observe_bytes(&[7u8; 21]);
+        a.observe_f128(f(1));
+        a.observe_f128_slice(&[f(2)]);
+        assert_eq!(a.sample_f128(), coins[0][0]);
+        a.observe_f256(flock_field::F256::new(f(3), f(4)));
+        a.observe_f128_slice(&[f(5), f(6), f(7)]);
+        a.sample_f128_vec(3);
+        a.observe_bytes(&0u64.to_le_bytes());
+        a.sample_f256();
+        a.observe_f128_slice(&[]);
+        a.sample_f128_vec(0);
+        a.observe_label(b"");
+        a.sample_f128();
+        a.observe_f128(f(8));
+        a.sample_f128_vec(5);
+        assert!(a.mismatch.is_none());
+        let mut b = RecordingChallenger::new(b"domain", coins.clone());
+        for (k, (content, n)) in a.rounds.iter().enumerate() {
+            assert_eq!(replay_round(&mut b, content, *n).unwrap(), coins[k], "round {k}");
+        }
+        assert_eq!(a.rounds, b.rounds);
+    }
+
+    #[test]
+    fn a_round_is_refused_unless_it_ends_in_its_squeeze() {
+        let mut a = RecordingChallenger::new(b"d", vec![vec![f(1)], vec![f(2), f(3)]]);
+        a.observe_f128(f(9));
+        a.sample_f128();
+        a.sample_f128_vec(2);
+        let (r0, r1) = (a.rounds[0].0.clone(), a.rounds[1].0.clone());
+        let mut b = RecordingChallenger::new(b"d", vec![vec![f(1)], vec![f(2), f(3)]]);
+        assert!(replay_round(&mut b, &r0, 2).is_err(), "the count differs");
+        assert!(replay_round(&mut b, &r0[..r0.len() - 16], 1).is_err(), "no squeeze");
+        assert!(replay_round(&mut b, &[r1.clone(), r1].concat(), 2).is_err(), "a squeeze mid-round");
+        assert!(replay_round(&mut b, &r0[..20], 1).is_err(), "truncated");
     }
 }
