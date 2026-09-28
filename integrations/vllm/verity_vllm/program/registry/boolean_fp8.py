@@ -10,6 +10,9 @@ statics (`elementwise.on_bits`; a `DOT` static, a Boolean e4m3 step, read as its
     Fp8GroupScale_v2{G}, Fp8GroupQuant_v2{K,G}, ScaledMmFp8BlockCoordinate_v2{K,G}, ScaledMmFp8Block_v2{K,N,G},
     ScaledMmFp8BlockCoordinateGivenScale_v2{K,G}, ScaledMmFp8BlockSharedScaleTile_v2{K,G}, ScaledMmFp8BlockSharedScale_v2{K,N,G}
                                                                     the block-scaled linear (128x128 weight blocks)
+    ScaledMmFp8BlockCoordinate_v4{K,G,DOT}, ScaledMmFp8Block_v4{K,N,G,DOT}, ScaledMmFp8BlockCoordinateGivenScale_v4{K,G,DOT},
+    ScaledMmFp8BlockSharedScaleTile_v4{K,G,DOT}, ScaledMmFp8BlockSharedScale_v4{K,N,G,DOT}
+                                                                    the same over the step DOT (the word versions 3)
 
 Every word is its bits (`verity.ir.boolean.word_type`): bf16 `Array<16, Value<1>>`, f32 `Array<32, Value<1>>`, e4m3
 `Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `verity.ml.boolean.scalar`'s f32 arithmetic,
@@ -237,17 +240,57 @@ Fp8GroupQuantV2 = EW.on_bits(
     _group_quant, F8.Fp8GroupQuant)
 
 
-def _block_acc(B, c, K: int, G: int, xq, wrow, scale_of):
-    """`acc = FFMA(temp, scale_of(kb), acc)` from +0 over the K/G tiles, `temp` the tile's G/32 k32 steps from +0, then the cast."""
+def _block_acc(B, c, K: int, G: int, xq, wrow, scale_of, dot=BG.HopperE4m3QgmmaDot32):
+    """`acc = FFMA(temp, scale_of(kb), acc)` from +0 over the K/G tiles, `temp` the tile's G/32 k32 steps `dot` from +0, then the cast."""
     assert K % G == 0 and G % 32 == 0, (K, G)
     acc = c.word(0, 32)
     for kb in range(K // G):
         temp = c.word(0, 32)
         for st in range(G // 32):
             lo = kb * G + 32 * st
-            temp = B.call(BG.HopperE4m3QgmmaDot32, temp, xq[lo:lo + 32], wrow[lo:lo + 32])
+            temp = B.call(dot, temp, xq[lo:lo + 32], wrow[lo:lo + 32])
         acc = B.call(SC.F32Fma, temp, scale_of(kb), acc)
     return B.call(BG.F2fpBf16, acc)
+
+
+def _coordinate_sig(S):
+    return (("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3)), ("sw", Array(S.K // S.G, F32))), BF16
+
+
+def _block_sig(S):
+    return ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
+             ("ws", Array(F8.weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16))
+
+
+def _given_scale_sig(S):
+    return (("xq", Array(S.K, E4M3)), ("s", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3))), BF16
+
+
+def _tile_sig(S):
+    return ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.G, Array(S.K, E4M3))), ("sw", Array(S.K // S.G, F32))),
+            Array(S.G, BF16))
+
+
+def _block_columns(B, K: int, N: int, G: int, coord, xq, sx, w, ws):
+    parts = [B.batch(coord, xq, sx, w[nb * G:min((nb + 1) * G, N)], ws[nb], axes=(None, None, 0, None))
+             for nb in range(F8.weight_blocks(N, G))]
+    return Coll(Array(N, BF16), concat([p.refs for p in parts]))
+
+
+def _shared_scale_blocks(B, K: int, N: int, G: int, tile, given, xq, sx, w, ws):
+    full, r = divmod(N, G)
+    if not r:
+        blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
+        out = B.batch(tile, xq, sx, blocks, ws, axes=(None, None, 0, 0))
+        return Coll(Array(N, BF16), out.refs)
+    parts = []
+    if full:
+        blocks = Coll(Array(full, Array(G, Array(K, E4M3))), w[0:full * G].refs)
+        scales = Coll(Array(full, Array(K // G, F32)), ws[0:full].refs)
+        parts.append(B.batch(tile, xq, sx, blocks, scales, axes=(None, None, 0, 0)))
+    s = B.batch(SC.F32Mul, sx, ws[full], axes=(0, 0))
+    parts.append(B.batch(given, xq, s, w[full * G:N], axes=(None, None, 0)))
+    return Coll(Array(N, BF16), concat([p.refs for p in parts]))
 
 
 def _block_coordinate(B, S, xq, sx, wrow, sw):
@@ -255,28 +298,18 @@ def _block_coordinate(B, S, xq, sx, wrow, sw):
     return _block_acc(B, _Bits(B), S.K, S.G, xq, wrow, lambda kb: B.call(SC.F32Mul, sx[kb], sw[kb]))
 
 
-ScaledMmFp8BlockCoordinateV2 = EW.on_bits(
-    "ScaledMmFp8BlockCoordinate", 2, ["K", "G"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3)),
-                ("sw", Array(S.K // S.G, F32))), BF16),
-    _block_coordinate, F8.ScaledMmFp8BlockCoordinate)
+ScaledMmFp8BlockCoordinateV2 = EW.on_bits("ScaledMmFp8BlockCoordinate", 2, ["K", "G"], _coordinate_sig, _block_coordinate,
+                                          F8.ScaledMmFp8BlockCoordinate)
 
 
 def _scaled_mm_block(B, S, xq, sx, w, ws):
     """`ScaledMmFp8Block_v1`'s body on bits: column n over the weight row `w[n]` and the scale row `ws[n // G]` (a partial last
     weight block when G does not divide N)."""
     K, N, G = S.K, S.N, S.G
-    coord = bind(ScaledMmFp8BlockCoordinateV2, K=K, G=G)
-    parts = [B.batch(coord, xq, sx, w[nb * G:min((nb + 1) * G, N)], ws[nb], axes=(None, None, 0, None))
-             for nb in range(F8.weight_blocks(N, G))]
-    return Coll(Array(N, BF16), concat([p.refs for p in parts]))
+    return _block_columns(B, K, N, G, bind(ScaledMmFp8BlockCoordinateV2, K=K, G=G), xq, sx, w, ws)
 
 
-ScaledMmFp8BlockV2 = EW.on_bits(
-    "ScaledMmFp8Block", 2, ["K", "N", "G"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(F8.weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _scaled_mm_block, F8.ScaledMmFp8Block)
+ScaledMmFp8BlockV2 = EW.on_bits("ScaledMmFp8Block", 2, ["K", "N", "G"], _block_sig, _scaled_mm_block, F8.ScaledMmFp8Block)
 
 
 def _block_coordinate_given_scale(B, S, xq, s, wrow):
@@ -284,10 +317,8 @@ def _block_coordinate_given_scale(B, S, xq, s, wrow):
     return _block_acc(B, _Bits(B), S.K, S.G, xq, wrow, lambda kb: s[kb])
 
 
-ScaledMmFp8BlockCoordinateGivenScaleV2 = EW.on_bits(
-    "ScaledMmFp8BlockCoordinateGivenScale", 2, ["K", "G"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("s", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3))), BF16),
-    _block_coordinate_given_scale, F8.ScaledMmFp8BlockCoordinateGivenScale)
+ScaledMmFp8BlockCoordinateGivenScaleV2 = EW.on_bits("ScaledMmFp8BlockCoordinateGivenScale", 2, ["K", "G"], _given_scale_sig,
+                                                    _block_coordinate_given_scale, F8.ScaledMmFp8BlockCoordinateGivenScale)
 
 
 def _shared_scale_tile(B, S, xq, sx, w, sw):
@@ -296,34 +327,68 @@ def _shared_scale_tile(B, S, xq, sx, w, sw):
     return B.batch(bind(ScaledMmFp8BlockCoordinateGivenScaleV2, K=S.K, G=S.G), xq, s, w, axes=(None, None, 0))
 
 
-ScaledMmFp8BlockSharedScaleTileV2 = EW.on_bits(
-    "ScaledMmFp8BlockSharedScaleTile", 2, ["K", "G"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.G, Array(S.K, E4M3))),
-                ("sw", Array(S.K // S.G, F32))), Array(S.G, BF16)),
-    _shared_scale_tile, F8.ScaledMmFp8BlockSharedScaleTile)
+ScaledMmFp8BlockSharedScaleTileV2 = EW.on_bits("ScaledMmFp8BlockSharedScaleTile", 2, ["K", "G"], _tile_sig, _shared_scale_tile,
+                                               F8.ScaledMmFp8BlockSharedScaleTile)
 
 
 def _scaled_mm_block_shared_scale(B, S, xq, sx, w, ws):
     """`ScaledMmFp8BlockSharedScale_v1`'s body on bits: the N/G whole weight blocks (`ScaledMmFp8BlockSharedScaleTile_v2`), then a
     partial last block's products and coordinates in this body."""
     K, N, G = S.K, S.N, S.G
-    full, r = divmod(N, G)
-    if not r:
-        blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
-        out = B.batch(bind(ScaledMmFp8BlockSharedScaleTileV2, K=K, G=G), xq, sx, blocks, ws, axes=(None, None, 0, 0))
-        return Coll(Array(N, BF16), out.refs)
-    parts = []
-    if full:
-        blocks = Coll(Array(full, Array(G, Array(K, E4M3))), w[0:full * G].refs)
-        scales = Coll(Array(full, Array(K // G, F32)), ws[0:full].refs)
-        parts.append(B.batch(bind(ScaledMmFp8BlockSharedScaleTileV2, K=K, G=G), xq, sx, blocks, scales, axes=(None, None, 0, 0)))
-    s = B.batch(SC.F32Mul, sx, ws[full], axes=(0, 0))
-    parts.append(B.batch(bind(ScaledMmFp8BlockCoordinateGivenScaleV2, K=K, G=G), xq, s, w[full * G:N], axes=(None, None, 0)))
-    return Coll(Array(N, BF16), concat([p.refs for p in parts]))
+    return _shared_scale_blocks(B, K, N, G, bind(ScaledMmFp8BlockSharedScaleTileV2, K=K, G=G), bind(ScaledMmFp8BlockCoordinateGivenScaleV2, K=K, G=G),
+                                xq, sx, w, ws)
 
 
-ScaledMmFp8BlockSharedScaleV2 = EW.on_bits(
-    "ScaledMmFp8BlockSharedScale", 2, ["K", "N", "G"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(F8.weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _scaled_mm_block_shared_scale, F8.ScaledMmFp8BlockSharedScale)
+ScaledMmFp8BlockSharedScaleV2 = EW.on_bits("ScaledMmFp8BlockSharedScale", 2, ["K", "N", "G"], _block_sig, _scaled_mm_block_shared_scale,
+                                           F8.ScaledMmFp8BlockSharedScale)
+
+
+def _block_coordinate_dot(B, S, xq, sx, wrow, sw):
+    """`ScaledMmFp8BlockCoordinate_v3`'s body on bits: the tiles' steps `DOT` (a Boolean e4m3 k32 step), the tile scale inside."""
+    return _block_acc(B, _Bits(B), S.K, S.G, xq, wrow, lambda kb: B.call(SC.F32Mul, sx[kb], sw[kb]), S.DOT)
+
+
+ScaledMmFp8BlockCoordinateV4 = EW.on_bits("ScaledMmFp8BlockCoordinate", 4, ["K", "G", "DOT"], _coordinate_sig, _block_coordinate_dot,
+                                          F8.ScaledMmFp8BlockCoordinateV3, lifted=["DOT"])
+
+
+def _scaled_mm_block_dot(B, S, xq, sx, w, ws):
+    """`ScaledMmFp8Block_v3`'s body on bits: the N coordinates (`ScaledMmFp8BlockCoordinate_v4`) over the step `DOT`."""
+    K, N, G = S.K, S.N, S.G
+    return _block_columns(B, K, N, G, bind(ScaledMmFp8BlockCoordinateV4, K=K, G=G, DOT=S.DOT), xq, sx, w, ws)
+
+
+ScaledMmFp8BlockV4 = EW.on_bits("ScaledMmFp8Block", 4, ["K", "N", "G", "DOT"], _block_sig, _scaled_mm_block_dot, F8.ScaledMmFp8BlockV3,
+                                lifted=["DOT"])
+
+
+def _block_coordinate_given_scale_dot(B, S, xq, s, wrow):
+    """`ScaledMmFp8BlockCoordinateGivenScale_v3`'s body on bits: the tile scales read, the steps `DOT`."""
+    return _block_acc(B, _Bits(B), S.K, S.G, xq, wrow, lambda kb: s[kb], S.DOT)
+
+
+ScaledMmFp8BlockCoordinateGivenScaleV4 = EW.on_bits("ScaledMmFp8BlockCoordinateGivenScale", 4, ["K", "G", "DOT"], _given_scale_sig,
+                                                    _block_coordinate_given_scale_dot, F8.ScaledMmFp8BlockCoordinateGivenScaleV3,
+                                                    lifted=["DOT"])
+
+
+def _shared_scale_tile_dot(B, S, xq, sx, w, sw):
+    """`ScaledMmFp8BlockSharedScaleTile_v3`'s body on bits: the K/G scale products once, then the G coordinates over the step `DOT`."""
+    s = B.batch(SC.F32Mul, sx, sw, axes=(0, 0))
+    return B.batch(bind(ScaledMmFp8BlockCoordinateGivenScaleV4, K=S.K, G=S.G, DOT=S.DOT), xq, s, w, axes=(None, None, 0))
+
+
+ScaledMmFp8BlockSharedScaleTileV4 = EW.on_bits("ScaledMmFp8BlockSharedScaleTile", 4, ["K", "G", "DOT"], _tile_sig, _shared_scale_tile_dot,
+                                               F8.ScaledMmFp8BlockSharedScaleTileV3, lifted=["DOT"])
+
+
+def _scaled_mm_block_shared_scale_dot(B, S, xq, sx, w, ws):
+    """`ScaledMmFp8BlockSharedScale_v3`'s body on bits: the whole weight blocks (`ScaledMmFp8BlockSharedScaleTile_v4`), then a partial
+    last block's products and coordinates in this body."""
+    K, N, G, DOT = S.K, S.N, S.G, S.DOT
+    return _shared_scale_blocks(B, K, N, G, bind(ScaledMmFp8BlockSharedScaleTileV4, K=K, G=G, DOT=DOT),
+                                bind(ScaledMmFp8BlockCoordinateGivenScaleV4, K=K, G=G, DOT=DOT), xq, sx, w, ws)
+
+
+ScaledMmFp8BlockSharedScaleV4 = EW.on_bits("ScaledMmFp8BlockSharedScale", 4, ["K", "N", "G", "DOT"], _block_sig,
+                                           _scaled_mm_block_shared_scale_dot, F8.ScaledMmFp8BlockSharedScaleV3, lifted=["DOT"])

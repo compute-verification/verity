@@ -65,8 +65,11 @@ keeps the cache sound: a pass is only reused while everything the tests read is 
   narrowly as a directory or a file allows: a listed workspace package is its directory alone, not its dependencies, and
   every listed path adds the suite to the quick tier of each change under it.
 
-Programs a test starts as a subprocess aren't traced, so list what they read; the guard sees opens, not `exists()` or `stat()`,
-so list a path a test only checks the existence of too. Locate files from `__file__`
+A Python a test starts is guarded like the test, and the failure names the test and the file the process read: declare the
+file, or give the test a stand-in for it. Other programs (bash, git, a Python run with `-I`, `-E` or `-S`, or with a PYTHONPATH
+that replaces the suite's) aren't traced, and nothing fails when they read outside the inputs, so list what they read; a Python
+they start on the suite's PYTHONPATH is traced again. The guard sees opens, not `exists()` or `stat()`, so list a path a test
+only checks the existence of too. Locate files from `__file__`
 (`Path(__file__).parent / "fixtures"`), never from the working directory. Never lean on another suite's side effects, such as
 a `sys.path` entry another test file added: every suite runs alone.
 

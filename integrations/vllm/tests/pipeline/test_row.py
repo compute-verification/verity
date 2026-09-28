@@ -124,9 +124,12 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
 # the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
-# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.
+# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.  SIGINT is the
+# kernel's default here: Python's handler only flags the signal, so one that lands between closing the FIFO and entering read()
+# leaves that process blocked for good, and the test's wait with it.
 STAGE = r'''
-import os, sys
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 d = sys.argv[1]
 for name, pid in (("stage", os.getpid()), ("timeout", os.getppid())):
     open(os.path.join(d, name + ".pid"), "w").write(str(pid))

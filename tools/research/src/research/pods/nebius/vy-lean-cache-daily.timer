@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-lean-cache-daily at 06:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 06:15:00 UTC
+AccuracySec=1min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

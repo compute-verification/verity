@@ -231,24 +231,3 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
         clear_observations()
     assert seen == [("w", K, N), ("ws", K // G, 21)]
     assert ctx.calls == [bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G)] * 2
-
-
-@pytest.mark.parametrize("cc, family", [((8, 9), "ampere"), ((10, 0), "unregistered:10.0"), ((12, 0), "blackwell_consumer")])
-def test_the_frontend_rule_refuses_every_target_but_hopper(cc, family):
-    """On sm_120, `VLLM_USE_DEEP_GEMM=0` also selects `CutlassFp8BlockScaledMMKernel`, whose `_C.cutlass_scaled_mm` is the sm_120
-    blockwise kernel: the kernel-class read-back cannot tell it from the sm_90 one, so the rule refuses the target, as the fold does."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
-    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
-
-    node = types.SimpleNamespace(args=(), kwargs={})
-    clear_observations()
-    try:
-        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=cc))
-        refused = R.CutlassScaledMmFp8BlockRule().applies(node, None)
-        observe_target_profile(DEFAULT_TARGET.with_overrides(compute_capability=(9, 0)))
-        past_the_gate = R.CutlassScaledMmFp8BlockRule().applies(node, None)
-    finally:
-        clear_observations()
-    assert refused == (f"numerics_unregistered: target {family} (cc {cc[0]}.{cc[1]}); ScaledMmFp8Block_v1 is the hopper family's blockwise "
-                       f"CUTLASS kernel, and this target's `_C.cutlass_scaled_mm` blockwise kernel has no registered Definition")
-    assert past_the_gate == "unexpected operator arity"

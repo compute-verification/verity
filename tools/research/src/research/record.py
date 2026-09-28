@@ -63,7 +63,7 @@ def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fi
 
     `store` (optional): what `research run` computed BEFORE launch for the evidence store -- tool identity, derivation id,
     reuse_key, key params (content-resolved), inputs, closure manifest, conditions, scratch dirs (research.store README §4/§6).
-    `cwd` (optional): {"path": the workload's cwd, "basis": "run_dir" | "source" | "explicit"} -> run.cwd / run.cwd_basis."""
+    `cwd` (optional): {"path": the workload's cwd, "basis": "run_dir" | "source" | "clone" | "explicit"} -> run.cwd / run.cwd_basis."""
     if job.get("schema") != JOB_SCHEMA_V1:
         raise ValueError(f"extend_job expects a {JOB_SCHEMA_V1} record, got {job.get('schema')!r}")
     out = dict(job)

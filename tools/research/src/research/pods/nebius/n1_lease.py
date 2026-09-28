@@ -51,6 +51,7 @@ import json
 import os
 import re
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -458,13 +459,24 @@ class Controller:
         return ans
 
 
+#: what `setup` runs as root on one file of DIR: DIR is 0777, so any local user can plant a symlink or a hard link there, or swap a
+#: file for one after it was listed; only the regular file it opens without following a link, with no other name, is made 0666
+FIX_MODE = """import os, stat, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+st = os.fstat(fd)
+if stat.S_ISREG(st.st_mode) and st.st_nlink == 1:
+    os.fchmod(fd, 0o666)
+"""
+
+
 def setup() -> None:
     if not DIR.is_dir() or (DIR.stat().st_mode & 0o7777) != 0o777:
         subprocess.run(["sudo", "-n", "install", "-d", "-m", "0777", str(DIR)], check=True)
         subprocess.run(["sudo", "-n", "chmod", "0777", str(DIR)], check=True)
     for f in DIR.iterdir():
-        if f.is_file() and (f.stat().st_mode & 0o666) != 0o666:
-            subprocess.run(["sudo", "-n", "chmod", "0666", str(f)], check=False)
+        st = f.lstat()
+        if stat.S_ISREG(st.st_mode) and (st.st_mode & 0o666) != 0o666:
+            subprocess.run(["sudo", "-n", "python3", "-c", FIX_MODE, str(f)], check=False)
 
 
 def main(argv: list[str]) -> int:

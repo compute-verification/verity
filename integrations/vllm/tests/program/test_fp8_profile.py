@@ -242,7 +242,8 @@ def test_cutlass_scaled_mm_binds_the_declared_scale_construction():
 def test_cutlass_scaled_mm_refuses_non_hopper_targets_bias_and_other_scale_shapes():
     node = _node("_C.cutlass_scaled_mm.default", MM_SCHEMA, mm_args())
     r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(cc=(8, 9)))          # L40S / Ada: another FP8 GEMM, no Definition
-    assert isinstance(r, Unsupported) and "sm90" in r.reason and r.detail["compute_capability"] == [8, 9]
+    assert isinstance(r, Unsupported) and r.detail["compute_capability"] == [8, 9]
+    assert r.reason == "blockwise FP8 linear on ada (8.9): this target's _C.cutlass_scaled_mm blockwise kernel has no registered Definition"
     # the record must attest the kernel class: a header without the read-back (pre-R15 capture) or with another class is refused
     r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(kernel=None))
     assert isinstance(r, Unsupported) and "does not attest CutlassFp8BlockScaledMMKernel" in r.reason and r.detail["fp8_block_gemm_kernel"] is None

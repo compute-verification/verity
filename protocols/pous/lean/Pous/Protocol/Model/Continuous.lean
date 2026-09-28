@@ -5,7 +5,8 @@ import Pous.Protocol.Model.Audit
 /-!
 # The continuous audit: a timed verifier, and a responder that runs on its clock
 
-Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`. Statement reviewer:
+Added on 3 Oct 2026, with `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`; the arrivals and the
+memory at every time (the last section) with `Pous.Guarantees.ContinuousTimeAverage`. Statement reviewer:
 needed. Red team: needed. It replaces PR #896's round-structured draft, which assumed three requirements on the protocol
 (no pipelining, a hard deadline, every answer past `Δ` counted late). Here the verifier is explicit and enforces each
 rule. The responder may try to break any of them, and no statement takes a hypothesis about its timing.
@@ -74,13 +75,18 @@ did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_ROUNDS`)
 
 * **The arrival process is the verifier's own randomness.** It must be independent of the setup, the indices and the
   answers (a Poisson process from its own `verity.randomness` domain, say). The number of challenges `N` must not
-  adapt to the misses, though rejecting early is fine. The statements hold for every fixed schedule `arr`, so they
-  hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by `λT`. The responder may
-  know every arrival time in advance, and a queued challenge is sent when the last round closes, which the responder
-  controls. Both only help it, and the statements hold for every machine.
-* **Storage at send times, not a time average.** `ε_j` is read at the send times. Between them a machine may hold
-  less, down to nothing, and rebuild before the next send (`rest` sees `C` and `ω`), so the bound says nothing about
-  the time average.
+  adapt to the misses, though rejecting early is fine. `PerAnswer` and `ContinuousAudit` hold for every fixed
+  schedule `arr`, so they hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by
+  `λT`. The responder may know every arrival time in advance, and a queued challenge is sent when the last round
+  closes, which the responder controls. Both only help it, and those statements hold for every machine.
+  `ContinuousTimeAverage` (the last section) draws the arrivals in the game instead: the responder does not know them
+  in advance, and the bound normalizes by `λT`.
+* **Storage at send times, not a time average,** in `PerAnswer` and `ContinuousAudit`. `ε_j` is read at the send
+  times. Between them a machine may hold less, down to nothing, and rebuild before the next send (`rest` sees `C` and
+  `ω`), so those bounds say nothing about the time average. `ContinuousTimeAverage` reads the memory at every idle
+  slot, and the memory at a slot cannot depend on whether a challenge arrives there. It reads nothing at a busy slot,
+  and the responder chooses which slots are busy (the last section), so it bounds an average over the idle slots, not
+  over the whole period.
 * **No messages in flight.** A round's answer is computed from the memory at the send time and the round's queries.
   Data the responder keeps outside its memory, on the wire say, and reads back during a round is outside help, which
   the deployment must exclude from each send to its close.
@@ -212,5 +218,72 @@ noncomputable def contFreed (sch : Scheme M) (held : ℕ) : ℝ :=
 `1 − ε + ε_proof`, off a setup event of probability at most `(β + 1)·π` (`Pous.Guarantees.PerAnswer`). -/
 noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
   1 - ((β : ℝ) - sch.B) / (sch.B * sch.ℓ)
+
+/-! ## Arrivals drawn by the verifier, and the memory at every time
+
+Added on 3 Oct 2026, with `Pous.Guarantees.ContinuousTimeAverage`. Statement reviewer: needed. Red team: needed.
+
+The verifier draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `Prog.depth` and of
+`arr` above. At slot `t` the verifier draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of everything
+else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival per slot,
+standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it draws its
+arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` drawn at its slot
+(`histAt`), and its arrival time is
+`arrAt a x j`. Rules 1–5 are unchanged: `contRecords` with `arr := arrAt a x` runs the verifier on these arrivals.
+
+**Arrivals queue.** Rule 1 sends challenge `j` at `max(arrAt a x j, c_{j−1})`, so a challenge that arrives while a
+round is open waits for it to close. None is dropped. This is load-bearing: at an idle slot (below) the indices sent
+so far are `histAt a x t`, a function of the verifier's draws alone. A verifier that dropped arrivals during an open
+round would send a history that depends on the rounds' depths, and so on the primitive.
+
+**Idle slots.** Slot `t` is idle (`contIdle`) when every challenge that arrived before `t` has closed by `t`, so a
+challenge arriving at `t` is sent at `t`. At a busy slot a round is open or a challenge is queued, and
+`ContinuousTimeAverage` does not read the memory there.
+
+**The responder chooses the busy slots.** A round lasts as many units as its program takes: at most `D` for a hit or
+a wrong answer (`contVerdict`, `PousContinuous.hit_on_time`), at most `D_late` otherwise
+(`PousContinuous.closed_le`). A busy slot lies inside some round, so over `n` challenges of which `F` miss, at most
+`D·n + (D_late − D)·F` slots are busy when `D ≤ D_late` (not proved here). The responder may make them busy at no
+cost but those misses: one that pads every hit to `D` units, answering at the deadline, misses nothing, and at
+`a/b = 0.02415` (100 challenges/s on 241.5 µs slots) it makes about 2.5% of the slots busy at `D = 2` and 9.9% at
+`D = 5`. At `D_late ≤ 1` no slot is busy: a round closes by the next slot. During a round the memory is not
+measured: the responder may keep only what the round's answer needs, and `rest`, which sees `C` and `ω`, restores
+the rest by the next idle slot.
+
+**The memory at time `t`** (`contHeldAt`) is `rest W pp C ω h t m` after the challenges that arrived before `t`: what
+the responder would present if a challenge were sent at `t`. At an idle slot it is the memory a challenge arriving at
+`t` meets. `rest` takes no argument about future arrivals, so the memory at `t` cannot depend on whether a challenge
+arrives at `t` (the model's PASTA property, by construction). The verifier never sees it; it is the game's
+measurement, as `ContRecord.held` is.
+-/
+
+/-- The slots whose coin is below `a`: the challenges' arrivals, in order. -/
+def arrivals (a : ℕ) {T b B : ℕ} (x : Fin T → Fin b × Fin B) : List (Fin T) :=
+  (List.finRange T).filter fun t => ((x t).1 : ℕ) < a
+
+/-- Challenge `j`'s arrival time, or `T` once the arrivals run out. -/
+def arrAt (a : ℕ) {T b B : ℕ} (x : Fin T → Fin b × Fin B) (j : ℕ) : ℕ :=
+  ((arrivals a x).map Fin.val).getD j T
+
+/-- The indices of the challenges that arrived before time `t`, oldest first. -/
+def histAt (a : ℕ) {T b B : ℕ} (x : Fin T → Fin b × Fin B) (t : ℕ) : List (Fin B) :=
+  ((arrivals a x).filter fun s : Fin T => (s : ℕ) < t).map fun s => (x s).2
+
+/-- Time `t` is idle: every challenge that arrived before `t` has closed by `t`, so one arriving at `t` is sent at
+`t` (rule 1). -/
+def contIdle {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
+    (C : sch.Code) (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B) (t : ℕ) : Prop :=
+  (contAfter mach D_late W pp C ω (arrAt a x) (histAt a x t)).closed ≤ t
+
+instance {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+    (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B) (t : ℕ) :
+    Decidable (contIdle mach D_late W pp C ω a x t) :=
+  inferInstanceAs (Decidable (_ ≤ t))
+
+/-- The length of the responder's memory at time `t`: what it would hold if a challenge were sent at `t`. -/
+def contHeldAt {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
+    (C : sch.Code) (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B) (t : ℕ) : ℕ :=
+  let s := contAfter mach D_late W pp C ω (arrAt a x) (histAt a x t)
+  (mach.rest W pp C ω s.sent t s.mem).length
 
 end Pous
