@@ -1,10 +1,11 @@
 # Proof of useful space (POUS)
 
-A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` from it on every use. A timed audit
-must certify that the GPU still holds more than a `ρ` fraction of `C`, so the memory it claims is really spent on the
+A GPU keeps an encoding `C` of model weights `W` in its memory and decodes `W` from it on every use. A timed audit must
+certify that the GPU still holds more than a `ρ` fraction of `C`, so the memory it claims is really spent on the
 weights. This directory holds the problem's Lean formalization (`lean/`): the definitions, the pinned statements, and
-the proofs so far. The secure-first scheme is the dense single-layer scheme (below). A Python distribution
-(`verity_pous`: reference encoder, decoder and audit simulator) comes when that code lands.
+the proofs so far. The secure-first scheme is the band graph with in-degree `d = 12`, and the dense scheme stays
+selectable (below). A Python distribution (`verity_pous`: reference encoder, decoder and audit simulator) comes when
+that code lands.
 
 ## Main caveat: H is a monolithic random oracle (narrow-state H)
 
@@ -17,13 +18,24 @@ those states: with SHAKE's 1600-bit state, Dense in one round from about 20% of 
 ideal-hash result transfers to a concrete hash by citation. So "no named assumption" for `DenseMeets` means within the
 ideal-hash model only, and so do the dense scheme's deployment results below. The chosen fix is H as the overwrite chain
 over an ideal permutation `Π₂` of width `2m + 512`, to be proved in the ideal-permutation model. Its pebbling side is
-proved, but its ex post facto bound, `ChainExPostFacto` (B5 for `Π₂`), is stated and not yet proved, and it is not in
-this package. `Π₂` itself (Feistel-SHAKE) is a heuristic ideal permutation. Sources: the POUS store's
-`docs/p3-cryptanalysis.md`, "Narrow-state H", and `docs/scheme-choice-e2e.md`.
+proved, but its ex post facto bounds are stated and not yet proved, and neither is in this package: `ChainExPostFacto`
+(B5 for `Π₂`) for dense, and its DAG-generic form `ChainExPostFactoG` for the band. `Π₂` itself (Feistel-SHAKE) is a
+heuristic ideal permutation. Sources: the POUS store's `docs/p3-cryptanalysis.md`, "Narrow-state H", and
+`docs/band-vs-dense.md`.
 
-## The secure-first scheme: dense
+## The secure-first scheme: the band graph, `d = 12`
 
-Daniel chose the dense single-layer scheme as the secure-first build (the POUS store's `docs/scheme-choice-e2e.md`).
+Daniel chose the band graph with in-degree `d = 12` as the secure-first build (28 Sep 2026, 01:10Z; the POUS store's
+`docs/band-vs-dense.md`), superseding the dense choice of `docs/scheme-choice-e2e.md`. It is the dense scheme below with
+one change: block `v` absorbs only its `d` newest parents. Over the overwrite chain, a band with `d ≥ D` is exactly as
+hard as dense, with the same certificate, and it decodes a block in `d + 1` calls instead of about 256. The price is a
+cliff: security holds only while the effective round budget stays at or below `d`, and one round past it an adversary
+that drops every `(d + 1)`-th block passes the audit. Its proofs are in the POUS store's `lean/submissions/band-chain/`,
+not yet in this package: `band_meets_64` gives `Meets` at 64 KiB, `B = 512`, `D = 5`, `Q = 2^20`, `k = 111` and
+`ε = 2^-128` for every `d ≥ 5`, given `ChainExPostFactoG`.
+
+## The dense scheme (selectable)
+
 `Pous.Dense.denseScheme B ℓ` is one segment of `B` blocks of `ℓ` bits: `C_i = W_i ⊕ H(i, C_{<i})` over the complete DAG,
 with no `pp` and no coins, so its rate is 1. Decoding recomputes each block with one query. `Pous.Dense.segScheme N B ℓ`
 lays out `N` such segments on global block indices, so each block reads only its own segment's earlier blocks.
@@ -140,4 +152,5 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
 
 ## Next
 
-N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`) and `p3-meets` are still changing, and come in the next PR.
+The band's proofs (`lean/submissions/band-chain/`), N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`) and
+`p3-meets` come in later PRs.
