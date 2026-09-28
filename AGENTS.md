@@ -32,6 +32,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       code is its `lean/`. NCI is Lean only.
     - `claims`: the ids of security claims.
     - `private_circuits`, and multiproofs (`commitments`).
+    - `core/`: core's Lean ports, each held to today's Python by `core/difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`).
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` starts empty.
 - `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
