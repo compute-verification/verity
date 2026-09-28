@@ -409,7 +409,9 @@ def nv_logf(C, a):
     r = f32_mul_ftz(C, r, f)
     r = f32_fma_ftz(C, r, f, f)
     r = _fma_ftz(C, i2, LN2, r)
-    r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), _fma_ftz(C, a2, INF, INF), r)
+    # a2 >= 0x7F800000 (+inf, a NaN, a negative): fma(a2, inf, inf) is a2 quieted for a NaN, +inf, else the invalid NaN 0xFFC00000
+    special = mux(C, _is_nan(C, a2), a2[:22] + [ONE] + a2[23:], mux(C, a2[31], _c32(0xFFC00000), _c32(INF)))
+    r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), special, r)
     return mux(C, NOT(or_reduce(C, a2[:31])), _c32(0xFF800000), r)
 
 
@@ -577,6 +579,21 @@ def gelu_tanh_mul_bf16(C, g, u):
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, ir_nan=True), 0x7FFF)
 
 
+def topp_numkeep(C, nd, q):
+    """``TopPNumkeep_v1``: ``min(max(nd - qi, 1), nd)`` on u32 counts, qi the f32 q truncated to a u32 (0 unless q is finite and
+    > 0, all ones from 2^32 on); 0 when nd is 0."""
+    s, e, m = q[31], list(q[23:31]), list(q[:23])
+    pos = C.AND(NOT(s), NOT(and_reduce(C, e)))
+    ge1 = NOT(_ult_const(C, e, 127))
+    big = NOT(_ult_const(C, e, 127 + 32))
+    ip = fp.shl(C, m + [ONE] + [ZERO] * 32, sub(C, e, const_bits(127, 8), 8)[0][:5])[23:55]
+    qi = [C.AND(pos, OR(C, big, C.AND(ge1, b))) for b in ip]
+    lt = sub(C, qi, nd, 32)[1]
+    r = mux(C, lt, sub(C, nd, qi, 32)[0], const_bits(1, 32))
+    nz = or_reduce(C, nd)
+    return [C.AND(nz, b) for b in r]
+
+
 #: primitive -> piece(C, *operand words)
 PIECES = {
     "F32AddFtz_v1": f32_add_ftz,
@@ -587,6 +604,13 @@ PIECES = {
     "F32Max_v1": f32_max,
     "GuardNegInfZero_v1": guard_neg_inf_zero,
     "MufuEx2Ftz_v1": mufu_ex2,
+    # the top-p keep word's word gates (verity_vllm.program.registry.topp_words)
+    "BitXor_v1": lambda C, a, b: [a[0] ^ b[0]],
+    "U32Xor_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
+    "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),
+    "I32ToF32_v1": _i32_to_f32,
+    "NvLogf_v1": nv_logf,
+    "TopPNumkeep_v1": topp_numkeep,
     "MufuRcpFtz_v1": mufu_rcp,
     "Fa2InvSum_v1": fa2_inv_sum,
     "RsqrtApprox_v1": rsqrt_approx,
