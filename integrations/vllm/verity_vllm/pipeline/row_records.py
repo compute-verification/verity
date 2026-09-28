@@ -313,14 +313,18 @@ def served_shape(d: str) -> str:
     return "LP=%d T_r=%d cap_T=%d" % (lp, t, cap) if t > 0 and t != cap else ""
 
 
-def manifest_engine(path: str) -> str:
-    """The query engine a manifest's header names (``v2-query`` for the manifest of record), "" when unreadable."""
+#: the query the row builds its manifest of record under: `query.required.QUERY_OF_RECORD`, spelt here because the row driver
+#: imports no core module (tests/pipeline/test_row.py pins the two equal)
+QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
+
+
+def manifest_query(path: str) -> str:
+    """The query a manifest's header names (``query.query_id``), "" when unreadable or when it names none."""
     try:
-        m = json.load(open(path))
-    except (OSError, ValueError):
+        q = json.load(open(path)).get("query")
+    except (OSError, ValueError, AttributeError):
         return ""
-    q = m.get("query") or {}
-    return q.get("engine") if isinstance(q, dict) else ""
+    return str(q.get("query_id") or "") if isinstance(q, dict) else ""
 
 
 #: the taps a row runs by default, NORM_TAP=0 etc. opting out for A/B only: (CommitConfig field, manifest build / verify flag, the query

@@ -289,6 +289,41 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
+def _record_manifest(path: Path, query_id: str) -> None:
+    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    path.write_text(json.dumps({"query": query, "identities": [{"family": "instance_outputs"}]}))
+
+
+def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
+    from verity_vllm.query import required
+    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
+
+
+def test_a_manifest_of_record_under_the_query_of_record_is_reused_and_one_of_another_query_rebuilt(tmp_path, monkeypatch):
+    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row.
+    The Build's manifest under the query of record is the Commit's; a pre-S1 Build's module-body manifest is moved aside and rebuilt."""
+    from verity_vllm.query.module_body import Q_MODULE_BODY_ID
+    r = _row(tmp_path)
+    (Path(r.d) / "build_request").mkdir()
+    (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
+    built: list[str] = []
+
+    def rebuild(stage: str) -> int:
+        built.append(stage)
+        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+        return 0
+
+    monkeypatch.setattr(r, "required_manifest", rebuild)
+    _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+    assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == [] and list(Path(r.d).glob("manifest.*-*.json")) == []
+    assert "required-value manifest of record:" in (Path(r.d) / "row.log").read_text()
+    _record_manifest(Path(r.d) / "manifest.json", Q_MODULE_BODY_ID)
+    assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == ["commit"]
+    aside = list(Path(r.d).glob("manifest.other-query-*.json"))
+    assert len(aside) == 1 and R.manifest_query(str(aside[0])) == Q_MODULE_BODY_ID
+    assert R.manifest_query(f"{r.d}/manifest.json") == R.QUERY_OF_RECORD
+
+
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1

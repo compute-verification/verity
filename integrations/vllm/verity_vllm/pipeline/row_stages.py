@@ -193,11 +193,11 @@ class SingleRow(Row):
         return self.ck_.guarded_max_tap == "1"
 
     def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs, under the tap and guarded-max
-        policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
+        """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
+        guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
         wd = ""
         policy = R.tap_policy_flags(self.ck_)
-        self.tl(f"{stage}.required_manifest", "start", ("engine", "v2-query"))
+        self.tl(f"{stage}.required_manifest", "start", ("query", R.QUERY_OF_RECORD))
         if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
             wd = R.workload_digest(self.d)
             cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
@@ -210,7 +210,7 @@ class SingleRow(Row):
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
         if rc == 0:
             self.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-            self.log(f"required-value manifest of record (Q_module_body_v1, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
+            self.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
             return 0
         if os.path.exists(f"{self.d}/manifest.json"):
             os.remove(f"{self.d}/manifest.json")
@@ -559,26 +559,26 @@ class SingleRow(Row):
         return req
 
     def manifest_of_record(self) -> str:
-        """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it
-        (a pre-query manifest is moved aside, never used), else rebuilt here from the Build's request Programs."""
+        """The required-value manifest the Commit runs over: the one named, else the Build's when it is built under the query of record
+        (a manifest of another query, or of none, is moved aside, never used), else rebuilt here from the Build's request Programs."""
         d = self.d
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
-            eng = R.manifest_engine(f"{d}/manifest.json")
-            mismatch = R.manifest_policy_mismatch(f"{d}/manifest.json", self.ck_) if eng == "v2-query" else []
+            qid = R.manifest_query(f"{d}/manifest.json")
+            mismatch = R.manifest_policy_mismatch(f"{d}/manifest.json", self.ck_) if qid == R.QUERY_OF_RECORD else []
             if mismatch:
                 prev = f"{d}/manifest.policy-{'-'.join(mismatch).replace('_', '-')}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
                 self.log(f"manifest.json beside the Build disagrees with this Commit's taps on the {', '.join(mismatch)} policy: moved aside "
                          f"({os.path.basename(prev)}), rebuilding the manifest under the row's policies")
-            elif eng == "v2-query":
+            elif qid == R.QUERY_OF_RECORD:
                 man = f"{d}/manifest.json"
                 self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
             else:
-                prev = f"{d}/manifest.pre-v2-{_stamp()}.json"
+                prev = f"{d}/manifest.other-query-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build is not the query path's (query.engine={eng or 'none'}): moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest of record")
+                self.log(f"manifest.json beside the Build is not built under the query of record {R.QUERY_OF_RECORD} (query.query_id="
+                         f"{qid or 'none'}): moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
         if not man and (os.path.isfile(f"{d}/build_request/instances.json.gz") or glob.glob(f"{d}/build_request_LP*_T*")):
             mrc = self.required_manifest("commit")
             if mrc == 3:
