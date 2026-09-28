@@ -14,6 +14,7 @@ units', with
   lines (`lines`, the ones `pc4Sem` reads) as their E2M1 codes, and `G_{s,q}` the FP4 chain of `F_B`'s column `s`
   against `F_A`'s column `q` at scale `1.0`, the words `peelFp4` reads as `G` (`gram4`). That the verifier's public
   inputs are these is L8;
+* `anchorsOK`: `True`, since E2M1 has no NaN code;
 * `reg sh`: the activation rows `a`, the weight rows `b` and every entry's `C̃` and `U`. The rows are BF16 in the
   Program, so `a`'s and `b`'s gates hold the commitment's words shifted right by 16, each as the gate's low 16 bits:
   a widened BF16 word's BF16 word, `−0` included (`Fp4Sem.OperandOK` asks that every word be one), and `C̃` and `U`
@@ -93,6 +94,7 @@ def tileCheck4 (ops : RowOps)
     (bAt sh.m sh.k ≤ g.val ∧ g.val < ebAt sh.m sh.n sh.k) ∨
     ∃ i < sh.m, ∃ j < sh.n, g.val = cGlob4 sh.m sh.n sh.k 64 64 i j ∨ g.val = uGlob4 sh.m sh.n sh.k 64 64 i j
   anchorsOf H s U u act := fun g => BitVec.ofNat _ (anchors4 (lines H s U u act) g.val)
+  anchorsOK _ _ _ _ _ := True
   rowsOf U u c := fun g => BitVec.ofNat _
     (rows4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.weight (U.layout.wid u))
       c.ticket c.useful g.val)

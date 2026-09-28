@@ -1,0 +1,21 @@
+{
+ "roots": ["Identity", "Identity.Difftest"],
+ "exempt": {
+  "Identity.DifftestMain": "the identity-difftest server's entry point, one line: Difftest.serve of Identity.Difftest.table, which tests/test_identity_difftest.py drives against the Python reference; audited under Identity.Difftest"
+ },
+ "layers": {
+  "Identity": {
+   "imports": ["Identity", "Flock.Hash", "Flock.Bytes", "Flock.Canon"],
+   "except": ["Identity.Difftest"],
+   "why": "the identity hash is code: Lean core and C-Flock's executable primitives only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "Identity.Difftest": {
+   "imports": ["Identity", "Difftest"],
+   "except": [],
+   "why": "the difftest's functions reach Lean only through the identity hash and the harness"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}
