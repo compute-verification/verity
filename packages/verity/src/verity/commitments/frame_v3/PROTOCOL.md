@@ -1,4 +1,4 @@
-# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512`
+# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512`; `frame-b3`
 
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
@@ -168,3 +168,30 @@ trees with their pads and paths, word leaves and an empty root. `test_sha512_fra
 - **What still rests on SHA-256.** Which statement and which session a root belongs to also rests on `binding`, a 32-byte SHA-256
   identity digest from the protocol and the IR. Until the re-baseline moves identities to SHA-512, a Table 1 row that cites this
   frame cites `cr/sha-256` beside `cr/sha-512`.
+
+## 7. `frame-b3`
+
+A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
+`verity.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
+(`protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
+B-Ligero do not mirror it, and `FrameV3` does not offer it.
+
+~~~text
+domain id  = BLAKE3( the frame-v3 domain message )                     (not keyed)
+leaf       = keyed(domain id, H zero-padded to a 64-byte block ‖ value),  H = 0x01 ‖ u64 rank ‖ u64 position ‖ u16 len ‖ schema
+node at l  = keyed(keyed(domain id, 0x02 ‖ u8 l), left ‖ right)         (one compression; no index)
+pad        = keyed(domain id, 0x03 ‖ u64 rank);   empty root = keyed(domain id, 0x04)
+~~~
+
+Integers are little-endian. The value starts block-aligned, so a row streams through BLAKE3's own chunk tree: a 32 KB row is
+33 chunks hashed in parallel under 6 parent levels. The tree's shape is fixed by the count the domain id absorbs, so a node
+hashes no index, and a leaf (its own tag) and a node (its level's key) cannot collide.
+
+- **Vectors and conformance.** `packages/verity/tests/commitments/test_frame_b3.py` rebuilds each message from this layout,
+  pins a domain id, leaf, node, pad, empty root and root, and rebuilds the root with the `blake3` package when that is
+  installed. `verity.commitments.blake3` itself matches that package on `vectors.json`'s BLAKE3 cases, hash and keyed
+  (`test_frame_v3.py`). Pearl-C's device kernels
+  (`benchmarks/pouw/pearl_c/hash.cuh`) are checked against this reference on the host (`test_pearl_c_hash_host.py`).
+- **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
+  also rests on `binding` and the positions' identity, both SHA-256 identity digests, so a Table 1 row citing this mode
+  cites `cr/sha-256` beside `cr/blake3`.
