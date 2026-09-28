@@ -2,6 +2,14 @@
 
     python benchmarks/pouw/pearl_calibration.py --model /root/models/Qwen2.5-7B-Instruct [--out RESULT.json]
 
+Recorded as r20260928-075340-f1bb, after ``pearl_b200_setup.sh``:
+
+    C=/root/pearl-venv/lib/python3.12/site-packages/nvidia/cu13
+    research run --on <b200> --project verity --source . --cwd source --campaign pouw --tool pouw_pearl_cal \
+      --env PATH=$C/bin:/root/pearl-venv/bin:/usr/bin:/bin --env CUDA_HOME=$C --env HF_HUB_OFFLINE=1 \
+      --env ATTENTION_BACKEND=FLASH_ATTN --env VLLM_USE_FLASHINFER_SAMPLER=0 \
+      -- python benchmarks/pouw/pearl_calibration.py --model /root/models/Qwen2.5-7B-Instruct
+
 Runs in the Python environment of Pearl's workspace (``pearl_b200_setup.sh``), not Verity's.  Three modes, each in its own
 process (vLLM keeps device memory until exit):
 

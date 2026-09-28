@@ -24,6 +24,13 @@ cd /root/pearl
 export UV_TORCH_BACKEND=cu130 UV_PROJECT_ENVIRONMENT=/root/pearl-venv UV_LINK_MODE=copy UV_PYTHON_INSTALL_DIR=/root/uv-python
 uv python install 3.12
 uv sync --package vllm-miner --no-dev --locked
+# The lock pairs nvcc 13.3 with cudart 13.0 headers, which CCCL's JIT check refuses; give nvcc its own headers' version.
+CU13=/root/pearl-venv/lib/python3.12/site-packages/nvidia/cu13
+if [ ! -d "$CU13/include.cudart-13.0" ]; then
+  uv pip install -q --target /root/cudart133 "nvidia-cuda-runtime==13.3.*"
+  cp -r "$CU13/include" "$CU13/include.cudart-13.0" && cp -r /root/cudart133/nvidia/cu13/include/. "$CU13/include/"
+  ln -sfn lib "$CU13/lib64"
+fi
 /root/pearl-venv/bin/python -c "import vllm, torch, vllm_miner; print('vllm', vllm.__version__, 'torch', torch.__version__, torch.version.cuda)"
 wait "$hf_pid"
 git -C /root/pearl rev-parse HEAD > /root/pearl-setup.done
