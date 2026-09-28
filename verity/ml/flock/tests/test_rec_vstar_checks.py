@@ -98,14 +98,15 @@ def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
 def test_v_stars_parts_are_as_many_as_the_verifiers_groups(tmp_path):
     """V*'s parts at the inner shape (`VStar.parts (spec vsh)`) are as many as the verifier's own packing of its algebra
     (`RecResiduals.groups (structureOf sh) (portSizes sh)`): both are functions of the shape alone, so the count refuses no
-    shape at which the two agree, and a shape whose packing refuses, where one residual alone reads more than 64 regions
-    (claims 16 at m = 22), is refused, naming V*'s parts."""
-    for shape in SHAPES:
+    shape at which the two agree, among them claims 16 at m = 22, whose batched T stands alone (172 slots, past MAX_SLOTS);
+    and a shape whose packing refuses, where one residual alone reads more than MAX_LONE_SLOTS (claims 22: 236 slots), is
+    refused, naming V*'s parts."""
+    for shape in (*SHAPES, (22, 6, 16)):
         rc, line = _statements(_inner(tmp_path / "inner.json", *shape))
         assert rc == 0 and len([s for s in line["statements"] if s[0].startswith("rec-residuals/")]) == len(
             RR.parts(RR.spec(A.Shape(*shape)))), line
-    rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 16))
-    assert rc == 1 and line["error"] == "V*'s parts: residual 20 alone reads more than 64 regions or 160 sha512x3 slots", line
+    rc, line = _statements(_inner(tmp_path / "wide.json", 22, 6, 22))
+    assert rc == 1 and line["error"] == "V*'s parts: residual 26 alone reads more than 64 regions or 223 sha512x3 slots", line
 
 
 def test_the_inner_shapes_claims_are_two_and_two_per_region(tmp_path):
