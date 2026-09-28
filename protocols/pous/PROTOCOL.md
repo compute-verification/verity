@@ -92,7 +92,7 @@ is 14.4 MB. `params.LEAN_P3_MEETS` (`wc = 37`) is the instance Lean's `p3_meets`
      from those leaves alone. Any mismatch, in any byte, block count or segment count, raises `ValueError`: there is
      no `vk` and no audit. It calls no encoder, reads no root or leaf from the server, and holds one segment at a
      time, never `W`. With the band codec (the default), the decode check costs 6,578 `Π₂` calls, 13 deep, per 32 MiB
-     segment: 24.6 s on one core in Python, against 493.9 s for dense (121.9 s on four processes).
+     segment: 24.6 s on one core in Python and 6.8 s on four processes, against 493.9 s and 121.9 s for dense.
    - **Private encoder** (`public_encoder=False`). The verifier encodes `W` itself (`setup.verifier_key`). Comparing
      roots (`setup.check_server_root`) catches a wrong server encoding at setup.
 
