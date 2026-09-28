@@ -1514,7 +1514,7 @@ OPENED = {
     "EmbeddingShard_v1": "checked by opening the tensor-parallel shard of the committed embedding table at the token's row "
                          "(a commitment opening, not a circuit)",
 }
-DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16"}
+DOT_SEMANTICS = {"AmpereBF16TcDot16_v1": "sm80.mma.m16n8k16.bf16", "AmpereBF16TcDot16_v2": "sm80.mma.m16n8k16.bf16"}
 
 
 def _params(tname: str, tp: dict) -> dict:
