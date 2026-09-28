@@ -212,8 +212,9 @@ def rotary_dim(C: dict[str, Any]) -> int:
 
 
 #: [R15 fp8] the block-scaled FP8 linears of a dense layer: base weight field -> (vLLM parameter suffix, scale field).  The scale
-#: field `<w>s` is f32 `[N/G][K/G]` (`weight_scale_inv`, one scale per GxG weight block; vLLM's `process_fp8_weight_block_strategy`
-#: only re-lays it out) and follows its weight field so every earlier leaf interval of the layer Record is unchanged.
+#: field `<w>s` is f32 `[cdiv(N, G)][K/G]` (`weight_scale_inv`, one scale per GxG weight block, the last one partial when N ends
+#: mid-block; vLLM's `process_fp8_weight_block_strategy` only re-lays it out) and follows its weight field so every earlier leaf
+#: interval of the layer Record is unchanged.
 FP8_LINEAR_FIELDS: tuple[tuple[str, str], ...] = (("qkv_w", "qkv_ws"), ("o_w", "o_ws"), ("gate_up_w", "gate_up_ws"), ("down_w", "down_ws"))
 
 
@@ -222,9 +223,9 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
     * `C["QK_NORM"] == "head"` (Qwen3): `q_norm`, `k_norm` bf16 `[D]` after `qkv_w`/`qkv_b` (vLLM `self_attn.q_norm.weight`,
       `self_attn.k_norm.weight`: ONE head-width vector shared by every head);
     * `C["FP8_BLOCK"] == G`: every linear's weight is e4m3 `[N][K]` (`Value<8>` words, the checkpoint's stored bytes) followed by its
-      f32 block-scale field `[N/G][K/G]` (`FP8_LINEAR_FIELDS`).  The norms stay bf16 (vLLM keeps them unquantised).
+      f32 block-scale field `[cdiv(N, G)][K/G]` (`FP8_LINEAR_FIELDS`).  The norms stay bf16 (vLLM keeps them unquantised).
     Configurations without these facts get exactly `b1.layer_weights_type(C)`."""
-    from verity_vllm.program.registry.fp8 import E4M3
+    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
     from verity_vllm.program.registry.prims import F32
     base = b1.layer_weights_type(C)
     fields: list[tuple[str, Any]] = list(base.fields)
@@ -239,10 +240,10 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
         for n, t in fields:
             if n in scale_of:
                 N, K = t.n, t.elem.n
-                if N % G or K % G:
-                    raise ValueError(f"{n}: [{N}][{K}] is not a multiple of the FP8 block {G} on both axes")
+                if K % G:
+                    raise ValueError(f"{n}: [{N}][{K}]: K is not a multiple of the FP8 block {G}")
                 out.append((n, Array(N, Array(K, E4M3))))
-                out.append((scale_of[n], Array(N // G, Array(K // G, F32))))
+                out.append((scale_of[n], Array(weight_blocks(N, G), Array(K // G, F32))))
             else:
                 out.append((n, t))
         fields = out

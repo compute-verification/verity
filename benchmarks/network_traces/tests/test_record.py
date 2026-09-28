@@ -200,6 +200,16 @@ def test_convert_takes_the_freeze_rule_from_its_flags(tmp_path: Path) -> None:
     assert kept("--freeze-scope", "chunk") == ([], True)
 
 
+def test_convert_refuses_a_job_without_its_requests(tmp_path: Path) -> None:
+    """An evicted `requests.jsonl` would otherwise convert to kept windows with no traffic."""
+    write_job(tmp_path, 2, [], samples(2))
+    assert rec.main(["convert", str(tmp_path)]) == 0
+    assert json.loads((tmp_path / "summary.json").read_text())["windows_kept"] == 2
+    (tmp_path / "requests.jsonl").unlink()
+    with pytest.raises(FileNotFoundError, match="requests.jsonl"):
+        rec.main(["convert", str(tmp_path)])
+
+
 def test_the_windows_after_the_monitor_stopped_are_dropped() -> None:
     records = [request(c, w * WINDOW_MS + 50.0, [[w * WINDOW_MS + 150.0, 1]]) for w, c in enumerate("abc")]
     died = [s for s in samples(3) if s["t_ms"] <= WINDOW_MS + 30_000]

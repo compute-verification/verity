@@ -791,6 +791,9 @@ def convert(out: Path, **rules) -> dict:
         summary = {"frozen": False, "windows_planned": 0, "windows_kept": 0, "error": "the job ended before t0"}
         (out / "summary.json").write_text(json.dumps(summary, indent=1))
         return summary
+    if not (out / "requests.jsonl").exists():
+        raise FileNotFoundError(f"{out / 'requests.jsonl'}: missing, though `run` creates it before t0; restore it (an evicted "
+                                f"run file's run-files.evicted.json names its artifact) rather than convert every window as idle")
     samples = [s | {"t_ms": ms(s["mono"] - meta["t0_mono"])} for s in read_lines(out / "samples.jsonl")]
     run_id = meta["env"].get("RESEARCH_RUN_ID") or out.name
     labels = {"mode": meta["mode"], "model": meta["model"], "mix": meta["mix"], "host": meta["host"],

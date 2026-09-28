@@ -446,15 +446,15 @@ def fp8_group_quant(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
 
 
 def scaled_mm_fp8_block(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`_C.cutlass_scaled_mm` blockwise on one token row: xq / sx composed from the interior quant, w (N x K e4m3) and ws (N/G x K/G
-    f32, `weight_scale_inv`) the registered checkpoint words.  A lane with a NaN e4m3 byte or a non-finite accumulator is outside
+    """`_C.cutlass_scaled_mm` blockwise on one token row: xq / sx composed from the interior quant, w (N x K e4m3) and ws (cdiv(N, G) x
+    K/G f32, `weight_scale_inv`) the registered checkpoint words.  A lane with a NaN e4m3 byte or a non-finite accumulator is outside
     the twin's domain -> unresolved by name (the tc_dot16 convention), never a silent word."""
     from verity_vllm.program.kernels import derived_rows as D
     K, N, G = int(statics["K"]), int(statics["N"]), int(statics["G"])
     xq = np.asarray(ops[0], dtype=np.uint8).reshape(K)
     sx = np.asarray(ops[1], dtype=np.uint32).reshape(K // G)
     w = np.asarray(ops[2], dtype=np.uint8).reshape(N, K)
-    ws = np.asarray(ops[3], dtype=np.uint32).reshape(N // G, K // G)
+    ws = np.asarray(ops[3], dtype=np.uint32).reshape(-(-N // G), K // G)
     out, nonfin = D.scaled_mm_fp8_block_row(xq, sx, w, ws, G=G, chunk=GEMM_CHUNK)
     if nonfin.any():
         raise Declined(f"ScaledMmFp8Block: {int(nonfin.sum())} output coordinates have a NaN e4m3 operand or a non-finite accumulator "
@@ -718,8 +718,8 @@ def _check_targets() -> dict[str, list]:
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
-        "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
-        "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
+        "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=n, G=128) for n in (128, 192)],
+        "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=n, G=128) for n in (128, 192)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
         "MoeRouterTopKOrdered_v1": [bind(moe.MoeRouterTopKOrdered, **router)],

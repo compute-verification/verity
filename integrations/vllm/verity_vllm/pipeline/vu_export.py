@@ -244,7 +244,7 @@ def _decompose_fp8_block(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
     K, N, G = int(st["K"]), int(st["N"]), int(st["G"])
     xq = np.asarray(ops[0], dtype=np.uint8).reshape(K)
     sx = np.asarray(ops[1], dtype=np.uint32).reshape(K // G)
-    ws = np.asarray(ops[3], dtype=np.uint32).reshape(N // G, K // G)
+    ws = np.asarray(ops[3], dtype=np.uint32).reshape(-(-N // G), K // G)
     y = _one(out).astype(np.uint16)
     sel, wsel = _coordinate_rows(ops[2], N, K, np.uint8, pick, limits)
     yy, nf = fp8_block_coordinate(xq, sx, wsel, ws[sel // G], G)

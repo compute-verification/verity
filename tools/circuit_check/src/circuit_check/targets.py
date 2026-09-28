@@ -396,6 +396,14 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MoeExpertFp8BlockCoordinateW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True)),
         ("MoeExpertFp8BlockGemm_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False)),
         ("MoeExpertFp8BlockGemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True)),
+        # silu_and_mul_per_block_quant between the expert launches: one element, GLM-5.3's served group (G = 128), and rows of
+        # two groups; on bits at G = 4 (each element about 19.6k ANDs)
+        ("SiluMulFp8BlockQuantResult_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantResult)),
+        ("SiluMulFp8BlockQuantGroup_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuantGroup, G=128)),
+        ("SiluMulFp8BlockQuant_v1", lambda: bind(fp8_moe.SiluMulFp8BlockQuant, I=16, G=8)),
+        ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
+        ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
+        ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),
         ("LServe_v2", lambda: lifted.lserve(TINY, 3, 2, (7,), lag=0)),
         ("ServeSpec_v1", lambda: bind(spec.ServeSpec, C=long, CD={**TINY_NOBIAS, "MAX_POS": 16}, LP=3, K=2, A=(2, 2))),
         ("ServeDraft_v1", lambda: bind(spec.ServeDraft, C=long, LP=3, STEPS=2)),
