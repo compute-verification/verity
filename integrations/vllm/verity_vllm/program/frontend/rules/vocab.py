@@ -138,6 +138,7 @@ from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity_vllm.program.registry.quarantine.ln import layer_norm_aten as _LN
 
 
 def _norm_v2(role: str):
@@ -304,7 +305,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
+           # (quarantine lane cov-ln, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
+           "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -346,7 +350,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
-                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
+                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
+                              "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
+                              "bf16(w * (rstd * (x - mean)) + b)"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:
