@@ -22,7 +22,7 @@ Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word 
   final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -440,4 +440,4 @@ theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     ligerito_checks h4 (fun x hx => hzero x (by rw [hrs]; simp [hx]))
   exact ⟨k3, ext, st, k, hl, hd, hm, ho, hlo, hlc, hf⟩
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

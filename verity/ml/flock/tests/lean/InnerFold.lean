@@ -8,11 +8,14 @@ session's public record, the fold points from each rep's recorded transcript), s
 record. `verity_flock.rec_vstage` hands `comb` to the algebra as a public input; its tests hold it to
 `tests/fixtures/inner_claims.json`, which `InnerClaims.lean` dumps while running the whole inner verifier.
 
-    lean --run InnerFold.lean [--plain-leaves] [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]
+    lean --run InnerFold.lean [--plain-leaves] [--partition FILE] [--registered FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]
 
 POINTS: `{"link": [[hex, ...], ...], "reps": [{"alpha", "beta", "lw": [64], "rho_in": [k_log - 6], "ts": [k_log - 6]}]}`.
 `os`: the statement's tags on the verifier's live OS coins (`verify --coins os`), else seeded coins.
 `--partition`: the verifier's copy of the `verity/partition/v1` object a circuit binds (`verify --partition`).
+`--registered`: the verifier's own registered reads (`verify --registered`, `verity/registered-reads/v0`) of the inner
+statement's description: its rows, read from the developer's registration (`Registered.checkDescription`, PROTOCOL.md
+§16.16), or the fold is refused; without it, a statement naming registered reads is refused.
 `--plain-leaves`: the statement's tags with the inner statement's plain SHA-512 leaves (`leafSchemePlain`) in place of
 their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the firewall salts.
 -/
@@ -53,11 +56,14 @@ def main (args : List String) : IO UInt32 := do
   let (args, partFile) := match args with
     | "--partition" :: f :: rest => (rest, some f)
     | _ => (args, none)
+  let (args, regFile) := match args with
+    | "--registered" :: f :: rest => (rest, some f)
+    | _ => (args, none)
   let (args, coins) := match args with
     | [sid, circuit, pub, points, "os"] => ([sid, circuit, pub, points], Coins.os)
     | _ => (args, Coins.seed)
   let [sid, circuit, pub, points] := args
-    | IO.eprintln "usage: lean --run InnerFold.lean [--plain-leaves] [--partition FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]"; return 2
+    | IO.eprintln "usage: lean --run InnerFold.lean [--plain-leaves] [--partition FILE] [--registered FILE] STATEMENT CIRCUIT PUBLIC POINTS [os]"; return 2
   let some tags := Tags.find? sid | IO.eprintln s!"unknown statement {sid}"; return 2
   let tags := tags.withCoins coins
   let tags := if plain then { tags with merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain }
@@ -72,9 +78,18 @@ def main (args : List String) : IO UInt32 := do
     | some f => match Json.parse (← IO.FS.readFile f) with
       | .ok j => pure (some j)
       | .error e => IO.eprintln s!"--partition {f}: not JSON: {e}"; return 2
+  let registered ← match regFile with
+    | none => pure none
+    | some f => match Json.parse (← IO.FS.readFile f) >>= Registered.ofJson with
+      | .ok own => pure (some own)
+      | .error e => IO.eprintln s!"--registered {f}: {e}"; return 2
   let (_, sts) ← match Stmt.setupTables tags circuitB pubB coins 1 (partition := partition) with
     | .ok x => pure x
     | .error e => IO.eprintln s!"setup: {e}"; return 1
+  let checked := match registered with
+    | some own => Registered.checkDescription sts[0]!.c sts[0]!.pub own
+    | none => Registered.check sts[0]!.c sts[0]!.pub none false
+  if let .error e := checked then IO.eprintln s!"setup: {e}"; return 1
   match run (Setup.ofCircuit sts[0]!) pts with
   | .ok j => IO.println j.compress; return 0
   | .error e => IO.eprintln e; return 1
