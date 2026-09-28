@@ -1,5 +1,5 @@
-"""Overhead-over-time plots from the ledger (``bench.ledger``): one PNG per lane and one overview, into
-``backends/numerical/reports/plots/``.
+"""Overhead-over-time plots from the ledger (``bench.ledger``; default the frozen ledger, from the evidence store): one PNG
+per lane and one overview, into ``backends/numerical/reports/plots/`` (never tracked: ``.gitignore``).
 
     python -m verity_numerical.bench.plots [--dir LEDGER_DIR] [--out PLOTS_DIR]
 
@@ -27,7 +27,7 @@ from verity_numerical.bench import ledger
 
 __all__ = ["OUT", "REFERENCES", "main", "plot_frontier", "plot_gate4", "plot_lane", "plot_overview"]
 
-OUT = ledger.DIR.parent / "plots"
+OUT = Path(__file__).resolve().parents[3] / "reports" / "plots"
 REFERENCES = {"goal 1e6": 1e6, "SP1 authenticated core, 1 VU per proof (4090, baselines.json)": 3.6e11, "TensorZKP HyperPlonk calibration (H100)": 5.0e7}
 COLOURS = {"ARITHMETIC_DIAGNOSTIC": "#9e9e9e", "NON_ZK_PROOF_DIAGNOSTIC": "#1f77b4", "NON_ZK_PROOF": "#17becf",
            "COMPLETE_HVZK_BACKEND": "#ff7f0e", "COMPLETE_ZK_BACKEND": "#2ca02c", "NO_PROOF": "#7f7f7f", "COMPONENT": "#bcbd22"}
@@ -227,7 +227,7 @@ def plot_gate4(entries: list[dict[str, Any]], out: Path, name: str = "gate4_h100
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dir", type=Path, default=ledger.DIR)
+    ap.add_argument("--dir", type=Path, default=None, help="default: the frozen ledger, from the evidence store")
     ap.add_argument("--out", type=Path, default=OUT)
     ns = ap.parse_args(argv)
     lanes = ledger.load_all(ns.dir)

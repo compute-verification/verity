@@ -1,8 +1,11 @@
 """Re-price B-Ligero at the checker-v2 witness shape with every bucket measured on the RTX 4090 (b-v2 lane).
 
     uv run --frozen --package verity-numerical python backends/direct/encode/reprice_v2.py \
-        --bench backends/direct/encode/results_v2_<run>.json --v1 backends/numerical/reports/b_measured_4090.json \
+        --bench backends/direct/encode/results_v2_<run>.json [--v1 FILE] \
         --out backends/numerical/reports/b_measured_4090_v2.json --md backends/numerical/reports/b_measured_4090_v2.md
+
+``--v1`` defaults to the recorded v1 re-pricing, ``backends/numerical/reports/b_measured_4090.json`` in the campaign's frozen
+evidence (``verity_numerical.bench.frozen``, from the evidence store).
 
 Same method as ``reprice_measured.py``: ``explore.tensor``'s cost model at ``VERITY_CHECKER_VARIANT=v2`` with the commitment,
 IRS row combination, linear test (structured, M = 2 + the table-side exceptional rows), quadratic tests (F_t triples and the
@@ -26,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from reprice_measured import GPUS, HASH_4090, INT32_OPS_PER_S, UTIL, _best
-from verity_numerical.bench import contract
+from verity_numerical.bench import contract, frozen
 from verity_numerical.explore import tensor as t
 
 NATIVE_4096 = 4096
@@ -278,14 +281,14 @@ def main(argv=None) -> None:
     ap.add_argument("--bench", required=True)
     ap.add_argument("--inverse", default=None, help="inverse_bench.py result: use the blocked kernel's timings for the inversions bucket")
     ap.add_argument("--inverse-run", default="")
-    ap.add_argument("--v1", default=str(HERE.parents[1] / "numerical/reports/b_measured_4090.json"))
+    ap.add_argument("--v1", default=None, help="default: the recorded v1 re-pricing, from the evidence store")
     ap.add_argument("--shape", default=str(HERE / "v2_shape.json"))
     ap.add_argument("--out", default=None)
     ap.add_argument("--md", default=None)
     a = ap.parse_args(argv)
     bench = json.loads(Path(a.bench).read_text())
     shape = json.loads(Path(a.shape).read_text())
-    v1 = json.loads(Path(a.v1).read_text())
+    v1 = json.loads(Path(a.v1 or frozen.path("backends/numerical/reports/b_measured_4090.json")).read_text())
     blocked = apply_blocked_inverse(bench, json.loads(Path(a.inverse).read_text()), a.inverse_run) if a.inverse else None
     radix4 = apply_radix4(bench, json.loads(Path(a.radix4).read_text()), a.radix4_run) if a.radix4 else None
     rep = reprice(bench, shape, v1)

@@ -18,7 +18,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  the source of a module the package imports from a fetched package (`.lake/packages/*`), or that
                  package's lakefile, unless `dependency_unchecked` lists it with a reason
     compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
-                 each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`
+                 each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`; a
+                 listing names one module with the digest of its file as it was reviewed, so a later edit needs a new
+                 review (`--update` records the digest), and no listed module may declare a pinned theorem or a
+                 definition a pinned statement reads
     policy       the package has no `lean-audit.json` (the message carries a template)
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
@@ -222,15 +225,46 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
             if hit := UNCHECKED.search(line):
                 hits.append(f"unchecked: {rel}:{i} names {hit.group(1)}, which lets a declaration skip the kernel or a proof "
                             f"become sorry")
-        if m is not None and not under(allowed, m):
+        if m is not None and m not in allowed:
             for hit in COMPILE_TIME.finditer(text):
                 hits.append(f"compile-time: {rel}:{text.count(chr(10), 0, hit.start()) + 1} runs code while it compiles "
                             f"({hit.group(1) or hit.group(2)}), which can write anywhere the build can; list {m} under "
                             f"`compile_time` with the reason if it must")
-    for m in sorted(allowed):
-        if not any(under([m], f) for f in files):
-            hits.append(f"compile-time: `compile_time` lists {m}, which matches no file; remove the entry")
     return hits
+
+
+def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
+             ) -> tuple[list[str], dict, list[str]]:
+    """The `compile_time` entries against the package.  Each names one module, with the reason and the digest of its file
+    as it was reviewed, so a later edit needs a new review.  No listed module may declare a pinned theorem or a definition
+    a pinned statement reads: compile-time code there (a term elaborator, a notation, a macro) could change what a
+    statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read)."""
+    fails, now, notes = [], {}, []
+    pinned: dict[str, set[str]] = {}
+    for p, rec in facts["pins"].items():
+        for mod in {rec.get("module"), *(r["module"] for r in rec.get("reads", []))} - {None}:
+            pinned.setdefault(mod, set()).add(p)
+    for m, entry in sorted(policy.get("compile_time", {}).items()):
+        why, recorded = (entry, None) if isinstance(entry, str) else (entry.get("why", ""), entry.get("digest"))
+        if m not in files:
+            fails.append(f"compile-time: `compile_time` lists {m}, which is not a module of the package; list modules one "
+                         f"by one")
+            continue
+        digest = sha256(pkg / files[m])
+        now[m] = {"why": why, "digest": digest}
+        if m in pinned:
+            fails.append(f"compile-time: {m} is listed under `compile_time`, and pinned statements are declared or read "
+                         f"there ({', '.join(sorted(pinned[m]))}): code that runs while it compiles (a term elaborator, a "
+                         f"notation, a macro) could change what a statement means; move the compile-time code or the "
+                         f"definitions to another module")
+        if recorded != digest:
+            change = "listed" if recorded is None else "the file changed since its listing was reviewed"
+            notes.append(f"compile_time {m} ({files[m]}): {change}; a reviewer reads its compile-time code ({why})")
+            if not update:
+                state = "records no digest of" if recorded is None else "was reviewed against another version of"
+                fails.append(f"compile-time: the listing of {m} {state} {files[m]}: have its compile-time code reviewed, "
+                             f"then run `audit.py --update` to record the file's digest")
+    return fails, now, notes
 
 
 def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[str], int]:
@@ -465,7 +499,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
 
 
 def statement_changes(notes: list[str]) -> list[str]:
-    """The lines of a review a named statement reviewer must read: all but the pins that only print differently."""
+    """The lines of a review a named reviewer must read: all but the pins that only print differently."""
     return [n for n in notes if not n.endswith(REPRINTED)]
 
 
@@ -638,16 +672,20 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             elif rc:
                 fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
+    lfails, listed, lnotes = listings(pkg, files, policy, facts, update)
+    fails += lfails
+    if update and listed:
+        new["compile_time"] = listed
     if update and new != policy:
         dump(pkg, new)
-        notes = review(policy, new, facts, module_files(pkg))
+        notes = review(policy, new, facts, module_files(pkg)) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
             f"; {len(notes) - len(must)} pinned statements only print differently" if len(notes) > len(must) else "") + (
-            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
+            "; a named reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "pins": new.get("pins", {}), "reads": new.get("reads", {}),
@@ -812,8 +850,9 @@ def main(argv: list[str]) -> int:
         if rep["failures"]:
             failed.append(str(pkg))
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
-        print(f"audit: pinned statements or the definitions they read changed in {', '.join(changed)}: the merge handoff must "
-              f"name the statement reviewer who read the changes above (review.txt in each package's reports)", flush=True)
+        print(f"audit: pinned statements, the definitions they read, or listed compile-time code changed in "
+              f"{', '.join(changed)}: the merge handoff must name the reviewer who read the changes above (review.txt in "
+              f"each package's reports)", flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
                                                ensure_ascii=False) + "\n")
     print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)

@@ -47,14 +47,16 @@
  "kernel": {
   "write": {"Control/Bad.lean": "import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Control.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
-  "policy": {"compile_time": {"Control.Bad": "the kernel control: its #eval adds the declaration"}},
+  "policy": {"compile_time": {"Control.Bad": {"why": "the kernel control: its #eval adds the declaration",
+   "digest": "4da2bab2648e444f57947d9604d9d9a74ae39700cffb41af077108b8bc006bd7"}}},
   "replay_only": true,
   "fails": "replay: the kernel rejected a declaration under Control"
  },
  "initializer": {
   "write": {"Control/Bad.lean": "initialize\n  try IO.FS.writeFile \"FORGED\" \"{\\\"offenders\\\": []}\" catch _ => pure ()\n\ntheorem Control.bad : 1 = 2 := by sorry\n"},
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
-  "policy": {"compile_time": {"Control.Bad": "the initializer control: allowed, so that only the facts can catch it"}},
+  "policy": {"compile_time": {"Control.Bad": {"why": "the initializer control: allowed, so that only the facts can catch it",
+   "digest": "0b39678139c7f8b49ec707f4135724412796e5b34eca442867c8620d5413661d"}}},
   "not_written": ["FORGED"],
   "fails": "sorry: sorryAx is used by Control.bad"
  },
@@ -87,5 +89,17 @@
  "missing_policy": {
   "delete": ["lean-audit.json"],
   "fails": "policy: "
+ },
+ "compile_time_edited": {
+  "write": {"Control/Bad.lean": "#eval (1 : Nat)\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "policy": {"compile_time": {"Control.Bad": {"why": "listed when the file read #eval (0 : Nat)",
+   "digest": "b54ec46ab467ff38b269b2ba53cc855be194b88dde03a4d7e374186a197e7ea3"}}},
+  "fails": "compile-time: the listing of Control.Bad was reviewed against another version of Control/Bad.lean"
+ },
+ "compile_time_pinned": {
+  "policy": {"compile_time": {"Control.Defs": {"why": "a listing where a pinned statement reads",
+   "digest": "fabe4581b46bc415cac5ac6fbd8cbba3c7bd4c497031f984cb49effabdfdf556"}}},
+  "fails": "compile-time: Control.Defs is listed under `compile_time`, and pinned statements are declared or read there"
  }
 }
