@@ -74,6 +74,7 @@ EVALUATORS = {
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
+    "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -350,6 +351,14 @@ def bias_add(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np
     y = D.as_f32(D.bf16_to_f32_words(np.asarray(ops[0], dtype=np.uint16).reshape(N)))
     b = D.as_f32(D.bf16_to_f32_words(np.asarray(ops[1], dtype=np.uint16).reshape(N)))
     return {"0": D.f2fp_bf16(D.as_u32((y + b).astype(np.float32)))}         # Bf16Add: one f32 add, RNE to bf16
+
+
+def gemm_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GemmBias_v1{K,N}(x, W, b)`: `Gemm_v1`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
+    if len(ops) != 3:
+        raise ValueError(f"GemmBias_v1 takes 3 operands (x, W, b), the row wires {len(ops)}")
+    y = gemm(statics, ops[:2])["0"]
+    return bias_add({"N": statics["N"]}, (y, ops[2]))
 
 
 def mul_scalar_tensor(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -675,7 +684,7 @@ def _sample_gumbel(rng: np.random.Generator, n: int, params: Sequence[Any], **st
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, hopper, moe, moe_pad, sampling
+    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -694,6 +703,7 @@ def _check_targets() -> dict[str, list]:
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
+        "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
@@ -728,6 +738,7 @@ _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
 _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
+_row("GemmBias_v1", gemm_bias, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)

@@ -391,7 +391,7 @@ def _load(path: str):
         desc = json.load(f)
     # IT-F5 (`independent-tests.md`): a descriptor names its primitives by id and `REGISTRY` holds only what the process
     # imported; the CLI populates it with every registered binding module so a Hopper / TP=2 descriptor decodes too.
-    from verity_vllm.program.registry import b1, b1_tp2, hopper  # noqa: F401
+    from verity_vllm.program.registry import b1, b1_tp2, gemm_bias, hopper  # noqa: F401
     d = decode_program(desc, REGISTRY)
     return d, {"path": path, "schema": desc.get("schema"), "digest": program_digest(desc), "bytes": None, "seconds_decode": round(time.time() - t0, 1)}
 

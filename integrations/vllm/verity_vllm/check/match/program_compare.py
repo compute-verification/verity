@@ -57,7 +57,7 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 def _registry():
     from verity.ir.defs import REGISTRY
-    from verity_vllm.program.registry import b1, moe, pad_prims, serve3  # noqa: F401  (moe: [R13 MOE-01] the fused-MoE Definitions + ref_prims they use)
+    from verity_vllm.program.registry import b1, gemm_bias, moe, pad_prims, serve3  # noqa: F401  (moe: [R13 MOE-01] the fused-MoE Definitions + ref_prims they use)
     from verity_vllm.program.registry import dense  # noqa: F401  [R15 dense] the unfused norm chain / GeGLU / softcap Definitions (Gemma-2 programs)
     from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] GumbelTopPTokenSelect_v1 / TopPMask_v1 / GumbelSelectF32_v1 (+ codec lazy prims)
     try:  # [R13 hopper] target-keyed programs (Hopper: HopperBF16WgmmaDot16_v1, Fa3InvSum_v1) decode through the same registry

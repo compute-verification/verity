@@ -34,7 +34,7 @@ from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
 # [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
 # (the fused-MoE Definitions and the ref_prims they use, e.g. F32Sub_v1 -- an OLMoE component failed to decode without it) + hopper if present.
-from verity_vllm.program.registry import b1, dense, moe, pad_prims, serve3  # noqa: F401  (dense: [R15] unfused norm chain / GeGLU / softcap)
+from verity_vllm.program.registry import b1, dense, gemm_bias, moe, pad_prims, serve3  # noqa: F401  (dense: [R15] unfused norm chain / GeGLU / softcap)
 from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] the stochastic select families
 try:
     from verity_vllm.program.registry import hopper  # noqa: F401
