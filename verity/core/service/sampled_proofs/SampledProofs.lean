@@ -8,3 +8,4 @@ import SampledProofs.Record
 import SampledProofs.OneStage
 import SampledProofs.Service
 import SampledProofs.Pieces
+import SampledProofs.DomainAgrees
