@@ -14,8 +14,9 @@ Hypothesis strategy of inputs, invalid ones included. There are two kinds, shari
 `run` keeps one server process open, feeds both sides every input the strategy draws, and fails with a `Mismatch` on the
 first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
 server that faults or dies, are differences too. A run is deterministic: Hypothesis draws from `seed` (`derandomize`, no
-example database, no deadline), so `run(port, examples=N, seed=S)` finds the same minimal input again, and `replay(port,
-value)` compares one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
+example database, no deadline) and from its own constants alone (`_no_local_constants`), so `run(port, examples=N,
+seed=S)` finds the same minimal input again whatever modules the process has loaded, and `replay(port, value)` compares
+one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
 never answers hangs its test.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
@@ -349,6 +350,25 @@ class Stats:
         return self.counts.get("reject", 0)
 
 
+@contextlib.contextmanager
+def _no_local_constants() -> Iterator[None]:
+    """Hypothesis also draws, at p = 0.05 per draw, constants it scrapes from every local module the process has loaded
+    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's draws moved when a
+    module the reference imports gained a literal, or a test imported one first. Within this, it draws from its own
+    constants alone. `tests/test_constants.py` pins the hook, so a Hypothesis upgrade that moves it fails there."""
+    from hypothesis.internal.conjecture import providers
+    from hypothesis.internal.constants_ast import Constants
+
+    scrape = providers._get_local_constants
+    providers._get_local_constants = Constants
+    providers.CONSTANTS_CACHE.cache.clear()
+    try:
+        yield
+    finally:
+        providers._get_local_constants = scrape
+        providers.CONSTANTS_CACHE.cache.clear()
+
+
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
     """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
@@ -365,7 +385,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
     def differential(value: Any) -> None:
         _compare(port, s, value, seen)
 
-    with Server(port.argv()) if server is None else contextlib.nullcontext(server) as s:
+    with Server(port.argv()) if server is None else contextlib.nullcontext(server) as s, _no_local_constants():
         try:
             differential()
         except Mismatch as e:
