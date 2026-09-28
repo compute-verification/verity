@@ -3,12 +3,20 @@
  "perm_sha256": {
   "d3s-v0": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
   "d3s-v0-decode": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
+  "d3s-v0-f16": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
+  "d3s-v0-f16-decode": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
   "d3s-v0-y16": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
   "d3s-v0-y16-decode": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
+  "d3s-v0-y16-f16": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
+  "d3s-v0-y16-f16-decode": "14b0d78181f13e1bb61367ffd0aa858dd40b367ac32f7cdd7ee1eb86f845cb54",
   "d3m-v0": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
   "d3m-v0-decode": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
+  "d3m-v0-f16": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
+  "d3m-v0-f16-decode": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
   "d3m-v0-y16": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
   "d3m-v0-y16-decode": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
+  "d3m-v0-y16-f16": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
+  "d3m-v0-y16-f16-decode": "2b6bd6fb8c33580674152739b254eb282cce982364e702e49d04b70793d19b82",
   "d3-v0": "b4d73260254663756f188893641a3fbf8e865f1b2491cf8dec433a24f6fbf830",
   "fpncp-v0": "e8dad8e594fc659334c726afa5fa203d2608793255b36f70ea3afdde4e214f6c",
   "d2-draft": "915cc09f89e924ffb52cd5500fcb2e75e5caa24c333e4cb847d987c31f9d63e3"
@@ -167,6 +175,82 @@
    "useful_00": -494628.0
   },
   {
+   "case": "small-d3s-y16-f16",
+   "scheme": "fp8-is-h100-d3s-v0-y16-f16",
+   "shape": [
+    64,
+    128,
+    64
+   ],
+   "tile": {
+    "rows": [
+     0,
+     2
+    ],
+    "cols": [
+     8,
+     10
+    ]
+   },
+   "index": 7,
+   "weight": 3,
+   "salt": "ef00ac57500e47ebdcb6ad8ea7e36f8dcc6b29e73a8ea5eb295ece0cbeb89f03",
+   "root_a": "9030824efe876cfcd76c68c67ec6306b82cf94dab0278c008eec611e85eb026d",
+   "root_b": "35b7d555dafffc85a89bc18e05f0ac1f2188a87cc0a905194b6f515cedec0cd7",
+   "x_row0": [
+    126,
+    231,
+    204,
+    94,
+    92,
+    254,
+    205,
+    125,
+    254,
+    95,
+    217,
+    253,
+    228,
+    226,
+    216,
+    125
+   ],
+   "y_col0": [
+    84,
+    76,
+    113,
+    80,
+    217,
+    98,
+    199,
+    204,
+    225,
+    76,
+    205,
+    210,
+    71,
+    93,
+    79,
+    67
+   ],
+   "trace_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "cell00_atoms": [
+    1178158080,
+    1216474112,
+    3351364608,
+    3350714368
+   ],
+   "cell00_running": [
+    null,
+    1216853536,
+    1211009600,
+    1202011264
+   ],
+   "digest": "861075d9aabd488ec5a6efd9fd7d5662cfd1d7a537e5e08676fc4a6171345e9d",
+   "useful_sha256": "dbe007263c0d8b5e2b3bef991a1cbba4d2b98f0903a0de8a526feb23597a0dcb",
+   "useful_00": 64234.0
+  },
+  {
    "case": "lead-k-d3s",
    "scheme": "fp8-is-h100-d3s-v0",
    "shape": [
@@ -241,6 +325,82 @@
    "digest": "357b10d3fc31f91efddd88f5fded39adb3adfc117f7dc3349512c7c7a0f168cf",
    "useful_sha256": "f4aebd97e5e0f862196188577af1c5cb59a875ee8201d338d2ea47d0931c2ab8",
    "useful_00": 2132577.0
+  },
+  {
+   "case": "d4-d3s-y16-f16",
+   "scheme": "fp8-is-h100-d3s-v0-y16-f16",
+   "shape": [
+    32768,
+    32768,
+    32768
+   ],
+   "tile": {
+    "rows": [
+     0,
+     1
+    ],
+    "cols": [
+     0,
+     1
+    ]
+   },
+   "index": 18446744073709551615,
+   "weight": 11,
+   "salt": "97557b4107a19ff826bd9f90b5aa9e564e9bdb69ed5f2873c4c511a63d182547",
+   "root_a": "14417ba06e814d3a3f22c871e3a0653ea0df8bdacd1e6db2321b769695fee5d0",
+   "root_b": "10f2e00c59f9823e964a6566e4cab44241986f1b81735b9e2c6d13a77b96a2dd",
+   "x_row0": [
+    73,
+    218,
+    126,
+    102,
+    189,
+    72,
+    238,
+    67,
+    217,
+    254,
+    85,
+    96,
+    254,
+    218,
+    254,
+    212
+   ],
+   "y_col0": [
+    202,
+    241,
+    84,
+    85,
+    84,
+    204,
+    59,
+    243,
+    221,
+    236,
+    75,
+    90,
+    206,
+    202,
+    171,
+    123
+   ],
+   "trace_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "cell00_atoms": [
+    1201326080,
+    1204172800,
+    3341469696,
+    1202321408
+   ],
+   "cell00_running": [
+    null,
+    1211138048,
+    1208339968,
+    1213909504
+   ],
+   "digest": "be4ce21fe2cbd611600bf1075e1b69e8cd57fa3e964fcb1c7086a7687f3189db",
+   "useful_sha256": "5b19db0b7f98507b223fa09b6a6879bcbc67b35b07d16e565a3c5e71485b357d",
+   "useful_00": 5922719.5
   },
   {
    "case": "small-d3m",

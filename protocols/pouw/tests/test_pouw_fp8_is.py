@@ -48,10 +48,14 @@ def test_registry_and_certificates():
         assert isinstance(s, PoUWScheme) and isinstance(s.forming, F.Forming) and isinstance(s.forming, layer)
         assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
         (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
-        assert s.fadd == 32 and s.prices == "round8"
-        assert s.certificate.omega == Fraction(6 * 8192 - 32 + f_a + f_b, 6 * 8192 - 32 + c_a + c_b)
+        assert s.prices == "round9" and s.fadd == Fraction(3211, 100)
+        t = 3 * 8192 // 32
+        assert s.certificate.omega == Fraction(32 * t + s.fadd * (t - 1) + f_a + f_b, 32 * (2 * t - 1) + c_a + c_b)
         sh = Shape(8192, 8192, 16384)
-        assert s.wref(sh) == 6 * sh.wmm - 32 * sh.m * sh.n + f_a * sh.m * sh.k + f_b * sh.n * sh.k
+        t = 3 * sh.k // 32
+        assert s.wref(sh) == -(-(sh.m * sh.n * (32 * t + s.fadd * (t - 1)) + f_a * sh.m * sh.k + f_b * sh.n * sh.k) // 1)
+        old = get(name, prices="round8")
+        assert old.fadd == 32 and old.wref(sh) == 6 * sh.wmm - 32 * sh.m * sh.n + f_a * sh.m * sh.k + f_b * sh.n * sh.k
     assert get("fp8-is-h100-d2-draft").forming.units == (336, 336)
     assert get("fp8-is-h100-d2-draft").forming.credited == (272, 272)
     assert get("fp8-is-h100-fpncp-v0").forming.units == (384, 384)
@@ -224,7 +228,7 @@ def test_a_seeded_layer_checks_r1():
     k, tile = 128, Tile((0, 1), (0, 1))
     a, b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)], [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
     ctx = ctx_of((64, k, 64))
-    plain, seeded = F.FP8IS(F.FpNcpV0(), mnk_min=16), F.FP8IS(SeededNcp(), mnk_min=16)
+    plain, seeded = F.FP8IS(F.FpNcpV0(), mnk_min=16, prices="round8"), F.FP8IS(SeededNcp(), mnk_min=16, prices="round8")
     p_ops, s_ops = plain.encode(ctx, plain.noise(ctx), a, b, tile), seeded.encode(ctx, seeded.noise(ctx), a, b, tile)
     p_chk, s_chk = plain.checked(ctx, p_ops), seeded.checked(ctx, s_ops)
     for i in range(2):
@@ -258,7 +262,7 @@ def test_d3_registry_price_and_domain():
     assert isinstance(s.forming, F.D3) and not s.forming.seeded
     assert s.forming.units == (372, 372) and s.forming.measured_units == Fraction(9893, 20)
     assert dict(s.certificate.parameters)["trace_units"] == 372
-    claimed = F.FP8IS(F.D3(form_units=192))
+    claimed = F.FP8IS(F.D3(form_units=192), prices="round8")
     assert claimed.certificate.omega == Fraction(6 * 8192 - 32 + 384, 6 * 8192 - 32)
     s.check(Matmul(0, Shape(8192, 8192, 16384), 1))
 
@@ -361,19 +365,122 @@ def e4m3_cell(v: Fraction) -> Fraction:
 CELLS = [(law, route, copy) for law in ("d3s", "d3m") for route in ("xq", "y16") for copy in (True, False)]
 
 
+def cell_name(law: str, route: str, copy: bool, sums: str = "f32") -> str:
+    return f"{law}-v0{'-y16' if route == 'y16' else ''}{'-f16' if sums == 'f16' else ''}{'' if copy else '-decode'}"
+
+
+def gamma_at(s, n: int) -> Fraction:
+    return 1 - Fraction(399, 400) / F.FP8IS(s.forming, mnk_min=n, prices=s.prices).certificate.omega
+
+
 @pytest.mark.parametrize("law,route,copy", CELLS)
-def test_d3_family_prices_and_gamma(law, route, copy):
-    """Every cell is registered; its price is schedule M4's at Round 8 (D-3s drops the cell mask), and its certificate
-    gives Phase 17f's γ at 16,384³ with r = 1 (within the 0.27-unit chain share the red team does not count)."""
-    name = f"{law}-v0{'-y16' if route == 'y16' else ''}{'' if copy else '-decode'}"
-    s = get(f"fp8-is-h100-{name}")
+def test_d3_family_round8_reproduces_the_strike(law, route, copy):
+    """At Round 8 each cell's price is schedule M4's (D-3s drops the cell mask), and its certificate gives Phase 17f's γ
+    at 16,384³ with r = 1 (within the 0.27-unit chain share the red team does not count)."""
+    s = get(f"fp8-is-h100-{cell_name(law, route, copy)}", prices="round8")
     assert s.forming.law == law and s.forming.route == route and s.forming.weight_copy == copy
+    assert s.forming.prices == s.prices == "round8"
     act = Fraction(27281, 64) - (32 if law == "d3s" else 0)
     assert s.forming.units == (act, 290 if copy else 322)
-    gamma = 1 - Fraction(399, 400) / F.FP8IS(s.forming, mnk_min=16384).certificate.omega
     want = {("d3s", True): "0.940", ("d3s", False): "0.972", ("d3m", True): "0.972", ("d3m", False): "1.004"}[law, copy]
-    assert f"{float(100 * gamma):.3f}" == want
-    assert s.forming.tag == name.removesuffix("-decode")
+    assert f"{float(100 * gamma_at(s, 16384)):.3f}" == want
+    assert s.forming.tag == cell_name(law, route, copy).removesuffix("-decode")
+
+
+def round9_units(law: str, route: str, copy: bool, sums: str, sass: bool) -> tuple[Fraction, Fraction]:
+    """Round 9's per-element trace from §14's figures (not from `PRICES`): FADD 32.11, half2 36, HMNMX2 64, LOP3 64,
+    F2FP 64, HMUL2 a·K 32.17, HADD2.F32 64, the four-code unpack 48 per code, the f16 pack 32 per element; the f16 -> e4m3
+    cast 64 per code (Round 8, F2FP + PRMT), or 32 with ``sass`` (ptxas 12.9's PRMT-free pair), when the amplitude's two
+    maxima are also one VHMNMX (32 per element)."""
+    fadd, half, lop = Fraction(3211, 100), Fraction(18), Fraction(32)
+    noise = lop + 3 * half                                    # field, centre, scale, s = e + e∘P
+    if sums == "f32":
+        blocks, widen = 3 * (64 + fadd) + 3 * 32, Fraction(64)
+    else:
+        blocks, widen = 3 * half + 3 * (32 if sass else 64), Fraction(0)
+    act = ((48 if route == "xq" else 32) + Fraction(3217, 200) + half + (64 + fadd) / 256
+           + (32 if law == "d3m" else 0) + (32 if sass else 64) + widen + noise + blocks)
+    weight = noise + blocks + (0 if copy else 48 + widen)
+    return act, weight
+
+
+R9_CELLS = [(law, route, copy, sums) for law in ("d3s", "d3m") for route in ("xq", "y16") for copy in (True, False)
+            for sums in ("f32", "f16")]
+
+
+@pytest.mark.parametrize("law,route,copy,sums", R9_CELLS)
+def test_d3_family_round9_prices(law, route, copy, sums):
+    """Every cell is registered with its Round 9 trace, measured (the default) and with ptxas 12.9's cast and max."""
+    for prices, sass in (("round9", False), ("round9-sass", True)):
+        s = get(f"fp8-is-h100-{cell_name(law, route, copy, sums)}", prices=prices)
+        assert s.forming.sums == sums and s.forming.prices == s.prices == prices
+        assert s.forming.units == round9_units(law, route, copy, sums, sass)
+    assert get(f"fp8-is-h100-{cell_name(law, route, copy, sums)}").prices == "round9"
+
+
+#: γ in % at N³ with r = 1 and FADD at 32.11, every checked word credited at 32 (the certificate's Ω)
+ROUND9_GAMMA = {
+    ("d3s", "y16", True, "f32"): ("1.556", "0.992", "0.707"),
+    ("d3s", "y16", False, "f32"): ("1.667", "1.048", "0.735"),
+    ("d3s", "xq", True, "f32"): ("1.572", "1.000", "0.711"),
+    ("d3s", "xq", False, "f32"): ("1.683", "1.056", "0.739"),
+    ("d3s", "y16", True, "f16"): ("1.218", "0.821", "0.622"),
+    ("d3s", "y16", False, "f16"): ("1.266", "0.845", "0.634"),
+    ("d3s", "xq", True, "f16"): ("1.234", "0.829", "0.626"),
+    ("d3s", "xq", False, "f16"): ("1.282", "0.853", "0.638"),
+}
+
+
+@pytest.mark.parametrize("cell", sorted(ROUND9_GAMMA))
+def test_round9_gamma_at_16384_32768_65536(cell):
+    """Nothing clears at 16,384³; D-4 (Track D: D-3s with 32,768 <= m, k, n <= 65,536, ``mnk_min=32768``) clears at
+    32,768³ only on Y16 with the copy under f32 sums (by 0.8%), and in every f16-sums cell."""
+    s = get(f"fp8-is-h100-{cell_name(*cell)}")
+    assert tuple(f"{float(100 * gamma_at(s, n)):.3f}" for n in (16384, 32768, 65536)) == ROUND9_GAMMA[cell]
+
+
+def test_round9_sass_best_cell_at_16384():
+    """With ptxas 12.9's cast and max, D-3s on Y16 with f16 sums and the copy clears 16,384³ at FADD 32.11 by 0.5%."""
+    s = get("fp8-is-h100-d3s-v0-y16-f16", prices="round9-sass")
+    assert f"{float(100 * gamma_at(s, 16384)):.3f}" == "0.995"
+    assert f"{float(100 * gamma_at(s, 32768)):.3f}" == "0.709"
+
+
+def test_one_price_row_prices_forming_and_core():
+    assert get("fp8-is-h100-d3s-v0-y16", prices="round8").forming.prices == "round8"
+    assert F.FP8IS(F.D3s(prices="round8")).prices == "round8"
+    with pytest.raises(ValueError):
+        F.FP8IS(F.D3s(prices="round8"), prices="round9")
+
+
+def test_d4_domain_is_selected_by_mnk_min():
+    s = get("fp8-is-h100-d3s-v0-y16", mnk_min=32768)
+    for ok in (Shape(32768, 32768, 32768), Shape(65536, 65536, 65536), Shape(32768, 65536, 49152)):
+        s.check(Matmul(0, ok, 1))
+    for bad in (Shape(16384, 32768, 32768), Shape(32768, 32768, 1 << 17), Shape(32768, 32768, 32800)):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, bad, 1))
+    assert dict(s.certificate.parameters)["mnk_min"] == 32768
+
+
+def test_f16_sums_round_once_in_f16_then_cast():
+    """With f16 sums each code is cvt.rn.satfinite.e4m3x2.f16x2 of HADD2(h, e_b); it differs from the f32-sums code only
+    by double rounding, and a 448 row still saturates at ±448."""
+    k = 128
+    rng = random.Random("f16-sums")
+    f32, f16 = F.D3s(route="xq"), F.D3s(route="xq", sums="f16")
+    pi, inv = F.ncp_perm(k, f32.P_SEED)
+    stream = F.xof("test/f16-sums", 2 * k)
+    for left in (True, False):
+        h = f32.parse(bytes(codes(rng, k, 0x7E)), k, left)
+        u, v = f32.side(h, stream, pi, inv, left), f16.side(h, stream, pi, inv, left)
+        diff = [l for l in range(3 * k) if u[l] != v[l]]
+        assert len(diff) < 3 * k // 16
+        assert all(abs(value(u[l]) - value(v[l])) <= max(e4m3_cell(value(u[l])), e4m3_cell(value(v[l]))) for l in diff)
+    h = [F.fp16.round_to_f16(False, 7, 6)] * k                                    # 448
+    ctx = ctx_of((64, k, 64))
+    st = f16.form(ctx, f16.noise(ctx), [h], [h], Tile((0,), (0,)))
+    assert all(c & 0x7F != 0x7F for c in st.x[0] + st.y[0]) and 0x7E in st.x[0] + st.y[0]
 
 
 def noise_of(layer, h, stream, left, pi, inv):
@@ -467,16 +574,18 @@ def test_d3_family_weight_copy_variants_share_the_checked_function(law, route):
     b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
     ctx = ctx_of((64, k, 64))
     digests = []
-    for copy in (True, False):
-        s = F.FP8IS(F.D3Family(law, route, copy), mnk_min=16)
-        ops = s.encode(ctx, s.noise(ctx), a, b, tile)
-        digests.append(s.digest(ctx, None, s.checked(ctx, ops)))
-    assert digests[0] == digests[1]
+    for sums in ("f32", "f16"):
+        for copy in (True, False):
+            s = F.FP8IS(F.D3Family(law, route, copy, sums=sums), mnk_min=16)
+            ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+            digests.append(s.digest(ctx, None, s.checked(ctx, ops)))
+    assert digests[0] == digests[1] != digests[2] == digests[3]
 
 
-@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
-def test_d3_family_useful_output_tracks_the_product(law, route):
-    s, k = F.FP8IS(F.D3Family(law, route), mnk_min=16, tile=(2, 2)), 512
+@pytest.mark.parametrize("law,route,sums", [(law, route, sums) for law in ("d3s", "d3m") for route in ("xq", "y16")
+                                            for sums in ("f32", "f16")])
+def test_d3_family_useful_output_tracks_the_product(law, route, sums):
+    s, k = F.FP8IS(F.D3Family(law, route, sums=sums), mnk_min=16, tile=(2, 2)), 512
     rng = random.Random(f"{law}-{route}-useful")
     a = [y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x6E)) for _ in range(2)]
     b = [bytes(codes(rng, k, 0x6E)) for _ in range(2)]

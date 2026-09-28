@@ -23,8 +23,8 @@ def _pearl(**config: Any) -> PoUWScheme:
 
 def _fp8_is(forming: str) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
-        from .fp8_is import FORMINGS, FP8IS
-        return FP8IS(FORMINGS[forming](), **config)
+        from .fp8_is import DEFAULT_PRICES, FORMINGS, FP8IS
+        return FP8IS(FORMINGS[forming](config.get("prices") or DEFAULT_PRICES), **config)
     return make
 
 
@@ -35,12 +35,20 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-fp8-v4": _pearl,
     "fp8-is-h100-d3s-v0": _fp8_is("d3s-v0"),
     "fp8-is-h100-d3s-v0-decode": _fp8_is("d3s-v0-decode"),
+    "fp8-is-h100-d3s-v0-f16": _fp8_is("d3s-v0-f16"),
+    "fp8-is-h100-d3s-v0-f16-decode": _fp8_is("d3s-v0-f16-decode"),
     "fp8-is-h100-d3s-v0-y16": _fp8_is("d3s-v0-y16"),
     "fp8-is-h100-d3s-v0-y16-decode": _fp8_is("d3s-v0-y16-decode"),
+    "fp8-is-h100-d3s-v0-y16-f16": _fp8_is("d3s-v0-y16-f16"),
+    "fp8-is-h100-d3s-v0-y16-f16-decode": _fp8_is("d3s-v0-y16-f16-decode"),
     "fp8-is-h100-d3m-v0": _fp8_is("d3m-v0"),
     "fp8-is-h100-d3m-v0-decode": _fp8_is("d3m-v0-decode"),
+    "fp8-is-h100-d3m-v0-f16": _fp8_is("d3m-v0-f16"),
+    "fp8-is-h100-d3m-v0-f16-decode": _fp8_is("d3m-v0-f16-decode"),
     "fp8-is-h100-d3m-v0-y16": _fp8_is("d3m-v0-y16"),
     "fp8-is-h100-d3m-v0-y16-decode": _fp8_is("d3m-v0-y16-decode"),
+    "fp8-is-h100-d3m-v0-y16-f16": _fp8_is("d3m-v0-y16-f16"),
+    "fp8-is-h100-d3m-v0-y16-f16-decode": _fp8_is("d3m-v0-y16-f16-decode"),
     "fp8-is-h100-d3-v0": _fp8_is("d3-v0"),
     "fp8-is-h100-d2-draft": _fp8_is("d2-draft"),
     "fp8-is-h100-fpncp-v0": _fp8_is("fpncp-v0"),
