@@ -85,7 +85,6 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
   let n := sch.n
   let R := sch.levels.size - 1
   let lv := fun (i : Nat) => sch.levels.getD i default
-  check (R ≥ 1) "ligerito: R < 1"
   check (p.initialCap == cap) "ligerito: initial_cap differs from the commitment's cap"
   check (zl.msgs.ybar.size == zl.tPad && zl.rep < EXTRA_LANES / 2) "ligerito: level 0's hiding messages have the wrong shape"
   label "flock-ligerito-basis-f256-split-v0"
