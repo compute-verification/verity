@@ -663,7 +663,7 @@ def d3_trace(law: str, route: str, weight_copy: bool, prices: dict[str, Fraction
         cast = (("three block values h + e_b in f16 (HADD2)", 3 * h2),
                 ("three casts f16 -> e4m3 (F2FP.F16 + PRMT)", 3 * prices["f2fp_f16"] / 2))
         widen = ()
-    noise = (("noise field (LOP3; two f16 lanes per XOF word)", i),
+    noise = (("noise field (one LOP3, 0x3C003C00 in a register; two f16 lanes per XOF word)", i),
              ("centre (2t − 3)/8 (HFMA2 t·K + c, c in a register: split)", h2),
              ("scale A·u (HMUL2)", h2), ("s = e + e∘P (HADD2)", h2), *cast)
     act = (source,
