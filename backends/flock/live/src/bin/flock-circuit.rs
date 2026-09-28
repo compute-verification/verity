@@ -2393,7 +2393,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                     let host = st.slot_zab(ni, net, ins);
                     let same = host.len() == ins.len()
                         && host.par_iter().all(|(x, z, a, b)| plan.slot_zab(&ins[*x]) == (z.clone(), a.clone(), b.clone()));
-                    json!({"pass": same, "slots": host.len(), "rows": plan.rows.len(), "window": plan.window(net)})
+                    json!({"pass": same, "slots": host.len(), "rows": plan.rows.len(), "window": plan.window(), "census": plan.census(), "circuit_sha256": hex(&net.sha256)})
                 }
             };
             pass &= v["pass"] == json!(true);
