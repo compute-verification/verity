@@ -21,6 +21,14 @@ open Lean (Json)
 /-- Row `r` shifted by `b`, as a placed callee's rows sit in its caller. -/
 def shiftRow (b : Nat) (r : List Nat × List Nat) : List Nat × List Nat := (r.1.map (· + b), r.2.map (· + b))
 
+/-- The unit's row `c` in the block: its Δ entry (`[one] · [one]`, or `src · src`), else its derived row. `one` is the
+block's constant. -/
+def blockRow (d : D) (one c : Nat) : Option (List Nat × List Nat) :=
+  match d.delta.find? (·.1 == c) with
+  | some (_, none) => some ([one], [one])
+  | some (_, some s) => some (s, s)
+  | none => d.rows[c]?
+
 /-- A layout's rows, and whether they are the unit's, whose binding and constant copies are Δ entries. -/
 structure Chk where
   d : D
@@ -69,7 +77,8 @@ def walk (types : String → Option CircuitType) (ls : Array Layout) (done : Arr
   | .and fa fb :: rest =>
     match refs with
     | .row col :: refs' =>
-      if k.rowIs col (resolve k.d.const (ent (formOf wire fa)), resolve k.d.const (ent (formOf wire fb))) then
+      if fa.c ≤ 1 && fb.c ≤ 1 &&
+          k.rowIs col (resolve k.d.const (ent (formOf wire fa)), resolve k.d.const (ent (formOf wire fb))) then
         walk types ls done unit j k jl top t l rest c (wire.push ([col], 0)) refs'
       else none
     | _ => none
@@ -81,7 +90,7 @@ def walk (types : String → Option CircuitType) (ls : Array Layout) (done : Arr
       match e.offset with
       | none =>
         if _h : e.layout < jl then
-          if args.size == u.inBits && u.outputs.size == u.outBits then
+          if args.size == u.inBits && args.all (·.c ≤ 1) && u.outputs.size == u.outBits && u.outputs.all (·.c ≤ 1) then
             match walk types ls done unit j k e.layout false u (ls.getD e.layout default) u.items.toList 0
                 (args.map (formOf wire)) refs with
             | some (w', refs') =>
@@ -94,8 +103,8 @@ def walk (types : String → Option CircuitType) (ls : Array Layout) (done : Arr
         | .seg jj base ex :: refs' =>
           let sub := done.getD jj default
           if top && jj == e.layout && jj < j && jj != unit && (ls.getD jj default).type == t.calls[kk]? &&
-              args.size == u.inBits && sub.inCols.size == u.inBits && sub.outCols.size == u.outBits &&
-              placedOk k sub base ex wire args then
+              args.size == u.inBits && args.all (·.c ≤ 1) && sub.inCols.size == u.inBits &&
+              sub.outCols.size == u.outBits && placedOk k sub base ex wire args then
             walk types ls done unit j k jl top t l rest (c + 1) (wire ++ sub.outCols.map fun col => ([base + col], 0))
               refs'
           else none
@@ -114,7 +123,8 @@ def checkLayout (types : String → Option CircuitType) (ls : Array Layout) (don
   let k : Chk := ⟨d, j == unit⟩
   match l.own, l.type.bind types with
   | .derive, some t =>
-    t.outputs.size == t.outBits && d.inCols.size == t.inBits && d.outCols.size == t.outputs.size && k.oneAt d.const &&
+    t.outputs.size == t.outBits && t.outputs.all (·.c ≤ 1) && d.inCols.size == t.inBits &&
+      d.outCols.size == t.outputs.size && k.oneAt d.const &&
       (List.range t.inBits).all (fun w => k.rowIs (d.inCols.getD w 0) ([d.inCols.getD w 0], [d.inCols.getD w 0])) &&
       match walk types ls done unit j k j true t l t.items.toList 0
           ((Array.range t.inBits).map fun w => ([d.inCols.getD w 0], 0)) d.items.toList with
