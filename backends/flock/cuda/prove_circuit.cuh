@@ -12,8 +12,9 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
-// device memory rep 0 leaves free when it keeps its witness for rep 1: the witness's scratch and inputs are outside the arena
-#define FC_KEEP_MARGIN ((size_t)6 << 30)
+// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most 2 GiB
+// at a time), its inputs, and the first proof's cached type matrices
+#define FC_KEEP_MARGIN ((size_t)4 << 30)
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -197,14 +198,13 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
-// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b and the lincheck's z) and level-0 codeword, tree and cap, live
-// in the device arena, which stays open until rep 1 releases them.
+// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
+// codeword, tree and cap, live in the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
     int m = 0, k_log = 0;
     F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
-    uint8_t* d_zlin = nullptr;
     F128* d_cw0 = nullptr;
     uint8_t* d_tree0 = nullptr;
     long long l0_bl = 0;
@@ -219,15 +219,13 @@ static size_t g_fc_arena = 0;
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_zlin, (void*)g_fc_kept.d_cw0,
-                    (void*)g_fc_kept.d_tree0})
+    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0})
         ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
 }
 
-// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free for the witness's own
-// buffers (the compression and unit scratch, the inputs), which are not the arena's
+// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
 static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
     size_t free_b = 0, total_b = 0;
     if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
