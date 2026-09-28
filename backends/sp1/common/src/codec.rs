@@ -105,7 +105,7 @@ fn err<T>(message: impl Into<String>) -> Result<T> {
     Err(CodecError(message.into()))
 }
 
-/// An argument of a gate: a port of the verification unit or an earlier gate of it.
+/// An argument of a gate: a port of the proof unit or an earlier gate of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arg {
     /// Index into `KindProgram::ports` (and so into `Obligation::inputs`).
@@ -121,7 +121,7 @@ pub struct GateOp {
     pub args: Vec<Arg>,
 }
 
-/// The relation of one kind of verification unit, in relative coordinates.
+/// The relation of one kind of proof unit, in relative coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KindProgram {
     pub kind: [u8; 32],

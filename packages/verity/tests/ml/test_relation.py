@@ -85,7 +85,7 @@ def _u16(path: Path) -> list[int]:
 
 
 def test_verification_unit_on_captured_gemm_coordinates() -> None:
-    """A VU: zero state, K/16 chained steps, then `pack_relation`; the bf16 word is the committed one (4 coordinates)."""
+    """A proof unit: zero state, K/16 chained steps, then `pack_relation`; the bf16 word is the committed one (4 coordinates)."""
     root = FIXTURES / "gemm-B1-b3eba618b1b5-20260907T1731Z"
     dirs = sorted(p for p in root.iterdir() if p.is_dir())
     picked = [dirs[0], dirs[7], dirs[15], dirs[-1]]
@@ -103,7 +103,7 @@ def test_verification_unit_on_captured_gemm_coordinates() -> None:
             st = R.check_step(AMP, R.step_witness(AMP, st, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16]), c)
         word, bf16 = R.pack_relation(st, AMP, c)
         assert bf16 == f["committed_word"], d.name
-        # the same VU's total against the published census
+        # the same proof unit's total against the published census
         vc = R.vu_census(AMP, K)
         assert c.summary()["mul"] == vc["total"]["mul"] and c.lookup_total == vc["total"]["lookup"]
 
