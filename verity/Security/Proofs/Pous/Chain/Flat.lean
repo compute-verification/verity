@@ -338,8 +338,8 @@ def SpongeExPostFacto : Prop :=
 the untweaked ideal permutation `Π` of `m + 512` bits under `H`, with `m = n·wc`. -/
 abbrev P3SOmega (n wc : ℕ) : Type := (Tweak n → Equiv.Perm (Lab n wc)) × Equiv.Perm (Bits (n * wc + 512))
 
-noncomputable instance (n wc : ℕ) : Fintype (P3SOmega n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (P3SOmega n wc) := ⟨⟨fun _ => 1, 1⟩⟩
+noncomputable instance instFintypeP3SOmega (n wc : ℕ) : Fintype (P3SOmega n wc) := Fintype.ofFinite _
+instance instNonemptyP3SOmega (n wc : ℕ) : Nonempty (P3SOmega n wc) := ⟨⟨fun _ => 1, 1⟩⟩
 
 /-- **The P3 model over the sponge.** Queries are `Π`, `Π⁻¹`, `P_T` and `P_T⁻¹`; answers are states or labels. -/
 noncomputable def p3SpongeModel (n wc : ℕ) : IdealModel where
@@ -1677,8 +1677,8 @@ abbrev KQ' (n wc : ℕ) : Type := Bits 256 × Fin 2 × Fin n × (Fin n → Optio
 /-- The salted primitive: `H : KQ' → Lab` and an ideal permutation `P` of labels. -/
 abbrev Omega' (n wc : ℕ) : Type := (KQ' n wc → Lab n wc) × Equiv.Perm (Lab n wc)
 
-noncomputable instance (n wc : ℕ) : Fintype (Omega' n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (Omega' n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
+noncomputable instance instFintypeOmega' (n wc : ℕ) : Fintype (Omega' n wc) := Fintype.ofFinite _
+instance instNonemptyOmega' (n wc : ℕ) : Nonempty (Omega' n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
 
 /-- The salted P3 model: `H | P | P⁻¹`, with the `(salt, segment)` tag inside `H`'s domain. -/
 noncomputable def p3Model' (n wc : ℕ) : IdealModel where
@@ -2362,8 +2362,8 @@ abbrev Tweak (n : ℕ) : Type := Bits 256 × Fin 2 × Fin n
 /-- The tweaked primitive: `H : KQ' → Lab` and a **family** of ideal permutations `P_t` indexed by the tweak. -/
 abbrev OmegaT (n wc : ℕ) : Type := (KQ' n wc → Lab n wc) × (Tweak n → Equiv.Perm (Lab n wc))
 
-noncomputable instance (n wc : ℕ) : Fintype (OmegaT n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (OmegaT n wc) := ⟨⟨fun _ _ _ => false, fun _ => 1⟩⟩
+noncomputable instance instFintypeOmegaT (n wc : ℕ) : Fintype (OmegaT n wc) := Fintype.ofFinite _
+instance instNonemptyOmegaT (n wc : ℕ) : Nonempty (OmegaT n wc) := ⟨⟨fun _ _ _ => false, fun _ => 1⟩⟩
 
 /-- The tweaked P3 model: `H | P_t | P_t⁻¹`, with the permutation tweaked by `(tag, layer, node)`. -/
 noncomputable def p3ModelT (n wc : ℕ) : IdealModel where
@@ -2581,7 +2581,7 @@ theorem length_le_of_isChain {α : Type} {R : α → α → Prop} (f : α → �
 /-- `a` is one of the `k` nodes before `b`. -/
 def Band (k : ℕ) (a b : Fin n) : Prop := a.val < b.val ∧ b.val ≤ a.val + k
 
-instance (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
+instance instDecidableBand (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
 
 /-- The nodes of `S` with no node of `S` among their `k` predecessors. -/
 def starts (k : ℕ) (S : Finset (Fin n)) : Finset (Fin n) := S.filter fun v => ∀ u ∈ S, ¬ Band k u v
@@ -10129,7 +10129,7 @@ theorem card_bits_eq_mul (K : Finset (Fin n × Fin wc)) (β : K → Bool) :
 def RedLab (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Type :=
   ({p // p ∉ K} → Bool) × Equiv.Perm {y // y ≠ x}
 
-instance (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Fintype (RedLab x K) :=
+instance instFintypeRedLab (x : Lab n wc) (K : Finset (Fin n × Fin wc)) : Fintype (RedLab x K) :=
   inferInstanceAs (Fintype (({p // p ∉ K} → Bool) × Equiv.Perm {y // y ≠ x}))
 
 /-- **Encoder, one tweak.** `P ↦ (bits K (P x), rest)`, with `rest : RedLab x K` what the hint stores. -/
@@ -10198,7 +10198,7 @@ variable {T : Type} [Fintype T] [DecidableEq T]
 /-- The family hint: per tweak, the bits of `P_t (x t)` off `K t` and the reduced permutation. -/
 def FamilyRed (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Type := (t : T) → RedLab (x t) (K t)
 
-instance (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Fintype (FamilyRed x K) :=
+instance instFintypeFamilyRed (x : T → Lab n wc) (K : T → Finset (Fin n × Fin wc)) : Fintype (FamilyRed x K) :=
   inferInstanceAs (Fintype ((t : T) → RedLab (x t) (K t)))
 
 /-- **Encoder, family.** `F ↦ ((bits (K t) (F t (x t)))ₜ, rest)`. -/
@@ -19240,7 +19240,7 @@ inductive GA
   | p1 | k1 | b1 | k2 | b2 | p2 | vY | vY2
   deriving DecidableEq
 
-instance : Fintype GA :=
+instance instFintypeGA : Fintype GA :=
   ⟨{.p1, .k1, .b1, .k2, .b2, .p2, .vY, .vY2}, fun x => by cases x <;> simp⟩
 
 /-- The relations of a pair group. -/
@@ -19248,7 +19248,7 @@ inductive GR
   | rc1 | rx2 | rc2 | rx1 | rh0 | rh1 | rIw | rIu | ab1 | ab2 | ap2 | aY | aY2
   deriving DecidableEq
 
-instance : Fintype GR :=
+instance instFintypeGR : Fintype GR :=
   ⟨{.rc1, .rx2, .rc2, .rx1, .rh0, .rh1, .rIw, .rIu, .ab1, .ab2, .ap2, .aY, .aY2}, fun x => by cases x <;> simp⟩
 
 /-- A relation's priority among relations at the same index (`< 13`). -/
@@ -26339,7 +26339,7 @@ variable {Sig : Type} (whole : Sig → ℕ)
 /-- The joint tables of a class profile `p`: one table per segment, segment `t`'s with `p t` whole credits. -/
 def SigP (p : Fin N → ℕ) : Type := {σ : Fin N → Sig // ∀ t, whole (σ t) = p t}
 
-noncomputable instance [Fintype Sig] (p : Fin N → ℕ) : Fintype (SigP whole p) := by
+noncomputable instance instFintypeSigP [Fintype Sig] (p : Fin N → ℕ) : Fintype (SigP whole p) := by
   classical
   unfold SigP
   infer_instance
@@ -42886,7 +42886,7 @@ inductive V6Part where
   | h
 deriving DecidableEq
 
-instance : Fintype V6Part where
+instance instFintypeV6Part : Fintype V6Part where
   elems := {.r, .h}
   complete := by intro x; cases x <;> simp
 
@@ -53522,7 +53522,7 @@ theorem pubMeets_exact {M : IdealModel} (sch : Scheme M) [Subsingleton sch.Coins
 
 instance instSubsingletonCoinsDenseScheme (B ℓ : ℕ) [NeZero B] : Subsingleton (Pous.Dense.denseScheme B ℓ).Coins := inferInstanceAs (Subsingleton Unit)
 
-instance (N B ℓ : ℕ) [NeZero (N * B)] : Subsingleton (Pous.DenseReCert.segScheme N B ℓ).Coins :=
+instance instSubsingletonCoinsSegScheme (N B ℓ : ℕ) [NeZero (N * B)] : Subsingleton (Pous.DenseReCert.segScheme N B ℓ).Coins :=
   inferInstanceAs (Subsingleton Unit)
 
 instance instSubsingletonCoinsChainDense (B ℓ c : ℕ) [NeZero B] (dom : ℕ → Bits c) : Subsingleton (Pous.Sponge.chainDense B ℓ c dom).Coins :=

@@ -5,7 +5,7 @@ import Definitions.Pouw.PearlC.Tile4Circuit
 /-!
 # `pc4`'s whole Program as a gate table (definitions only)
 
-`Pc4Check{M, K, N, TM, TN}` (`verity_pouw.circuit.pc4`) as a `WholeCircuit.Whole`, as `whole8` writes `Pc8Check`.
+`Pc4Check{M, K, N, TM, TN}` (`verity.protocols.accounting.work.pouw.circuit.pc4`) as a `WholeCircuit.Whole`, as `whole8` writes `Pc8Check`.
 Its input regions have `pc8`'s sizes and order (`a`, `ea`, `b`, `eb`, `fa`, `fb`, `g`), so their first gates are
 `eaAt` … `gAt` and `in8`, and a row unit reads them through `portA8` and `portB8`: RowA `i` reads row `i` of `a`, line
 `i` of `ea`, `fa` (its form basis) and `fb` (its chain basis); RowB `j` reads row `j` of `b`, line `j` of `eb`, `fb`,

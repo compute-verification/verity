@@ -150,7 +150,7 @@ noncomputable def readsAt (ω : L.Ω) (bs : List (List (OutC 𝔽 D))) (c : vb.P
 abbrev Ωc (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsDraw plan tab vb c ω}
 
 open Classical in
-noncomputable instance (L : Law n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
+noncomputable instance instFintypeΩc (L : Law n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
   Subtype.fintype _
 
 /-- A trial's outcome: the draw, the fresh run, and the waits' runs. -/

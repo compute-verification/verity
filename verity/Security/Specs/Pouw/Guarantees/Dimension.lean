@@ -3,7 +3,7 @@ import Specs.Pouw.Assumptions.Dimension.OpenPipe
 /-!
 # The dimension argument's guarantee (trusted)
 
-Each guarantee is a `def G : Prop`, stated over `Pouw.Protocol`'s definitions with the named assumptions it rests on as
+Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem
 `Pouw.SecurityProofs.Dimension.G : Pouw.Guarantees.Dimension.G`. A2 on the checked words, whichever pipe class
 (`Pouw.Assumptions.Dimension.OpenPipe`). Each keeps the text, the docstring and the `open`s of the statement it was in

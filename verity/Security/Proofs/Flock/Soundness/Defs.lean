@@ -60,7 +60,7 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
 `2^64` positions. -/
 def Accounting.Level.Fits (l : Level) : Prop := l.logCols ≤ 40 ∧ l.logLen ≤ 64
 
-instance (l : Level) : Decidable l.Fits := by unfold Accounting.Level.Fits; infer_instance
+instance instDecidableFits (l : Level) : Decidable l.Fits := by unfold Accounting.Level.Fits; infer_instance
 
 /-- Every `fast100` level fits. -/
 theorem fast100_levels_fit : ∀ m s, fast100 m = some s → ∀ l ∈ s.levels, l.Fits := by

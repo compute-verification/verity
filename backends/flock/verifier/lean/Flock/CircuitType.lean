@@ -215,7 +215,7 @@ def WellFormed (callee : String → Option CircuitType) (t : CircuitType) : Prop
   labelOk t = true ∧ portsOk t = true ∧ callsOk t = true ∧ tablesOk t = true ∧ resolves callee t = true ∧
     itemsOk callee t = true ∧ firstUseOk t = true ∧ outputsOk callee t = true ∧ liveOk callee t = true
 
-instance (callee : String → Option CircuitType) (t : CircuitType) : Decidable (WellFormed callee t) := by
+instance instDecidableWellFormed (callee : String → Option CircuitType) (t : CircuitType) : Decidable (WellFormed callee t) := by
   unfold WellFormed; infer_instance
 
 /-- The first rule `t` breaks, by name. -/

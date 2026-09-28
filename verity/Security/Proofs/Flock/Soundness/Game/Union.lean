@@ -20,7 +20,7 @@ open scoped ENNReal
 
 variable {α β γ : Type}
 
-instance : LawfulMonad Game :=
+instance instLawfulMonad : LawfulMonad Game :=
   LawfulMonad.mk' Game
     (id_map := fun x => by
       show x.bind (fun a => Game.ret (id a)) = x

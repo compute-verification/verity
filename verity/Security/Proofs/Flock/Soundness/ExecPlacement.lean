@@ -35,7 +35,7 @@ def InSpan (r : Range) (x : ℕ) : Prop := r.start ≤ x ∧ x < r.start + spanH
 /-- Two ranges' spans do not overlap: `HmRow.check`'s pairwise test does not fire on them. -/
 def Apart (r r' : Range) : Prop := ¬ (r.start < r'.start + spanH r' ∧ r'.start < r.start + spanH r)
 
-instance : Std.Symm Apart := ⟨fun _ _ h ⟨h1, h2⟩ => h ⟨h2, h1⟩⟩
+instance instSymmRangeApart : Std.Symm Apart := ⟨fun _ _ h ⟨h1, h2⟩ => h ⟨h2, h1⟩⟩
 
 theorem not_apart_of_inSpan {r r' : Range} {x : ℕ} (h : InSpan r x) (h' : InSpan r' x) : ¬ Apart r r' :=
   fun ha => ha ⟨by have := h.1; have := h'.2; omega, by have := h'.1; have := h.2; omega⟩

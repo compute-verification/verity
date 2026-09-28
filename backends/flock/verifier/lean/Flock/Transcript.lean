@@ -66,7 +66,7 @@ def _root_.Flock.Round.answers (r : Round) (c : ByteArray) : Prop :=
   | some b => c = b
   | none => (if r.sha.size = 64 then Sha512.hash c else Sha256.hash c) = r.sha
 
-instance (r : Round) (c : ByteArray) : Decidable (r.answers c) := by
+instance instDecidableAnswers (r : Round) (c : ByteArray) : Decidable (r.answers c) := by
   unfold Round.answers
   split <;> infer_instance
 

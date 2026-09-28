@@ -313,7 +313,7 @@ def Conflict (root : D) (op op' : CoinOpening D Coin Salt) : Prop :=
   op.pos = op'.pos ∧ op.idx = op'.idx ∧ op.cs.length = op'.cs.length ∧ op.sibs.length = op'.sibs.length ∧
     op.cs ≠ op'.cs ∧ T.reach H op = root ∧ T.reach H op' = root
 
-instance [DecidableEq D] [DecidableEq Coin] (root : D) (op op' : CoinOpening D Coin Salt) :
+instance instDecidableConflictOfDecidableEq [DecidableEq D] [DecidableEq Coin] (root : D) (op op' : CoinOpening D Coin Salt) :
     Decidable (Conflict H T root op op') := by
   unfold Conflict
   infer_instance

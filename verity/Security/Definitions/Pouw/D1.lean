@@ -12,7 +12,7 @@ Parameters (the `tt-attacks` and `llm-shapes` threads may change every one of th
   The factor distribution is the push-forward of the uniform oracle through `expAct`, `expWt`;
 * `W_ref`, from the layout only (generic, the milestone's included).
 
-The named milestone instance is `D1.m1` (`Pouw/Protocol/M1.lean`).
+The named milestone instance is `D1.m1` (`Definitions/Pouw/M1.lean`).
 
 Noise `E = E_L·E_R` (`m × k`, rank `≤ r`), `F = F_L·F_R` (`k × n`); noised operands `A' = A + E`, `B' = B + F`.
 Checked values: the running partial sums of `A'·B'` at inner depths `d, 2d, …`, the last block capped at `k`.

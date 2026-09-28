@@ -38,8 +38,8 @@ abbrev KQ (n wc : ℕ) : Type := Fin 2 × Fin n × (Fin n → Option (Lab n wc))
 /-- The primitive of the P3 model: an `H`-oracle and an ideal permutation of labels. -/
 abbrev P3Omega (n wc : ℕ) : Type := (KQ n wc → Lab n wc) × Equiv.Perm (Lab n wc)
 
-noncomputable instance (n wc : ℕ) : Fintype (P3Omega n wc) := Fintype.ofFinite _
-instance (n wc : ℕ) : Nonempty (P3Omega n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
+noncomputable instance instFintypeP3Omega (n wc : ℕ) : Fintype (P3Omega n wc) := Fintype.ofFinite _
+instance instNonemptyP3Omega (n wc : ℕ) : Nonempty (P3Omega n wc) := ⟨⟨fun _ _ _ => false, 1⟩⟩
 
 /-- The P3 ideal model: a random oracle `H : KQ → Lab` and an ideal permutation `P` of labels, with `P` and `P⁻¹`
 both queryable (`Qry := KQ ⊕ (Lab ⊕ Lab)` is `H | P | P⁻¹`). -/

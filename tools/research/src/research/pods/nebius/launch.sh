@@ -203,5 +203,5 @@ if [ "$register" = 1 ]; then
 fi
 cat <<EOF
 READY $MACHINE $IP vm=$VM_ID project=$PROJECT_ID data=$DATA_ID sg=$SG_ID
-next: research run --on $MACHINE --project $PROJECT --source . --cwd source -- bash tools/research/src/research/pods/nebius/check.sh
+next: research run --on $MACHINE --project $PROJECT --source . --cwd source -- python3 tools/research/src/research/pods/nebius/check.py
 EOF

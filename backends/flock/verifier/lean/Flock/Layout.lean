@@ -372,7 +372,7 @@ def WellFormed (types : String → Option CircuitType) (ls : Array Layout) (unit
     ∀ j, j < ls.size → rangeOk ls unit j = true ∧ genOk ls info unit j = true ∧ entriesOk types ls info j = true ∧
       geometryOk types ls info unit j = true
 
-instance (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
+instance instDecidableWellFormed (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
     Decidable (WellFormed types ls unit info) := by
   unfold WellFormed; infer_instance
 

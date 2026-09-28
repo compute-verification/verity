@@ -52,7 +52,8 @@
   "Proofs.Flock.Verifier",
   "Flock",
   "Proofs.Flock.Level3",
-  "Proofs.Flock.Soundness"
+  "Proofs.Flock.Soundness",
+  "Proofs.Flock.VBridge"
  ],
  "layers": {
   "Definitions.Core": {
@@ -226,7 +227,8 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "guarantees": {
   "Flock.HmNets.col_and": {
@@ -20960,6 +20962,28 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
+  },
+  "FlockVBridge.sound_shaFrom": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockVBridge.sound_shaFrom (cv : List (BitVec 64)) (bits : List Flock.HmNets.Lin) (np : Nat) :",
+    "  FlockSoundness.Discharge.Hm.Sound (FlockVBridge.shaFrom cv bits (instHMul.hMul 128 np)) fun z out =>",
+    "    ∀ (pre data : List UInt8),",
+    "      Eq pre.length (instHMul.hMul 128 np) →",
+    "        Eq bits.length (instHMul.hMul 8 data.length) →",
+    "          (∀ (q : Nat),",
+    "              instLTNat.lt q bits.length →",
+    "                Eq (FlockSoundness.Discharge.Hm.bit z bits q) (FlockSoundness.Discharge.Hm.bitL data q)) →",
+    "            Eq cv (FlockVBridge.preCv pre np) →",
+    "              And (Eq out.length 512)",
+    "                (∀ (t : Nat),",
+    "                  instLTNat.lt t 512 →",
+    "                    Eq (FlockSoundness.Discharge.Hm.bit z out t)",
+    "                      (FlockSoundness.Discharge.Hm.bitL (Flock.Sha512.hash (FlockVBridge.catBytes pre data)).data.toList",
+    "                        t))"
+   ],
+   "assumptions": [],
+   "type_hash": "7751f3655f8a84941af362f27c5e8f46ef3ee5c69389884ff0cb56c247aa7ad4"
   },
   "Nci.SecurityProofs.Inference": {
    "owner": "@lean",
@@ -46500,7 +46524,8 @@
     "FlockSoundness.Registered.TwoOpenings.collides",
     "FlockSoundness.Registered.TwoOpenings.conflict_strict",
     "FlockSoundness.Registered.flock_e2e_count_hm96_reads",
-    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads"
+    "FlockSoundness.Registered.flock_e2e_drawn_hm96_reads",
+    "FlockVBridge.sound_shaFrom"
    ]
   },
   "Flock.Hm96": {
@@ -47162,7 +47187,8 @@
     "FlockSoundness.Prog.flock_headline_execL",
     "FlockSoundness.Prog.flock_headline_live",
     "FlockSoundness.Prog.flock_headline_live_on",
-    "FlockSoundness.Refine.setupH_wf"
+    "FlockSoundness.Refine.setupH_wf",
+    "FlockVBridge.sound_shaFrom"
    ]
   },
   "Flock.HmRow": {
@@ -61669,8 +61695,9 @@
    "guarantees": ["FlockSoundness.Discharge.Hm.good_compression3", "FlockSoundness.Discharge.Hm.good_hm96Row"]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Gadget": {
-   "digest": "819bcbffe909f082c7103bcaa02a9c3b0ab4a4fa702d398c4cc4b013dec92d35",
+   "digest": "7caa3ee2decd21f56666a140ec00e71175f48ae7b48fdda1a48f72c5cff30a23",
    "definitions": {
+    "FlockSoundness.Discharge.Hm.Sound": "d77ff65e99bb4b026909035e6ab916a62c7a3c477e4a8efb548ad58d6f385c57",
     "FlockSoundness.Discharge.Hm.ev": "bc737f6e17d771e4784070f1fa9bf79c4964a1dc6441e18972b75a8c9aec29af",
     "FlockSoundness.Discharge.Hm.rowHolds": "e0bdc96ce9a6d578dfb4040c073a1d17d666c73e45cd6d8d9fe0c941dd6cbe75",
     "FlockSoundness.Discharge.Hm.stHolds": "794facfb551c127786bb8c3d2276fa3f2d4fba44298a157f4d2cd23a13082540"
@@ -61680,18 +61707,21 @@
     "FlockSoundness.Discharge.Hm.hm96Row_spec",
     "FlockSoundness.Discharge.Hm.hm96_commit",
     "FlockSoundness.Discharge.Hm.port_commit",
-    "FlockSoundness.Discharge.Hm.row_commit"
+    "FlockSoundness.Discharge.Hm.row_commit",
+    "FlockVBridge.sound_shaFrom"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Hash": {
-   "digest": "5dbbd23c3b665a82aac53efca9cb89a138a5c597ef886d7e91eb18f632b540aa",
+   "digest": "d3ae30c1115ce3b6497f6f90433284ff6da77e7e3facabba489ad8dfda1bbb85",
    "definitions": {
     "FlockSoundness.Discharge.Hm.bitL": "1ced822e6de7c5a795df961f9f67daa2711ca8e44e54d6d721dee086b0b64133",
     "FlockSoundness.Discharge.Hm.chain": "e8913abf1bc79b1554ab97edae466e55c11d6dfbb7829df8525d1b4ef12a54e5",
     "FlockSoundness.Discharge.Hm.lastBlock": "c6e0a13f8ffa40a10e39fae8e8f1ca149f993e096fef8682a32fff75c8246358",
     "FlockSoundness.Discharge.Hm.lastCv": "e38ef08329f6f81e3b94a86aa557a82c2b6634311b1fea9598d25eca11e0f487",
+    "FlockSoundness.Discharge.Hm.lenBytes": "5d439511bedc806861d3b6887cfc766cf7b376ead33d9f6b93b54ece0318ed47",
     "FlockSoundness.Discharge.Hm.padData": "95f17a51af1ddb6921c20b727c57e878219cef677069607b2ecf6dd6aa06a7d2",
-    "FlockSoundness.Discharge.Hm.wordL": "710196f22f9eccd694af7a28576e9eaaa793c97e90bdb800f290d5364473543f"
+    "FlockSoundness.Discharge.Hm.wordL": "710196f22f9eccd694af7a28576e9eaaa793c97e90bdb800f290d5364473543f",
+    "FlockSoundness.Discharge.Hm.zeroPad": "ac5a6e7f5761d3724e15c6dd57099a0d943dff926e7052743c8b595fe7b66472"
    },
    "guarantees": [
     "FlockSoundness.Discharge.Hm.bitL_hash",
@@ -61700,7 +61730,8 @@
     "FlockSoundness.Discharge.Hm.row_commit",
     "FlockSoundness.Discharge.ZkView.honest_msg",
     "FlockSoundness.Discharge.ZkView.leafSplit",
-    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal"
+    "FlockSoundness.Discharge.ZkView.zk_wire_prefinal",
+    "FlockVBridge.sound_shaFrom"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hm.Laid": {
@@ -61821,6 +61852,13 @@
    },
    "guarantees": ["FlockSoundness.Discharge.Hm.bitL_saltHash"]
   },
+  "Proofs.Flock.Soundness.Discharge.Hm.Slot": {
+   "digest": "996a0c3f3d5f03d516591ff18d55359540563873ef8facafe4aad4cbdb6d5710",
+   "definitions": {
+    "FlockSoundness.Discharge.Hm.chainV": "b99ccde1a47b767e9e0abdc0d0508205208da64a474d082e1ed814dcbf7a12fb"
+   },
+   "guarantees": ["FlockVBridge.sound_shaFrom"]
+  },
   "Proofs.Flock.Soundness.Discharge.Hm.Spec": {
    "digest": "f7eccf982512ca06f4f551eba84fc7eab424381074b9c4938b449d3af5b79b7e",
    "definitions": {
@@ -61866,7 +61904,8 @@
     "FlockSoundness.Discharge.Hm.hm96Row_spec",
     "FlockSoundness.Discharge.Hm.hm96_commit",
     "FlockSoundness.Discharge.Hm.port_commit",
-    "FlockSoundness.Discharge.Hm.row_commit"
+    "FlockSoundness.Discharge.Hm.row_commit",
+    "FlockVBridge.sound_shaFrom"
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Integrate.Headline": {
@@ -73737,6 +73776,21 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewH",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ"
    ]
+  },
+  "Proofs.Flock.VBridge.Sha": {
+   "digest": "8ecb8ea6d469ac3a6d0f2b4940afc0242b3a45f71d16e48b5a83e0d94ceedbc5",
+   "definitions": {
+    "FlockVBridge.bitsOf": "9f878b41e1e669b700427312f132ec82b671c1dc6e3e28cdb45e18413a177c41",
+    "FlockVBridge.blockAt": "e06b73012b14513a67fd1f234a6728376ef39a69891866f4fe862bdb8d77d076",
+    "FlockVBridge.catBytes": "55941de5532a0f0d0ba11af2a64e18f94ee28dca21a4f65c401bc5cf803bdcf0",
+    "FlockVBridge.padTail": "99539d387a703a079a980a11809c80f5528adb0e74d9f9cbd8a47794cf681d09",
+    "FlockVBridge.preCv": "174c22a7a29a1d333cac897b72aae3968d86bd9bc8298b36139aa6b64025d540",
+    "FlockVBridge.shaBlock": "2dcd18bdcadd92ad3e0d4c797d7e8105cc63d848397db107dc440d0499ab8ade",
+    "FlockVBridge.shaBlocks": "53237629c002bf742d751252c68e0ab28125e64f1ad600d9a32c1aaa8e3e533a",
+    "FlockVBridge.shaFrom": "3ebda9016bfbc7ea8f97672fd775d782cab5d9f30360b33387b2661930e4d143",
+    "FlockVBridge.shaMsg": "16bf93948655629a19b5374fcd30c496b9605711de519b8f987f592a2f23933f"
+   },
+   "guarantees": ["FlockVBridge.sound_shaFrom"]
   },
   "Proofs.Flock.Verifier.Hash": {
    "digest": "d6d1e8b248f3eb42f59dc34dc27f0fcfd6283a88ba7e68b82990f6f603201997",

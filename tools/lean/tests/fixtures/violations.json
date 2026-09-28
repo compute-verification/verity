@@ -4,6 +4,11 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "fails": "sorry: sorryAx is used by Control.bad"
  },
+ "anonymous_instance": {
+  "write": {"Control/Bad.lean": "instance : Inhabited (Fin 2) := ⟨0⟩\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "instance: Control/Bad.lean:1 declares an instance without a name, which Lean names instInhabitedFinOfNatNat_control"
+ },
  "axiom": {
   "write": {"Control/Bad.lean": "axiom Control.magic : False\n"},
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},

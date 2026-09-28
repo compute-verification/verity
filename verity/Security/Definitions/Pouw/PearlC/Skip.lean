@@ -93,7 +93,7 @@ def chainDebit (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) : �
 `Forming.Needed`, the same definition. -/
 def needed (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Prop := ∃ j, flag i j ((l : ℕ) / 32) = false
 
-instance (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Decidable (needed flag i l) := by
+instance instDecidableNeeded (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Decidable (needed flag i l) := by
   unfold needed; infer_instance
 
 /-- The needed elements of `A′`. -/

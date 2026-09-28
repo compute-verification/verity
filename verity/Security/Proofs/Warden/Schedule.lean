@@ -263,7 +263,7 @@ def syncInteraction : Interaction 1 1 1 Bool Unit Bool (Obs 1 1 1) where
   op _ _ := ()
   snd z _ _ := z
 
-instance (k : ℕ) (op : ℕ → List (Obs 1 1 1) → Unit) (o : List (Obs 1 1 1)) (a : Unit × (Fin 1 → twoSyncs.Elem)) :
+instance instDecidableAcceptedUnitProdForallFinOfNatNatElemTwoSyncsConstantRateOneFrame (k : ℕ) (op : ℕ → List (Obs 1 1 1) → Unit) (o : List (Obs 1 1 1)) (a : Unit × (Fin 1 → twoSyncs.Elem)) :
     Decidable (Accepted (constantRate (S := 1) 2 1 twoSyncs oneFrame) op k o a) := by
   unfold Accepted; infer_instance
 

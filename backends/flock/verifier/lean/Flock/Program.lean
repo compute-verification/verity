@@ -64,7 +64,7 @@ partial def beq : Ty → Ty → Bool
   | .record a, .record b => a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && beq x.2 y.2
   | _, _ => false
 
-instance : BEq Ty := ⟨beq⟩
+instance instBEq : BEq Ty := ⟨beq⟩
 
 partial def leaves : Ty → Nat
   | .value _ => 1

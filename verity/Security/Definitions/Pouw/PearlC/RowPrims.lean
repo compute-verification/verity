@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.Tile4Circuit
 /-!
 # PoUW's own primitives in the row units, as word functions (definitions only)
 
-The six primitives of `verity_pouw.circuit.words` that `pc8`'s and `pc4`'s row templates read, each a function on
+The six primitives of `verity.protocols.accounting.work.pouw.circuit.words` that `pc8`'s and `pc4`'s row templates read, each a function on
 words as naturals with the Python's arithmetic:
 
 * `sqrtWord` is `PouwF32SqrtRn_v1`, `sqrt.rn.f32` (`verity.ml.tc.fp32.sqrt`, `ρ`'s root): `⌊√m⌋` of the significand
@@ -15,7 +15,7 @@ words as naturals with the Python's arithmetic:
   statistic over `sq300` (`2^300·x²` of an FP32 word) and `up48` (rounded up to 48 significant bits).
 
 `RowPrimVectors` holds them to the Python by vectors the kernel checks (`SecurityProofs.PearlC.RowPrimChecks`;
-`PouwETilde_v1` on its whole domain), written by `scripts/row_prims_vectors.py` from each primitive's `evaluate`;
+`PouwETilde_v1` on its whole domain), written by `verity/protocols/accounting/work/pouw/lean/scripts/row_prims_vectors.py` from each primitive's `evaluate`;
 `tests/test_row_prims_lean.py` checks that the script still writes them.
 -/
 

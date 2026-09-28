@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.Instance
 /-!
 # The per-tile cap and the sampled audit (trusted; the cheap-binding lane's file)
 
-The verifier opens drawn tiles, not units: `verity_pouw.audit` draws `t` tiles independently, each with probability
+The verifier opens drawn tiles, not units: `verity.protocols.accounting.work.pouw.audit` draws `t` tiles independently, each with probability
 `W_ref(tile)/W`, and recomputes each drawn tile from its openings (its activation rows and weight rows over the full k).
 So the debit cap has to be decided on a tile, and γ has to hold for a verifier that checks drawn tiles only (the red
 team's F1, `internal/pouw/red-team-pearl-c-vllm.md`). This file states both; `TileGamma` proves γ from them.
@@ -138,7 +138,7 @@ def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q 
       CM.calls prog H U act [] s ≤ qref U
 
 /-- **The γ-gap property under the sampled audit.** For every in-domain workload, budget `T`, oracle bound `q` and
-adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity_pouw.audit`'s `tickets`), `t` independent
+adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity.protocols.accounting.work.pouw.audit`'s `tickets`), `t` independent
 draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − γ` of the
 claimed work (the credited rows' `W_ref`) less `ε_s` of the layout's, with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
@@ -203,7 +203,7 @@ noncomputable def PearlCSem.tileDebit (sem : PearlCSem Q R S) (c : Costs) (H : Q
 - `rowOK`: `PearlCSem.RowOK`, Π's rules on one activation row;
 - `credit`: `(1 − ρ)·creditOf` times the credited rows' share, fixed;
 - `capOK`: the replayed debit on the credited rows (`tileDebit`) is at most `ρ·creditOf` times their share;
-- `Wref`: `wrefOf` times the tile's share, as `verity_pouw.audit`'s `tickets` weigh a tile once its `wref` is `wrefOf`
+- `Wref`: `wrefOf` times the tile's share, as `verity.protocols.accounting.work.pouw.audit`'s `tickets` weigh a tile once its `wref` is `wrefOf`
   (the red team's F2);
 - `Wcred`: `wrefOf` times the credited rows' share. -/
 noncomputable def pearlCTiles (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : TileRules Q R S where

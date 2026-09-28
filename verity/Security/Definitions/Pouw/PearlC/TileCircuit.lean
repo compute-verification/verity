@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.PeelExact
 /-!
 # The tile unit as a core circuit (definitions only)
 
-`pc8`'s tile template `Pc8Tile_v1{K, TM, TN, DEV}` (`verity_pouw.circuit.pc8`, its `_tile_body` and `_chain`) as a
+`pc8`'s tile template `Pc8Tile_v1{K, TM, TN, DEV}` (`verity.protocols.accounting.work.pouw.circuit.pc8`, its `_tile_body` and `_chain`) as a
 `Verity.Circuit`, written as a gate table (`Spec`): for each gate its width, whether it is an input, the earlier gates
 it reads in order, and its value from theirs. No evaluator for IR Programs: the table is the template's computing graph
 (`verity.ir.cut.CallGraph`), with each IR primitive's semantics a Lean function on words.

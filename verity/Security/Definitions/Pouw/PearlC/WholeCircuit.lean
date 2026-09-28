@@ -4,7 +4,7 @@ import Definitions.Core.Partition
 /-!
 # A whole Program's gate table from its units' tables (definitions only)
 
-A tile-check Program (`verity_pouw.circuit.pc8`'s `Pc8Check`) is its proof units' templates wired together: each row
+A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof units' templates wired together: each row
 unit reads the Program's input regions, and each tile unit reads its rows' outputs. Its table here is a `Whole`: the
 Program's input gates, then its units' computed gates, each unit an instance of a `Block`, a unit template's own table
 (`TileCircuit.Spec`, whose inputs are its first `nIn` gates) with the gate each instance's input reads (`port`). An
@@ -12,7 +12,7 @@ instance's computed gates are the template's, in order, with every read relocate
 its port names, a computed gate to the instance's own copy. These ports are the only wires between units.
 
 The partition (`Whole.part`) puts each instance's gates in a unit of its own, numbered in the blocks' order, as
-`verity_pouw.circuit.pc4.units` numbers the root body's members.
+`verity.protocols.accounting.work.pouw.circuit.pc4.units` numbers the root body's members.
 
 * **`pc8`** (`whole8`, `Pc8Check{M, K, N, TM, TN, DEV}`): the inputs in `Pc8Check`'s parameter-leaf order (`a`, `ea`,
   `b`, `eb`, `fa`, `fb`, `g`), then `N` instances of `Pc8RowB_v1{K}` (`row8B`), `M` of `Pc8RowA_v1{K}` (`row8A`) and

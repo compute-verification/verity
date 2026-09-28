@@ -3,7 +3,7 @@ import Specs.Pouw.Assumptions.Pinned
 /-!
 # The game's guarantees (trusted)
 
-Each guarantee is a `def G : Prop`, stated over `Pouw.Protocol`'s definitions with the named assumptions it rests on as
+Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.G : Pouw.Guarantees.G`. (b), (c) and (d)
 of `Pouw.Assumptions.Pinned`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
 text, the docstring and the `open`s of the statement it was in its source module.

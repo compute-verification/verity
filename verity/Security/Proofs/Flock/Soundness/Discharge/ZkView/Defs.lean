@@ -232,7 +232,7 @@ abbrev Base (z : Sizes) (Hi : Type) :=
       × ((Fin z.nS → Salt) × (Fin 2 → Fin z.nQ → Salt) × (Fin 2 → Salt) × (Fin 2 → Hi)))
 
 set_option synthInstance.maxSize 1024 in
-instance (z : Sizes) (Hi : Type) [Fintype Hi] : Fintype (Base z Hi) := inferInstance
+instance instFintypeBase (z : Sizes) (Hi : Type) [Fintype Hi] : Fintype (Base z Hi) := inferInstance
 
 /-- **The table's randomness** from `b` and each pre-final leaf's seed by position (`T.s0`, `T.sP`). -/
 noncomputable def Coined.randOf (T : Coined K W Hi VL z) (b : Base z Hi) (u : LeafPos z → Bits × Salt) : T.tab.Rand :=

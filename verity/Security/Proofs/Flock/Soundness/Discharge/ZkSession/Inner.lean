@@ -101,7 +101,7 @@ def innerCheck {N : ℕ} (dom : Fin N ↪ F) {s nP q : ℕ} (pos : F → Fin N) 
   (∑ i, batchCoef γ R i * head y i = batchT γ R + β * τ) ∧
     ∀ j, enc dom y (pos (w j)) = Ch (pos (w j)) + β * Cμ (pos (w j))
 
-instance [DecidableEq F] {N : ℕ} (dom : Fin N ↪ F) {s nP q : ℕ} (pos : F → Fin N) {nA : ℕ}
+instance instDecidableInnerCheckOfDecidableEq [DecidableEq F] {N : ℕ} (dom : Fin N ↪ F) {s nP q : ℕ} (pos : F → Fin N) {nA : ℕ}
     (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) (ε : F) (ρσ : F × F) (γ : Fin (nA + 3) → F)
     (τ β : F) (y : Fin (s + nP) → F) (w : Fin q → F) :
     Decidable (innerCheck dom pos rows tr Ch Cμ ε ρσ γ τ β y w) := by

@@ -91,7 +91,7 @@ structure CapDomain (g k tm tn n rho : ℕ) : Prop where
   tm_pos : 0 < tm
   rho_pos : 0 < rho
 
-instance (g k tm tn n rho : ℕ) : Decidable (CapDomain g k tm tn n rho) :=
+instance instDecidableCapDomain (g k tm tn n rho : ℕ) : Decidable (CapDomain g k tm tn n rho) :=
   decidable_of_iff (0 < g ∧ 32 * g ∣ k ∧ 2 ≤ k / (32 * g) ∧ 0 < tn ∧ tn ≤ n ∧ tn ∣ n ∧ 0 < tm ∧ 0 < rho)
     ⟨fun ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩,
      fun ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ => ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩⟩
@@ -103,7 +103,7 @@ def CapFits (p : IntPrices) (g k tm tn n rho : ℕ) : Prop :=
   c.atom * words + c.zero * tm * tn * (k / (32 * g)) ≤ 2 ^ 31 - 1 ∧
     c.nG * c.lMax + c.elemG * tm * k ≤ 2 ^ 31 - 1 ∧ c.table tm ≤ 2 ^ 31 - 1
 
-instance (p : IntPrices) (g k tm tn n rho : ℕ) : Decidable (CapFits p g k tm tn n rho) := by
+instance instDecidableCapFits (p : IntPrices) (g k tm tn n rho : ℕ) : Decidable (CapFits p g k tm tn n rho) := by
   unfold CapFits; infer_instance
 
 /-- **The cap's tests on integers**: `debit = atom·atoms + zero·zeros` at most `l_max`, and

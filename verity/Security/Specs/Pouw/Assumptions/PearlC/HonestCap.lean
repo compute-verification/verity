@@ -3,7 +3,7 @@ import Definitions.Pouw.PearlC.Tile
 /-!
 # The honest tiles' measured cap rate, completeness's one assumption (trusted; a `Prop` taken as a hypothesis)
 
-The sampled audit's completeness (`CompleteSampled`, `Pouw.Protocol.PearlC.Completeness`) takes the workload's weights
+The sampled audit's completeness (`CompleteSampled`, `Definitions.Pouw.PearlC.Completeness`) takes the workload's weights
 passing the rules as a hypothesis (`Workload.WeightsOK`), and needs two facts about the honest prover's drawn tile: its
 words are the reference's, and its replayed debit is within the cap. The first is
 proved (`HonestWords`: every reference value is an FP32 word's). The second depends on the activations and the noise,

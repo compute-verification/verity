@@ -37,7 +37,7 @@ namespace Scheme
 
 variable {M : IdealModel} (sch : Scheme M)
 
-instance : NeZero sch.B := ⟨sch.B_pos.ne'⟩
+instance instNeZeroNatB : NeZero sch.B := ⟨sch.B_pos.ne'⟩
 
 /-- A codeword: `B` blocks of `ℓ` bits. -/
 abbrev Code : Type := Fin sch.B → Bits sch.ℓ

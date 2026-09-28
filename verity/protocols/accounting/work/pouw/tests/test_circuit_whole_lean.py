@@ -1,6 +1,6 @@
 """The Lean whole-Program table is `pc8`'s `Pc8Check`: its input gates and their widths, its units in `pc8.units`' order,
 each unit's computed gates a copy of its template's with every read relocated through the Lean port map, and its
-outputs. `lean_layout` restates `WholeCircuit.whole8` (`lean/Pouw/Protocol/PearlC/WholeCircuit.lean`): the input
+outputs. `lean_layout` restates `WholeCircuit.whole8` (`verity/Security/Definitions/Pouw/PearlC/WholeCircuit.lean`): the input
 regions (`eaAt` … `in8`, `inW8`), the blocks (`row8B`, `row8A`, `tileSpec`) and their ports (`portB8`, `portA8`,
 `portT8`, with `code8`, `paOut8` and `pbOut8` naming the rows' outputs), and the outputs (`outs8`). Each template's reads
 are its own `CallGraph`'s, which `test_circuit_row_lean.py` and `test_circuit_tile_lean.py` tie to the Lean unit tables;

@@ -40,7 +40,7 @@ theorem length_le_of_isChain {α : Type} {R : α → α → Prop} (f : α → �
 /-- `a` is one of the `k` nodes before `b`. -/
 def Band (k : ℕ) (a b : Fin n) : Prop := a.val < b.val ∧ b.val ≤ a.val + k
 
-instance (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
+instance instDecidableBand (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
 
 /-- The nodes of `S` with no node of `S` among their `k` predecessors. -/
 def starts (k : ℕ) (S : Finset (Fin n)) : Finset (Fin n) := S.filter fun v => ∀ u ∈ S, ¬ Band k u v

@@ -259,7 +259,7 @@ noncomputable def tabAfterZC (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F m
   (interleave (repZCAt A Hs T pts 0) (repZCAt A Hs T pts 1)).bind fun pend =>
     Game.send (OpensZ F D Sl) fun os => Game.ret (outZC Hs T cap₀ pend os)
 
-instance [Inhabited D] [Inhabited Sl] : Inhabited (OpensZ F D Sl) :=
+instance instInhabitedOpensZ [Inhabited D] [Inhabited Sl] : Inhabited (OpensZ F D Sl) :=
   ⟨⟨fun _ _ _ => ([], []), fun _ _ _ => default, fun _ => ⟨fun _ => ((0, 0), default, []), (0, default)⟩⟩⟩
 
 /-- A default output, for positions outside a batch. -/

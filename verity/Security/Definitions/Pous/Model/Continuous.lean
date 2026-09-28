@@ -275,7 +275,7 @@ def contIdle {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits 
     (C : sch.Code) (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B) (t : ℕ) : Prop :=
   (contAfter mach D_late W pp C ω (arrAt a x) (histAt a x t)).closed ≤ t
 
-instance {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+instance instDecidableContIdle {sch : Scheme M} (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
     (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B) (t : ℕ) :
     Decidable (contIdle mach D_late W pp C ω a x t) :=
   inferInstanceAs (Decidable (_ ≤ t))

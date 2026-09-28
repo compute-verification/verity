@@ -1,5 +1,5 @@
 """The Lean whole-Program table is `pc4`'s `Pc4Check`, as `test_circuit_whole_lean.py` ties `whole8` to `Pc8Check`.
-`lean_layout` restates `WholeCircuit.whole4` (`lean/Pouw/Protocol/PearlC/WholeCircuit4.lean`): `pc8`'s input regions at
+`lean_layout` restates `WholeCircuit.whole4` (`verity/Security/Definitions/Pouw/PearlC/WholeCircuit4.lean`): `pc8`'s input regions at
 `inW4`'s widths, the blocks (`row4B`, `row4A`, `tile4Spec`) and their ports (`portB8`, `portA8`, `portT4`, with `code4`,
 `scale4`, `paOut4` and `pbOut4` naming the rows' outputs), and the outputs (`outs4`). `check_whole` checks every computed
 gate's template gate, owner, width and relocated reads, and each parameter leaf's producer exactly, so it and the pinned

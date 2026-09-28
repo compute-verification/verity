@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.DeviceFp4
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)
 
-`pc4`'s tile template `Pc4Tile_v1{K, TM, TN}` (`verity_pouw.circuit.pc4`, its `_tile_body` and `_chain`) as a
+`pc4`'s tile template `Pc4Tile_v1{K, TM, TN}` (`verity.protocols.accounting.work.pouw.circuit.pc4`, its `_tile_body` and `_chain`) as a
 `Verity.Circuit`, a gate table (`TileCircuit.Spec`) as `TileCircuit` writes `pc8`'s.
 
 * **Inputs**, in the template's parameter-leaf order, with `S = K/16` scale bytes per row: the E2M1 codes of `A′`'s

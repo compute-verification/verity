@@ -594,14 +594,12 @@ def merge_locks(m: Map, root: Path, locks: dict, code_thms: dict, dry: bool):
         for key in [k for k, v in pol.items() if v in ({}, [], {"imports": [], "watch": {}})]:
             if key not in ("dependencies", "guarantees", "reads"):
                 del pol[key]
-    order = A.ORDER
     out = {"definitions two locks hashed differently (a definition's hash covers what its readers read; `--update` "
            "rewrites them)": conflicts}
     for rel, pol in ((f"{m.sec}/{POLICY}", sec), (f"{m.proofs}/{POLICY}", prf),
                      (f"{m.pkgs['verifier']['dir']}/{POLICY}", code["verifier"]),
                      (f"{m.pkgs['pous']['dir']}/{POLICY}", code["pous"])):
-        pol = {k: pol[k] for k in sorted(pol, key=lambda k: order.index(k) if k in order else len(order))}
-        write(root, rel, json.dumps(pol, indent=1, ensure_ascii=False) + "\n", dry)
+        write(root, rel, A.text(pol), dry)
         out[rel] = {k: len(v) if hasattr(v, "__len__") else v for k, v in pol.items()}
     return out
 

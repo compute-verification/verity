@@ -3,7 +3,8 @@
 # (pod_bootstrap.sh --cpu, no checkpoint cases), Llama-3.1-8B-Instruct at its pinned revision, and FlashInfer's sampling
 # kernels, which vLLM's top-p/top-k sampler would otherwise JIT-compile on its first call inside a window.  They are built
 # for window.sh's FLASHINFER_CUDA_ARCH_LIST (12.0f, what the card's (12, 0) maps to) with the venv's ninja first on PATH, so
-# the window's build flags and cache path are these and nothing rebuilds there.  pyarrow reads the quality run's WikiText-2.
+# the window's build flags and cache path are these and nothing rebuilds there; the cache is the venv's FlashInfer build's own
+# (flashinfer_env.sh).  pyarrow reads the quality run's WikiText-2.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
 # Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.  LINK_VENV=DIR links a venv already
@@ -38,6 +39,7 @@ ready = {"model": repo, "revision": rev, "path": str(p), "vllm": vllm.__version_
 print(json.dumps(ready))
 EOF
 [ -n "${LINK_VENV:-}" ] || "$WORK/venv312/bin/python" -c "import pyarrow" 2>/dev/null || uv pip install --python "$WORK/venv312/bin/python" -q pyarrow
+. "$ROOT/benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh"
 PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f CUDA_VISIBLE_DEVICES= "$WORK/venv312/bin/python" - <<'EOF'
 import json, os
 from pathlib import Path
@@ -50,6 +52,7 @@ if not spec.is_compiled:
 ready = Path(os.environ["WORK"]) / "ready.json"
 r = json.loads(ready.read_text())
 r["flashinfer"] = {"version": flashinfer.__version__, "arch_list": os.environ["FLASHINFER_CUDA_ARCH_LIST"],
+                   "workspace_base": os.environ["FLASHINFER_WORKSPACE_BASE"],
                    "prebuilt": {"sampling": str(spec.get_library_path())}}
 ready.write_text(json.dumps(r, indent=1) + "\n")
 print(json.dumps(r["flashinfer"]))

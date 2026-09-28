@@ -111,7 +111,7 @@ theorem irreducible_of_rabin (F w : P) (k : ℕ) (hF : F.natDegree = 2 ^ (k + 1)
 theorem G_irreducible : Irreducible G :=
   irreducible_of_rabin G (F128.poly bezoutW) 6 G_natDegree G_monic.ne_zero G_dvd_frob G_bezout
 
-instance : Fact (Irreducible G) := ⟨G_irreducible⟩
+instance instFactIrreduciblePG : Fact (Irreducible G) := ⟨G_irreducible⟩
 
 /-! ### Frobenius and the inverse -/
 
@@ -173,7 +173,7 @@ theorem toAdj_inv_zero : toAdj (F128.inv 0) = 0 := by
 /-- GF(2^128): the field GF(2)[X]/(G) on the executable's representation. -/
 def GF128 := F128
 
-noncomputable instance : Field GF128 := equivAdj.field
+noncomputable instance instFieldGF128 : Field GF128 := equivAdj.field
 
 namespace GF128
 

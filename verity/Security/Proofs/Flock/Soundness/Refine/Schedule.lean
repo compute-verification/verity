@@ -31,7 +31,7 @@ def LevelSeam (lv : Flock.Level) : Prop :=
     lv.d - lv.cap = pathLen (levelOf lv) ∧ Nat.log2 (lv.q - 1) + 1 = ceilLog2 lv.q ∧
     lv.d = (levelOf lv).logLen
 
-instance (lv : Flock.Level) : Decidable (LevelSeam lv) := by unfold LevelSeam; infer_instance
+instance instDecidableLevelSeam (lv : Flock.Level) : Decidable (LevelSeam lv) := by unfold LevelSeam; infer_instance
 
 /-- The dimensions the executable's Ligerito loop tracks: `n = m − 7`; at least two levels; level 0 has `k0` lanes and
 `n − k0` columns; every later level has 4 lanes and 3 columns fewer than the level before; `ext` is the last level's
@@ -43,6 +43,6 @@ def DimSeam (s : Flock.Schedule) : Prop :=
     (∀ i < s.levels.size - 1, (s.levels.getD (i + 1) default).cols + 3 = (s.levels.getD i default).cols) ∧
     s.ext = (s.levels.getD (s.levels.size - 1) default).cols
 
-instance (s : Flock.Schedule) : Decidable (DimSeam s) := by unfold DimSeam; infer_instance
+instance instDecidableDimSeam (s : Flock.Schedule) : Decidable (DimSeam s) := by unfold DimSeam; infer_instance
 
 end FlockSoundness.Refine

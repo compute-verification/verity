@@ -20,7 +20,7 @@ variable {Q R S : Type}
 
 /-- **The sampled audit is complete on `Served` at `ε` per draw.** For every in-domain workload `U` whose weights pass
 the rules, every activation input `act` in `Served`, every ticket count `w` proportional to the tiles' `W_ref`
-(`verity_pouw.audit`'s `tickets`) and every number of draws `t`: over the oracle, the salt and `t` independent
+(`verity.protocols.accounting.work.pouw.audit`'s `tickets`) and every number of draws `t`: over the oracle, the salt and `t` independent
 work-weighted draws, the audit rejects the honest transcript (some drawn tile is neither good nor of a blank unit) with
 probability at most `t·ε`. -/
 def CompleteSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)

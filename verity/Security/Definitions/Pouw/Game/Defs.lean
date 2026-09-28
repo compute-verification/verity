@@ -27,7 +27,7 @@ every cost model.
 Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * ideal commitments: the online phase outputs the committed values themselves (`Transcript`);
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
-* deterministic adversaries (`Pouw/Protocol/Basic/Prob.lean`).
+* deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
 -/
 
 namespace Pouw

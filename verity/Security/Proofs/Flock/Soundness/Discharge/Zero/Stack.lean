@@ -29,7 +29,7 @@ def InPort (c : Circuit) (off : ℕ) : Prop := off ∈ portBits c.unit.inGroups
 def ZeroIn (c : Circuit) (x : ℕ) : Prop :=
   InPort c (x % (c.unit.inWords * WORD)) ∧ ZeroAt c (x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD))
 
-instance (c : Circuit) : DecidablePred (ZeroIn c) := fun _ => by
+instance instDecidablePredNatZeroIn (c : Circuit) : DecidablePred (ZeroIn c) := fun _ => by
   unfold ZeroIn InPort ZeroAt ZeroPort
   infer_instance
 

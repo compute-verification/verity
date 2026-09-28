@@ -303,7 +303,7 @@ theorem rq_congr {H H' : KQ 8 64 → Lab 8 64} (u : Fin 8) (h : ∀ u' < u, H' (
 /-- The first `j` guesses are right: `c¹_u[1] = 0` for `1 ≤ u ≤ j`. -/
 def Ev (j : ℕ) (H : KQ 8 64 → Lab 8 64) : Prop := ∀ u : Fin 8, 1 ≤ u.val → u.val ≤ j → c1 chain8 H P W0 u 1 = z64
 
-noncomputable instance (j : ℕ) : DecidablePred (Ev P j) := Classical.decPred _
+noncomputable instance instDecidablePredForallKQOfNatNatLabEv (j : ℕ) : DecidablePred (Ev P j) := Classical.decPred _
 
 set_option linter.constructorNameAsVariable false in
 /-- **One more guess costs `2^64`.** Resample the oracle at node `j + 1`'s real query so that its label's

@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.Game
 /-!
 # The deadline in Pearl-C's game (trusted)
 
-`Pouw.Protocol.Game.Deadline`'s timed run and verifier's rule are the game's; Pearl-C's adversaries are its own type, so
+`Definitions.Pouw.Game.Deadline`'s timed run and verifier's rule are the game's; Pearl-C's adversaries are its own type, so
 their budget by the deadline is restated here. The named assumption is `Pouw.PearlC.Assumptions.HonestClock`.
 -/
 

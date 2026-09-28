@@ -131,6 +131,17 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
     assert other_id != audit_id                                                               # a fresh counter, a fresh audit
 
 
+def test_the_spec_rtt_cap_is_the_schemes():
+    """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
+    judges against the cap whose `Δ + RTT` the certificate admits."""
+    from verity.protocols.accounting.space.pous import audit
+    from verity.protocols.accounting.space.pous.schemes import p2
+
+    R, _, _ = _p2()
+    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (audit.DEADLINE_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
+
+
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     R, _, _ = _p2()
     nvme = tmp_path / "nvme"

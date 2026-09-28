@@ -1,7 +1,7 @@
 """P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
 `internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`).  Every block is independent, and
-its decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
+v1 of 29 Sep 2026, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, amended to v1.1 by Daniel's
+ruling of 4 Oct 2026 in `../p2/PROTOCOL.md`, which this module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
 
 - `p2-16448/v3`: SHAKE256 with the spec's v1 framing, the expander its setup assumption P2-EXP-IO names (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
@@ -44,8 +44,9 @@ challenge derivation), not with the expander.
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
 - So is SeqRoot: no 16,448-bit root, nor another computation with its effect on the challenged block, finishes within
-  `Δ + RTT` on the allowed hardware.  `call_ns` stands for it, and the certificate allows no such call within the
-  deadline.
+  twice `Δ + RTT` on the allowed hardware, a CPU or GPU core with cooperation within one chiplet.  `call_ns` stands for
+  it, half the fastest such root (`ROOT_CALL_NS`), and the certificate allows no such call within the deadline.  The
+  spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """
@@ -66,8 +67,8 @@ from ..labels import salt_value, tag
 from ..params import SALT_BITS
 from ..protocol import Certificate, Scheme
 
-EXPERIMENTAL = ("abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not accepted; "
-                "SeqRoot's root floor does not count cooperating cores")
+EXPERIMENTAL = ("abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not accepted, "
+                "and the XOR-then-reduce compression attack on it is open")
 
 CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to the spec's F4 (SHAKE256)"
 
@@ -99,13 +100,20 @@ CERT_BLOCKS = 1 << 19
 CERT_K = 105
 """The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
 
-ROOT_CALL_NS = 2_900_000
-"""Half the fastest single core's time for one 16,448-bit root: the 2× margin of the timing red team, which sized
-w = 16,448 for `Δ + RTT` up to 2.9 ms (`internal/efficient-crypto/attacks/p2-redteam-timing.md`).  The certificate
-allows no such call within the deadline.  It does not count cooperating cores, which the frozen spec allows within one
-chiplet: with them the fastest root is an estimated 1.41–2.52 ms, so this admits windows the 2× margin does not cover
-(art:f33b450f2cd48f6cec2057915ae08b2221a4a6060dc2f9fa38055e8e4d74b98c).  It stays until Daniel rules on the response
-window."""
+ROOT_CALL_NS = 854_029
+"""Half the fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, in ns rounded down:
+the `Δ + RTT` that SeqRoot's 2× margin must stay under.  The certificate allows no such call within the deadline.  The
+single-core floor is the timing red team's Zen 5 at 5.7 GHz with full-rate IFMA, 2,060.845 cycles = 361.55 ns per
+squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs; the measured 8-core speedup on one
+Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
+art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
+and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
+art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
+
+RTT_ALLOWANCE_CAP_NS = 354_000
+"""The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the
+largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
+it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,6 +412,6 @@ class P2ChaCha(P2):
 
 
 __all__ = ["CERT_BLOCKS", "CERT_K", "CHACHA8", "CHACHA8_NONCONFORMING", "EXPAND_LABEL", "EXPERIMENTAL", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "SEED_DOMAIN", "SHAKE256", "P2", "P2ChaCha", "P2Params", "below",
-           "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment", "expand_prefix",
-           "segment_keys", "segment_seed", "shake_keys"]
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHAKE256", "P2", "P2ChaCha",
+           "P2Params", "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_segment",
+           "expand_prefix", "segment_keys", "segment_seed", "shake_keys"]

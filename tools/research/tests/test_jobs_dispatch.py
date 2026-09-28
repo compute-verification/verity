@@ -561,6 +561,31 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
         lean_key(one, ["b"], repo)
 
 
+def test_a_lean_regen_is_keyed_on_its_provers_and_everything_they_require(tmp_path):
+    """A package whose guarantees are proved in a nested package (`proved_in`) is audited from that package's build, and so
+    from every package it requires by path, at any depth."""
+    from research.jobs.cli import lean_inputs, lean_key
+
+    repo = _lean_repo(tmp_path)
+    files = {"s/lean-audit.json": json.dumps({"proved_in": ["Proofs"]}), "s/lakefile.toml": "", "s/S.lean": "s",
+             "s/Proofs/lakefile.toml": "", "s/Proofs/P.lean": "p",
+             "s/Proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../../a"}]})}
+    for f, text in files.items():
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_text(text)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "s")
+    one = _git(repo, "rev-parse", "HEAD")
+    assert {"s/S.lean", "s/Proofs/P.lean", "a/A.lean", "b/B.lean"} <= set(lean_inputs(one, ["s"], repo))
+    assert not {"a/nested/N.lean", "c/C.lean"} & set(lean_inputs(one, ["s"], repo))
+    base, keys = lean_key(one, ["s"], repo), set()
+    for path in ("s/Proofs/P.lean", "a/A.lean", "b/B.lean"):
+        (repo / path).write_text("x")
+        _git(repo, "commit", "-qam", path)
+        keys.add(lean_key(_git(repo, "rev-parse", "HEAD"), ["s"], repo))
+    assert len(keys | {base}) == 4
+
+
 def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monkeypatch, capsys):
     repo = _lean_repo(tmp_path)
     one = _git(repo, "rev-parse", "HEAD")
