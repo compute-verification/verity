@@ -30,6 +30,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import resource
 import subprocess
 import time
@@ -202,15 +203,19 @@ def cache_slot_circuits() -> None:
     FC._expanded(IL.layout(hm, ["cv", "pad", "y"], ["bc"]), FC.HM_NET)
 
 
-def distinct_calls(graph_path: str, modules: str | None = None) -> tuple[Any, dict[str, int], list[dict]]:
+#: token-select Calls (the samplers), which the table-free sweep leaves for phase 2
+SAMPLER = re.compile(r"^(GumbelTopPTokenSelect|GumbelTokenSelect|TokenSelect|TopPMaskWord)")
+
+
+def distinct_calls(graph_path: str | None, modules: str | None = None, definitions: dict[str, int] | None = None,
+                   exclude: re.Pattern | None = None) -> tuple[Any, dict[str, int], list[dict]]:
     """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
     each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
     (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its v0 encoding's SHA-256 is checked
     against the graph's ``definitions_index`` where the graph has it (every group's spec; attention's smallest and largest T).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
-    row's and the row's unit counts are the per-Call counts times the Call counts."""
-    import re
-
+    row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
+    adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
     from verity.ir.codec import descriptor_id
     from verity.ir.defs import CompositeDefinition
@@ -218,9 +223,9 @@ def distinct_calls(graph_path: str, modules: str | None = None) -> tuple[Any, di
     from verity_vllm.pipeline.program_graph import _encoded, definition_digest
 
     TG.load_registries()
-    g = json.loads(open(graph_path).read())
+    g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
-    calls: dict[str, int] = {}
+    calls: dict[str, int] = dict(definitions or {})
     for x in g["groups"]:
         if modules and not x["module"].startswith(modules):
             continue
@@ -233,6 +238,8 @@ def distinct_calls(graph_path: str, modules: str | None = None) -> tuple[Any, di
                 calls[fid] = calls.get(fid, 0) + int(n) * (x["calls"] // max(1, sum(int(c) for c in per.values())))
         elif x["spec"]:
             calls[x["spec"]] = calls.get(x["spec"], 0) + x["calls"]
+    if exclude is not None:
+        calls = {fid: n for fid, n in calls.items() if not exclude.match(fid)}
     fns, prov = [], []
     for fid in calls:
         readable = re.sub(r'\{"f64":"([^"]+)"\}', lambda m: repr(float.fromhex(m[1])), fid)
@@ -476,6 +483,10 @@ def _stage_job(s: str) -> dict:
     cc = PU.lower_class(units.activation(cl.definition), uc)
     if cc.circuit is None:
         rec["broke"] = {"at": "lowering", "why": cc.reason, "missing": list(cc.missing)}
+    elif a.table_free and cc.circuit.lookups:
+        rec["skipped"] = "reads"
+        rec["ands"] = cc.counts["ands"]
+        rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
     elif cc.counts["ands"] > a.max_ands:
         rec["broke"] = {"at": "size", "why": f"{cc.counts['ands']} ANDs > --max-ands {a.max_ands}"}
         rec["ands"] = cc.counts["ands"]
@@ -536,6 +547,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     src.add_argument("--definition")
     src.add_argument("--program-module", help="MODULE:FUNC (FUNC() returns a Program); MODULE may be a .py path")
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
+    src.add_argument("--definitions", help="a JSON file {descriptor id: Call count}: those Call Definitions, one Call of each (distinct_calls)")
     ap.add_argument("--modules", default=None, help="with --program-graph: keep groups whose module path starts with this")
     ap.add_argument("--partition", default="q-word")
     ap.add_argument("--out", required=True)
@@ -556,10 +568,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
     ap.add_argument("--jobs", type=int, default=1, help="shapes staged in parallel (forked workers); proving stays one at a time")
+    ap.add_argument("--table-free", action="store_true", help="leave out the token-select Calls, and record a shape whose unit reads a "
+                    "pinned table as skipped, unstaged")
+    ap.add_argument("--protocol", default="sweep-v0", help="the measurement protocol the result is labelled with (sweep-v0: never a "
+                    "table cell)")
     a = ap.parse_args(argv)
     calls: dict[str, int] | None = None
-    if a.program_graph:
-        program, calls, prov = distinct_calls(a.program_graph, a.modules)
+    if a.program_graph or a.definitions:
+        defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
+        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.table_free else None)
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
     elif a.program_module:
@@ -651,11 +668,12 @@ def write_result(results: Path, a) -> None:
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"kind": "class-sweep/v1", "statement": FC.STATEMENT, "scheme": FC.SCHEME, "partition": a.partition,
                                     "gpu": a.gpu, "warm": a.warm, "runs": a.runs, "batch": a.batch or a.n, "seed": a.seed,
-                                    "shapes": sorted(r["shape"] for r in recs)},
+                                    "protocol": a.protocol, "shapes": sorted(r["shape"] for r in recs)},
            "validation": {"status": "failed" if rejected or any(not x.get("all_pass") for x in selftests) else ("passed" if ok else "not_run"),
                           "checker": "flock-circuit loopback verifier (live coins) and selftest",
                           "detail": f"{len(ok)} of {len(recs)} shapes accepted, {len(rejected)} rejected, "
-                                    f"{sum(1 for r in recs if r.get('broke'))} broke; selftests {sum(1 for x in selftests if x.get('all_pass'))}/{len(selftests)}",
+                                    f"{sum(1 for r in recs if r.get('broke'))} broke, {sum(1 for r in recs if r.get('skipped'))} skipped (table reads); "
+                                    f"selftests {sum(1 for x in selftests if x.get('all_pass'))}/{len(selftests)}",
                           "evidence": ["class-sweep.jsonl"]},
            "measurements": [{"name": "shapes", "value": len(recs), "unit": "count"},
                             {"name": "shapes_accepted", "value": len(ok), "unit": "count"},
