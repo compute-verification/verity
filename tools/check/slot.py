@@ -365,7 +365,7 @@ def allowed() -> set[int]:
     return os.sched_getaffinity(0)
 
 
-DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-95,128-159`, 2 Oct)"
+DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-159` on node 1 since 6 Oct)"
 
 
 def usable(slots: list[dict]) -> list[dict]:
