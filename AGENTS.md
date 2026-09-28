@@ -235,6 +235,9 @@ origin lacks.
 
 ## Skills
 
+When writing or launching a job for `research run` (its cwd, its outputs, `--declared-output`, scratch), use
+`.agents/skills/writing-runs/SKILL.md`: custody uploads only the declared outputs and the run's own records in full.
+
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
 
