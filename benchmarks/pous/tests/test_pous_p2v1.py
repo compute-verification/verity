@@ -725,7 +725,8 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
     again.state.close()
     tree = tmp_path / "key" / "tree.bin"
-    tree.write_bytes(tree.read_bytes()[:-1] + b"\0")
+    raw = tree.read_bytes()
+    tree.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0xFF]))
     with pytest.raises(ValueError, match="is not the tree of"):
         live.lms_signer(tmp_path / "key", params=small)
 
