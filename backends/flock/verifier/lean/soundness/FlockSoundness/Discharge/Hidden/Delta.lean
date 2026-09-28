@@ -63,12 +63,10 @@ theorem hidden_delta' : HiddenDelta := by
   simp only
   refine run_pair _ _ _ _ ?_
   refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) #[]
-  refine forIn_range_at _ (outAt c) (fun j => c.outPorts[j]!.2) _ (fun j hj => outAt_succ c hj)
-    (fun j hj d => ⟨_, rfl, ?_⟩) d
+  refine forIn_range_append _ _ (fun j _ d => ⟨_, rfl, ?_⟩) d
   refine forIn_range_append _ _ (fun k _ d => ⟨_, rfl, ?_⟩) d
   refine forIn_range_append _ _ (fun t _ d => ⟨_, rfl, ?_⟩) d
-  simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append, outSrc,
-    getElem!_eq_getD' c.outPorts j]
+  simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
   rfl
 
 end FlockSoundness.Discharge.Hidden

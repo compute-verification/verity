@@ -149,7 +149,7 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
   -- the rows' constant bits: each row's first cv, its hm96 pad's, its chain's message bits past its length
   refine run_bind_fst (Q := FlatDelta c pin) (P := FlatRowsQ c pin)
     (forIn_id_inv_range (FlatRowsQ c pin) (fun g _ hg d hd => ⟨_, rfl,
-      forIn_id_inv_range (FlatRowsQ c pin) (fun p _ hp d hd => ⟨_, rfl, ?_⟩) hd⟩) h0) ?_
+      forIn_id_inv_range (FlatRowsQ c pin) (fun p _ hp d hd => ?_) hd⟩) h0) ?_
   · have push2 : ∀ {d : Array (ℕ × ℕ)} {i a b : ℕ},
         (∃ rows, d.toList = constPairs c pin ++ rows ∧ ∀ p ∈ rows, Flat.RowBit c p.1) → Flat.RowBit c i →
         ∃ rows, ((d.push (i, a)).push (i, b)).toList = constPairs c pin ++ rows ∧ ∀ p ∈ rows, Flat.RowBit c p.1 := by
@@ -160,19 +160,50 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
       · exact hq q hq'
       · exact hi
       · exact hi
-    refine forIn_id_inv_range (FlatRowsQ c pin) (fun k _ hk d hd => ⟨_, rfl,
-        forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_) hd⟩)
-      (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_)
-        (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩) hd))
-    · split
-      · exact ⟨_, rfl, push2 hd (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
-      · exact ⟨_, rfl, hd⟩
-    · split
-      · exact ⟨_, rfl, push2 hd (Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)⟩
-      · exact ⟨_, rfl, hd⟩
-    · split
-      · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
-      · exact Or.inr ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩
+    split
+    · -- a segmented row: each chain start's midstate, then every constant or digest-copied message bit
+      refine ⟨_, rfl, forIn_id_inv_range (FlatRowsQ c pin) (fun k _ hk d hd => ?_) hd⟩
+      split
+      · refine ⟨_, rfl, forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_)
+          (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩) hd)⟩
+        · split
+          · refine ⟨_, rfl, push2 hd ?_⟩
+            split
+            · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+            · exact Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩
+          · refine ⟨_, rfl, push2 hd ?_⟩
+            split
+            · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+            · exact Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩
+          · exact ⟨_, rfl, hd⟩
+        · split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 0, by omega, t, by omega, rfl⟩
+          · exact Or.inr ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩
+      · refine ⟨_, rfl, forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_) hd⟩
+        split
+        · refine ⟨_, rfl, push2 hd ?_⟩
+          split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+          · exact Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩
+        · refine ⟨_, rfl, push2 hd ?_⟩
+          split
+          · next hk' => exact Or.inl ⟨g, hg, p, hp, k, hk', 1, by omega, t, by omega, rfl⟩
+          · exact Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩
+        · exact ⟨_, rfl, hd⟩
+    · refine ⟨_, rfl, ?_⟩
+      refine forIn_id_inv_range (FlatRowsQ c pin) (fun k _ hk d hd => ⟨_, rfl,
+          forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_) hd⟩)
+        (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_)
+          (forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ⟨_, rfl, push2 hd ?_⟩) hd))
+      · split
+        · exact ⟨_, rfl, push2 hd (Or.inl ⟨g, hg, p, hp, k, hk, 1, by omega, t, by omega, rfl⟩)⟩
+        · exact ⟨_, rfl, hd⟩
+      · split
+        · exact ⟨_, rfl, push2 hd (Or.inr ⟨g, hg, p, hp, 1, by omega, t, by omega, rfl⟩)⟩
+        · exact ⟨_, rfl, hd⟩
+      · split
+        · exact Or.inl ⟨g, hg, p, hp, 0, by assumption, 0, by omega, t, by omega, rfl⟩
+        · exact Or.inr ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩
   rintro d ⟨rows, hrows, hrq⟩
   refine ⟨rows, ?_, hrq⟩
   -- the units' leaf bits
@@ -780,7 +811,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact netOfD_built hnet) hpc
     have P' : ParseFacts tags st.c := by
       rw [hc]
-      exact ⟨P.nets, P.portWords, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
+      exact ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed⟩
     obtain ⟨ls, hcheck⟩ := P'.check
     have h0 : c'.nets[0]? = some ("unit", net) := by
