@@ -60,6 +60,7 @@ __all__ = [
     "ADA_E4M3_M16N8K32",
     "ADA_E5M2_M16N8K32",
     "AMPERE_BF16_M16N8K16",
+    "BLACKWELL_SM120_E2M1_M16N8K32",
     "BLACKWELL_SM120_E4M3_M16N8K32",
     "BLACKWELL_SM120_E5M2_M16N8K32",
     "BLACKWELL_SM120_MXF4",
@@ -854,6 +855,34 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
     ),
 )
 
+# The K=32 E2M1 row of Blackwell consumer (sm_120), ``kind::f8f6f4`` (SASS QMMA.16832): Hopper's BF16 adder (26 bits, floor
+# 2^-133) over one group of all 32 exact E2M1 products, not the block-scaled adder of the K=64 rows (OMMA) -- the instruction
+# fixes the arithmetic, not the element format.  autoproof's 1,400 RTX 5090 vectors of this instruction (zero accumulators)
+# do not tell the two apart; the RTX PRO 6000 capture does (tests/ml/test_models.py).  Also measured with 0 mismatches, and
+# outside this object because a GroupSum has one dtype and no scales: e2m1 x e4m3 and e4m3 x e2m1, and kind::mxf8f6f4
+# .scale_vec::1X (QMMA.SF, UE8M0 entering as an exponent shift of each product).
+BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
+    name="blackwell_sm120_e2m1_m16n8k32",
+    arch="sm_120",
+    dtype="e2m1",
+    operand_bits=4,
+    groups=(32,),
+    width=26,
+    zero_exponent=-133,
+    validated=(
+        "NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120a, cc 12.0, driver 580.173.02, nvcc 13.0.88) "
+        "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32, one SASS QMMA.16832.F32.E2M1.E2M1 per tile, "
+        "tools/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run r20260930-071201-d356 "
+        "(GPU-5f1149a4, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
+        "unscaled block-scaled adder (group 16 / 32) 193,027 / 192,566 and autoproof's model5 268,267; fresh-seed "
+        "confirmation r20260930-073334-fdac (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
+        "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU-5f1149a4; a 1024-step register chain (K = 32,768) "
+        "on a second die, r20260930-073445-e2b6 (GPU-2b59d5fe, seed 20261004, gated on this model), 1,408 end words, "
+        "0 mismatches. "
+        "NaN/inf accumulators are outside the model (record-only). Capture sample: tests/ml/fixtures/tc-sm120-k32-e2m1-2026-09-30"
+    ),
+)
+
 #: Every model instance by name -- the grouped-sum pipelines and the block-scaled hypotheses alike.
 MODELS: dict[str, Model] = {
     m.name: m
@@ -869,5 +898,6 @@ MODELS: dict[str, Model] = {
         BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
         BLACKWELL_SM100_NVF4,
         BLACKWELL_SM100_MXF4,
+        BLACKWELL_SM120_E2M1_M16N8K32,
     )
 }

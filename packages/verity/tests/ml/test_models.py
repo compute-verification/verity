@@ -21,9 +21,11 @@ from verity.ml.tc.models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
+    BLACKWELL_SM120_E2M1_M16N8K32,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
+    HOPPER_BF16_M16N8K16,
     HOPPER_E4M3_K32,
     HOPPER_E5M2_K32,
     MODELS,
@@ -39,6 +41,7 @@ from verity.ml.tc.term import Term, e2m1_product, e5m2_product
 
 ROOT = Path(__file__).resolve().parents[4]
 VECTORS = ROOT / "fixtures" / "tc" / "autoproof-probe-vectors.json"
+K32_E2M1_CAPTURE = Path(__file__).parent / "fixtures" / "tc-sm120-k32-e2m1-2026-09-30" / "records.json"
 
 
 def _f32(word: int) -> float:
@@ -216,6 +219,31 @@ def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) ->
     for c in cases:
         a, b = _nibbles(c["a"]), _nibbles(c["b"])
         assert unscaled.chain(0, a, b) == int(c["d"], 16), c
+
+
+def test_sm120_k32_e2m1_is_a_group_sum_on_the_rtx_pro_6000(vectors: dict) -> None:
+    m = BLACKWELL_SM120_E2M1_M16N8K32
+    assert MODELS[m.name] is m and m.groups == (32,)
+    assert (m.width, m.zero_exponent) == (HOPPER_BF16_M16N8K16.width, HOPPER_BF16_M16N8K16.zero_exponent)
+    doc = json.loads(K32_E2M1_CAPTURE.read_text())
+    assert doc["instruction"] == "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32"
+    alternatives = {
+        "two groups of 16": GroupSum(name="t_gs16x2", arch="sm_120", dtype="e2m1", operand_bits=4, groups=(16, 16),
+                                     width=26, zero_exponent=-133, validated="test only"),
+        "block-scaled g16": _bsaa(name="t_bsaa_g16", scale=None, k_per_instruction=32),
+        "block-scaled g32": _bsaa(name="t_bsaa_g32", scale=None, k_per_instruction=32, group=32),
+    }
+    misses = dict.fromkeys(alternatives, 0)
+    for r in doc["records"]:
+        c, a, b, d = int(r["c"], 16), _nibbles(r["a"]), _nibbles(r["b"]), int(r["d"], 16)
+        assert m.step(c, a, b) == d, r
+        for name, alt in alternatives.items():
+            misses[name] += alt.step(c, a, b) != d
+    assert len(doc["records"]) == 260 and all(misses.values()), misses
+    # The RTX 5090's zero-accumulator vectors of the same instruction fit the pinned GroupSum and the refuted
+    # block-scaled adder alike: they are consistent with this capture but do not discriminate.
+    for c in vectors["fp4_unscaled_m16n8k32"]["cases"]:
+        assert tc_dot_chain(m, 0, _nibbles(c["a"]), _nibbles(c["b"])) == int(c["d"], 16), c
 
 
 def test_single_window_w26_hypothesis_is_refuted_by_the_fixture(vectors: dict) -> None:
