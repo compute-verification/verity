@@ -594,6 +594,7 @@ theorem ligerito_accepts {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
+    (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1)
     (ho : ∀ ℓ < sch.levels.size, ∀ j < (sch.levels.getD ℓ default).q,
       (o r ℓ j).1 = ((openAt p (sch.levels.size - 1) ℓ).1)[j]!.toList.map fOf)
     (hbasis : ∀ (orig : Array F256) (y : ℕ), orig.size + sch.ext = sch.m - 7 → y < 2 ^ sch.ext →
@@ -605,7 +606,7 @@ theorem ligerito_accepts {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (
       pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capD p.recursiveCaps[j]!) ∧
       (∀ req ∈ pend.reqs, ReqOK ms sch cap p req) ∧ pend.verdict o = true := by
   obtain ⟨pend, initCh, levels, stF, stF', tF, hr, hk, hpl, hcaps, hreqs, -, -, hlanes, hyr, hpos, hfin, hver⟩ :=
-    ligerito_refines ms sch T cap p basisAt r b capD o hdim hlv ho hwf h
+    ligerito_refines ms sch T cap p basisAt r b capD o hdim hlv hα1 ho hwf h
   have hn7 := hdim.1
   obtain ⟨-, -, horig, -⟩ := finalProg_ok hfin
   obtain ⟨rfl, hfc⟩ := final_refines (n := sch.n) b hlanes hyr hpos

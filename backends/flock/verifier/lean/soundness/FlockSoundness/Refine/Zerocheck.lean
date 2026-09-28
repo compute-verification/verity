@@ -108,7 +108,7 @@ theorem consumed_eq_map (rs : Array Round) (k n : ℕ) :
 /-- **The zerocheck refines the model's** (PROTOCOL.md §9.1–§9.2). If the executable's statement binding and zerocheck
 succeed from `t` to `t'`, the model's zerocheck, played with the proof's zerocheck messages and the coins of the rounds
 consumed from `t` to `t'`, returns the executable's output, read in the model's field. -/
-theorem zerocheck_refines (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
+theorem zerocheck_refines (m : ℕ) (hm : 15 ≤ m) (digest cap : ByteArray) (p : ZerocheckProof)
     (t t' : Transcript) (zc : Flock.ZcOut) (hwf : RoundsWF t.rounds)
     (h : bindAndZerocheck m digest cap p t = .ok (zc, t')) :
     t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
@@ -208,9 +208,9 @@ theorem zerocheck_refines (m : ℕ) (hm : 14 ≤ m) (digest cap : ByteArray) (p 
   · rw [hcoins]
     unfold Model.zerocheck
     refine Plays.bind' (ms₂ := zcMsgs m p) (cs₂ := c₁ :: c₂ :: (List.range' 0 (m - 6)).map C)
-      (Plays.drawVec c₀ hsz₀) ?_ (by simp) (by simp)
+      (Plays.drawVec c₀ hsz₀ (by omega)) ?_ (by simp) (by simp)
     refine Plays.bind' (ms₂ := zcMsgs m p) (cs₂ := c₂ :: (List.range' 0 (m - 6)).map C)
-      (Plays.drawVec c₁ hsz₁) ?_ (by simp) (by simp)
+      (Plays.drawVec c₁ hsz₁ (by omega)) ?_ (by simp) (by simp)
     refine Plays.bind' (ms₂ := ((List.range (m - 6)).map fun i => ⟨𝔽 × 𝔽, pairOf p.rounds[i]!⟩) ++
       [⟨𝔽 × 𝔽, (fOf p.finalA, fOf p.finalB)⟩]) (cs₂ := c₂ :: (List.range' 0 (m - 6)).map C)
       (Plays.recv _ (vecOf 64 p.round1ab, vecOf 64 p.round1c)) ?_ (by simp [zcMsgs]) (by simp)
