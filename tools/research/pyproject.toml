@@ -22,5 +22,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Test-only, and to move: test_store_vllm_tools, test_repo_replicas, test_pythonpath and one test each in test_notes and
 # test_store_prov exercise this repository's Tools, workspace and fixtures rather than the tool itself.
-inputs = [".agents/skills", "backends/direct", "fixtures", "integrations/vllm", "packages/verity", "tools/tc_probe"]
+inputs = [".agents/skills", ".gitignore", "backends/direct", "fixtures", "integrations/vllm", "packages/verity", "tools/tc_probe"]
 parallel = true
