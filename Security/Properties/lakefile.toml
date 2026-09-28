@@ -2,7 +2,8 @@
 # functions (`Pouw`: PoUW's window; `Pouw.Check`: its check as a core protocol; `Pouw.Commit`: its commitments, salts and
 # draws; `Nci`: the NCI check; `CertifierDevice`: the network certifier device's `step` over traces and its issuer; `Pous`:
 # the PoUS setup check; `NetworkCertifier`: the network certificate check; `CertifierNetwork`: the check accepts the
-# device's own output). It may require `security` (Definitions, Models) and the code it states properties of, never
+# device's own output; `Evaluate`: the descriptor v1 evaluator's primitives, each equal to the `Definitions.Core` definition it
+# copies). It may require `security` (Definitions, Models) and the code it states properties of, never
 # `security_proofs`. Its modules sit beside the trusted text's (`srcDir = ".."`) under a root of their own, `Properties`:
 # `Properties.<Protocol>` states, `Properties.Proofs.<Protocol>` proves. A property whose proof needs `security_proofs` is
 # stated here and proved there.
@@ -46,10 +47,14 @@ path = "../../verity/core/protocols/pous/check"
 name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 
+[[require]]
+name = "verity_evaluate"
+path = "../../verity/core/primitives/evaluate"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Proofs.Pouw",
   "Properties.Proofs.Pouw.Check", "Properties.Proofs.Pouw.Commit", "Properties.Nci", "Properties.Proofs.Nci",
   "Properties.CertifierDevice", "Properties.Proofs.CertifierDevice", "Properties.Pous", "Properties.Proofs.Pous",
   "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier", "Properties.CertifierNetwork",
-  "Properties.Proofs.CertifierNetwork"]
+  "Properties.Proofs.CertifierNetwork", "Properties.Evaluate", "Properties.Proofs.Evaluate"]
