@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# The POUS benchmark on a GPU pod, as a research Attempt:
+#
+#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #188's cursor/dense-decode-opt-6667
+#   research run --on <pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
+#     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
+#   research run --on <pod> --project verity --source . --cwd source --campaign pous \
+#     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
+#
+# vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
+# vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity_pous. reference runs
+# bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv.
+for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
+set -uxo pipefail
+REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
+IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}; HW=${HW:-l40s-48gb/bf16}; SCHEME=${SCHEME:-band-chain/d12/v1}
+AUDITS=${AUDITS:-20}
+mkdir -p "$W" "$O/bench"
+nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
+nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
+command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
+export PATH=$HOME/.local/bin:$PATH
+export PYTHONPATH=$REPO/packages/verity/src:$REPO/protocols/pous:$REPO/tools/research/src
+if [ "$IMPL" = vllm-gpu ]; then
+  [ -f "$I/impl.tar" ] || { echo "vllm-gpu needs --send impl.tar"; exit 2; }
+  SHA=$(sha256sum "$I/impl.tar" | cut -c1-16)
+  if [ "$(cat "$W/impl.sha" 2>/dev/null)" != "$SHA" ]; then
+    rm -rf "$W/impl" && mkdir -p "$W/impl" && tar -xf "$I/impl.tar" -C "$W/impl" && echo "$SHA" > "$W/impl.sha" || exit 3
+  fi
+  (cd "$W/impl/integrations/vllm" && bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases QWEN05 --out "$O/bootstrap") \
+    > "$O/bootstrap.log" 2>&1 || { tail -30 "$O/bootstrap.log"; exit 3; }
+  PY=${VENV:-/workspace/venv312}/bin/python
+  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
+    --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
+else
+  PY=$W/ref312/bin/python
+  [ -x "$PY" ] || { uv venv -q "$W/ref312" --python 3.12 && uv pip install -q --python "$PY" numpy; } || exit 3
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl reference --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
+    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+fi
