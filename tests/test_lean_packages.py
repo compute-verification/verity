@@ -113,6 +113,18 @@ def test_every_record_merges_with_the_driver():
                        f"FILE` recomputes them): {stale}")
 
 
+def test_every_fetching_package_has_a_pinned_bundle():
+    """A Lake package that fetches dependencies has a bundle in `lean-deps.json` for its manifest and toolchain (`deps_key`),
+    which is what `check`'s preflight on node 1 restores; without one main's full check can't start (#1499, reverted). A
+    change to a manifest, a `path` entry included, needs its pin: a cold `lean_audit.py --export` run, then `--pin RUN`."""
+    spec = importlib.util.spec_from_file_location("lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    pinned = json.loads((ROOT / audit.PIN).read_text())["deps"]
+    missing = [f"{p.relative_to(ROOT)} ({k[:12]})" for p in lake_packages() if (k := audit.deps_key(p)) and k not in pinned]
+    assert not missing, f"Lake packages whose dependencies {audit.PIN} pins no bundle for: {missing}"
+
+
 SECURITY = ROOT / "Security"
 PROOFS = SECURITY / "Proofs"
 
