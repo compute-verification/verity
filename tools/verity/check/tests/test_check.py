@@ -1088,8 +1088,11 @@ def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_p
     a = argv.read_text().splitlines()
     assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
     assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
-    job = a[-1]
-    assert "slot.py\" --priority" in job and f"--head {head} --base {root} --" in job
+    cmd, job = a[a.index("--") + 1:], a[-1]
+    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
+        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
+    assert f"--head {head} --base {root} --" in job
     assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
 
 
