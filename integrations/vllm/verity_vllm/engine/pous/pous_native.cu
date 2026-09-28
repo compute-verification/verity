@@ -161,6 +161,22 @@ __global__ void feistel_kernel(uint8_t* x, int64_t x_stride, int64_t half, const
 // ---- one thread per row (throughput): a whole Keccak state in one thread's registers ------------------------------------
 __device__ __forceinline__ uint64_t rotl64(uint64_t x, int n) { return (x << n) | (x >> (64 - n)); }
 
+// ρ and π then χ, fully unrolled: lane s moves to PI_DEST[s] rotated by RHO[s] (the standard offsets, lane s = x + 5y going to
+// (y, 2x + 3y)) into a fresh array, then χ reads it back row by row.  Every rotation is independent, instead of the in-place
+// 24-step cycle whose serial carry costs a move per step.
+__device__ __forceinline__ void keccak_rho_pi_chi(uint64_t st[25]) {
+  constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
+  constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+  uint64_t b[25];
+#pragma unroll
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = RHO[s] ? rotl64(st[s], RHO[s]) : st[s];
+#pragma unroll
+  for (int j = 0; j < 25; j += 5) {
+#pragma unroll
+    for (int i = 0; i < 5; ++i) st[j + i] = b[j + i] ^ ((~b[j + (i + 1) % 5]) & b[j + (i + 2) % 5]);
+  }
+}
+
 __device__ __forceinline__ void keccak_f_thread(uint64_t st[25]) {
   const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
   const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
@@ -175,22 +191,7 @@ __device__ __forceinline__ void keccak_f_thread(uint64_t st[25]) {
 #pragma unroll
       for (int j = 0; j < 25; j += 5) st[j + i] ^= t;
     }
-    uint64_t t = st[1];
-#pragma unroll
-    for (int i = 0; i < 24; ++i) {
-      int j = piln[i];
-      uint64_t b0 = st[j];
-      st[j] = rotl64(t, rotc[i]);
-      t = b0;
-    }
-#pragma unroll
-    for (int j = 0; j < 25; j += 5) {
-      uint64_t b[5];
-#pragma unroll
-      for (int i = 0; i < 5; ++i) b[i] = st[j + i];
-#pragma unroll
-      for (int i = 0; i < 5; ++i) st[j + i] ^= (~b[(i + 1) % 5]) & b[(i + 2) % 5];
-    }
+    keccak_rho_pi_chi(st);
     st[0] ^= KECCAK_RC[r];
   }
 }
@@ -328,8 +329,6 @@ __global__ void feistel_words_kernel(uint8_t* x, int64_t x_stride, int64_t half,
 
 // Two independent Keccak-f[1600] permutations in one round loop, so their instructions interleave.
 __device__ __forceinline__ void keccak_f_pair(uint64_t s[25], uint64_t t[25]) {
-  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
-  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
 #pragma unroll 1
   for (int r = 0; r < 24; ++r) {
     uint64_t bs[5], bt[5];
@@ -348,30 +347,8 @@ __device__ __forceinline__ void keccak_f_pair(uint64_t s[25], uint64_t t[25]) {
         t[j + i] ^= dt;
       }
     }
-    uint64_t us = s[1], ut = t[1];
-#pragma unroll
-    for (int i = 0; i < 24; ++i) {
-      const int j = piln[i];
-      const uint64_t s0 = s[j], t0 = t[j];
-      s[j] = rotl64(us, rotc[i]);
-      t[j] = rotl64(ut, rotc[i]);
-      us = s0;
-      ut = t0;
-    }
-#pragma unroll
-    for (int j = 0; j < 25; j += 5) {
-      uint64_t a[5], c[5];
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        a[i] = s[j + i];
-        c[i] = t[j + i];
-      }
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        s[j + i] ^= (~a[(i + 1) % 5]) & a[(i + 2) % 5];
-        t[j + i] ^= (~c[(i + 1) % 5]) & c[(i + 2) % 5];
-      }
-    }
+    keccak_rho_pi_chi(s);
+    keccak_rho_pi_chi(t);
     s[0] ^= KECCAK_RC[r];
     t[0] ^= KECCAK_RC[r];
   }
@@ -1093,6 +1070,54 @@ void chunked_gather(torch::Tensor state, int64_t row0, torch::Tensor src, torch:
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+// Pure-register Keccak-f throughput: each thread permutes one (`mode` 1) or two interleaved (`mode` 2) independent states
+// `iters` times with no memory traffic, so the rate is the round code's own ceiling at that thread count (issue rate and
+// dependency latency only).  `out[n]` keeps the result live.
+__global__ void keccak_bench_kernel(uint64_t* out, int64_t threads, int64_t iters, int mode) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (mode == 3) {
+    // one state split across the lane pair (2n, 2n + 1): `threads` counts states, so 2 * threads lanes run
+    const int64_t state = n / 2;
+    const int h = (int)(n & 1);
+    uint32_t sp[25];
+#pragma unroll
+    for (int i = 0; i < 25; ++i) sp[i] = (uint32_t)((uint64_t)state * 0x9E3779B97F4A7C15ull + (uint64_t)i) ^ (h ? 0x85EBCA6Bu : 0u);
+    for (int64_t it = 0; it < iters; ++it) keccak_f_split(sp, h);
+    uint32_t acc = 0;
+#pragma unroll
+    for (int i = 0; i < 25; ++i) acc ^= sp[i];
+    if (state < threads) out[n] = acc;
+    return;
+  }
+  if (n >= threads) return;
+  uint64_t s[25], t[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) {
+    s[i] = (uint64_t)n * 0x9E3779B97F4A7C15ull + (uint64_t)i;
+    t[i] = s[i] ^ 0xC2B2AE3D27D4EB4Full;
+  }
+  if (mode == 1) {
+    for (int64_t it = 0; it < iters; ++it) keccak_f_thread(s);
+  } else {
+    for (int64_t it = 0; it < iters; ++it) keccak_f_pair(s, t);
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int i = 0; i < 25; ++i) acc ^= s[i] ^ t[i];
+  out[n] = acc;
+}
+
+void keccak_bench(torch::Tensor out, int64_t threads, int64_t iters, int64_t mode, int64_t block) {
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kInt64 && out.numel() >= (mode == 3 ? 2 : 1) * threads,
+              "out must be int64 [threads], or [2 threads] for the split mode");
+  c10::cuda::CUDAGuard guard(out.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t lanes = mode == 3 ? 2 * threads : threads;
+  keccak_bench_kernel<<<(unsigned)((lanes + block - 1) / block), (unsigned)block, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(out.data_ptr<int64_t>()), threads, iters, (int)mode);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 static void check_rows(const torch::Tensor& t, const char* name, int64_t rows) {
   TORCH_CHECK(t.is_cuda() && t.scalar_type() == torch::kUInt8 && t.dim() == 2, name, " must be a 2-D uint8 CUDA tensor");
   TORCH_CHECK(t.size(0) == rows || (t.size(0) == 1 && t.stride(0) == 0) || t.size(1) == 0, name, " has the wrong row count");
@@ -1336,6 +1361,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
   m.def("chunked_gather", &chunked_gather, "parent rows into half 0 of a chunk-major state", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
+  m.def("keccak_bench", &keccak_bench, "pure-register Keccak-f throughput", pybind11::arg("out"), pybind11::arg("threads"),
+        pybind11::arg("iters"), pybind11::arg("mode"), pybind11::arg("block") = 128);
   m.def("band_chain", &band_chain, "every step of the rows' chains in one launch, writing W", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("threads"), pybind11::arg("c"),
         pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"));
