@@ -44,6 +44,8 @@ structure Tags where
   bindings : Bool := false
   /-- PR #83 from `967b8d06`: a public file may be a shared-row file (header `shared_rows`, `Flock.HmRow.sharedRows`) -/
   sharedRows : Bool := false
+  /-- item 1e (#225): the unit is circuit types and a layout, not rows, and the verifier derives its rows (`Flock.Typed`) -/
+  typed : Bool := false
   deriving Inhabited
 
 namespace Tags
@@ -181,9 +183,19 @@ def circuit967b8d06 : Tags :=
 def circuit967b8d06Selftest : Tags :=
   { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
 
+/-- `verity/flock-circuit/types` (item 1e, #225): `verity/flock-circuit`'s statement with its unit as circuit types and a
+layout; the verifier derives the unit's rows (`Flock.Typed`). -/
+def circuitTypes : Tags :=
+  { circuit with
+    name := "verity/flock-circuit/types", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
+    typed := true }
+
+def circuitTypesSelftest : Tags :=
+  { circuitTypes with name := "verity/flock-circuit/types+seed-injection", identity := identityHm96 true }
+
 /-- The versions this verifier knows, by name. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
-  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest]
+  circuit, circuitSelftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes, circuitTypesSelftest]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 

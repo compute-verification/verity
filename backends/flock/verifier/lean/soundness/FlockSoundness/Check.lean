@@ -170,6 +170,12 @@ hypotheses of the theorems that use them, never `axiom` declarations, so they ca
 #print axioms FlockSoundness.UnitPlace.decode_one
 #print axioms FlockSoundness.Prog.topo
 #print axioms FlockSoundness.Prog.isRowsUnit
+-- L1 for every flat circuit type: the rows the verifier derives (Flock.Derive.derive) compute the type, and the honest
+-- evaluation satisfies them; the logical order audit-lean's composed rows read
+#print axioms FlockSoundness.Types.compose_sound
+#print axioms FlockSoundness.Types.compose_complete
+#print axioms FlockSoundness.Types.order_nodup
+#print axioms FlockSoundness.Types.order_covers
 -- the audit layer: strategy-level probabilities, draw laws, partitions, the one-stage profile
 #print axioms FlockSoundness.Game.prob_or_le
 #print axioms FlockSoundness.Game.prob_map

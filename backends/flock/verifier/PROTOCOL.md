@@ -1180,6 +1180,29 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
 
+### 16.11 The typed statement (`verity/flock-circuit/types`, item 1e)
+
+`verity_flock.typed_statement` (#225) writes §16.10's statement with its unit as circuit types and a layout instead of
+rows. The first line is `flock-circuit/types NAME`; META `format` and `statement` name it (`Tags.circuitTypes`, and
+`+seed-injection` for the selftest build). Everything else is §16.10's.
+
+- **No statement carries the unit's rows.** A `CIRCUIT unit` section is refused. `Typed.expand` derives the rows:
+  - `types`: `{digest: content}`. Each key must be its content's digest, and each type passes `CircuitType.check` (#194).
+  - `layouts`: #200's records. Each record's `sha512` must be its digest, and the list must pass `Layout.check`, with no
+    tables held.
+  - `unit_layout`: the unit's layout, which must be derived (`own` is `derive`).
+  - `unit_type` must be that layout's type, `policy` must be `calls/v1`, and `unit_in` must be empty: this version binds
+    no inputs to constants.
+  - The unit's rows are `Derive.derive` (#199) of the unit's type, with the layout's port splits, written as
+    `flock-ir-unit/v2` (`Derive.netlist`).
+- **Then as §16.10.** `HmRow.parseTyped` inserts the derived rows as the file's `CIRCUIT unit` section, first, where the old
+  statement has it, and parses the result with `HmRow.parse`. The circuit digest and the class are the typed file's own:
+  its SHA-512, and `classOf` over its bytes.
+- **This version covers the flat classes:** a unit type of AND items and one layout. `derive` refuses any other type.
+  - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte,
+    and every section `HmRow.parse` reads is the old statement's.
+  - `flock-verify typed-expand FILE [--out F]` prints what the verifier derives (`test_lean_typed_statement.py`).
+
 ## 17. Acceptance, assumptions and trust
 
 ### 17.1 How the Lean verifier becomes the verifier of record

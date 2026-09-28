@@ -10,6 +10,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 -/
 import Flock.Statement
 import Flock.TemplateQuery
+import Flock.Typed
 
 namespace Flock
 
@@ -349,6 +350,13 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts }
   check c tags leafScheme
   return c
+
+/-- A typed statement (item 1e): its unit's rows derived (`Typed.expand`), then parsed as any statement. Its digest and
+class are the typed file's own, the file the prover writes and the partition names. -/
+def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+  let c ← parse tags (← Typed.expand tags bytes) tables
+  let classSha ← if c.classSha.isEmpty then pure c.classSha else classOf bytes s!"{tags.fileFormat} {c.name}" c.metaJ
+  return { c with sha := Sha512.hash bytes, classSha }
 
 /-- The pinned constant column: the first slot of the first range that is not the mask. -/
 def pin (c : Circuit) : V Nat :=
@@ -724,7 +732,7 @@ end HmRow
 drawn units' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
-  let c ← HmRow.parse tags circuitFile tables
+  let c ← if tags.typed then HmRow.parseTyped tags circuitFile tables else HmRow.parse tags circuitFile tables
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"

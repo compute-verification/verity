@@ -299,6 +299,25 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
 
+/-- `typed-expand FILE [--out F]`: a `verity/flock-circuit/types` file (item 1e) parsed as `verify` parses it, its unit's
+rows derived (`HmRow.parseTyped`). One `TYPED` line: the circuits, the unit's rows, and the file's SHA-512 and class. With
+`--out`, the file with the derived rows as its `CIRCUIT unit` section (`Typed.expand`). -/
+def typedExpandCmd (args : List String) : IO UInt32 := do
+  let some path := args.head? | IO.eprintln "typed-expand FILE [--out F]"; return 2
+  let bytes ← IO.FS.readBinFile path
+  let tags := Tags.circuitTypes
+  let line ← match HmRow.parseTyped tags bytes with
+    | .error e => pure (Lean.Json.mkObj [("ok", Lean.Json.bool false), ("error", Lean.Json.str e)])
+    | .ok c =>
+      if let some out := argOf args "--out" then
+        if let .ok ex := Typed.expand tags bytes then IO.FS.writeBinFile out ex
+      let u := c.nets[c.unitNet]!.2
+      pure (Lean.Json.mkObj [("ok", Lean.Json.bool true), ("name", Lean.Json.str c.name),
+        ("nets", Lean.toJson (c.nets.map (·.1))), ("unit_useful", Lean.toJson u.useful),
+        ("sha512", Lean.Json.str (hexOf c.sha)), ("class", Lean.Json.str (hexOf c.classSha))])
+  IO.println s!"TYPED {line.compress}"
+  return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
+
 /-- `--program P --partition Q --stratified K`: the stratified law the verifier derives from its own program and partition
 object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
 def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
@@ -420,6 +439,7 @@ def main (args : List String) : IO UInt32 := do
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | ["hash-test", path] => hashTest path
+  | "typed-expand" :: rest => typedExpandCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
   | "layout" :: paths => Layout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2
