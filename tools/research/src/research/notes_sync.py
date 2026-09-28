@@ -130,6 +130,17 @@ def remote_target(root: Path, remote: str = "origin") -> tuple[list[str], str]:
     return (token_url(url) if url else None) or ([], remote)
 
 
+RACE = ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")
+REFUSED = ("Authentication failed", "could not read Username", "Permission denied", "denied to", "returned error: 401",
+           "returned error: 403", "Repository not found", "does not appear to be a git repository")
+
+
+def refused(stderr: str) -> bool:
+    """Whether a failed fetch or push was refused (credentials, permissions, no such repository), which no retry changes. Anything
+    else, a lost push race or a lock or transfer error two machines' syncs under load hit (6 Oct, load 156), is retried."""
+    return any(k in stderr for k in REFUSED)
+
+
 def token_hint(root: Path, remote: str = "origin") -> str:
     """'' unless RESEARCH_NOTES_TOKEN is empty here and `remote` is github.com's; then why git failed and what to do, for the end of
     a fetch or push failure (a laptop's own credentials need no token, so an empty one is no refusal by itself)."""
@@ -482,6 +493,9 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         f = _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
         has_remote = f.returncode == 0
         if not has_remote and "couldn't find remote ref" not in f.stderr:
+            if n < retries and not refused(f.stderr):
+                time.sleep(min(2.0, 0.1 * 2 ** n))
+                continue
             return {**rep, "rc": 1, "error": f"git fetch {remote} failed: {f.stderr.strip()[-300:]}{token_hint(root, remote)}"}
         base = tracking if has_remote else None
         if has_remote and _run(root, "merge-base", "--is-ancestor", tracking, "HEAD").returncode != 0:
@@ -502,7 +516,7 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
         if p.returncode == 0:
             _run(root, *opts, "fetch", "-q", where, f"+refs/heads/{branch}:{tracking}", timeout=300)
             return {**rep, "pushed": True, "warn": rep["warn"] + citation_warnings(cites)}
-        if not any(k in p.stderr for k in ("non-fast-forward", "fetch first", "[rejected]", "failed to update ref", "stale info")):
+        if refused(p.stderr) or n == retries and not any(k in p.stderr for k in RACE):
             return {**rep, "rc": 1, "error": f"git push failed (local commit kept): {p.stderr.strip()[-300:]}{token_hint(root, remote)}"}
         time.sleep(min(2.0, 0.1 * 2 ** n))
     return {**rep, "rc": 1, "error": f"lost the push race {retries + 1} times (local commit kept); sync again"}

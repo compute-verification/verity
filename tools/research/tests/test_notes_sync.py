@@ -79,11 +79,48 @@ def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
             t.start()
         for t in ts:
             t.join()
-    assert errors == []
+    assert errors == [], [(w, i, rep.get("attempts"), rep.get("error")) for w, i, rep in errors]
     doc = _git(origin, "show", f"main:{DOC}")
     assert all(f"{w} write {i}" in doc for w in "ab" for i in range(20))
     files = _git(origin, "ls-tree", "--name-only", "main", "lanes/shared/").split()
     assert len(files) == 40
+
+
+def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
+    real, failed = NS._run, []
+
+    def run(root, *args, **kw):
+        if verb in args and not failed:
+            failed.append(args)
+            return subprocess.CompletedProcess(["git", *args], 128, "", stderr)
+        return real(root, *args, **kw)
+    monkeypatch.setattr(NS, "_run", run)
+    return failed
+
+
+@pytest.mark.parametrize("verb, stderr", [
+    ("push", "error: cannot lock ref 'refs/heads/main': Unable to create '/srv/notes.git/refs/heads/main.lock': File exists.\n"
+             " ! [remote rejected] HEAD -> main (failed to lock)"),
+    ("fetch", "fatal: the remote end hung up unexpectedly"),
+])
+def test_a_fetch_or_push_that_fails_under_load_is_retried(machines, monkeypatch, verb, stderr):
+    """Two machines' syncs under load 156 (vy-mig-check-20, 6 Oct) failed on their first attempt with an error that was not a
+    lost push race, and gave up there; a lock or transfer error clears on the next attempt."""
+    origin, a, _ = machines
+    failed = _fail_once(monkeypatch, verb, stderr)
+    _insert_after(a / DOC, "<!-- a -->", "a under load")
+    rep = NS.sync(a, secrets=[])
+    assert failed and (rep["rc"], rep["pushed"], rep["attempts"]) == (0, True, 2), rep
+    assert "a under load" in _git(origin, "show", f"main:{DOC}")
+
+
+def test_a_refused_fetch_is_not_retried(machines, monkeypatch):
+    _, a, _ = machines
+    _fail_once(monkeypatch, "fetch", "remote: Permission to danielreuter/research-notes.git denied to cursor[bot].\n"
+                                     "fatal: unable to access 'https://github.com/x': The requested URL returned error: 403")
+    _insert_after(a / DOC, "<!-- a -->", "a refused")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and "git fetch origin failed" in rep["error"] and "403" in rep["error"]
 
 
 def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
