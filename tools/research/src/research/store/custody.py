@@ -49,6 +49,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from ..env import DIRTY_CAPTURE
 from ..telemetry.job import write_json_atomic
 from ..telemetry.run import OUT_DIR
 from .attempt import TERMINAL as TERMINAL_STATES
@@ -104,8 +105,9 @@ def _sha256(p: Path) -> str:
 
 
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
+#: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
-                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json"})
+                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
 #: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
 RUN_FILE_GLOBS = ("logs/stall-*.txt",)
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never

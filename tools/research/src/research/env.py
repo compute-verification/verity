@@ -15,8 +15,10 @@ passes what it knew (`source_hint`) and it fills only the facts git could not su
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.metadata
+import io
 import os
 import platform
 import re
@@ -36,6 +38,12 @@ KEYS = (
 # `research pods unpreserved|drain <machine>` can find every Attempt recorded on a machine; hw.hostname is the container's hostname.
 LOCKFILES = ("uv.lock", "Cargo.lock")
 UNTRACKED_CAP_BYTES = 64 << 20
+#: The runner's capture of a dirty source in the run dir (`source_conditions(dirty_capture=...)`), which custody always uploads
+#: (store.custody.RUN_FILES): the tree on the machine is never a run's only copy of its source.  Inside: the diff against HEAD, and
+#: each untracked, unignored file under DIRTY_UNTRACKED/.
+DIRTY_CAPTURE = "source-dirty.tar"
+DIRTY_PATCH = "diff-HEAD.patch"
+DIRTY_UNTRACKED = "untracked"
 
 # The ONE SKU -> family table.  First match wins; `\b` keeps L40 off L40S and A10 off A100.  Strings as nvidia-smi prints them:
 # "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB", "NVIDIA A100 80GB PCIe", "NVIDIA L40S", "NVIDIA GeForce RTX 4090".
@@ -85,13 +93,40 @@ def _git(args: list[str], root: Path, *, timeout: float = 10.0, binary: bool = F
     return out if binary or out is None else out.strip()
 
 
-def _dirty_digest(root: Path) -> str | None:
+class _Hashing:
+    """A file read through `h`: what a tar member copies is exactly what the digest hashed."""
+
+    def __init__(self, f: Any, h: Any) -> None:
+        self.f, self.h = f, h
+
+    def read(self, n: int = -1) -> bytes:
+        b = self.f.read(n)
+        self.h.update(b)
+        return b
+
+
+def _dirty_digest(root: Path, capture: Path | None = None) -> str | None:
+    """sha256 over `git diff HEAD --binary`, then each untracked, unignored file as `rel NUL bytes NUL` in path order.  With
+    `capture`, the same bytes go there as a tar in the same pass (DIRTY_PATCH, then DIRTY_UNTRACKED/<rel> per file), so the tar
+    reproduces the digest; it is left only when it holds every hashed byte (removed for None, `too-large`, or any error).
+    Capturing never changes the digest."""
+    import tarfile
+
     diff = _git(["diff", "HEAD", "--binary"], root, timeout=60, binary=True)
     if diff is None:
         return None
     others = _git(["ls-files", "-z", "--others", "--exclude-standard"], root, timeout=60)
     if others is None:
         return None
+    tar = None
+    if capture is not None:
+        try:
+            tar = tarfile.open(capture, "w", format=tarfile.PAX_FORMAT)
+            info = tarfile.TarInfo(DIRTY_PATCH)
+            info.size = len(diff)
+            tar.addfile(info, io.BytesIO(diff))
+        except (OSError, tarfile.TarError):
+            tar = _drop(tar, capture)
     h = hashlib.sha256()
     h.update(diff)
     total = 0
@@ -102,15 +137,40 @@ def _dirty_digest(root: Path) -> str | None:
                 continue
             total += p.stat().st_size
             if total > UNTRACKED_CAP_BYTES:
+                _drop(tar, capture)
                 return "too-large"
             h.update(rel.encode("utf-8") + b"\0")
             with open(p, "rb") as f:
+                if tar is not None:
+                    try:
+                        info = tarfile.TarInfo(f"{DIRTY_UNTRACKED}/{rel}")
+                        info.size = os.fstat(f.fileno()).st_size
+                        tar.addfile(info, _Hashing(f, h))
+                    except (OSError, tarfile.TarError):
+                        tar = _drop(tar, capture)
                 for chunk in iter(lambda: f.read(1 << 20), b""):
                     h.update(chunk)
             h.update(b"\0")
         except OSError:
+            tar = _drop(tar, capture)
             continue
+    if tar is not None:
+        try:
+            tar.close()
+        except (OSError, tarfile.TarError):
+            _drop(tar, capture)
     return h.hexdigest()
+
+
+def _drop(tar: Any, capture: Path | None) -> None:
+    """Abandon a capture: close it and remove the file, so a partial tar is never mistaken for the dirty state."""
+    if tar is not None:
+        with contextlib.suppress(OSError, ValueError):
+            tar.close()
+    if capture is not None:
+        with contextlib.suppress(OSError):
+            capture.unlink()
+    return None
 
 
 def _sha256_file(p: Path) -> str | None:
@@ -124,7 +184,10 @@ def _sha256_file(p: Path) -> str | None:
         return None
 
 
-def source_conditions(source_root: Path | None = None, source_hint: dict[str, Any] | None = None) -> dict[str, Any]:
+def source_conditions(source_root: Path | None = None, source_hint: dict[str, Any] | None = None, *,
+                      dirty_capture: Path | None = None) -> dict[str, Any]:
+    """`source.*` from git in `source_root`.  With `dirty_capture` (a path in the run dir), a dirty source's bytes are written there
+    (`_dirty_digest`); nothing is written for a clean one."""
     root = Path(source_root or os.getcwd())
     out: dict[str, Any] = {"source.commit": None, "source.tree": None, "source.dirty": None, "source.dirty_digest": None}
     commit = _git(["rev-parse", "HEAD"], root)
@@ -135,7 +198,7 @@ def source_conditions(source_root: Path | None = None, source_hint: dict[str, An
         if porcelain is not None:
             out["source.dirty"] = bool(porcelain)
             if porcelain:
-                out["source.dirty_digest"] = _dirty_digest(root)
+                out["source.dirty_digest"] = _dirty_digest(root, dirty_capture)
     hint = source_hint or {}
     for k in ("commit", "tree", "dirty", "dirty_digest"):
         if out[f"source.{k}"] is None and hint.get(k) is not None:
@@ -218,10 +281,11 @@ def load_now() -> float | None:
 
 
 def conditions(*, run_dir: Path | str | None = None, project: str | None = None, campaign: str | None = None, exclusive: bool | None = None,
-               source_root: Path | str | None = None, source_hint: dict[str, Any] | None = None) -> dict[str, object]:
+               source_root: Path | str | None = None, source_hint: dict[str, Any] | None = None,
+               dirty_capture: Path | None = None) -> dict[str, object]:
     """Every key in KEYS present (plus `source.lockfiles.<name>` per lockfile found); None when unknown."""
     out: dict[str, Any] = {k: None for k in KEYS}
-    out.update(source_conditions(Path(source_root) if source_root else None, source_hint))
+    out.update(source_conditions(Path(source_root) if source_root else None, source_hint, dirty_capture=dirty_capture))
     out["rt.os"] = platform.system() or None
     out["rt.kernel"] = platform.release() or None
     out["rt.python"] = platform.python_version()

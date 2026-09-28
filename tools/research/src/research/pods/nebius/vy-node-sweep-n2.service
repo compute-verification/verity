@@ -1,5 +1,5 @@
 [Unit]
-Description=infra node sweep (node_sweep.sh): src/.trash leftovers and stale check scratch; never in a timed window
+Description=infra node sweep (node_sweep.sh): stale check scratch; never in a timed window; src/ is store/evict.py's alone
 [Service]
 Type=oneshot
 Nice=19
