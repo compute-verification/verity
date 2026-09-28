@@ -29,10 +29,9 @@ import json
 import os
 import resource
 import subprocess
-import sys
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Sequence
@@ -41,6 +40,7 @@ import numpy as np
 
 from verity.ir import partition_object as PO
 from verity.ir.types import Array, Value
+from verity.ir.cut import DefinitionCut
 from verity.ir.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
@@ -64,26 +64,51 @@ def _pad(n: int, to: int) -> int:
 
 @dataclass
 class ClassDefinition:
-    """What M0's writers read of a Definition: one ``u16`` row parameter and one ``u16`` result array."""
+    """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array."""
 
     id: str
-    w_in: int
+    port_words: tuple[int, ...]
     w_out: int
 
+    @property
+    def w_in(self) -> int:
+        return sum(self.port_words)
+
     def signature(self):
-        return (("in", Array(self.w_in, Value(16))),), Array(self.w_out, Value(16))
+        return tuple((f"p{i}", Array(w, Value(16))) for i, w in enumerate(self.port_words)), Array(self.w_out, Value(16))
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str) -> IL.Lowering:
-    """The class's unit on u16 ports: ``in0 .. in{W_in-1}`` (the row's words) and ``out0 .. out{W_out-1}``."""
-    w_in = _pad(sum(_words(w) for w in uc.in_widths), BLOCK_WORDS)
+def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, int]) -> list[list[int]]:
+    """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per producing
+    unit whose committed outputs it reads (``owner_of``: computing gate -> its unit in the flat cut). Each group is one row: serving
+    commits a source's values once, and every instance reading the same values opens the same row."""
+    leaf_param = []
+    for i, (_n, t) in enumerate(act.fn.signature()[0]):
+        leaf_param += [i] * t.leaves
+    groups: dict[tuple, list[int]] = {}
+    for t, k in enumerate(uc.inputs):
+        key = ("p", leaf_param[-1 - k]) if k < 0 else ("u", owner_of.get(k, -1))
+        groups.setdefault(key, []).append(t)
+    return list(groups.values())
+
+
+def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None) -> IL.Lowering:
+    """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), each
+    padded to whole 64-word SHA-512 blocks, and ``out0 .. out{W_out-1}``."""
+    groups = groups or [list(range(len(uc.inputs)))]
+    port_words = tuple(_pad(sum(_words(uc.in_widths[t]) for t in g), BLOCK_WORDS) for g in groups)
     C = gf2.Circuit()
-    row = [C.input(f"in{j}", 16) for j in range(w_in)]
-    wires, at = {}, 0
-    for k, w in zip(uc.inputs, uc.in_widths):
-        bits = [b for word in row[at:at + _words(w)] for b in word][:w]
-        wires[act.absolute(k)] = bits
-        at += _words(w)
+    leaves = []
+    for i, w in enumerate(port_words):
+        leaves += [C.input(f"in{len(leaves) + j}", 16) for j in range(w)]
+    wires, base = {}, 0
+    for g, w_port in zip(groups, port_words):
+        at = base
+        for t in g:
+            w = uc.in_widths[t]
+            wires[act.absolute(uc.inputs[t])] = [b for word in leaves[at:at + _words(w)] for b in word][:w]
+            at += _words(w)
+        base += w_port
     IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
     out_bits = []
     for j, w in zip(uc.outputs, uc.out_widths):
@@ -92,29 +117,48 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str) -> IL.Lowering:
     out_bits += [gf2.ZERO] * (16 * w_out - len(out_bits))
     for j in range(w_out):
         C.output(f"out{j}", out_bits[16 * j:16 * (j + 1)])
+    w_in = sum(port_words)
     units = IL.Units(target=None, in_widths=[16] * w_in, out_widths=[16] * w_out, in_src=[[("leaf", p) for p in range(w_in)]],
                      out_src=[[("ret", p) for p in range(w_out)]], signature=(uc.shape,), gates=[], arg_gates=[], ret_gates=[])
     lay = IL.layout(C, [f"in{j}" for j in range(w_in)], [f"out{j}" for j in range(w_out)])
-    return IL.Lowering(name, ClassDefinition(name, w_in, w_out), units, C, lay)
+    return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int):
-    """The lanes as rows ``(n, w_in)`` and outputs ``(n, w_out)``, u16, in the packing `class_lowering` reads."""
+def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None):
+    """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
+    the packing `class_lowering` reads."""
+    groups = groups or [list(range(len(uc.inputs)))]
+    port_words = port_words or [w_in]
     n = len(ins[0]) if ins else len(want[0])
-    rows, outs = np.zeros((n, w_in), np.uint16), np.zeros((n, w_out), np.uint16)
-    for dst, ports, widths in ((rows, ins, uc.in_widths), (outs, want, uc.out_widths)):
-        at = 0
-        for vals, w in zip(ports, widths):
-            v = np.asarray(vals, dtype=np.uint64)
-            for h in range(_words(w)):
-                dst[:, at + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
-            at += _words(w)
-    return rows, outs
+    rows = np.zeros((n, w_in), np.uint16)
+    base = 0
+    for g, wp in zip(groups, port_words):
+        at = base
+        for t in g:
+            v = np.asarray(ins[t], dtype=np.uint64)
+            for h in range(_words(uc.in_widths[t])):
+                rows[:, at + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
+            at += _words(uc.in_widths[t])
+        base += wp
+    outs = np.zeros((n, w_out), np.uint16)
+    at = 0
+    for vals, w in zip(want, uc.out_widths):
+        v = np.asarray(vals, dtype=np.uint64)
+        for h in range(_words(w)):
+            outs[:, at + h] = ((v >> np.uint64(16 * h)) & np.uint64(0xFFFF)).astype(np.uint16)
+        at += _words(w)
+    per_port, base = {}, 0
+    for i, wp in enumerate(port_words):
+        per_port[f"p{i}"] = rows[:, base:base + wp]
+        base += wp
+    return rows, outs, per_port
 
 
-def _shims(name: str, content: bytes):
+def _shims(name: str, content: bytes, ports: int = 1):
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
-    sub = SimpleNamespace(id=f"unit-class/{name}", template=SimpleNamespace(id="unit-class"), inputs=[port("in")], outputs=[port("out")],
+    sub = SimpleNamespace(id=f"unit-class/{name}", template=SimpleNamespace(id="unit-class"), inputs=[port(f"p{i}") for i in range(ports)],
+                          outputs=[port("out")],
                           program_digests=lambda statics: {f"unit-class/{name}": hashlib.sha256(content).hexdigest()})
     return sub, SimpleNamespace(subcircuit=sub, name=f"unit-class-{name}", content_digest=hashlib.sha256(content).hexdigest())
 
@@ -220,16 +264,78 @@ def partition_binding(units: PartitionUnits, spec: str) -> tuple[str, str]:
     return hashlib.sha512(EXPERIMENTAL.encode() + b"\0" + json.dumps({"program": program, "owners": spec}, sort_keys=True).encode()).hexdigest(), program
 
 
+def owners_of(units: PartitionUnits, fn_id: str) -> dict[int, int]:
+    """Computing gate -> its unit, in the flat Definition's cut (structure gates, copied into every reader, have none)."""
+    act = units.activation_of(fn_id)
+    keep = set(act.graph.keep)
+    return {j: uc.unit for uc in units._flat[fn_id][1] for j in uc.gates if j in keep}
+
+
+def broadcast_params(units: PartitionUnits) -> dict[str, tuple[set[int], int]]:
+    """Per flat Definition that is a member of a separable Call: the parameters its batch node shares across members (axis None) and
+    the member count, as the Call evaluates it (a GEMM coordinate's activation row, read by every coordinate of the Call)."""
+    out: dict[str, tuple[set[int], int]] = {}
+
+    def walk(cut):
+        if not (isinstance(cut, DefinitionCut) and cut.parts is not None):
+            return
+        body = cut.fn.body
+        for k, (child, m) in enumerate(cut.parts):
+            if child is None:
+                continue
+            node = body.nodes[k]
+            if node.form == "batch" and child.fn.id not in out:
+                out[child.fn.id] = ({i for i, ax in enumerate(node.axes) if ax is None}, m)
+            walk(child)
+
+    for _k, _m, _fn, cut in units._calls():
+        walk(cut)
+    return out
+
+
+def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list]:
+    """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
+    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
+    (group of members). Instances of one evaluation or Call share their sources' values, so their rows dedupe as serving's do."""
+    act = units.activation(cl.definition)
+    mine = [uc for uc in units._flat[cl.definition.id][1] if uc.shape == cl.shape]
+    widths = [act.width(-1 - p) for p in range(act.params)]
+    leaf_param = []
+    for i, (_nm, t) in enumerate(act.fn.signature()[0]):
+        leaf_param += [i] * t.leaves
+    bcast, members = shared.get(cl.definition.id, (set(), 1))
+    ins = [[] for _ in mine[0].inputs]
+    want = [[] for _ in mine[0].outputs]
+    have, t = 0, 0
+    while have < n:
+        raw = PU.synthetic_words(key, f"{act.fn.id}#{t}", widths, 1)[0]
+        grp = PU.synthetic_words(key, f"{act.fn.id}#call{t // max(1, members)}", widths, 1)[0]
+        words = [grp[p] if leaf_param[p] in bcast else raw[p] for p in range(len(raw))]
+        run = PU.evaluate(act, words)
+        for uc in mine:
+            if have >= n:
+                break
+            for port, x in zip(ins, uc.inputs):
+                port.append(run[x])
+            for port, j in zip(want, uc.outputs):
+                port.append(run[j])
+            have += 1
+        t += 1
+    return ins, want
+
+
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes) -> dict:
-    """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class."""
+    """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
+    each port's equal rows committed once (shared rows)."""
     act = units.activation(cl.definition)
     uc = cl.representative
     name = shape[:16]
     ins, want = lanes_
     partition, program = partition_binding(units, spec)
-    sub, iset = _shims(name, uc.form.encode())
-    low = class_lowering(act, uc, f"unit-class/{name}")
-    rows, outs = pack(uc, ins, want, low.definition.w_in, low.definition.w_out)
+    groups = sources(act, uc, owners_of(units, cl.definition.id))
+    low = class_lowering(act, uc, f"unit-class/{name}", groups)
+    sub, iset = _shims(name, uc.form.encode(), len(groups))
+    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     text = FC.compose(low, sub, partition=partition, program=program)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
@@ -237,11 +343,13 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
-    FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows={"in": rows}, outs={"out": outs})
+    head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
+                    share_rows=True)
     meta = json.loads(text.split("\n", 2)[1][5:])
-    return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
-            "ands": low.layout.counts["ands"], "k_log": meta["k_log"], "vus_per_block": meta["vus_per_block"],
-            "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+    return {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
+            "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
+            "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
+            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
@@ -364,6 +472,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.sample:
         keep = set(sorted(classes, key=lambda sh: hashlib.sha256(f"{a.seed}/{sh}".encode()).digest())[:a.sample])
         order = [kv for kv in order if kv[0] in keep]
+    shared = broadcast_params(units)
     largest = {}
     for sh, cl in order:
         largest[cl.definition.id if hasattr(cl.definition, "id") else cl.definition] = sh
@@ -386,7 +495,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if a.batch == "auto":
                     have = row_units.get(s) or cl.units
                     n = 256 if cc.counts["ands"] > 10**6 else max(16, min(1024, 1 << max(0, have.bit_length() - 1)))
-                lanes_ = PU.lanes(units.activation(cl.definition), [cl.representative], key, n)[(cl.representative.definition, cl.representative.unit)]
+                lanes_ = class_lanes(units, cl, key, n, shared)
                 d = out / s[:16]
                 rec["ands"] = cc.counts["ands"]
                 rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
