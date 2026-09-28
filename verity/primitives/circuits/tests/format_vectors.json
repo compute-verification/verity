@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of verity/ir/PROTOCOL.md (the program format), checked by tests/ir/test_format_spec.py; written by it with --write.",
+ "about": "Pinned vectors of verity/primitives/circuits/PROTOCOL.md (the program format), checked by verity/primitives/circuits/tests/test_format_spec.py; written by it with --write.",
  "canonical_json": {
   "in_domain": [
    [

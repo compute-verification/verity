@@ -9,7 +9,7 @@ rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl
 `pearl_c_work` read the record; nothing else in them names hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
-  Rounds 10-11's W1 prices (research store ``docs/pouw/cheap-binding.md`` §1), k <= 2^16 (the pure-chain freezing bound)
+  Rounds 10-11's W1 prices, k <= 2^16 (the pure-chain freezing bound)
   and ρ = 1/400 (TT_OUT(1/400)).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are

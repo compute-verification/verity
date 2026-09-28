@@ -28,11 +28,13 @@ python benchmarks/pouw/e2e_audit.py --out e2e.json
 What the timings cover:
 
 - **Noise and hashing.** The timed vLLM modes draw noise from torch's generator. SHAKE256 over NCP's transcript
-  (3k/16 words per output) is costed at the research store's measured 650 GB/s, not run in the timed path.
+  (3k/16 words per output) is costed at a measured 650 GB/s, not run in the timed path.
 - **Pearl's operand steps.** Pearl's noisy quantization and peel run as unfused torch operations. Pearl's own fused
   SM100 kernel is not portable to the 4090.
 - **The model.** Qwen2.5-3B has every linear inside both schemes' domains. Qwen2.5-0.5B's k = 896 is below them, and
   Qwen2.5-1.5B's n = 1536 puts NCP's γ above 1%.
+- **The served baseline.** Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8, the baseline: stock
+  vLLM `quantization="fp8"` compiled with its CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).
 
 Native route-U result (`r20260928-120218-f7d7`, RTX 4090, m=16, k=2048, n=256):
 all 16 tile digests and outputs match `ncp-v1.checked()`, the final int32 output is exact, and checkpoint-dump time is

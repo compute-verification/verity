@@ -13,8 +13,7 @@ Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
 - plain: the int8 GEMM (cuBLASLt ``torch._int_mm`` where it applies, and this kernel without reads), the e4m3 GEMM
   (cuBLASLt ``torch._scaled_mm``) and BF16 (``torch.mm``);
 - NCP: the (m, 3k, n) GEMM with every accumulator read once per 16-deep step, forming the three noised operands, and
-  SHAKE256 over the transcript (3k/16 words per output) at the research store's measured 650 GB/s (``gpu-constants.md``;
-  an estimate, not run here);
+  SHAKE256 over the transcript (3k/16 words per output) at a measured 650 GB/s (an estimate, not run here);
 - Pearl: the windowed e4m3 GEMM, noisy quantization of A (the rank-32 noise product and the elementwise BF16 steps), and
   the peel (A·F_B and the 2r correction columns, BF16).
 """

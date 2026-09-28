@@ -1,6 +1,6 @@
 # A timed harness run on node 2 (vy-nebius-2), the kind whose numbers go on the panel: queue pouw, priority pouw-timed, which
 # preempts pouw's other jobs so the node is quiet. It holds all 8 GPUs, times on GPU (index) 5 alone, and is killed at 18 minutes
-# so it releases the node within the 20-minute window (server.md, 05:10Z and 05:50Z). Batch the shapes into one run.
+# so it releases the node within the 20-minute window (05:10Z and 05:50Z). Batch the shapes into one run.
 #
 #   sky jobs launch -n pouw-timed-<what> benchmarks/pouw/harness/jobs/harness-timed.yaml \
 #     --env BUILD=art:<id> --env GPU_UUID=<GPU 5's UUID, from server.md> \

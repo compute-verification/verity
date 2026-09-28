@@ -9,7 +9,7 @@ this module is the reference both statements are checked against.
 **Statement** (public; `statement`, `validate`, `digest` = `SHA-512("verity/partition/v2\\0" || canon(statement))`)::
 
     {"format": "verity/partition/v2", "family": "<the public template's name>",
-     "predicates": {"width": [X, W] | null, "recompute": "refuse" | "report", "max_gates": int | null, "max_in_bits": int | null,
+     "predicates": {"width": int | null, "recompute": "refuse" | "report", "max_gates": int | null, "max_in_bits": int | null,
                     "canonical": <a Q_word query> | null, "grid_bits": g},
      "units": n_b, "advice": {"rows": R_b, "root": "<frame-v3-sha512 root, hex>"}}
 
@@ -47,10 +47,11 @@ the header's count up to R_b are all 0.
 * G3 Boundary and G5 Recompute: each flat entry's cut on its graph (`cut.check_cut`, without the width rule): every computing
   gate in one unit, reads across units only through committed values, returned values committed; and the predicates' recompute
   rule [cut];
-* G4 Width: every unit of every flat entry fits the width rule (`cut.fits`: at most X bits out, or one value of at most W bits)
-  [unit-too-wide];
+* G4 Width: every unit of every flat entry has at most `width` bits out (`WIDTH`, 16, by default), summed over its committed
+  outputs (`cut.boundary_widths`).  The limit is literal: unlike `Q_word{X, W}`'s width rule there is no exception for one value
+  of up to W bits, so a unit whose output is one 32-bit value is refused [unit-too-wide];
 * G6 Count: n_b = grid(n); and, with a canonical query, no entry has more units than the query's cut of its Definition
-  [units-bucket, units-canonical];
+  (`cut.evaluate_definition` at the query's X; its W bounds no count, and G4 is `width`'s alone) [units-bucket, units-canonical];
 * G7 Shapes: each flat entry's classes and their shapes are its units' circuits' (`units.Activation.circuits`), within
   max_gates gates and max_in_bits input bits [shape, unit-too-large].
 
@@ -79,7 +80,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from . import partition_object as PO
 from .codec import canonical_json
 from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
-                  evaluate_definition, fits, separable)
+                  evaluate_definition, separable)
 from .partition import RECOMPUTE_RULES, CutVerdict
 from .units import Activation, UnitCircuit
 
@@ -93,6 +94,7 @@ NONE = (1 << 64) - 1
 FLAT, PARTS = 1, 2
 OWNERS_PER_ROW, SHAPES_PER_ROW, PAIRS_PER_ROW = ROW_BYTES // 4, ROW_BYTES // 64, ROW_BYTES // 16
 GRID_BITS = 4
+WIDTH = 16
 PARAM_MAX = PO.PARAM_MAX
 
 _KEYS = {"format", "family", "predicates", "units", "advice"}
@@ -442,11 +444,11 @@ def decode(rs: Sequence[bytes]) -> Advice:
 # --- the statement ---------------------------------------------------------------------------------------------------------------
 
 
-def predicates(width: tuple[int, int] | None = (16, 32), recompute: str = "refuse", max_gates: int | None = None,
+def predicates(width: int | None = WIDTH, recompute: str = "refuse", max_gates: int | None = None,
                max_in_bits: int | None = None, canonical: Mapping[str, Any] | None = None, grid_bits: int = GRID_BITS) -> dict[str, Any]:
-    """The public predicates: the width rule (X, W) or none, the recompute rule, the caps on a unit's circuit, the canonical query
-    whose unit counts bound each entry's, and the grid."""
-    return {"width": list(width) if width is not None else None, "recompute": recompute, "max_gates": max_gates,
+    """The public predicates: the limit on a unit's bits out or none, the recompute rule, the caps on a unit's circuit, the
+    canonical query whose unit counts bound each entry's, and the grid."""
+    return {"width": width, "recompute": recompute, "max_gates": max_gates,
             "max_in_bits": max_in_bits, "canonical": dict(canonical) if canonical is not None else None, "grid_bits": grid_bits}
 
 
@@ -483,7 +485,7 @@ def validate(st: Any) -> CutVerdict:
         fail("predicate-keys", sorted(set(p) ^ _PRED_KEYS, key=repr) if isinstance(p, Mapping) else p)
     else:
         w = p["width"]
-        if w is not None and not (isinstance(w, list) and len(w) == 2 and all(_is_int(x) and 0 < x <= PARAM_MAX for x in w)):
+        if w is not None and not (_is_int(w) and 0 < w <= PARAM_MAX):
             fail("predicates", {"width": w})
         if p["recompute"] not in RECOMPUTE_RULES:
             fail("predicates", {"recompute": p["recompute"]})
@@ -606,7 +608,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
         fail("entry-unreached", unreached)
     if reached != sorted(reached) or reached != list(range(len(reached))):
         fail("entry-order", reached[:_MAX_LISTED])
-    X, W = p["width"] if p["width"] is not None else (None, None)
+    width = p["width"]
     canon = p["canonical"]
     for j, fn in sorted(fns.items()):
         en = adv.entries[j]
@@ -640,10 +642,10 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
         r = check_cut(g, en.owner, None, None, p["recompute"])
         if not r.ok:
             fail("cut", {"entry": j, "definition": fn.id, "codes": list(r.codes), "detail": r.detail})
-        # G4: the width rule on every unit
-        if X is not None:
+        # G4: the limit on every unit's bits out
+        if width is not None:
             ob, og = boundary_widths(g, en.owner, en.units)
-            wide = [[u, b, c] for u, (b, c) in enumerate(zip(ob, og)) if not fits(b, c, X, W, 0)]
+            wide = [[u, b, c] for u, (b, c) in enumerate(zip(ob, og)) if b > width]
             if wide:
                 fail("unit-too-wide", {"entry": j, "definition": fn.id, "units": wide[:_MAX_LISTED], "n": len(wide)})
         # G7: the shapes, and the caps
@@ -969,16 +971,17 @@ def openings(st: Mapping[str, Any], rs: Sequence[bytes], i: int) -> list[int]:
 
 
 def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
-    """The predicates a v1 object's query implies: `Q_word{X, W}` v1 or v2 its width rule, recompute rule and the query itself as the
-    canonical bound; a template query no width rule."""
+    """The predicates a v1 object's query implies: `Q_word{X, W}` v1 or v2 a limit of X bits out, its recompute rule and the query
+    itself as the canonical bound; a template query no width limit.  W has no counterpart: a unit the query admits through its
+    one-value exception (one value of more than X bits) fails G4."""
     q = obj["query"]
     if q["name"] == "Q_word":
-        return predicates((q["params"]["X"], q["params"]["W"]), RECOMPUTE[q["version"]], canonical=q)
+        return predicates(q["params"]["X"], RECOMPUTE[q["version"]], canonical=q)
     if (q["name"], q["version"]) in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
         return predicates(None)
     raise ValueError(f"no v2 predicates for {q['name']!r} v{q['version']!r}")
 
 
-__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "Call", "Entry", "Advice",
-           "Malformed", "Reader", "Unit", "grid", "definition_digest", "shape_digest", "build", "rows", "pad", "decode", "predicates",
+__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "Call", "Entry",
+           "Advice", "Malformed", "Reader", "Unit", "grid", "definition_digest", "shape_digest", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

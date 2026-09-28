@@ -10,8 +10,10 @@
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
     verity_catalog.definitions.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
-    verity_catalog.definitions.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`, `softmax`, `fp4`, and `gather`,
-                      the multiplexer tree), `trace` (Boolean Definitions from builders), `gemm`: the BF16 steps, cast,
+    verity_catalog.definitions.boolean word arithmetic as Boolean circuits, built with `verity.primitives.circuits.boolean`'s builders
+                      (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
+                      `verity_catalog.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,
+                      `mufu`: the MUFU operations on bits, `gemm`: the BF16 steps, cast,
                       DotBf16_v3, GemmCoordinate_v3 and Gemm_v3 on bits, the E4M3, E5M2, NVFP4 and MXFP4 steps and their
                       coordinates, `attention`: FA2's FTZ f32 operations, max, -inf guard and inverse sum on bits,
                       `elementwise`: FP32 add / mul / fma / div (no ftz), the BF16 residual add and the I32 add on bits, `cast`:

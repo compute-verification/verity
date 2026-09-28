@@ -145,7 +145,7 @@ def test_the_clean_up_removes_the_noise_up_to_the_peels_bf16_roundings(fmt):
 @pytest.mark.parametrize("fmt", FMTS)
 def test_the_chain_is_exact_on_the_domain(fmt):
     """Every C̃ word is the exact dot product rounded once toward zero: nothing the chain drops depends on the order.
-    Rounding therefore binds no word to its order, and the design's defense is salt-dependence (``fp4-design.md`` §6)."""
+    Rounding therefore binds no word to its order, and the design's defense is salt-dependence."""
     s, ctx = V.scheme(fmt, True), V.ctx_of("exact", (16, 1024, 16), 1, 2)
     tile = s.tiles(ctx.matmul.shape)[0]
     ops = s.encode(ctx, s.noise(ctx), V.rows("exact", "A", 16, 1024)[:4], V.rows("exact", "B", 16, 1024)[:4],
@@ -218,9 +218,9 @@ def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
 
 
 def test_a_checkpoint_that_needs_gamma_folded_registers_only_with_it():
-    """70B registrations fold γ (research store docs/pouw/keyed-transforms.md §14: the cast moves Llama-3.1-70B's layer 0
-    update by 158% unfolded).  The rotation folds γ, so its stacks pass as they are; an unrotated checkpoint declares
-    `GAMMA_FOLD`, and is still curated only.  A folded but unrotated checkpoint takes no V/O or interleave."""
+    """70B registrations fold γ (the cast moves Llama-3.1-70B's layer 0 update by 158% unfolded).  The rotation folds γ,
+    so its stacks pass as they are; an unrotated checkpoint declares `GAMMA_FOLD`, and is still curated only.  A folded
+    but unrotated checkpoint takes no V/O or interleave."""
     s = get("pearl-c-nvfp4-v0")
     vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
     for stack in F.REGISTRATION_STACKS:
@@ -359,7 +359,7 @@ def test_row_rules_and_debit(fmt):
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms (about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
@@ -402,7 +402,7 @@ def witness_elements(s, ops) -> int:
 @pytest.mark.parametrize("blocks", (2, 4))
 def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
     """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
-    witness's salt-dead and unneeded elements (not every element of a screened block, server.md 11:32Z), no block pair
+    witness's salt-dead and unneeded elements (not every element of a screened block), no block pair
     is screened, and the tile stays under ρ."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
@@ -546,8 +546,7 @@ def spike_row(i: int, k: int = 1024, s: float = 8.9, top: float | None = None) -
 
 def narrow_cell_row(i: int, k: int = 1024, s: float = 8.9) -> list[int]:
     """One max per block at s·ρ, and every other code, ρ's samples included, at the centre of a narrow E2M1 cell (0,
-    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays
-    (theory-pearl-c4-domain.md §6.1)."""
+    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays."""
     u, rs = s / 6, 1 if i % 2 else -1
     v = [rs * _SIGN[t] * (_SAMPLE[t] if t % 8 == 0 else _CELL[t]) * u for t in range(k)]
     for b in range(k // 16):
@@ -562,7 +561,7 @@ def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
 
 @pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
 def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
-    """F1′ (theory §6.2): the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
+    """F1′: the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
     and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
     the Gaussian side carries nothing."""
     f, k, n = F.NVFP4, 1024, 4096
@@ -597,8 +596,8 @@ def test_c_charges_at_least_the_first_reading(family):
 
 def test_b_tilde_rows_are_charged_at_the_overfit_factor():
     """B̃'s F1′ is charged at F1_B_OVERFIT = 10 times its expectation per window, capped at the window's MACs (a layout
-    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights,
-    theory §6.10); A′'s at 1×.  R1 reads B rows the same way."""
+    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights);
+    A′'s at 1×.  R1 reads B rows the same way."""
     f, k, n = F.NVFP4, 1024, 4096
     assert F.F1_B_OVERFIT == 10
     a, e_a = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "A", 2, k)], F.ROLE_EA, F.ROLE_FA, k)
@@ -622,7 +621,7 @@ def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
 
 
 def test_f1_prime_puts_the_correction_inside_the_expectation():
-    """κ inside (ratings.md 15:18Z condition 1): a cheater routes each row after the salt, so F1′ charges
+    """κ inside (the assessor's FP4 condition 1, 15:18Z): a cheater routes each row after the salt, so F1′ charges
     E[max(0, R − κ)] per route, never less than max(0, E[R] − κ), and κ = 0 leaves S_w as it was."""
     f = F.NVFP4
     p = [0.0] * 16 + [0.45] * 112
@@ -635,8 +634,9 @@ def test_f1_prime_puts_the_correction_inside_the_expectation():
 
 
 def test_f1_prime_reads_the_exact_noise_law():
-    """p_t under the exact law given E (ratings.md 15:18Z condition 2): the pmf of Σ (2E_r)(2F_r) has the Gaussian's
-    variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled by 12."""
+    """p_t under the exact law given E (the assessor's FP4 condition 2, 15:18Z): the pmf of Σ (2E_r)(2F_r) has the
+    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled
+    by 12."""
     e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
     lo, pmf = F.noise_law(e)
     assert sum(pmf) == pytest.approx(1.0) and lo == -(len(pmf) - 1) // 2
@@ -712,10 +712,10 @@ def r1_tile():
 
 
 def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
-    """R1 (ratings.md 15:18Z condition 4): the spike row's own F1′ passes ρ·(its cell credit), so it must be declared
-    excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it fails the
-    tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest prover's
-    declaration finds exactly row 0."""
+    """R1 (the assessor's FP4 condition 4, 15:18Z): the spike row's own F1′ passes ρ·(its cell credit), so it must be
+    declared excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it
+    fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
+    prover's declaration finds exactly row 0."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
     assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
@@ -747,7 +747,7 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
 
 
 def test_b_ovf_discounts_credit_by_its_pinned_table():
-    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
+    """B-OVF (the assessor's B, 18:45Z; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
     measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
     4,096 up."""
     assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
@@ -806,15 +806,15 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
 
 
 def strassen_c_L(m: int, k: int, n: int) -> float:
-    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; ratings.md 15:18Z): Strassen–Winograd at W1's int8
-    leaf of 2 slots, depth capped by log2(k/16) alone."""
+    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; the assessor's FP4 conditions, 15:18Z):
+    Strassen–Winograd at W1's int8 leaf of 2 slots, depth capped by log2(k/16) alone."""
     return min((2 * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75
                 for L in range(1, (k // 16).bit_length())), default=2.0)
 
 
 def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
     """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
-    20:00Z ruling; fast-matmul-catalogue-audit.md §4): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
+    20:00Z ruling): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
     formula gave 0.808 / 0.707 / 0.619 / 0.542.  At the domain's corner (m = 2^24, k = 2^16, n = 2^18, the claimed n
     cap) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
     at 8k³, far from honest tiles' 0.13–0.30."""
@@ -904,9 +904,9 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
 
 
-#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review, research store
-#: internal/pouw-fp8/pearl-c4-scale-decode/): (accumulator, a, b, sa, sb), codes and bytes packed little-endian, as the
-#: Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets bit 7.
+#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review): (accumulator, a, b, sa, sb),
+#: codes and bytes packed little-endian, as the Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets
+#: bit 7.
 NAN_BIT7_SPECIALS = (
     (0xFFACB8FF, 0xD012B2233DC6403271C58AC78DFF95B32950DA366B5B32A97D33B2DECE69A903,
      0x932E07AB6589BD2774DC10686F6F47C3F71883659810A8DEEA135E394A8BA32E, 0x28DB5712, 0x4F2C4D74),
@@ -1006,7 +1006,7 @@ def test_the_work_law_audits_pearl_c4():
 
 
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
-    """V-EX (theory §6.13, the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
+    """V-EX (the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
     the rules exclude stays excluded."""
     s = V.scheme("nvfp4", True)

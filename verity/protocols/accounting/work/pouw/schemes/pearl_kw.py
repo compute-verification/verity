@@ -35,7 +35,7 @@ activation and weight roots (bound to the unit's index and the weight id), not P
 the tiles are the protocol's 16 x 16 grid with Pearl's layout ``[(4, Fold), (4, Blake)]`` on both axes.  The seed order is
 kept: B is fixed before seed_B, and A before seed_A.
 
-**Where Pearl differs from our milestone 1 (D1, the hardened KW transcript; ``internal/pouw/kw-reference.md``).**
+**Where Pearl differs from our milestone 1 (D1, the hardened KW transcript).**
 - Datatype: FP8 E4M3 with FP32 accumulation, approximate and device-specific, against int7 on the int8 datapath, exact.
 - Noise: rank 32 lines, ±{1..128} normalized to norm 256 then FP8, the same F basis for every row of a job; D1 has rank
   16 with inner ±1 factors, E_L and F_R in {−3..3}, and E_R shared only per group of 16 units (wider sharing admits a

@@ -1,4 +1,4 @@
-"""The γ accounting reproduces the research store's NCP numbers (``docs/pouw/new-crypto.md`` §2, sub-word moves priced)."""
+"""The γ accounting reproduces the NCP numbers, sub-word moves priced."""
 
 from __future__ import annotations
 

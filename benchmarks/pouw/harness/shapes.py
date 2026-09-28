@@ -8,7 +8,7 @@ from __future__ import annotations
 from arm import Shape
 
 SQUARE = (2048, 4096, 8192, 16384, 32768)
-#: the panel's headline shapes, by phase (`internal/pouw/panel/panel.py`'s HEADLINE)
+#: the panel's headline shapes, by phase
 HEADLINE = {"prefill": "m8192-n8192-k8192", "decode": "m32-n8192-k8192"}
 PREFILL_M, DECODE_M = 2048, 32
 

@@ -258,7 +258,7 @@ def build() -> dict:
         order.append([label, name, key, node, arg, refs, {"codes": list(v.codes), "detail": v.detail.get("query-inapplicable", {}).get("gates")}])
     return {
         "about": "Pinned vectors of Q_call v1 (verity.primitives.circuits.cut 'Q_call v1', verity.primitives.circuits.partition_object, verity/primitives/circuits/PROTOCOL.md §11), checked "
-                 "by tests/ir/test_qcall_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TAdd64_v1 and "
+                 "by verity/primitives/circuits/tests/test_qcall_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TAdd64_v1 and "
                  "TLo32_v1 are test primitives).  Gate indices in a Call are local (layout order, 0 = the Call's first gate); owner, "
                  "committed, outputs and recomputed number the computing gates compactly (keep).",
         "constants": {"x": cut.CALL_X, "param_max": PO.PARAM_MAX, "query": PO.call_query()},

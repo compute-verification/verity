@@ -251,9 +251,6 @@ placeholders are listed in its `info()`.
 - The transcript's `leaves` grow without bound for the life of the install: 32 B per 16×16 tile, about 0.84 MB per
   token at 70B.
 
-The check, and the options with their costs, are in the research store at
-`/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw-mvp/deployment-audit-315-check.md`.
-
 ## Running
 
 ~~~sh

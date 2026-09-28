@@ -1,5 +1,5 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.primitives.circuits` Program, verified by sampled proofs (design note
-`docs/pouw/sampled-proofs-circuit.md`; `PROTOCOL.md` §`ncp-v2`).
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.primitives.circuits` Program, verified by sampled proofs
+(`PROTOCOL.md` §`ncp-v2`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,

@@ -98,6 +98,18 @@ class Findings:
         self.warnings += other.warnings
 
 
+_SHA512 = ("one SHA-512 compression under the AND budget, traced from `sha512.compress_gadget`: the trace turns the gadget's "
+           "23,455 commits (`sha512.commit`, And(x, ONE)) into x's wire, and `ir_lower` cannot commit an Xor, so every form "
+           "is carried whole and grows round over round (mean 3,132 bits, 8.2 GB a third of the way in); each of these four "
+           "was OOM-killed at 64 GiB (MemoryMax) after 14 minutes on vy-nebius-1 (run r20261006-074613-c4b9)")
+#: Boolean Definition families whose whole C-Flock lowering does not fit in memory, and why
+UNLOWERED: dict[str, str] = {f: _SHA512 for f in ("Sha512Compress_v1", "LmsChainStep_v1", "LmsLeaf_v1", "LmsNode_v1")}
+
+
+def _family(t: Any) -> str:
+    return getattr(t, "base_id", None) or t.id
+
+
 def load_pins() -> dict:
     """Every pin: `PINS`' and each sidecar's (`sidecars.load_pins`)."""
     return SC.load_pins(PINS)
@@ -427,6 +439,8 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
             return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
     elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
+    elif is_boolean(t) and (why := UNLOWERED.get(_family(t))):
+        return {"lowered": False, "reason": why}
     else:
         used, missing, est = _pieces_used(t, pins)
         if missing:

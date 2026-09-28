@@ -1,5 +1,4 @@
-"""form_nv's block-step variants on one card (handoffs/ue4m3-scale-lut.md, server.md 11:28Z and 13:25Z): the gate, then
-the timing.
+"""form_nv's block-step variants on one card: the gate, then the timing.
 
   python form_bench.py CUBIN OUT_JSON [--expect-uuid GPU-...] [--shapes 8192x8192,64x8192] [--reps 7] [--item-ms 40]
 

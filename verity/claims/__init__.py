@@ -63,6 +63,8 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
     # secret bytes in its first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte key)
     Property("prf", "Pseudorandom function", "PRF"),
+    # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
+    Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -82,6 +84,10 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("python-secrets", "Python's secrets"),
     # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
+    # verity.primitives.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
+    # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
+    # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
+    Instance("lms-sha512-n64", "LMS over SHA-512"),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (

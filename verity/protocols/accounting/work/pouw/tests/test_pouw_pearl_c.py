@@ -446,10 +446,10 @@ def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf
     return mkn + mkn * add / 128 - add * m * n + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
 
 
-#: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`; research store
-#: `internal/pouw/rtx-pro/workers/0-fp8-capture.md`), per SM per clock: the unit, a dense E4M3 `mma.sync` MAC with FP32
-#: accumulation; FADD in the measured 64-add loop, and alone (issue-bound, from the two-loop fit); FFMA alone; and the
-#: BF16 MAC's and the E4M3 cast's prices (alone, and in the packing loop)
+#: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`), per SM per
+#: clock: the unit, a dense E4M3 `mma.sync` MAC with FP32 accumulation; FADD in the measured 64-add loop, and alone
+#: (issue-bound, from the two-loop fit); FFMA alone; and the BF16 MAC's and the E4M3 cast's prices (alone, and in the
+#: packing loop)
 SM120_MEASURED = {"fp8_mac": 1023.98, "fadd_loop": 122.26, "fadd_alone": 128, "ffma_alone": 128, "bf16_mac": 2.000,
                   "cast_alone": 8.0, "cast_loop": 12.31}
 
