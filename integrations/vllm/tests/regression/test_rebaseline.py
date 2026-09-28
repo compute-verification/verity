@@ -102,3 +102,29 @@ def test_write_main_dry_run_touches_nothing(monkeypatch, tmp_path):
     assert rc == 0
     out = json.load(open(exp_dir / f"{ROW}.json"))
     assert out["executed_prefix"] == {"a": 2} and out["reference"]["runs"] == ["r2026-1"] and out["row"] == 57
+
+
+def test_digests_reads_a_rows_run_directory_and_a_tp_rows_ranks(tmp_path, capsys):
+    """`digests`: per row the step, request and workload Program digests (per rank on a TP row), the manifest's and every component's
+    partition digest, the run roots and the verdict, from the run directory the row's GPU run wrote."""
+    part = lambda c: {"object": {"format": "verity/partition/v1", "program": c * 128}, "digest": c * 128}      # noqa: E731
+    one = tmp_path / "row-b1"
+    one.mkdir()
+    (one / "build_summary.json").write_text(json.dumps({"step": {"program_digest": "s" * 64}, "request": {"program_digest": "q" * 64},
+                                                         "build_request_LP8_T2": {"program_digest": "r" * 64}, "workload": {"workload_digest": "w" * 64}}))
+    (one / "manifest.json").write_text(json.dumps({"manifest_digest": "m" * 64, "program_digest": "w" * 64,
+                                                    "query": {"query_id": "Q_word_v1{X=16,W=32,R=no-recompute}",
+                                                              "partition": {"by_component": {"r0": part("a"), "r1": part("b")}}}}))
+    (one / "verdict.json").write_text(json.dumps({"outcome": "PASS", "run_roots": ["1" * 64, "2" * 64]}))
+    tp = tmp_path / "row-tp2"
+    for r in (0, 1):
+        (tp / "build" / f"rank{r}").mkdir(parents=True)
+        (tp / "build" / f"rank{r}" / "build_summary.json").write_text(json.dumps({"step": {"program_digest": str(r) * 64}}))
+    out = tmp_path / "t.json"
+    assert RB.main(["digests", str(one), str(tp), "--out", str(out), "--markdown", str(tmp_path / "t.md")]) == 1, "the TP row has no manifest"
+    rows = {r["row"]: r for r in json.loads(out.read_text())["rows"]}
+    b1 = rows["row-b1"]
+    assert b1["programs"] == {"0": {"step": "s" * 64, "workload": "w" * 64, "requests": {"build_request_LP8_T2": "r" * 64, "request": "q" * 64}}}
+    assert b1["partition_digests"] == ["a" * 128, "b" * 128] and b1["run_roots"] == ["1" * 64, "2" * 64] and b1["verdict"] == "PASS"
+    assert set(rows["row-tp2"]["programs"]) == {"0", "1"} and rows["row-tp2"]["manifest_digest"] is None
+    assert "| row-b1 | PASS | ssssssssssssssss |" in (tmp_path / "t.md").read_text()
