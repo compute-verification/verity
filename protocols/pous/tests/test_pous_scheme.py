@@ -103,7 +103,8 @@ def test_vectors():
     import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
-    assert pous_vectors.vectors(operating_point_segment=False) == {k: v for k, v in pinned.items() if k != "segment_64kb"}
+    slow = {"segment_64kb", "band/64kb/segment"}
+    assert pous_vectors.vectors(operating_point_segment=False) == {k: v for k, v in pinned.items() if k not in slow}
 
 
 @pytest.mark.slow
