@@ -36,6 +36,14 @@
   "replace": {"Control/Thms.lean": ["double n = n + n", "double n ≥ n + n"]},
   "fails": "guarantees: Control.main_thm's signature changed"
  },
+ "shape": {
+  "replace": {"Control/Thms.lean": ["(h : Control.Hyp) (n : Nat)", "(h : Control.Hyp) (_ : 1 = 1) (n : Nat)"]},
+  "fails": "shape: Control.main_thm takes"
+ },
+ "shape_unstated": {
+  "replace": {"Control/Defs.lean": ["def double", "def Unstated : Prop := True\n\ndef double"]},
+  "fails": "shape: Control.Unstated (Control.Defs) is a statement that no guarantee"
+ },
  "layer": {
   "replace": {"Control/Defs.lean": ["/-! What", "import Control.Assumptions\n/-! What"]},
   "fails": "layers: Control.Defs imports Control.Assumptions"

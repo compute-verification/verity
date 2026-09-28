@@ -8,5 +8,7 @@
              "Control.loop'": "partial def, calling `loop` as `loop` calls it"},
  "layers": {"Control.Assumptions": {"imports": [], "why": "the named assumption imports nothing of the package"},
             "Control.Defs": {"imports": [], "why": "the definitions import nothing of the package"}},
- "guarantees": {"Control.main_thm": {"owner": "@lean"}}
+ "guarantees": {"Control.main_thm": {"owner": "@lean"}},
+ "shape": {"premises": ["Control.Assumptions"], "statements": ["Control.Defs"],
+           "properties": {"Control.main_thm": {"function": "Control.double", "outcome": "none"}}}
 }

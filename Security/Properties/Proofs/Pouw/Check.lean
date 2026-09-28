@@ -7,7 +7,9 @@ import Properties.Proofs.Pouw.Grid
 
 By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
 composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRange` from the window's grid properties
-`PointEnumerates` and `FloorPointGreatest`, which `Properties.Proofs.Pouw.Grid` proves.
+`PointEnumerates` and `floorPoint_greatest`, which `Properties.Proofs.Pouw.Grid` proves. `acceptMeans_complete` is the
+converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
+leave: the service's reject is the check's.
 -/
 
 namespace Properties.Pouw.Check
@@ -24,8 +26,8 @@ theorem digestIsOneStage's : DigestIsOneStage's := fun _ => rfl
 theorem check_eq (p : Params) (c : Registration) (e : Evidence) :
     protocol.check p c e = PouwCheck.check p c e := rfl
 
-theorem serviceRejectRejects : ServiceRejectRejects := by
-  intro p c e r h
+theorem serviceReject_rejects (p : Params) (c : Registration) (e : Evidence) (r : String) (h : e.said = .reject r) :
+    ∃ r', protocol.check p c e = .reject r' := by
   rw [check_eq]
   unfold PouwCheck.check
   split
@@ -165,8 +167,11 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
   · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, rfl⟩
     exact ⟨rfl, rfl⟩
 
-theorem acceptMeans : AcceptMeans := by
-  intro p c e pub prof
+/-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes. -/
+theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
+    protocol.check p c e = .accept pub prof ↔
+      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
+        pub = ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ := by
   rw [check_eq]
   unfold PouwCheck.check
   constructor
@@ -180,15 +185,24 @@ theorem acceptMeans : AcceptMeans := by
     rw [(registered_ok _ _ _).mpr hk]
     exact (outcome_accept _ _ _ _ _ _).mpr ⟨draw, hs, hp⟩
 
+theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
+
+/-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes, is
+accepted, publishing the rule's items and the service's draw. -/
+theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
+    (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) :
+    protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ prof :=
+  (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, rfl⟩
+
 theorem acceptedIsTheService's : AcceptedIsTheService's := by
   intro p c e pub prof h
-  obtain ⟨f, draw, -, ⟨hp, hc, hs, -⟩, rfl⟩ := acceptMeans p c e pub prof |>.mp h
+  obtain ⟨f, draw, -, ⟨hp, hc, hs, -⟩, rfl⟩ := acceptMeans p c e pub prof h
   exact ⟨hp, hc, draw, hs, rfl⟩
 
 theorem acceptedDraw : AcceptedDraw := by
   intro p c e pub prof h
   obtain ⟨f, draw, ⟨-, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
-    ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, rfl⟩ := acceptMeans p c e pub prof |>.mp h
+    ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, rfl⟩ := acceptMeans p c e pub prof h
   refine ⟨hw, ?_, hpop, hlaw, hsz, hasc, hall⟩
   unfold PouwWindow.sampling at hs
   revert hs
@@ -231,12 +245,11 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   | reject r₀ => simp only [hs] at h; cases h
   | undecided r₀ => simp only [hs] at h; cases h; exact ⟨r₀, rfl, rfl⟩
 
-/-- `AcceptedInRange` from the window's grid properties: the credited tiles are at least `lo` by the level's
-rule, and the padded count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts
-`level` on the grid. -/
-theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) (hf : Window.FloorPointGreatest) : AcceptedInRange := by
+/-- `AcceptedInRange` from the window's grid: the credited tiles are at least `lo` by the level's rule, and the padded
+count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts `level` on the grid. -/
+theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) : AcceptedInRange := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof |>.mp h
+  obtain ⟨f, draw, ⟨-, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
   dsimp only
   rw [hw]
   refine ⟨h4, ?_⟩
@@ -251,7 +264,7 @@ theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) (hf : Window.Floor
       · exact Nat.le_trans (ih (Nat.le_of_lt_succ hab)) (Nat.le_of_lt (hlt b))
       · rw [hab]; exact Nat.le_refl _
   by_cases hhi : 1 ≤ p.hi
-  · obtain ⟨hpt, hle, -⟩ := hf p.gridBits p.hi hhi
+  · obtain ⟨hpt, hle, -⟩ := Window.floorPoint_greatest p.gridBits p.hi hhi
     have := mono _ _ h3
     rw [hinv _ hpt] at this
     omega
@@ -262,7 +275,7 @@ theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) (hf : Window.Floor
     omega
 
 theorem acceptedInRange : AcceptedInRange :=
-  acceptedInRange_of_grid Window.pointEnumerates Window.floorPointGreatest
+  acceptedInRange_of_grid Window.pointEnumerates
 
 theorem commitmentKeepsBytes : CommitmentKeepsBytes := by
   intro b c h

@@ -63,6 +63,27 @@ def test_a_changed_definition_names_the_guarantees_that_read_it():
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
 
 
+def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():
+    """Adding to `shape.frozen` exempts a guarantee from the shape rule: a claims change Daniel sees, as he ruled (9 Oct)."""
+    base = _doc({"P.t": _g("P.t : A", H1)})
+    frozen = base | {"shape": {"frozen": {"P.t": "RESTATE: split the iff."}}}
+    assert spec.changes(base, frozen) == ["• frozen `P.t` (doesn't have the shape yet): RESTATE: split the iff."]
+    assert spec.changes(frozen, base) == [] and spec.changes(frozen, frozen) == []
+    assert spec._tally(["frozen", "frozen", "new"]) == "guarantees: 1 new; shape: 2 frozen"
+
+
+def test_a_conjecture_added_or_marked_falsified_is_shown_with_its_reason():
+    """`shape.conjectures`: a property resting on an open one is conditional, and a falsified one takes every property
+    resting on it off the list, so a new entry or a new status is shown; an unchanged one is not."""
+    base = _doc({"P.t": _g("P.t : A", H1)})
+    opened = base | {"shape": {"conjectures": {"P.C": {"status": "open", "test": "t.py", "why": "unsettled"}}}}
+    dead = base | {"shape": {"conjectures": {"P.C": {"status": "falsified", "why": "known false"}}}}
+    assert spec.changes(base, opened) == ["• conjecture `P.C` open: unsettled"]
+    assert spec.changes(opened, dead) == ["• conjecture `P.C` falsified (was open): known false"]
+    assert spec.changes(dead, dead) == [] and spec.changes(dead, base) == []
+    assert spec._tally(["frozen", "conjecture"]) == "shape: 1 frozen, 1 conjectures marked"
+
+
 def test_a_record_from_before_the_rename_compares_by_what_it_says():
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
     old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
