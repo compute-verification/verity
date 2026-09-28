@@ -14,7 +14,7 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `lincheck_coins` says which rounds `lincheck` draws its points from, and `lincheck_of_residuals` is the stage at a rep.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
@@ -217,4 +217,4 @@ theorem lincheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
   rw [← hl, show dot comb p.zPartial = dot (decoded sh w comb cons).comb p.zPartial by rw [decoded_comb sh cons hc]]
   exact lincheck_checks h1 (hzero r1 (by rw [hrs]; simp)) hp (fun j hj => hC j (by rwa [hl] at hj))
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra
