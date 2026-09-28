@@ -129,6 +129,39 @@ def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
     assert f"check slot a (cores {cpu})" in out.stderr
 
 
+def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
+    """Who holds check-a/b/c and since when, without `fuser` on the lock files (old-circuits-and-proofs, 1 Oct)."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30\n")
+    slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
+    held = _hold(tmp_path / "check-a.lock")
+    a, b, d = SLOT.status(slots, tmp_path, NOW)
+    me = Path(f"/proc/{os.getpid()}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
+    assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} since ") and a.endswith(f": {me}")
+    assert b == "b  cores 64-95  free"
+    assert d.startswith("d  cores 0-47  free; blocked: window 2026-10-01T09:20Z")
+    os.close(held)
+    assert SLOT.status(slots[:1], tmp_path, NOW) == ["a  cores 32-63  free"]
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    assert SLOT.main(["--status"], now=lambda: NOW) == 0
+
+
+def test_a_waiters_line_in_proc_locks_is_not_the_holder(tmp_path):
+    lock = tmp_path / "check-a.lock"
+    lock.touch()
+    st = lock.stat()
+    dev = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "locks").write_text(f"1: FLOCK  ADVISORY  WRITE 4242 {dev} 0 EOF\n1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n"
+                                f"2: POSIX  ADVISORY  WRITE 99 00:01:1 0 EOF\n")
+    assert SLOT.holder(lock, proc) == 4242
+    (proc / "locks").write_text(f"1: -> FLOCK  ADVISORY  WRITE 777 {dev} 0 EOF\n")
+    assert SLOT.holder(lock, proc) is None
+    assert SLOT.holder(tmp_path / "absent.lock", proc) is None
+
+
 def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)

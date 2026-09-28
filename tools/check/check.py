@@ -13,8 +13,9 @@
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
-First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`) and the repository's wall-clock lint and
-blob cap (`LINTS`). The groups start only once it passes, so a check that one of them fails ends in seconds, not hours.
+First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
+tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
@@ -511,7 +512,7 @@ def agreement_closure(files: list[str]) -> list[str]:
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
-LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py::test_no_tracked_blob_exceeds_limit")
+LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py")
 #: how long a stopped step's processes have after SIGINT before SIGKILL
 STOP_GRACE_S = 60
 #: each step's record, one JSON line appended as the step ends
