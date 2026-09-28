@@ -200,7 +200,6 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     order, Δ's constant copies copying `one`) are in that order (`ofBlock_ordered`, from `Types.Dag.order_sound`), and
     satisfied composed rows carry the unit type's outputs (`Rows.compose_eval_unit`, from `Types.Dag.unit_sound`).
   - Still to prove: the matrices' reads from the executable's `setupH` (1e), and reads (S3c-2).
-- **L1, each template's rows compute its gates,** is a named hypothesis (`ASSUMPTIONS.md`).
 
 ### 1.6 Proved from the libraries, not assumed
 
