@@ -407,6 +407,19 @@
    "assumptions": [],
    "type_hash": "00000000be141dea"
   },
+  "FlockSoundness.Refine.ofCircuit_extra": {
+   "signature": [
+    "FlockSoundness.Refine.ofCircuit_extra (st : Flock.Stmt) (hwf : FlockSoundness.Refine.StmtWF st)",
+    "  (hr : FlockSoundness.Refine.RegionsWF st) (points : Array (Array Flock.F128)) (hpts : Eq points.size 2)",
+    "  (hsz : ∀ (p : Array Flock.F128), List.instMembership.mem points.toList p → Eq p.size st.mPts) :",
+    "  FlockSoundness.Refine.ExtraRealizes (Flock.Setup.ofCircuit st)",
+    "    (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st)) points",
+    "    (FlockSoundness.Model.extraClaims (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "      Flock.PT_LOCAL st.mPts (FlockSoundness.Refine.ptsOf st.mPts points))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001cace95c"
+  },
   "FlockSoundness.Refine.ofCircuit_fold": {
    "signature": [
     "FlockSoundness.Refine.ofCircuit_fold (st : Flock.Stmt) (h : FlockSoundness.Refine.StmtWF st)",
@@ -609,6 +622,107 @@
    ],
    "assumptions": [],
    "type_hash": "00000000477e5254"
+  },
+  "FlockSoundness.Refine.verify_refines_ofCircuit": {
+   "signature": [
+    "FlockSoundness.Refine.verify_refines_ofCircuit (st : Flock.Stmt) (hwf : FlockSoundness.Refine.StmtWF st)",
+    "  (hr : FlockSoundness.Refine.RegionsWF st) (hm : instLENat.le 13 st.m) (msId : String)",
+    "  (hms : Eq st.merkle (Flock.MerkleScheme.sha512 msId)) (record : String) (proofs : Array ByteArray)",
+    "  (h : Eq (Flock.verify (Flock.Setup.ofCircuit st) record proofs) (Except.ok Unit.unit)) :",
+    "  Exists fun sess =>",
+    "    Exists fun sch =>",
+    "      Exists fun p₀ =>",
+    "        Exists fun p₁ =>",
+    "          Exists fun s₀ =>",
+    "            Exists fun s₁ =>",
+    "              Exists fun pend₀ =>",
+    "                Exists fun pend₁ =>",
+    "                  And (Eq (Flock.Record.decode st.spec record) (Except.ok sess))",
+    "                    (And (Eq (Flock.fast100 st.m) (Option.some sch))",
+    "                      (And",
+    "                        (Eq",
+    "                          (Flock.decodeProof",
+    "                            (FlockSoundness.Refine.shapeOf (Flock.Setup.ofCircuit st) sch",
+    "                              (FlockSoundness.Model.extraClaims",
+    "                                  (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                  Flock.PT_LOCAL st.mPts (FlockSoundness.Refine.ptsOf st.mPts sess.points)).length)",
+    "                            (Array.instGetElem?NatLtSize.getElem! proofs 0))",
+    "                          (Except.ok p₀))",
+    "                        (And",
+    "                          (Eq",
+    "                            (Flock.decodeProof",
+    "                              (FlockSoundness.Refine.shapeOf (Flock.Setup.ofCircuit st) sch",
+    "                                (FlockSoundness.Model.extraClaims",
+    "                                    (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                    Flock.PT_LOCAL st.mPts (FlockSoundness.Refine.ptsOf st.mPts sess.points)).length)",
+    "                              (Array.instGetElem?NatLtSize.getElem! proofs 1))",
+    "                            (Except.ok p₁))",
+    "                          (And",
+    "                            (Eq",
+    "                              (Array.find?",
+    "                                (fun x =>",
+    "                                  instBEqOfDecidableEq.beq x.name",
+    "                                    (instHAppendOfAppend.hAppend",
+    "                                      (instHAppendOfAppend.hAppend (instToStringString.toString st.spec.table)",
+    "                                        (instToStringString.toString \"/rep\"))",
+    "                                      (instToStringNat.toString 0)))",
+    "                                sess.streams)",
+    "                              (Option.some s₀))",
+    "                            (And",
+    "                              (Eq",
+    "                                (Array.find?",
+    "                                  (fun x =>",
+    "                                    instBEqOfDecidableEq.beq x.name",
+    "                                      (instHAppendOfAppend.hAppend",
+    "                                        (instHAppendOfAppend.hAppend (instToStringString.toString st.spec.table)",
+    "                                          (instToStringString.toString \"/rep\"))",
+    "                                        (instToStringNat.toString 1)))",
+    "                                  sess.streams)",
+    "                                (Option.some s₁))",
+    "                              (And",
+    "                                (FlockSoundness.Game.Plays FlockSoundness.Refine.fOf",
+    "                                  (FlockSoundness.Model.repC FlockSoundness.execArith 0",
+    "                                    (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                    (FlockSoundness.Refine.schedOf sch) hm",
+    "                                    (FlockSoundness.Model.extraClaims",
+    "                                      (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                      Flock.PT_LOCAL st.mPts (FlockSoundness.Refine.ptsOf st.mPts sess.points)))",
+    "                                  (FlockSoundness.Refine.repMsgs (Flock.Setup.ofCircuit st) sch",
+    "                                    (instHAdd.hAdd 2",
+    "                                      (FlockSoundness.Model.extraClaims",
+    "                                          (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                          Flock.PT_LOCAL st.mPts",
+    "                                          (FlockSoundness.Refine.ptsOf st.mPts sess.points)).length)",
+    "                                    p₀ FlockSoundness.Refine.capDig)",
+    "                                  (List.map (fun x => x.coins) s₀.rounds.toList) pend₀)",
+    "                                (And",
+    "                                  (FlockSoundness.Game.Plays FlockSoundness.Refine.fOf",
+    "                                    (FlockSoundness.Model.repC FlockSoundness.execArith 1",
+    "                                      (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                      (FlockSoundness.Refine.schedOf sch) hm",
+    "                                      (FlockSoundness.Model.extraClaims",
+    "                                        (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                        Flock.PT_LOCAL st.mPts (FlockSoundness.Refine.ptsOf st.mPts sess.points)))",
+    "                                    (FlockSoundness.Refine.repMsgs (Flock.Setup.ofCircuit st) sch",
+    "                                      (instHAdd.hAdd 2",
+    "                                        (FlockSoundness.Model.extraClaims",
+    "                                            (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st))",
+    "                                            Flock.PT_LOCAL st.mPts",
+    "                                            (FlockSoundness.Refine.ptsOf st.mPts sess.points)).length)",
+    "                                      p₁ FlockSoundness.Refine.capDig)",
+    "                                    (List.map (fun x => x.coins) s₁.rounds.toList) pend₁)",
+    "                                  (And (Eq (pend₀.verdict (FlockSoundness.Refine.opensOf p₀ p₁ sch)) Bool.true)",
+    "                                    (And (Eq (pend₁.verdict (FlockSoundness.Refine.opensOf p₀ p₁ sch)) Bool.true)",
+    "                                      (And",
+    "                                        (FlockSoundness.Model.OpensOK FlockSoundness.Refine.H512",
+    "                                          FlockSoundness.Refine.enc512 (FlockSoundness.Refine.capDig p₀.cap) 0 pend₀",
+    "                                          (FlockSoundness.Refine.opensOf p₀ p₁ sch))",
+    "                                        (FlockSoundness.Model.OpensOK FlockSoundness.Refine.H512",
+    "                                          FlockSoundness.Refine.enc512 (FlockSoundness.Refine.capDig p₀.cap) 1 pend₁",
+    "                                          (FlockSoundness.Refine.opensOf p₀ p₁ sch))))))))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003c00bcfe"
   },
   "FlockSoundness.Refine.verify_tableAfter": {
    "signature": [
@@ -878,6 +992,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -899,10 +1014,12 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -917,7 +1034,11 @@
     "FlockLevel3.covers": "59b910b51d2c0ff6",
     "FlockLevel3.instDecidableCovers": "e729a15297954cbb"
    },
-   "pins": ["FlockSoundness.Refine.ofCircuit_fold"]
+   "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
+    "FlockSoundness.Refine.ofCircuit_fold",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
+   ]
   },
   "FlockLevel3.GF128": {
    "digest": "238daf9bf2ee59921fa3ba13d8c1e929",
@@ -934,10 +1055,12 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -961,11 +1084,13 @@
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
     "FlockSoundness.Refine.merkleCheck_verifies",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -987,10 +1112,12 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1021,6 +1148,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1046,6 +1174,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1071,6 +1200,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1096,6 +1226,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1140,6 +1271,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1194,6 +1326,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1302,6 +1435,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
@@ -1380,6 +1514,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1428,6 +1563,7 @@
     "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound_compiled"
    ]
@@ -1463,6 +1599,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.execArith_correct",
@@ -1527,6 +1664,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound_compiled"
    ]
@@ -1585,6 +1723,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1630,6 +1769,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
     "FlockSoundness.table_sound",
@@ -1652,6 +1792,8 @@
     "FlockSoundness.Model.table": "dcc09e165b51dba2"
    },
    "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1695,10 +1837,12 @@
    },
    "pins": [
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -1721,7 +1865,8 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.rep_refines",
-    "FlockSoundness.Refine.verify_refines"
+    "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
    ]
   },
   "FlockSoundness.Refine.Final": {
@@ -1746,7 +1891,8 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.rep_refines",
-    "FlockSoundness.Refine.verify_refines"
+    "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
    ]
   },
   "FlockSoundness.Refine.LigeritoRun": {
@@ -1769,6 +1915,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
@@ -1787,6 +1934,7 @@
     "FlockSoundness.Refine.merkleCheck_verifies",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
@@ -1803,6 +1951,17 @@
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
+  "FlockSoundness.Refine.Regions": {
+   "digest": "aca74af3d917ece2087e19ca29afc2ef",
+   "definitions": {
+    "FlockSoundness.Refine.RegionWF": "45eb7a7e0158143f",
+    "FlockSoundness.Refine.RegionsWF": "3a9731bcfbb5a1d2",
+    "FlockSoundness.Refine.ptsOf": "4fbf7edd75c7e7a7",
+    "FlockSoundness.Refine.regionOf": "c2c6137c5dc0126b",
+    "FlockSoundness.Refine.regionsOf": "cac820d20e8bde9c"
+   },
+   "pins": ["FlockSoundness.Refine.ofCircuit_extra", "FlockSoundness.Refine.verify_refines_ofCircuit"]
+  },
   "FlockSoundness.Refine.Rep": {
    "digest": "2c6ccf1102c5f506e8dd201e1edab997",
    "definitions": {
@@ -1811,8 +1970,10 @@
     "FlockSoundness.Refine.shapeOf": "bdaf356e88d0d902"
    },
    "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
@@ -1836,6 +1997,7 @@
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines"
    ]
@@ -1858,6 +2020,7 @@
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter"
    ]
   },
@@ -1877,14 +2040,22 @@
     "FlockSoundness.Refine.spCnt": "e5c18a909d67006f",
     "FlockSoundness.Refine.stmtOf": "e4c418751a5d754e"
    },
-   "pins": ["FlockSoundness.Refine.ofCircuit_fold"]
+   "pins": [
+    "FlockSoundness.Refine.ofCircuit_extra",
+    "FlockSoundness.Refine.ofCircuit_fold",
+    "FlockSoundness.Refine.verify_refines_ofCircuit"
+   ]
   },
   "FlockSoundness.Refine.Table": {
    "digest": "983ee33194e90bac35de429ffef6177d",
    "definitions": {
     "FlockSoundness.Refine.opensOf": "983ee33194e90bac"
    },
-   "pins": ["FlockSoundness.Refine.verify_refines", "FlockSoundness.Refine.verify_tableAfter"]
+   "pins": [
+    "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
+    "FlockSoundness.Refine.verify_tableAfter"
+   ]
   },
   "FlockSoundness.Refine.Tapes": {
    "digest": "1fdab595340e5e578fbd8775afb61721",
@@ -1906,11 +2077,13 @@
     "FlockSoundness.Refine.ligerito_accepts_opening",
     "FlockSoundness.Refine.ligerito_refines",
     "FlockSoundness.Refine.lincheck_refines",
+    "FlockSoundness.Refine.ofCircuit_extra",
     "FlockSoundness.Refine.ofCircuit_fold",
     "FlockSoundness.Refine.opening_refines",
     "FlockSoundness.Refine.opensOK_of",
     "FlockSoundness.Refine.rep_refines",
     "FlockSoundness.Refine.verify_refines",
+    "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines"
    ]

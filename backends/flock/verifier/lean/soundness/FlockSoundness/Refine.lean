@@ -19,3 +19,4 @@ import FlockSoundness.Refine.Rep
 import FlockSoundness.Refine.Paths
 import FlockSoundness.Refine.Table
 import FlockSoundness.Refine.StmtOf
+import FlockSoundness.Refine.Regions
