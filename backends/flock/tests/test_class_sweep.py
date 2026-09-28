@@ -73,4 +73,9 @@ def test_regroup_carries_known_definitions_over_and_names_the_ones_to_cut():
 def test_rollup_with_counts_lists_every_shape_of_the_row():
     got = CW.rollup([_rec("a", 1, 256, 2.0, 10)], total_ands=1e6, counts={"a": {"row_units": 512}, "z": {"row_units": 7, "definition": "Tz"}})
     assert got["row_units_proved"] == 512 and got["proving_s"] == 512 * 2.0 / 256
-    assert [(x["shape"], x["why"]) for x in got["not_proved"]] == [("z", "broke at sweep: not run")]
+    assert [(x["shape"], x["why"]) for x in got["not_proved"]] == [("z", "not run")]
+
+
+def test_rollup_prefers_an_accepted_record_across_runs():
+    recs = [_rec("a", 10, 16, 1.0, 5), {"shape": "a", "definition": "Ta", "units": 10, "row_units": 10, "skipped": "table-free", "ands": 5}]
+    assert CW.rollup(recs, total_ands=100)["shapes_proved"] == 1

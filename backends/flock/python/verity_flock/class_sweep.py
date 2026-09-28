@@ -129,21 +129,26 @@ def plan(rows: dict[str, dict], full_rows: set[str], per_doubling: int, pods: di
 
 def rollup(records, total_ands: float, total_units: float | None = None, natives: dict[str, float] | None = None,
            counts: dict[str, dict] | None = None) -> dict:
-    """The whole-row figure from per-shape records (the last record of a shape wins). ``counts`` ({shape: {"row_units", ...}}, the
-    row's `class_statement --counts-only`) gives every shape's row units, and a shape of the row without a record is listed as
-    not run."""
-    recs = {r["shape"]: r for r in records}
+    """The whole-row figure from per-shape records, over any number of runs: per shape, an accepted record over a rejected or
+    broken one over a skipped one, the later at equal rank. ``counts`` ({shape: {"row_units", ...}}, the row's `class_statement
+    --counts-only`) gives every shape's row units, and a shape of the row without a record is listed as not run."""
+    def rank(r):
+        return 3 if (r.get("live") or {}).get("accepted") else 0 if r.get("not_run") else 1 if r.get("skipped") else 2
+    recs: dict = {}
+    for r in records:
+        if r["shape"] not in recs or rank(r) >= rank(recs[r["shape"]]):
+            recs[r["shape"]] = r
     if counts is not None:
         recs = {s: dict(recs[s], row_units=c["row_units"]) if s in recs else
                 {"shape": s, "definition": c.get("definition"), "units": c.get("units"), "row_units": c["row_units"],
-                 "broke": {"at": "sweep", "why": "not run"}} for s, c in counts.items() if c.get("row_units")}
+                 "not_run": True} for s, c in counts.items() if c.get("row_units")}
     proved, not_proved = [], []
     for r in recs.values():
         lv = r.get("live") or {}
         if lv.get("accepted"):
             proved.append(r)
         else:
-            why = ("rejected: " + str(lv.get("why", ""))[:200] if lv else f"skipped: {r['skipped']}" if r.get("skipped")
+            why = ("rejected: " + str(lv.get("why", ""))[:200] if lv else "not run" if r.get("not_run") else f"skipped: {r['skipped']}" if r.get("skipped")
                    else "broke at {at}: {why}".format(**r["broke"]) if r.get("broke") else "no record")
             not_proved.append({"shape": r["shape"], "definition": r.get("definition"), "row_units": r.get("row_units"),
                                "ands": r.get("ands"), "why": why})
