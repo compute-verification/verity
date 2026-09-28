@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""`tools/move/restack.py BRANCH... --move-commit SHA [--onto REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+branch across a generated layout move by running the move's own script on it, instead of rebasing it.
+
+A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
+the root of a checkout of its parent B. Because the move is a deterministic, idempotent codemod, a branch is migrated by the
+same script rather than by rename detection:
+
+1. merge B into the branch (skipped when the branch already contains B). A conflict here is an ordinary one with the tree
+   before the move: the owner merges main first, as without the move.
+2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
+   the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
+   itself, B's copy runs and the branch's is put back before the commit.
+3. merge `--onto` (default M; the moved main once M has landed, which must contain M), with M as the merge base. M is the
+   script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
+   other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
+   rewrote next to one the branch edited would conflict.)
+
+A branch that already contains M skips to step 3. The branch, its ref and the caller's checkout are never changed: the
+commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
+id), `up-to-date`, `conflicted` (the step and the files) or `script-failed` (the script's exit code and the tail of its
+output). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
+pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
+every branch is clean or up to date, 1 otherwise.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+SCRIPT = "tools/move/layout.py"
+SCRIPT_DIR = "tools/move"
+TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
+
+
+class ScriptFailed(Exception):
+    pass
+
+
+def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
+    p = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=cwd, input=input, capture_output=True)
+    if p.returncode not in ok:
+        raise RuntimeError(f"git {' '.join(args)}: {p.stderr.decode(errors='replace').strip()}")
+    return p
+
+
+def out(*args: str, cwd: str | None = None) -> str:
+    return git(*args, cwd=cwd).stdout.decode().strip()
+
+
+def rev(ref: str, cwd: str | None) -> str:
+    return out("rev-parse", "--verify", f"{ref}^{{commit}}", cwd=cwd)
+
+
+def contains(ancestor: str, descendant: str, cwd: str | None) -> bool:
+    return git("merge-base", "--is-ancestor", ancestor, descendant, cwd=cwd, ok=(0, 1)).returncode == 0
+
+
+def merge_trees(ours: str, theirs: str, cwd: str | None, base: str | None = None) -> tuple[str, list[str]]:
+    """`git merge-tree` (ort, with rename detection): (tree, conflicted paths)."""
+    pin = [f"--merge-base={base}"] if base else []
+    p = git("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", *pin, ours, theirs, cwd=cwd, ok=(0, 1))
+    fields = [s.decode() for s in p.stdout.split(b"\0") if s]
+    return fields[0], sorted(set(fields[1:])) if p.returncode else []
+
+
+def commit_tree(tree: str, parents: list[str], message: str, cwd: str | None) -> str:
+    args = ["commit-tree", tree]
+    for p in parents:
+        args += ["-p", p]
+    return git(*args, "-F", "-", cwd=cwd, input=message.encode()).stdout.decode().strip()
+
+
+def tree_of(commit: str, cwd: str | None) -> str:
+    return out("rev-parse", f"{commit}^{{tree}}", cwd=cwd)
+
+
+def blobs_under(commit: str, prefix: str, cwd: str | None) -> dict[str, str]:
+    """path -> "mode blob" for every file under `prefix` in `commit`."""
+    p = git("ls-tree", "-r", "-z", "--full-tree", commit, "--", prefix, cwd=cwd)
+    entries = {}
+    for line in (s.decode() for s in p.stdout.split(b"\0") if s):
+        meta, path = line.split("\t", 1)
+        mode, _, oid = meta.split(" ")
+        entries[path] = f"{mode} {oid}"
+    return entries
+
+
+def move_base(move: str, cwd: str | None) -> str:
+    parents = out("rev-list", "--parents", "-n", "1", move, cwd=cwd).split()[1:]
+    if len(parents) != 1:
+        raise SystemExit(f"--move-commit {move[:12]} has {len(parents)} parents; a generated move is one commit on its base "
+                         "(pass --base)")
+    return parents[0]
+
+
+def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
+    """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
+    change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
+    script's output."""
+    script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
+    if SCRIPT not in script:
+        raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
+    restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
+    with tempfile.TemporaryDirectory(prefix="restack-") as tmp:
+        wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
+        git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
+        try:
+            if restored:
+                # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
+                git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
+                overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
+                git("reset", "-q", "--soft", overlay, cwd=wt)
+            p = subprocess.run([python, SCRIPT], cwd=wt, capture_output=True)
+            output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
+            if p.returncode:
+                raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
+            git("add", "-A", cwd=wt)
+            for path in restored:
+                if path in mine:
+                    git("checkout", merged, "--", path, cwd=wt)
+                else:
+                    git("rm", "-q", "-f", "--ignore-unmatch", "--", path, cwd=wt)
+            return out("write-tree", cwd=wt), restored, output
+        finally:
+            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
+            git("worktree", "prune", cwd=cwd)
+
+
+_GENERATED: dict[tuple[str, str, str], str] = {}
+
+
+def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
+    """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
+    fixups) taken as the move would make the third merge undo them, while every branch still reported clean."""
+    key = (move, base, python)
+    if key not in _GENERATED:
+        try:
+            _GENERATED[key] = run_script(base, base, python, cwd)[0]
+        except ScriptFailed as e:
+            raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
+    if _GENERATED[key] != tree_of(move, cwd):
+        raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
+                         "generated, and a later commit on the move's branch as --onto")
+
+
+def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
+            cwd: str | None = None) -> dict:
+    head, move = rev(branch, cwd), rev(move, cwd)
+    base = rev(base, cwd) if base else move_base(move, cwd)
+    onto = rev(onto, cwd) if onto else move
+    if not contains(move, onto, cwd):
+        raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
+    check_generated(move, base, python, cwd)
+    r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
+    _, plain = merge_trees(head, onto, cwd)
+    r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
+
+    if contains(onto, head, cwd):
+        return {**r, "status": "up-to-date", "result": head}
+    tip, ran = head, False
+    if not contains(move, head, cwd):
+        if not contains(base, head, cwd):
+            tree, conflicts = merge_trees(head, base, cwd)
+            if conflicts:
+                return {**r, "status": "conflicted", "step": "base", "files": conflicts}
+            tip = commit_tree(tree, [head, base], f"Merge {base[:12]}, the layout move's base, into {branch}\n", cwd)
+            r["steps"].append({"step": "base", "commit": tip})
+        try:
+            tree, restored, output = run_script(tip, base, python, cwd)
+        except ScriptFailed as e:
+            return {**r, "status": "script-failed", "step": "script", "error": str(e)}
+        ran = True
+        if tree != tree_of(tip, cwd):
+            msg = (f"restack: rerun {SCRIPT} from {move[:12]} on {branch}\n\n"
+                   f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
+                   f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
+            tip = commit_tree(tree, [tip], msg, cwd)
+            r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
+    if contains(onto, tip, cwd):
+        return {**r, "status": "clean", "result": tip}
+    tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
+    if conflicts:
+        return {**r, "status": "conflicted", "step": "moved", "files": conflicts}
+    result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n", cwd)
+    r["steps"].append({"step": "moved", "commit": result})
+    return {**r, "status": "clean", "result": result}
+
+
+def push(result: str, new: str, remote: str, cwd: str | None) -> None:
+    if git("ls-remote", "--exit-code", remote, f"refs/heads/{new}", cwd=cwd, ok=(0, 2)).returncode == 0:
+        raise SystemExit(f"--push-to {new}: {remote} already has that branch; nothing pushed")
+    git("push", remote, f"{result}:refs/heads/{new}", cwd=cwd)
+
+
+def line(r: dict) -> str:
+    plain = f"plain merge {r['plain']['status']}" + (f" ({len(r['plain']['files'])})" if r["plain"]["files"] else "")
+    if r["status"] in ("clean", "up-to-date"):
+        return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
+    if r["status"] == "script-failed":
+        return f"{r['branch']}: script-failed  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
+    return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("branches", nargs="+", metavar="BRANCH")
+    ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
+    ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
+    ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
+    ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
+    ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
+    ap.add_argument("--remote", default="origin")
+    ap.add_argument("--dry-run", action="store_true", help="report only; never push")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    if a.push_to and len(a.branches) != 1:
+        ap.error("--push-to takes one branch")
+    results = []
+    for b in a.branches:
+        r = restack(b, a.move_commit, a.onto, a.base, a.python)
+        results.append(r)
+        if not a.json:
+            print(line(r), flush=True)
+    if a.push_to and not a.dry_run:
+        r = results[0]
+        if r["status"] != "clean":
+            print(f"--push-to {a.push_to}: {r['branch']} is {r['status']}; nothing pushed", file=sys.stderr)
+        else:
+            push(r["result"], a.push_to, a.remote, None)
+            r["pushed"] = f"{a.remote}/{a.push_to}"
+            if not a.json:
+                print(f"pushed {r['result'][:12]} to {a.remote} {a.push_to}")
+    if a.json:
+        print(json.dumps(results, indent=2))
+    return 0 if all(r["status"] in ("clean", "up-to-date") for r in results) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

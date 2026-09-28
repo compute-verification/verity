@@ -46,6 +46,9 @@ KINDS: dict[str, str] = {
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
+    "check-shard/v1": "one shard's result.json (tools/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
+                      "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "
+                      "its set (research.merge.shard_set)",
     "lean-fast/v1": "a Lean fast-path run's result.json (tools/lean/lean_changed.py --records): one package's records audited without "
                     "the kernel replay or the tests; meta {validation, workload_fingerprint {package, update}}; `research merge` refuses "
                     "an attempt with this result whatever its tool (research.merge.REFUSED_KINDS)",
