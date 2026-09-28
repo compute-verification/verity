@@ -31,7 +31,7 @@ if [ ! -d "$CG/.git" ]; then
   git clone -q https://github.com/NVlabs/CGBN "$CG" && git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
-export PYTHONPATH=$(pwd):$(pwd)/packages/verity/src:${PYTHONPATH:-}
+export PYTHONPATH=$(pwd):${PYTHONPATH:-}
 GMPINC=$("$PY" -c 'import gmpy2, os; print(os.path.dirname(gmpy2.__file__))')
 [ "$(git -C "$CG" rev-parse HEAD)" = "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" ] || { echo "CGBN is not at the pinned commit"; exit 3; }
 ARCH=${ARCH:-sm_120}
