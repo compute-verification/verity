@@ -7,6 +7,7 @@ the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python lay
 (`backends/flock/tests/test_flock_rows.py`).
 -/
 import Flock.Derive
+import Flock.DeriveAll
 
 namespace Flock.Rows
 
@@ -27,8 +28,15 @@ def usage : String :=
 def readLine? (f : Option String) : IO (Option String) :=
   f.mapM fun p => return (← IO.FS.readFile p).trimAsciiEnd.toString
 
+/-- `flock-rows --archive FILE --part unit|delta|logical|DIGEST`: that part of the archive's derivation (`deriveAll`). -/
+def archiveCmd (path part : String) : IO UInt32 := do
+  match Json.parse (← IO.FS.readFile path) >>= fun j => DeriveAll.archivePart j part with
+  | .ok s => IO.print s; return 0
+  | .error e => IO.eprintln s!"flock-rows: {e}"; return 1
+
 /-- `flock-rows`: the command. -/
 def cmd (args : List String) : IO UInt32 := do
+  if let (some path, some part) := (argOf args "--archive", argOf args "--part") then return ← archiveCmd path part
   let some path := args.head? | IO.eprintln usage; return 2
   let (some root, some name) := (argOf args "--root", argOf args "--name") | IO.eprintln usage; return 2
   match Json.parse (← IO.FS.readFile path) >>= fun j => j.getObjValAs? (Array Json) "types" with
