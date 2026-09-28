@@ -75,7 +75,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme), each with
  pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
- its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ its `PROTOCOL.md`. `protocols/network_warden` (`verity_network_warden`) is network
+ transparency's timing channel: the warden, its audit and calibration, and its Lean package
+ (`lean/`). Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
