@@ -107,6 +107,23 @@ def test_a_missing_checkout_is_named(tmp_path):
     assert U.pinned(pkg, cfg)[1][0].startswith(f"upstream: {repo} is not a git checkout")
 
 
+def test_fetch_clones_a_missing_checkout_from_the_manifest_at_the_pinned_revision(tmp_path, capsys):
+    """The weekly look at upstream's head runs on a machine that never built the package: `--fetch` needs git, not `setup.sh`."""
+    pkg, repo, rev = package(tmp_path, {"mca": {**WATCH["mca"], "ack": ["Lib.by_cases", "Lib.proved_one"]}})
+    origin = tmp_path / "origin"
+    shutil.move(str(repo), origin)
+    (origin / "Lib" / "B.lean").write_text("namespace Lib\ntheorem later : mcaError 2 = code 2 := rfl\nend Lib\n")
+    git(origin, "add", "-A")
+    git(origin, "commit", "-qm", "upstream moves on")
+    manifest = json.loads((pkg / "lake-manifest.json").read_text())
+    manifest["packages"][0]["url"] = str(origin)
+    (pkg / "lake-manifest.json").write_text(json.dumps(manifest))
+    assert U.main([str(pkg), "--fetch", "--rev", "origin/HEAD"]) == 1
+    assert "NEW    Lib.later" in capsys.readouterr().out
+    assert git(repo, "rev-parse", "HEAD") == rev                    # checked out where the manifest pins it, as lake would
+    assert U.main([str(pkg), "--fetch"]) == 0                       # the pinned revision, from the clone
+
+
 def test_the_command_exits_1_on_news_and_ack_records_them(tmp_path, capsys):
     pkg, repo, rev = package(tmp_path)
     assert U.main([str(pkg)]) == 1
