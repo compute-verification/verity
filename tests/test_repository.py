@@ -28,10 +28,20 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
+#: The Flock soundness package's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), one
+#: file each, so that no one document outgrows its cap.
+SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
 #: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
 #: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
-#: live under ``reports/`` or ``results/``.
+#: live under ``reports/`` or ``results/``, or be named ``results_*``.
 PINNED_EVIDENCE = (
+    "backends/direct/encode/results_buckets_r20260922-065537-279b.json",
+    "backends/direct/encode/results_commit_r20260922-064722-07c7.json",
+    "backends/direct/encode/results_lintest_r20260922-073017-0924.json",
+    "backends/direct/encode/results_r20260922-062016-6bdf.json",
+    "backends/shared/hash_gpu/results_r20260922-054241-b966.json",
+    # not read by code: kept with the rest of fixtures/redteam until the red team rules on it
+    "fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",
     "backends/numerical/reports/b_measured_4090.json",
     "backends/numerical/reports/fused_logup_4090.json",
     "backends/numerical/reports/fused_sumcheck_4090.json",
@@ -46,7 +56,7 @@ PINNED_EVIDENCE = (
 )
 PINNED_EVIDENCE_DIRS = ("backends/shared/anchor_a100/results/",)
 
-REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status", re.IGNORECASE)
+REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_", re.IGNORECASE)
 #: Source files are exempt from the basename rule (``report.py`` is a script, not a report).
 SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".lock"})
 
@@ -83,7 +93,8 @@ def _is_pinned(path: str) -> bool:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
-                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA]
+                 and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
+                 and not p.startswith(SOUNDNESS_ASSUMPTIONS)]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
@@ -92,7 +103,7 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
 
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
-                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES]
+                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE]
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 

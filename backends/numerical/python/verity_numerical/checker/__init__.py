@@ -1,5 +1,5 @@
 """WP2: the auxiliary-witness checker Check(x, y, h) for the frozen target's transition unit and, by chaining,
-for the verification unit.
+for the proof unit.
 
 This is a REFERENCE: Python ints, clarity over speed, no field.  Its decomposition into gadgets, its hint layout
 and its predicate names are one way to write the relation and are NOT canonical for the proof backends; what a

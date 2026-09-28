@@ -22,7 +22,7 @@ is bounded by `√` of the average (Cauchy–Schwarz), which is the probability 
 sharing the prefix conflict: a fork at the commitment. `conflict_collision` turns every
 conflicting pair of verified openings into a collision of the hash (`Merkle.opening_binding`).
 With `Pr[conflict] ≤ Adv_CR^{SHA-512}(B)` for the two-run finder `B`, these are the terms of
-the compiled theorem (`ASSUMPTIONS.md` §1.2, derived in `DESIGN.md` §2).
+the compiled theorem (`README.md` §1.2, derived in `DESIGN.md` §2).
 -/
 
 open Finset

@@ -2,7 +2,7 @@ import FlockSoundness.Knowledge
 import FlockSoundness.Game.Batch
 
 /-!
-# A table inside a batched session (ASSUMPTIONS.md §1.3)
+# A table inside a batched session (README.md §1.3)
 
 **The session** follows PROTOCOL.md §5. `Commit` carries every table's level-0 cap before any coin
 (S3, S13, S16). The link points are one draw for all tables. Then every table's reps and openings
