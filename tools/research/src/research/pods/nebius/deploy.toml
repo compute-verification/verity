@@ -106,6 +106,28 @@ path = "/workspace/verity-guest/bin/n2_commit.sh"
 src = "tools/research/src/research/pods/nebius/n2_commit.sh"
 nodes = ["vy-nebius-2"]
 
+# ---- both nodes: standing campaign targets (`research keeper`); after installing, `sudo systemctl enable --now vy-keeper.timer`
+
+[[file]]
+path = "/usr/local/bin/vy-keeper"
+src = "tools/research/src/research/pods/nebius/keeper.py"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.service"
+src = "tools/research/src/research/pods/nebius/vy-keeper-n1.service"
+nodes = ["vy-nebius-1"]
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.service"
+src = "tools/research/src/research/pods/nebius/vy-keeper-n2.service"
+nodes = ["vy-nebius-2"]
+
+[[file]]
+path = "/etc/systemd/system/vy-keeper.timer"
+src = "tools/research/src/research/pods/nebius/vy-keeper.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+
 # ---- node 1: the Kueue cluster's host (pods/nebius/sky/cluster_up.sh, monitoring/host_up.sh)
 
 [[tree]]
