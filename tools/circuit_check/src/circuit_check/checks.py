@@ -16,7 +16,8 @@
                      units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes);
                      recorded: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two units
                      it reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
-                     in its entry and the summary, and every other code fails as under v1
+                     in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
+                     beside it (`q_call`: units, committed bits, values computed in two units; or why it refuses, a warning)
     lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
                      circuit digest against its C-Flock
@@ -501,9 +502,34 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
                                     else across_rule if rec["checked"] else None)
     elif applies:
         rec["q_word"] = 1
+    rec["q_call"] = q_call(fn, opts, P, memo)
     if not applies:
         rec["isolated"] = [f["name"] for f in P.failures]
     return rec, rule
+
+
+def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
+    """`Q_call{X = cut.CALL_X}` v1 on one Call of ``fn``: its units, committed gates and bits, and the values two units compute
+    (reported, as `Q_word` v2 does); or why the query refuses it (``inapplicable``: a gate wider than X, a warning).  A code of
+    the cut's own check fails by name (``partition/q-call-<code>``); none is expected, since the cut derives what it checks."""
+    from verity.ir import cut
+
+    X = cut.CALL_X
+    if fn.gates > opts.partition_max_gates:
+        return {"X": X, "checked": False}
+    try:
+        c = cut.evaluate_call(fn, X, memo)
+    except cut.QueryInapplicable as e:
+        F.warn("partition", "q-call-inapplicable", fn.id, 1, e.detail.get("why", ""), detail=e.detail)
+        return {"X": X, "checked": True, "inapplicable": e.detail}
+    G = cut.call_gates(fn, memo)
+    com = cut.call_committed(G, c)
+    v = cut.check_call_cut(G, c.owner(), X)
+    for code in v.codes:
+        det = v.detail.get(code, {})
+        F.fail("partition", f"q-call-{code}", fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
+    return {"X": X, "checked": True, "units": len(c.units), "committed": len(com), "committed_bits": sum(G.width[G.keep[g]] for g in com),
+            "recomputed_across": v.detail["recomputed_across"]["n"], "redundant_gates": v.detail["redundant_gates"], "codes": list(v.codes)}
 
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
@@ -546,7 +572,8 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
         entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph, within_units=as_call) if part["checked"] else {"checked": False}
         entry["dead_gates"] = dead_gates(t, opts, F)
     elif kind == "primitive":
-        entry["partition"] = {"applies": as_call, "checked": True, "units_per_call": 1 if t.params else 0}
+        entry["partition"] = {"applies": as_call, "checked": True, "units_per_call": 1 if t.params else 0,
+                              "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
     entry["failures"], entry["warnings"] = F.failures, F.warnings
@@ -757,7 +784,8 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
 def summarize(entries: Iterable[dict]) -> dict:
     """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
-    too, once), and ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two units, with its count."""
+    too, once), ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two units, with its count, and
+    ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why."""
     from .known import known
     entries = list(entries)
     fails: dict[str, dict] = {}
@@ -773,13 +801,15 @@ def summarize(entries: Iterable[dict]) -> dict:
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
     new = [f["name"] for f in fails if known(f) is None]
-    across = {}
+    across, refused = {}, {}
     for e in entries:
         p = e.get("partition") or {}
         if p.get("q_word") == 2 and p.get("recomputed_across"):
             across[e.get("definition") or e.get("target")] = p["recomputed_across"]
+        if "inapplicable" in (p.get("q_call") or {}):
+            refused[e.get("definition") or e.get("target")] = p["q_call"]["inapplicable"].get("why")
     return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
-            "recomputed_across": dict(sorted(across.items())),
+            "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
             "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
