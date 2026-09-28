@@ -35,6 +35,8 @@ KINDS: dict[str, str] = {
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "approach/v1": "one approach of the registry (research.approaches): meta {campaign, slug} and nothing else, so the id is a function of "
+                   "the name <campaign>/<slug>; payload null; title, hypothesis, owner, status, reason and evidence are labels on it",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
     "trust-dossier/v1": "the computed trust level of one numerical target (verity.proofs.trust): meta = the TrustReport "

@@ -432,6 +432,10 @@ prints the table; the groups are:
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
+- **approach** — the registry (`research notes claim | approach`, `research/approaches.py`), by the owning lane or its coordinator,
+  on an `approach/v1` record: `title`, `hypothesis`, `approach_type` (enum: scheme | route | attack), `attacks`, `owner`,
+  `approach_status` (enum: live | parked | killed | superseded | merged), `reason`, `cites` (one evidence token each), and
+  `superseded_by` from the result group; `approach` on a run or artifact names the approach it belongs to.
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
 `"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value
@@ -545,6 +549,8 @@ run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
+approach/v1              one approach of the registry: meta {campaign, slug} only, so the id is a function of the name; payload
+                         null; everything else is an `approach`-group label on it (§8.1)
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
 trust-dossier/v1         the computed trust level of one numerical target (`python -m verity.proofs.trust --publish`): meta =

@@ -13,6 +13,7 @@
   research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
   research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
+  research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -1788,6 +1789,10 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
+    if argv and argv[0] in ("claim", "approach", "approaches"):
+        from . import approaches  # noqa: PLC0415
+
+        return approaches.main(argv, default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
@@ -2040,6 +2045,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("render", render_lines, root, now, state)
+            from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
+
+            more += steward_rule("approaches", approaches_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)
