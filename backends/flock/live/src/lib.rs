@@ -26,6 +26,7 @@
 
 pub mod chunk;
 pub mod coin_seed;
+pub mod coin_tree;
 pub mod ir_block;
 pub mod ir_frame;
 pub mod ir_sampling;
@@ -38,6 +39,8 @@ pub mod pure_block;
 pub mod tables;
 pub mod vllm_block;
 pub mod zk_hooks;
+#[cfg(feature = "sha512")]
+pub mod zk_veil;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 #[cfg(feature = "gpu")]
@@ -878,6 +881,9 @@ pub struct SessionConfig {
     pub unit_draw: Option<Value>,
     /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
     pub draw_law: Option<(unit_draw::Law, u64)>,
+    /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
+    /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
+    pub coin_tree: Option<coin_tree::Spec>,
     /// Or serve this draw, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
     pub draw_given: Option<Value>,
 }
@@ -885,7 +891,7 @@ pub struct SessionConfig {
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None }
     }
 
     /// The record's digest of `b`.
@@ -903,6 +909,15 @@ impl SessionConfig {
     pub fn check(&self) -> Result<(), String> {
         if self.link.is_some() && !self.require_link {
             return Err("E0: a link exchange (link: Some) without the R5 gate (require_link: false) is refused: y could follow Flock's coins".into());
+        }
+        if self.coin_tree.is_some() && (self.coin_seed || self.prime_live) {
+            return Err("a committed coin schedule replaces the step-0 seed, and serves no live prime coins".into());
+        }
+        if let Some(t) = &self.coin_tree
+            && (t.streams.first().map(|x| x.as_str()) != Some(coin_tree::SESSION)
+                || self.tables.iter().flat_map(|tb| (0..self.reps).map(move |r| rep_stream(&tb.name, r))).any(|x| !t.streams.contains(&x)))
+        {
+            return Err("the committed coin schedule must hold the session's stream first, then every table's every rep".into());
         }
         if self.coin_seed && self.prime_live {
             return Err("step-0 coins derive the GF(2^128) coins only; live prime coins with a committed seed are not built".into());
@@ -924,6 +939,9 @@ impl SessionConfig {
         }
         if self.coin_seed {
             h["coins"] = json!(coin_seed::SCHEME);
+        }
+        if let Some(t) = &self.coin_tree {
+            h["coins"] = t.to_json();
         }
         if self.retain_rounds {
             h["rounds"] = json!("bytes retained");
@@ -991,6 +1009,8 @@ struct CommitRec {
 
 /// The drawn units' statement: from the draw, the session configuration (carrying the draw) and the verifier.
 pub type DrawHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
+/// `(stream, round, block)`: a malicious verifier's edit of a committed block ([`coin_tree::CoinTree::draw_with`]).
+pub type CoinEdit = Box<dyn Fn(&str, usize, &mut [F128]) + Send>;
 
 pub struct Server {
     pub cfg: SessionConfig,
@@ -1022,6 +1042,12 @@ pub struct Server {
     on_draw: Option<DrawHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
+    /// M2: the committed coin schedule (drawn at `Hello`), and a test harness's random tape for it (the verifier's coins as a
+    /// function of the tape: the simulator's rewinding model)
+    coin_tree: Option<coin_tree::CoinTree>,
+    coin_tape: Option<[u8; 32]>,
+    /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::draw_with`)
+    coin_edit: Option<CoinEdit>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
     handle_s: f64,
@@ -1074,6 +1100,9 @@ impl Server {
             round_msg: BTreeMap::new(),
             on_draw: None,
             seed_inject: None,
+            coin_tree: None,
+            coin_tape: None,
+            coin_edit: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
         })
@@ -1083,6 +1112,30 @@ impl Server {
     #[cfg(feature = "seed-injection")]
     pub fn inject_coin_seed(&mut self, seed: [u8; 32], nonce: [u8; 32]) {
         self.seed_inject = Some((seed, nonce));
+    }
+
+    /// A test harness's random tape for the committed coin schedule (a verifier whose coins are a function of its tape).
+    #[cfg(feature = "seed-injection")]
+    pub fn inject_coin_tape(&mut self, tape: [u8; 32]) {
+        self.coin_tape = Some(tape);
+    }
+
+    /// A test harness's malicious verifier: it commits to its tape's coins with `edit` applied to every block.
+    #[cfg(feature = "seed-injection")]
+    pub fn inject_coin_edit(&mut self, edit: CoinEdit) {
+        self.coin_edit = Some(edit);
+    }
+
+    /// The committed coin schedule's root (after `Hello`).
+    pub fn coin_root(&self) -> Option<[u8; 64]> {
+        self.coin_tree.as_ref().map(|t| t.root())
+    }
+
+    /// M2: `n` coins of `stream`'s round `round` from the committed schedule, and the answer's words (coins, then opening).
+    fn committed_coins(&mut self, stream: &str, round: usize, n: usize) -> Result<(Vec<F128>, Vec<F128>), String> {
+        let t = self.coin_tree.as_ref().ok_or("no committed coin schedule")?;
+        let si = t.spec.stream_index(stream).ok_or(format!("{stream} is outside the committed coin schedule"))?;
+        t.open(si, round, n)
     }
 
     /// The live prime rounds, and how many preceded `Commit`.
@@ -1239,6 +1292,26 @@ impl Server {
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
                 }
+                if let Some(spec) = self.cfg.coin_tree.clone()
+                    && self.urandom.is_some()
+                {
+                    let edit: &dyn Fn(&str, usize, &mut [F128]) = match &self.coin_edit { Some(e) => e.as_ref(), None => &|_, _, _| {} };
+                    let tree = match self.coin_tape {
+                        Some(t) => {
+                            use rand_chacha::{ChaCha20Rng, rand_core::{RngCore, SeedableRng}};
+                            let mut r = ChaCha20Rng::from_seed(t);
+                            coin_tree::CoinTree::draw_with(spec, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
+                        }
+                        None => {
+                            let mut f = File::open("/dev/urandom").expect("/dev/urandom");
+                            coin_tree::CoinTree::draw_with(spec, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
+                        }
+                    };
+                    let w = tree.root_words();
+                    self.coin_tree = Some(tree);
+                    self.hello = Some(h);
+                    return Resp::Coins(w);
+                }
                 if self.cfg.coin_seed && self.urandom.is_some() {
                     let (mut seed, mut nonce) = ([0u8; 32], [0u8; 32]);
                     match self.seed_inject.take() {
@@ -1315,6 +1388,14 @@ impl Server {
                 }
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
+                if self.coin_tree.is_some() {
+                    let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m) {
+                        Ok(x) => x,
+                        Err(e) => return self.refuse(e),
+                    };
+                    self.points = c.chunks(spec.m).map(|p| p.to_vec()).collect();
+                    return Resp::Coins(w);
+                }
                 let pts: Vec<Vec<F128>> = self.coins(spec.points * spec.m).chunks(spec.m).map(|p| p.to_vec()).collect();
                 self.points_g = self.last_g;
                 self.points = pts;
@@ -1341,6 +1422,9 @@ impl Server {
                         return self.refuse(format!("R1: {stream} opened before rep {} committed its root", rep - 1));
                     }
                 } else {
+                    if self.cfg.coin_tree.is_some() {
+                        return self.refuse(format!("fork {stream}: a committed coin schedule has no forked streams"));
+                    }
                     let Some(p) = self.streams.get(&parent) else {
                         return self.refuse(format!("fork of unknown stream {parent}"));
                     };
@@ -1395,8 +1479,16 @@ impl Server {
                     }
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
                 }
-                let coins = self.coins(n as usize);
                 let at = self.streams[&stream].rounds.len();
+                let (coins, answer) = if self.coin_tree.is_some() {
+                    match self.committed_coins(&stream, at, n as usize) {
+                        Ok(x) => x,
+                        Err(e) => return self.refuse(e),
+                    }
+                } else {
+                    let c = self.coins(n as usize);
+                    (c.clone(), c)
+                };
                 if let Some(g) = self.last_g {
                     self.round_g.insert((stream.clone(), at), g);
                 }
@@ -1404,7 +1496,7 @@ impl Server {
                 if self.cfg.retain_rounds {
                     self.round_msg.insert((stream, at), content);
                 }
-                Resp::Coins(coins)
+                Resp::Coins(answer)
             }
             Req::Proof { table, rep, bytes } => {
                 self.proofs.insert((table, rep as usize), bytes);
@@ -1581,6 +1673,7 @@ impl Server {
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},
             "unit_draw": self.cfg.unit_draw,
             "aborted": self.aborted, "verdict": self.verdict, "streams": streams, "prime": prime,
+            "coin_tree": self.coin_tree.as_ref().map(|t| json!({"spec": t.spec.to_json(), "root": hex(&t.root())})),
             "coin_seed": self.seed.as_ref().map(|(seed, nonce, c, _, k)| {
                 let mut v = json!({"scheme": coin_seed::SCHEME, "domain": coin_seed::DOMAIN, "context": {"hello": self.hello}, "commitment": hex(c),
                                    "requests": k});
@@ -1929,5 +2022,56 @@ impl Challenger for ReplayChallenger {
         let mut c = ReplayChallenger::stream(self.st.clone(), name, frame_domain(label));
         c.observe_f128_slice(&seed);
         c
+    }
+}
+
+/// A challenger that frames exactly as [`LiveChallenger`] and [`ReplayChallenger`] do, answers each squeeze from a known coin
+/// schedule, and keeps each round's content: the rounds a live prover would send for a transcript whose coins are known in
+/// advance (M2's simulator, after its extraction run). A request whose size differs from the schedule's round is recorded in
+/// `mismatch` and answered with zeros.
+pub struct RecordingChallenger {
+    pending: Vec<u8>,
+    schedule: Vec<Vec<F128>>,
+    /// every round's content and coin count, in order
+    pub rounds: Vec<(Vec<u8>, usize)>,
+    pub mismatch: Option<String>,
+}
+
+impl RecordingChallenger {
+    pub fn new(domain: &[u8], schedule: Vec<Vec<F128>>) -> Self {
+        Self { pending: frame_domain(domain), schedule, rounds: Vec::new(), mismatch: None }
+    }
+
+    fn squeeze(&mut self, kind: u8, n: usize) -> Vec<F128> {
+        push_header(&mut self.pending, OP_SQUEEZE, kind, n as u64);
+        if n == 0 {
+            return Vec::new();
+        }
+        let k = self.rounds.len();
+        self.rounds.push((std::mem::take(&mut self.pending), n));
+        match self.schedule.get(k) {
+            Some(c) if c.len() == n => c.clone(),
+            other => {
+                self.mismatch.get_or_insert(format!("round {k}: {n} coins requested, the schedule has {:?}", other.map(|c| c.len())));
+                vec![F128::default(); n]
+            }
+        }
+    }
+}
+
+impl Challenger for RecordingChallenger {
+    framed_challenger!();
+
+    fn grind_pow(&mut self, _bits: u32) -> u64 {
+        unreachable!("the recording challenger replays a verifier")
+    }
+
+    fn verify_pow(&mut self, nonce: u64, _bits: u32) -> bool {
+        self.observe_bytes(&nonce.to_le_bytes());
+        true
+    }
+
+    fn fork_from_seed(&self, _: [F128; 2], _: &'static [u8]) -> Self {
+        unreachable!("the single-table path does not fork")
     }
 }

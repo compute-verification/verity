@@ -279,12 +279,24 @@ mod tests {
         assert_ne!(ProverRng::from_os().f128s(STREAM_MASK, 0, 2), ProverRng::from_os().f128s(STREAM_MASK, 0, 2));
     }
 
-    /// TODO(M1): two proofs of the same statement share no mask bit: prove one statement twice with masking on, take every
-    /// mask cell, Reed–Solomon padding row and leaf salt of each, and assert the two sets are disjoint as bit positions with
-    /// equal values no more often than chance (a chi-square on the XOR). Needs M1's masks.
+    /// Two proofs' masks share no bit beyond chance: the M1 draws of two OS seeds (the algebraic phase's pads and dot-product
+    /// mask for both reps, the mask slot, Ligerito level 0's padding and extra lanes) XOR to a balanced bit string. The
+    /// protocol-level version is `flock-circuit zkstat`'s cross-run XOR test.
     #[test]
-    #[ignore = "M1: needs the masking hooks implemented"]
     fn two_proofs_share_no_mask_bits() {
-        unimplemented!("M1");
+        let draw = |seed: ProverSeed| -> Vec<u8> {
+            let mut r = ProverRng::from_seed(seed);
+            let mut b = Vec::new();
+            for (stream, index, n) in [(STREAM_MASK, 0u64, 1024usize), (4, 0, 300), (5, 0, 300), (4, 1 << 32, 300), (6, 0, 4096), (7, 5 << 32, 500)] {
+                b.extend(r.f128s(stream, index, n).iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()));
+            }
+            b
+        };
+        let (a, b) = (draw(ProverSeed::from_os()), draw(ProverSeed::from_os()));
+        let n = (8 * a.len()) as f64;
+        let ones: u64 = a.iter().zip(&b).map(|(x, y)| (x ^ y).count_ones() as u64).sum();
+        let z = (ones as f64 - n / 2.0) / (n / 4.0).sqrt();
+        assert!(z.abs() < 6.0, "the XOR of two proofs' masks is unbalanced: z = {z}");
+        assert!(a.chunks(16).zip(b.chunks(16)).all(|(x, y)| x != y), "two proofs share a mask word");
     }
 }

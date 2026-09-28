@@ -21,6 +21,8 @@ F=/workspace/flock-gpu-link/flock; FEAT="--features sha512 --features glue"
 # after the circuit prover is generated (it widens both provers' trees)
 (cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/backends/flock/flock-sha512-b684b12.patch \
   && git apply $REPO/backends/flock/flock-glue-b684b12.patch) || exit 1
+# M1 (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
+(cd $F && git apply $REPO/backends/flock/flock-zk-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/backends/flock/cuda_circuit_patch.py && python3 $REPO/backends/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
