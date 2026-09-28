@@ -14,7 +14,7 @@ The rule (no recomputes):
   * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
-  * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
+  * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
 The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ir.cut.CallGraph`: wiring and constants removed,
 reads through them re-pointed):
@@ -284,7 +284,7 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 #: where serving commits each committed interior value today, by (activation family, primitive of the value): the FA2 / FA3 hidden
 #: stream's fields (`commit/hidden_stream.py` StreamLayout; S after the softcap), else None -- a new tap
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
-_STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
+_STREAM = {"AmpereBF16TcDot16_v2": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
            "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
 #: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
@@ -316,6 +316,11 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
+#: unit rules by gate limits, then (Definition id, X, W, extras), shared by every check in the process: a row's request Programs share
+#: most specializations
+_RULES: dict = {}
+
+
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
                 specialize: Callable[[str, dict], Any] = specialization,
                 acquired: Mapping[str, int | Callable[[dict], int]] | None = None, max_gates: Limits = None) -> dict[str, Any]:
@@ -330,8 +335,8 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     partition commits another number of interior words per Call is an `interior-not-acquired` violation.
 
     `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any."""
-    memo: dict = {}
     limits = gate_limits(max_gates)
+    memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
 

@@ -84,3 +84,29 @@ def test_new_ids_carry_no_version_in_their_names():
         name = new.id.rsplit("_v", 1)[0]
         assert new.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith(old.id.rsplit("_v", 1)[0])
         assert SM.SHARED_GREEDY[old.id] is new and bind(new, V=16).signature() == bind(old, V=16).signature()
+
+
+@pytest.mark.parametrize("construction, shared", [(None, True), ("shared-greedy", True), ("greedy-check-per-stage", False)])
+def test_the_target_binds_the_select_in_the_vocabulary_and_the_fold(construction, shared):
+    """`TargetProfile.sampler_construction` (None = `shared-greedy`) at the vocabulary role the frontend rule asks for and at the fold's
+    top-p select (`TokenSelectGumbelTopP._stage3`, the record's declared target); the rule: tests/program/test_derive_stochastic.py."""
+    from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
+    from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP
+    from verity_vllm.observe.fold.resolver import StepContext
+    from verity_vllm.observe.fold.tree import TreeNode
+    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
+    from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
+    V = 64
+    tp = DEFAULT_TARGET.with_overrides(sampler_construction=construction)
+    for old, new in PAIRS:
+        assert SM.select_for(old, tp.effective_sampler_construction()) is (new if shared else old)
+    select = SM.GumbelTopPTokenSelectSharedGreedy if shared else SM.GumbelTopPTokenSelect
+    assert PROFILE_B1_EAGER_V3.kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction()).id == bind(select, V=V).id
+    logits = ViewDesc(1, 0, (1, V), (V, 1), "bfloat16", "cuda:0")
+    local_argmax, idx, out = ViewDesc(2, 0, (1, 4), (4, 1), "int64", "cuda:0"), *(ViewDesc(a, 0, (1, 1), (1, 1), "int64", "cuda:0") for a in (3, 4))
+    node = TreeNode(DispatchEnter(1, None, 0, "sample", "aten.gather.default", "aten::gather(Tensor self, int dim, Tensor index, *, bool "
+                                  "sparse_grad=False) -> Tensor", [local_argmax, 1, idx], {}, 7, None), DispatchExit(1, out))
+    header = RunHeader("verity-capture/log/v1", "2026-09-28T00:00:00Z", "toy", {"target": tp.to_json()} if construction else {}, {}, {})
+    stage2 = {"local_argmax": local_argmax, "bf16": logits, "S": 4, "kernels": (), "specs": [("r0", 5, 7, 0.8, 0.9)]}
+    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"stage2": {idx.alloc: stage2}}})
+    assert TokenSelectGumbelTopP()._stage3(node, ctx).spec.id == bind(select, V=V).id

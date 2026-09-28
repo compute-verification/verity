@@ -33,7 +33,7 @@ class _Row:
                                        "needs more, e.g. 0.92 with --commit-gpu-util 0.80 for a 30B MoE at TP2 on 48 GB)")
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
     nccl_p2p_disable: str = option("--nccl-p2p-disable", env="NCCL_P2P_DISABLE", default="1", help="TP: NCCL_P2P_DISABLE of the stages")
-    query: str = option("--query", env="VERITY_QUERY_ID", default="Q_module_body_v1", help="verification query id (recorded)")
+    query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
     commit: CommitConfig = group(CommitConfig)
