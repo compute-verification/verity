@@ -20,10 +20,11 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   KEY=$(cat backends/flock/pod/20-gpu-link.sh backends/flock/pod/60-circuit.sh backends/flock/*.patch backends/flock/cuda_*_patch.py | sha256sum | cut -c1-16)
   BIN=$W/bin-$KEY-g$G-sm$SM; F=/workspace/flock-gpu-link/flock
   # the prover runs on CUDA 13.3: a driver older than that (R570) needs its compat library, cached binary or not
-  source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+  C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   if [ ! -x $BIN/flock-circuit-selftest ]; then
     MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
     mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
+    source $HOME/.cargo/env
     FEAT="--features sha512"; [ $G = 1 ] && FEAT="$FEAT --features gpu"
     (cd $F && CARGO_TARGET_DIR=$F/target-selftest cargo build --release -p flock-live $FEAT --features seed-injection --bin flock-circuit) \
       > $O/build-selftest.txt 2>&1 || { tail -30 $O/build-selftest.txt; exit 1; }
