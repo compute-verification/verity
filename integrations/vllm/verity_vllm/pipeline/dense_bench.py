@@ -289,6 +289,9 @@ def live_audit(c, segments: int, salt: bytes, decode_pass, out: Path, audits: in
     host = c.cpu().numpy()
     (out / "leaves-audit.bin").write_bytes(b"".join(leaf_hash(params, salt, i, host[i].tobytes()) for i in range(len(host))))
     os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - {2, 3})
+    decode_pass()
+    torch.cuda.synchronize()
+    throttled = [_cgroup_cpu()]
     responder = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], torch.cuda.current_device(), "127.0.0.1", 0, 2)
     responder.start()
     (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "codec": SCHEME[0].name,
@@ -303,9 +306,20 @@ def live_audit(c, segments: int, salt: bytes, decode_pass, out: Path, audits: in
         torch.cuda.synchronize()
         passes += 1
     responder.stop()
+    throttled.append(_cgroup_cpu())
     doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {}
     return {"rc": proc.returncode, "passes_during_audit": passes, "answered": int(responder.answered()),
-            "accepted": proc.returncode == 0, **doc}
+            "accepted": proc.returncode == 0, "cgroup_cpu_stat": {"before": throttled[0], "after": throttled[1]}, **doc}
+
+
+def _cgroup_cpu() -> dict[str, int]:
+    """The container's CFS counters (`nr_throttled`, `throttled_usec`): a quota exhausted within a period stops every
+    thread, the responder's included, for the rest of it."""
+    try:
+        rows = Path("/sys/fs/cgroup/cpu.stat").read_text().split()
+    except OSError:
+        return {}
+    return {k: int(v) for k, v in zip(rows[::2], rows[1::2]) if k in ("nr_periods", "nr_throttled", "throttled_usec")}
 
 
 def run_model(name: str, m: dict[str, Any], reps: int, salt: bytes, audit: tuple[Path, int, int] | None = None) -> dict[str, Any]:
