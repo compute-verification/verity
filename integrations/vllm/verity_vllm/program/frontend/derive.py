@@ -606,11 +606,24 @@ def _record_partial(prov: dict, holder: list) -> None:
     prov["note"] = "refused: no program exists; the applications listed fired before the refusing node and are evidence for the report only"
 
 
+def declared_source(source) -> str | None:
+    """The source's declared, versioned description (`DERIVE_SOURCE`, e.g. `verity-vllm/engine-step/v1`), or None. When present it
+    is the `SRC` static's `class`, so moving or renaming the source's Python module leaves the Program id unchanged; a change to
+    what the source computes bumps its version."""
+    d = getattr(source, "DERIVE_SOURCE", None)
+    if d is not None and (not isinstance(d, str) or not d):
+        raise TypeError(f"{type(source).__qualname__}.DERIVE_SOURCE must be a non-empty str, got {d!r}")
+    return d
+
+
 def _describe_source(source, example_inputs, mode, profile, config, allowed_dims) -> dict:
     if isinstance(source, torch.nn.Module):
         cls = type(source)
-        d = {"kind": "nn.Module", "class": f"{cls.__module__}.{cls.__qualname__}",
+        declared = declared_source(source)
+        d = {"kind": "nn.Module", "class": declared or f"{cls.__module__}.{cls.__qualname__}",
              "submodules": [f"{n}: {type(m).__qualname__}" for n, m in source.named_modules() if n]}
+        if declared:
+            d["python_class"] = f"{cls.__module__}.{cls.__qualname__}"
     else:
         d = {"kind": "callable", "name": getattr(source, "__qualname__", repr(source))}
     d["example_inputs"] = [(str(getattr(x, "dtype", type(x).__name__)), list(getattr(x, "shape", ()))) for x in example_inputs]

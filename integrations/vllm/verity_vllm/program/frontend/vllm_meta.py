@@ -62,6 +62,10 @@ class WithPeers(nn.Module):
         super().__init__()
         self.inner, self.bus = inner, bus
 
+    @property
+    def DERIVE_SOURCE(self) -> str:
+        return f"verity-vllm/with-peers/v1[{self.inner.DERIVE_SOURCE}]"
+
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         self.bus.reset("trace", list(peers))
         out = self.inner(prompt)
@@ -206,6 +210,8 @@ class EngineStep(nn.Module):
     Generic: takes any vLLM `*ForCausalLM` (forward(input_ids, positions), compute_logits(hidden)). The row policy
     (`logits of the last row only`) is vLLM's `logits_indices` for one request; it is structure, not architecture."""
 
+    DERIVE_SOURCE = "verity-vllm/engine-step/v1"
+
     def __init__(self, model: nn.Module, pos0: int, M: int, sampled_rows: str = "last") -> None:
         super().__init__()
         self.model = model
@@ -228,6 +234,8 @@ class GreedyRequest(nn.Module):
 
     Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (BRIEF: prompt
     length, max_tokens, sampling kind)."""
+
+    DERIVE_SOURCE = "verity-vllm/greedy-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, T: int) -> None:
         super().__init__()
@@ -260,6 +268,8 @@ class PaddedGreedyRequest(nn.Module):
     engine state (written by `unified_kv_cache_update` inside the attention layer), so the wrapper cannot mux the rows the way
     `PaddedGreedyServe` does with its own `unified_cache_write`; `unified_cache_pad` addresses the state by slot for every
     layer at once — model-agnostic (no layer names, no counts)."""
+
+    DERIVE_SOURCE = "verity-vllm/padded-greedy-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, D_MAX: int, eos_id: int) -> None:
         super().__init__()
@@ -302,6 +312,8 @@ class StochasticEngineStep(nn.Module):
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload --
     never a constant of the Program."""
 
+    DERIVE_SOURCE = "verity-vllm/stochastic-engine-step/v1"
+
     def __init__(self, model: nn.Module, pos0: int, M: int, temperature: float, top_p: float) -> None:
         super().__init__()
         self.model = model
@@ -327,6 +339,8 @@ class StochasticRequest(nn.Module):
     in -- a value of the WORKLOAD (the live set), bound at Match to the split kernels' constexpr and checked against the relation there
     (GM-01 G6 'sampler geometry').  The Program carries no S schedule: the forward reads `splits[s:s+1]` per event (a static view of
     the Input).  Parameter order [prompt, seed, splits] so the workload Program's layout stays [prompts, seeds, splits, weights...]."""
+
+    DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, T: int, temperature: float, top_p: float) -> None:
         super().__init__()
