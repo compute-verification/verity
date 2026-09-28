@@ -1,4 +1,4 @@
-"""Process-level cyclic-GC thresholds for the offline analysis processes (fold worker, Match checkers).
+"""Process-level cyclic-GC thresholds for the offline analysis processes (fold worker, Match checkers, `manifest build` / `build-global`).
 
 Content-neutral by construction: CPython's cyclic collector only frees objects that are already unreachable; no
 artifact byte, digest, verdict or population depends on WHEN it runs. What depends on it is wall time. With the

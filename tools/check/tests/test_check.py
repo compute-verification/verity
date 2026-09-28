@@ -214,9 +214,6 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("backends/flock/check_build.sh")
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
-    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "abc123")                          # a shipped tree: suites.py gets the commit
-    shipped = CHECK.groups(tmp_path, 16)[0][0][1]
-    assert shipped[shipped.index("--commit") + 1] == "abc123"
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
@@ -239,7 +236,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
     """The agreement's key reads the tree as git has it: tracked and untracked-unignored files, not bytecode or builds."""
     import subprocess
 
-    assert CHECK.tracked_files(tmp_path) is None                                   # no git, no shipped tree: nothing is keyed
+    assert CHECK.tracked_files(tmp_path) is None                                   # outside a checkout nothing is keyed
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitignore").write_text("__pycache__/\n.lake/\n")
     (tmp_path / "a.txt").write_text("a")
@@ -248,29 +245,6 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
     assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
-
-
-def test_a_shipped_trees_files_are_its_commits(tmp_path):
-    """On a machine the tree is a `git archive` beside the bare repository it was pushed to: its files are the commit's tree,
-    not what a step built inside it since."""
-    import json
-    import subprocess
-
-    work, bare = tmp_path / "work", tmp_path / "root" / "git" / "verity.git"
-    subprocess.run(["git", "init", "-q", str(work)], check=True)
-    (work / "a.txt").write_text("a")
-    g = ["git", "-C", str(work), "-c", "user.name=t", "-c", "user.email=t@t"]
-    subprocess.run([*g, "add", "a.txt"], check=True)
-    subprocess.run([*g, "commit", "-q", "-m", "a"], check=True)
-    subprocess.run(["git", "clone", "-q", "--bare", str(work), str(bare)], check=True)
-    sha = subprocess.run([*g, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    tree = subprocess.run([*g, "rev-parse", "HEAD^{tree}"], capture_output=True, text=True, check=True).stdout.strip()
-    shipped = tmp_path / "root" / "src" / sha
-    shipped.mkdir(parents=True)
-    (shipped / "a.txt").write_text("a")
-    (shipped / "READY.json").write_text(json.dumps({"tree": tree}))
-    (shipped / "built.bin").write_bytes(b"x")
-    assert CHECK.tracked_files(shipped) == ["a.txt"]
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -426,3 +400,20 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
     monkeypatch.delenv("UV", raising=False)
     monkeypatch.setattr(CHECK.shutil, "which", lambda _name: None)
     assert CHECK.preflight()[0][1].startswith("failed: no `uv` here")
+
+
+def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch):
+    import json
+
+    from research import result as RES
+
+    (tmp_path / "suites.json").write_text(json.dumps([{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}, {"suite": "b"}]))
+    (tmp_path / "suites-lean.json").write_text(json.dumps([{"suite": "lean", "nondeterministic": ["tests/test_b.py::test_b"]}]))
+    bad, flaky = CHECK.contradictions(tmp_path), CHECK.contradictions(tmp_path, "nondeterministic")
+    assert bad == [{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}]
+    assert flaky == [{"suite": "lean", "nondeterministic": ["tests/test_b.py::test_b"]}]
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20260929-010000-abcd")
+    CHECK.write_result(tmp_path, False, [{"step": "pytest", "status": "failed", "rc": 1, "seconds": 1.0}], None, bad, flaky)
+    r = RES.check(tmp_path, "r20260929-010000-abcd")
+    assert r.valid, r.errors
+    assert r.doc["cache_contradictions"] == bad and r.doc["nondeterministic"] == flaky

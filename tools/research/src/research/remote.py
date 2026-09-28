@@ -18,6 +18,8 @@
                     the launcher says so (remote.json tool_checked=false).  job.json run.remote.tool_running = what ran.
     source          --source <git dir> ships `git archive HEAD` of a CLEAN checkout to <root>/src/<identity>/ (the run's cwd, tree_sha);
                     the identity is the commit sha.  A dirty tree is refused rather than mislabeled.  Untracked inputs go with --send.
+                    Shipped as git objects (`ship_source`), the tree is a checkout: a clone of <root>/git/verity.git sharing its objects,
+                    detached at the commit, so what asks git there gets a checkout's answers.  The archive stream ships no .git.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
                     the archive lands in <root>/src/<identity>.partial-<nonce>/, is sha256'd on the machine and compared with the
                     launcher's, its extracted file set is compared with the archive's manifest, and only then is the directory
@@ -625,21 +627,25 @@ def _stale_partials_sweep(root: str) -> str:
 
 
 def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
-    """The machine side of a git ship: the pushed commit's tree must be the launcher's ($1), then `git archive` of it is extracted
-    (`tar -m`, extraction mtimes) into the partial directory and every extracted file's sha256 is listed back.  The partial removes
-    itself on any exit until the listing starts."""
+    """The machine side of a git ship: the pushed commit's tree must be the launcher's ($1), then the partial directory becomes a
+    checkout of it, a clone of the bare repository that borrows its objects (`clone --shared`: nothing is copied, and a clone,
+    unlike a worktree, survives the rename into place), detached at the commit, with READY.json excluded from git's view.  Files
+    get checkout-time mtimes, not the commit time.  Listed back: the sha256 of the machine's `git archive` of the commit, then
+    every checked-out file's sha256, `.git` left out.  The partial removes itself on any exit until the listing starts."""
     q, g = shlex.quote(partial), shlex.quote(repo)
     return (_stale_partials_sweep(root) +
             f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; "
             f"t=$(git --git-dir={g} rev-parse --verify -q {sha}^{{tree}}) || exit {_RC_TREE}; [ \"$t\" = \"$1\" ] || exit {_RC_TREE}; "
-            f"mkdir -p {q}; git --git-dir={g} archive --format=tar {sha} > {q}/.archive.tar; "
-            f"sha256sum {q}/.archive.tar | cut -d' ' -f1; tar -xmf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; "
-            f"trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
+            f"git clone -q --shared --no-checkout {g} {q}; git -C {q} -c advice.detachedHead=false checkout -q --detach {sha}; "
+            f"mkdir -p {q}/.git/info; echo /{READY_FILE} >> {q}/.git/info/exclude; "
+            f"git --git-dir={g} archive --format=tar {sha} > {q}/.git/ship.tar; sha256sum {q}/.git/ship.tar | cut -d' ' -f1; "
+            f"rm -f {q}/.git/ship.tar; trap - EXIT HUP INT TERM PIPE; "
+            f"cd {q} && find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
 
 
 def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
     """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
-    then extract and verify on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
+    then check it out and verify it on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
     (partial dir ready to be marked, None) or (None, why the archive stream must ship instead).  Never raises for the transport:
     every failure falls back, and nothing is marked READY by a failed git ship."""
     repo = f"{root}/{POD_GIT_REPO}"
@@ -706,10 +712,12 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
       2. git first (`_ship_git`): `git push` of the commit into the machine's bare repo <root>/git/verity.git over the same ssh
-         (only the objects it lacks travel; no credential anywhere), then on the machine the commit's tree hash must be HEAD's,
-         `git archive` of it is extracted and every file's sha256 must equal the launcher's archive manifest (`verified:
-         git-push+tree+file-sha256`, `transport: git`).  A machine without git, or any failure of that path, prints one line and
-         falls through to the archive stream below; `RESEARCH_SHIP=stream` goes straight there;
+         (only the objects it lacks travel; no credential anywhere), then on the machine the commit's tree hash must be HEAD's, the
+         tree becomes a checkout of it (`_git_ship_script`: a shared clone of the bare repo, detached, READY.json excluded), so code
+         there asks git what it asks in the launcher's checkout, and every file's sha256 must equal the launcher's archive manifest
+         (`verified: git-push+tree+file-sha256`, `transport: git`, `checkout: true`).  A machine without git, or any failure of that
+         path, prints one line and falls through to the archive stream below, a tree without .git; `RESEARCH_SHIP=stream` goes
+         straight there.  A READY tree shipped before checkouts is reused as it is;
       2'. the archive stream into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
          archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
@@ -747,7 +755,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
         gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
-            doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git",
+            doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git", "checkout": True,
                    "pod_archive_sha256": man.get("pod_archive_sha256")}
             return sha, dest, _mark_ready(ssh, gpartial, dest, sha, doc)
         print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
@@ -1156,8 +1164,8 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if remote.get("source_sha"):
-        # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
-        # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
+        # [R19 tele] a tree the archive stream shipped has no .git: the workload's source-identity precheck reads the tree's sha from
+        # here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
         env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
         env.setdefault("PYTHONPYCACHEPREFIX", str(runs_root.parent / "cache" / "pycache"))   # imports from the shared tree do not write into it
         from .pythonpath import import_roots_dir, pythonpath

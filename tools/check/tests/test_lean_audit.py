@@ -124,6 +124,22 @@ def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_
     assert not set(keys.values()) & {LA.key(p, files, ["--all", "--build"]) for p in keys}
 
 
+def test_explain_names_the_inputs_a_miss_changed(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    cache = tmp_path / "cache" / "lean-audit"
+    assert _run(tmp_path, 1)[0] == 0
+    assert LA.explain("pkg/b", cache) == (0, [f"pkg/b: PASS reused ({LA.key('pkg/b', LA.COMMON.tracked_files(), ['--all', '--build'])[:12]}): "
+                                              "every file its audit reads is unchanged"])
+    (root / "tools/check/check.py").write_text("# check.py changed\n")
+    assert "PASS reused" in LA.explain("b", cache)[1][0]                          # a unique part of the path names it too
+    (root / "pkg/a/A.lean").write_text("theorem a : True := by trivial\n")
+    rc, lines = LA.explain("pkg/b", cache)
+    assert rc == 0 and lines[0].startswith("pkg/b: missed (") and "differs in 1 input(s):" in lines[0]
+    assert lines[1:] == ["  changed: pkg/a/A.lean"]                               # b requires a by path
+    assert LA.explain("pkg", cache)[0] == 2                                       # two packages match
+
+
 def test_every_file_the_step_loads_is_in_its_key():
     """What `lean_audit.py` loads by path is in `inputs`, and `common.py` imports only the standard library, so a key covers
     everything the step runs. Loading `check.py` again would need it back in the key."""

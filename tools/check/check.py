@@ -419,9 +419,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
-    commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
     suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
-    tail = [*commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
@@ -439,12 +438,25 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
     return [s for g in groups(out, n) for s in g]
 
 
+#: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
+#: the temporary and XDG directories, the Rust and Lean toolchains' homes), the locale, how this machine reaches the network (its
+#: proxies and certificate bundles), uv and the environment it runs in, and the switches tests read (`VERITY_*`, `FLOCK_*`).
+#: Nothing else: not the store's, RunPod's or GitHub's credentials, not what the recording run gives its workload (`RESEARCH_*`,
+#: the machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them).
+ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "VIRTUAL_ENV", "CARGO_HOME", "RUSTUP_HOME",
+                      "ELAN_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"})
+ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
+#: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
+#: otherwise pass its parent's on.
+ENV_OWN = frozenset({CUSTODY_ENV, STORE_REQUIRED_ENV})
+
+
 def env() -> dict[str, str]:
-    """The steps' environment, as a plain shell's: none of what the recording run gives its workload (`RESEARCH_*`, the
-    machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them), PYTHONPATH entries inside this
-    tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set.  Inside a recorded run,
-    the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
-    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k not in ("PYTHONPYCACHEPREFIX", CUSTODY_ENV, STORE_REQUIRED_ENV)}
+    """The steps' environment: this process's variables that `ENV_PASS` and `ENV_PASS_PREFIXES` name, less `ENV_OWN`; PYTHONPATH
+    entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
+    run, the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
+    out = {k: v for k, v in os.environ.items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
     if os.environ.get("RESEARCH_RUN_ID"):
         out[STORE_REQUIRED_ENV] = "1"
         if custody := custody_dir():
@@ -669,7 +681,20 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
     return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
 
 
-def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None) -> None:
+def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
+    """What the suites' runs say about the caches (`suites.py`), per suite: ``contradicts``, what a fresh run (`--no-cache`, which the
+    nightly `audit-main` runs on `main`) failed that a cached pass, a suite's or a test's, answers for (a key that misses an input,
+    or a test whose outcome isn't a function of its inputs); ``nondeterministic``, the tests that both passed and failed under one
+    key (their inputs were identical)."""
+    found = []
+    for f in ("suites.json", "suites-lean.json"):
+        if (out / f).is_file():
+            found += [{"suite": d["suite"], field: d[field]} for d in json.loads((out / f).read_text()) if d.get(field)]
+    return found
+
+
+def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
+                 nondeterministic: list[dict] = ()) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
@@ -681,6 +706,10 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                         if p and (run_dir / p).exists()]}
     if verdicts:
         doc["verdicts"] = verdicts
+    if contradicted:
+        doc["cache_contradictions"] = list(contradicted)
+    if nondeterministic:
+        doc["nondeterministic"] = list(nondeterministic)
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
@@ -727,10 +756,16 @@ def main(argv: list[str]) -> int:
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
     ok, done = run(out, n, cache, keep_going)
+    bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
+    for c in bad:
+        print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
+              flush=True)
+    for c in flaky:
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts)
+        write_result(run_dir, ok, done, verdicts, bad, flaky)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1
