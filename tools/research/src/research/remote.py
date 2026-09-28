@@ -1534,6 +1534,37 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     return rec
 
 
+def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
+    """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
+    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody."""
+    rec = fetch(local_dir)
+    if err := rec.get("last_fetch_error"):
+        raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
+    st = _read_json(local_dir / "status.json") or {}
+    if st.get("state") != "running":
+        raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
+    pgid = st.get("pgid")
+    if not isinstance(pgid, int) or pgid <= 1:
+        raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
+    if not rec.get("tool"):
+        raise Refused(f"{local_dir.name}'s remote.json names no shipped tool to record the cancel with")
+    rd = rec["remote_run_dir"]
+    tele = ["env", f"PYTHONPATH={rec['tool']}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
+            "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-nonempty", "--attempt-dir", rd,
+            "--deliver"]
+    script = f"{shlex.join(tele)}; rc=$?; tail -n 1 {shlex.quote(rd)}/events.jsonl; exit $rc"
+    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+    try:
+        res = json.loads(r.stdout.decode(errors="replace").splitlines()[-1])
+    except (IndexError, ValueError):
+        res = {}
+    if res.get("kind") != "cancel_result":
+        raise Refused(f"the cancel did not run on the machine (rc {r.returncode}): {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return {"pgid": pgid, "processes": len((res.get("target") or {}).get("members") or []), "delivered": bool(res.get("delivered")),
+            "why": res.get("reason")}
+
+
 def _file_sha256(p: Path) -> str:
     with open(p, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
