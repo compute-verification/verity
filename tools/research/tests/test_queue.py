@@ -119,7 +119,7 @@ def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless
     assert [m.pr for m in members] == [1, 2, 3, 6] == world.on_next(q)
     assert members[3].owner == AGENT and members[0].owner == "lane-1"
     assert entries[4].why == entries[7].why == "held (`hold` label)" and entries[5].why.startswith("no owner")
-    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8 --on MACHINE` (or --local)"
+    assert entries[8].why == f"not marked ready at {h8[:8]}: `research queue ready 8 --on MACHINE` (or --local; --mark without the tier)"
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^1^1^1^1") == _git(world.origin, "rev-parse", "main")    # one merge commit each
     msg = _git(world.origin, "log", "-1", "--format=%B", tip)
@@ -440,12 +440,24 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     h2 = world.change({"a.txt": "a2\n"})
     world.gh.put(1, h2, ready=False)                           # a new push: the label was for the old head
     members, entries = q.sync()
-    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1 --on MACHINE` (or --local)"
+    assert members == [] and entries[1].why == f"not marked ready at {h2[:8]}: `research queue ready 1 --on MACHINE` (or --local; --mark without the tier)"
     world.gh.put(1, h2, labels=("hold",), ready=False)
     assert ready(world.gh, world.store, 1, "lane-1", PASS) == 0
     members, entries = q.sync()
     assert members == [] and entries[1].why == "held (`hold` label)"   # hold wins over ready
     assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
+
+
+def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
+    """#1650 lost 5.5 h to a ready post with no mark behind it; `--mark` needs neither a machine nor a tier."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({"m.txt": "m\n"})
+    world.gh.put(3, h, ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
+    assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
 
 
 def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
