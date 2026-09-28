@@ -40,7 +40,6 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.ml.scalar import F32_NAN_PTX
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 
@@ -92,8 +91,7 @@ def ftz(u: np.ndarray) -> np.ndarray:
 
 
 def _f32_binop(a: np.ndarray, b: np.ndarray, op) -> np.ndarray:
-    out = as_u32(op(as_f32(a), as_f32(b)))
-    return np.where(((out & 0x7F800000) == 0x7F800000) & ((out & 0x007FFFFF) != 0), np.uint32(F32_NAN_PTX), out)
+    return as_u32(op(as_f32(a), as_f32(b)))
 
 
 def add_rn(a, b):
@@ -176,7 +174,7 @@ def fma_rn(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
     # case, where f64 addition already yields +0 (matches f32_fma_bits: exact cancellation -> +0), and the
     # all-zero-addends case, where the f64 sum sign is the IEEE one.  NaN canonicalisation:
     nan = ((out & 0x7F800000) == 0x7F800000) & ((out & 0x007FFFFF) != 0)
-    out = np.where(nan, np.uint32(F32_NAN_PTX), out)
+    out = np.where(nan, np.uint32(P.F32_NAN), out)
     return out
 
 
@@ -341,10 +339,12 @@ def div_full_scale_a(aw: np.ndarray, bw: np.ndarray) -> np.ndarray:
     """`DivFullScaleA_v1`: numerator range scaling of `div.full.f32`."""
     aw = np.asarray(aw, dtype=np.uint32)
     bf = as_f32(np.asarray(bw, dtype=np.uint32))
+    af = as_f32(aw)
     ab = np.abs(bf)
     big = ab > np.float32(8.507059173023462e37)
     small = ab < np.float32(1.1754943508222875e-38)
-    return np.where(big, mul_rn(aw, np.full_like(aw, 0x3E800000)), np.where(small, mul_rn(aw, np.full_like(aw, 0x4B800000)), aw))
+    return np.where(big, as_u32((af * np.float32(0.25)).astype(np.float32)),
+                    np.where(small, as_u32((af * np.float32(16777216.0)).astype(np.float32)), aw))
 
 
 # ---------------------------------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ TABLE_SHA256 = {"tanh_mufu": "4c25bacba332fda09d215e64dc5ca3ec9a7dfdc98a3ea7971f
 QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
+DEFAULT_NAN = 0xFFC00000
 #: every NaN result of `__nv_logf` / `__nv_log1pf` (`sampling.LOG_NAN`: the GPU's canonical NaN)
 LOG_NAN = 0x7FFFFFFF
 BIG = 0x7E800000       # 2^126
@@ -160,12 +161,17 @@ def ftz(C, w):
 
 def f32_add_ftz(C, a, b):
     """``F32AddFtz_v1``: ftz(RN(ftz(a) + ftz(b)))."""
-    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b)))
+    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), ir_nan=True))
 
 
 def f32_sub(C, a, b):
-    """``a - b``: RN, every NaN result the canonical NaN (a NaN operand, or inf - inf of one sign)."""
-    return fp.f32_add(C, a, fp.f32_neg(b))
+    """numpy float32's ``a - b``: RN; a's NaN quieted when a is a NaN, else b's (its own sign), else 0xFFC00000 for an invalid
+    operation (inf - inf of one sign)."""
+    r = fp.f32_add(C, a, fp.f32_neg(b))
+    A, B = fp.unpack(C, a), fp.unpack(C, b)
+    r = mux(C, C.AND(C.AND(A.inf, B.inf), NOT(A.s ^ B.s)), const_bits(DEFAULT_NAN, 32), r)
+    src = mux(C, A.nan, a[:22] + a[23:], b[:22] + b[23:])
+    return mux(C, OR(C, A.nan, B.nan), src[:22] + [ONE] + src[22:], r)
 
 
 def f32_sub_ftz(C, a, b):
@@ -175,7 +181,7 @@ def f32_sub_ftz(C, a, b):
 
 def f32_mul_ftz(C, a, b):
     """``F32MulFtz_v1``: ftz(RN(ftz(a) * ftz(b)))."""
-    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b)))
+    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), ir_nan=True))
 
 
 def f32_fma_ftz(C, a, b, c):
@@ -320,7 +326,7 @@ def div_full_rcp(C, b):
     tiny = _fields(C, b)[4]
     fb = mux(C, big, _scale(C, b, QUARTER), mux(C, tiny, _scale(C, b, TWO24), b))
     a2, b2 = _div_scale(C, const_bits(ONE_F, 32), fb)
-    return fp.f32_mul(C, a2, rcp_post(C, b2, table_read(C, "rcp", b2[:23])))
+    return fp.f32_mul(C, a2, rcp_post(C, b2, table_read(C, "rcp", b2[:23])), ir_nan=True)
 
 
 def div_full_scale_a(C, a, b):
@@ -328,8 +334,8 @@ def div_full_scale_a(C, a, b):
     mag = b[:31]
     big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
     small = _ult_const(C, mag, 0x00800000)
-    return mux(C, big, fp.f32_mul(C, a, fp.f32_const(QUARTER)),
-               mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24)), list(a)))
+    return mux(C, big, fp.f32_mul(C, a, fp.f32_const(QUARTER), ir_nan=True),
+               mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), ir_nan=True), list(a)))
 
 
 # --- the sampler: Philox, the Gumbel noise (libdevice logf / log1pf), the row's bit logic -----------------------------------
@@ -572,8 +578,8 @@ def gelu_tanh_mul_bf16(C, g, u):
     """``GeluTanhMulBf16_v1``: ``bf16(f32(act(g)) * (f32(u) + 0))``, act the gelu-tanh activation word of g (a 2^16 table of the
     IR's own function), both conversions RN with the F2FP NaN 0x7FFF."""
     act = table_read(C, "gelu_tanh_bf16", list(g))
-    uf = fp.f32_add(C, fp.bf16_to_f32(u), _c32(0), nan_word=fp.F32_QNAN_CAST)
-    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, nan_word=fp.F32_QNAN_CAST), 0x7FFF)
+    uf = fp.f32_add(C, fp.bf16_to_f32(u), _c32(0), ir_nan=True)
+    return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, ir_nan=True), 0x7FFF)
 
 
 def topp_numkeep(C, nd, q):

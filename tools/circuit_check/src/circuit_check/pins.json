@@ -34,25 +34,25 @@
    "and": 0
   },
   "DivFullRcp_v1": {
-   "and": 3956
+   "and": 3987
   },
   "DivFullScaleA_v1": {
-   "and": 1542
+   "and": 1538
   },
   "F2fpBf16_v1": {
    "and": 77
   },
   "F32AddFtz_v1": {
-   "and": 913
+   "and": 944
   },
   "F32Add_v1": {
-   "and": 823
+   "and": 854
   },
   "F32BitsShl23_v1": {
    "and": 0
   },
   "F32Div_v1": {
-   "and": 2493
+   "and": 2525
   },
   "F32Eq_v1": {
    "and": 155
@@ -88,10 +88,10 @@
    "and": 283
   },
   "F32MulFtz_v1": {
-   "and": 2496
+   "and": 2528
   },
   "F32Mul_v1": {
-   "and": 2406
+   "and": 2438
   },
   "F32Neg_v1": {
    "and": 0
@@ -100,7 +100,7 @@
    "and": 100
   },
   "F32SubFtz_v1": {
-   "and": 913
+   "and": 1071
   },
   "F32Sub_v1": {
    "and": 823
@@ -151,13 +151,13 @@
    "and": 539
   },
   "GeluTanhMulBf16_v1": {
-   "and": 1034
+   "and": 1051
   },
   "GuardNegInfZero_v1": {
    "and": 63
   },
   "GumbelNoiseLane_v1": {
-   "and": 109299
+   "and": 109391
   },
   "GumbelStreamKey_v1": {
    "and": 9758
@@ -193,7 +193,7 @@
    "and": 160
   },
   "NvLogf_v1": {
-   "and": 48586
+   "and": 48616
   },
   "RopeOutAdd_v1": {
    "and": 2998
@@ -246,19 +246,19 @@
    "xor": 55973
   },
   "gumbel-top-p-token-select/v64/fp32": {
-   "and": 4981,
-   "not": 1279,
-   "xor": 44240
+   "and": 5043,
+   "not": 1159,
+   "xor": 44455
   },
   "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": {
-   "and": 323044,
-   "not": 69248,
-   "xor": 2152553
+   "and": 328453,
+   "not": 62814,
+   "xor": 2165677
   },
   "rmsnorm-triton/n128-eps1e-06/bf16": {
-   "and": 146036,
-   "not": 25808,
-   "xor": 1024321
+   "and": 148173,
+   "not": 22942,
+   "xor": 1029829
   },
   "rope-head/d64/neox-bf16": {
    "and": 6036,

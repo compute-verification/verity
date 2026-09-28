@@ -3,7 +3,7 @@
 //!
 //! A program is ops `[out slot, primitive id, operand slots...]` (constants `[slot, "Const", value]`) over slots
 //! `[cut words | temporaries]`. The primitives are the IR's (`verity_vllm.program.registry.prims`), line for line: IEEE f32
-//! add, mul and div, and fma with one rounding, every NaN result the GPU's canonical 0x7FFFFFFF (`scalar.F32_NAN_PTX`); and the MUFU ops as the
+//! add, mul and div; fma with one rounding and every NaN the canonical 0x7FC00000 (`f32_fma_bits`); and the MUFU ops as the
 //! IR's C++ model computes them (`rms_triton_model.cpp`: `rsqrt_nonftz`, `mufu_sqrt`, `div_full_parts`, `mufu_rcp`) on the
 //! measured tables, which are pinned here by sha256.
 
@@ -289,32 +289,35 @@ fn ftz(u: u32) -> u32 {
 
 fn fma_bits(a: u32, b: u32, c: u32) -> u32 {
     let y = f(a).mul_add(f(b), f(c));
-    if y.is_nan() { F32_NAN } else { u(y) }
+    if y.is_nan() { 0x7FC0_0000 } else { u(y) }
 }
 
 fn is_nan(x: u32) -> bool {
     x & 0x7FFF_FFFF > 0x7F80_0000
 }
 
-/// The GPU's canonical NaN: every NaN result of the IR's f32 arithmetic, a NaN operand's included (no payload or sign survives).
-const F32_NAN: u32 = 0x7FFF_FFFF;
-
-/// IEEE f32, every NaN result `F32_NAN`.
-fn ieee(a: u32, b: u32, op: fn(f32, f32) -> f32) -> u32 {
-    if is_nan(a) || is_nan(b) {
-        return F32_NAN;
+/// IEEE f32 with the IR's NaN choice (numpy float32 on x86-64, red-team-flock-2 IR5), fixed here rather than left to the
+/// compiler's operand order: a NaN operand comes back quieted, `b` when both are NaN if `second` (add, mul) else `a` (div); an
+/// invalid operation gives 0xFFC00000.
+fn ieee(a: u32, b: u32, second: bool, op: fn(f32, f32) -> f32) -> u32 {
+    match (is_nan(a), is_nan(b)) {
+        (true, true) => (if second { b } else { a }) | 0x40_0000,
+        (true, false) => a | 0x40_0000,
+        (false, true) => b | 0x40_0000,
+        _ => {
+            let y = op(f(a), f(b));
+            if y.is_nan() { 0xFFC0_0000 } else { u(y) }
+        }
     }
-    let y = op(f(a), f(b));
-    if y.is_nan() { F32_NAN } else { u(y) }
 }
 
 /// One primitive on encodings.
 pub fn apply(p: Prim, a: &[u32], t: &Tables) -> u32 {
     match p {
         Prim::Const(v) => v,
-        Prim::F32Add => ieee(a[0], a[1], |x, y| x + y),
-        Prim::F32Mul => ieee(a[0], a[1], |x, y| x * y),
-        Prim::F32Div => ieee(a[0], a[1], |x, y| x / y),
+        Prim::F32Add => ieee(a[0], a[1], true, |x, y| x + y),
+        Prim::F32Mul => ieee(a[0], a[1], true, |x, y| x * y),
+        Prim::F32Div => ieee(a[0], a[1], false, |x, y| x / y),
         Prim::F32Fma => fma_bits(a[0], a[1], a[2]),
         Prim::RsqrtApprox => u(rsqrt_nonftz(f(a[0]), &t.rsq)),
         Prim::MufuSqrtFtz => mufu_sqrt(a[0], &t.sqrt),
@@ -328,11 +331,11 @@ pub fn apply(p: Prim, a: &[u32], t: &Tables) -> u32 {
         }
         Prim::DivFullScaleA => {
             let ab = f(a[1]).abs();
-            if ab > BIG { ieee(a[0], 0x3E80_0000, |x, y| x * y) } else if ab < TINY { ieee(a[0], 0x4B80_0000, |x, y| x * y) } else { a[0] }
+            if ab > BIG { u(f(a[0]) * 0.25) } else if ab < TINY { u(f(a[0]) * 16_777_216.0) } else { a[0] }
         }
-        Prim::F32AddFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), |x, y| x + y)),
-        Prim::F32SubFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), |x, y| x - y)),
-        Prim::F32MulFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), |x, y| x * y)),
+        Prim::F32AddFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), true, |x, y| x + y)),
+        Prim::F32SubFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), false, |x, y| x - y)),
+        Prim::F32MulFtz => ftz(ieee(ftz(a[0]), ftz(a[1]), true, |x, y| x * y)),
         Prim::F32FmaFtz => ftz(fma_bits(ftz(a[0]), ftz(a[1]), ftz(a[2]))),
         Prim::F32FmaSubFtz => ftz(fma_bits(ftz(a[0]), ftz(a[1]), ftz(a[2]) ^ 0x8000_0000)),
         // `x > y ? x : y` on the flushed words (FA2 MaxOp; a NaN compares false)
@@ -362,19 +365,19 @@ pub fn eval(ops: &[Op], slots: &mut Vec<Option<u32>>, t: &Tables) {
 mod tests {
     use super::*;
 
-    /// `(a, b, add, mul, div)` from `verity.ml.fp32` (every NaN result the GPU's 0x7FFFFFFF): quiet and signaling NaNs of both
-    /// signs, one or both operands, and invalid operations.
+    /// `(a, b, add, mul, div)` from `verity_vllm.program.registry.prims` (numpy float32, x86-64): quiet and signaling NaNs of
+    /// both signs, one or both operands, and invalid operations.
     const VECTORS: [(u32, u32, u32, u32, u32); 10] = [
-        (0x7FC0_0001, 0x7FC0_0002, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7F80_0001, 0x7FC0_0002, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7FC0_0001, 0x7F80_0002, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7F80_0001, 0x7F80_0002, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0xFFC0_0003, 0x7FC0_0004, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7FA0_0005, 0xFF90_0006, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7FC0_0001, 0x3F80_0000, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x3F80_0000, 0x7F80_0009, 0x7FFF_FFFF, 0x7FFF_FFFF, 0x7FFF_FFFF),
-        (0x7F80_0000, 0xFF80_0000, 0x7FFF_FFFF, 0xFF80_0000, 0x7FFF_FFFF),
-        (0x0000_0000, 0x7F80_0000, 0x7F80_0000, 0x7FFF_FFFF, 0x0000_0000),
+        (0x7FC0_0001, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7F80_0001, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7FC0_0001, 0x7F80_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0x7F80_0001, 0x7F80_0002, 0x7FC0_0002, 0x7FC0_0002, 0x7FC0_0001),
+        (0xFFC0_0003, 0x7FC0_0004, 0x7FC0_0004, 0x7FC0_0004, 0xFFC0_0003),
+        (0x7FA0_0005, 0xFF90_0006, 0xFFD0_0006, 0xFFD0_0006, 0x7FE0_0005),
+        (0x7FC0_0001, 0x3F80_0000, 0x7FC0_0001, 0x7FC0_0001, 0x7FC0_0001),
+        (0x3F80_0000, 0x7F80_0009, 0x7FC0_0009, 0x7FC0_0009, 0x7FC0_0009),
+        (0x7F80_0000, 0xFF80_0000, 0xFFC0_0000, 0xFF80_0000, 0xFFC0_0000),
+        (0x0000_0000, 0x7F80_0000, 0x7F80_0000, 0xFFC0_0000, 0x0000_0000),
     ];
 
     /// Differential against the IR (`verity_flock.ir_lower` vectors): `IR_TAIL_VECTORS` = JSON `{prim id: [[args.., want]..]}`,
@@ -414,9 +417,5 @@ mod tests {
             assert_eq!(apply(Prim::F32Mul, &[a, b], &t), mul, "mul {a:08x} {b:08x}");
             assert_eq!(apply(Prim::F32Div, &[a, b], &t), div, "div {a:08x} {b:08x}");
         }
-        // the scaling FMUL's NaN, and a NaN a passed through unscaled
-        assert_eq!(apply(Prim::DivFullScaleA, &[0xFFC0_0003, 0x7F80_0000], &t), 0x7FFF_FFFF);
-        assert_eq!(apply(Prim::DivFullScaleA, &[0xFFC0_0003, 0x0000_0001], &t), 0x7FFF_FFFF);
-        assert_eq!(apply(Prim::DivFullScaleA, &[0xFFC0_0003, 0x3F80_0000], &t), 0xFFC0_0003);
     }
 }

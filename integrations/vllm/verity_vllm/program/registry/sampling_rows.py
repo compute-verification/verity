@@ -18,7 +18,7 @@ keeps a per-run sample of rows through the lane walk beside the vectorised path 
 Bit-exactness notes (each mirrors the scalar function it twins, by name):
   * `fma_ftz`  — `derived_rows.fma_ftz` (Boldo–Melquiond round-to-odd through float64; validated against `prims.f32_fma_bits`).
     `sampling.fma_ftz` rounds the same exact value the same way (TwoSum + exact tie rule); both are RN32 of a*b + c.  The
-    only difference is NaN canonicalisation: derived_rows returns `F32_NAN_PTX`, sampling returns the struct NaN — no finite
+    only difference is NaN canonicalisation: derived_rows returns `P.F32_NAN`, sampling returns the struct NaN — no finite
     logit row reaches a NaN inside the noise chain (u in [2^-31', 1)), and a NaN logit lane is `y = NaN`, which never wins.
   * `add_rz_ftz` — equals the REGISTERED scalar, whose toward-zero step is a no-op (see the function: F-stoch-r17-01, revb's call).
   * `nv_logf` / `nv_log1pf` — the int32 exponent arithmetic in int64 with explicit wraparound; the branches as `np.where`.

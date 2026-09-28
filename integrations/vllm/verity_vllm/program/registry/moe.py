@@ -78,13 +78,12 @@ def _round_f32_toward_neg_inf(x: Fraction) -> int:
 @primitive("F32FmaRm", 1, [("a", F32), ("b", F32), ("c", F32)], F32, conformance="exact-model-tested")
 def F32FmaRm(a: int, b: int, c: int) -> int:
     """`fma.rm.f32`: a * b + c with ONE rounding toward -infinity (exact rational arithmetic).  Non-finite operands follow
-    `F32Fma_v1` (every NaN result 0x7FFFFFFF: a NaN operand, inf * 0, inf - inf); an exact zero sum is +0 unless both
-    addends are -0."""
+    `F32Fma_v1` (NaN propagation, inf * 0 = NaN, inf - inf = NaN); an exact zero sum is +0 unless both addends are -0."""
     ca, va = _decode(a)
     cb, vb = _decode(b)
     cc, vc = _decode(c)
     if 2 in (ca, cb, cc):
-        return F32_NAN_PTX
+        return P.F32_NAN
     if ca == 0 and cb == 0:
         prod = va * vb
         if cc == 0:
@@ -95,11 +94,11 @@ def F32FmaRm(a: int, b: int, c: int) -> int:
             return _round_f32_toward_neg_inf(s)
         return 0x7F800000 if cc == 1 else 0xFF800000
     if (ca == 0 and va == 0) or (cb == 0 and vb == 0):
-        return F32_NAN_PTX
+        return P.F32_NAN
     sign = ((a >> 31) ^ (b >> 31)) & 1
     if cc == 0 or (cc == -1) == bool(sign):
         return 0xFF800000 if sign else 0x7F800000
-    return F32_NAN_PTX
+    return P.F32_NAN
 
 
 #: The constants of nvcc's `expf` (sm_89, CUDA 12.x math headers; PTX of `y = expf(x)` on the pod, 2026-09-17):
@@ -251,9 +250,8 @@ def _router_probs(B, E: int, VPT: int, logits: Coll, *, interior: bool = False) 
 
 
 def _ptx_nan(B, v: Coll, nan: Coll) -> Coll:
-    """`v`, or the GPU's canonical NaN word when `v` is a NaN: FP32 arithmetic on sm_80+ returns 0x7FFFFFFF for every NaN result.
-    `F32Add_v1` / `F32Mul_v1` / `F32Div_v1` / `F32Sub_v1` now return it themselves, so on their outputs this select is the
-    identity; the Definitions keep it, and with it their digests."""
+    """`v`, or the GPU's canonical NaN word when `v` is a NaN: FP32 arithmetic on sm_80+ returns 0x7FFFFFFF for every NaN result, where
+    `F32Add_v1` / `F32Mul_v1` / `F32Div_v1` / `F32Sub_v1` keep a NaN operand's payload or give 0x7FC00000 / 0xFFC00000."""
     return B.call(P.SelectF32, B.call(F32Eq, v, v), v, nan)
 
 

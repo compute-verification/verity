@@ -10,8 +10,8 @@ unit netlist is pinned per (N, EPS) by :data:`PINS`, its leaf maps and cut struc
 included."""
 TEMPLATE = "rmsnorm-fused-cuda"
 UNIT = "rmsnorm-fused-cuda/bf16/warp"
-PINS = {(2048, 1e-05): "02a7f46193a286e6e9fb877e79465b25f5f39752cbb40ff88f80940bf34db1f6",
-        (4096, 1e-05): "7f349900d97afb495be3d169b59cef9c36aeae9ec34f9b3de484df598ae1a768"}
+PINS = {(2048, 1e-05): "b18b3a5995ac32acab7377c653554b648dc5b9452ca4526bbfacc9d1eeaedced",
+        (4096, 1e-05): "2d738630c45d35554222541059ee0db4841973444b82d664a6bdb4a5168ca97b"}
 
 
 def width(n: int) -> int | None:

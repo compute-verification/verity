@@ -194,8 +194,8 @@ _REF_CONF = ("reference-defined; the evaluator is the definition; conformance vs
 
 @primitive("F32Sub", 1, [("a", F32), ("b", F32)], F32, conformance=_REF_CONF)
 def F32Sub(a: int, b: int) -> int:
-    """FSUB: RN(a - b), IEEE RN-even, no ftz; every NaN result the GPU's 0x7FFFFFFF (`verity.ml.fp32.f32_sub_bits`)."""
-    return P.f32_sub_bits(a, b)
+    """FSUB: RN(a - b), IEEE RN-even, no ftz; NaN -> 0x7FC00000 (canonical, host-independent)."""
+    return _canon_nan(bits_of(np.float32(f32_of(a)) - np.float32(f32_of(b))))
 
 
 @primitive("F32Sqrt", 1, [("x", F32)], F32, conformance=_REF_CONF)
