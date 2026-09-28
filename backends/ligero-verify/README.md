@@ -1,10 +1,12 @@
 # ligero-verify: the independent verifier for B-Ligero's chain proofs
 
+Frozen: kept, still in the tables, not developed. What the merge gate runs for B-Ligero: `../README.md`.
+
 Lanes `b-verifier` / `b-verifier-2` (the latter brought it to the b-zk-fix protocol, `main` a52441c). A dependency-free Rust verifier for the chain proofs of `backends/direct/ligero` (BabyBear Ligero
 with statement-bound SHAKE-256 challenges, BLAKE3 Merkle, BLAKE2b statement digest and HM96 coin commitments;
-PROTOCOL.md sections 3, 4, 6, 7b, 8b, 8c). It shares no code with the Python prover/verifier: BLAKE3, BLAKE2b,
-SHAKE-256 (Keccak), the BabyBear NTT, the coset code, the file parsers and every check are written from
-`PROTOCOL.md`, `HANDOFF.md` and the red-team transcript rules (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3), with the Python sources read
+`backends/direct/ligero/PROTOCOL.md` sections 3, 4, 6, 7b, 8b, 8c; "PROTOCOL.md" below is that file). It shares no code
+with the Python prover/verifier: BLAKE3, BLAKE2b, SHAKE-256 (Keccak), the BabyBear NTT, the coset code, the file parsers
+and every check are written from `PROTOCOL.md`, the b-ligero lane's handoff (not in the repository) and the red-team transcript rules (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3), with the Python sources read
 as the *reference of record* where the document is silent (each such place is a finding in `DISCREPANCIES.md`).
 
 Before it, every B-Ligero proof had been verified only by the code that produced it (shared `field.py`, shared

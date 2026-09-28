@@ -1,8 +1,10 @@
 # B-Ligero: direct constraints (`verity-direct`)
 
+Frozen: kept, still in the tables, not developed. What the merge gate runs for B-Ligero: `../README.md`.
+
 The transition unit (one 16-product `mma.sync` update with an arbitrary finite accumulator) as an AIR whose
 constraints are the WP2 gadget contracts (`backends/numerical/python/verity_numerical/checker/`), and the **full
-K=1536 verification unit** as 96 chained rows plus the epilogue (`ChainAir`, PROTOCOL.md 12), proved with Plonky3
+K=1536 proof unit** as 96 chained rows plus the epilogue (`ChainAir`, PROTOCOL.md 12), proved with Plonky3
 `uni-stark` over Goldilocks or BabyBear; range checks and fixed tables either as 2-bit limbs / one-hot selectors
 (PROTOCOL.md 12) or as LogUp lookups against preprocessed tables (`--lookup`, PROTOCOL.md 14: 3.4x fewer committed
 bytes per VU, 2.9x faster at 4 096 VUs), and with **checker v2** (`note:r20-proof/checker-min/20260922T0727Z-report-checker-min`) as the row program on
@@ -56,11 +58,15 @@ PCS of `PROTOCOL.md`: it is the fastest complete non-ZK proof of the *right* con
 - `run_vu.sh`: the pod script (build, `cargo test`, `chain-layout`, `vu-neg`, battery, `vu-bench`);
   `run_lookup.sh`: the same for the LogUp realisation (`tests/lookup.rs` incl. the 2^17-row round trip, battery
   `--lookup`, `vu-bench --lookup`).
-- `tests/negative.rs`: the `test_negative.py` patterns as Rust tests, plus prove/verify of mutated traces.
+- `tests/negative.rs`: the `backends/numerical/tests/checker/test_negative.py` patterns as Rust tests, plus prove/verify of mutated traces.
 - `tests/chain.rs`: two real VUs (from the committed negative arrays, with their correct words) prove and verify over
   both fields; a wrong claimed word, a broken link, a non-zero `c_0`, a skipped step are rejected by `verify`.
-- `results/`: the `result.json` and `vu_neg.json` records of the runs in the table below.
 - `tools/crosscheck.py`, `fixtures/crosscheck_units.json`: 1,200 WP2-generated units for the cross-check.
+- `ligero/`: the Ligero-style prover of `PROTOCOL.md` (torch, GPU; HVZK and ZK modes), with its own `README.md` and
+  `PROTOCOL.md`; `encode/`: its Reed-Solomon encoders and streaming commitment (`README.md`); `ligerito/`: the Ligerito
+  polynomial commitment over BabyBear.
+
+The runs' `result.json` and `vu_neg.json` records are not kept in the repository; the run ids below name them.
 
 ## What is constrained
 
@@ -71,7 +77,7 @@ the fallback for a lookup argument `uni-stark` 0.4.3 lacks), 610 one-hot selecto
 (POW, ALIGN, LEAD, NORM: boolean + sum-to-one + match + range-checked slack), 66 exclusion inverses, 18 slack, 13
 materialised products. 3,090 constraints, max degree 5 (`log_quotient_degree = 2`), no multiplicity columns.
 
-Against the census (`security/census.py`: 1,064 committed slots + 306 helpers = 1,370 cells per unit) the trace is
+Against the census (`backends/numerical/python/verity_numerical/security/census.py`: 1,064 committed slots + 306 helpers = 1,370 cells per unit) the trace is
 2.04× wider; the excess is entirely the range-check fallback (1,828 limb columns for 306 lookups).
 
 ## Build, test, cross-check
@@ -139,7 +145,7 @@ rejected; `--unbound` runs the pre-fix path for a same-box timing baseline and l
 `statement_binding.bound = false`. Pins: `tests/chain.rs::statement_suite`, `tests/lookup_statement.rs` (`--include-ignored`,
 2^17 rows). `vendor/p3-fri`: `p3-fri 0.4.3-succinct` with the ζ-openings absorbed before the PCS batching challenge α
 (`[patch.crates-io]`; the transcript differs from upstream). Gate: `run_bind_gate.sh [check|test|gate|battery|timing|all|full]`
-(`vu-neg --lookup`, both batteries, the 4096-VU bound/unbound timing pairs); records in `results/b-bind/`.
+(`vu-neg --lookup`, both batteries, the 4096-VU bound/unbound timing pairs).
 
 | LogUp, 4096 VUs, 2^19 rows, vy-cpu3 12 threads (`r20260922-094310-af1a`) | bound #1 | unbound #1 | bound #2 | unbound #2 |
 |---|---|---|---|---|
@@ -177,7 +183,7 @@ r20260922-055326-699d (Goldilocks), r20260922-055900-f53a (BabyBear), r20260922-
 | BabyBear, checker v2 + LogUp, **BabyBear^6** (`--ext 6`, vendored extension), 166 queries: **honest 2^-128.6** | r20260922-090904-cd75 | 281 + 174 + 8 = 463 | 2.39 | 30.41 | 32.80 | 0.00801 | 0.731 | 2,026,972 | 26 | 5.47 GB | 44,448 cells, 177.8 kB | **128.6** / 348; lookup term 2^-156.7 |
 
 Trace: 2^19 rows (393,216 real + zero-VU padding) x width. `overhead.vs_native_peak` (t.total / 4096 over 9.85 ps):
-**4.53e9** (Goldilocks), **4.24e9** (BabyBear). Ledger: `backends/reports/ledger/b-chain.jsonl`.
+**4.53e9** (Goldilocks), **4.24e9** (BabyBear). Ledger: `backends/numerical/reports/ledger/b-chain.jsonl`.
 
 Reading the numbers:
 
@@ -199,5 +205,5 @@ Reading the numbers:
 - The claimed output words are committed trace cells (the `vu.y16` column) bound to the epilogue word on each VU's
   last row; nothing binds them to an external statement (authentication excluded, as in wave 1).
 
-Not yet built: the Ligero PCS of PROTOCOL.md 3-5, a range-check lookup argument (1,868 of 2,844 columns are 2-bit
-limbs), HVZK (no randomised columns, no blinded openings), authentication, the GPU prover.
+Not in this crate: the Ligero PCS of PROTOCOL.md 3-5, HVZK (no randomised columns, no blinded openings),
+authentication and the GPU prover, which are `ligero/`'s.

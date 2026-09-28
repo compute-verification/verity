@@ -2,9 +2,10 @@
 
     research run --tool commit_cost --project verity -- python benchmarks/commitments/commit_cost.py --scheme all --leaves 1048576
     research run --tool hiding_leaf_cost --campaign salted-leaves -- python benchmarks/commitments/hiding_leaf_cost.py
+    research run --tool serving_commit_cost --campaign C -- python benchmarks/commitments/serving_commit_cost.py --input-set DIR --n 1024
 
 Key params: for commit_cost the schemes, the leaf count and the leaf size; for hiding_leaf_cost the row sizes and the row
-count.  ``--reps`` and ``--out`` say how often and where, and do not enter the derivation.  Imports nothing but
+count; for serving_commit_cost the input set, the instance count and the workers.  ``--reps`` and ``--out`` say how often and where, and do not enter the derivation.  Imports nothing but
 ``research.store.tool``.
 """
 
@@ -64,4 +65,29 @@ HIDING_LEAF_COST = Tool(
     key_params=["row_bytes", "rows"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_hiding,
+)
+
+
+def parse_serving(argv: list[str]) -> dict:
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("--input-set", default=None)
+    ap.add_argument("--input-set-art", default=None)
+    ap.add_argument("--n", type=int, default=None)
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--workers", type=int, default=None)
+    ap.add_argument("--out", default=None)
+    ns, _ = ap.parse_known_args(argv)
+    return {"input_set": ns.input_set_art or ns.input_set, "n": ns.n, "workers": ns.workers}
+
+
+SERVING_COMMIT_COST = Tool(
+    name="serving_commit_cost",
+    version="1",
+    command=["python", "benchmarks/commitments/serving_commit_cost.py"],
+    closure=["benchmarks/commitments/**", "packages/verity/src/verity/commitments/**", "packages/verity/src/verity/errors.py",
+             "integrations/vllm/verity_vllm/commit/serving_rows.py", "integrations/vllm/verity_vllm/commit/hiding.py",
+             "backends/numerical/python/verity_numerical/bench/input_sets.py"],
+    key_params=["input_set", "n", "workers"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_serving,
 )

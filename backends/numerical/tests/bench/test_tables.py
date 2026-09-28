@@ -364,7 +364,7 @@ def test_hopper_rows_need_the_frozen_synthetic_set(store: LocalStore) -> None:
     # a Hopper result that does not name its instances is rejected for that (the sets ARE frozen now: the recipe digests)
     art = put(store, result(target=FP8_HOPPER_WGMMA, gpu="NVIDIA H100 80GB HBM3", instances=None))
     reasons = rejected(T.build(store), art)
-    assert any("instances is null" in r for r in reasons) and not any("has no frozen instance set" in r for r in reasons)
+    assert any("instances is null" in r for r in reasons) and not any("has no frozen input set" in r for r in reasons)
     # ... one on another seed's set differs from the frozen ref on its digest ...
     other = dict(T.FROZEN_INSTANCES[BF16_HOPPER.name], manifest_sha256="ab" * 32)
     art2 = put(store, result(target=BF16_HOPPER, gpu="NVIDIA H100 80GB HBM3", instances=other))
@@ -383,7 +383,7 @@ def test_hopper_rows_need_the_frozen_synthetic_set(store: LocalStore) -> None:
     assert T.frozen_instances(unfrozen) is None
     res = result(target=FP8_HOPPER_WGMMA, gpu="NVIDIA H100 80GB HBM3")
     cand = T.candidate_for(res["workload_fingerprint"]["software"]["backend"]["name"])
-    assert any("has no frozen instance set yet" in r for r in T.reject_reasons(res, [], None, unfrozen, cand))
+    assert any("has no frozen input set yet" in r for r in T.reject_reasons(res, [], None, unfrozen, cand))
 
 
 def test_best_of_two_is_min_t_total(store: LocalStore) -> None:
