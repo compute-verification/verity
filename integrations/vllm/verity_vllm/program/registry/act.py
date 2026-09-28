@@ -1,0 +1,74 @@
+"""verity_vllm.program.registry.act — vLLM d9105ea80 `csrc/libtorch_stable/activation_kernels.cu` activations as served Definitions:
+
+  _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
+
+PROMOTED from `verity_vllm.program.registry.quarantine.act` (the X-08 pattern): each Definition below is the quarantine module's
+body VERBATIM — same name, same version, same gates — so its specialization ids are the quarantine's. The quarantine modules
+re-export these objects (their difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID`s are unchanged). Bound as the `silu_mul` kind
+of the `b1-eager-v3` vocabulary (`frontend/rules/vocab.py`), asked for by `SiluAndMulRule`; `SiluMul_v1` (b1) stays registered,
+the kind of the older vocabularies and of the bodies that call it directly. The Boolean form is `boolean_silu.SiluMulExpf`
+(`SiluMul_v4{I}`, word view `SiluMul_v2{I}`).
+
+`SiluMulBf16_v2` is one output word of `act_and_mul_kernel<bf16, silu_kernel, true>`, the vec and scalar paths alike:
+
+    silu_kernel(x):  (T)(f / (1.0f + expf(-f)))          f = (float)x; cvt.rn.bf16.f32 (NaN -> 0x7FFF)
+    out = (T)(ACT(gate) * ((float)up + beta))           beta = 0.0f: up = -0 enters as +0, identity otherwise
+
+`SiluMulBf16_v1` (prims) is this function except on the words the red-team measured on sm_120 (labels on
+r20260930-092038-7dbc, `silu-edge-cases`):
+  * NaN results are 0x7FFF, not 0x7FC0;
+  * up = -0 is +0 after `+ beta`, so the product's zero takes the gate's sign (`[g=0x3F80 | u=0x8000]` -> 0x0000);
+  * gate -inf is `-inf / (1 + inf)` = NaN, not the limit -0;
+  * gates whose `expf(-g)` overflows (bf16 g <= -89, past ln(FLT_MAX) = 88.72) are `g / inf` = -0, not a tiny g * e^g;
+  * gate -0 is -0 (`_v1` decodes it to an unsigned zero).
+Every other word is `_v1`'s: `silu_f32` is the same RN32-of-the-exact-real stand-in for expf + div.rn.
+"""
+from __future__ import annotations
+
+import math
+
+from verity.ir.defs import composite, primitive
+from verity.ir.types import Array
+
+from verity_vllm.program.registry import prims as P
+
+#: `SEMANTIC_ID`s of the promoted Definitions (quarantine identity; the quarantine modules keep the same strings)
+SEMANTIC_IDS = {"SiluMulBf16": "act/SiluMulBf16@v2", "SiluMul": "act/SiluMul@v2"}
+
+BF16 = P.BF16
+F32_NEG_ZERO = 0x80000000
+ZERO_BITS = 0x00000000
+#: ln of the smallest real that RN32 sends to +inf, (2 - 2^-24) * 2^127: no f32 word lies within float64 error of it
+LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
+
+CONFORMANCE = ("exact-model-tested: SiluMulBf16_v1 on finite ordinary words; the edge words (NaN, gate -inf, gates past expf "
+               "overflow, gate -0, up -0) as the red-team measured them (r20260930-092038-7dbc, silu-edge-cases)")
+
+
+def silu_f32_bits(g: int) -> int:
+    """`f / (1.0f + expf(-f))` on an f32 word, total."""
+    c, v = P._decode(g)
+    if c == 2 or c == -1:
+        return P.F32_NAN
+    if c == 1:
+        return 0x7F800000
+    if g == F32_NEG_ZERO:
+        return F32_NEG_ZERO
+    if -float(v) >= LN_F32_OVERFLOW:
+        return F32_NEG_ZERO
+    return P._silu_f32_bits(g)
+
+
+@primitive("SiluMulBf16", 2, [("g", BF16), ("u", BF16)], BF16, conformance=CONFORMANCE)
+def SiluMulBf16(g: int, u: int) -> int:
+    """`bf16(f32(bf16(silu_f32(g))) * (f32(u) + 0.0f))`, both conversions `cvt.rn.bf16.f32` (NaN -> 0x7FFF)."""
+    s = P.f32_to_bf16_rn_bits(silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_F2FP)
+    uf = P.f32_add_bits(P.bf16_to_f32_bits(u), ZERO_BITS)
+    return P.f32_to_bf16_rn_bits(P.f32_mul_bits(P.bf16_to_f32_bits(s), uf), P.BF16_NAN_F2FP)
+
+
+@composite("SiluMul", 2, ["I"], lambda S: ((("gu", Array(2 * S.I, BF16)),), Array(S.I, BF16)),
+           conformance="exact-model-tested: SiluMulBf16_v2 per element")
+def SiluMul(B, S, gu):
+    """`out[i] = SiluMulBf16_v2(gu[i], gu[I + i])`."""
+    return B.batch(SiluMulBf16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0))
