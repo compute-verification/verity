@@ -4,12 +4,6 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `FlockSoundness/Audit/README.md`. `DESIGN.md` holds the derivations.
 
-**What is pinned.** `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads
-(`reads`). The audit fails when either changes until the record is rewritten, and a rewritten record needs a named
-statement reviewer. The pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms),
-`execArith_correct` and `Merkle.opening_binding`; none takes a named assumption. Every other theorem this file names is
-audited (standard axioms, kernel replay) but not pinned, so a change to its statement would not fail the audit.
-
 ## Named assumptions (taken without proof)
 
 There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem (`flock_batched_linkSoundE`)
@@ -91,6 +85,16 @@ before the session's first coin, not bounds state by state.
 - **Table 1** cites Flock's soundness under the `live-verifier` model and the collision resistance of each row's hashes
   (`cr/sha-512` in the C-Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
   would add A2 as `ecr/sha-512`, a `verity.claims` id that no row cites yet.
+
+## What is pinned
+
+`lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
+fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
+pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
+`Merkle.opening_binding`; none takes a named assumption. The theorem that takes A2, `flock_batched_linkSoundE`, is not
+pinned, nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that
+is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the
+audit.
 
 ## Upstream status
 
