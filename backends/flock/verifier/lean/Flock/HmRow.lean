@@ -10,6 +10,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 -/
 import Flock.Statement
 import Flock.TemplateQuery
+import Flock.Typed
 
 namespace Flock
 
@@ -96,6 +97,26 @@ private def ctx := "circuit META"
 private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
   (← J.arr j k ctx).mapM fun u => do (← J.asArr u s!"{ctx}.{k}").mapM fun x => J.asInt x s!"{ctx}.{k}"
 
+/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
+one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
+pinned dummy values and leaf scheme. -/
+def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
+  let root := c.unit
+  let nOut := c.outWords
+  if c.perVu.getD c.unitNet 0 != 1 then throw "the instance's root is not one slot per VU"
+  if t.ins != c.ports.map (fun p => (p.words, 16)) || t.outs != c.outPorts.map (fun p => (p.2, 16)) then
+    throw "the instance type's ports are not the rows' words and the output words"
+  if root.outGroups.size != 1 || (root.outGroups.getD 0 default).bits.foldl (· + ·) 0 != 16 * nOut || !isPow2 (16 * nOut) then
+    throw "the instance's outputs are not one output group of the output words"
+  for (n, s) in t.rangeLogs do
+    if c.perVu.getD n 0 != (t.parts.filter (·.1 == n)).size || (c.nets.getD n default).2.unitLog != s then
+      throw s!"layout {(c.nets.getD n default).1.take 16}..: not one slot of its range per part"
+  if root.useful ≥ 2 ^ root.unitLog then throw "the instance's root fills its slot: no forced-zero row for a zero bit"
+  if c.dummyDigests.size != c.ports.size || c.dummyOutputs.size != nOut then
+    throw "the pinned dummy values are not one per port and output leaf"
+  if let some pinned := tags.pinnedLeafScheme then
+    if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
+
 /-- Upstream's `Composite::check`: the layout's shape, the row slots' ports and counts, every non-row input port wired
 exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -127,6 +148,13 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
       || (portCols hm.inGroups).map (·.2) != #[512, 1024, 8 * SALT_BYTES]
       || (portCols hm.outGroups).map (·.2) != #[8 * BC_BYTES] then
     throw "the sha512x3 and hm96 circuits' ports are not (cv, msg) x 3 -> out x 3 and (cv, pad, y) -> bc"
+  if let some t := c.typed then
+    for r in c.ranges do
+      if let .net n := r.kind then
+        if r.count != c.g * c.perVu.getD n 0 then throw s!"a range of {(c.nets.getD n default).1} is not {c.perVu.getD n 0} slots per VU"
+    for n in [0:c.nets.size] do
+      if (c.ranges.filter (·.kind == Kind.net n)).size != 1 then throw s!"circuit {(c.nets.getD n default).1} has not exactly one range"
+    return ← checkTyped c t tags leafScheme
   let unit := c.unit
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
@@ -201,8 +229,29 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   if let some pinned := tags.pinnedLeafScheme then
     if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
 
-/-- Parse the circuit file (upstream's `Composite::parse`) and check its layout. -/
-def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+/-- A template's block with its parts placed: each part's layout circuit and its slot among that circuit's slots, counted
+in item order (#273's `TypedBlock`). -/
+def blockOf (t : Typed.Template) (netOf : String → Option Nat) : V TypedBlock := do
+  let mut parts := #[]
+  let mut seen : Array (Nat × Nat) := #[]
+  for (d, base) in t.parts do
+    let some n := netOf d | throw "a part's layout has no circuit"
+    let q := ((seen.find? (·.1 == n)).map (·.2)).getD 0
+    seen := (seen.filter (·.1 != n)).push (n, q + 1)
+    parts := parts.push (n, q, base)
+  let rangeLogs ← t.layouts.mapM fun (d, _, s) => do
+    let some n := netOf d | throw "a placed layout has no circuit"
+    pure (n, s)
+  return { own := t.own, ins := t.ins, outs := t.outs, inCols := t.inCols, parts, rangeLogs, bind := t.bind, cross := t.cross }
+
+/-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
+def TEMPLATE_DERIVED : List String :=
+  ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
+
+/-- Parse the circuit file (upstream's `Composite::parse`) and check its layout. A typed template's block (`tmpl`, item 1e)
+brings its root and placed layouts' circuits; its wiring is derived. -/
+def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
   let sha := Sha512.hash bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
@@ -228,7 +277,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
         throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
       classOf bytes head mj
     else pure ByteArray.empty
-  let mut nets : Array (String × Net) := #[]
+  let mut nets : Array (String × Net) := match tmpl with
+    | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
+    | none => pre
   let mut at_ := 2
   while at_ < lines.size do
     let h := tokens lines[at_]!
@@ -242,6 +293,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     at_ := at_ + 1 + n
   for k in Circuit.FORBIDDEN do
     if J.has mj k then throw s!"META: {k} (a verifier-evaluated part of the computation); the verifier only checks proofs"
+  if tmpl.isSome then
+    for k in TEMPLATE_DERIVED do
+      if J.has mj k then throw s!"META: {k}: a typed template's block wiring is derived from its types, never stated"
   let lks ← match mj.getObjVal? "lookups" with
     | .ok (Json.obj kvs) => pure (kvs.toArray.qsort (fun a b => a.1 < b.1))
     | .ok Json.null => pure #[]
@@ -280,8 +334,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if (← J.str mj "row_key_sha512" ctx) != hexOf (Sha512.hash Hm96.Default512.key) then
     throw "META: the rows' hm96 key is not hm96-sha512/v1's default key"
   let g ← J.nat mj "vus_per_block" ctx
-  let upv ← J.nat mj "units_per_vu" ctx
-  let some unitNet := nets.findIdx? (·.1 == "unit") | throw "circuit: no unit circuit"
+  -- a typed template's unit is its instance's root, one per VU
+  let upv ← if tmpl.isSome then pure 1 else J.nat mj "units_per_vu" ctx
+  let some unitNet := nets.findIdx? (·.1 == if tmpl.isSome then "root" else "unit") | throw "circuit: no unit circuit"
   let netOf := fun (nm : String) => match nets.findIdx? (·.1 == nm) with
     | some i => (pure i : V Nat)
     | none => throw s!"META: unknown circuit {nm}"
@@ -295,8 +350,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
       | _ => false
     pure ({ kind, slotLog := ← J.nat r "slot_log" ctx, pos0 := ← J.nat r "pos0" ctx, count := ← J.nat r "count" ctx,
             role := .none, packed } : Range)
-  let leavesIn ← intLists mj "leaves_in"
-  let leavesOut ← (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
+  let leavesIn ← if tmpl.isSome then pure #[#[]] else intLists mj "leaves_in"
+  let leavesOut ← if tmpl.isSome then pure #[#[]] else (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
     if x < 0 then (throw "META: a negative output leaf" : V Nat) else pure x.toNat
   let dummy ← J.get mj "dummy" ctx
   let dummyDigests ← (← J.arr dummy "bc" ctx).mapM fun d => do
@@ -319,7 +374,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   | _ => pure ()
   let shaNet ← netOf SHA_NET
   let hmNet ← netOf HM_NET
-  let outNet ← netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
+  let outNet ← if tmpl.isSome then pure unitNet else netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
   let outNetPorts ← match mj.getObjVal? "out_net_ports" with
     | .ok (.arr a) => a.mapM (J.asNat · "out_net_ports")
     | _ => pure #[]
@@ -337,8 +392,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
       pure (⟨(← netOf (← J.asStr a[0]! "wire"), ← J.asNat a[1]! "wire", ← J.asNat a[2]! "wire"),
               (← netOf (← J.asStr a[3]! "wire"), ← J.asNat a[4]! "wire", ← J.asNat a[5]! "wire")⟩ : Wire)
     | .error _ => pure #[]
-  -- the rows' wires come first, exactly as the ports imply
+  -- the rows' wires come first, exactly as the ports imply; a typed template's are just those
   let derived := rowWires ports shaNet hmNet
+  let wires := if tmpl.isSome then derived else wires
   let rowNet := fun (n : Nat) => n == shaNet || n == hmNet
   if wires.size < derived.size || (List.range derived.size).any (fun i => wires[i]!.dst != derived[i]!.dst || wires[i]!.src != derived[i]!.src)
       || (wires.extract derived.size wires.size).any (fun w => rowNet w.dst.1 || rowNet w.src.1) then
@@ -348,9 +404,21 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts }
+                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
+                       typed := ← tmpl.mapM fun t => blockOf t (fun d => nets.findIdx? (·.1 == d)) }
   check c tags leafScheme
   return c
+
+/-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
+A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
+unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
+derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
+def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+  let (k, r) ← Typed.read tags bytes tables
+  let c ← match r with
+    | .inr t => parse tags bytes tables (tmpl := some t)
+    | .inl unit => parse tags bytes tables (pre := #[("unit", unit)])
+  return { c with cls := some k }
 
 /-- The pinned constant column: the first slot of the first range that is not the mask. -/
 def pin (c : Circuit) : V Nat :=
@@ -425,7 +493,34 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := d.push (dst + t, dst + t) |>.push (dst + t, src + t)
-  return (d, d)
+  -- a typed template (#273), per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+  -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
+  -- its parts' columns, A's in A and B's in B
+  let some tb := c.typed | return (d, d)
+  let col := fun (g u : Nat) =>
+    if u < tb.own then c.slotCol c.unitNet g 0 + u
+    else match tb.parts.toList.reverse.find? (·.2.2 ≤ u) with
+      | some (n, q, b) => c.slotCol n g q + (u - b)
+      | none => 0
+  let mut da := d
+  let mut db := d
+  for g in [0:c.g] do
+    for w in [0:tb.inCols.size] do
+      let (leaf, bit) := (w / 16, w % 16)
+      let p := ((List.range starts.size).reverse.find? (fun q => starts[q]! ≤ leaf)).getD 0
+      let i := col g tb.inCols[w]!
+      let src := msgCol g p (2 * (leaf - starts[p]!) + bit / 8) (bit % 8)
+      da := da.push (i, i) |>.push (i, src)
+      db := db.push (i, i) |>.push (i, src)
+    for (r, src) in tb.bind do
+      let i := col g r
+      da := da.push (i, i) ++ src.map (fun x => (i, col g x))
+      db := db.push (i, i) ++ src.map (fun x => (i, col g x))
+    for (r, xa, xb) in tb.cross do
+      let i := col g r
+      da := da ++ xa.map (fun x => (i, col g x))
+      db := db ++ xb.map (fun x => (i, col g x))
+  return (da, db)
 
 /-- The header's `units`: the instances' global unit indices (ascending), and per block its units. -/
 def unitsEntry (c : Circuit) (indices : Array Nat) : Json :=
@@ -706,8 +801,8 @@ def regions (c : Circuit) (pub : Public) : V (Array Region) := do
       fun b => (Array.range c.g).foldl (fun acc g => acc ++ match c.instOf pub.n b g with
         | some i => pub.digest i p np
         | none => c.dummyDigests.getD p ByteArray.empty) ByteArray.empty)
-  if c.outNet != c.unitNet then
-    -- the last stage's output group is the output words (one slot per VU)
+  if c.outNet != c.unitNet || c.typed.isSome then
+    -- the last stage's (or a typed instance's root's) output group is the output words (one slot per VU)
     let onet := (c.nets.getD c.outNet default).2
     let r := c.rangeOf c.outNet
     let nOut := c.outWords
@@ -770,7 +865,7 @@ end HmRow
 drawn units' statement over it. -/
 def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none) : V Stmt := do
-  let c ← HmRow.parse tags circuitFile tables
+  let c ← if tags.typed then HmRow.parseTyped tags circuitFile tables else HmRow.parse tags circuitFile tables
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
   let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"

@@ -234,7 +234,8 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
     `Stmt.setupH` accepted, for composed rows that are the parsed unit net's (`Compose.NetRows`).
-  - Still to prove: that the unit net `setupH` parses holds the derived rows (`NetRows`, 1e), and templates (#277).
+  - Still to prove: `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`),
+    and a template's block rows from `setupH` (1e, #277).
 
 ### 1.6 Proved from the libraries, not assumed
 
