@@ -1275,6 +1275,15 @@ def cmd_status(argv: list[str]) -> int:
     return 0
 
 
+def _slot_text(sl: dict) -> str:
+    """A run's check-slot record (runs.SLOT_FILE) in a line: waiting since when and why, the slot it took and when, or why it left."""
+    if sl.get("state") == "held":
+        return f"check slot {sl.get('slot')} (cores {sl.get('cores')}) taken {sl.get('took')}, after waiting in line since {sl.get('since')}"
+    if sl.get("state") == "left":
+        return f"left the check line at {sl.get('left')} without a slot, waiting since {sl.get('since')}: {sl.get('why')}"
+    return f"waiting in the check line since {sl.get('since')}, not started" + (f": {sl['why']}" if sl.get("why") else "")
+
+
 def _tool_line(tool: dict | None) -> str:
     if tool is None:
         return "unknown (v0.1 record: the harness alone wrote it)"
@@ -1341,6 +1350,8 @@ def cmd_inspect(argv: list[str]) -> int:
               + ("  (records shown are a cached copy; `research fetch` refreshes)" if rr.get("observed_utc") else "  (nothing fetched yet)"))
         if q := rr.get("queue"):
             print(f"queue     placed on {q.get('machine')} ({q.get('why')}); {q.get('phase')} phase")
+    if sl := s.get("slot"):
+        print(f"slot      {_slot_text(sl)}")
     if s["state"] in R.ACTIVE and (not s.get("remote_rec") or s["remote_rec"].get("remote_run_dir")):
         row = {**s, "id": Path(s["dir"]).name}
         _read_holds([row])
@@ -1366,7 +1377,7 @@ def _inspect_py_spy(run_dir: Path) -> int:
             print(f"research inspect: {run_dir.name}: {e}", file=sys.stderr)
             return 1
     else:
-        if (state := R.summarize(run_dir)["state"]) != "running":
+        if (state := R.summarize(run_dir)["state"]) not in ("running", "waiting"):
             print(f"research inspect: {run_dir.name} is {state}: no live workload to dump", file=sys.stderr)
             return 1
         results = pyspy.of_run(run_dir)
