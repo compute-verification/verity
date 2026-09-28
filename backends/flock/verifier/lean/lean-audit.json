@@ -34,7 +34,8 @@
   "Flock.MerklePair.hm96_inputs": {
    "signature": [
     "Flock.MerklePair.hm96_inputs (p : Flock.MerklePair) (h : Flock.MerklePair.Collides Flock.MerkleScheme.hm96Sha512 p) :",
-    "  p.hm96Inputs.fst ≠ p.hm96Inputs.snd ∧ Flock.Sha512.hash p.hm96Inputs.fst = Flock.Sha512.hash p.hm96Inputs.snd"
+    "  And (Ne p.hm96Inputs.fst p.hm96Inputs.snd)",
+    "    (Eq (Flock.Sha512.hash p.hm96Inputs.fst) (Flock.Sha512.hash p.hm96Inputs.snd))"
    ],
    "assumptions": [],
    "type_hash": "00000000fe81cab5"
@@ -43,7 +44,7 @@
    "signature": [
     "Flock.MerklePair.sha256_inputs (id : String) (p : Flock.MerklePair)",
     "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha256 id) p) :",
-    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha256.hash p.shaInputs.fst = Flock.Sha256.hash p.shaInputs.snd"
+    "  And (Ne p.shaInputs.fst p.shaInputs.snd) (Eq (Flock.Sha256.hash p.shaInputs.fst) (Flock.Sha256.hash p.shaInputs.snd))"
    ],
    "assumptions": [],
    "type_hash": "000000000e191f17"
@@ -52,20 +53,22 @@
    "signature": [
     "Flock.MerklePair.sha512_inputs (id : String) (p : Flock.MerklePair)",
     "  (h : Flock.MerklePair.Collides (Flock.MerkleScheme.sha512 id) p) :",
-    "  p.shaInputs.fst ≠ p.shaInputs.snd ∧ Flock.Sha512.hash p.shaInputs.fst = Flock.Sha512.hash p.shaInputs.snd"
+    "  And (Ne p.shaInputs.fst p.shaInputs.snd) (Eq (Flock.Sha512.hash p.shaInputs.fst) (Flock.Sha512.hash p.shaInputs.snd))"
    ],
    "assumptions": [],
    "type_hash": "00000000f3d5d62d"
   },
   "Flock.MerkleScheme.all_sized": {
-   "signature": ["Flock.MerkleScheme.all_sized (ms : Flock.MerkleScheme) : ms ∈ Flock.MerkleScheme.all → ms.Sized"],
+   "signature": [
+    "Flock.MerkleScheme.all_sized (ms : Flock.MerkleScheme) : List.instMembership.mem Flock.MerkleScheme.all ms → ms.Sized"
+   ],
    "assumptions": [],
    "type_hash": "0000000039d140ab"
   },
   "Flock.MerkleScheme.collision_hash": {
    "signature": [
     "Flock.MerkleScheme.collision_hash (ms : Flock.MerkleScheme) :",
-    "  ms ∈ Flock.MerkleScheme.all → ms.Collision → Flock.Sha256.Collision ∨ Flock.Sha512.Collision"
+    "  List.instMembership.mem Flock.MerkleScheme.all ms → ms.Collision → Or Flock.Sha256.Collision Flock.Sha512.Collision"
    ],
    "assumptions": [],
    "type_hash": "000000003ffc6eca"
@@ -73,13 +76,13 @@
   "Flock.climb_binding": {
    "signature": [
     "Flock.climb_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (s1 s2 : List ByteArray) (a b : ByteArray) (idx : Nat) :",
-    "  s1.length = s2.length →",
-    "    (∀ (x : ByteArray), x ∈ s1 → x.size = ms.digestLen) →",
-    "      (∀ (x : ByteArray), x ∈ s2 → x.size = ms.digestLen) →",
-    "        a.size = ms.digestLen →",
-    "          b.size = ms.digestLen →",
-    "            a ≠ b →",
-    "              Flock.climb ms a idx s1 = Flock.climb ms b idx s2 →",
+    "  Eq s1.length s2.length →",
+    "    (∀ (x : ByteArray), List.instMembership.mem s1 x → Eq x.size ms.digestLen) →",
+    "      (∀ (x : ByteArray), List.instMembership.mem s2 x → Eq x.size ms.digestLen) →",
+    "        Eq a.size ms.digestLen →",
+    "          Eq b.size ms.digestLen →",
+    "            Ne a b →",
+    "              Eq (Flock.climb ms a idx s1) (Flock.climb ms b idx s2) →",
     "                Flock.MerklePair.Collides ms (Flock.climbPair ms s1 s2 a b idx)"
    ],
    "assumptions": [],
@@ -89,10 +92,13 @@
    "signature": [
     "Flock.merkleCheck_opens (ms : Flock.MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat)",
     "  (rows : Array (Array Flock.F128)) (siblings salts : Array ByteArray) (lanes : Nat)",
-    "  (h : Flock.merkleCheck ms cap c d positions rows siblings salts lanes = Except.ok ()) (j : Nat)",
-    "  (hj : j < positions.size) :",
-    "  Flock.opens ms cap c d lanes positions[j]! rows[j]! (salts.getD j ByteArray.empty) (Flock.sibsOf siblings (d - c) j) =",
-    "    true"
+    "  (h : Eq (Flock.merkleCheck ms cap c d positions rows siblings salts lanes) (Except.ok Unit.unit)) (j : Nat)",
+    "  (hj : instLTNat.lt j positions.size) :",
+    "  Eq",
+    "    (Flock.opens ms cap c d lanes (Array.instGetElem?NatLtSize.getElem! positions j)",
+    "      (Array.instGetElem?NatLtSize.getElem! rows j) (salts.getD j ByteArray.empty)",
+    "      (Flock.sibsOf siblings (instHSub.hSub d c) j))",
+    "    Bool.true"
    ],
    "assumptions": [],
    "type_hash": "00000000192488c1"
@@ -101,9 +107,10 @@
    "signature": [
     "Flock.merkle_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d : Nat)",
     "  (positions : Array Nat) (rows1 rows2 : Array (Array Flock.F128)) (sib1 sib2 salt1 salt2 : Array ByteArray)",
-    "  (lanes : Nat) (h1 : Flock.merkleCheck ms cap c d positions rows1 sib1 salt1 lanes = Except.ok ())",
-    "  (h2 : Flock.merkleCheck ms cap c d positions rows2 sib2 salt2 lanes = Except.ok ()) (j : Nat)",
-    "  (hj : j < positions.size) (hr : rows1[j]! ≠ rows2[j]!) :",
+    "  (lanes : Nat) (h1 : Eq (Flock.merkleCheck ms cap c d positions rows1 sib1 salt1 lanes) (Except.ok Unit.unit))",
+    "  (h2 : Eq (Flock.merkleCheck ms cap c d positions rows2 sib2 salt2 lanes) (Except.ok Unit.unit)) (j : Nat)",
+    "  (hj : instLTNat.lt j positions.size)",
+    "  (hr : Ne (Array.instGetElem?NatLtSize.getElem! rows1 j) (Array.instGetElem?NatLtSize.getElem! rows2 j)) :",
     "  Flock.MerklePair.Collides ms (Flock.merklePair ms c d positions rows1 rows2 sib1 sib2 salt1 salt2 j)"
    ],
    "assumptions": [],
@@ -113,31 +120,35 @@
    "signature": [
     "Flock.opens_binding (ms : Flock.MerkleScheme) (hs : ms.Sized) (cap : Array ByteArray) (c d lanes pos : Nat)",
     "  (r1 r2 : Array Flock.F128) (y1 y2 : ByteArray) (s1 s2 : List ByteArray)",
-    "  (hw1 : ∀ (x : ByteArray), x ∈ s1 → x.size = ms.digestLen) (hw2 : ∀ (x : ByteArray), x ∈ s2 → x.size = ms.digestLen)",
-    "  (h1 : Flock.opens ms cap c d lanes pos r1 y1 s1 = true) (h2 : Flock.opens ms cap c d lanes pos r2 y2 s2 = true)",
-    "  (hr : r1 ≠ r2) : Flock.MerklePair.Collides ms (Flock.opensPair ms pos r1 y1 s1 r2 y2 s2)"
+    "  (hw1 : ∀ (x : ByteArray), List.instMembership.mem s1 x → Eq x.size ms.digestLen)",
+    "  (hw2 : ∀ (x : ByteArray), List.instMembership.mem s2 x → Eq x.size ms.digestLen)",
+    "  (h1 : Eq (Flock.opens ms cap c d lanes pos r1 y1 s1) Bool.true)",
+    "  (h2 : Eq (Flock.opens ms cap c d lanes pos r2 y2 s2) Bool.true) (hr : Ne r1 r2) :",
+    "  Flock.MerklePair.Collides ms (Flock.opensPair ms pos r1 y1 s1 r2 y2 s2)"
    ],
    "assumptions": [],
    "type_hash": "000000002d308eb1"
   },
   "Flock.squeeze_answers": {
    "signature": [
-    "Flock.squeeze_answers (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : n ≠ 0)",
-    "  (h : Flock.Transcript.squeeze kind n t = Except.ok (coins, t')) :",
-    "  ∃ r,",
-    "    t.rounds[t.k]? = some r ∧",
-    "      r.n = n ∧",
-    "        r.answers (t.framed kind n) ∧",
-    "          coins = r.coins ∧ t' = { rounds := t.rounds, k := t.k + 1, pending := ByteArray.empty }"
+    "Flock.squeeze_answers (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : Ne n 0)",
+    "  (h : Eq (Flock.Transcript.squeeze kind n t) (Except.ok { fst := coins, snd := t' })) :",
+    "  Exists fun r =>",
+    "    And (Eq (Array.instGetElem?NatLtSize.getElem? t.rounds t.k) (Option.some r))",
+    "      (And (Eq r.n n)",
+    "        (And (r.answers (t.framed kind n))",
+    "          (And (Eq coins r.coins)",
+    "            (Eq t' { rounds := t.rounds, k := instHAdd.hAdd t.k 1, pending := ByteArray.empty }))))"
    ],
    "assumptions": [],
    "type_hash": "000000003bb3acb8"
   },
   "Flock.squeeze_retained": {
    "signature": [
-    "Flock.squeeze_retained (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : n ≠ 0)",
-    "  (h : Flock.Transcript.squeeze kind n t = Except.ok (coins, t')) (r : Flock.Round) (hr : t.rounds[t.k]? = some r)",
-    "  (b : ByteArray) (hb : r.bytes = some b) : t.framed kind n = b ∧ coins = r.coins"
+    "Flock.squeeze_retained (kind : UInt8) (n : Nat) (t t' : Flock.Transcript) (coins : Array Flock.F128) (hn : Ne n 0)",
+    "  (h : Eq (Flock.Transcript.squeeze kind n t) (Except.ok { fst := coins, snd := t' })) (r : Flock.Round)",
+    "  (hr : Eq (Array.instGetElem?NatLtSize.getElem? t.rounds t.k) (Option.some r)) (b : ByteArray)",
+    "  (hb : Eq r.bytes (Option.some b)) : And (Eq (t.framed kind n) b) (Eq coins r.coins)"
    ],
    "assumptions": [],
    "type_hash": "00000000a0fefb73"
@@ -181,5 +192,8 @@
     "Flock.opens_binding"
    ]
   }
+ },
+ "dependencies": {
+  "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
  }
 }

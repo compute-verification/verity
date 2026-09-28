@@ -28,7 +28,7 @@ cuda = ["sp1-sdk/cuda"]
 native-gnark = ["sp1-sdk/native-gnark"]
 # DIAGNOSTIC builds (never sound, never a result): build.rs forwards these to
 # the embedded guest, which then skips the authentication (or only the path
-# folding) and commits an unmistakable verdict byte.  See zk/sp1/README.md.
+# folding) and commits an unmistakable verdict byte.  See backends/sp1/README.md.
 unsound-skip-authentication = ["veritor-zk-common/unsound-skip-authentication"]
 unsound-skip-path-fold = ["veritor-zk-common/unsound-skip-path-fold"]
 # Relation-only guest: the `--witness` file is the compact input (K || x || W);
