@@ -9,7 +9,8 @@ format (Project store `internal/live-console/panel-format.md`; the inventory is 
   dashboard's own loaders (`ovd.py` is a copy of the Project store's `scripts/overnight-dashboard.py`), and the merge trains on
   `main` (a commits-only clone, `--git`) with their `check` Attempts.
 - `node1`, on vy-nebius-1: its Prometheus (DCGM and node-exporter, with the steward's definitions from `util_collect.py`, a copy of
-  `internal/lanes/nebius-infra/tools/util_collect.py`) and the Kueue samples `vy-usage` appends to /workspace/usage/queues.jsonl.
+  `internal/lanes/nebius-infra/tools/util_collect.py`) and the Kueue samples `vy-usage` appends to /workspace/usage/queues.jsonl;
+  and vy-nebius-2's POUS sampler, read over `ssh vy-n2` and reduced to per-minute rows there.
 
 Every panel is checked against the format (fields, lengths, cell types, 64 KiB) and written to OUT/<name>.json. When the key file
 exists (default ~/.config/verity/panels.key) each valid panel is also PUT to the site; without it the run is a dry run. A panel
@@ -520,9 +521,22 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
                      updated_at=iso(now), source=src,
                      note="Each GPU's latest DCGM reading (1-minute scrapes) and the pod DCGM names as holding it. Engine active is "
                           "DCGM_FI_PROF_GR_ENGINE_ACTIVE, closer to real SM occupancy than utilization."))
+    mstart = (now - timedelta(hours=MINUTES_H)).timestamp()
+    minutes: dict[str, list[tuple] | None] = {"n1": None, "n2": None}
+    try:
+        minutes["n1"] = n1_minutes(mstart, end)
+        out += owner_panels("node1", "vy-nebius-1", minutes["n1"], now, src.split(" and Kueue")[0] + ", DCGM's pod labels")
+    except Exception as e:  # noqa: BLE001  the other panels still go out
+        errors.append(f"node1-owners: {type(e).__name__}: {e}")
+    try:
+        minutes["n2"] = n2_minutes(mstart)
+        out.append(hours_panel("node2", "vy-nebius-2", minutes["n2"], now,
+                               f"vy-nebius-2: POUS's sampler ({N2_UTIL}), read over ssh from vy-nebius-1"))
+    except Exception as e:  # noqa: BLE001  the other panels still go out
+        errors.append(f"node2-hours: {type(e).__name__}: {e}")
     try:
         pool = json.loads(POOL.read_text()) if POOL.exists() else {}
-        out += pool_panels(pool, n1_from_prom(summary, urows, grows, now), now, errors)
+        out += pool_panels(pool, n1_from_prom(summary, urows, grows, now), now, errors, minutes)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"pool: {type(e).__name__}: {e}")
     try:
@@ -576,6 +590,170 @@ def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------- GPU minutes (both nodes)
+
+N2_HOST = "vy-n2"
+N2_UTIL = "/workspace/pouw/infra/util"  # POUS's own 10 s sampler on vy-nebius-2, one file a UTC day; read, never written
+MINUTES_H = 25  # a day of hours plus the hour before the first one, for rolling last-hour figures
+NO_POD = "(no pod: direct or leaked)"
+KUEUE_POD = re.compile(r"^nd-(.+?)-[0-9a-f]{10}-")
+SKY_POD = re.compile(r"^(.+?)-\d+-[0-9a-f]{8}-head$")
+N2_MINUTES = r"""
+import datetime as dt, glob, json, os, sys
+start = float(sys.argv[1])
+out = {}
+for f in sorted(glob.glob(sys.argv[2] + "/*.jsonl")):
+    if os.path.getmtime(f) < start:
+        continue
+    for ln in open(f):
+        try:
+            d = json.loads(ln)
+            t = dt.datetime.strptime(d["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp()
+        except (ValueError, KeyError):
+            continue
+        if t < start:
+            continue
+        for g in d.get("gpus") or []:
+            who = next((x[4:] for x in (g.get("lease") or "").split() if x.startswith("who=")), None)
+            held = bool(who) or bool(g.get("procs")) or (g.get("mem_mib") or 0) >= 1024
+            busy = (g.get("util") or 0) > 0
+            k = (int(t) // 60 * 60, g["i"])
+            c = out.setdefault(k, [0, 0, 0, 0, None])
+            c[2 * (not held) + (not busy)] += 1
+            c[4] = c[4] or who or ("(process, no lease)" if held else None)
+json.dump([[m, i, *(round(x / sum(c[:4]), 3) for x in c[:4]), c[4]] for (m, i), c in sorted(out.items())], sys.stdout,
+          separators=(",", ":"))
+"""
+
+
+def owner_n1(namespace: str | None, pod: str) -> str:
+    """A node-1 pod's job family: Kueue jobs by their name, SkyPilot managed jobs by their name's first word."""
+    if m := KUEUE_POD.match(pod):
+        return f"Kueue {m.group(1)}"
+    if m := SKY_POD.match(pod):
+        return f"SkyPilot {m.group(1).split('-')[0]}-*"
+    if namespace == "vy-system":
+        return f"direct ({pod})"
+    return pod[:40]
+
+
+def owner_n2(who: str) -> str:
+    """A node-2 lease's holder: its kind (fill, verity, ...) and the agent's short id."""
+    m = re.search(r"bc-[0-9a-f]{8}", who)
+    kind = who.split(":", 1)[0] if ":" in who else None
+    return " ".join(x for x in (kind, m.group(0) if m else who[:40]) if x)
+
+
+def n1_minutes(start: float, end: float) -> list[tuple]:
+    """(minute, GPU, held and busy, held and idle, free and busy, free and idle, holder), the four as shares of the minute.
+
+    DCGM at 60 s gives one reading a minute, so each minute is wholly one of the four: busy = utilization > 0, held = a pod on the
+    GPU or >= 1 GiB used."""
+    util = prom_range("max by (gpu, pod, namespace) (DCGM_FI_DEV_GPU_UTIL)", start, end)
+    fb = prom_range("max by (gpu) (DCGM_FI_DEV_FB_USED)", start, end)
+    mem = {(r["metric"].get("gpu"), int(float(t))): float(v) for r in fb for t, v in r["values"]}
+    seen: dict[tuple, tuple] = {}
+    for r in util:
+        m = r["metric"]
+        pod = m.get("pod") or None
+        for t, v in r["values"]:
+            k = (int(float(t)) // 60 * 60, m.get("gpu"))
+            b, o = seen.get(k, (False, None))
+            seen[k] = (b or float(v) > 0, o or (owner_n1(m.get("namespace"), pod) if pod else None))
+    out = []
+    for (t, g), (b, o) in seen.items():
+        held = bool(o) or mem.get((g, t), 0.0) >= 1024
+        q = [0.0] * 4
+        q[2 * (not held) + (not b)] = 1.0
+        out.append((t, int(g) if str(g).isdigit() else g, *q, o or (NO_POD if held else None)))
+    return sorted(out, key=lambda r: (r[0], str(r[1])))
+
+
+def n2_minutes(start: float) -> list[tuple]:
+    """The same rows for vy-nebius-2 from POUS's 10 s sampler, each share the fraction of the minute's samples."""
+    doc = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", N2_HOST, "python3", "-", str(int(start)), N2_UTIL],
+                         input=N2_MINUTES, check=True, capture_output=True, text=True, timeout=120).stdout
+    return [(*r[:6], owner_n2(r[6]) if r[6] and not r[6].startswith("(") else r[6]) for r in json.loads(doc)]
+
+
+def raw_busy(minutes: list[tuple], at: float, span: float = 3600) -> float | None:
+    """Share of observed GPU-time in (at - span, at] with utilization above 0."""
+    xs = [r[2] + r[4] for r in minutes if at - span < r[0] + 60 <= at]
+    return sum(xs) / len(xs) if xs else None
+
+
+def split_rows(minutes: list[tuple], key) -> dict:
+    """GPU-hours by key(row, held): held and busy, held and idle, busy with no holder, and neither."""
+    acc: dict = defaultdict(lambda: defaultdict(float))
+    for r in minutes:
+        for held, parts in ((True, (("held_busy", r[2]), ("held_idle", r[3]))), (False, (("free_busy", r[4]), ("free_idle", r[5])))):
+            if not parts[0][1] and not parts[1][1]:
+                continue
+            a = acc[key(r, held)]
+            for k, v in parts:
+                a[k] += v / 60
+                a["obs"] += v / 60
+                if k.endswith("busy"):
+                    a["busy"] += v / 60
+    return acc
+
+
+def hours_panel(name: str, host: str, minutes: list[tuple], now: datetime, src: str) -> dict:
+    cut = now.timestamp() - 24 * 3600
+    cur = uc_hour(now.timestamp())
+    by_hour = split_rows([r for r in minutes if r[0] >= cut], lambda r, _: uc_hour(r[0]))
+    hrows = []
+    for h in sorted(by_hour, reverse=True):
+        a = by_hour[h]
+        hrows.append([h + (" (so far)" if h == cur else ""), sig(a["obs"], 3), sig(100 * a["busy"] / a["obs"], 3) if a["obs"] else None,
+                      sig(a["held_busy"], 3), sig(a["held_idle"], 3), sig(a["free_idle"] + a["free_busy"], 3), sig(a["free_busy"], 3)])
+    return panel(f"{name}-hours", f"{host} per hour: busy, held idle, not held", "table",
+                 ["Hour (UTC)", "GPU-h observed", "Raw busy %", "Held and busy", "Held and idle", "Not held", "of which busy"], hrows,
+                 updated_at=iso(now), source=src,
+                 note="GPU-hours from POUS's 10 s sampler. Raw busy: the share of samples with utilization above 0 (node 1's "
+                      "rule, DCGM's one reading a minute, on node 2's samples). Held: a lease, a process, or 1 GiB of memory in use. Not held: none of those; 'of which busy' is "
+                      "the part with utilization anyway. The last 24 hours, newest first.")
+
+
+def owner_panels(name: str, host: str, minutes: list[tuple], now: datetime, src: str) -> list[dict]:
+    out = []
+    cut = now.timestamp() - 24 * 3600
+    day = [r for r in minutes if r[0] >= cut]
+    cur = uc_hour(now.timestamp())
+    tot = split_rows(day, lambda r, held: r[6] if held else None)
+    orows = []
+    for o, a in sorted(((o, a) for o, a in tot.items() if o), key=lambda x: -(x[1]["held_busy"] + x[1]["held_idle"])):
+        held = a["held_busy"] + a["held_idle"]
+        orows.append([o, sig(held, 3), sig(a["held_busy"], 3), sig(a["held_idle"], 3), sig(100 * a["held_busy"] / held, 3) if held else None])
+    free = tot.get(None)
+    if free:
+        orows.append(["Not held", sig(free["obs"], 3), sig(free["free_busy"], 3), sig(free["free_idle"], 3), None])
+    allo = sum(a["obs"] for a in tot.values())
+    orows.append(["All GPU-hours", sig(allo, 3), sig(sum(a["held_busy"] + a["free_busy"] for a in tot.values()), 3),
+                  sig(sum(a["held_idle"] + a["free_idle"] for a in tot.values()), 3), None])
+    out.append(panel(f"{name}-owners", f"{host}: GPU-hours by holder, last 24 hours", "table",
+                     ["Holder", "GPU-h", "Busy", "Idle", "Busy share of held %"], orows[:200], updated_at=iso(now), source=src,
+                     note="Holder is the pod DCGM names on the GPU: Kueue jobs by job name, SkyPilot managed jobs by their name's first "
+                          "word. Held: a pod on the GPU, or 1 GiB used. Busy: utilization above 0 in DCGM's 60 s reading. 'Not held' has no holder; its busy part is utilization with "
+                          "no pod on the GPU."))
+    ohour = split_rows(day, lambda r, held: (uc_hour(r[0]), r[6] if held else None))
+    ohrows = []
+    for (h, o), a in sorted(ohour.items(), key=lambda x: (x[0][0], x[0][1] is not None, x[1]["held_busy"] + x[1]["held_idle"]), reverse=True):
+        label = h + (" (so far)" if h == cur else "")
+        if o is None:
+            ohrows.append([label, "Not held", None, None, sig(a["obs"], 3)])
+        else:
+            ohrows.append([label, o, sig(a["held_busy"], 3), sig(a["held_idle"], 3), None])
+    out.append(fit(panel(f"{name}-owner-hours", f"{host} per hour and holder: held and busy, held and idle, not held", "table",
+                         ["Hour (UTC)", "Holder", "Held and busy", "Held and idle", "Not held"], ohrows[:1000], updated_at=iso(now),
+                         source=src, note="GPU-hours per UTC hour and holder, from per-minute DCGM readings; newest first.")))
+    return out
+
+
+def uc_hour(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+
+
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
 
 POOL = Path("/workspace/usage/infra-pool.json")  # infra's file: node 2 (and later node 1), every 5 minutes, written atomically
@@ -620,7 +798,7 @@ def useful(node: dict):
     return b * u if isinstance(u, (int, float)) else b
 
 
-def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list) -> list[dict]:
+def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minutes: dict | None = None) -> list[dict]:
     nodes = dict(pool.get("nodes") or {k: v for k, v in pool.items() if k in ("n1", "n2")})
     if "n1" not in nodes and n1:
         nodes["n1"] = n1
@@ -653,12 +831,18 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list) -> lis
     tmp = POOL_HISTORY.with_name(f".{POOL_HISTORY.name}.tmp")
     tmp.write_text("".join(json.dumps(h) + "\n" for h in hist))
     os.replace(tmp, POOL_HISTORY)
-    cols = ["time"] + [f"{names[k]} useful GPU %" for k in ("n1", "n2")] + [f"{names[k]} CPU %" for k in ("n1", "n2")]
-    urows = [[h["t"]] + [pct((h.get(k) or {}).get("useful")) for k in ("n1", "n2")] + [pct((h.get(k) or {}).get("cpu")) for k in ("n1", "n2")]
-             for h in hist]
-    out.append(panel("pool-utilization", "Useful GPU busy and CPU busy, both nodes, last 24 hours", "line", cols, urows, producer="infra",
-                     unit="%", target=USEFUL_TARGET, target_label="useful GPU target", updated_at=iso(now), source=src,
-                     note="One point per 5-minute run: each node's last-hour useful GPU busy, and CPU busy. History starts when this panel did."))
+    minutes = minutes or {}
+    at = lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()  # noqa: E731
+    raw = lambda k, t: pct(raw_busy(minutes[k], t)) if minutes.get(k) else None  # noqa: E731
+    cols = ["time"] + [c for k in ("n1", "n2") for c in (f"{names[k]} useful GPU %", f"{names[k]} raw GPU busy %")] + \
+           [f"{names[k]} CPU %" for k in ("n1", "n2")]
+    urows = [[h["t"]] + [c for k in ("n1", "n2") for c in (pct((h.get(k) or {}).get("useful")), raw(k, at(h["t"])))] +
+             [pct((h.get(k) or {}).get("cpu")) for k in ("n1", "n2")] for h in hist]
+    out.append(panel("pool-utilization", "Useful and raw GPU busy, and CPU busy, both nodes, last 24 hours", "line", cols, urows,
+                     producer="infra", unit="%", target=USEFUL_TARGET, target_label="useful GPU target", updated_at=iso(now), source=src,
+                     note="One point per 5-minute run, each over the hour before it. Useful: infra's useful GPU busy. Raw: the share of "
+                          "readings with utilization above 0 (node 1: DCGM every 60 s; node 2: POUS's sampler every 10 s), the same "
+                          "rule on both nodes. History starts when this panel did."))
 
     qrows = []
     for k in order:
@@ -699,11 +883,14 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list) -> lis
         prev = [h for h in hist if h["t"] <= iso(now - timedelta(hours=1)) and (h.get(k) or {}).get("useful") is not None]
         trend = (u - prev[-1][k]["useful"]) if prev and isinstance(u, (int, float)) else None
         status = ("met" if u >= USEFUL_TARGET / 100 else "behind" if (trend or 0) <= 0 else "on track") if isinstance(u, (int, float)) else "no data"
+        r = raw(k, now.timestamp())
         trows.append([f"{names[k]} useful GPU busy", f">= {USEFUL_TARGET}%", f"{pct(u)}%" if u is not None else None,
+                      f"{r}%" if r is not None else None,
                       f"{'+' if (trend or 0) >= 0 else ''}{sig(100 * trend, 2)} pts/h" if trend is not None else None, status, TARGET_BY,
                       f"{sig(left_h, 3)} h" if left_h > 0 else "ended"])
     out.append(panel("targets", "Daniel's targets: how each is going", "table",
-                     ["target", "goal", "now (last hour)", "change over the hour", "status", "by", "time left"], trows, producer="infra",
+                     ["target", "goal", "now (last hour)", "raw busy, util > 0 (last hour)", "change over the hour", "status", "by",
+                      "time left"], trows, producer="infra",
                      updated_at=iso(now), source=src,
                      note="Met: at or above the goal now. On track: below, and rising over the last hour. Behind: below and flat or falling."))
     age = (now - datetime.fromisoformat(gen.replace("Z", "+00:00"))).total_seconds() if isinstance(gen, str) else 0
