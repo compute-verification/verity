@@ -16,8 +16,9 @@ Kinds:
              (for S >= 2) straddling split boundaries (s*slice_len - 1, s*slice_len) + a small-mass tail; p chosen so the top-p
              boundary falls INSIDE the plateau (numkeep < numdup: the kernel's duplicate budget is exercised) at several offsets;
   record     the 3 preserved F-stoch-01 rows (bf16 logits -> the real `apply_temperature` kernel) at every S (needs --record).
-  drain      the REAL `_apply_topp_split` entry on a stacked batch of `ties` rows at B = 64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1
-             (S = splits_for(B, num_sm) flips as a B8 workload drains) -- every row must equal the constexpr-S model at that S.
+  drain      the REAL `_apply_topp_split` entry on a stacked batch of `ties` rows at B = 64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1 and
+             both sides of every live-count boundary of splits_for(B, num_sm) at the device's SM count (`drain_batches`; 142 SMs adds
+             35/36, 188 adds 11/12, 23/24, 47/48) -- every row must equal the constexpr-S model at that S.
 """
 from __future__ import annotations
 
@@ -38,6 +39,14 @@ SPLITS = (1, 2, 4, 8, 16, 32)
 RANDOM_VOCABS = (1024, 3000, 4096, 128256)
 TIE_VOCABS = (4096, 128256)
 DRAIN_BATCHES = (64, 18, 17, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+
+
+def drain_batches(num_sm: int) -> tuple[int, ...]:
+    """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
+    splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
+    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for
+    edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
+    return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 
 
 def bf16_round(x: np.ndarray) -> np.ndarray:
@@ -305,7 +314,7 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     P = torch.tensor([r[1] for r in rows], dtype=torch.float32, device=dev)
     dc["rows"] = [{"seed": dc["seed"] + b, "S_gen": 16 if b % 2 == 0 else 32, "p": float(rows[b][1])} for b in range(len(rows))]
     dc["num_sm"] = int(num_sm); dc["batches"] = []
-    for B in DRAIN_BATCHES:
+    for B in drain_batches(num_sm):
         L = X[:B].clone()
         TT._apply_topp_split(L, None, P[:B], float("-inf"), num_sm)
         torch.cuda.synchronize()

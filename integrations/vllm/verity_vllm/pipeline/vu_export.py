@@ -267,9 +267,14 @@ def routed_gemm_coordinate(dot_id: str, x: np.ndarray, w: np.ndarray, g: int) ->
     return D.f2fp_bf16(acc).astype(np.uint16).reshape(-1), np.asarray(nf).reshape(-1)
 
 
+def _moe_expert_dot(fam: str, st: dict[str, Any]) -> str:
+    """The k16 step of a fused-MoE expert GEMM row: the Ampere one for the `_v1` families, the DOT static of the `_v2` ones."""
+    return RK.prim_static(st, "DOT", fam) if fam.endswith("_v2") else "AmpereBF16TcDot16_v2"
+
+
 def _decompose_moe_expert(fam, st, ops, out, pick, limits, *, routed: bool) -> Iterator[Instance]:
     E, K, N = int(st["E"]), int(st["K"]), int(st["N"])
-    dot_id = "AmpereBF16TcDot16_v2"
+    dot_id = _moe_expert_dot(fam, st)
     x = np.asarray(ops[0], dtype=np.uint16).reshape(K)
     e = int(np.asarray(ops[1]).reshape(-1)[0])
     w = ops[3 if routed else 2]
@@ -369,6 +374,8 @@ DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose
                                                            "ScaledMmFp8Block_v1": _decompose_fp8_block,
                                                            "MoeExpertGemm_v1": partial(_decompose_moe_expert, routed=False),
                                                            "MoeExpertGemmW_v1": partial(_decompose_moe_expert, routed=True),
+                                                           "MoeExpertGemm_v2": partial(_decompose_moe_expert, routed=False),
+                                                           "MoeExpertGemmW_v2": partial(_decompose_moe_expert, routed=True),
                                                            "Attention_v3": _decompose_attention, "Attention_v2": _decompose_attention,
                                                            "RoPE_v1": _decompose_rope}
 
@@ -388,7 +395,8 @@ def _expert_rows(g: int) -> Callable[[dict[str, Any], list], tuple[np.ndarray, d
 #: reference fields); the store keeps a fixed sample of those rows and the whole operand by checkpoint reference
 WEIGHT_ROWS_OF: dict[str, tuple[int, Callable[[dict[str, Any], list], tuple[np.ndarray, dict[str, Any]]]]] = {
     "Gemm_v1": (1, _dense_rows(1, np.uint16)), "Gemm_v2": (1, _dense_rows(1, np.uint16)), "ScaledMmFp8Block_v1": (2, _dense_rows(2, np.uint8)),
-    "MoeExpertGemm_v1": (2, _expert_rows(2)), "MoeExpertGemmW_v1": (3, _expert_rows(3))}
+    "MoeExpertGemm_v1": (2, _expert_rows(2)), "MoeExpertGemmW_v1": (3, _expert_rows(3)),
+    "MoeExpertGemm_v2": (2, _expert_rows(2)), "MoeExpertGemmW_v2": (3, _expert_rows(3))}
 
 
 def _gemm_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
@@ -400,7 +408,7 @@ def _fp8_block_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, An
 
 
 def _moe_expert_template(template: str, fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
-    return template, {"K": st["K"], "dot": "AmpereBF16TcDot16_v2"}, int(st["N"])
+    return template, {"K": st["K"], "dot": _moe_expert_dot(fam, st)}, int(st["N"])
 
 
 def _attention_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], int]:
@@ -416,6 +424,7 @@ def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], i
 TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
     "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "ScaledMmFp8Block_v1": _fp8_block_template,
     "MoeExpertGemm_v1": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v1": partial(_moe_expert_template, "RoutedGemmCoordinate"),
+    "MoeExpertGemm_v2": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v2": partial(_moe_expert_template, "RoutedGemmCoordinate"),
     "Attention_v3": _attention_template, "Attention_v2": _attention_template, "RoPE_v1": _rope_template}
 
 

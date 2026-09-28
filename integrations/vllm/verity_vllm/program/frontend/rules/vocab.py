@@ -270,6 +270,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_topk_ordered_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKOrderedNorm, E=E, TOPK=TOPK, VPT=VPT),
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
+           # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
+           # the Ampere/Ada one (`registry.targets.moe_expert_dot`); those above keep the `_v1` records' digests
+           "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
+           "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
@@ -324,6 +328,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm": "MoeExpertGemm_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=False) for one (token, slot) pair — bf16_rne(DotBf16(x, W[e][n,:])), "
                               "e an I32 value operand (gather over the expert axis inside the body)",
            "moe_expert_gemm_w": "MoeExpertGemmW_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=True) — bf16_rne(f32mul(DotBf16(x, W[e][n,:]), g)), g the pair's routed weight",
+           "moe_expert_gemm_dot": "MoeExpertGemm_v2{E,K,N,DOT}: MoeExpertGemm_v1 with the target's k16 step DOT — bf16_rne(DotBf16_v2{K,DOT}(x, W[e][n,:]))",
+           "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
+                                    "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "

@@ -44,6 +44,8 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
 
 from __future__ import annotations
 
+import math
+
 import torch
 
 from verity.ir.refs import Coll
@@ -53,6 +55,7 @@ from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import moe_expert_refusal, moe_expert_role
 
 aten = torch.ops.aten
 
@@ -294,7 +297,7 @@ class FusedMoeKernelRule(InPlaceRule):
                                    "launch geometry == the difftested one (BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages: vLLM's BI default for these stacks at every M)",
                                    "schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
                                    "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT"),
-                    evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck)")
+                    evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck), _v2{DOT} where registry.targets.moe_expert_dot names a step")
 
     def targets(self):
         return {triton_launch.default}
@@ -303,7 +306,7 @@ class FusedMoeKernelRule(InPlaceRule):
         meta = launch_meta(node)
         if meta.get("kernel") != MOE_GEMM_PINS["kernel"]:
             return f"kernel {meta.get('kernel')} is not {MOE_GEMM_PINS['kernel']}"
-        if (r := _not_owned(INDEXED_READ)):
+        if (r := _not_owned(INDEXED_READ)) or (r := moe_expert_refusal()):
             return r
         sc = meta.get("scalars", {})
         if (r := _launch_pins(node, meta, sc)):
@@ -336,7 +339,6 @@ class FusedMoeKernelRule(InPlaceRule):
             return f"shapes a{as_} b{bs} vs scalars N={sc.get('N')} K={sc.get('K')}"
         if rows * top_k != nv:
             return f"a rows {rows} x top_k {top_k} != num_valid_tokens {nv}"
-        import math
         if math.prod(cs[:-1]) != nv or cs[-1] != N:
             return f"c {cs} is not {nv} rows of N={N}"
         if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
@@ -359,7 +361,6 @@ class FusedMoeKernelRule(InPlaceRule):
                 return "naive_block_assignment with a sorted_token_ids_ptr"
             if ids_t is None or not isinstance(ctx.val(ids_t), Coll) or ctx.dtype_of(ids_t) != torch.int32:
                 return "naive schedule: expert_ids_ptr is not an i32 value collection"
-            import math
             if math.prod(shape(ctx, ids_t)) != nv:
                 return f"naive schedule: expert_ids {shape(ctx, ids_t)} is not {nv} pairs"
         else:
@@ -374,7 +375,6 @@ class FusedMoeKernelRule(InPlaceRule):
             w_t = launch_tensor(node, meta, "topk_weights_ptr")
             if w_t is None or not isinstance(ctx.val(w_t), Coll) or ctx.dtype_of(w_t) != torch.float32:
                 return "MUL_ROUTED_WEIGHT: topk_weights_ptr is not an f32 value collection"
-            import math
             if math.prod(shape(ctx, w_t)) != nv:
                 return f"topk_weights {shape(ctx, w_t)} is not {nv} pairs"
         return None
@@ -394,7 +394,8 @@ class FusedMoeKernelRule(InPlaceRule):
         from verity_vllm.program.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
-        fn = ctx.kind("moe_expert_gemm_w" if mrw else "moe_expert_gemm", node, E=E, K=K, N=N)
+        role, dot = moe_expert_role(mrw)
+        fn = ctx.kind(role, node, E=E, K=K, N=N, **dot)
         hint = ctx.hint_name(node)
         outs = []
         for p in range(nv):
@@ -619,7 +620,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         meta = launch_meta(node)
         if meta.get("kernel") != MOE_GEMM_PINS["kernel"]:
             return f"kernel {meta.get('kernel')} is not {MOE_GEMM_PINS['kernel']}"
-        if (r := _not_owned(PADDED)):
+        if (r := _not_owned(PADDED)) or (r := moe_expert_refusal(padded=True)):
             return r
         sc = meta.get("scalars", {})
         if (r := _launch_pins(node, meta, sc)):
@@ -644,7 +645,6 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         nv = sc.get("num_valid_tokens")
         if (sc.get("N"), sc.get("K")) != (N, K):
             return f"b{bs} vs scalars N={sc.get('N')} K={sc.get('K')}"
-        import math
         if math.prod(cs[:-1]) != nv or cs[-1] != N:
             return f"c {cs} is not {nv} rows of N={N}"
         if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
