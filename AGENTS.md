@@ -232,7 +232,9 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
+jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan. Before
+starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
+and claim yours at your first checkpoint (`research notes claim`).
 
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
