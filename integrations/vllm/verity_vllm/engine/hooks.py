@@ -6,7 +6,9 @@ installed through this module, and every one can be put back.
 had none because the attribute was inherited, computed or missing) and returns a `Patch`.  `Patch.uninstall` restores
 exactly that: afterwards ``vars(owner).get(name)`` is the object it was, and an inherited method is inherited again.
 `Hooks` is a set of patches one component installs together and uninstalls newest first.  `live()` lists the patches
-installed in this process and not yet uninstalled.
+installed in this process and not yet uninstalled.  A `Service` is an in-process service a component starts beside its
+patches (a responder thread); it is an entry like a patch, and uninstalling it stops it.  Entries made through a
+``Hooks(tag=...)`` carry its tag, so `live(tag)` finds what one component (a protocol option) installed.
 
 The patch sites keep their wrappers (they close over the component's state); this module holds the mechanism and the
 targets more than one site patches.  It imports nothing from ``verity_vllm`` and nothing from vLLM, torch or Triton at
@@ -58,6 +60,7 @@ class Patch:
     original: Any
     by_value: bool = False
     installed: bool = True
+    tag: str | None = None
 
     def uninstall(self) -> None:
         """Put back what the owner held: set ``prior`` again, or remove the own attribute when there was none.
@@ -85,6 +88,7 @@ class Appended:
     seq: MutableSequence[Any]
     item: Any
     installed: bool = True
+    tag: str | None = None
 
     def uninstall(self) -> None:
         """Remove ``item`` (this object, not an equal one) if it is still in the list.  Idempotent."""
@@ -96,6 +100,27 @@ class Appended:
             if x is self.item:
                 del self.seq[i]
                 break
+
+
+@dataclass(eq=False)
+class Service:
+    """An in-process service started beside a component's patches: ``handle`` is what ``start()`` returned, and
+    `uninstall` calls ``stop(handle)`` once, keeping its return value (the service's counters) in ``result``."""
+
+    name: str
+    handle: Any
+    stop: Callable[[Any], Any]
+    installed: bool = True
+    tag: str | None = None
+    result: Any = None
+
+    def uninstall(self) -> None:
+        """Stop the service.  Idempotent: a stop that raised is not retried."""
+        if not self.installed:
+            return
+        self.installed = False
+        _forget(self)
+        self.result = self.stop(self.handle)
 
 
 def _forget(entry: Any) -> None:
@@ -137,40 +162,59 @@ def patched(owner: Any, name: str, value: Any) -> Iterator[Patch]:
         p.uninstall()
 
 
-def live() -> tuple[Patch | Appended, ...]:
-    """The patches installed in this process and not yet uninstalled, oldest first."""
-    return tuple(_LIVE)
+def service(name: str, start: Callable[[], Any], stop: Callable[[Any], Any]) -> Service:
+    """Start a service now (``handle = start()``) and return the `Service` whose uninstall calls ``stop(handle)``."""
+    s = Service(name, start(), stop)
+    _LIVE.append(s)
+    return s
+
+
+def live(tag: str | None = None) -> tuple[Patch | Appended | Service, ...]:
+    """The entries installed in this process and not yet uninstalled, oldest first; with ``tag``, only those carrying it."""
+    return tuple(e for e in _LIVE if tag is None or e.tag == tag)
 
 
 class Hooks:
-    """Patches one component installs together; `uninstall` removes them newest first, so stacked patches of one
-    attribute unwind to the original.  Usable as a context manager."""
+    """Patches (and services) one component installs together; `uninstall` removes them newest first, so stacked patches
+    of one attribute unwind to the original and a service stops before the patches it serves come off.  Every entry
+    carries ``tag``.  Usable as a context manager."""
 
-    def __init__(self) -> None:
-        self._entries: list[Patch | Appended] = []
+    def __init__(self, tag: str | None = None) -> None:
+        self.tag = tag
+        self._entries: list[Patch | Appended | Service] = []
+
+    def _add(self, e: Any) -> Any:
+        e.tag = self.tag
+        self._entries.append(e)
+        return e
 
     def patch(self, owner: Any, name: str, value: Any) -> Patch:
-        p = patch(owner, name, value)
-        self._entries.append(p)
-        return p
+        return self._add(patch(owner, name, value))
 
     def wrap(self, owner: Any, name: str, make: Callable[[Any], Any]) -> Patch:
-        p = wrap(owner, name, make)
-        self._entries.append(p)
-        return p
+        return self._add(wrap(owner, name, make))
 
     def append(self, seq: MutableSequence[Any], item: Any) -> Appended:
-        a = append(seq, item)
-        self._entries.append(a)
-        return a
+        return self._add(append(seq, item))
+
+    def service(self, name: str, start: Callable[[], Any], stop: Callable[[Any], Any]) -> Service:
+        return self._add(service(name, start, stop))
 
     @property
-    def entries(self) -> tuple[Patch | Appended, ...]:
+    def entries(self) -> tuple[Patch | Appended | Service, ...]:
         return tuple(e for e in self._entries if e.installed)
 
     def uninstall(self) -> None:
+        """Uninstall every entry, newest first.  An entry that raises (a service's stop) does not leave the older ones
+        installed: the first error is raised once all of them are off."""
+        err: BaseException | None = None
         while self._entries:
-            self._entries.pop().uninstall()
+            try:
+                self._entries.pop().uninstall()
+            except BaseException as e:  # noqa: BLE001
+                err = err or e
+        if err is not None:
+            raise err
 
     def __enter__(self) -> Hooks:
         return self
