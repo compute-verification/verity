@@ -48,7 +48,7 @@ def test_registry_and_certificates():
         assert isinstance(s, PoUWScheme) and isinstance(s.forming, F.Forming) and isinstance(s.forming, layer)
         assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
         (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
-        assert s.prices == "round9" and s.fadd == Fraction(3211, 100)
+        assert s.prices == "round10" and s.fadd == 32
         t = 3 * 8192 // 32
         assert s.certificate.omega == Fraction(32 * t + s.fadd * (t - 1) + f_a + f_b, 32 * (2 * t - 1) + c_a + c_b)
         sh = Shape(8192, 8192, 16384)
@@ -409,38 +409,85 @@ def test_d3_family_round9_prices(law, route, sums):
         s = get(f"fp8-is-h100-{cell_name(law, route, sums)}", prices=prices)
         assert s.forming.sums == sums and s.forming.prices == s.prices == prices
         assert s.forming.units == round9_units(law, route, sums, sass)
-    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}").prices == "round9"
+    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}").prices == "round10"
 
 
-#: γ in % at N³ over the frontier, r = 1, FADD 32.11, decoded weights, every checked word credited at 32 (the
-#: certificate's Ω).  Computed from class prices; the honest kernel has not been run at any size.
+def round10_units(law: str, route: str, sums: str, k: int) -> tuple[Fraction, Fraction]:
+    """Round 10's per-element trace from §16's figures (not from `PRICES`), ptxas 12.9: FADD 32.00 (the class price for
+    loops under the knee), UNPACK_B 64.17 per two codes, the PRMT-free four-code cast 129.27, VHMNMX 66.50 per two
+    elements, the f32-pair F2FP 64.61, the centre HFMA2 with immediates 64.02 per two; Round 9's half2 36, LOP3 64,
+    HMUL2 a·K 32.17, HADD2.F32 64 and f16 pack 64.  Each statistic lane chains min(256, k/64) entries."""
+    fadd, half, lop = Fraction(32), Fraction(18), Fraction(32)
+    unpack, chain = Fraction(6417, 200), min(256, k // 64)
+    if sums == "f32":
+        blocks, widen = 3 * (64 + fadd) + 3 * Fraction(6461, 200), Fraction(64)
+    else:
+        blocks, widen = 3 * half + 3 * Fraction(12927, 400), Fraction(0)
+    rest = (Fraction(3217, 200) + half + (64 + fadd) / chain + (32 if law == "d3m" else 0) + Fraction(133, 4)
+            + widen + lop + Fraction(6402, 200) + 2 * half + blocks)
+    return (unpack if route == "xq" else 32) + rest, unpack + rest
+
+
+@pytest.mark.parametrize("law,route,sums", CELLS)
+def test_d3_family_round10_prices(law, route, sums):
+    for k in FRONTIER:
+        assert F.D3Family(law, route, "round10", sums).units_at(k) == round10_units(law, route, sums, k)
+    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}", prices="round10-built").fadd == Fraction(3205, 100)
+
+
+def fadd_threshold(law: str, route: str, sums: str, prices: str, n: int) -> Fraction:
+    """The FADD class price at which N³ reaches γ = 1%, every FADD (the core's and the forming's) at that price."""
+    def forming(p):
+        row = {**F.PRICES[prices], "fadd": Fraction(p), "block_f32": 64 + Fraction(p)}
+        return sum(u for side in F.d3_trace(law, route, row, min(256, n // 64), sums) for _, u in side)
+    t = 3 * n // 32
+    f0, f1 = forming(0), forming(1) - forming(0)
+    return (Fraction(399, 400) * 32 * (2 * t - 1) / Fraction(99, 100) - 32 * t - f0) / (t - 1 + f1)
+
+
+def test_round10_target_cell():
+    """The red team's target (Round 10 re-issue, 21:13Z): D-3s on X_q with f16 sums at 16,384³ is 0.957% at FADD 32.00
+    with threshold 32.028, and 1.034% at the as-built loop's 32.05."""
+    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16'), 16384)):.3f}" == "0.957"
+    assert f"{float(fadd_threshold('d3s', 'xq', 'f16', 'round10', 16384)):.3f}" == "32.028"
+    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16', prices='round10-built'), 16384)):.3f}" == "1.034"
+
+
+#: γ in % at N³ over the frontier, r = 1, decoded weights (no amplitude table, no rms′ cache), every checked word
+#: credited at 32 (the certificate's Ω), at each row's FADD (Round 10: 32.00, and 32.05 as built; Round 9: 32.11).
+#: Computed from class prices; the honest D-3 kernel has not been run at any size.
 FRONTIER_GAMMA = {
-    ("round9", "d3s", "xq", "f16"): ("7.621", "4.151", "2.321", "1.380", "0.903"),
-    ("round9", "d3s", "xq", "f32"): ("10.362", "5.646", "3.102", "1.780", "1.105"),
-    ("round9", "d3s", "y16", "f16"): ("7.509", "4.091", "2.290", "1.364", "0.895"),
-    ("round9", "d3s", "y16", "f32"): ("10.257", "5.588", "3.072", "1.764", "1.097"),
-    ("round9", "d3m", "xq", "f16"): ("8.066", "4.391", "2.445", "1.443", "0.935"),
-    ("round9-sass", "d3s", "xq", "f16"): ("5.566", "3.058", "1.757", "1.093", "0.758"),
-    ("round9-sass", "d3s", "xq", "f32"): ("9.727", "5.296", "2.918", "1.685", "1.057"),
-    ("round9-sass", "d3m", "xq", "f16"): ("6.031", "3.303", "1.883", "1.157", "0.790"),
+    ("round10", "d3s", "xq", "f16"): ("5.689", "3.030", "1.656", "0.957", "0.605"),
+    ("round10", "d3s", "xq", "f32"): ("9.834", "5.266", "2.818", "1.550", "0.904"),
+    ("round10", "d3s", "y16", "f16"): ("5.688", "3.030", "1.656", "0.957", "0.605"),
+    ("round10", "d3m", "xq", "f16"): ("6.152", "3.276", "1.782", "1.021", "0.637"),
+    ("round10-built", "d3s", "xq", "f16"): ("5.758", "3.104", "1.732", "1.034", "0.682"),
+    ("round9", "d3s", "xq", "f16"): ("7.658", "4.160", "2.322", "1.380", "0.903"),
+    ("round9", "d3s", "xq", "f32"): ("10.397", "5.654", "3.104", "1.780", "1.105"),
+    ("round9", "d3s", "y16", "f16"): ("7.546", "4.100", "2.291", "1.364", "0.895"),
+    ("round9", "d3m", "xq", "f16"): ("8.102", "4.399", "2.447", "1.443", "0.935"),
+    ("round9-sass", "d3s", "xq", "f16"): ("5.604", "3.067", "1.758", "1.093", "0.758"),
+    ("round9-sass", "d3s", "xq", "f32"): ("9.762", "5.304", "2.920", "1.685", "1.057"),
+    ("round9-sass", "d3m", "xq", "f16"): ("6.069", "3.312", "1.884", "1.157", "0.790"),
 }
 
 
 @pytest.mark.parametrize("cell", sorted(FRONTIER_GAMMA))
 def test_frontier_gamma(cell):
-    """Nothing clears at 16,384³ or below; at 32,768³ only f16 sums clear (D-3s on X_q: 0.903%, or 0.758% with ptxas
-    12.9's code, whose three new rates are untimed)."""
+    """At Round 10 nothing clears below 16,384³; the target clears at 32.00 only (a loop under the knee), and 32,768³
+    clears in every cell at 32.00."""
     prices, *rest = cell
     s = get(f"fp8-is-h100-{cell_name(*rest)}", prices=prices)
     assert tuple(f"{float(100 * gamma_at(s, n)):.3f}" for n in FRONTIER) == FRONTIER_GAMMA[cell]
 
 
 def test_k_drops_out():
-    """γ depends on m and n: at m = n = 32,768 it moves by less than 0.001 points over the frontier's k."""
+    """γ depends on m and n: at m = n = 32,768 it moves by less than 0.004 points over the frontier's k (the statistic's
+    shorter chains at small k)."""
     s = get("fp8-is-h100-d3s-v0-f16")
     t = lambda k: 3 * k // 32
     g = [1 - Fraction(399, 400) * 32 * (2 * t(k) - 1) * 32768 ** 2 / s.wref(Shape(32768, k, 32768)) for k in FRONTIER]
-    assert max(g) - min(g) < Fraction(1, 100000)
+    assert max(g) - min(g) < Fraction(4, 100000)
 
 
 def test_one_price_row_prices_forming_and_core():

@@ -204,31 +204,42 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
   - **The price** is the cell's per-element trace (`d3_trace`) from one `PRICES` row, which prices the forming layer and
     the core's FADD together (`get(name, prices=…)`). `FP8IS` rejects a layer priced from another row.
   - **The rows.**
-    - **`round9`**, the default: Round 9 as measured. FADD 32.11, HADD2.F32 64, the four-code unpack 48 per code,
-      HMNMX2 64, HMUL2 a·K 32.17, and the f16 → e4m3 cast 64 per code (with PRMT).
-    - **`round9-sass`**: the code ptxas ≥ 12.9 emits for the honest kernel (approved, Daniel 20:31Z).
-      - The four-code unpack is two `UNPACK_B`, the second reading `.H1`.
-      - The four-code f16 → e4m3 cast is two `F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C`.
-      - Neither has a PRMT.
-      - The amplitude's maxima are one `VHMNMX` per register, with |·| folded.
-      - All three rates are untimed: each is priced at its pipe's 64 per instruction until Round 10 times it.
-  - **γ over the reporting frontier** (Daniel, 20:41Z), N³ with r = 1 and FADD 32.11. The figures are computed from
-    class prices; the honest kernel has not been run at any size:
+    - **`round10`**, the default: Round 10 (`gpu-constants.md` §16, ptxas 12.9), and the red team's reading of it.
+      - FADD at its class price, 32.00, which holds for honest loops of at most about 390 instructions with
+        bank-clean SASS.
+      - `UNPACK_B` 64.17 per two codes, so the unpack (`.H0` and `.H1`) is 32.1 per code.
+      - The PRMT-free four-code cast is 129.27 per register, 32.3 per code.
+      - `VHMNMX` is 66.50 per two elements, HMNMX2 64.13 and the f32-pair F2FP 64.61.
+      - The centre HFMA2 is 64.02 per two elements, the only form Round 10 timed (both constants immediate, unsplit).
+      - HADD2 36, LOP3 64, HMUL2 a·K 32.17, HADD2.F32 64 and the f16 pack 64 carry over from Round 9.
+    - **`round10-built`**: the same at FADD 32.05, today's 567-instruction honest loop, which is past the knee.
+    - **`round9`** (Round 9 as measured, FADD 32.11) and **`round9-sass`** (ptxas 12.9's code at Round 9's classes,
+      with the centre split at 36), kept for comparison.
+    - Each statistic lane chains min(256, k/64) entries (`units_at(k)`), so rows below k = 16,384 pay more per element
+      for the widen and the FADD.
+  - **γ over the reporting frontier** (Daniel, 20:41Z), N³ with r = 1. The figures are computed from class prices;
+    the honest D-3 kernel has not been run at any size:
 
-    | Cell | Row | 2,048³ | 4,096³ | 8,192³ | 16,384³ | 32,768³ |
+    | Cell | Row (FADD) | 2,048³ | 4,096³ | 8,192³ | 16,384³ | 32,768³ |
     |---|---|---:|---:|---:|---:|---:|
-    | `d3s-v0-f16` (X_q, f16 sums) | `round9` | 7.621% | 4.151% | 2.321% | 1.380% | **0.903%** |
-    | `d3s-v0-f16` | `round9-sass` | 5.566% | 3.058% | 1.757% | 1.093% | **0.758%** |
-    | `d3s-v0` (X_q, f32 sums) | `round9` | 10.362% | 5.646% | 3.102% | 1.780% | 1.105% |
-    | `d3s-v0` | `round9-sass` | 9.727% | 5.296% | 2.918% | 1.685% | 1.057% |
-    | `d3s-v0-y16-f16` (comparison) | `round9` | 7.509% | 4.091% | 2.290% | 1.364% | **0.895%** |
-    | `d3m-v0-f16` | `round9` | 8.066% | 4.391% | 2.445% | 1.443% | **0.935%** |
+    | **`d3s-v0-f16`** (X_q, f16 sums; the target) | `round10` (32.00) | 5.689% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3s-v0-f16` | `round10-built` (32.05) | 5.758% | 3.104% | 1.732% | 1.034% | **0.682%** |
+    | `d3s-v0` (X_q, f32 sums) | `round10` | 9.834% | 5.266% | 2.818% | 1.550% | **0.904%** |
+    | `d3s-v0-y16-f16` (comparison) | `round10` | 5.688% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3m-v0-f16` | `round10` | 6.152% | 3.276% | 1.782% | 1.021% | **0.637%** |
+    | `d3s-v0-f16` | `round9` (32.11) | 7.658% | 4.160% | 2.322% | 1.380% | **0.903%** |
+    | `d3s-v0-f16` | `round9-sass` (32.11) | 5.604% | 3.067% | 1.758% | 1.093% | **0.758%** |
 
-    - **Nothing clears at 16,384³, the security target, or below.**
-    - **At 32,768³ only f16 sums clear.** The FADD thresholds are 32.173 (`round9`) and 32.267 (`round9-sass`).
-    - **γ depends on m and n; k drops out** (under 0.001 points over the frontier's k). On an m × n grid under
-      `round9-sass`, 16,384 × 32,768 gives 0.926%.
-    - `mnk_min` selects any frontier size as the domain's floor; 32,768 is Track D's D-4.
+    - **The target** clears at FADD 32.00 with threshold 32.028 (every FADD, core and forming, at the class price). As
+      built, at 32.05, it is 1.034%, so it needs the honest loop under the knee.
+    - **This reproduces the red team's Round 10 re-issue** in all 40 D-3 cells, to rounding.
+    - **Nothing clears below 16,384³.**
+    - **The centre is one open point.** With −3/8 held in a register, ptxas splits the centre (HFMA2.MMA + HFMA2),
+      which is the two-source half2 class Round 8 timed at 36.
+      - In that form the target is 0.929% at 32.00, with threshold 32.046, and 1.006% at 32.05.
+      - That exact form is untimed.
+    - **γ depends on m and n; k drops out** (under 0.004 points over the frontier's k).
+    - `mnk_min` selects any frontier size as the domain's floor.
 - **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
   noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
   reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
@@ -247,8 +258,9 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
   the transform weights. Its checked words are every transform atom word and every converted code (7 words and 3 codes
   per element: 272 units credited per element per side). The noise-code distribution (`MaxRelativeCodes`, 64 units) is
   a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
-- **Prices.** `PRICES` holds Round 7 as measured, Round 8 loop-free, Round 9 (the default; `gpu-constants.md` §14)
-  and `round9-sass`. Rounds 7 and 8 carry the red team's assumptions for the X_q unpack and HADD2.F32.
+- **Prices.** `PRICES` holds Round 7 as measured, Round 8 loop-free, Round 9 (`gpu-constants.md` §14), `round9-sass`,
+  and Round 10 (§16: `round10`, the default, and `round10-built`). Rounds 7 and 8 carry the red team's assumptions for
+  the X_q unpack and HADD2.F32.
 - **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`):
   - every layer on a test instance;
   - `d3-v0` and `d2-draft` at k = 8,192;
@@ -262,5 +274,6 @@ wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom wor
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
-- The honest `fp8-is-h100` kernel on an H100: not run at any frontier size. `fp8-is-h100`'s γ figures come from class
-  prices (Rounds 8 and 9), and Round 10 times `round9-sass`'s three forms.
+- The honest D-3 kernel on an H100 (its forming loop and the checked step together): not run at any frontier size.
+  Round 10 timed the classes and the checked step's harness shapes, not this kernel. The γ figures come from class
+  prices.

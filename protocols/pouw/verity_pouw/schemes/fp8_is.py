@@ -60,26 +60,36 @@ CVT_UNITS = 16
 #: and 8 assumed was one two-source HADD2.F32, and which Round 9 found has no such form on sm_90 (a widen of e plus an FADD),
 #: with ``widen_once`` the widen of h shared by the three blocks; ``unpack`` two E4M3 codes to f16 (Round 9: 48 per code in
 #: the four-code form); ``f2fp`` two codes cast from f32; ``f2fp_f16`` two codes cast from f16 (F2FP.F16 + PRMT, Round 8);
-#: ``hmul2_imm`` HMUL2 by an immediate (split, Round 9 §14.6).  ``round9-sass`` is Round 9 with the code ptxas emits for
-#: three forms whose Round 9 kernels differed from the honest schedule's: the four-code X_q unpack is two UNPACK_B, the
-#: second reading ``.H1`` (no PRMT; ptxas 12.4 and 12.9), so ``unpack`` is 64; the four-code f16 -> e4m3 cast is two
-#: F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C with no PRMT (ptxas 12.9; 12.4 adds one per pair), so ``f2fp_f16`` is 64;
-#: and D-3's amplitude max is one VHMNMX per register with |.| folded (``max3``, assumed at HMNMX2's 64 until timed).
+#: ``hmul2_imm`` HMUL2 by an immediate (split, Round 9 §14.6); ``centre`` the centring HFMA2 t·(1/4) + c.
+#: ``round9-sass`` is Round 9 with the code ptxas >= 12.9 (approved, Daniel 20:31Z) emits for three forms whose Round 9
+#: kernels differed from the honest schedule's: the four-code X_q unpack is two UNPACK_B, the second reading ``.H1``, so
+#: ``unpack`` is 64; the four-code f16 -> e4m3 cast is two F2FP.SATFINITE.E4M3.F16.UNPACK_B_MERGE_C with no PRMT, so
+#: ``f2fp_f16`` is 64; and D-3's amplitude max is one VHMNMX per register with |.| folded (``max3``, at 64).  Until
+#: Round 10 the centre is priced at the split two-source half2 class (36), as ptxas emits it with c in a register.
+#: ``round10`` (§16, run ``r20260928-205054-f167``, ptxas 12.9) times all three at 64.17, 129.27 per four codes and 66.50,
+#: HMNMX2 at 64.13, the f32-pair F2FP at 64.61, and FADD's class price at 32.00 for loops of at most about 390
+#: instructions; ``round10-built`` is the same at 32.05, today's 567-instruction honest loop.  Round 10 timed the centre
+#: only with both constants immediate (unsplit, 64.02), and ``round10`` prices it there, as the red team does.
 PRICES: dict[str, dict[str, Fraction]] = {
     "round7": {"fadd": Fraction(67, 2), "half2": Fraction(401, 10), "hmnmx2": Fraction(401, 10), "int": Fraction(64),
                "f2fp": Fraction(667, 10), "f2fp_f16": Fraction(667, 5), "unpack": Fraction(667, 10),
                "hadd2_f32": Fraction(401, 10), "block_f32": Fraction(401, 10), "widen_once": Fraction(0),
-               "f16pack": Fraction(667, 10), "hmul2_imm": Fraction(401, 10)},
+               "f16pack": Fraction(667, 10), "hmul2_imm": Fraction(401, 10), "centre": Fraction(401, 10)},
     "round8": {"fadd": Fraction(32), "half2": Fraction(36), "hmnmx2": Fraction(36), "int": Fraction(64),
                "f2fp": Fraction(64), "f2fp_f16": Fraction(128), "unpack": Fraction(64), "hadd2_f32": Fraction(36),
-               "block_f32": Fraction(36), "widen_once": Fraction(0), "f16pack": Fraction(64), "hmul2_imm": Fraction(36)},
+               "block_f32": Fraction(36), "widen_once": Fraction(0), "f16pack": Fraction(64), "hmul2_imm": Fraction(36),
+               "centre": Fraction(36)},
     "round9": {"fadd": Fraction(3211, 100), "half2": Fraction(36), "hmnmx2": Fraction(64), "int": Fraction(64),
                "f2fp": Fraction(64), "f2fp_f16": Fraction(128), "unpack": Fraction(96), "hadd2_f32": Fraction(64),
                "block_f32": Fraction(64) + Fraction(3211, 100), "widen_once": Fraction(64), "f16pack": Fraction(64),
-               "hmul2_imm": Fraction(3217, 100)},
+               "hmul2_imm": Fraction(3217, 100), "centre": Fraction(36)},
 }
 PRICES["round9-sass"] = {**PRICES["round9"], "unpack": Fraction(64), "f2fp_f16": Fraction(64), "max3": Fraction(64)}
-DEFAULT_PRICES = "round9"
+PRICES["round10"] = {**PRICES["round9-sass"], "fadd": Fraction(32), "block_f32": Fraction(64 + 32),
+                     "unpack": Fraction(6417, 100), "f2fp_f16": Fraction(12927, 200), "max3": Fraction(133, 2),
+                     "hmnmx2": Fraction(6413, 100), "f2fp": Fraction(6461, 100), "centre": Fraction(6402, 100)}
+PRICES["round10-built"] = {**PRICES["round10"], "fadd": Fraction(3205, 100), "block_f32": 64 + Fraction(3205, 100)}
+DEFAULT_PRICES = "round10"
 
 
 # ---- the core -------------------------------------------------------------------------------------------------------
@@ -157,7 +167,8 @@ class Forming(Protocol):
     #: Whether `form` gives every cell a salt word R_0 for the running accumulator (then R_1 = add(R_0, I_1) is checked);
     #: an unseeded layer starts from +0, and R_1 = I_1 is dropped.
     seeded: bool
-    #: W1 units per operand element of the honest forming trace, for an A row and for a B row.
+    #: W1 units per operand element of the honest forming trace, for an A row and for a B row (at large k; `units_at`
+    #: gives them at a given k).
     units: tuple[int | Fraction, int | Fraction]
     #: The part of ``units`` spent writing the layer's own checked words, which a lower bound may credit.
     credited: tuple[int | Fraction, int | Fraction]
@@ -166,6 +177,10 @@ class Forming(Protocol):
 
     def check(self, shape: Shape) -> None:
         """Raise `DomainError` when the layer cannot form this shape."""
+        ...
+
+    def units_at(self, k: int) -> tuple[int | Fraction, int | Fraction]:
+        """``units`` for operand rows of k values."""
         ...
 
     def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
@@ -257,10 +272,13 @@ def ncp_perm(k: int, seed: bytes) -> tuple[tuple[int, ...], tuple[int, ...]]:
 
 
 class CodeRows:
-    """Row parsing for the layers whose rows are all E4M3 codes (the earlier layers)."""
+    """Row parsing for the layers whose rows are all E4M3 codes (the earlier layers), whose price does not depend on k."""
 
     def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
         return e4m3_row(row, k)
+
+    def units_at(self, k: int) -> tuple[int | Fraction, int | Fraction]:
+        return self.units
 
 
 # ---- fpncp-v0: C-2's forming as posted (refuted; the negative control) -----------------------------------------------
@@ -671,7 +689,7 @@ def d3_trace(law: str, route: str, prices: dict[str, Fraction], chain: int,
         ((("partner and floor max, |.| folded (one VHMNMX)", prices["max3"] / 2),) if "max3" in prices
          else (("partner max (HMNMX2)", mx), ("floor max (HMNMX2)", mx)))
     noise = (("noise field (one LOP3, 0x3C003C00 in a register; two f16 lanes per XOF word)", i),
-             ("centre (2t − 3)/8 (HFMA2 t·K + c, c in a register: split)", h2),
+             ("centre (2t − 3)/8 (HFMA2 t·K + c)", prices["centre"] / 2),
              ("scale A·u (HMUL2)", h2), ("s = e + e∘P (HADD2)", h2), *cast)
     act = (source, *statistic, *amplitude, *widen, *noise)
     weight = (decode, *statistic, *amplitude, *widen, *noise)
@@ -726,7 +744,7 @@ class D3Family:
         self.name = self.tag
         self.P_SEED = f"verity/pouw/fp8-is/{law}/P".encode()
         self.trace = d3_trace(law, route, PRICES[prices], self.CHAIN, sums)
-        self.units = tuple(sum(u for _, u in side) for side in self.trace)
+        self.units = self.units_at(self.LANES * self.CHAIN)
         self.parameters = (("law_d3s", int(law == "d3s")), ("route_y16", int(route == "y16")),
                            ("sums_f16", int(sums == "f16")),
                            ("form_units_a_ceil", -(-self.units[0] // 1)), ("form_units_b_ceil", -(-self.units[1] // 1)))
@@ -735,6 +753,11 @@ class D3Family:
         if shape.k % SLICE or shape.k > 1 << 16:
             raise DomainError(f"{self.name}: k is a multiple of {SLICE} and at most 2^16")
         ncp_perm(shape.k, self.P_SEED)
+
+    def units_at(self, k: int) -> tuple[Fraction, Fraction]:
+        """The trace's sum per side for rows of k values: each statistic lane chains min(256, k/64) entries."""
+        trace = d3_trace(self.law, self.route, PRICES[self.prices], min(self.CHAIN, max(1, k // self.LANES)), self.sums)
+        return tuple(sum(u for _, u in side) for side in trace)
 
     def parse(self, row: bytes, k: int, left: bool) -> list[int] | None:
         """A committed row as f16 words: X_q's (or the weights') E4M3 codes decoded, or Y16's words (finite, |y| <= 448)."""
@@ -854,7 +877,7 @@ class FP8IS:
         self.mnk_min, self.tile = mnk_min, tile
         self.name = f"{PREFIX}-{forming.name}"
         self.fadd = PRICES[prices]["fadd"]                                          # the honest running add, per word
-        (f_a, f_b), (c_a, c_b) = forming.units, forming.credited
+        (f_a, f_b), (c_a, c_b) = forming.units_at(mnk_min), forming.credited
         slices = forming.blocks * mnk_min // SLICE                                   # T at k = N
         adds = slices if forming.seeded else slices - 1
         honest = ATOM_UNITS * slices + self.fadd * adds                              # per output cell
@@ -880,8 +903,8 @@ class FP8IS:
                 f"forming layer {forming.name}: DistinctLive is refuted for fpncp-v0 (X-D1-1, X-C2-B1) and d2-draft "
                 "(X-D2-4, X-D2-5), and claimed for the D-3 family at r = 1 (the D-3m strike, Phase 17f); γ_0 is "
                 "withheld until it is certified",
-                f"prices: {prices} (PRICES); round9-sass's VHMNMX rate is assumed, and its PRMT-free cast and unpack "
-                "are counted from ptxas's SASS at Round 9's class prices, untimed in the honest kernel's form",
+                f"prices: {prices} (PRICES); round10's centre is the immediate-constant HFMA2 Round 10 timed (the "
+                "split form with c in a register is untimed), and its FADD is the class price for loops under the knee",
             ),
             parameters=(("mnk_min", mnk_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("blocks", forming.blocks),
                         ("seeded", int(forming.seeded)), *forming.parameters),
@@ -900,7 +923,7 @@ class FP8IS:
         """The core (an atom word per cell per slice, and an FADD at ``prices``' rate per checked running word) plus the
         forming trace on both sides, rounded up.  The weight side is charged once per matmul (r = 1); reuse across the
         epoch's units is the spec's reuse condition, not this per-matmul figure."""
-        f_a, f_b = self.forming.units
+        f_a, f_b = self.forming.units_at(shape.k)
         slices = self.forming.blocks * shape.k // SLICE
         adds = slices if self.forming.seeded else slices - 1
         total = shape.m * shape.n * (ATOM_UNITS * slices + self.fadd * adds) + f_a * shape.m * shape.k + f_b * shape.n * shape.k
