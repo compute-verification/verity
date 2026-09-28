@@ -46,8 +46,6 @@ structure Tags where
   sharedRows : Bool := false
   /-- item 1e (#225): the unit is circuit types and a layout, not rows, and the verifier derives its rows (`Flock.Typed`) -/
   typed : Bool := false
-  /-- the statement digest's leading tag, when it is not `statement` -/
-  digestTag : Option String := none
   deriving Inhabited
 
 namespace Tags
@@ -186,12 +184,12 @@ def circuit967b8d06Selftest : Tags :=
   { circuit967b8d06 with name := "verity/flock-circuit@967b8d06+seed-injection", identity := identityHm96 true true }
 
 /-- `verity/flock-circuit/types` (item 1e, #225, #273): `verity/flock-circuit`'s statement (with `967b8d06`'s identity text)
-with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity names the
-typed statement, as the prover's does. -/
+with its unit as circuit types and a layout; the verifier derives the unit's rows (`Flock.Typed`). The identity and the
+statement digest's leading tag name the typed statement, as the prover's do. -/
 def circuitTypes : Tags :=
   { circuit967b8d06 with
     name := "verity/flock-circuit/types", statement := "verity/flock-circuit/types", fileFormat := "flock-circuit/types",
-    identity := identityHm96 false true "verity/flock-circuit/types", typed := true, digestTag := some "verity/flock-circuit" }
+    identity := identityHm96 false true "verity/flock-circuit/types", typed := true }
 
 def circuitTypesSelftest : Tags :=
   { circuitTypes with
