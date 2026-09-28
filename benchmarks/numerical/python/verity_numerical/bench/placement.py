@@ -23,6 +23,23 @@ TCP-connect RTT on it of at least :data:`RTT_FLOOR_MS`).  A shared public IP tha
 (``shared_public_ip`` and its evidence).
 
     python3 placement.py probe [--peer HOST:PORT] [--rtt HOST:PORT] [--out FILE]     stdlib only: runs on a pod before a cell's job
+
+The same checks are the deployment gate of the proof service's parties (:func:`gate`, :data:`GATE_RULES`): the developer's
+firewall, and the auditor's network certifiers, memory challengers and challenger.  It runs on the machine, and in the cgroup,
+of the role it checks, and refuses (exit 1, the reasons in its JSON verdict) unless
+
+- every peer the role must be separate from (:func:`separate`: :func:`assess` finds nothing; with ``--link``, a routed link with
+  a TCP-connect round trip of at least :data:`RTT_FLOOR_MS`) is, and every peer it must share a machine with, the one node a
+  certifier or memory challenger guards, is that machine (:func:`same_machine`: inside the node's isolation boundary);
+- the firewall is a VM guest;
+- a role on dedicated cores may run on exactly ``--cores``, and no task outside its own cgroup may run on any of them
+  (:func:`dedicated_cores` over :func:`read_tasks`' ``/proc``; kernel threads are not counted).
+
+Every peer role in the rule is named (``--peer ROLE[:NAME]=FILE``, a probe record) or declared not yet deployed
+(``--absent ROLE``, recorded in the verdict); a guarded node can never be absent.
+
+    python3 placement.py gate --role ROLE [--self FILE|-] [--peer ROLE[:NAME]=FILE ...] [--absent ROLE ...]
+                              [--link NAME=HOST:PORT ...] [--cores LIST] [--out FILE]
 """
 from __future__ import annotations
 
@@ -326,6 +343,222 @@ def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Map
     return assess(prover, verifier, link)["problems"]
 
 
+#: The deployment gate's rule per role (the proof-service architecture of 6 Oct 2026): the peer roles it must share a machine
+#: with (exactly one: the node it guards, inside whose isolation boundary it runs), those it must be separate from (every one,
+#: at least one each unless absent), whether it must be a VM guest, and whether it runs on dedicated cores.
+GATE_RULES: dict[str, dict[str, Any]] = {
+    "firewall": {"same": (), "separate": ("worker", "challenger"), "vm": True, "cores": True},
+    "certifier": {"same": ("worker",), "separate": ("firewall", "challenger"), "vm": False, "cores": True},
+    "memory-challenger": {"same": ("worker",), "separate": ("firewall", "challenger"), "vm": False, "cores": True},
+    "challenger": {"same": (), "separate": ("firewall", "worker"), "vm": False, "cores": False},
+}
+PEER_ROLES = ("worker", "firewall", "challenger")
+GATE_SCHEMA = "verity/placement-gate/v1"
+PROC = "/proc"
+
+
+def cpu_list(text: str | None) -> frozenset[int]:
+    """A CPU list (``0-3,8``: ``Cpus_allowed_list``, a cpuset, ``taskset -c``) as a set; a malformed one raises ``ValueError``."""
+    out: set[int] = set()
+    for part in (text or "").replace(" ", "").split(","):
+        if part:
+            lo, _, hi = part.partition("-")
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return frozenset(out)
+
+
+def cpu_text(cpus: frozenset[int] | set[int]) -> str:
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(f"{a}" if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def _cgroup(lines: list[str]) -> str | None:
+    """A task's cgroup: the v2 path (``0::/...``), else its v1 cpuset hierarchy's."""
+    v1 = None
+    for line in lines:
+        hid, _, rest = line.partition(":")
+        ctrl, _, path = rest.partition(":")
+        if hid == "0" and not ctrl:
+            return path
+        if "cpuset" in ctrl.split(","):
+            v1 = path
+    return v1
+
+
+def read_tasks(proc: str = PROC) -> dict[str, dict[str, Any]]:
+    """Every task (thread) under ``proc`` by tid: its process, name, allowed CPUs (``Cpus_allowed_list``), cgroup and whether it
+    is a kernel thread (kthreadd or its child).  A task that exits while it is read is left out."""
+    out: dict[str, dict[str, Any]] = {}
+    for status in Path(proc).glob("[0-9]*/task/[0-9]*/status"):
+        try:
+            fields = dict(line.split(":", 1) for line in status.read_text().splitlines() if ":" in line)
+            cgroup = _cgroup(status.with_name("cgroup").read_text().splitlines())
+        except OSError:
+            continue
+        f = {k: v.strip() for k, v in fields.items()}
+        pid = status.parent.parent.parent.name
+        out[status.parent.name] = {"pid": pid, "name": f.get("Name"), "cpus": f.get("Cpus_allowed_list"), "cgroup": cgroup,
+                                   "kthread": pid == "2" or f.get("PPid") == "2" or f.get("Kthread") == "1"}
+    return out
+
+
+def dedicated_cores(cores: frozenset[int], tasks: Mapping[str, Mapping[str, Any]], own: str) -> tuple[list[str], dict[str, Any]]:
+    """Why ``cores`` are not the role's alone (empty: they are), and the evidence: its own task ``own`` (a tid of ``tasks``) may run
+    on exactly ``cores``, in a cgroup of its own (not the root), and no task outside that cgroup or below it may run on any of
+    them; a task whose allowed CPUs cannot be read counts as on them.  Kernel threads are not counted: no cgroup moves them."""
+    out: list[str] = []
+    ev: dict[str, Any] = {"declared": cpu_text(cores), "own": None, "cgroup": None, "tasks": len(tasks), "kernel_threads": 0,
+                          "intruders": {}}
+    if not cores:
+        out.append("no dedicated cores declared (--cores)")
+    me = tasks.get(own)
+    scope = ((me or {}).get("cgroup") or "").rstrip("/")
+    if me is None or not scope:
+        out.append(f"this process (task {own}) is not in a cgroup of its own: {(me or {}).get('cgroup')!r}")
+        return out, ev
+    try:
+        mine = cpu_list(me.get("cpus"))
+    except ValueError:
+        mine = frozenset()
+    ev.update(own=cpu_text(mine), cgroup=scope)
+    if mine != cores:
+        out.append(f"this process may run on CPUs {cpu_text(mine) or '?'}, not exactly the declared {cpu_text(cores)}")
+    intruders: dict[str, dict[str, Any]] = ev["intruders"]
+    for t in tasks.values():
+        cg = t.get("cgroup") or ""
+        if t.get("kthread"):
+            ev["kernel_threads"] += 1
+            continue
+        if cg == scope or cg.startswith(scope + "/"):
+            continue
+        try:
+            on = cpu_list(t.get("cpus")) & cores if t.get("cpus") else cores
+        except ValueError:
+            on = cores
+        if on:
+            x = intruders.setdefault(str(t.get("pid")), {"name": t.get("name"), "cgroup": cg, "cpus": set()})
+            x["cpus"] |= on
+    for x in intruders.values():
+        x["cpus"] = cpu_text(x["cpus"])
+    if intruders:
+        shown = "; ".join(f"{x['name']} (pid {pid}, {x['cgroup'] or 'no cgroup'}) on {x['cpus']}"
+                          for pid, x in sorted(intruders.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0)[:5])
+        more = f"; and {len(intruders) - 5} more" if len(intruders) > 5 else ""
+        out.append(f"{len(intruders)} process(es) outside cgroup {scope} may run on the dedicated CPUs {cpu_text(cores)}: {shown}{more}")
+    return out, ev
+
+
+def same_machine(me: Mapping[str, Any], node: Mapping[str, Any]) -> list[str]:
+    """Why ``me`` is not shown to run on ``node``'s machine, inside its isolation boundary (empty: it is): every identity both
+    record (machine id, DMI product uuid, boot id) equal, and at least one recorded on both.  A VM guest's uuid and boot id are its
+    own, so a process on the guest's host, outside the guest, matches neither."""
+    both = [k for k in NAT_IDS if me.get(k) and node.get(k)]
+    out = [f"its {k} {me[k]} is not the node's {node[k]}" for k in both if me[k] != node[k]]
+    if not both:
+        out.append(f"none of {', '.join(NAT_IDS)} is recorded on both, so it is not shown to be on the node's machine")
+    return out
+
+
+def separate(me: Mapping[str, Any], peer: Mapping[str, Any], link: Mapping[str, Any] | None = None) -> list[str]:
+    """Why ``me`` and ``peer`` are not shown to be separate machines (empty: they are): :func:`assess`'s problems, and with a
+    ``link`` (:func:`link_to` with its :func:`tcp_rtt`) every TCP connect succeeding at a median of at least :data:`RTT_FLOOR_MS`."""
+    out = [p.replace("prover and verifier", "they").replace("the prover reaches the verifier", "it reaches the peer")
+           for p in assess(me, peer, link)["problems"]]
+    if link is not None:
+        rtt = link.get("rtt") or {}
+        med = rtt.get("median_ms")
+        if not (isinstance(med, (int, float)) and med >= RTT_FLOOR_MS and rtt.get("failed") == 0 and rtt.get("n")):
+            out.append(f"the link to it ({link.get('peer')}) has no TCP-connect round trip of at least {RTT_FLOOR_MS} ms with every "
+                       f"connect succeeding (median {med!r} ms, {rtt.get('n')!r} connected, {rtt.get('failed')!r} failed)")
+    return out
+
+
+def gate(role: str, me: Mapping[str, Any], peers: list[tuple[str, str, Mapping[str, Any]]], absent: tuple[str, ...] = (),
+         cores: frozenset[int] | None = None, tasks: Mapping[str, Mapping[str, Any]] | None = None, own: str | None = None,
+         links: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    """The deployment verdict for ``role`` (a :data:`GATE_RULES` key) on the machine ``me`` (its :func:`probe`): ``peers`` are
+    ``(peer role, name, probe record)``, ``absent`` the peer roles not deployed yet, ``links`` measured links by peer name, and
+    ``cores``, ``tasks`` (:func:`read_tasks`) and ``own`` (this process's tid) the dedicated-cores check's inputs."""
+    rule, links = GATE_RULES[role], dict(links or {})
+    named = {want: [n for r, n, _ in peers if r == want] for want in PEER_ROLES}
+    problems: list[str] = []
+    for r in rule["same"]:
+        if len(named[r]) != 1:
+            problems.append(f"a {role} guards exactly one {r} (--peer {r}=FILE): {len(named[r])} named")
+    for r in rule["separate"]:
+        if not named[r] and r not in absent:
+            problems.append(f"no {r} named: name every one (--peer {r}[:NAME]=FILE), or --absent {r} while none is deployed")
+        if named[r] and r in absent:
+            problems.append(f"{r} is both named and declared absent")
+    for r in absent:
+        if r not in rule["separate"]:
+            problems.append(f"--absent {r}: a {role}'s rule needs {'its ' + r if r in rule['same'] else 'no ' + r}")
+    checked = []
+    for r, name, ident in peers:
+        if r in rule["same"]:
+            why, relation = same_machine(me, ident), "same machine"
+        elif r in rule["separate"]:
+            why, relation = separate(me, ident, links.pop(name, None)), "separate machine"
+        else:
+            why, relation = [f"a {role}'s rule names no {r}"], None
+        problems += [f"{name} ({r}): {w}" for w in why]
+        checked.append({"name": name, "role": r, "relation": relation, "problems": why})
+    problems += [f"--link {name}: no peer of that name is checked separate" for name in links]
+    if rule["vm"] and not (me.get("hypervisor") is True or is_hypervisor_vendor(me.get("sys_vendor"))):
+        problems.append(f"a {role} runs in a VM guest of its own: this machine's hypervisor flag is {me.get('hypervisor')!r} and "
+                        f"its DMI sys_vendor {me.get('sys_vendor')!r}")
+    core_ev = None
+    if rule["cores"] or cores is not None:
+        why, core_ev = dedicated_cores(cores or frozenset(), tasks or {}, own or "")
+        problems += [f"cores: {w}" for w in why]
+    return {"schema": GATE_SCHEMA, "role": role, "passed": not problems, "problems": problems, "self": dict(me), "peers": checked,
+            "absent": sorted(absent), "cores": core_ev}
+
+
+def _gate_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
+    def load(path: str) -> dict[str, Any]:
+        try:
+            return json.loads(sys.stdin.read() if path == "-" else Path(path).read_text())
+        except (OSError, ValueError) as e:
+            ap.error(f"{path}: {type(e).__name__}: {e}")
+
+    peers, names = [], set()
+    for spec in a.peer:
+        who, sep, path = spec.partition("=")
+        r, _, name = who.partition(":")
+        name = name or r
+        if not sep or r not in PEER_ROLES or name in names:
+            ap.error(f"--peer {spec}: ROLE[:NAME]=FILE, ROLE one of {', '.join(PEER_ROLES)}, each NAME once")
+        names.add(name)
+        peers.append((r, name, load(path)))
+    links = {}
+    for spec in a.link:
+        name, sep, target = spec.partition("=")
+        if not sep:
+            ap.error(f"--link {spec}: NAME=HOST:PORT")
+        links[name] = {**link_to(target), "rtt": tcp_rtt(target)}
+    try:
+        cores = cpu_list(a.cores) if a.cores is not None else None
+    except ValueError:
+        ap.error(f"--cores {a.cores}: a CPU list such as 124-127")
+    rule = GATE_RULES[a.role]
+    needs_cores = rule["cores"] or cores is not None
+    verdict = gate(a.role, load(a.self_) if a.self_ else probe(), peers, tuple(a.absent), cores,
+                   read_tasks(PROC) if needs_cores else None, str(os.getpid()), links)
+    text = json.dumps(verdict, indent=1) + "\n"
+    if a.out:
+        Path(a.out).write_text(text)
+    sys.stdout.write(text)
+    for p in verdict["problems"]:
+        sys.stderr.write(f"placement gate: {a.role}: {p}\n")
+    return 0 if verdict["passed"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="placement.py")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -333,7 +566,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--peer", default=None)
     p.add_argument("--rtt", default=None, help="HOST:PORT on the peer's route: the TCP-connect RTT target")
     p.add_argument("--out", default=None)
+    g = sp.add_parser("gate", help="the deployment gate: exit 0 when ROLE may run here, 1 with the reasons when it may not")
+    g.add_argument("--role", required=True, choices=sorted(GATE_RULES))
+    g.add_argument("--self", dest="self_", default=None, metavar="FILE|-", help="this machine's probe record; default: probe it now")
+    g.add_argument("--peer", action="append", default=[], metavar="ROLE[:NAME]=FILE", help="a peer's probe record")
+    g.add_argument("--absent", action="append", default=[], choices=PEER_ROLES, help="a peer role not deployed yet")
+    g.add_argument("--link", action="append", default=[], metavar="NAME=HOST:PORT", help="measure the route to a separate peer")
+    g.add_argument("--cores", default=None, metavar="LIST", help="the role's dedicated CPUs, e.g. 124-127")
+    g.add_argument("--out", default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "gate":
+        return _gate_main(a, ap)
     doc = probe(a.peer or None, a.rtt or None)
     text = json.dumps(doc, indent=1) + "\n"
     if a.out:

@@ -1321,3 +1321,32 @@ def test_quick_tier_py_refuses_a_call_it_cannot_place(tmp_path, monkeypatch):
         assert quick_tier.main(argv) == 2
     monkeypatch.delenv("RESEARCH_RUN_DIR")
     assert quick_tier.main(["--head", "h", "--base", "b", "--", "c"]) == 2 and not (tmp_path / "result.json").exists()
+
+
+def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_path):
+    """Each tier's checkout is fresh, so the verifier's `lake build` ran cold in every one and held a node-1 slot for most of a
+    small PR's tier (#1298, 6 Oct). In a slot (CHECK_SLOT) it starts from the slot's last passing `.lake`; a warm build that fails
+    is retried cold, and outside a slot nothing is kept."""
+    from research import quick_tier
+
+    lake = tmp_path / "lake"
+    lake.write_text('#!/bin/sh\n[ -f .lake/warm ] && w=warm || w=cold\necho "$w" >> "$LOG"\n'
+                    '[ "$w" = warm ] && [ -n "$FAIL_WARM" ] && exit 3\nmkdir -p .lake && echo x > .lake/warm\n')
+    lake.chmod(0o755)
+    log = tmp_path / "log"
+    env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
+    d = "backends/flock/verifier/lean"
+
+    def run(n, **extra):
+        (pkg := tmp_path / f"t{n}" / d).mkdir(parents=True)
+        return quick_tier.build(str(lake), pkg, d, {**env, **extra})
+
+    assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "backends--flock--verifier--lean"
+    assert (warm / "warm").is_file()
+    assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
+    assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}
+    assert log.read_text().split() == ["cold", "warm", "warm", "cold"]
+    assert quick_tier.warm_dir({"HOME": env["HOME"]}, d) is None and quick_tier.warm_dir({**env, "CHECK_SLOT": "../x"}, d) is None
+    env.pop("CHECK_SLOT")
+    assert run(4) == {"dir": d, "rc": 0, "start": "cold"} and log.read_text().split()[-1] == "cold"
