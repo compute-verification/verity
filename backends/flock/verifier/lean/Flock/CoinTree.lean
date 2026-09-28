@@ -5,7 +5,8 @@ session's tree, drawn after the nonce, never reused and never revealed before th
 `coin_tree = {key, nonce, root, spec}`.
 
 The verifier checks the record, not the openings: the commitment protects the prover (§7). It checks R7 with the prover's
-nonce, the record's `coin_tree`, and, across the sessions it verifies together, that no key or nonce repeats.
+nonce, the record's `coin_tree`, and, across the sessions it verifies together, that no key repeats. Nonces are not
+compared across sessions: a repeated prover nonce is not a soundness matter.
 -/
 import Flock.Canon
 
