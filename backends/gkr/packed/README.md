@@ -41,7 +41,7 @@ PYTHONPATH=backends/numerical/python python backends/gkr/packed/bench.py --repri
 |---|---|---|
 | **r20260922-062108-4b25** | **the table**: `--mode triton` (fused kernels), t = 2^20, 2^22, 2^24, 2^26, k = 0..4, median of 9 after 3 warm | 36 tests passed on the H100 (CPU, CUDA eager, CUDA triton; k = 0..4, n <= 10) |
 | r20260922-055336-4080 | earlier state: Triton SIMT passes + cuBLAS `_int_mm`, torch reduce/contract; t <= 2^24 | 36 passed |
-| (unrecorded, `results/eager_l22_24`) | `--mode eager`: the torch-op baseline | 22 passed |
+| (unrecorded) | `--mode eager`: the torch-op baseline | 22 passed |
 
 ## The table (r20260922-062108-4b25; one layer table would be 2^28.6 elements)
 
@@ -109,7 +109,7 @@ ways), but for a different reason -- 3.8x fewer/cheaper operations at 1.6% utili
 at 17.2%.  The plain kernel as measured would have put A at 2.84e7.  The sumcheck is still 47-60% of A's re-priced
 total; the remaining buckets are modelled, not measured.
 
-## Ledger (`backends/reports/ledger/a-packed.jsonl`)
+## Ledger (`backends/numerical/reports/ledger/a-packed.jsonl`)
 
 Final entries (run r20260922-062108-4b25): `plain c-round sumcheck k=0, fused Triton+tensor cores` -- component,
 238 us/VU; `packed sumcheck k=3: 3.8x on the dominant bucket (measured)` -- component, 62.7 us/VU, breakthrough;
@@ -185,7 +185,7 @@ Launch overhead is the a-gpu prover's problem to solve (it owns the round loop):
 
 ## Third pass (lane `a-fusion`): launch-fused logUp, round-fused sumcheck, v2 shape
 
-Full write-up: `note:r20-proof/a-fusion/20260922T0853Z-report-a-kernels-h100-v2` (+ `.json`); raw results `backends/numerical/reports/a_fusion/`.
+Full write-up: `note:r20-proof/a-fusion/20260922T0853Z-report-a-kernels-h100-v2` (+ `.json`).
 All on vy-g4 (H100), tests: 31 sumcheck agreement + 7 graphed logUp + 4 vector tests bit-exact.
 
 | what | before -> after |

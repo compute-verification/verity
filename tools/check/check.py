@@ -11,10 +11,12 @@ Steps, in order; `check` stops at the first that fails:
     pytest          every test under the root `pyproject.toml` testpaths, except the `circuit_suite` ones (the next step runs them)
     circuit-check   `circuit-check --all`: every registered Definition and template (`tools/circuit_check`), its report beside
                     the run's result
-    lean-build      `lake build` of the Lean verifier (PR #85, `backends/flock/verifier/lean`), then
+    lean-build      `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then
     lean-unit-cut   its partition check against `verity.ir.partition` on random cuts (`unit_cut_agree.py`), then
     lean-audit      `tools/lean/audit.py --all --build`: every Lake package with a `lean-audit.json` built and audited
-                    (axioms, sorry, declared axioms, escapes, files, kernel bypasses, pinned statements, a kernel replay),
+                    (axioms, sorry, declared axioms, escapes, files, kernel bypasses, code run while compiling, dependency
+                    .olean digests, pinned statements, a kernel replay; facts read from the .olean files as data, builds
+                    in a sandbox where the machine allows one),
                     after the controls; its reports under `lean-audit/`, then
     lean-agreement  its agreement with upstream's Rust verifier (`ci-pod.sh`) when the run is sent the input bundle
                     (`--send ci-bundle.tar.gz`); skipped by name without one (`lean_steps`)
@@ -32,7 +34,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: PR #85: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
+#: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
 
 
@@ -43,13 +45,13 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 
 
 def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
-    """The Lean steps: nothing until PR #85 is on the tree (a skip, named); then `lake build`, the Lean partition check's
+    """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ir.partition` (`unit_cut_agree.py`), and the agreement job against upstream's Rust verifier
     (`ci-pod.sh`) when the run was sent its input bundle (`--send ci-bundle.tar.gz`, made by `ci-bundle.sh` on a machine with
     store credentials); without one that step is skipped by name, and the cross-check stays the recorded `flock_agreement` job."""
     lean = FLOCK_VERIFIER / "lean"
     if not (lean / "lakefile.toml").exists():
-        return [("lean", "skipped: PR #85 (backends/flock/verifier) is not on this tree", ROOT)]
+        return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     bundles = sorted((out / "inputs").glob("ci-bundle*.tar.gz"))
     agreement: list[str] | str = "skipped: no upstream bundle sent with this run (--send ci-bundle.tar.gz); the cross-check is `flock_agreement`"
