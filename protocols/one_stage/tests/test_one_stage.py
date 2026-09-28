@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from fractions import Fraction
 from math import comb
+from pathlib import Path
 
 import pytest
 
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
+import verity.ml.prims  # noqa: F401  (with verity.ml.scalar, the primitives partition_vectors.json's descriptor names)
+import verity.ml.scalar  # noqa: F401
+from verity.ir import codec, partition_object as PO
+from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ir.program import Program
 from verity.ir.types import Array, Value
 from verity_one_stage import audit, draw as D, partition as P, registration as R
@@ -372,3 +378,69 @@ def test_a4_under_the_stratified_rule():
     core = audit.core_law(law, sum(sizes))
     assert core.count_bound(2.0 ** -20) == 91_063 and core.stratum_bound(temps[0].id, 2.0 ** -20) == 286
     assert core.escape({temps[0].id: 287}) == 0
+
+
+# ---- the partition is core's `verity/partition/v1` (`verity.ir.partition_object`), byte for byte ------------------------
+
+CORE_VECTORS = Path(__file__).resolve().parents[3] / "packages" / "verity" / "tests" / "ir"
+QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
+TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
+V32 = Value(32)
+#: the primitives template_instance_vectors.json's descriptors name (a partition reads their ids and types only)
+TEMPLATE_REG = Registry()
+for _name in ("TAdd32", "TMul32"):
+    TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
+
+
+def _one_stage(program, q) -> dict:
+    obj = P.partition(program, q)
+    return {"object": codec.canonical_json(obj), "digest": P.digest(obj), "program": P.program_sha512(program),
+            "population": P.units(program, q), "ranges": P.ranges(program, q)}
+
+
+def _core(program, q) -> dict:
+    obj, part = PO.build(program, q), PO.evaluate(program, q)
+    return {"object": codec.canonical_json(obj), "digest": PO.digest(obj), "program": PO.program_sha512(program),
+            "population": part.population, "ranges": [(t, lo, n) for _k, t, lo, n in part.ranges]}
+
+
+def test_the_partition_is_cores_on_the_pinned_q_word_vector():
+    """One-stage names any `verity/partition/v1` object as core does, and applies only the template queries."""
+    prog = codec.decode_program(json.loads(QWORD["descriptor"]), REGISTRY)
+    q = QWORD["object"]["query"]
+    obj = P.partition(prog, q)
+    assert codec.canonical_json(obj) == codec.canonical_json(QWORD["object"]) == codec.canonical_json(PO.build(prog, q))
+    assert P.program_sha512(prog) == QWORD["program_sha512"] == PO.program_sha512(prog)
+    assert P.digest(obj) == QWORD["object_digest"] == PO.digest(PO.build(prog, q))
+    with pytest.raises(P.QueryRefused):
+        P.units(prog, q)
+
+
+@pytest.mark.parametrize("n", range(len(TEMPLATE["cases"])), ids=[c[0] for c in TEMPLATE["cases"]])
+def test_the_partition_is_cores_on_the_pinned_template_vectors(n):
+    _label, name, q, want = TEMPLATE["cases"][n]
+    prog = codec.decode_program(json.loads(TEMPLATE["descriptors"][name]), TEMPLATE_REG)
+    pinned = {"object": codec.canonical_json(want["object"]), "digest": want["digest"], "program": want["object"]["program"],
+              "population": want["population"], "ranges": [(t, lo, c) for _k, t, lo, c in want["ranges"]]}
+    assert _one_stage(prog, q) == pinned == _core(prog, q)
+
+
+def test_the_partition_is_cores_on_this_protocols_programs():
+    temps = [_template(i) for i in range(6)]
+    pair, both = P.template_instance_query(PAIR.id), P.template_instances_query([PAIR.id, XOR3.id])
+    cases = [(P.population_program(PAIR, n), pair) for n in (1, 3, 5, 6, 7)]
+    for members in ([(PAIR, 3), (XOR3, 5)], [(PAIR, 3), (XOR3, 4)], [(XOR3, 2), (PAIR, 3), (XOR3, 1)], [(PAIR, 2), (PAIR, 3), (XOR3, 1)]):
+        prog = P.mixed_population_program(members)
+        cases += [(prog, both), (prog, P.template_instances_query([XOR3.id, PAIR.id]))]
+    sizes = (287, 6_171_648, 11_480, 287, 287, 587_776)
+    cases.append((P.mixed_population_program(list(zip(temps, sizes))), P.template_instances_query(temps)))
+    for prog, q in cases:
+        assert _one_stage(prog, q) == _core(prog, q), (prog.root.id, q)
+
+
+def test_a_pre_canonical_object_keeps_its_digest():
+    """A record made before the canonical envelope names `{program, query}` (benchmarks' `--legacy-partition`); its digest is
+    the envelope's rule over that object, as the roots registered with it bind."""
+    prog = P.population_program(PAIR, 6)
+    old = {"program": P.program_sha512(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
+    assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
