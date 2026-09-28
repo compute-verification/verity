@@ -106,6 +106,16 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   if tags.hm96Rows then Stmt.setupH tags circuitB pubB coins tables draw partition program
   else do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
+/-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. -/
+def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none) :
+    V (SessionSpec × Array Stmt) :=
+  if tags.hm96Rows then Stmt.setupTables tags circuitB pubB coins count tables draw partition program
+  else if count > 1 then throw s!"{tags.name}: one table per session"
+  else do
+    let st ← buildStmt tags circuitB pubB compB coins tables draw partition program
+    return (st.spec, #[st])
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -148,16 +158,18 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
     IO.println s!"{hex}  {path}"
   return 0
 
-/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
-tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
-circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
-verdict line per session, in order. Exit 0 iff every session is accepted. -/
+/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
+names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
+pinned compression circuit; `J` (default 1) is the tables of every session (§16.11). Each DIR holds `session.json` and
+`<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order. Exit 0
+iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--coins seed|os] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--partition F] [--program F] [--coins seed|os] [--session-tables J] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
+  let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
@@ -170,36 +182,40 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let setupOf := fun (draw : Option Lean.Json) => match buildStmt tags circuitB pubB compB coins tables draw partition program with
-    | .ok st => Except.ok (Setup.ofCircuit st, st.partition)
+  let setupOf := fun (draw : Option Lean.Json) =>
+    match buildSession tags circuitB pubB compB coins tables count draw partition program with
+    | .ok (spec, sts) => Except.ok (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
     | .error e => Except.error s!"setup: {e}"
   let setup := setupOf none
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
-  let mut drawn : Array (String × Except String (Setup × Lean.Json)) := #[]
+  let mut drawn : Array (String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
-    let files ← try
-        let record ← IO.FS.readFile (dir ++ "/session.json")
-        let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
-        pure (Except.ok (record, proofs))
+    let record ← try pure (Except.ok (← IO.FS.readFile (dir ++ "/session.json")))
       catch e => pure (Except.error s!"session files: {e}")
-    -- a drawn session is verified against the drawn units' statement (Σ covers the draw)
+    -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
     let mut st := setup
     if tags.hm96Rows then
-      if let .ok (record, _) := files then
-        if let some d := recordDraw record then
+      if let .ok r := record then
+        if let some d := recordDraw r then
           let key := (canon d).toOption.getD ""
           match drawn.find? (·.1 == key) with
           | some (_, s) => st := s
           | none =>
             st := setupOf (some d)
             drawn := drawn.push (key, st)
-    let verdict := do let (record, proofs) ← files; verify (← st).1 record proofs
+    let files ← match record, st with
+      | .ok r, .ok (spec, _, _) =>
+        try pure (Except.ok (r, ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"))
+        catch e => pure (Except.error s!"session files: {e}")
+      | .error e, _ => pure (.error e)
+      | _, .error e => pure (.error e)
+    let verdict := do let (record, proofs) ← files; let (spec, tabs, _) ← st; verify spec tabs record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
-    let part := match st with | .ok (_, p) => p | .error _ => Lean.Json.null
+    let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]))
     IO.println s!"VERDICT {line.compress}"

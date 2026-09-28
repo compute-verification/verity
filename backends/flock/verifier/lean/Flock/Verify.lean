@@ -9,9 +9,8 @@ namespace Flock
 
 open Transcript
 
-/-- A statement as the pipeline sees it (§16's `setup` output). -/
+/-- One table's statement as the pipeline sees it (§16's `setup` output). -/
 structure Setup where
-  spec : SessionSpec
   m : Nat
   kLog : Nat
   digest : ByteArray
@@ -25,15 +24,16 @@ structure Setup where
   deriving Inhabited
 
 def Setup.ofCircuit (st : Stmt) : Setup :=
-  { spec := st.spec, m := st.m, kLog := st.c.kLog, digest := st.digest.extract 0 32, fold := st.circuitFold,
+  { m := st.m, kLog := st.c.kLog, digest := st.digest.extract 0 32, fold := st.circuitFold,
     extra := st.extraClaims, merkle := st.merkle,
     publics := fun p => if p.size == 0 then pure () else throw "S8: the circuit statement commits no public words" }
 
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
 
-/-- §9–§14 for rep `r`; returns the proof's flattened cap. -/
-def verifyRep (st : Setup) (sch : Schedule) (sess : Session) (r : Nat) (bytes : ByteArray) : V ByteArray := do
-  let name := s!"{st.spec.table}/rep{r}"
+/-- §9–§14 for table `i`'s rep `r`; returns the proof's flattened cap. -/
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
+  let t := spec.tables[i]!
+  let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes
@@ -45,26 +45,32 @@ def verifyRep (st : Setup) (sch : Schedule) (sess : Session) (r : Nat) (bytes : 
     let lc ← lincheck st.fold zc p.lincheck
     let (T, sws) ← ringSwitch st.m (abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
     ligerito st.merkle sch T p.cap p.ligerito (basis sws)
-  let ((), t) ← prog.run (Transcript.init stream.rounds (st.spec.domain r).toUTF8)
-  if t.k != stream.rounds.size then throw s!"S15/R2: {name}: {stream.rounds.size - t.k} recorded rounds were never consumed"
+  let ((), tr) ← prog.run (Transcript.init stream.rounds (spec.domain t r).toUTF8)
+  if tr.k != stream.rounds.size then throw s!"S15/R2: {name}: {stream.rounds.size - tr.k} recorded rounds were never consumed"
   let cap := p.cap.foldl (· ++ ·) ByteArray.empty
-  if cap != sess.rootB then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
+  if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
   return cap
 
-/-- The verdict: `.ok ()` is Accept. `proofs[r]` is the file the server received for rep `r`. -/
-def verify (st : Setup) (record : String) (proofs : Array ByteArray) : V Unit := do
-  let sess ← Record.decode st.spec record
-  st.publics sess.publics
-  let some sch := fast100 st.m | throw s!"m = {st.m}: no fast100 schedule"
-  if proofs.size != 2 then throw "two proofs expected"
-  let want := [s!"{st.spec.table}/rep0", s!"{st.spec.table}/rep1"]
-  if sess.proofSha.size != 2 || !want.all (fun w => sess.proofSha.any (·.1 == w)) then
-    throw s!"S17: proof_{st.spec.dk} does not list exactly the two rep streams"
-  for r in [0:2] do
-    let sha := (sess.proofSha.find? (·.1 == want[r]!)).map (·.2)
-    if sha != some (hexOf (st.spec.dg proofs[r]!)) then throw s!"S17: {want[r]!}: the proof is not the one the server received"
-  let c0 ← verifyRep st sch sess 0 proofs[0]!
-  let c1 ← verifyRep st sch sess 1 proofs[1]!
-  if c0 != c1 then throw "S18/R1: the reps' caps differ"
+/-- The verdict: `.ok ()` is Accept. `tabs[i]` is table `i`'s statement, and `proofs[2i + r]` the file the server received
+for its rep `r`. -/
+def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  let sess ← Record.decode spec record
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => match fast100 st.m with
+    | some sch => pure sch
+    | none => throw s!"m = {st.m}: no fast100 schedule"
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if (sess.proofSha.find? (·.1 == w)).map (·.2) != some (hexOf (spec.dg b)) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, sch) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRep spec st sch sess i 0 proofs[2 * i]!
+    let c1 ← verifyRep spec st sch sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 end Flock

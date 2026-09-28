@@ -192,7 +192,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
 | S4 | `link.sigma = hex(Σ)` | the session is about this statement |
-| U1–U3 | the record's `unit_draw` is the statement's, well formed, and the statement's instances are the drawn units (§7.3) | the drawn units are the proved ones |
+| U1–U3 | the record's `unit_draw` is the statement's (for several tables, the session's draw, §16.11), well formed, and the statement's instances are the drawn units (§7.3) | the drawn units are the proved ones |
 | S5 | for every configured table `t`: `root_b.<t>` present, non-empty, and `SHA-256(root_b.<t>) = root_b_sha256.<t>` (keys for other tables are ignored, as upstream does) | L1/L3 |
 | S6 | `SHA-256(root_f) = root_f_sha256` and `root_f` non-empty; for these statements `root_f = Σ` (intended divergence D1, §17.1) | L1: statements without a prime half commit Σ as root_F |
 | S7 | for every configured `t`: `SHA-256(publics.<t>) = publics_sha256.<t>` (absent key = empty bytes; other keys ignored) | C4 prerequisites |
@@ -1179,6 +1179,36 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
+
+### 16.11 Sessions of several tables (#306, `--session-tables J`)
+
+A session may prove its units in `J` tables (`Stmt.setupTables`, upstream's `session_tables`). `J` is the verifier's
+setting (`verify --session-tables J`, default 1), never the record's. Only `verity/flock-circuit` from `967b8d06` defines
+such a session; any other statement refuses `J > 1`.
+
+- **The tables.** Take the session's units: the record's draw's (§7.3), or without a draw the population's `0 … N − 1`.
+  - The draw must be a `subset` draw of the registered population. A Bernoulli or stratified draw is refused, since its
+    count is not fixed.
+  - Refused as well: `J > 64`, no units, or a count `J` doesn't divide.
+  - The units split into `J` equal consecutive parts of `k` units. Table `j` is `circuit-{j:02}`. Its statement is §16.10's
+    drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
+    `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
+    parts; table j proves part j as a subset draw of the population"}`.
+  - Every part comes from the session's draw. Nothing in the record describes a table's units.
+- **The session.**
+  - Every table must have the same `m_pts`.
+  - Σ = `SHA-512("verity/flock-circuit/sigma-tables" ‖ le64(J) ‖ Σ_0 ‖ … ‖ Σ_{J−1})`, and `root_F = Σ` (S6).
+  - `Hello` names the tables in order, with this Σ.
+  - A table's rep domain is `flock-circuit/fast100x2/<t>/rep<r>`.
+  - U1–U3 compare the record's `unit_draw` with the session's draw, never a table's part.
+- **The checks.**
+  - §5.3 runs over every table: S5, S7, S8, S13 and S16 per table. S10's `y` has `2J` zeros. S11 and S17 cover exactly the
+    `2J` rep streams. S14's roots are in table order, which is lexicographic.
+  - Table `t`'s reps are the files `<t>.rep<r>.bin`. Each is verified against its table's statement and domain, and S18
+    applies per table.
+- **Upstream's rules the record can't show.** One `Commit` carries every root. Every proof comes after the session's last
+  coin (the barrier). These are the live server's and the prover's rules. The barrier serves zero-knowledge; a verifier
+  accepts without it.
 
 ## 17. Acceptance, assumptions and trust
 
