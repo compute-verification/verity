@@ -32,9 +32,10 @@ promotion (`G = 0`):
   salt-dead codes per element instead. The screen `x² > 90·ρ²`, about 9.49ρ (`Fp4Dev.screenDead`, `DEAD_RHO_SQ = 90`),
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
-* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = keyed(blake3("pearl-c4/v0/seed-B"),
-  salt ‖ root_B)`, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` drawn from `seed_B`. The verifier forms `B̃` itself on
-  every drawn tile and rejects when the checked values differ. It is a condition of the domain.
+* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)`
+  (SHA-512 of the label block and the message, its first 32 bytes; `pearl_c4.labelled`), and `B̃ = form(B, E_B, F_B)`
+  with `E_B`, `F_B` drawn from `seed_B`. The verifier forms `B̃` itself on every drawn tile and rejects when the checked
+  values differ. It is a condition of the domain.
 * **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
   units). Its executable reference is #556's `pearl_c4.tile_debit` (`9363e5012`), the rule the assessor's grant of
   6:36 PM PDT names; each term carries #556's name for it:
@@ -713,8 +714,8 @@ structure Fp4Sem (Q R S : Type) where
 variable {Q R S : Type}
 
 /-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK", 11:00Z; `pearl_c4.seed_b`), a domain rule of
-TT_OUT-FP4. `seed_B = keyed(blake3("pearl-c4/v0/seed-B"), salt ‖ root_B)`, with the salt from this job's epoch beacon
-and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
+TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), with the salt from this
+job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
 - `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
   the salt, so a `B̃` keyed by another salt, or by none, is excluded.
 - `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (TurboSHAKE128 of

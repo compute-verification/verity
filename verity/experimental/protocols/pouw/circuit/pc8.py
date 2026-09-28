@@ -14,12 +14,14 @@ scheme's (whole 16-row ticket subtiles), so a short last tile row, r = m mod TM 
 r × TN (`Shape.tile_rows`, `tile_templates`).  The partition is `Q_template_instances` over the templates (`query`), and
 every value is computed in exactly one unit.  Forming v0 (#311's
 port) has no circuit here.  The hiding Programs are `pc4`'s (``Shape.hidden``): `Pc8TileHidden` returns its tile digest in
-place of C̃ and U, and the rows are C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i,
-B̃_j ‖ P_B,j; `leaves`) and each row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the
-per-tile cap to the hiding call, cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row
-unit along k into a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's
-block at every served k.  A shape takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a
-short last tile row there); off, nothing here changes.
+place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, the row its ``sha512/row-seg/v1`` leaf
+hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet), and the rows are
+C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
+row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
+cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
+per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k.  A shape
+takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row there); off,
+nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -270,6 +272,20 @@ Pc8TileHiddenDef = CompositeDefinition(
     doc="`Pc8Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
+
+def _tile_hidden_h3_body(B, S_, ac, bc, pa, pb):
+    k, tm, tn = S_.K, S_.TM, S_.TN
+    out = B.call(templates(k, (tm, tn), S_.DEV)["tile"], ac, bc, pa, pb)
+    return L.tile_messages(out[0], out[1], tm, tn)
+
+
+Pc8TileHiddenH3Def = CompositeDefinition(
+    "Pc8TileHiddenH3", 1, ("K", "TM", "TN", "DEV"), lambda S_: (_tile_sig(S_)[0], L.messages_type(S_.TM, S_.TN)),
+    _tile_hidden_h3_body,
+    doc="`Pc8TileHidden` under hashing -h3: `Pc8Tile`'s checked words as the tile's messages (`pearl_c.messages`, "
+        "`leaves.tile_messages`), whose bits are the row `Sha512RowSeg_v1{N_BITS = 64·TM·TN}` hashes into `pearl_c.leaf`; "
+        "a value for that unit, not a public output.", conformance="protocol-defined")
+
 #: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
 #: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
 #: `cap.ADVICE`), which C-Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
@@ -337,11 +353,14 @@ SEEDS = {"seed_a": C.LABELS["seed-A"].decode(), "seed_b": C.LABELS["seed-B"].dec
 
 @lru_cache(maxsize=16)
 def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
-              hidden: bool = False) -> dict[str, SpecializedDefinition]:
+              hidden: bool = False, hashing: str = "h0") -> dict[str, SpecializedDefinition]:
     """The unit templates at depth ``k``, tile ``tile`` (rows, columns) and device ``dev``, by role; ``hidden``, the
-    hiding tile."""
+    hiding tile, under ``hashing`` h0 (`Pc8TileHidden`) or h3 (`Pc8TileHiddenH3`)."""
+    if hashing not in C.HASHINGS or (hashing != "h0" and not hidden):
+        raise ValueError(f"Pearl-C's tile takes hashing {' or '.join(C.HASHINGS)}, and h3 only hiding: {hashing!r}")
+    td = Pc8TileDef if not hidden else Pc8TileHiddenDef if hashing == "h0" else Pc8TileHiddenH3Def
     return {"row_b": bind(Pc8RowBDef, K=k, DEV=dev), "row_a": bind(Pc8RowADef, K=k, DEV=dev),
-            "tile": bind(Pc8TileHiddenDef if hidden else Pc8TileDef, K=k, TM=tile[0], TN=tile[1], DEV=dev)}
+            "tile": bind(td, K=k, TM=tile[0], TN=tile[1], DEV=dev)}
 
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
@@ -549,7 +568,8 @@ def check(shape: Shape) -> SpecializedDefinition:
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
 ROLES = pc4.ROLES
-_ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile"}
+_ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile",
+            id(Pc8TileHiddenH3Def): "tile"}
 
 
 def _role_of() -> dict[int, str]:

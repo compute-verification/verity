@@ -19,6 +19,7 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
+from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.program import Program
@@ -26,6 +27,7 @@ from verity.ml.circuits.ops.fp32 import F32FmaV2
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.ml.circuits.ops.scalar import I32Le
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.randomness import derive
 from verity.experimental.protocols.pouw.circuit import pc8, plan
 from verity.experimental.protocols.pouw.circuit.anchors import TileAnchors
@@ -129,9 +131,10 @@ def test_the_floor_is_the_sign_of_one_fma():
 
 # ---- the units against the scheme -------------------------------------------------------------------------------------
 
-def _case(case: str, shape: tuple[int, int, int], dev: str, index: int = 3, weight: int = 9, tile=(16, 16)):
-    s = C.PearlC(k_min=32, tile=tile, forming="v1", device=DEVICES[dev])
-    ctx = V.ctx_of(case, shape, index, weight)
+def _case(case: str, shape: tuple[int, int, int], dev: str, index: int = 3, weight: int = 9, tile=(16, 16),
+          hashing: str = "h0"):
+    s = C.PearlC(k_min=32, tile=tile, forming="v1", device=DEVICES[dev], hashing=hashing)
+    ctx = V.ctx_of(case, shape, index, weight, hashing == "h3")
     m, k, n = shape
     a, b = V.rows_f32(case, "A", m, k), V.rows_f32(case, "B", n, k)
     noise = s.noise(ctx)
@@ -330,6 +333,54 @@ def test_the_port_check_holds_advice_to_unread_parameters():
     for bad in ({**ports, "advice": ("pa",)}, {**ports, "rows": ports["rows"][:-1], "advice": (0,)}):
         with pytest.raises(AssertionError):
             CF.check_ports(tile, bad, pc8.DERIVATIONS, K, reads)
+
+
+def _row_seg_arguments(row: bytes, n_bits: int) -> list[int]:
+    """`Sha512RowSeg_v1{N_BITS}`'s argument, the row's bits in leaf order: bit i is bit i % 8 of byte i // 8 (#1438's
+    `verity.ml.commitments.gates.rowleaf.arguments`, which is not on main yet)."""
+    return [(row[i >> 3] >> (i & 7)) & 1 for i in range(n_bits)]
+
+
+def _element_bits(words, width: int) -> list[int]:
+    """Words as a Boolean lowering carries them (`boolean.bit_type`): each its ``width`` bits, least significant first."""
+    return [(w >> j) & 1 for w in words for j in range(width)]
+
+
+@pytest.mark.parametrize("shape, tile", [((4, K, 6), (2, 3)), ((16, K, 64), (16, 64)),
+                                         pytest.param((64, K, 64), (64, 64), marks=pytest.mark.slow)],
+                         ids=["2x3", "16x64", "64x64"])
+def test_the_h3_hiding_tile_returns_the_row_its_leaf_hashes(shape, tile):
+    """`Pc8TileHiddenH3` on each of the -h3 scheme's tiles (its A′, P_A, B̃ and P_B) returns that tile's messages: its
+    words' bits, as a Boolean lowering carries them, are `Sha512RowSeg_v1`'s argument over ``b"".join(messages)``, whose
+    `sha512_row_seg_digest` is the scheme's -h3 leaf.  At 16 x 64 each row is two 32-column chunks, so a word in the wrong
+    chunk or field moves; 64 x 64 is the scheme's tile, 262,144 bits in 32 segments.  `Sha512RowSeg_v1`'s gates over this value are #1438's; the composed test lands with it."""
+    m, k, n = shape
+    s, ctx, *_ = _case("pc8-h3-tile", shape, "sm120", tile=tile, hashing="h3")
+    noise = s.noise(ctx)
+    a, b = V.rows_f32("pc8-h3-tile", "A", m, k), V.rows_f32("pc8-h3-tile", "B", n, k)
+    fn = pc8.templates(k, tile, "sm120", True, "h3")["tile"]
+    n_bits = 64 * tile[0] * tile[1]
+    assert fn.id == f"Pc8TileHiddenH3_v1{{K={k},TM={tile[0]},TN={tile[1]},DEV='sm120'}}"
+    assert BL.bit_type(fn.signature()[1]).leaves == n_bits
+    for t in s.tiles(ctx.matmul.shape):
+        ops = s.encode(ctx, noise, [a[i] for i in t.rows], [b[j] for j in t.cols], t)
+        assert s.admissible(ctx, ops)
+        checked = s.checked(ctx, ops)
+        out = evaluate(fn, _flat(ops.a.codes), _flat(ops.b.codes), _flat(ops.pa), _flat(ops.pb))
+        row = b"".join(C.messages(checked))
+        assert len(row) * 8 == n_bits and _element_bits(out, 32) == _row_seg_arguments(row, n_bits)
+        assert sha512_row_seg_digest(row, n_bits) == s.digest(ctx, noise, checked) == C.leaf(checked, "h3")
+
+
+def test_the_h3_tile_is_hiding_only_and_leaves_h0_as_it_is():
+    """-h3 changes only the hiding tile: the row units and the plain tile are h0's Definitions, h0's hiding tile is
+    `Pc8TileHidden` (its Programs are pinned in `WHOLE`), and a plain tile under -h3 or an unknown hashing is refused."""
+    h0, h3 = pc8.templates(K, (2, 3), "sm120", True), pc8.templates(K, (2, 3), "sm120", True, "h3")
+    assert h0["row_a"] == h3["row_a"] and h0["row_b"] == h3["row_b"]
+    assert h0["tile"].defn is pc8.Pc8TileHiddenDef and h3["tile"].defn is pc8.Pc8TileHiddenH3Def
+    for bad in ((False, "h3"), (True, "h1")):
+        with pytest.raises(ValueError, match="h3 only hiding"):
+            pc8.templates(K, (2, 3), "sm120", *bad)
 
 
 @pytest.mark.parametrize("dev", ["h100", "sm120"])
