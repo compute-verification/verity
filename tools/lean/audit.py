@@ -3,8 +3,9 @@
     python tools/lean/audit.py [--build] [--update] [--out DIR] PACKAGE_DIR...
     python tools/lean/audit.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
 
-For each package it imports the policy's `roots` into a file that `Audit.lean` completes, runs it with `lake env lean`, and
-replays the audited modules through the kernel (`Replay.lean`). It fails a package when:
+For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
+environment extension loaded, so none of the package's code runs), and replays the audited modules through the kernel
+(`Replay.lean`). It fails a package when:
 
     axioms       a declaration of an audited module uses an axiom outside `axioms` (default propext, Classical.choice,
                  Quot.sound): `sorryAx` is a sorry, `Lean.ofReduceBool` or `Lean.trustCompiler` a native_decide
@@ -13,7 +14,12 @@ replays the audited modules through the kernel (`Replay.lean`). It fails a packa
                  `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
     orphans      a .lean file of the package is neither an audited module nor under an `exempt` prefix
     unchecked    a source file or the lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a
-                 `bootstrap.*` option, `addDeclWithoutChecking` or `addDeclCore`
+                 `bootstrap.*` option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings aside)
+    compile-time a source file runs code while it compiles (an initializer, `#eval`, `run_cmd`, an elaborator or macro:
+                 each can do IO) outside a module listed under `compile_time`, or the package has a `lakefile.lean`
+    policy       the package has no `lean-audit.json` (the message carries a template)
+    dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
+                 toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
@@ -23,17 +29,26 @@ replays the audited modules through the kernel (`Replay.lean`). It fails a packa
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
                  differ from those the `.olean` files recorded; a replay killed by a signal is reported as a kill
+    upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
+                 a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
+                 a bump that brings such a proof fails until someone has looked at it
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
-    tamper       this tool's files or the toolchain's `lean`, `lake` or `leanchecker` changed during the run (a build runs
-                 arbitrary code); the Lean files are run from a copy taken before the first build
+    tamper       this tool's files, the toolchain's `lean`, `lake` or `leanchecker`, or the `.olean` files of a package
+                 audited earlier in the run changed during it; the Lean files are run from a copy taken before the first build
+
+`--build` builds in a sandbox where the machine allows one (`sandbox.sh`: new user, mount, network and PID namespaces;
+everything read-only but the build's `.lake` directories; no network; nothing outlives the build), and says when it
+cannot; the `compile-time` check stands in for it then.
 
 A record holds the statement, not the proof, so a pin may be recorded on a `sorry` stub and pass once a proof with allowed
 axioms replaces it.  `--update` writes the records and `reads` from the build instead of comparing them, and prints what
 changed: each changed pin's signature before and after, and each changed definition a pin reads with its source now.  A
 weakened definition passes every axiom check and the replay, so those changes need a named statement reviewer in the merge
-handoff; `--update` records them, it does not approve them.  `--all` first runs the controls (`controls`): a
-fixture package built with each audited toolchain, which must pass clean and fail each check once a violation is added.
+handoff; `--update` records them, it does not approve them.  A pin whose statement is the same but prints differently
+(same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
+fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
+check once a violation is added.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -71,12 +86,31 @@ SKIP_DIRS = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 #: anywhere in a package's sources and lakefile.  A scan is evaded by building the name at run time, which the replay catches.
 UNCHECKED = re.compile(r"\b(debug\.skipKernelTC|skipKernelTC|debug\.byAsSorry|debug\.proofAsSorry|debug\.terminalTacticsAsSorry"
                        r"|bootstrap\.\w+|addDeclWithoutChecking|addDeclCore)\b")
+#: code a Lean file runs while it is compiled (an initializer, an `#eval`, a command or an elaborator: each can do IO, and a
+#: macro can expand to one); refused in a package's sources unless its module is listed under `compile_time`
+COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected|noncomputable|scoped|local|partial|unsafe)"
+                          r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
+                          r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
+                          r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
+#: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
 FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "layers", "pins", "reads")
+ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "layers", "upstream", "pins",
+         "reads", "dependencies")
+
+
+def sibling(name: str):
+    """This directory's `name.py`, loaded by path (the directory is copied into other repositories, not installed)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(f"lean_{name}", HERE / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def lake_env() -> dict[str, str]:
@@ -131,34 +165,84 @@ def lean_modules(pkg: Path) -> dict[str, str]:
     return out
 
 
-def unchecked(pkg: Path, files: dict[str, str]) -> list[str]:
-    """Where the package's sources or lakefile name an option or entry point that bypasses the kernel (`UNCHECKED`)."""
+def strip_comments(src: str, toml: bool = False) -> str:
+    """``src`` with its comments (Lean's `--` and nested `/- -/`, docstrings included; TOML's `#`) blanked out, string
+    literals and line numbers kept."""
+    out, i, n, depth = [], 0, len(src), 0
+    while i < n:
+        c = src[i]
+        if depth:
+            if src.startswith("/-", i):
+                depth, i = depth + 1, i + 2
+                out.append("  ")
+            elif src.startswith("-/", i):
+                depth, i = depth - 1, i + 2
+                out.append("  ")
+            else:
+                out.append("\n" if c == "\n" else " ")
+                i += 1
+        elif not toml and src.startswith("/-", i):
+            depth, i = 1, i + 2
+            out.append("  ")
+        elif src.startswith("#" if toml else "--", i):
+            j = src.find("\n", i)
+            j = n if j < 0 else j
+            out.append(" " * (j - i))
+            i = j
+        elif c == '"':
+            j = i + 1
+            while j < n and src[j] not in '"\n':
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        elif not toml and c == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'!?.")) and \
+                (m := re.match(r"'(\\.[^']*|[^'\\])'", src[i:])):
+            out.append(m.group(0))
+            i += len(m.group(0))
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
+    """What the package's sources and lakefile say, comments aside: an option or entry point that bypasses the kernel
+    (`UNCHECKED`), code run while a file compiles (`COMPILE_TIME`) outside a module listed under `compile_time`, and a
+    `lakefile.lean` (which `lake` runs whenever it loads the package, `lake env` included)."""
     hits = []
-    for rel in [*sorted(files.values()), *(f for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).exists())]:
-        for i, line in enumerate((pkg / rel).read_text(errors="replace").splitlines(), 1):
-            if m := UNCHECKED.search(line):
-                hits.append(f"unchecked: {rel}:{i} names {m.group(1)}, which lets a declaration skip the kernel or a proof "
+    allowed = policy.get("compile_time", {})
+    lakefiles = [f for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).exists()]
+    if "lakefile.lean" in lakefiles:
+        hits.append("compile-time: lakefile.lean runs code whenever lake loads the package; write lakefile.toml instead")
+    for m, rel in [*sorted(files.items()), *((None, f) for f in lakefiles)]:
+        text = strip_comments((pkg / rel).read_text(errors="replace"), toml=rel.endswith(".toml"))
+        for i, line in enumerate(text.splitlines(), 1):
+            if hit := UNCHECKED.search(line):
+                hits.append(f"unchecked: {rel}:{i} names {hit.group(1)}, which lets a declaration skip the kernel or a proof "
                             f"become sorry")
+        if m is not None and not under(allowed, m):
+            for hit in COMPILE_TIME.finditer(text):
+                hits.append(f"compile-time: {rel}:{text.count(chr(10), 0, hit.start()) + 1} runs code while it compiles "
+                            f"({hit.group(1) or hit.group(2)}), which can write anywhere the build can; list {m} under "
+                            f"`compile_time` with the reason if it must")
+    for m in sorted(allowed):
+        if not any(under([m], f) for f in files):
+            hits.append(f"compile-time: `compile_time` lists {m}, which matches no file; remove the entry")
     return hits
 
 
 def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
-    """Run `Audit.lean` on the package: the facts document it writes."""
-    roots = policy["roots"]
-    lit = lambda names: "#[" + ", ".join(f"`{n}" for n in names) + "]"   # noqa: E731
+    """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
+    runs): the facts document it writes."""
     out = work / "facts.json"
-    head = ["import Lean", *(f"import {r}" for r in roots), "", "set_option maxHeartbeats 0", "set_option format.width 100",
-            "set_option pp.proofs false", "", "namespace LeanAudit.Config",
-            f"def prefixes : Array Lean.Name := {lit(roots)}",
-            f"def meaning : Array Lean.Name := {lit(policy.get('meaning', roots))}",
-            f"def allowed : Array Lean.Name := {lit(policy.get('axioms', STANDARD))}",
-            f"def pins : Array Lean.Name := {lit(sorted(policy.get('pins', {})))}",
-            f"def out : System.FilePath := {json.dumps(str(out))}", "end LeanAudit.Config", ""]
-    src = work / "LeanAuditRun.lean"
-    src.write_text("\n".join(head) + "\n" + (TOOL / "Audit.lean").read_text())
-    rc, text = run(["lake", "env", "lean", str(src)], pkg, work / "lean.log")
+    out.unlink(missing_ok=True)
+    config = work / "facts-config.json"
+    config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
+                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("pins", {})),
+                                  "out": str(out)}))
+    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
-        raise RuntimeError(f"`lake env lean` on the audit file failed (exit {rc}):\n{text[-3000:]}")
+        raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
     return json.loads(out.read_text())
 
 
@@ -297,14 +381,21 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
+REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
+
+
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[str]:
     """What a statement reviewer reads for an `--update`: each changed pin's signature before and after, and each changed
-    definition a pin reads, with the pins that read it and its source as it is now."""
+    definition a pin reads, with the pins that read it and its source as it is now.  A pin whose statement is the same but
+    prints differently (a toolchain's printer, notation) gets one line."""
     out = []
     op, np = old.get("pins", {}), new.get("pins", {})
     for name in sorted(set(op) | set(np)):
         a, b = op.get(name) or {}, np.get(name) or {}
         if a == b:
+            continue
+        if a and b and a.get("type_hash") == b.get("type_hash") and a.get("assumptions") == b.get("assumptions"):
+            out.append(f"pin {name}: {REPRINTED}")
             continue
         out.append(f"pin {name}: {'new' if not a else 'removed' if not b else 'changed'}")
         out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
@@ -331,25 +422,118 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
     return out
 
 
+def statement_changes(notes: list[str]) -> list[str]:
+    """The lines of a review a named statement reviewer must read: all but the pins that only print differently."""
+    return [n for n in notes if not n.endswith(REPRINTED)]
+
+
 def killed(rc: int) -> bool:
     """A process ended by a signal (the machine's OOM killer, a timeout), which says nothing about the kernel's verdict."""
     return rc < 0 or rc >= 128
 
 
+_SANDBOX: bool | None = None
+
+
+def sandboxed() -> bool:
+    """Whether builds run in `sandbox.sh` here: it needs `unshare` and unprivileged user namespaces, and it must leave this
+    tool's own directory read-only (checked, not assumed)."""
+    global _SANDBOX
+    if _SANDBOX is None:
+        probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
+        try:
+            r = subprocess.run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), str(probe), "--", "bash", "-c",
+                                f'touch "{probe}/rw" && ! touch "{TOOL}/.sandbox-probe" 2>/dev/null'], capture_output=True,
+                               timeout=60)
+            _SANDBOX = r.returncode == 0 and (probe / "rw").exists()
+        except (OSError, subprocess.TimeoutExpired):
+            _SANDBOX = False
+        (TOOL / ".sandbox-probe").unlink(missing_ok=True)
+        shutil.rmtree(probe, ignore_errors=True)
+    return _SANDBOX
+
+
+def path_deps(pkg: Path) -> list[Path]:
+    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too)."""
+    manifest = pkg / "lake-manifest.json"
+    return [(pkg / d["dir"]).resolve() for d in json.loads(manifest.read_text()).get("packages", [])
+            if d.get("type") == "path"] if manifest.exists() else []
+
+
+def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
+    """``argv`` inside the build sandbox, writable only in the `.lake` directories of the package and its path dependencies
+    (``argv`` as is where there is no sandbox)."""
+    rw = [str(d / ".lake") for d in [pkg.resolve(), *path_deps(pkg)]]
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *rw, "--", *argv] if sandboxed() else argv
+
+
+def olean_files(lib: Path) -> list[Path]:
+    return sorted(p for p in lib.rglob("*") if p.is_file() and (p.suffix == ".olean" or p.name.endswith((".olean.server",
+                                                                                                         ".olean.private"))))
+
+
+def olean_digest(lib: Path, files: list[Path]) -> str:
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as ex:
+        hashes = list(ex.map(sha256, files))
+    h = hashlib.sha256()
+    for p, d in zip(files, hashes):
+        h.update(f"{p.relative_to(lib)}\0{d}\n".encode())
+    return h.hexdigest()
+
+
+def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
+    """A digest of the `.olean` files (every part) of the modules the package imports (``oleans``, which `Facts.lean`
+    reports), per package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache, ArkLib's local build...) and for
+    the toolchain's own library. A dependency's other modules may be built or not (the upstream watch's exact pass builds
+    all of ArkLib) without changing the record. Lean's `.olean` files are reproducible, so the record holds across machines
+    and changes only at a bump."""
+    packages_dir = pkg / ".lake" / "packages"
+    libs = [(d.name, d / ".lake" / "build" / "lib" / "lean") for d in sorted(packages_dir.iterdir())] if packages_dir.is_dir() else []
+    libs.append(("toolchain", toolchain_bins(toolchain)[0].parent.parent / "lib" / "lean"))
+    loaded = [Path(o).resolve() for o in oleans]
+    out = {}
+    for name, lib in libs:
+        lib = lib.resolve()
+        files = sorted(p for o in loaded if o.is_relative_to(lib)
+                       for p in (o, o.with_name(o.name + ".server"), o.with_name(o.name + ".private")) if p.is_file())
+        if files:
+            out[name] = olean_digest(lib, files)
+    return out
+
+
+def template(pkg: Path) -> dict:
+    """A minimal policy for a package without one: its libraries as roots, nothing pinned yet."""
+    libs = []
+    if (pkg / "lakefile.toml").exists():
+        import tomllib
+        libs = [lib["name"] for lib in tomllib.loads((pkg / "lakefile.toml").read_text()).get("lean_lib", []) if "name" in lib]
+    return {"roots": libs or [pkg.name], "pins": {}}
+
+
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes)."""
+    rep = {"package": str(pkg), "seconds": {}, "failures": []}
+    if not (pkg / POLICY).exists():
+        rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, pin the theorems your documents cite "
+                               f"(\"name\": {{}} under \"pins\"), and run `audit.py --update {pkg}`:\n"
+                               f"{json.dumps(template(pkg))}")
+        return rep
     policy = load(pkg)
     tag = re.sub(r"[^A-Za-z0-9]+", "_", str(pkg.resolve().relative_to(ROOT)) if pkg.resolve().is_relative_to(ROOT) else pkg.name)
     work = out / f"audit-{tag}"
     if work.resolve().is_relative_to(pkg.resolve()):
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
-    rep = {"package": str(pkg), "toolchain": (pkg / "lean-toolchain").read_text().strip(), "seconds": {}, "failures": []}
+    rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
     t = time.monotonic()
     if build:
-        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]), ("build", ["lake", "build"]),
-                           ("build-roots", ["lake", "build", *(f"+{r}" for r in policy["roots"])])):
+        rep["sandbox"] = sandboxed()
+        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]),
+                           ("build", in_sandbox(pkg, ["lake", "build"])),
+                           ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
             s = time.monotonic()
             rc, text = run(argv, pkg, work / f"{step}.log")
             rep["seconds"][step] = round(time.monotonic() - s, 1)
@@ -365,7 +549,26 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
     files = lean_modules(pkg)
     fails, new = judge(policy, facts, files, update)
-    fails = unchecked(pkg, files) + fails
+    fails = scans(pkg, files, policy) + fails
+    if "upstream" in policy:
+        s = time.monotonic()
+        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+        fails += missed
+        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
+    s = time.monotonic()
+    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
+    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+    if update:
+        new["dependencies"] = deps
+    elif "dependencies" not in policy:
+        fails.append("dependencies: no record of the dependencies' .olean files; run `audit.py --update` and commit it")
+    else:
+        for d in sorted(set(policy["dependencies"]) | set(deps)):
+            if policy["dependencies"].get(d) != deps.get(d):
+                fails.append(f"dependencies: the .olean files of the modules the package imports from {d} differ from the "
+                             f"record. After a change to the package's imports, or at a bump, run `audit.py --update` (and "
+                             f"review it at a bump); otherwise it is a different cache or toolchain, a build that is not "
+                             f"reproducible, or tampering")
     if replay:
         s = time.monotonic()
         found = work / "replay.json"
@@ -395,9 +598,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         notes = review(policy, new, facts, module_files(pkg))
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
+        must = statement_changes(notes)
+        rep["statement_changes"] = bool(must)
         log(f"audit: {pkg}/{POLICY}: pins and reads rewritten from the build" + (
-            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in notes)
-            if notes else ""))
+            f"; {len(notes) - len(must)} pinned statements only print differently" if len(notes) > len(must) else "") + (
+            "; a named statement reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
+            if must else ""))
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "pins": new.get("pins", {}), "reads": new.get("reads", {}),
             "failures": fails}
@@ -407,25 +613,32 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
 
 
 def packages(root: Path) -> list[Path]:
-    """Every directory under ``root`` with a `lean-audit.json`, the controls' fixtures excepted."""
+    """Every Lake package under ``root`` (a directory with a lakefile), the controls' fixtures excepted: one without a
+    `lean-audit.json` fails with a template for one."""
     found = []
     for d, dirs, files in os.walk(root):
         dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
         here = Path(d)
-        if POLICY in files and not here.is_relative_to(FIXTURES):
+        if ({"lakefile.toml", "lakefile.lean", POLICY} & set(files)) and not here.is_relative_to(FIXTURES):
             found.append(here)
     return sorted(found)
 
 
-def controls(toolchain: str, out: Path, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added."""
+def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
+    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`: the controls run before any package's
+    own setup does."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(FIXTURES / "control", work / "pkg")
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
-    rc, text = run(["lake", "build"], pkg, work / "build.log")
+    if install:
+        rc, text = run(["bash", str(TOOL / "setup.sh"), str(pkg)], pkg, work / "setup.log")
+        if rc:
+            return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
+    rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
         return [f"controls: the clean fixture does not build with {toolchain}:\n{text[-2000:]}"]
     reports = work / "reports"
@@ -434,6 +647,12 @@ def controls(toolchain: str, out: Path, log=print) -> list[str]:
     if clean:
         fails.append("controls: the clean fixture fails the audit:\n" + "\n".join(clean))
     expect = json.loads((FIXTURES / "violations.json").read_text())
+
+    def beside(failures: list[str]) -> list[str]:
+        """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
+        import changes it (its own test covers that check)."""
+        return [f for f in failures if not f.startswith("dependencies:")]
+
     for name, v in expect.items():
         bad = work / f"bad-{name}"
         shutil.rmtree(bad, ignore_errors=True)
@@ -445,17 +664,33 @@ def controls(toolchain: str, out: Path, log=print) -> list[str]:
             src = (bad / rel).read_text()
             assert old in src, (name, rel, old)
             (bad / rel).write_text(src.replace(old, new))
-        rc, text = run(["lake", "build"], bad, work / f"bad-{name}.log")
+        if "policy" in v:
+            dump(bad, load(bad) | v["policy"])
+        for rel in v.get("delete", []):
+            (bad / rel).unlink()
+        rc, text = run(in_sandbox(bad, ["lake", "build"]), bad, work / f"bad-{name}.log")
         if rc:
             fails.append(f"controls: `{name}` does not build:\n{text[-1000:]}")
             continue
+        for rel in v.get("not_written", []):
+            if (bad / rel).exists():
+                if sandboxed():
+                    fails.append(f"controls: `{name}`'s build wrote {rel} into the package through the sandbox")
+                (bad / rel).unlink()
         if v.get("replay_only"):
-            if missed := audit(bad, reports, replay=False)["failures"]:
+            if missed := beside(audit(bad, reports, replay=False)["failures"]):
                 fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
         got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False))["failures"]
-        if not any(f.startswith(v["fails"]) for f in got):
+        for rel in v.get("not_written", []):
+            if (bad / rel).exists():
+                fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
+        if v.get("passes"):
+            if beside(got):
+                fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
+        elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
-    log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)})")
+    log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
+        f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
 
 
@@ -488,41 +723,50 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
-    ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default a temporary directory)")
+    ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
+                    "recorded run, else a temporary directory)")
     a = ap.parse_args(argv)
-    pkgs = packages(a.root.resolve()) if a.all else a.package
+    pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and a.update):
         ap.error("name package directories, or --all (which does not --update)")
-    out = a.out or Path(tempfile.mkdtemp(prefix="lean-audit-"))
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    out = a.out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-audit-")))
     out.mkdir(parents=True, exist_ok=True)
     TOOL = out / "tool"
     shutil.rmtree(TOOL, ignore_errors=True)
     shutil.copytree(HERE, TOOL, ignore=shutil.ignore_patterns("tests", "__pycache__"))
-    seals = {str(p): sha256(p) for d in (HERE, TOOL) for p in sorted(d.iterdir()) if p.is_file()}
-    toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs})
+    toolchains = sorted({(p / "lean-toolchain").read_text().strip() for p in pkgs if (p / "lean-toolchain").exists()})
     bins = [b for tc in toolchains for b in toolchain_bins(tc)]
+    seals = {str(p): sha256(p) for p in [*(p for d in (HERE, TOOL) for p in sorted(d.iterdir())), *bins] if p.is_file()}
     failed = []
     reports = []
     if a.all:
         for tc in toolchains:
-            if fs := controls(tc, out):
+            if fs := controls(tc, out, install=a.build):
                 failed.append(f"controls ({tc})")
                 print("\n".join("  " + f.replace("\n", "\n    ") for f in fs), flush=True)
+        if moved := tampered(seals, bins):
+            failed.append("controls (tamper)")
+            print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
     for pkg in pkgs:
         rep = audit(pkg, out, a.build, a.update, not a.no_replay, a.fresh)
         rep["failures"] += [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]
+        if (lib := pkg / ".lake" / "build" / "lib" / "lean").is_dir():
+            seals |= {str(p): sha256(p) for p in olean_files(lib)}
         reports.append(rep)
         n = sum(rep.get("declarations", {}).values())
         head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
         if "modules" in rep:
             head += (f"  {n} declarations in {rep['modules']} modules; axioms {', '.join(rep['axioms']) or 'none'}; "
                      f"{len(rep['pins'])} pinned theorems; {rep['seconds']}")
+        if "sandbox" in rep:
+            head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
         print(head, flush=True)
         for f in rep["failures"]:
             print("  " + f.replace("\n", "\n    "), flush=True)
         if rep["failures"]:
             failed.append(str(pkg))
-    if changed := [r["package"] for r in reports if r.get("review")]:
+    if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: pinned statements or the definitions they read changed in {', '.join(changed)}: the merge handoff must "
               f"name the statement reviewer who read the changes above (review.txt in each package's reports)", flush=True)
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,

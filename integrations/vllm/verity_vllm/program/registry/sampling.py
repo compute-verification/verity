@@ -408,7 +408,13 @@ def _splits_of(word: int) -> int | None:
 def topp_keep(x_f32, p: float, splits: int):
     """The keep bits of `TopPMaskWordx{V}` for every i32 `splits`: `topp_split.topp_keep_row(x, p, S)` at a split count, and no lane
     at any other value.  The one statement of the keep word's semantics (the primitive, `sampling_rows.topp_mask_row`, C-Flock's
-    native twin in `verity_flock.ir_sampling`)."""
+    native twin in `verity_flock.ir_sampling`).
+
+    Defined on every row.  The split kernels hold the row's scalars per warp half, and on a row where the two halves disagree on
+    stopping (the uniform-or-empty test, or a `nomask` search outcome) every lane follows its own half: a lane of a half that stops
+    keeps its logit, and a lane of a half that goes on is masked by that half's pivot, dup and quota (`topp_split.mask_kernel`).
+    That is each GPU thread's own early return, and the kernels' result wherever no collective follows the divergent return; the
+    same reading defines the rest."""
     import numpy as np
     from verity_vllm.program.registry import topp_split as _TS
     S = _splits_of(splits)
@@ -420,7 +426,7 @@ def topp_keep(x_f32, p: float, splits: int):
 def topp_mask_word(vocab: int) -> PrimitiveDefinition:
     """`TopPMaskWordx{V}`: (logits: Array<V, f32>, top_p: f32, splits: i32) -> Value<V>; bit v = the split top-p pipeline's `keep` for
     lane v under S = splits (all ones when the pipeline leaves the row untouched: p >= 1, (nearly) uniform / empty row, `nomask` search
-    outcome).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
+    outcome; ones on its lanes when only one warp half stops, `topp_keep`).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
     with >= 64 SMs, 16 at 8 live on 142 SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
     (0, negative, not a power of two, above 32) keeps no lane -- word 0.  Every launched split count keeps at least one lane, so word 0
     is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the workload outside
@@ -492,7 +498,7 @@ def GumbelTopPTokenSelect(B, S, logits, top_p, seed, pos, temp, splits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same two selects with `temp == 0` computed once and read by both halves (opt-in: nothing binds them until the re-baseline).
+# the same two selects with `temp == 0` computed once and read by both halves (`TargetProfile.sampler_construction`, `select_for`).
 # `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1` compute it in `TemperatureScale_v1` (the early return) and again in
 # `GumbelSelectF32_v1` (noise or not): one value computed twice inside the sampler's one unit, 1 redundant gate per Call.
 # ---------------------------------------------------------------------------------------------------------
@@ -540,8 +546,14 @@ def GumbelTopPTokenSelectSharedGreedy(B, S, logits, top_p, seed, pos, temp, spli
     return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), masked, seed, pos, greedy)
 
 
-#: each restated select by the Definition it restates (the re-baseline binds these instead)
+#: each restated select by the Definition it restates (bound under `TargetProfile.sampler_construction = "shared-greedy"`, the default)
 SHARED_GREEDY = {"GumbelTokenSelect_v1": GumbelTokenSelectSharedGreedy, "GumbelTopPTokenSelect_v1": GumbelTopPTokenSelectSharedGreedy}
+
+
+def select_for(select, construction: str):
+    """The stochastic select a `sampler_construction` binds for `select` (a `SHARED_GREEDY` key): its `SHARED_GREEDY` entry under
+    `shared-greedy`, `select` itself under `greedy-check-per-stage`."""
+    return SHARED_GREEDY[select.id] if construction == "shared-greedy" else select
 
 
 def f32_bits(x: float) -> int:

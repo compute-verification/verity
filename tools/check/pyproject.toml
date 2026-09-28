@@ -1,0 +1,21 @@
+[project]
+name = "verity-check"
+version = "0.0.0"
+description = "`check`, the one check a merge requires, and `suites`, the test runner it uses."
+requires-python = ">=3.12"
+dependencies = ["research"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+research = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs).
+inputs = ["backends/flock/verifier"]

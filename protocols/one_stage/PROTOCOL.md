@@ -12,22 +12,70 @@ drawn units are proved. The two-stage protocol (replay, then a second draw) is `
    The verifier checks R1-R6 against its own copies (`registration.check`), holds its own public file to it
    (`registration.matches_public`) and writes a receipt (`registration.receipt`) before it draws. Served roots use the
    domain rule agreed with vllm-serving-commit (`registration.served_domain`).
-3. **The draw**: the verifier samples units from the operating system's randomness under its law (`subset:K` or
-   `bernoulli:NUM/DEN`) and sends the draw in the clear, before the session's coin commitment. Nothing is derived from a
-   commitment. `draw.check_draw` holds it to the registration and the law.
+3. **The draw**: the verifier samples units from the operating system's randomness under its law (`stratified:K`, the
+   default, `subset:K` or `bernoulli:NUM/DEN`) and sends the draw in the clear, before the session's coin commitment.
+   Nothing is derived from a commitment. `draw.check_draw` holds it to the registration and the law.
 4. **Proofs** of the drawn units, in one session whose statement is the drawn units' (`draw.check_proved`: its instances
    are the drawn units, in order).
 5. **Verification** by each verifier that runs, the Lean verifier of record among them.
 6. **The audit record** (`audit.audit_record`): the registration, its receipt, the draw, the law, the proved units, the
-   statement's digests, every verdict, and, when every check and verdict that ran accepted, the profile in two forms: the
-   core `IntegrityProfile` (one level `unit` with `sizes = (population,)`, drawn by the law, and the bound on wrong units at
-   delta) and `verity/integrity-profile/v1` (§0.2), whose ε terms come from the soundness analysis and stay null here.
+   statement's digests, every verdict, and, when every check and verdict that ran accepted, the integrity profile. The
+   profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` with `sizes = (population,)`, drawn by the law
+   under every law, with delta: per-stratum bounds on wrong units, nothing weighted. The record states it as recorded
+   runs hold it: `profile` (its JSON; a stratified law keeps the v0 form, the law's JSON with delta and the count drawn
+   per template), `wrong_units` (its bounds) and `verity/integrity-profile/v1` (§0.2), whose ε terms come from the
+   soundness analysis and stay null here.
+
+## The stratified law
+
+The default law (Daniel, Sep 27): one stratum per template, and inside each a uniform draw without replacement of a fixed
+size, independently across strata. `docs/sampling-strategies.md` has the analysis.
+
+- **Strata.** Each verifier derives them from its own program and query (`partition.strata`), never from the prover. Apply
+  the query and group the units by the template descriptor id of their root node. A stratum's units are ascending,
+  disjoint, non-empty half-open ranges `[lo, hi)`, with adjacent ranges merged, and the strata are in the order of their
+  first unit. This is defined for `Q_template_instance` and `Q_template_instances`; any other query refuses it until it
+  defines its stratum key.
+- **Sizes.** For the agreement's `k`, with $1 \le k \le n$, stratum $s$ draws $k_s = \max(1, \lfloor (2 k n_s + n)/(2n) \rfloor)$
+  units (`draw.stratum_k`): $k\,n_s/n$ rounded half up, and never fewer than one, so every template is exercised in every
+  audit. Always $1 \le k_s \le n_s$, and the total drawn is $\sum_s k_s$.
+- **The law object** is the agreement's rule `stratified:K` expanded over the program and query (`draw.derive`):
+
+  ~~~json
+  {"law": "stratified", "k": 1024,
+   "strata": [{"template": "{descriptor id}", "units": [[0, 287]], "k": 1}, ...]}
+  ~~~
+
+  The registration carries it expanded, and R1 holds it to the verifier's own expansion.
+- **The draw** carries the law's keys plus `population` and `units`:
+  `{"law": "stratified", "population": N, "k": K, "strata": [...], "units": [...]}`. `draw.check_draw` holds its law to the
+  verifier's, and checks that the strata tile the population with the rule's `k` and that exactly $k_s$ units fall in
+  each stratum. The sampler of record draws each stratum's `subset k_s n_s` on its own stream and maps local index $j$ to
+  the stratum's $j$-th unit.
+- **A session that proves one template's units** (A4's members) is served that template's share as a `subset:k_s` draw
+  over its $n_s$ units, in its own indices. The audit record keeps the union draw.
+- **The bound.** A set with $m_s$ wrong units in stratum $s$ escapes with $\prod_s \binom{n_s-m_s}{k_s}/\binom{n_s}{k_s}$. The
+  audit record's `wrong_units.bound` is core's exact `Stratified.count_bound` at delta, and `per_template` gives each
+  template's own bound. A template wrong in every unit is never missed. `subset:K` is one stratum and gets the same exact
+  bound.
+
+## Consumers
+
+Applications read the profile, and it is neither of them (`consumers`). Each weights wrong units by what one costs it,
+through the profile's generic weighted bound (`IntegrityProfile.harm_bound`), at the profile's delta:
+
+- **Exfiltration security** (`exfiltration_bound`): wrong units weighted by their output bits, which the prover chose.
+- **Compute security** (`compute_bound`): wrong units weighted by their work, which the prover could have skipped.
 
 ## Partition
 
-`{"program": <SHA-512 of the program>, "query": {...}}`, digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`. The
-only query here is `Q_template_instance` v0: each instance of one template in the program's root body is one unit, in
-canonical order, with no width rule. It is a demo query for single-template runs, not the serving partition.
+Core's `verity/partition/v1` (`verity.ir.partition_object`): `{"format": "verity/partition/v1", "program": <SHA-512 of the
+program>, "query": {"name", "version", "params"}}`, digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`. The units
+are core's evaluation of the query, which refuses a malformed query and a program that is not topological. The queries
+applied here are `Q_template_instance` v0 and `Q_template_instances` v0: each instance of a listed template in the
+program's root body is one unit, in canonical order, with no width rule. They are demo queries for template runs, not the
+serving partition. A record made before the canonical envelope names `{"program", "query"}` and keeps that object's
+digest under the same rule (`partition.digest`).
 
 ## Not here yet
 

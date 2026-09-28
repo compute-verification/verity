@@ -2,6 +2,7 @@
 nothing, key material and big files never leave the machine."""
 from __future__ import annotations
 
+import datetime as dt
 import subprocess
 import threading
 from pathlib import Path
@@ -13,6 +14,7 @@ from research import notes_sync as NS
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
+NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.timezone.utc)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -56,6 +58,7 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+@pytest.mark.slow
 def test_a2_two_machines_20_times_in_the_same_minute_lose_no_write(machines):
     origin, a, b = machines
     errors: list = []
@@ -95,8 +98,6 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
 
 
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
-    import datetime as dt
-
     origin, a, b = machines
     now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
     for i in range(3):
@@ -111,6 +112,7 @@ def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pas
     assert notes.sync_lines(a, NS.sync(a, secrets=[]), now) == []                                    # a clean pass says nothing
 
 
+@pytest.mark.slow
 def test_key_material_is_refused_before_anything_is_pushed(machines):
     origin, a, _ = machines
     before = _git(origin, "rev-parse", "main")
@@ -146,7 +148,7 @@ def test_a5_scan_finds_big_blobs_and_keys_anywhere_in_history(machines):
     _, a, _ = machines
     assert NS.scan(a, secrets=[]) == {"blobs": 1, "big": [], "keys": []}
     (a / "big.bin").write_bytes(b"x" * 2000)
-    (a / "k.md").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    (a / "k.md").write_text("-----BEGIN OPENSSH " "PRIVATE KEY-----\n")   # split, so no scanner reads a key here
     _git(a, "add", "-A")
     _git(a, "commit", "-qm", "bad")
     _git(a, "rm", "-q", "k.md", "big.bin")
@@ -166,3 +168,84 @@ def test_checkpoint_syncs_its_lane_only_when_asked(machines, monkeypatch):
     tree = _git(origin, "ls-tree", "-r", "--name-only", "main").split()
     assert any(p.startswith("lanes/x/") for p in tree) and "kb/other.md" not in tree
     assert notes.main(["sync", "--root", str(a)]) == 0 and "kb/other.md" in _git(origin, "ls-tree", "-r", "--name-only", "main")
+
+
+def _note(repo: Path, rel: str, created: str | None = None) -> Path:
+    p = repo / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text((f"---\nlane: {p.parent.name}\ncreated: {created}\n---\n\n" if created else "") + "a note\n")
+    return p
+
+
+def _tree(origin: Path) -> list[str]:
+    return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
+
+
+def test_a_lane_note_stamped_over_5_min_ahead_is_left_out_and_the_rest_sync(machines):
+    origin, a, _ = machines
+    six, five, created = ("lanes/x/20260928T0648Z-report-x.md", "lanes/y/20260928T0647Z-report-y.md",
+                          "lanes/z/20260928T0640Z-handoff-z.md")
+    for rel in (six, five):
+        _note(a, rel)
+    _note(a, created, created="2026-09-28T07:00:00Z")
+    _git(a, "add", six)                                                          # staged, and still left out
+    (a / "kb" / "other.md").write_text("an edit\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"], rep["paths"]) == (NS.FUTURE_RC, True, 2)
+    assert rep["future"] == [
+        f"{six}: stamp 20260928T0648Z is 6 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ)",
+        f"{created}: created: 2026-09-28T07:00:00Z is 18 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
+    tree = _tree(origin)
+    assert five in tree and "kb/other.md" in tree and six not in tree and created not in tree
+    assert f"?? {six}" in _git(a, "status", "--porcelain", "--untracked-files=all")
+    assert notes.sync_lines(a, rep, NOW) == [
+        f"06:42Z notes sync: committed {rep['commit']} (2 paths); pushed; left out 2 stamped ahead of the clock (SYNC-REFUSED)",
+        *(f"06:42Z SYNC-REFUSED {x}" for x in rep["future"])]
+    later = NS.sync(a, secrets=[], now=NOW + dt.timedelta(minutes=13))           # the clock caught up; nothing was recorded
+    assert (later["rc"], later["future"]) == (0, []) and {six, created} <= set(_tree(origin))
+
+
+def test_notes_already_committed_are_not_rechecked_but_a_changed_created_is(machines):
+    origin, a, _ = machines
+    old = "lanes/w/20260928T0800Z-report-w.md"
+    _note(a, old, created="2026-09-28T08:00Z")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "tonight's history")
+    _git(a, "push", "-q", "origin", "HEAD:main")
+    with (a / old).open("a") as f:
+        f.write("CHECKPOINT none (06:42Z) [open] still here\n")
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert (rep["rc"], rep["pushed"], rep["future"]) == (0, True, []) and "still here" in _git(origin, "show", f"main:{old}")
+    (a / old).write_text((a / old).read_text().replace("created: 2026-09-28T08:00Z", "created: 2026-09-28T09:00Z"))
+    rep = NS.sync(a, secrets=[], now=NOW)
+    assert rep["rc"] == NS.FUTURE_RC and rep["future"] == [
+        f"{old}: created: 2026-09-28T09:00Z is 138 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)"]
+
+
+@pytest.mark.slow
+def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machines, monkeypatch, capsys):
+    origin, a, _ = machines
+    monkeypatch.setattr(NS, "_utcnow", lambda: NOW)
+    monkeypatch.setenv(NS.SYNC_ENV, "1")
+    bad = "lanes/x/20260928T0700Z-report-x.md"
+    _note(a, bad, created="2026-09-28T07:00Z")
+    assert notes.main(["checkpoint", "x", "open", "measuring", "--commit", "none", "--root", str(a)]) == NS.FUTURE_RC
+    assert (f"SYNC-REFUSED {bad}: stamp 20260928T0700Z is 18 min ahead; use 20260928T0642Z (date -u +%Y%m%dT%H%MZ); "
+            f"created: 2026-09-28T07:00Z is 18 min ahead; use 2026-09-28T06:42Z (date -u +%Y-%m-%dT%H:%MZ)") in capsys.readouterr().err
+    assert "CHECKPOINT none" in (a / bad).read_text() and bad not in _tree(origin)
+    assert notes.main(["sync", "--root", str(a)]) == NS.FUTURE_RC and f"SYNC-REFUSED {bad}: stamp" in capsys.readouterr().err
+    fixed = a / "lanes/x/20260928T0642Z-report-x.md"
+    (a / bad).rename(fixed)
+    fixed.write_text(fixed.read_text().replace("created: 2026-09-28T07:00Z", "created: 2026-09-28T06:42Z"))
+    assert notes.main(["sync", "--root", str(a)]) == 0 and "lanes/x/20260928T0642Z-report-x.md" in _tree(origin)
+
+
+def test_created_is_read_from_the_front_matter_with_or_without_seconds():
+    utc = dt.timezone.utc
+    for value, when in (("2026-09-28T07:00Z", dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
+                        ("2026-09-28T07:00:30Z", dt.datetime(2026, 9, 28, 7, 0, 30, tzinfo=utc)),
+                        ('"2026-09-28 07:00"', dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
+                        ("2026-09-28T09:00+02:00", dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc))):
+        assert NS.created_at(f"---\nlane: x\ncreated: {value}\n---\nbody\n")[1] == when, value
+    assert NS.created_at("created: 2026-09-28T07:00Z\n") is None                  # not in front matter
+    assert NS.created_at("---\ncreated: 2026-09-28\n---\n") is None               # no time of day

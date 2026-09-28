@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Verity x vLLM integration: runtime capture, definitions and Torch-derived Programs for vLLM, Match/Commit, the qualification sweep."
 requires-python = ">=3.12"
 dependencies = [
+    "research",
     "verity",
     "verity-sampled-proofs",
     "numpy>=1.26",
@@ -26,6 +27,7 @@ packages = [
 ]
 
 [tool.uv.sources]
+research = { workspace = true }
 verity = { workspace = true }
 verity-sampled-proofs = { workspace = true }
 
@@ -35,7 +37,12 @@ testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
 # tests/regression (R19 reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
+    "slow: takes over about 5 s; deselect with -m 'not slow'",
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
 ]
+
+[tool.verity.tests]
+# Test-only: tests/pipeline checks the fixtures this package registers.
+inputs = ["fixtures/artifacts.json"]

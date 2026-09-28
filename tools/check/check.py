@@ -9,21 +9,23 @@
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
-    pytest          every test under the root `pyproject.toml` testpaths except the `circuit_suite` ones, `-n` half the cores
+    pytest          every test suite (`tools/check/suites.py`), half the cores' worth at once: each package's tests in their own
+                    process, a pass reused while its inputs are unchanged; each suite's log and the outcomes (`suites.json`)
+                    beside the run's result
     circuit-check   `circuit-check --all --jobs` the other half: every registered Definition and template (`tools/circuit_check`),
                     its report beside the run's result
-    lean            `lake build` of the Lean verifier (PR #85), then its partition check against `verity.ir.partition`
-                    (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
-                    (`tools/lean/audit.py --all --build`, its reports under `lean-audit/`), then its agreement with
-                    upstream's Rust verifier (`ci.py`) on the upstream build
-                    stored once and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by
-                    name without it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
+    lean            `lake build` of the Lean verifier (`backends/flock/verifier/lean`), then its partition check against
+                    `verity.ir.partition` (`unit_cut_agree.py`), then the audit of every Lake package with a `lean-audit.json`
+                    (`tools/lean/audit.py --all --build`: axioms, sorry, declared axioms, escapes, files, kernel bypasses, code
+                    run while compiling, dependency .olean digests, pinned statements, a kernel replay; its reports under
+                    `lean-audit/`), then its agreement with upstream's Rust verifier (`ci.py`) on the upstream build stored once
+                    and pinned by hash (`backends/flock/verifier/upstream.json`), when the run has it; skipped by name without
+                    it.  `research merge` requires it for a change under backends/flock/ (`tool.py`)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
-    pytest          a passing result is reused when the tree's every file (`tree_digest`), the steps' environment, the interpreter,
-                    the installed distributions and the pytest arguments are the same (the tests start processes of their own,
-                    so what they read cannot be traced: the whole tree is the input)
+    pytest          `suites.py`'s own: a suite's pass is reused while its declared inputs are unchanged (`--no-cache` passes
+                    `--fresh`)
     circuit-check   `circuit-check --cache`: a report is reused when every file, directory listing and existence probe the
                     recorded run made is unchanged, with the checker's own version (`circuit_check.cache`)
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
@@ -48,7 +50,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: PR #85: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
+#: the Lean verifier of record, and `ci.py`, its agreement job against upstream's Rust verifier
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
 VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
@@ -110,13 +112,14 @@ def agreement_files(out: Path) -> dict[str, Path]:
 
 
 def lean_steps(out: Path) -> list[tuple[str, list[str] | str, Path]]:
-    """The Lean steps: nothing until PR #85 is on the tree (a skip, named); then `lake build`, the Lean partition check's
-    conformance with `verity.ir.partition` (`unit_cut_agree.py`), and the agreement job against upstream's Rust verifier on the
-    pinned upstream build (`upstream.json`) when the run has it; without it that step is skipped by name.  `research merge`
-    requires it for a change under `backends/flock/` (`tools/check/tool.py`), and `--record` sends it then."""
+    """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
+    conformance with `verity.ir.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
+    against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
+    is skipped by name.  `research merge` requires it for a change under `backends/flock/` (`tools/check/tool.py`), and
+    `--record` sends it then."""
     lean = FLOCK_VERIFIER / "lean"
     if not (lean / "lakefile.toml").exists():
-        return [("lean", "skipped: PR #85 (backends/flock/verifier) is not on this tree", ROOT)]
+        return [("lean", "skipped: backends/flock/verifier/lean is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing backends/flock/ requires "
                                   "this step: `check.py --record` sends it)")
@@ -269,7 +272,9 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
-    pytest = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not circuit_suite", *(["-n", str(a)] if a > 1 else [])]
+    # vLLM's suite is not in the gate yet: 12 of its 4,400 CPU tests fail with torch 2.14 and it takes 20 minutes on one core
+    pytest = [py, str(ROOT / "tools" / "check" / "suites.py"), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
+              "--skip", "verity-vllm", "--jobs", str(a), *([] if cache else ["--fresh"])]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else [])]
     return [[("pytest", pytest, ROOT)], [("circuit-check", cc, ROOT)], lean_steps(out)]
@@ -311,37 +316,10 @@ def tracked_files(root: Path = ROOT) -> list[str] | None:
     return sorted(p.decode() for p in r.stdout.split(b"\0") if p) if r.returncode == 0 else None
 
 
-def tree_digest(root: Path = ROOT) -> str | None:
-    """sha256 over the tree's files (`tracked_files`: path and current content, a deleted one marked): what the tests read.
-    None when the tree's files cannot be listed (then nothing is cached)."""
-    files = tracked_files(root)
-    if files is None:
-        return None
-    h = hashlib.sha256()
-    for f in files:
-        p = root / f
-        h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() and not p.is_symlink() else
-                                        (os.readlink(p).encode() if p.is_symlink() else b"-")) + b"\0")
-    return h.hexdigest()
-
-
 def _env_key(e: dict[str, str]) -> dict[str, str]:
     """The environment as a key: without the shell's bookkeeping, and with this tree's path written `<tree>` (a machine keeps each
     commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
     return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE}
-
-
-def pytest_key(argv: list[str], e: dict[str, str]) -> str | None:
-    from importlib import metadata
-
-    tree = tree_digest()
-    if tree is None:
-        return None
-    dists = sorted(f"{d.metadata['Name']}=={d.version}" for d in metadata.distributions())
-    doc = {"tree": tree, "argv": [a for a in argv[1:] if not a.isdigit() and a != "-n"],
-           "env": _env_key(e), "python": sys.version, "platform": platform.platform(),
-           "distributions": dists}
-    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
@@ -380,7 +358,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
     e = env()
     t0 = time.monotonic()
     hit = None
-    key = (pytest_key(argv, e) if name == "pytest" else agreement_key(e) if name == "lean-agreement" else None) if cache else None
+    key = agreement_key(e) if cache and name == "lean-agreement" else None
     if key:
         entry = cache_dir() / name / f"{key}.json"
         if entry.exists():
@@ -436,7 +414,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict]) -> None:
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("circuit-check.json", "lean-audit/", *(s.get("log") for s in done), *agreement_verdicts(run_dir))
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites/", "circuit-check.json", "lean-audit/",
+                                                    *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")

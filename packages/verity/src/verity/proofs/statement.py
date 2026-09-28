@@ -1,7 +1,7 @@
 """The public statements of the proof layer: obligations, kind programs, batches.
 
 An :class:`Obligation` is what the verifier demands for one sampled
-verification unit (VU): *this* copy of *this* kind, under *these* commitment
+proof unit: *this* copy of *this* kind, under *these* commitment
 roots, has every input and output value it touches authenticated at *these*
 ``(rank, position, schema)`` coordinates, and the kind's relation holds over
 them: the copy's gates, recomputed from the opened inputs, produce the opened
@@ -247,11 +247,11 @@ type PositionEntry = PositionRef | PositionRange
 
 @dataclass(frozen=True, slots=True)
 class Obligation:
-    """The public statement for one sampled VU.
+    """The public statement for one sampled proof unit.
 
     ``session`` is the header digest of the run (it binds the session id, the
     compiled circuit, the policy, the public I/O and ``kappa_W``);
-    ``compiled`` repeats ``H(C, I)`` explicitly.  ``unit`` is the VU index and
+    ``compiled`` repeats ``H(C, I)`` explicitly.  ``unit`` is the proof unit's index and
     ``replay_unit`` the RU it lies in.  ``positions`` are every coordinate the
     relation touches -- the copy's inputs and its opened outputs, nothing
     else -- in ascending address order; ``inputs[k]`` is the slot of the

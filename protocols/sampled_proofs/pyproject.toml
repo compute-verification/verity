@@ -14,3 +14,7 @@ packages = ["verity_sampled_proofs"]
 
 [tool.uv.sources]
 verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

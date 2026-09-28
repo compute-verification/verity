@@ -144,6 +144,7 @@ def test_machines_resolution(tmp_path, monkeypatch):
         remote.resolve_machine("a", None)
 
 
+@pytest.mark.slow
 def test_exclusive_refuses_when_any_run_is_live_and_vice_versa(tmp_path):
     plain, runs_root = _request(tmp_path, "plain", [PY, "-c", "import time; time.sleep(3)"])
     assert remote.launch_request(plain)["started"]

@@ -76,6 +76,7 @@ def _open_ids(rl: RowLayout, head: int) -> list[ValueId]:
 
 
 @pytest.mark.parametrize("kind", ["decode_T160", "prefill_P20"])
+@pytest.mark.slow
 def test_round_trip_on_oracle_values_both_layouts(kind: str) -> None:
     if kind == "decode_T160":
         fx = synthetic_fixture(seed=7, geo=GEO, layer=3, step=5, prompt_len=155).with_replay(oracle_row)   # 9 rows, T = 160

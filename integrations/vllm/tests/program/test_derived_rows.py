@@ -291,7 +291,7 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
 
 
 def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_every_encoding():
-    """[R17 dense, rev M-0287 / revb M-0290, int-3] `prims.AmpereBF16TcDot16` now evaluates through `tc_total.tc_dot_total(AMPERE_BF16_M16N8K16)`
+    """[R17 dense, rev M-0287 / revb M-0290, int-3; re-key] `prims.AmpereBF16TcDot16` (core's `_v2`) evaluates through `tc_total.tc_dot_total(AMPERE_BF16_M16N8K16)`
     (pure Python, 3.11): == `silicon_total.tc_dot_total(AMPERE_BF16_DOT16_TOTAL)` word for word on EVERY encoding, and on finite lanes
     == `verity_vllm.program.kernels.mma.tc_dot(AMPERE_BF16)` == `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16 relation, unchanged).
     The two documented differences from the retired mma-based extension path are STATED here as facts about non-finite outcomes only:
@@ -302,14 +302,13 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
         pytest.skip("veritor.core.silicon(_total) (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
     from verity_vllm.program.registry import prims as P
     S, ST = ref
-    mma = P._mma()
+    from verity_vllm.program.kernels import mma
     rng = np.random.default_rng(1848)
 
     def check(acc, a, b):
         want = ST.tc_dot_total(ST.AMPERE_BF16_DOT16_TOTAL, acc, list(a), list(b))
-        got = P._tc_dot16_total(acc, tuple(a), tuple(b))
+        got = P.AmpereBF16TcDot16.evaluate(acc, *a, *b)
         assert got == want, (hex(acc), [hex(v) for v in a], [hex(v) for v in b], hex(want), hex(got))
-        assert P.AmpereBF16TcDot16.evaluate(acc, *a, *b) == want
         return want
 
     n_nan = n_inf = 0
@@ -355,8 +354,6 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
             sys.modules[k] = None
         ev = P.AmpereBF16TcDot16.evaluate
         assert ev(0, *ones, *ones) == 0x41800000
-        with pytest.raises(ImportError):
-            P._mma.__wrapped__()                                                   # the reference is lazy and test-only
     finally:
         for k, v in saved.items():
             if v is None:
@@ -383,8 +380,7 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     assert ev(0x3F800000, *[t24] + [z] * 15, *[one] + [z] * 15) == 0x3F800000
     assert ev(0x3F800000, *[t24, t24] + [z] * 14, *[one, one] + [z] * 14) == 0x3F800001     # both in group 1: 1 + 2 * 2^-24 = 1 + ulp
     assert ev(0x3F800000, *[t24] + [z] * 7 + [t24] + [z] * 7, *[one] + [z] * 7 + [one] + [z] * 7) == 0x3F800000  # split: each truncates
-    with pytest.raises(ValueError, match="takes 16 operand pairs"):
-        P._tc_dot16_total(0, tuple(ones[:8]), tuple(ones[:8]))
+    assert P.AmpereBF16TcDot16.id == "AmpereBF16TcDot16_v2"
 
 
 def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampere():
@@ -439,7 +435,7 @@ def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampe
         if ref is not None:
             assert step == ref[0].tc_dot_chain(ref[0].HOPPER_BF16_M16N8K16, 0, [int(v) for v in q[i]], [int(v) for v in k[i]]), i
     # the dispatch table and its refusal
-    assert D.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"] is D.tc_dot16_hopper and D.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v1"] is D.tc_dot16
+    assert D.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"] is D.tc_dot16_hopper and D.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v2"] is D.tc_dot16
     ah, _ = D.dot_bf16_for("HopperBF16WgmmaDot16_v1")(q, k)
     assert np.array_equal(ah, acc)
     with pytest.raises(KeyError, match="no vectorised k16 twin for DOT primitive 'BlackwellBF16TcDot16_v1'"):
@@ -552,7 +548,7 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     assert tuple(int(x) for x in out[:nh].ravel()) == tuple(ref)
     # the DOT / INV statics are load-bearing by construction (test_tc_dot16_hopper_...: the two adders differ on the same words); here
     # only the dispatch is checked -- the Ampere chain runs on the same shapes and refusals name the primitive
-    out_amp, nf_amp = D.attention_rows(q, kc, vc, BN, dot_prim="AmpereBF16TcDot16_v1", inv_prim="Fa2InvSum_v1")
+    out_amp, nf_amp = D.attention_rows(q, kc, vc, BN, dot_prim="AmpereBF16TcDot16_v2", inv_prim="Fa2InvSum_v1")
     assert out_amp.shape == out.shape and not nf_amp.any()
     with pytest.raises(KeyError, match="DOT primitive"):
         D.attention_rows(q, kc, vc, BN, dot_prim="Nope_v9")

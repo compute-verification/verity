@@ -24,9 +24,13 @@ REGISTRY: dict[str, str] = {
     "native_peak": "tools.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
+    "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
     "flock_pure": "backends.flock.tool:FLOCK_PURE",
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
+    "flock_class_sweep": "backends.flock.tool:FLOCK_CLASS_SWEEP",
     "check": "tools.check.tool:CHECK",
+    "lean_audit": "tools.lean.tool:LEAN_AUDIT",
+    "lean_upstream": "tools.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",

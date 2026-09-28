@@ -59,6 +59,7 @@ def test_gadgets_over_a_40_bit_field_wrap() -> None:
 
 
 @pytest.mark.parametrize("pname", ["ampere", "hopper"])
+@pytest.mark.slow
 def test_whole_group_and_step_over_the_integers_are_pinned(pname: str) -> None:
     pipe = PIPES[pname]
     pool = GOLDEN[:4] if pipe is AMP else C.structured_cases(pipe)[:4]
@@ -69,6 +70,7 @@ def test_whole_group_and_step_over_the_integers_are_pinned(pname: str) -> None:
         assert Z.step_query(pipe, None, w, timeout_ms=60_000)[0] == "UNSAT", name
 
 
+@pytest.mark.slow
 def test_whole_group_over_goldilocks_is_forgeable_and_the_model_replays() -> None:
     """z3 finds the unranged-magW forgery on its own; the model, replayed through ``check_step`` under
     ``FieldCensus``, is accepted with an output one ulp below the measured word."""

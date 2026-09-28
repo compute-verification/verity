@@ -4,7 +4,8 @@ negatives (each check fires by name on a circuit built to break it).
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
 cause; a test whose only failures are known is an expected failure, and `test_known_failures_are_current` fails once a known one
 is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
-The per-target tests are marked `circuit_suite`: `check` deselects them and runs `circuit-check --all`, the same checks.
+The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
+same checks as `circuit-check --all`.
 """
 from __future__ import annotations
 
@@ -96,6 +97,7 @@ def _request_program(tmp_path: Path, **kw) -> Path:
     return out
 
 
+@pytest.mark.slow
 def test_row(tmp_path, results):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
     results.append({**r, "kind": "row", "target": "synthetic request Program"})
@@ -103,6 +105,7 @@ def test_row(tmp_path, results):
     _clean(r)
 
 
+@pytest.mark.slow
 def test_a_call_output_no_commitment_holds_is_named(tmp_path):
     """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a unit would end
     at an uncommitted value, across Calls."""
@@ -263,6 +266,7 @@ def test_redundant_ands_are_counted():
     assert CK.redundant_ands(C)[0] == 2
 
 
+@pytest.mark.slow
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
@@ -272,9 +276,10 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["Bf16ToF32_v1", "RoPEHead_v1{D=8}"]
     assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
     capsys.readouterr()
-    assert cli.main(["F32Add_v1", "-q"]) == 0                                    # a known failure: named, not failing
-    assert "known correspondence/lowering-mismatch F32Add_v1 [c-flock]" in capsys.readouterr().out
-    assert cli.main(["F32Add_v1", "-q", "--strict"]) == 1
+    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
+    assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
+    assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
+    assert cli.main([fp8, "-q", "--strict"]) == 1
 
 
 def test_the_cache_reuses_a_report_only_while_every_read_is_unchanged(tmp_path):

@@ -20,3 +20,10 @@ verity = { workspace = true }
 verity-vllm = { workspace = true }
 verity-flock = { workspace = true }
 verity-numerical = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: takes over about 5 s; deselect with -m 'not slow'",
+    "circuit_suite: one circuit-check target per test, the checks `circuit-check --all` runs; collected only under -m circuit_suite",
+]

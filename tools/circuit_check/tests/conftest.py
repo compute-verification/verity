@@ -18,3 +18,14 @@ def results():
     path = os.environ.get("CIRCUIT_CHECK_REPORT")
     if path and out:
         Path(path).write_text(json.dumps(CK.report(out, CK.Options()), indent=1, default=str) + "\n")
+
+
+def pytest_collection_modifyitems(config, items):
+    """The per-target tests are `circuit-check --all` as pytest items, which `check` runs through the CLI: they are collected
+    only when `-m` names `circuit_suite`."""
+    if "circuit_suite" in (config.getoption("markexpr") or ""):
+        return
+    dropped = [i for i in items if "circuit_suite" in i.keywords]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+        items[:] = [i for i in items if "circuit_suite" not in i.keywords]

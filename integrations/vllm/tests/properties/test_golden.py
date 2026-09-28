@@ -26,6 +26,7 @@ def test_changed_attribution_fails(tmp_path):
     assert rep["status"] == "fail" and "attribution changed" in rep["entries"][0]["reason"]
 
 
+@pytest.mark.slow
 def test_attribution_is_deterministic_and_names_patterns():
     m1 = golden.measure(REPO / "data" / "logs" / "m1.jsonl.gz", "vllm_d9105ea80_sm89_eager")
     m2 = golden.measure(REPO / "data" / "logs" / "m1.jsonl.gz", "vllm_d9105ea80_sm89_eager")

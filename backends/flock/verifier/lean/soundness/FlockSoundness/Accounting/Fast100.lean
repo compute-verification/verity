@@ -9,18 +9,19 @@ import Mathlib.Tactic.GCongr
 # The bound for `fast100` run twice on one root
 
 For every witness size the profile supports and every statement shape the three statements of
-PROTOCOL.md §16 can take (at most `2^26` bits per block, 1024 public regions and 64 link-point
+PROTOCOL.md §16 can take (at most `2^27` bits per block, 1024 public regions and 64 link-point
 coordinates, well beyond today's statements), `tableError` is at most
 
-* `2^-195.5` for `22 ≤ m ≤ 33` (`tableError_le_of_le_33`);
-* `2^-195.4` for `m ∈ {34, 35}`, which have a seventh Ligerito level (`tableError_le_of_34_35`).
+* `2^-205` for every `22 ≤ m ≤ 35` (`tableError_le_of_le_33`, `tableError_le_of_34_35`), at the
+  analysis slack `η = 1/200`.
 
-The spec quotes 2^-195.5 per table from the `m = 33` ledger; at `m = 34, 35` the extra level's
-query term (2^-102.6) moves the total to 2^-195.43.
+At `η = 1/50` these were 2^-195.5 and, with the seventh level at `m = 34, 35`, 2^-195.4. The slack
+is the analysis's choice: the radius `1 − √ρ − η` and the list bound `1/(2ηρ)` follow it, and
+the verifier never reads it.
 
 **Method.** Each real term is bounded by a rational one (`…Up`): `√(2^-r)` by a rational upper
 bound, and the mutual-correlated-agreement numerator of BCHKS25 Theorem 4.6 by a crude closed
-form (its terms sit below 2^-170, against 2^-97.8 for the queries). The rational bound is then
+form (its terms sit below 2^-180, against about 2^-102.5 for the queries). The rational bound is then
 checked by exact arithmetic for each `m`.
 -/
 
@@ -44,7 +45,7 @@ theorem sqrt_rate_le (l : Level) (hr : l.logInvRate ≤ 7) :
   interval_cases r <;> norm_num [sqrtUp]
 
 /-- `(√ρ + η)^Q`, rationally. -/
-def queryUp (l : Level) : ℚ := (sqrtUp l.logInvRate + 1 / 50) ^ l.queries
+def queryUp (l : Level) : ℚ := (sqrtUp l.logInvRate + 1 / 200) ^ l.queries
 
 theorem queryError_le (l : Level) (hr : l.logInvRate ≤ 7) :
     l.queryError ≤ (queryUp l : ℝ) := by
@@ -55,8 +56,8 @@ theorem queryError_le (l : Level) (hr : l.logInvRate ≤ 7) :
 
 /-- A closed-form upper bound on the MCA numerator `a` (`Level.mcaA`) for rates `2^-1 … 2^-7`. -/
 def mcaUp (l : Level) : ℚ :=
-  (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / 3 * 2 ^ (3 * l.logInvRate + 2 + l.logCols)
-    + 101 / 2 * 2 ^ (l.logInvRate + 1)
+  (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / 3 * 2 ^ (3 * l.logInvRate + 2 + l.logCols)
+    + 401 / 2 * 2 ^ (l.logInvRate + 1)
 
 theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols) :
     0 ≤ l.mcaA ∧ l.mcaA ≤ (mcaUp l : ℝ) := by
@@ -105,16 +106,16 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
   have hsq_pos : 0 < Real.sqrt ρr := Real.sqrt_pos.2 hρr_pos
   -- the radius and the multiplicity parameter
   set δ : ℝ := l.radius with hδ_def
-  have hδ : δ = 1 - Real.sqrt ρ - 1 / 50 := by rw [hδ_def, Level.radius, eta]
-  have hden : 1 / 50 ≤ 1 - Real.sqrt ρr - δ := by rw [hδ]; linarith
-  have hx : Real.sqrt ρr / (1 - Real.sqrt ρr - δ) ≤ 50 := by
+  have hδ : δ = 1 - Real.sqrt ρ - 1 / 200 := by rw [hδ_def, Level.radius, eta]
+  have hden : 1 / 200 ≤ 1 - Real.sqrt ρr - δ := by rw [hδ]; linarith
+  have hx : Real.sqrt ρr / (1 - Real.sqrt ρr - δ) ≤ 200 := by
     rw [div_le_iff₀ (by linarith)]; linarith
   set mm : ℝ := max (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) 3 with hmm_def
-  have hceil : (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) ≤ 50 := by
+  have hceil : (⌈ρr ^ ((1 : ℝ) / 2) / (1 - ρr ^ ((1 : ℝ) / 2) - δ)⌉ : ℝ) ≤ 200 := by
     rw [hs]
-    have : ⌈Real.sqrt ρr / (1 - Real.sqrt ρr - δ)⌉ ≤ 50 := Int.ceil_le.2 (by exact_mod_cast hx)
+    have : ⌈Real.sqrt ρr / (1 - Real.sqrt ρr - δ)⌉ ≤ 200 := Int.ceil_le.2 (by exact_mod_cast hx)
     exact_mod_cast this
-  have hmm_le : mm ≤ 50 := max_le hceil (by norm_num)
+  have hmm_le : mm ≤ 200 := max_le hceil (by norm_num)
   have hmm_ge : 3 ≤ mm := le_max_right _ _
   have hδ_le1 : δ ≤ 1 := by rw [hδ]; linarith [Real.sqrt_nonneg ρ]
   have hδ_ge : -1 ≤ δ := by rw [hδ]; linarith
@@ -125,13 +126,13 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
   have hδρ' : -1 ≤ δ * ρr := by
     have := mul_le_mul_of_nonneg_right hδ_ge hρr_pos.le
     linarith
-  have hnum : 2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr ≤ 2 * (101 / 2) ^ 5 + 3 * (101 / 2) := by
-    have h5 : (mm + 1 / 2) ^ 5 ≤ (101 / 2 : ℝ) ^ 5 := by gcongr; linarith
-    have : 3 * (mm + 1 / 2) * δ * ρr ≤ 3 * (101 / 2) := by
+  have hnum : 2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr ≤ 2 * (401 / 2) ^ 5 + 3 * (401 / 2) := by
+    have h5 : (mm + 1 / 2) ^ 5 ≤ (401 / 2 : ℝ) ^ 5 := by gcongr; linarith
+    have : 3 * (mm + 1 / 2) * δ * ρr ≤ 3 * (401 / 2) := by
       have hpos : 0 ≤ 3 * (mm + 1 / 2) := by linarith
       calc 3 * (mm + 1 / 2) * δ * ρr = 3 * (mm + 1 / 2) * (δ * ρr) := by ring
         _ ≤ 3 * (mm + 1 / 2) * 1 := mul_le_mul_of_nonneg_left hδρ hpos
-        _ ≤ 3 * (101 / 2) := by linarith
+        _ ≤ 3 * (401 / 2) := by linarith
     linarith
   have hnum_nonneg : 0 ≤ 2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr := by
     have hm : (7 / 2 : ℝ) ≤ mm + 1 / 2 := by linarith
@@ -144,28 +145,28 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
     have e2 := mul_le_mul_of_nonneg_left hδρ' hpos
     norm_num at e1 e2 ⊢
     linarith
-  have hnum0 : (0 : ℝ) ≤ 2 * (101 / 2) ^ 5 + 3 * (101 / 2) := by norm_num
+  have hnum0 : (0 : ℝ) ≤ 2 * (401 / 2) ^ 5 + 3 * (401 / 2) := by norm_num
   -- the two terms of `a`
   have hρr2 : 1 / 2 ^ (2 * r + 2) ≤ ρr ^ 2 := by
     calc 1 / 2 ^ (2 * r + 2) = (1 / 2 ^ (r + 1) : ℝ) ^ 2 := by rw [div_pow, ← pow_mul]; ring_nf
       _ ≤ ρr ^ 2 := by gcongr
   have hT1 : (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
-      ≤ (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / 3 * 2 ^ (3 * r + 2 + c) := by
+      ≤ (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / 3 * 2 ^ (3 * r + 2 + c) := by
     have hD : 3 * (1 / 2 ^ (2 * r + 2)) ≤ 3 * ρr ^ ((3 : ℝ) / 2) := by linarith
     calc (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
-        ≤ (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / (3 * (1 / 2 ^ (2 * r + 2))) * n := by
+        ≤ (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / (3 * (1 / 2 ^ (2 * r + 2))) * n := by
           have := div_le_div₀ hnum0 hnum (by positivity) hD
           gcongr
-      _ = (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / 3 * 2 ^ (3 * r + 2 + c) := by
+      _ = (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / 3 * 2 ^ (3 * r + 2 + c) := by
           rw [hn, hk_def]; push_cast
           field_simp
           ring
-  have hT2 : (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) ≤ 101 / 2 * 2 ^ (r + 1) := by
+  have hT2 : (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) ≤ 401 / 2 * 2 ^ (r + 1) := by
     rw [hs]
-    calc (mm + 1 / 2) / Real.sqrt ρr ≤ (101 / 2) / Real.sqrt ρr := by gcongr; linarith
-      _ ≤ (101 / 2) / (1 / 2 ^ (r + 1)) :=
+    calc (mm + 1 / 2) / Real.sqrt ρr ≤ (401 / 2) / Real.sqrt ρr := by gcongr; linarith
+      _ ≤ (401 / 2) / (1 / 2 ^ (r + 1)) :=
           div_le_div_of_nonneg_left (by norm_num) (by positivity) (hρr_ge.trans hs_ge)
-      _ = 101 / 2 * 2 ^ (r + 1) := by field_simp
+      _ = 401 / 2 * 2 ^ (r + 1) := by field_simp
   have hT1_nonneg : 0 ≤ (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr)
       / (3 * ρr ^ ((3 : ℝ) / 2)) * n :=
     mul_nonneg (div_nonneg hnum_nonneg (by positivity)) (by positivity)
@@ -176,7 +177,7 @@ theorem mcaA_bounds (l : Level) (hr : l.logInvRate ≤ 7) (hc : 1 ≤ l.logCols)
   have hA : l.mcaA = (2 * (mm + 1 / 2) ^ 5 + 3 * (mm + 1 / 2) * δ * ρr) / (3 * ρr ^ ((3 : ℝ) / 2)) * n
       + (mm + 1 / 2) / ρr ^ ((1 : ℝ) / 2) := rfl
   have hup : ((mcaUp l : ℚ) : ℝ) =
-      (2 * (101 / 2) ^ 5 + 3 * (101 / 2)) / 3 * 2 ^ (3 * r + 2 + c) + 101 / 2 * 2 ^ (r + 1) := by
+      (2 * (401 / 2) ^ 5 + 3 * (401 / 2)) / 3 * 2 ^ (3 * r + 2 + c) + 401 / 2 * 2 ^ (r + 1) := by
     simp only [mcaUp, ← hr_def, ← hc_def]; push_cast; ring
   rw [hA, hup]
   exact ⟨by linarith, by linarith⟩
@@ -258,14 +259,14 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
 
 /-! ## The statement ranges -/
 
-/-- The statement shapes covered: at most `2^26` witness bits per block, 1024 public regions,
+/-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
 64 coordinates per link point. -/
-def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 26 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
+def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
 
 /-- The worst-case numerator of `piopError` over the covered statements. -/
 def piopNumMax (m L₀ : ℕ) : ℕ :=
   (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
-    + L₀ * (2 + 2 * 20 + 63) + L₀ * (7 * 2050 + 1) + L₀
+    + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀
 
 theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMax m L₀ : ℚ) / 2 ^ 128 : ℚ) := by
@@ -274,13 +275,13 @@ theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
   push_cast
   gcongr
   have h1 : m - st.kLog ≤ m := Nat.sub_le _ _
-  have h2 : st.kLog - 6 ≤ 20 := by omega
+  have h2 : st.kLog - 6 ≤ 21 := by omega
   have h3 : st.nClaims ≤ 2050 := by unfold Stmt.nClaims; omega
   unfold piopNumMax
   exact_mod_cast (by gcongr : (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6))
       + L₀ * (m - st.kLog) + L₀ * (2 + 2 * (st.kLog - 6) + 63) + L₀ * (7 * st.nClaims + 1) + L₀
       ≤ (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
-      + L₀ * (2 + 2 * 20 + 63) + L₀ * (7 * 2050 + 1) + L₀)
+      + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀)
 
 /-- The rational bound on one rep over the covered statements. -/
 def repUp (s : Schedule) : ℚ := (piopNumMax s.m s.listBound₀ : ℚ) / 2 ^ 128 + ligUp s.levels

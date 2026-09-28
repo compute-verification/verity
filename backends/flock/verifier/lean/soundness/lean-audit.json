@@ -1,152 +1,851 @@
 {
- "roots": ["FlockSoundness", "FlockSoundnessTest.AssumptionIsArkLibs"],
+ "roots": ["FlockSoundness"],
  "exempt": {
   "FlockSoundness.Check": "the lane's #print axioms list, which this audit supersedes (every declaration is audited)"
  },
  "assumptions": ["FlockSoundness.Assumptions"],
- "meaning": ["FlockSoundness", "FlockLevel3"],
+ "meaning": [
+  "FlockSoundness",
+  "FlockLevel3",
+  "Flock.Derive",
+  "Flock.CircuitType",
+  "Flock.DeriveAll",
+  "Flock.DeriveCheck",
+  "Flock.Layout",
+  "Flock.Library"
+ ],
+ "upstream": {
+  "scan": {
+   "Arklib": {
+    "baseline": "scripts/axiom_baseline.json",
+    "sources": ["ArkLib"]
+   }
+  },
+  "imports": [
+   "ArkLib",
+   "CompPoly.Fields.Binary.AdditiveNTT.NovelPolynomialBasis",
+   "VCVio.CryptoFoundations.HardnessAssumptions.CollisionResistance"
+  ],
+  "watch": {
+   "A1-johnson-mca": {
+    "about": "Assumptions.BCHKS25Thm46 (A1): the Johnson-range MCA bound the Ligerito folds assume",
+    "mentions": ["CoreDefinitions.mcaError", "CoreDefinitions.AffineLineGenerator", "ReedSolomon.code"],
+    "ack": [
+     "ProximityGap.rs_mcaError_le_of_le_relUDR",
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_mcaError_le",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_mcaError_le",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_mcaError_le",
+     "ReedSolomon.HasCapacityLineAgreement.mcaError_le",
+     "ReedSolomon.automaticFirstOrder_hybrid_mcaError_le",
+     "ReedSolomon.automaticFirstOrder_rate_mcaError_le",
+     "ReedSolomon.exists_capacity_mcaError",
+     "ReedSolomon.mcaError_affineLine_fullRate_eq_zero",
+     "ReedSolomon.mcaError_affineLine_johnson_le",
+     "ReedSolomon.mcaError_affineLine_le_min_one_of_exactAgreement",
+     "ReedSolomon.mcaError_affineLine_le_of_exactAgreement",
+     "ReedSolomon.mcaError_affineLine_weightedJohnson_le",
+     "ToyProblem.Impl.IRS.exactGammaFailure_prob_le"
+    ]
+   },
+   "udr-mca": {
+    "about": "the unique-decoding fallback for the MCA bound",
+    "mentions": ["CoreDefinitions.mcaError", "Code.relativeUniqueDecodingRadius"],
+    "ack": ["ProximityGap.rs_mcaError_le_of_le_relUDR"]
+   },
+   "list-size": {
+    "about": "ListSize.closeMsgs_card_le: the Johnson list bound, 25·2^r at rate 2^-r",
+    "mentions": ["ReedSolomon.closePolynomialSet", "Set.ncard"],
+    "ack": [
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_finiteSlack_bounds",
+     "ReedSolomon.FirstOrder.automaticFirstOrder_finiteLength_rate_bounds",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_bounded_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_dimension_le_one",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_finiteLength_of_selector_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_inv_eta_of_certificate",
+     "ReedSolomon.FirstOrder.closePolynomialSet_finite_and_card_le_inv_eta_of_dimension_le_one",
+     "ReedSolomon.FirstOrder.finiteLength_completeList_and_exceptionalMca_of_selector_certificates",
+     "ReedSolomon.FirstOrder.finiteLength_completeList_and_exceptionalMca_of_selector_certificates_inv_eta",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_finiteSlack_bounds",
+     "ReedSolomon.FirstOrder.firstOrderBranch_finiteLength_rate_bounds",
+     "ReedSolomon.FirstOrder.lowRate_closePolynomialSet_finite_and_card_le_finiteLength",
+     "ReedSolomon.FirstOrder.lowRate_closePolynomialSet_finite_and_card_le_inv_eta",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_completeList_and_exceptionalMca",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_completeList_and_exceptionalMca_inv_eta",
+     "ReedSolomon.FirstOrder.lowRate_finiteLength_rate_bounds",
+     "ReedSolomon.automaticFirstOrder_closePolynomialSet_at_ceil_finite_and_card_le",
+     "ReedSolomon.automaticFirstOrder_closePolynomialSet_finite_and_card_le",
+     "ReedSolomon.automaticFirstOrder_rate_bounds",
+     "ReedSolomon.automatic_first_order_list_bound",
+     "ReedSolomon.automatic_first_order_list_bound_of_slack",
+     "ReedSolomon.automatic_first_order_squarefree_list_bound_of_slack",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_of_differential_equation_and_gap",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_pairwiseJohnson",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_le_pairwiseJohnson_of_gap",
+     "ReedSolomon.closePolynomialSet_finite_and_ncard_mul_choose_le",
+     "ReedSolomon.closePolynomialSet_ncard_mul_choose_le",
+     "ReedSolomon.closePolynomialSet_one_ncard_le_div",
+     "ReedSolomon.close_list_bound_of_curve_certificate_directJetCoarse",
+     "ReedSolomon.close_list_bound_of_curve_certificate_of_jetCharacteristic",
+     "ReedSolomon.exists_ratePartition_list_bound",
+     "ReedSolomon.fixedRatePartitionOrder_list_bound",
+     "ReedSolomon.fixedRatePartitionOrder_list_bound_selected",
+     "ReedSolomon.lambda_le_ceil_of_closePolynomialSet_bound",
+     "ReedSolomon.mathematicalUniformRatePartition_close_list_bound",
+     "ReedSolomon.mathematicalUniform_capacity_list_bound",
+     "ReedSolomon.prescribed_geometric_close_list_bound",
+     "ReedSolomon.ratePartition_close_list_bound",
+     "ReedSolomon.uniformRatePartition_close_list_bound",
+     "ReedSolomon.uniform_capacity_list_bound"
+    ]
+   },
+   "list-size-code": {
+    "about": "ListSize.closeMsgs_card_le, stated as list decodability",
+    "mentions": ["Code.IsListDecodable", "ReedSolomon.code"],
+    "ack": [
+     "OutOfDomSmpl.out_of_dom_smpl_1",
+     "OutOfDomSmpl.out_of_dom_smpl_2",
+     "ReedSolomon.Interleaved.interleavedCodeSet_isListDecodable",
+     "ReedSolomon.code_isListDecodable_pairwiseJohnson",
+     "ReedSolomon.listDecodable_reedSolomon"
+    ]
+   },
+   "tensor-fold": {
+    "about": "the fold union in LigeritoLevels (2^k - 1 pairs per level, paper Lemma 9)",
+    "mentions": ["TensorMCA.tensorFoldBad"],
+    "ack": [
+     "ReedSolomon.interleavedRS_tensorFoldBad_card_le_heightThree",
+     "TensorMCA.hasFullTensorDecomposition_of_not_mem_bad",
+     "TensorMCA.tensorFoldBad_card_le",
+     "TensorMCA.tensorFoldBad_eq_empty_height_zero",
+     "TensorMCA.tensorFoldBad_probability_height_three",
+     "TensorMCA.tensorFoldBad_probability_le"
+    ]
+   },
+   "novel-basis": {
+    "about": "Arith.Correct.xhat_poly, proved per instance for L ≤ 40 (level3)",
+    "mentions": ["AdditiveNTT.novelPolynomialBasis"],
+    "ack": ["AdditiveNTT.novelPolynomialBasis_is_basisVectors"]
+   },
+   "collision-resistance": {
+    "about": "A2 (SHA512ExpectedTimeCR) and the explicit collision finders",
+    "mentions": ["CollisionResistance.crAdvantage"],
+    "ack": []
+   },
+   "keyed-cr": {
+    "about": "A2, keyed form",
+    "mentions": ["CollisionResistance.keyedCRAdvantage"],
+    "ack": []
+   },
+   "rom-cr": {
+    "about": "A2's random-oracle shadow (an expected-query birthday bound)",
+    "mentions": ["CollisionResistance.romCRAdvantage"],
+    "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
+   }
+  }
+ },
  "pins": {
+  "FlockSoundness.Audit.Partition.flock_e2e_count": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {Reg D : Type} [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D) {mPts : Nat}",
+    "  (plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts))",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) {L : FlockSoundness.Audit.Law n}",
+    "  {execAccept : Prod Bool (Finset (Fin n)) → Prop}",
+    "  (hExec : ∀ (o : Prod Bool (Finset (Fin n))), execAccept o → Eq o.fst Bool.true)",
+    "  {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows) {CB : FlockSoundness.Audit.Circuit}",
+    "  (PB : FlockSoundness.Audit.Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N))",
+    "  (hL1 : P.RowsL1 PB proj ones) {Dh : Type} {Hc : List UInt8 → Dh}",
+    "  (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc) {k : Nat} (hk : instLENat.le 1 k) {Rw M : Nat}",
+    "  (hRw : instLENat.le 1 Rw) (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
+    "  (hr :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (plan S R).length),",
+    "      Real.instLE.le (FlockSoundness.rateB (plan S R) j k) ρ)",
+    "  {t' : Real} (ht : Real.instLE.le 0 t')",
+    "  (hCR :",
+    "    ∀ (R : Reg) (τ : FlockSoundness.Audit.Cont L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan) R)",
+    "      (c : vb.Pos) (x : Nonempty (P.Ωc plan tab vb L c)),",
+    "      FlockSoundness.Assumptions.SHA512ExpectedTimeCR Hc",
+    "        (FlockSoundness.LinkFinder.finderG (P.trialG H E plan tab vb R τ c k Rw) M)",
+    "        (FlockSoundness.LinkFinder.finderStrat (P.trialG H E plan tab vb R τ c k Rw)",
+    "          (P.trialStrat H E plan tab vb R τ c k Rw) M)",
+    "        (P.outC H E plan tab vb R τ c)",
+    "        (FlockSoundness.LinkFinder.finderCost (P.rdT H E plan tab vb R τ c)",
+    "          (FlockSoundness.Audit.Partition.cT plan R t')))",
+    "  (K : Nat) (σ : (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)).Strategy)",
+    "  (hOne :",
+    "    ∀ (g : Fin C.N),",
+    "      SetLike.instMembership.mem ones g →",
+    "        Eq (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw g) Bool.true) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (execAccept o)",
+    "          (instLENat.le K",
+    "            (PB.wrong",
+    "                (proj (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw))).card))",
+    "      (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)) σ)",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd (L.miss K)",
+    "        (FlockSoundness.Audit.Partition.ksAvgBE H E plan k (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ)))",
+    "      (P.linkBoundE plan tab vb k Rw M ρ t'))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000003b214729"
+  },
+  "FlockSoundness.Audit.Partition.flock_e2e_drawn": {
+   "signature": [
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn {C : FlockSoundness.Audit.Circuit} {n : Nat}",
+    "  (P : FlockSoundness.Audit.Partition C n) {Reg D : Type} [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List FlockLevel3.GF128) D) {mPts : Nat}",
+    "  (plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts))",
+    "  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) {L : FlockSoundness.Audit.Law n}",
+    "  {execAccept : Prod Bool (Finset (Fin n)) → Prop}",
+    "  (hExec : ∀ (o : Prod Bool (Finset (Fin n))), execAccept o → Eq o.fst Bool.true)",
+    "  {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows) {CB : FlockSoundness.Audit.Circuit}",
+    "  (PB : FlockSoundness.Audit.Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N))",
+    "  (hL1 : P.RowsL1 PB proj ones) {Dh : Type} {Hc : List UInt8 → Dh}",
+    "  (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc) {k : Nat} (hk : instLENat.le 1 k) {Rw M : Nat}",
+    "  (hRw : instLENat.le 1 Rw) (hM : instLENat.le 1 M) {ρ : Real} (hρ : Real.instLT.lt ρ 1)",
+    "  (hr :",
+    "    ∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (plan S R).length),",
+    "      Real.instLE.le (FlockSoundness.rateB (plan S R) j k) ρ)",
+    "  {t' : Real} (ht : Real.instLE.le 0 t')",
+    "  (hCR :",
+    "    ∀ (R : Reg) (τ : FlockSoundness.Audit.Cont L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan) R)",
+    "      (c : vb.Pos) (x : Nonempty (P.Ωc plan tab vb L c)),",
+    "      FlockSoundness.Assumptions.SHA512ExpectedTimeCR Hc",
+    "        (FlockSoundness.LinkFinder.finderG (P.trialG H E plan tab vb R τ c k Rw) M)",
+    "        (FlockSoundness.LinkFinder.finderStrat (P.trialG H E plan tab vb R τ c k Rw)",
+    "          (P.trialStrat H E plan tab vb R τ c k Rw) M)",
+    "        (P.outC H E plan tab vb R τ c)",
+    "        (FlockSoundness.LinkFinder.finderCost (P.rdT H E plan tab vb R τ c)",
+    "          (FlockSoundness.Audit.Partition.cT plan R t')))",
+    "  (σ : (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)).Strategy)",
+    "  (hOne :",
+    "    ∀ (g : Fin C.N),",
+    "      SetLike.instMembership.mem ones g →",
+    "        Eq (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw g) Bool.true) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun o =>",
+    "        And (execAccept o)",
+    "          (Not",
+    "            (Disjoint",
+    "              (PB.wrong",
+    "                (proj (P.Xplur H E plan tab vb (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ) k Rw)))",
+    "              o.snd)))",
+    "      (FlockSoundness.Audit.audit L Reg (FlockSoundness.Audit.Partition.batchedSession H E plan)) σ)",
+    "    (instHAdd.hAdd",
+    "      (FlockSoundness.Audit.Partition.ksAvgBE H E plan k (FlockSoundness.Audit.reg σ) (FlockSoundness.Audit.cont σ))",
+    "      (P.linkBoundE plan tab vb k Rw M ρ t'))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000076fada01"
+  },
   "FlockSoundness.Merkle.opening_binding": {
    "signature": [
     "FlockSoundness.Merkle.opening_binding {Col D : Type} (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc Col D)",
-    "  (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D) (hc : c ≠ c')",
+    "  (cap : Nat → D) (depth pos : Nat) (c c' : Col) (sibs sibs' : List D) (hc : Ne c c')",
     "  (h : FlockSoundness.Merkle.Verifies H E cap depth pos c sibs)",
     "  (h' : FlockSoundness.Merkle.Verifies H E cap depth pos c' sibs') : FlockSoundness.Merkle.Collision H"
    ],
    "assumptions": [],
    "type_hash": "00000000deee5660"
   },
+  "FlockSoundness.Rope.rope_sound": {
+   "signature": [
+    "FlockSoundness.Rope.rope_sound (z : Nat → Bool) (hz : FlockSoundness.Rope.SatList FlockSoundness.Rope.pinned z)",
+    "  (h1 : Eq (z 6144) Bool.true) (o : Nat) (ho : instLTNat.lt o 32) :",
+    "  Eq (z (instHAdd.hAdd 6016 o)) (List.instGetElemNatLtLength.getElem (FlockSoundness.Rope.circ.eval z) o ⋯)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000022955420"
+  },
+  "FlockSoundness.Rows.compose_eval": {
+   "signature": [
+    "FlockSoundness.Rows.compose_eval {t : Flock.CircuitType} {inSplit outSplit : List Nat} {d : Flock.Derive.Derived}",
+    "  (hd : Eq (Flock.Derive.derive t inSplit outSplit) (Except.ok d))",
+    "  {h : FlockSoundness.Compose.Ordered (FlockSoundness.Compose.ofDerived d)}",
+    "  {z : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w → Bool}",
+    "  (hz : (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).Sat z)",
+    "  (h1 : Eq (z (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).one) Bool.true) {x : Nat → Bool}",
+    "  (hx :",
+    "    ∀ (i : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w),",
+    "      instLTNat.lt i.val d.nIn → Eq (x i.val) (z i))",
+    "  {o : Nat} (ho : instLTNat.lt o t.outputs.size)",
+    "  (ℓ : Fin (FlockSoundness.Rows.compose (FlockSoundness.Compose.ofDerived d) h).w)",
+    "  (hℓ : Eq ℓ.val (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd d.nIn 1) d.geo.nAnd) o)) :",
+    "  Eq (z ℓ) ((FlockSoundness.Types.eval t x).getD o Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000ba2f91ed"
+  },
+  "FlockSoundness.Rows.compose_eval_unit": {
+   "signature": [
+    "FlockSoundness.Rows.compose_eval_unit {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
+    "  {info : String → Option Flock.TableInfo} {words : String → Option (Array Nat)} {unit : Nat}",
+    "  {done : Array Flock.DeriveAll.D} (hd : Eq (Flock.DeriveAll.deriveChecked types ls info words unit) (Except.ok done))",
+    "  {t : Flock.CircuitType} (ht : Eq ((ls.getD unit Flock.instInhabitedLayout.default).type.bind types) (Option.some t))",
+    "  {h :",
+    "    FlockSoundness.Compose.Ordered",
+    "      (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default))}",
+    "  {z :",
+    "    Fin",
+    "        (FlockSoundness.Rows.compose",
+    "            (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default)) h).w →",
+    "      Bool}",
+    "  (hz :",
+    "    (FlockSoundness.Rows.compose",
+    "          (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default)) h).Sat",
+    "      z)",
+    "  (h1 :",
+    "    Eq",
+    "      (z",
+    "        (FlockSoundness.Rows.compose",
+    "            (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default)) h).one)",
+    "      Bool.true)",
+    "  {x : Nat → Bool}",
+    "  (hx :",
+    "    ∀",
+    "      (i :",
+    "        Fin",
+    "          (FlockSoundness.Rows.compose",
+    "              (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default)) h).w),",
+    "      instLTNat.lt i.val (done.getD unit Flock.DeriveAll.instInhabitedD.default).inCols.size → Eq (x i.val) (z i))",
+    "  (F : Nat) (hF : instLTNat.lt unit F) {o : Nat} (ho : instLTNat.lt o t.outputs.size)",
+    "  (ℓ :",
+    "    Fin",
+    "      (FlockSoundness.Rows.compose",
+    "          (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default)) h).w)",
+    "  (hℓ :",
+    "    Eq ℓ.val",
+    "      (FlockSoundness.Compose.lidx",
+    "        (FlockSoundness.Compose.ofBlock words done (done.getD unit Flock.DeriveAll.instInhabitedD.default))",
+    "        ((done.getD unit Flock.DeriveAll.instInhabitedD.default).outCols.getD o 0))) :",
+    "  Eq (z ℓ) ((FlockSoundness.Types.Dag.evalT types words F t x).getD o Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000944fbc12"
+  },
+  "FlockSoundness.Types.Dag.layout_sound": {
+   "signature": [
+    "FlockSoundness.Types.Dag.layout_sound {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
+    "  {info : String → Option Flock.TableInfo} {words : String → Option (Array Nat)} {unit : Nat}",
+    "  {done : Array Flock.DeriveAll.D} (hd : Eq (Flock.DeriveAll.deriveChecked types ls info words unit) (Except.ok done))",
+    "  {j : Nat} (hj : Ne j unit) {t : Flock.CircuitType}",
+    "  (ht : Eq ((ls.getD j Flock.instInhabitedLayout.default).type.bind types) (Option.some t)) (z : Nat → Bool)",
+    "  (hz :",
+    "    FlockSoundness.Types.Dag.SatAt (Flock.DeriveAll.fullRow words (done.getD j Flock.DeriveAll.instInhabitedD.default))",
+    "      z)",
+    "  (h1 : Eq (z (done.getD j Flock.DeriveAll.instInhabitedD.default).const) Bool.true) (F : Nat) (hF : instLTNat.lt j F)",
+    "  (o : Nat) (ho : instLTNat.lt o t.outputs.size) :",
+    "  Eq (z ((done.getD j Flock.DeriveAll.instInhabitedD.default).outCols.getD o 0))",
+    "    ((FlockSoundness.Types.Dag.evalT types words F t fun i =>",
+    "          z ((done.getD j Flock.DeriveAll.instInhabitedD.default).inCols.getD i 0)).getD",
+    "      o Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000eb48d8bd"
+  },
+  "FlockSoundness.Types.Dag.unit_sound": {
+   "signature": [
+    "FlockSoundness.Types.Dag.unit_sound {types : String → Option Flock.CircuitType} {ls : Array Flock.Layout}",
+    "  {info : String → Option Flock.TableInfo} {words : String → Option (Array Nat)} {unit : Nat}",
+    "  {done : Array Flock.DeriveAll.D} (hd : Eq (Flock.DeriveAll.deriveChecked types ls info words unit) (Except.ok done))",
+    "  {t : Flock.CircuitType} (ht : Eq ((ls.getD unit Flock.instInhabitedLayout.default).type.bind types) (Option.some t))",
+    "  (one : Nat) (z : Nat → Bool)",
+    "  (hz :",
+    "    FlockSoundness.Types.Dag.SatAt",
+    "      (Flock.DeriveAll.blockRow words (done.getD unit Flock.DeriveAll.instInhabitedD.default) one) z)",
+    "  (h1 : Eq (z one) Bool.true) (F : Nat) (hF : instLTNat.lt unit F) (o : Nat) (ho : instLTNat.lt o t.outputs.size) :",
+    "  Eq (z ((done.getD unit Flock.DeriveAll.instInhabitedD.default).outCols.getD o 0))",
+    "    ((FlockSoundness.Types.Dag.evalT types words F t fun i =>",
+    "          z ((done.getD unit Flock.DeriveAll.instInhabitedD.default).inCols.getD i 0)).getD",
+    "      o Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000e5bf6f1f"
+  },
+  "FlockSoundness.Types.compose_complete": {
+   "signature": [
+    "FlockSoundness.Types.compose_complete {t : Flock.CircuitType} {inSplit outSplit : List Nat} {d : Flock.Derive.Derived}",
+    "  (hd : Eq (Flock.Derive.derive t inSplit outSplit) (Except.ok d)) (x : Nat → Bool) :",
+    "  And (FlockSoundness.Types.Sat d.rows (FlockSoundness.Types.honest t d.geo x))",
+    "    (And (Eq (FlockSoundness.Types.honest t d.geo x d.geo.const) Bool.true)",
+    "      (And (∀ (i : Nat), instLTNat.lt i t.inBits → Eq (FlockSoundness.Types.honest t d.geo x (d.inCol i)) (x i))",
+    "        (∀ (o : Nat),",
+    "          instLTNat.lt o t.outputs.size →",
+    "            Eq (FlockSoundness.Types.honest t d.geo x (d.outCol o))",
+    "              ((FlockSoundness.Types.eval t x).getD o Bool.false))))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000008624e1aa"
+  },
+  "FlockSoundness.Types.compose_sound": {
+   "signature": [
+    "FlockSoundness.Types.compose_sound {t : Flock.CircuitType} {inSplit outSplit : List Nat} {d : Flock.Derive.Derived}",
+    "  (hd : Eq (Flock.Derive.derive t inSplit outSplit) (Except.ok d)) (z : Nat → Bool)",
+    "  (hz : FlockSoundness.Types.Sat d.rows z) (h1 : Eq (z d.geo.const) Bool.true) (o : Nat)",
+    "  (ho : instLTNat.lt o t.outputs.size) :",
+    "  Eq (z (d.outCol o)) ((FlockSoundness.Types.eval t fun i => z (d.inCol i)).getD o Bool.false)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000c74db5c9"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
    "type_hash": "00000000f4d0def7"
   },
+  "FlockSoundness.placement_of_realizes": {
+   "signature": [
+    "FlockSoundness.placement_of_realizes {S : FlockSoundness.Model.Statement} {L : FlockSoundness.Compose.Logical}",
+    "  {h : FlockSoundness.Compose.Ordered L} {pos : Nat → Nat}",
+    "  {hb : ∀ (ℓ : Nat), instLTNat.lt ℓ L.order.length → instLTNat.lt (pos (L.order.getD ℓ 0)) (instHPow.hPow 2 S.kLog)}",
+    "  (hrowA :",
+    "    ∀ (k : Nat),",
+    "      instLTNat.lt k (instHSub.hSub L.order.length L.nIn) →",
+    "        ∀ (p : Prod (List Nat) (List Nat)),",
+    "          Eq (L.row (L.order.getD (instHAdd.hAdd L.nIn k) 0)) (Option.some p) →",
+    "            ∀ (r j : Fin (instHPow.hPow 2 S.kLog)),",
+    "              Eq r.val (pos (L.order.getD (instHAdd.hAdd L.nIn k) 0)) →",
+    "                Eq (S.A₀ r j) (List.count j.val (List.map pos p.fst)).cast)",
+    "  (hrowB :",
+    "    ∀ (k : Nat),",
+    "      instLTNat.lt k (instHSub.hSub L.order.length L.nIn) →",
+    "        ∀ (p : Prod (List Nat) (List Nat)),",
+    "          Eq (L.row (L.order.getD (instHAdd.hAdd L.nIn k) 0)) (Option.some p) →",
+    "            ∀ (r j : Fin (instHPow.hPow 2 S.kLog)),",
+    "              Eq r.val (pos (L.order.getD (instHAdd.hAdd L.nIn k) 0)) →",
+    "                Eq (S.B₀ r j) (List.count j.val (List.map pos p.snd)).cast)",
+    "  (honeA :",
+    "    ∀ (k : Nat),",
+    "      instLTNat.lt k (instHSub.hSub L.order.length L.nIn) →",
+    "        Eq (L.row (L.order.getD (instHAdd.hAdd L.nIn k) 0)) Option.none →",
+    "          ∀ (r j : Fin (instHPow.hPow 2 S.kLog)),",
+    "            Eq r.val (pos (L.order.getD (instHAdd.hAdd L.nIn k) 0)) → Eq (S.A₀ r j) (ite (Eq j S.pin) 1 0))",
+    "  (honeB :",
+    "    ∀ (k : Nat),",
+    "      instLTNat.lt k (instHSub.hSub L.order.length L.nIn) →",
+    "        Eq (L.row (L.order.getD (instHAdd.hAdd L.nIn k) 0)) Option.none →",
+    "          ∀ (r j : Fin (instHPow.hPow 2 S.kLog)),",
+    "            Eq r.val (pos (L.order.getD (instHAdd.hAdd L.nIn k) 0)) → Eq (S.B₀ r j) (ite (Eq j S.pin) 1 0))",
+    "  (hpinA : ∀ (j : Fin (instHPow.hPow 2 S.kLog)), Eq (S.A₀ S.pin j) (ite (Eq j S.pin) 1 0))",
+    "  (hpinB : ∀ (j : Fin (instHPow.hPow 2 S.kLog)), Eq (S.B₀ S.pin j) (ite (Eq j S.pin) 1 0)) :",
+    "  FlockSoundness.Placement S (FlockSoundness.Rows.compose L h) (FlockSoundness.composePlace S L h pos hb)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000456de154"
+  },
   "FlockSoundness.table_sound": {
    "signature": [
     "FlockSoundness.table_sound {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]",
-    "  (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)",
-    "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
-    "      (FlockSoundness.Model.table A S sch hm ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
+    "  (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch))",
+    "  (hm : instLENat.le 13 S.m) (ptLocal mPts : Nat) (hlay : S.LinkLayout ptLocal mPts)",
+    "  (σ : (FlockSoundness.Model.table A S sch hm ptLocal mPts).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "      (FlockSoundness.Model.table A S sch hm ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000003b47bb96"
+   "assumptions": [],
+   "type_hash": "00000000ff68839c"
   },
   "FlockSoundness.table_sound_compiled": {
    "signature": [
     "FlockSoundness.table_sound_compiled {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] {D : Type} (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K)",
-    "  (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc (List F) D)",
-    "  (S : FlockSoundness.Model.Statement) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)",
-    "  (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext })",
-    "  (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "  [DecidableEq K] {D : Type} (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)",
+    "  (E : FlockSoundness.Merkle.Enc (List F) D) (S : FlockSoundness.Model.Statement) (m k0 : Nat)",
+    "  (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : Nat)",
+    "  (hsch :",
+    "    Eq (FlockSoundness.Accounting.fast100 S.m)",
+    "      (Option.some { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }))",
+    "  (hm : instLENat.le 13 S.m) (ptLocal mPts : Nat) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ :",
-    "    (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
-    "        mPts).Strategy) :",
-    "  FlockSoundness.Game.expect",
+    "    (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext } hm",
+    "        ptLocal mPts).Strategy) :",
+    "  Real.instLE.le",
+    "    (FlockSoundness.Game.expect",
     "      (FlockSoundness.Game.ind fun out =>",
-    "        out.accepted = true ∧",
-    "          ¬FlockSoundness.Committed A S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext }",
-    "              (FlockSoundness.C0star A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
-    "                mPts σ.fst σ.snd))",
-    "      (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal mPts)",
-    "      σ ≤",
-    "    FlockSoundness.Accounting.tableError { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } (S.shape mPts) +",
-    "          √(2 ^ l₀.logLen * (2 * ↑l₀.queries) *",
-    "              FlockSoundness.adv₀ A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal mPts",
-    "                σ) +",
-    "        ∑ r ∈ Finset.range 2,",
-    "          ∑ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,",
-    "            √(2 ^ (FlockSoundness.lvOf { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } ℓ).logLen *",
-    "                  ↑(FlockSoundness.lvOf { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } ℓ).queries *",
-    "                FlockSoundness.advR A H E S m k0 l₀ l₁ rest ext ⋯ hm ptLocal mPts r ℓ σ) +",
-    "      FlockSoundness.Game.expect",
+    "        And (Eq out.accepted Bool.true)",
+    "          (Not",
+    "            (FlockSoundness.Committed A S { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }",
+    "              (FlockSoundness.C0star A H E S",
+    "                { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext } hm ptLocal mPts",
+    "                (Sigma.fst σ) (Sigma.snd σ)))))",
+    "      (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }",
+    "        hm ptLocal mPts)",
+    "      σ)",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (FlockSoundness.Accounting.tableError",
+    "            { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext } (S.shape mPts))",
+    "          (instHMul.hMul (instHMul.hMul (instHPow.hPow 2 l₀.logLen) (instHMul.hMul 2 l₀.queries.cast))",
+    "              (FlockSoundness.adv₀ A H E S { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }",
+    "                hm ptLocal mPts σ)).sqrt)",
+    "        ((Finset.range 2).sum fun r =>",
+    "          (Finset.Icc 1 (List.cons l₀ (List.cons l₁ rest)).length).sum fun ℓ =>",
+    "            (instHMul.hMul",
+    "                (instHMul.hMul",
+    "                  (instHPow.hPow 2",
+    "                    (FlockSoundness.lvOf { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }",
+    "                        ℓ).logLen)",
+    "                  (FlockSoundness.lvOf { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }",
+    "                        ℓ).queries.cast)",
+    "                (FlockSoundness.advR A H E S m k0 l₀ l₁ rest ext ⋯ hm ptLocal mPts r ℓ σ)).sqrt))",
+    "      (FlockSoundness.Game.expect",
     "        (FlockSoundness.Game.ind",
-    "          (FlockSoundness.SelfClash H E { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext }))",
-    "        (FlockSoundness.Model.tableC A H E S { m := m, k0 := k0, levels := l₀ :: l₁ :: rest, ext := ext } hm ptLocal",
-    "          mPts)",
-    "        σ"
+    "          (FlockSoundness.SelfClash H E { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext }))",
+    "        (FlockSoundness.Model.tableC A H E S",
+    "          { m := m, k0 := k0, levels := List.cons l₀ (List.cons l₁ rest), ext := ext } hm ptLocal mPts)",
+    "        σ))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000005fae07d4"
+   "assumptions": [],
+   "type_hash": "00000000b260307d"
   },
   "FlockSoundness.table_sound_exec": {
    "signature": [
-    "FlockSoundness.table_sound_exec (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (S : FlockSoundness.Model.Statement)",
-    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm : 13 ≤ S.m)",
-    "  (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)",
+    "FlockSoundness.table_sound_exec (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch)) (hm : instLENat.le 13 S.m) (ptLocal mPts : Nat)",
+    "  (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
-    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts))"
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed FlockSoundness.execArith S sch out.snd)))",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch hm ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (FlockSoundness.Accounting.tableError sch (S.shape mPts)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "000000003f17c9a1"
+   "assumptions": [],
+   "type_hash": "000000002aa866d9"
   },
   "FlockSoundness.table_sound_exec_fast100": {
    "signature": [
-    "FlockSoundness.table_sound_exec_fast100 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "FlockSoundness.table_sound_exec_fast100 (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
+    "  (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch)) (hm1 : instLENat.le 22 S.m)",
+    "  (hm2 : instLENat.le S.m 33) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
-    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.5))"
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed FlockSoundness.execArith S sch out.snd)))",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "00000000d627bb2f"
+   "assumptions": [],
+   "type_hash": "000000001e3027e6"
   },
   "FlockSoundness.table_sound_exec_fast100_34_35": {
    "signature": [
-    "FlockSoundness.table_sound_exec_fast100_34_35 (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
+    "FlockSoundness.table_sound_exec_fast100_34_35 (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch))",
+    "  (hm1 : instLENat.le 34 S.m) (hm2 : instLENat.le S.m 35) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange)",
+    "  (hlay : S.LinkLayout ptLocal mPts)",
     "  (σ : (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed FlockSoundness.execArith S sch out.2)",
-    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.4))"
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob",
+    "      (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed FlockSoundness.execArith S sch out.snd)))",
+    "      (FlockSoundness.Model.table FlockSoundness.execArith S sch ⋯ ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "0000000026f3eb6e"
+   "assumptions": [],
+   "type_hash": "000000001b91fe83"
   },
   "FlockSoundness.table_sound_fast100": {
    "signature": [
     "FlockSoundness.table_sound_fast100 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
-    "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
-    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.5))"
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch))",
+    "  (hm1 : instLENat.le 22 S.m) (hm2 : instLENat.le S.m 33) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange)",
+    "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "00000000bc426dc5"
+   "assumptions": [],
+   "type_hash": "00000000cb254820"
   },
   "FlockSoundness.table_sound_fast100_34_35": {
    "signature": [
     "FlockSoundness.table_sound_fast100_34_35 {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] (hMCA : FlockSoundness.Assumptions.BCHKS25Thm46) (A : FlockSoundness.Model.Arith F K) (hA : A.Correct)",
-    "  (S : FlockSoundness.Model.Statement) (sch : FlockSoundness.Accounting.Schedule)",
-    "  (hsch : FlockSoundness.Accounting.fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ)",
-    "  (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)",
-    "  (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
-    "  FlockSoundness.Game.prob (fun out => out.1 = true ∧ ¬FlockSoundness.Committed A S sch out.2)",
-    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ ≤",
-    "    ENNReal.ofReal (2 ^ (-195.4))"
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (S : FlockSoundness.Model.Statement)",
+    "  (sch : FlockSoundness.Accounting.Schedule) (hsch : Eq (FlockSoundness.Accounting.fast100 S.m) (Option.some sch))",
+    "  (hm1 : instLENat.le 34 S.m) (hm2 : instLENat.le S.m 35) (ptLocal mPts : Nat) (hshape : (S.shape mPts).InRange)",
+    "  (hlay : S.LinkLayout ptLocal mPts) (σ : (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prob (fun out => And (Eq out.fst Bool.true) (Not (FlockSoundness.Committed A S sch out.snd)))",
+    "      (FlockSoundness.Model.table A S sch ⋯ ptLocal mPts) σ)",
+    "    (ENNReal.ofReal (instHPow.hPow 2 (-205)))"
    ],
-   "assumptions": ["FlockSoundness.Assumptions.BCHKS25Thm46"],
-   "type_hash": "0000000074c9083c"
+   "assumptions": [],
+   "type_hash": "00000000afa9b1c8"
   }
  },
  "reads": {
+  "Flock.CircuitType": {
+   "digest": "bc8a8aee1518d4662eebba652825aafc",
+   "definitions": {
+    "Flock.CircuitType": "789208e06955f6aa",
+    "Flock.CircuitType.calls": "c514a2c006743ee7",
+    "Flock.CircuitType.formOk": "a7f2ec83835e1240",
+    "Flock.CircuitType.inBits": "449654f95da7d293",
+    "Flock.CircuitType.ins": "e7ab560baf422e62",
+    "Flock.CircuitType.itemForms": "d2d22a0c20b6c8a3",
+    "Flock.CircuitType.items": "5a0559e90fb11c31",
+    "Flock.CircuitType.outBits": "0bf4fa25a5dd0d1f",
+    "Flock.CircuitType.outputs": "b1dd4e5f7f730011",
+    "Flock.CircuitType.outs": "7a26346e90ec9f1a",
+    "Flock.CircuitType.portBits": "bb67dc48fe863148",
+    "Flock.CircuitType.tables": "624bd84d30d3bc9d",
+    "Flock.Form": "c244759a14e4dfa8",
+    "Flock.Form.c": "dd2357bc27cf6e90",
+    "Flock.Form.ws": "2e0b992d9e47c1e2",
+    "Flock.Item": "d0c4d7c2fdd321de",
+    "Flock.Item.and": "7e339b454ab4a3ab",
+    "Flock.Item.bad": "4d2a83fd44450a73",
+    "Flock.Item.call": "485ffae42b86792f",
+    "Flock.Item.read": "5241d29e3aa5f3f1",
+    "Flock.instInhabitedForm": "050907a42f7191a6",
+    "Flock.instInhabitedForm.default": "39565b89558a96ad",
+    "Flock.instInhabitedItem": "3e9d7ad7c51b7f32",
+    "Flock.instInhabitedItem.default": "abc98ad87f061274",
+    "Flock.instReprItem.repr": "40f7876e1442c0cd"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.Types.compose_complete",
+    "FlockSoundness.Types.compose_sound"
+   ]
+  },
+  "Flock.Derive": {
+   "digest": "81612958b180ff3f7cb1b55cb0cc5bd5",
+   "definitions": {
+    "Flock.Derive.Derived": "a6762e6e37f98189",
+    "Flock.Derive.Derived.geo": "e3d354d1d10c263a",
+    "Flock.Derive.Derived.inCol": "31fae78edbf8950f",
+    "Flock.Derive.Derived.nIn": "8b55ab2d51d31988",
+    "Flock.Derive.Derived.nOut": "6f905d5b33fc9967",
+    "Flock.Derive.Derived.order": "3e945d221bd70744",
+    "Flock.Derive.Derived.outCol": "f01ed56965f501cf",
+    "Flock.Derive.Derived.rows": "ccbb7fa9aeaa2134",
+    "Flock.Derive.Geo": "3bbb554207b1f6aa",
+    "Flock.Derive.Geo.andBase": "0afc125a2aefe2f9",
+    "Flock.Derive.Geo.col": "92360d6ea3865a19",
+    "Flock.Derive.Geo.const": "2df2c99b4eaf7453",
+    "Flock.Derive.Geo.formCols": "d07da890cb20b524",
+    "Flock.Derive.Geo.ins": "dc9d69b777b7cec0",
+    "Flock.Derive.Geo.nAnd": "dff303f109a5aa79",
+    "Flock.Derive.Geo.outs": "d9f61fdbf4950287",
+    "Flock.Derive.Geo.rowAt": "46bd33341cf06187",
+    "Flock.Derive.Group": "9b6bea67aca1da47",
+    "Flock.Derive.Group.bits": "cd83676da2ae9939",
+    "Flock.Derive.Group.word": "019f901887f1c5b2",
+    "Flock.Derive.WORD": "1869ed82d0e16932",
+    "Flock.Derive.bitAt": "a9507766648ebb33",
+    "Flock.Derive.ceilPow2": "710e96a71e88c187",
+    "Flock.Derive.colOf": "b2072b09e7fde6f8",
+    "Flock.Derive.derive": "284e81fda87183bc",
+    "Flock.Derive.flatOk": "a608ccf9380eceaf",
+    "Flock.Derive.geo": "8397e087b3cc5a56",
+    "Flock.Derive.geoOk": "224e56c38acc2717",
+    "Flock.Derive.groupsOf": "f978fea0641a8a4e",
+    "Flock.Derive.place": "ca6a3bd0be2b5da2",
+    "Flock.Derive.portBits": "5eff0dceeddb69c6",
+    "Flock.Derive.splitOk": "8d00f60c06da8b61"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.Types.compose_complete",
+    "FlockSoundness.Types.compose_sound"
+   ]
+  },
+  "Flock.DeriveAll": {
+   "digest": "0cc432ba738d70475708774a38509f1b",
+   "definitions": {
+    "Flock.DeriveAll.Build": "d002b4dad286ea98",
+    "Flock.DeriveAll.Build.items": "7ae45696c3561161",
+    "Flock.DeriveAll.Build.reads": "74f55c7dc43ab4db",
+    "Flock.DeriveAll.Build.row": "429aca758c8c3da0",
+    "Flock.DeriveAll.Build.rows": "1c3e5ab177a834c2",
+    "Flock.DeriveAll.Build.zeros": "6fba0553f727c9a6",
+    "Flock.DeriveAll.CF": "762c24b72942b347",
+    "Flock.DeriveAll.Ctx": "b8b76f4141474e44",
+    "Flock.DeriveAll.Ctx.done": "abac926eab10eebd",
+    "Flock.DeriveAll.Ctx.info": "2c8569735c1b26b9",
+    "Flock.DeriveAll.Ctx.ls": "87b566d3a6a9062d",
+    "Flock.DeriveAll.Ctx.types": "ce0777b587c4aba2",
+    "Flock.DeriveAll.Ctx.words": "fc0be076998d1b7b",
+    "Flock.DeriveAll.D": "8ab4a20442efedad",
+    "Flock.DeriveAll.D.const": "294d9930fbba2a74",
+    "Flock.DeriveAll.D.delta": "15d42b561673915c",
+    "Flock.DeriveAll.D.inCols": "bced23c0e2bb1316",
+    "Flock.DeriveAll.D.items": "6891311a20572388",
+    "Flock.DeriveAll.D.outCols": "de0348a6ffdee110",
+    "Flock.DeriveAll.D.reads": "db0f9a1e12cf606e",
+    "Flock.DeriveAll.D.rows": "cd0fdaa26acd576e",
+    "Flock.DeriveAll.Ent": "9caacc5860f2e379",
+    "Flock.DeriveAll.Inst": "ffa6a203af5a68cd",
+    "Flock.DeriveAll.Inst.base": "4ec66829443b36f1",
+    "Flock.DeriveAll.Inst.exported": "3efc2516dc5e8bc3",
+    "Flock.DeriveAll.Inst.forms": "1d8edd29485d5690",
+    "Flock.DeriveAll.Inst.item": "8de343361091f164",
+    "Flock.DeriveAll.Inst.j": "4d78d57c63797b57",
+    "Flock.DeriveAll.ReadRec": "13beacc4e76be975",
+    "Flock.DeriveAll.ReadRec.k": "cb635496cc664cf2",
+    "Flock.DeriveAll.ReadRec.lo": "a2badd7c4de69c34",
+    "Flock.DeriveAll.ReadRec.loTop": "08b009bc0f5049cf",
+    "Flock.DeriveAll.ReadRec.n": "9cca450d5add8304",
+    "Flock.DeriveAll.ReadRec.prod0": "f5fa65d3047806c5",
+    "Flock.DeriveAll.ReadRec.shift": "49121296d0cbaf1c",
+    "Flock.DeriveAll.ReadRec.table": "0266b0196d46461f",
+    "Flock.DeriveAll.Ref": "05141243b45080e8",
+    "Flock.DeriveAll.Ref.row": "28a354958b4db323",
+    "Flock.DeriveAll.Ref.seg": "1b210cff01a19b1f",
+    "Flock.DeriveAll.WORD": "b51aa722a2c2ef27",
+    "Flock.DeriveAll.decode": "260119218d7a2d7c",
+    "Flock.DeriveAll.deriveAll": "d2e6bbd91e9f98e3",
+    "Flock.DeriveAll.deriveOne": "258890d229634d1f",
+    "Flock.DeriveAll.ent": "1a5619116541aa86",
+    "Flock.DeriveAll.formOf": "f9bde0eedaf7e92d",
+    "Flock.DeriveAll.instDecidableEqReadRec": "b42ba9d58d0a3ad4",
+    "Flock.DeriveAll.instDecidableEqReadRec.decEq": "a9cff3ad55b0a444",
+    "Flock.DeriveAll.instInhabitedD": "25ac96a9546633bb",
+    "Flock.DeriveAll.instInhabitedD.default": "20cf1be003ac07ef",
+    "Flock.DeriveAll.instInhabitedInst": "fdfce35fca5ae051",
+    "Flock.DeriveAll.instInhabitedInst.default": "5f95b73c66fa71cf",
+    "Flock.DeriveAll.instInhabitedReadRec": "dced766c4fdbc999",
+    "Flock.DeriveAll.instInhabitedReadRec.default": "f81c64af811d2c9c",
+    "Flock.DeriveAll.instReprRef.repr": "3d5228e00eae5c37",
+    "Flock.DeriveAll.items": "e329c5ff96be3ffd",
+    "Flock.DeriveAll.order": "da99a640f2a1107c",
+    "Flock.DeriveAll.placements": "7c5b4e42a2db64f3",
+    "Flock.DeriveAll.readRows": "8022fecb6b907bf5",
+    "Flock.DeriveAll.resolve": "1441af696f612712",
+    "Flock.DeriveAll.roundUp": "ef1f0b3de8915fe5",
+    "Flock.DeriveAll.segment": "ec4606741c63c1ea",
+    "Flock.DeriveAll.span": "1c7d95f3e1db529e",
+    "Flock.DeriveAll.xorCF": "14ffc1539f28cdbc",
+    "Flock.DeriveAll.xorCols": "e1914f95bd70621c"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound"
+   ]
+  },
+  "Flock.DeriveCheck": {
+   "digest": "178f624d4096fa9b1a86685fc78b0891",
+   "definitions": {
+    "Flock.DeriveAll.Chk": "151ea8aaea236e59",
+    "Flock.DeriveAll.Chk.bindAt": "86eb8746f8ac415b",
+    "Flock.DeriveAll.Chk.d": "607dadfc7ca173c7",
+    "Flock.DeriveAll.Chk.oneAt": "d76270d87093c256",
+    "Flock.DeriveAll.Chk.prodIs": "332e1abca19a3bb2",
+    "Flock.DeriveAll.Chk.rowIs": "5c246b82bc8bd31f",
+    "Flock.DeriveAll.Chk.unit": "9a9f6ed101e0f44b",
+    "Flock.DeriveAll.ReadRec.covers": "e49d3e072b2efafd",
+    "Flock.DeriveAll.blockRow": "a53fcf0d7bc6047a",
+    "Flock.DeriveAll.blockRows": "2662cb370862cfa8",
+    "Flock.DeriveAll.checkLayout": "958daaa574aa442d",
+    "Flock.DeriveAll.chkDecode": "d148225f81443f39",
+    "Flock.DeriveAll.colSet": "50da0a8eb7d303c6",
+    "Flock.DeriveAll.deriveChecked": "9becb22bbb3c5c15",
+    "Flock.DeriveAll.fullRow": "7de91b23c8fa735e",
+    "Flock.DeriveAll.genOk": "71f98dc26325138d",
+    "Flock.DeriveAll.genOuts": "516379ddb6627629",
+    "Flock.DeriveAll.orderChecked": "fea41fd751371b71",
+    "Flock.DeriveAll.orderOk": "4af817ede5db2de6",
+    "Flock.DeriveAll.outRows": "d7fde6a8eac7f371",
+    "Flock.DeriveAll.outsideOk": "ae67f57728791e9c",
+    "Flock.DeriveAll.placedOk": "b6bbca77af62543a",
+    "Flock.DeriveAll.prodRows": "24708b8a8c98bae9",
+    "Flock.DeriveAll.readOk": "e3eac2c6f5463220",
+    "Flock.DeriveAll.readSide": "8d8a6160f11e447c",
+    "Flock.DeriveAll.readsOf": "4d13811fface13c1",
+    "Flock.DeriveAll.shiftRow": "54585bbd4270157a",
+    "Flock.DeriveAll.walk": "f76b037af32a4239"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound"
+   ]
+  },
+  "Flock.Layout": {
+   "digest": "a73b23aa5e2c98ba1b7586119bfdbf99",
+   "definitions": {
+    "Flock.CallE": "09ea8b20b96d349c",
+    "Flock.CallE.layout": "2d0473dfcdd24d6f",
+    "Flock.CallE.offset": "b410e46c6938d78c",
+    "Flock.Layout": "63b4caa560adfe7d",
+    "Flock.Layout.WORD": "977038791b15ef01",
+    "Flock.Layout.calls": "eff1b148fe07d574",
+    "Flock.Layout.ceilPow2": "1214052a786782a0",
+    "Flock.Layout.decodeRows": "860b9a41430cb8ee",
+    "Flock.Layout.exported": "ac9737e51205f9ba",
+    "Flock.Layout.groups": "09ced23e6724208a",
+    "Flock.Layout.inSplit": "8e91399f75e4ef5c",
+    "Flock.Layout.itemsRows": "936659a3f84c68e6",
+    "Flock.Layout.kOf": "5deac396f55bd62c",
+    "Flock.Layout.outSplit": "131cc9526259fd7e",
+    "Flock.Layout.own": "bcdc62e6aa8832f3",
+    "Flock.Layout.ownSize": "14dccab5bf4874fb",
+    "Flock.Layout.portBits": "4eda6b43e97d5b10",
+    "Flock.Layout.rangeLog": "2c99c555c8b43658",
+    "Flock.Layout.readRowsInline": "4494cf139e8b06d1",
+    "Flock.Layout.readRowsPlaced": "2a47a0725ec85e5b",
+    "Flock.Layout.reads": "d6b2851ed341a375",
+    "Flock.Layout.tableInfo": "306a8a3a475e27ed",
+    "Flock.Layout.type": "0fb3b63e47c59b39",
+    "Flock.Layout.uses": "1ed68db4cfe3c899",
+    "Flock.Own": "01da69ea3c397403",
+    "Flock.Own.derive": "217a857b1f24fa7b",
+    "Flock.Own.gen": "5b1a7014795d1132",
+    "Flock.ReadE": "226bc79bed8a098d",
+    "Flock.ReadE.lo": "029b550e68f12ad3",
+    "Flock.ReadE.placed": "1f5b9e0dfa11cdbf",
+    "Flock.TableInfo": "58fb288476cbb4c8",
+    "Flock.TableInfo.diff": "a194efd03a0036dd",
+    "Flock.instInhabitedCallE": "ef97fba11f4f1d0b",
+    "Flock.instInhabitedCallE.default": "4c573fba6fa260a3",
+    "Flock.instInhabitedLayout": "3b30a272d8372ddd",
+    "Flock.instInhabitedLayout.default": "62a6b88ed2b03528",
+    "Flock.instInhabitedOwn": "cb02b13557c1f983",
+    "Flock.instInhabitedOwn.default": "e4cfd5a0d8ea61d3",
+    "Flock.instInhabitedReadE": "41004c4ee8c6b3a1",
+    "Flock.instInhabitedReadE.default": "b761859cdafe2894",
+    "Flock.instInhabitedTableInfo": "2fee08f474317132",
+    "Flock.instInhabitedTableInfo.default": "e9539c9f77df741b"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound"
+   ]
+  },
+  "Flock.Library": {
+   "digest": "93d40a2b1043e48bde6fb33c7af7b99d",
+   "definitions": {
+    "Flock.LIBRARY_TABLES": "e1ee76c308f54ecb",
+    "Flock.LibraryTable": "9cc34748c1191f0f",
+    "Flock.LibraryTable.sha512": "5b8af8681d4530bc",
+    "Flock.libraryTable?": "65be82d231b7d443"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound"
+   ]
+  },
   "FlockLevel3.ArithFacts": {
    "digest": "16108cbf154c708038a30c392f4fd5b1",
    "definitions": {
@@ -163,6 +862,8 @@
     "FlockLevel3.unpack": "33c9bd21c8216137"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -176,6 +877,8 @@
     "FlockLevel3.natPoly": "5162bcc1ce64f198"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -191,6 +894,8 @@
     "FlockLevel3.w128": "74a2d7f0bc29b87a"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -205,6 +910,8 @@
     "FlockLevel3.instFieldGF128": "d78105b3c29f09dd"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -218,6 +925,8 @@
     "FlockLevel3.toAdj": "dacfbc5be315f0f6"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -237,6 +946,8 @@
     "FlockLevel3.xK": "3c5829f32f812106"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -251,6 +962,8 @@
     "FlockLevel3.lagΛ": "4bc831a2c07c9734"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -265,6 +978,8 @@
     "FlockLevel3.sPoly": "97b19d0ec8fd900f"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -279,6 +994,8 @@
     "FlockLevel3.u": "2b76b486951e7592"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -286,10 +1003,10 @@
    ]
   },
   "FlockSoundness.Accounting.Bound": {
-   "digest": "a734a553cf2fb20da04e46029a71b51f",
+   "digest": "ee105483efdfe8dcabdaeb8673f1359d",
    "definitions": {
     "FlockSoundness.Accounting.Level.foldError": "fbfa2e025d009956",
-    "FlockSoundness.Accounting.Level.listBound": "95af9351ebf02b1b",
+    "FlockSoundness.Accounting.Level.listBound": "980778a29acd534c",
     "FlockSoundness.Accounting.Level.mcaA": "0d0c735eae15bb8f",
     "FlockSoundness.Accounting.Level.queryError": "8cf2d72b0122f0c3",
     "FlockSoundness.Accounting.Level.radius": "1c8f26a5e79092f9",
@@ -301,7 +1018,7 @@
     "FlockSoundness.Accounting.Stmt.nClaims": "7991c5fa6348aa15",
     "FlockSoundness.Accounting.Stmt.nRegions": "ce2346f0db0b5e9b",
     "FlockSoundness.Accounting.ceilLog2": "9af703a41d8f29ce",
-    "FlockSoundness.Accounting.eta": "920bce284addedac",
+    "FlockSoundness.Accounting.eta": "a336aa40bf61289e",
     "FlockSoundness.Accounting.lastLevelError": "0a9c9ad4914ec348",
     "FlockSoundness.Accounting.ligeritoError": "41a3c2013a71c3ea",
     "FlockSoundness.Accounting.linkError": "54c5bf01a6b38dc4",
@@ -314,6 +1031,8 @@
     "FlockSoundness.Accounting.tableError": "9f0c445d3f517528"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -324,10 +1043,10 @@
    ]
   },
   "FlockSoundness.Accounting.Fast100": {
-   "digest": "b56386638df300238ae4dd4c77c2946f",
+   "digest": "86bab5d4cb758a523f310602fe7bf5f5",
    "definitions": {
     "FlockSoundness.Accounting.Level.Ok": "4ceac0d6e396f854",
-    "FlockSoundness.Accounting.Stmt.InRange": "05b8805bfb0eb87c",
+    "FlockSoundness.Accounting.Stmt.InRange": "74b4593243e2afc8",
     "FlockSoundness.Accounting.instDecidableOk": "a47c2ec2fab1540b"
    },
    "pins": [
@@ -359,6 +1078,8 @@
     "FlockSoundness.Accounting.queriesAt": "1f62ee663f3e17b3"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -369,19 +1090,134 @@
    ]
   },
   "FlockSoundness.Assumptions": {
-   "digest": "3bbb81d392f3ace37ec35c5c9c05dea4",
+   "digest": "ccb6f722fa4330ad7a31a868a59f6053",
    "definitions": {
-    "FlockSoundness.Assumptions.BCHKS25Thm46": "3bbb81d392f3ace3"
+    "FlockSoundness.Assumptions.SHA512ExpectedTimeCR": "ccb6f722fa4330ad"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.Circuit": {
+   "digest": "f8e33f60eb43c2bd69ae731ff0418dae",
+   "definitions": {
+    "FlockSoundness.Audit.Circuit": "ac0209898d7f0b93",
+    "FlockSoundness.Audit.Circuit.N": "ab448554c28c1c7d",
+    "FlockSoundness.Audit.Circuit.op": "d2e7ed001812d20b",
+    "FlockSoundness.Audit.Circuit.outputs": "0b39b9dec279981a",
+    "FlockSoundness.Audit.Circuit.run": "4be3672db31c479a",
+    "FlockSoundness.Audit.Op": "99e112a75c6e5c06",
+    "FlockSoundness.Audit.Op.and": "b5b348c58b687b35",
+    "FlockSoundness.Audit.Op.apply": "fd6baf15b385c4d3",
+    "FlockSoundness.Audit.Op.args": "147b0a15ecf3da7d",
+    "FlockSoundness.Audit.Op.input": "40a40f4aba47940a",
+    "FlockSoundness.Audit.Op.isInput": "31db3f4b76d9d9ce",
+    "FlockSoundness.Audit.Op.not": "a75d9b4d4257c431",
+    "FlockSoundness.Audit.Op.row": "f08c72a9fe3bd2ec",
+    "FlockSoundness.Audit.Op.xor": "904817d34211a037",
+    "FlockSoundness.Audit.Partition": "9a719009f4f01fdf",
+    "FlockSoundness.Audit.Partition.Correct": "926a70ca08af9ee0",
+    "FlockSoundness.Audit.Partition.committed": "5e30fcbca748a6e6",
+    "FlockSoundness.Audit.Partition.io": "710c798260b02960",
+    "FlockSoundness.Audit.Partition.localEval": "26e6bb4e9e72636e",
+    "FlockSoundness.Audit.Partition.unit": "92123cd7e478810a",
+    "FlockSoundness.Audit.Partition.wrong": "0f0a7fa92e17ff19",
+    "FlockSoundness.Audit.xorSum": "05493c94f08c5153"
    },
    "pins": [
-    "FlockSoundness.table_sound",
-    "FlockSoundness.table_sound_compiled",
-    "FlockSoundness.table_sound_exec",
-    "FlockSoundness.table_sound_exec_fast100",
-    "FlockSoundness.table_sound_exec_fast100_34_35",
-    "FlockSoundness.table_sound_fast100",
-    "FlockSoundness.table_sound_fast100_34_35"
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Rope.rope_sound",
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.Types.compose_complete",
+    "FlockSoundness.Types.compose_sound"
    ]
+  },
+  "FlockSoundness.Audit.FlockBatched": {
+   "digest": "dea09807e364910a078eb29acdb12fb3",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.DecoderB": "4a3c09aa446cb485",
+    "FlockSoundness.Audit.Partition.batchStrat": "e575fb50b81475fd",
+    "FlockSoundness.Audit.Partition.batchedSession": "c9f9c060ac307ed0",
+    "FlockSoundness.Audit.Partition.tabOf": "443b5aa6c1c50bd3"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockBatchedAcc": {
+   "digest": "490b0378546e13b9531fb420e4e4ebeb",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.ksAvgBE": "490b0378546e13b9"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockLink": {
+   "digest": "11af9ca0821ce01081424179f7dd4743",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.OpensAt": "59e46d02cfe2f41a",
+    "FlockSoundness.Audit.Partition.Reads": "2fbdd5f598fff987",
+    "FlockSoundness.Audit.Partition.ReadsDraw": "8358bbd3e0638d93",
+    "FlockSoundness.Audit.Partition.TrialOut": "ec16051630324548",
+    "FlockSoundness.Audit.Partition.ValueBinding": "27b97023c8649478",
+    "FlockSoundness.Audit.Partition.ValueBinding.Opening": "612fd65182e04851",
+    "FlockSoundness.Audit.Partition.ValueBinding.Pos": "2f20299ac628234f",
+    "FlockSoundness.Audit.Partition.ValueBinding.Val": "c797807f66542acb",
+    "FlockSoundness.Audit.Partition.ValueBinding.bit": "b7becf7f72aca4b7",
+    "FlockSoundness.Audit.Partition.ValueBinding.collide": "7d740db846ff51eb",
+    "FlockSoundness.Audit.Partition.ValueBinding.finPos": "548a9acd9aedd113",
+    "FlockSoundness.Audit.Partition.ValueBinding.finVal": "a4b17c433135a357",
+    "FlockSoundness.Audit.Partition.ValueBinding.inhVal": "42da1631fa01f921",
+    "FlockSoundness.Audit.Partition.ValueBinding.opening": "54f640bbfbb13357",
+    "FlockSoundness.Audit.Partition.ValueBinding.pos": "2336880226f0da07",
+    "FlockSoundness.Audit.Partition.ValueBinding.val": "fe2ec8444b7f322b",
+    "FlockSoundness.Audit.Partition.Xplur": "10241559b798fc55",
+    "FlockSoundness.Audit.Partition.Xval": "086e7984979e8edf",
+    "FlockSoundness.Audit.Partition.accω": "4d1d6064e1fc874b",
+    "FlockSoundness.Audit.Partition.cT": "d9e969d6723c188a",
+    "FlockSoundness.Audit.Partition.cand": "95ef7bed3348203e",
+    "FlockSoundness.Audit.Partition.gameω": "821f5937576bec50",
+    "FlockSoundness.Audit.Partition.instFintypeΩc": "23d0fe9de549ac95",
+    "FlockSoundness.Audit.Partition.opOf": "39281adfde1005be",
+    "FlockSoundness.Audit.Partition.outC": "fa6ef00dc7008c60",
+    "FlockSoundness.Audit.Partition.rdT": "a040f87929fced2e",
+    "FlockSoundness.Audit.Partition.readsAt": "33c09da6f6c3beb5",
+    "FlockSoundness.Audit.Partition.stratω": "d2ab55f3a40fad5c",
+    "FlockSoundness.Audit.Partition.tabExt": "6ee285fe73b2f2bb",
+    "FlockSoundness.Audit.Partition.trialG": "e57a4d0e53db0214",
+    "FlockSoundness.Audit.Partition.trialStrat": "5e0afba475f400c6",
+    "FlockSoundness.Audit.Partition.Ωc": "dbd8ff314e4aac75"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.FlockLinked": {
+   "digest": "eea53dee89f0210e563922dd66354f52",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.linkBoundE": "7152c4c16a0c01e4",
+    "FlockSoundness.Audit.Partition.placeDecoder": "48b816a77733250c"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.Law": {
+   "digest": "3fb92dc3a95ed41b5f28cadecc91125c",
+   "definitions": {
+    "FlockSoundness.Audit.Law": "ab6311f067d1e558",
+    "FlockSoundness.Audit.Law.draw": "e9f1dc8a2d17dfbd",
+    "FlockSoundness.Audit.Law.escape": "54759f255ec28484",
+    "FlockSoundness.Audit.Law.fintype": "e69a6854a7f2747b",
+    "FlockSoundness.Audit.Law.miss": "d7e09d10fca7bd60",
+    "FlockSoundness.Audit.Law.Ω": "829fd6ddac35b1ca"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Audit.OneStage": {
+   "digest": "a20a8b34af0234a867313fb5c573090b",
+   "definitions": {
+    "FlockSoundness.Audit.Cont": "78d0a1f1523d45de",
+    "FlockSoundness.Audit.audit": "74586d8a66f3427c",
+    "FlockSoundness.Audit.cont": "ea2c637aa000131e",
+    "FlockSoundness.Audit.reg": "965ee5ab445cdecb"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
   },
   "FlockSoundness.CompiledLock": {
    "digest": "703ed11cb8289e0e443a40539e2782a6",
@@ -412,7 +1248,11 @@
     "FlockSoundness.tableCmp": "118a4d065d18d5f4",
     "FlockSoundness.tableOrc": "754edfa0fe154cb9"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.CompiledSound": {
    "digest": "896bd03046ccb99b547909edd8d33742",
@@ -433,7 +1273,38 @@
     "FlockSoundness.slotOpens": "d6979365b039c3a5",
     "FlockSoundness.tabOf": "6b8f77cd3962baad"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
+  },
+  "FlockSoundness.Compose": {
+   "digest": "f60ebcc8ff901bdccaaec3a7793a1b61",
+   "definitions": {
+    "FlockSoundness.Compose.Logical": "69fbb649a1937ca6",
+    "FlockSoundness.Compose.Logical.nIn": "9bce623cd94d829b",
+    "FlockSoundness.Compose.Logical.order": "3ee96014455fe06f",
+    "FlockSoundness.Compose.Logical.row": "f6dd19dac6b5460a",
+    "FlockSoundness.Compose.Ordered": "1ecfd07683bf3dd8",
+    "FlockSoundness.Compose.lidx": "c6e4fbfe9ceb4099",
+    "FlockSoundness.Compose.lrow": "ca600e7f9ec538ee",
+    "FlockSoundness.Compose.ofDerived": "cdd7dcaaef6a3360",
+    "FlockSoundness.Rows.compose": "b272db07ea78bf64",
+    "FlockSoundness.composePlace": "732f3c44ab8946ab"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.placement_of_realizes"
+   ]
+  },
+  "FlockSoundness.ComposeDag": {
+   "digest": "4cfa2fa1186569939b28cfea65c09f03",
+   "definitions": {
+    "FlockSoundness.Compose.ofBlock": "4cfa2fa118656993"
+   },
+   "pins": ["FlockSoundness.Rows.compose_eval_unit"]
   },
   "FlockSoundness.Defs": {
    "digest": "1cc2134a37060fbf2b00703ce87a654e",
@@ -447,6 +1318,8 @@
     "FlockSoundness.instDecidableFits": "c58796efd6440472"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -457,23 +1330,51 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.E2E": {
+   "digest": "836a0dcece8eac975286068403b1747c",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.DerivedPlaces": "939851eaefbe2de9",
+    "FlockSoundness.Audit.Partition.DerivedPlaces.place": "58c6f4c0c85674a8",
+    "FlockSoundness.Audit.Partition.RowsL1": "4a5011fce2192af3"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Extract": {
+   "digest": "2e90c25ca1a2d40529a6ce773df8e68e",
+   "definitions": {
+    "FlockSoundness.Extract.firstTable": "2e90c25ca1a2d405"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.ExtractWait": {
+   "digest": "ab9062903c31c4b97e462bc07050ecc8",
+   "definitions": {
+    "FlockSoundness.Extract.firsts": "38d7f19d9d2a8126",
+    "FlockSoundness.Extract.waitCost": "0b2ddf280a5d6cb3"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.Game.Basic": {
-   "digest": "634ba2028d8a1545aad522a08e4877e1",
+   "digest": "d39bbe0b0175850214e89b610c58bbe4",
    "definitions": {
     "FlockSoundness.Game": "fd35e1f2071277e1",
     "FlockSoundness.Game.Strategy": "74474416fceda635",
+    "FlockSoundness.Game.avg": "d2062df562dd07a7",
     "FlockSoundness.Game.bind": "f03387860619ff82",
     "FlockSoundness.Game.brecOn.go": "f039f51273f2be1f",
     "FlockSoundness.Game.coin": "f4d3016e8e9b0cfe",
     "FlockSoundness.Game.draw": "8be81c07b62af09e",
     "FlockSoundness.Game.instMonad": "d66985901c7cf5a7",
     "FlockSoundness.Game.map": "2dd8901027ff369b",
+    "FlockSoundness.Game.prCoin": "e6966f5cbf0413ac",
     "FlockSoundness.Game.prob": "09a0d2b9679c7e10",
     "FlockSoundness.Game.recv": "7038bcd497ba84e4",
     "FlockSoundness.Game.ret": "88fe9cd2b7f87553",
     "FlockSoundness.Game.send": "ca27d021bc348230"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -483,6 +1384,20 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.Game.Batch": {
+   "digest": "0f678d4dc2109e8a4351c7e06146c843",
+   "definitions": {
+    "FlockSoundness.Game.Lock.batchLock": "e841e1129e23c11a",
+    "FlockSoundness.Game.Lock.leftSame": "dd9e5571d8024732",
+    "FlockSoundness.Game.Lock.lockWithL": "c5eaae6e7e58c984",
+    "FlockSoundness.Game.Lock.lockWithSame": "f4b22fda0261f157",
+    "FlockSoundness.Game.Lock.mapL": "bda9ed1f5d4204ce",
+    "FlockSoundness.Game.Lock.rightSame": "df789c3cfa99e7ed",
+    "FlockSoundness.Game.Lock.sameThen": "b576e93f4d8a2698",
+    "FlockSoundness.Game.batch": "04cc7e06ce627a1a"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.Game.Expect": {
    "digest": "1d9ca2b4c76019fbe50326b120a9da3d",
    "definitions": {
@@ -491,7 +1406,11 @@
     "FlockSoundness.Game.ind": "c6107682cdaab6dd",
     "FlockSoundness.Rewinding.IsPluralityE": "0deb9b829a3919bd"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Game.Interleave": {
    "digest": "6e09f08ba672c6c5ab53cf845ffde115",
@@ -500,6 +1419,8 @@
     "FlockSoundness.Game.interleaveWith": "a560b554cf64074c"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -510,7 +1431,7 @@
    ]
   },
   "FlockSoundness.Game.Lock": {
-   "digest": "6c2d5f6a6f6ced6a7034bbb8d4ffbba5",
+   "digest": "6c615892bf20f6a79d1ceed6143fe8ce",
    "definitions": {
     "FlockSoundness.Game.Lock": "aa384fbf3a62fb74",
     "FlockSoundness.Game.Lock.Chooser": "30c9e5ec2c71eb00",
@@ -525,14 +1446,62 @@
     "FlockSoundness.Game.Lock.getPair": "10295cfa95b26934",
     "FlockSoundness.Game.Lock.interleaveLock": "04f9a644e6f63b4d",
     "FlockSoundness.Game.Lock.lockWith": "26e9c36a78eec76c",
-    "FlockSoundness.Game.Lock.mono": "7181797cf45c408c",
+    "FlockSoundness.Game.Lock.map": "5058642db844ed75",
+    "FlockSoundness.Game.Lock.mono": "97e2d2f6eabf8b7b",
     "FlockSoundness.Game.Lock.oracleStrat": "9b2170fcdd8f6dc0",
     "FlockSoundness.Game.Lock.ret": "d28725ff4bbc77c1",
     "FlockSoundness.Game.Lock.same": "f2a8dc9ef6e8e72b",
     "FlockSoundness.Game.Lock.send": "1bb2b13d2987b4a6",
     "FlockSoundness.Game.Lock.table": "dcb2a3475ca6b33e"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
+  },
+  "FlockSoundness.Game.Prob": {
+   "digest": "42270a46a7c16ac64f5c5a51c7569db7",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.ofMap": "42270a46a7c16ac6"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Game.Seq": {
+   "digest": "9da3f9905f3092408e83d86356e58105",
+   "definitions": {
+    "FlockSoundness.Game.Strategy.bind": "3f8a210645cb3622",
+    "FlockSoundness.Game.Strategy.map": "4fa94ba73929c637",
+    "FlockSoundness.Game.drawStrat": "061c1a2f0e465e5d",
+    "FlockSoundness.Game.runsG": "e72dd36e2030d14a",
+    "FlockSoundness.Game.runsStrat": "9bc113835d0df7f5"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.GateRows": {
+   "digest": "c105c0c80ea0329ac48e53aac43ef21b",
+   "definitions": {
+    "FlockSoundness.GateRows.Circ": "c3d79ef60ee593d5",
+    "FlockSoundness.GateRows.Circ.eval": "e86e5c36574024e3",
+    "FlockSoundness.GateRows.Circ.gates": "b16fd0739e99d971",
+    "FlockSoundness.GateRows.Circ.nIn": "149dd71678b6d768",
+    "FlockSoundness.GateRows.Circ.outs": "8b5fb86e9b42061c",
+    "FlockSoundness.GateRows.Gate": "3831d4ebd47743ff",
+    "FlockSoundness.GateRows.Gate.and": "a736c612871c3cfe",
+    "FlockSoundness.GateRows.Gate.not": "833a87555c5e419a",
+    "FlockSoundness.GateRows.Gate.val": "cbfe04640799134a",
+    "FlockSoundness.GateRows.Gate.xor": "017609dc9c853089",
+    "FlockSoundness.GateRows.Src": "ccc2d9fe39969171",
+    "FlockSoundness.GateRows.Src.one": "15583fa12d1b1f26",
+    "FlockSoundness.GateRows.Src.val": "0de3caef17305923",
+    "FlockSoundness.GateRows.Src.wire": "5af8f0a7ed3164f6",
+    "FlockSoundness.GateRows.Src.zero": "87ec73cd2b8adfeb",
+    "FlockSoundness.GateRows.gatesWF": "d5e68be2329d92ea",
+    "FlockSoundness.GateRows.nAnd": "8847e06879559520",
+    "FlockSoundness.GateRows.run": "927948e95290f765",
+    "FlockSoundness.GateRows.runsList": "13a1a437aad8d735"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
   },
   "FlockSoundness.Instance": {
    "digest": "614e3e3f08e4cd9422ad82c3c4444147",
@@ -540,6 +1509,8 @@
     "FlockSoundness.execArith": "614e3e3f08e4cd94"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound_exec",
     "FlockSoundness.table_sound_exec_fast100",
@@ -554,12 +1525,26 @@
    },
    "pins": ["FlockSoundness.table_sound_compiled"]
   },
+  "FlockSoundness.LinkFinder": {
+   "digest": "db3e7fbd5c745fb38049d6b9e79582dd",
+   "definitions": {
+    "FlockSoundness.LinkFinder.finderCost": "2c4c0dfa7fcf9d24",
+    "FlockSoundness.LinkFinder.finderG": "2ff67bd0091d1262",
+    "FlockSoundness.LinkFinder.finderStrat": "4c2cee66bf97bdcd",
+    "FlockSoundness.LinkFinder.loopCost": "66b6bcf36f3a5583",
+    "FlockSoundness.LinkFinder.nextRead": "f03052b33dd7f473",
+    "FlockSoundness.LinkFinder.pRd": "dd59e91de4619eac"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
   "FlockSoundness.LinkSound": {
    "digest": "6c32c076a0c9c1cc6f968128ffc221ac",
    "definitions": {
     "FlockSoundness.Model.Statement.LinkLayout": "6c32c076a0c9c1cc"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -567,6 +1552,38 @@
     "FlockSoundness.table_sound_exec_fast100_34_35",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35"
+   ]
+  },
+  "FlockSoundness.Lowering": {
+   "digest": "496b54d3803bf220e47ed9b10e6347ed",
+   "definitions": {
+    "FlockSoundness.Audit.Partition.IsRowsUnit": "e8fd3a86de155234",
+    "FlockSoundness.Audit.Partition.IsRowsUnit.decode": "a6f173a9a2cb273f",
+    "FlockSoundness.Audit.Partition.IsRowsUnit.wire": "0091ebc2dc688ed3",
+    "FlockSoundness.Placement": "48dda1a1429920d8",
+    "FlockSoundness.Rows": "451bf782963ef6af",
+    "FlockSoundness.Rows.Sat": "c13cbb9f1f53f506",
+    "FlockSoundness.Rows.a": "83e5a1723bb68a69",
+    "FlockSoundness.Rows.b": "736dab133b244b1c",
+    "FlockSoundness.Rows.comp": "11cf48e4964d93c9",
+    "FlockSoundness.Rows.nComp": "95cc405951a17f39",
+    "FlockSoundness.Rows.nIn": "c068cb69891d4646",
+    "FlockSoundness.Rows.one": "2f294e1490520e33",
+    "FlockSoundness.Rows.w": "fbe53e17a6cfd83e",
+    "FlockSoundness.UnitPlace": "0766bc23158d944c",
+    "FlockSoundness.UnitPlace.R": "317ae06ff4f882ba",
+    "FlockSoundness.UnitPlace.col": "b3493b273430b5f5",
+    "FlockSoundness.UnitPlace.decode": "dae56579106b91a2",
+    "FlockSoundness.UnitPlace.inst": "98a66c30c327558b",
+    "FlockSoundness.UnitPlace.o": "d16360389a3f37c9",
+    "FlockSoundness.bit": "f1dc7fd94ed01cee"
+   },
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.placement_of_realizes"
    ]
   },
   "FlockSoundness.Merkle": {
@@ -581,7 +1598,12 @@
     "FlockSoundness.Merkle.up": "9dbce0b81a2b294b",
     "FlockSoundness.Merkle.walk": "515ccc6c9ff48dc6"
    },
-   "pins": ["FlockSoundness.Merkle.opening_binding", "FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.Merkle.opening_binding",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Model.Basic": {
    "digest": "f28feff001cc0b255c696bcf7cd396e2",
@@ -604,6 +1626,8 @@
     "FlockSoundness.Model.eqAt": "2cc1488397babdef"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -658,7 +1682,11 @@
     "FlockSoundness.Model.tableC": "c12cf7196e132c19",
     "FlockSoundness.Model.twoOodC": "78dfd131e6d68b4e"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
   },
   "FlockSoundness.Model.Ligerito": {
    "digest": "7fc3a806055498d6e804461c35306af5",
@@ -705,6 +1733,8 @@
     "FlockSoundness.Model.twoOod": "ef721c561532de41"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -743,6 +1773,8 @@
     "FlockSoundness.Model.zerocheck": "8138b662477225cc"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -763,6 +1795,8 @@
     "FlockSoundness.Model.table": "dcc09e165b51dba2"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -804,6 +1838,9 @@
     "FlockSoundness.Model.witnessOf": "f422b8c5d9c2023b"
    },
    "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.placement_of_realizes",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -818,7 +1855,251 @@
    "definitions": {
     "FlockSoundness.Rewinding.ConflictAt": "4d9e617c66a3a013"
    },
-   "pins": ["FlockSoundness.table_sound_compiled"]
+   "pins": [
+    "FlockSoundness.Audit.Partition.flock_e2e_count",
+    "FlockSoundness.Audit.Partition.flock_e2e_drawn",
+    "FlockSoundness.table_sound_compiled"
+   ]
+  },
+  "FlockSoundness.Rope.Defs": {
+   "digest": "8b06163f6e89ba32e532404ab3ca3ab1",
+   "definitions": {
+    "FlockSoundness.Rope.circ": "c3cbe7720de6bff7",
+    "FlockSoundness.Rope.decGate": "9a995d28e8e0b85b",
+    "FlockSoundness.Rope.decSrc": "4e5aae1fd74b0df4",
+    "FlockSoundness.Rope.pinned": "2b43990a89c1587e",
+    "FlockSoundness.Rope.pinnedRuns": "a733b84daa315397",
+    "FlockSoundness.Rope.unpackRuns": "0d63f82b79bf0d34"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Gates": {
+   "digest": "456a404bb2949dbb43f705d30d3b91af",
+   "definitions": {
+    "FlockSoundness.Rope.gateCodes": "b1b28a9c920ae295",
+    "FlockSoundness.Rope.gatesChunk0": "5c3dc82fc67d675e",
+    "FlockSoundness.Rope.gatesChunk0_0": "4dacf45c4e6b301d",
+    "FlockSoundness.Rope.gatesChunk0_1": "e5bf311cbc484298",
+    "FlockSoundness.Rope.gatesChunk1": "5fd4e79fb8340ad3",
+    "FlockSoundness.Rope.gatesChunk10": "004417f63b7fb3e0",
+    "FlockSoundness.Rope.gatesChunk10_0": "dfffc5ffc62899ae",
+    "FlockSoundness.Rope.gatesChunk10_1": "385129acf85d0e1a",
+    "FlockSoundness.Rope.gatesChunk11": "78f0591c34733d93",
+    "FlockSoundness.Rope.gatesChunk11_0": "5339c463bb9a10d3",
+    "FlockSoundness.Rope.gatesChunk11_1": "af805f1b9ec04a68",
+    "FlockSoundness.Rope.gatesChunk12": "a1acb532fec57dbb",
+    "FlockSoundness.Rope.gatesChunk12_0": "75c102aea3db0fd2",
+    "FlockSoundness.Rope.gatesChunk12_1": "8c5588750165edee",
+    "FlockSoundness.Rope.gatesChunk13": "03917b076fd1f98a",
+    "FlockSoundness.Rope.gatesChunk13_0": "397a9c051c9e0acd",
+    "FlockSoundness.Rope.gatesChunk13_1": "e91061c88c907266",
+    "FlockSoundness.Rope.gatesChunk14": "6325cbe2df397a4c",
+    "FlockSoundness.Rope.gatesChunk14_0": "45fe7c282749e88f",
+    "FlockSoundness.Rope.gatesChunk14_1": "f8c07150e2cd8bb4",
+    "FlockSoundness.Rope.gatesChunk15": "b89d71ebc281e4e8",
+    "FlockSoundness.Rope.gatesChunk15_0": "b69437ccdbe9a462",
+    "FlockSoundness.Rope.gatesChunk15_1": "6d85bd439fe1adcf",
+    "FlockSoundness.Rope.gatesChunk16": "ada64b8b7f587966",
+    "FlockSoundness.Rope.gatesChunk16_0": "138586df8f172e46",
+    "FlockSoundness.Rope.gatesChunk16_1": "5c0433e48beb21f1",
+    "FlockSoundness.Rope.gatesChunk17": "bbd8580b19de8954",
+    "FlockSoundness.Rope.gatesChunk1_0": "885a3a1d2fa8a029",
+    "FlockSoundness.Rope.gatesChunk1_1": "e621976d774f30eb",
+    "FlockSoundness.Rope.gatesChunk2": "c5ff5f1ad8a619da",
+    "FlockSoundness.Rope.gatesChunk2_0": "b19c44ba1de9c66a",
+    "FlockSoundness.Rope.gatesChunk2_1": "6f721798bcfe160f",
+    "FlockSoundness.Rope.gatesChunk3": "4d5b3e047d1e2a41",
+    "FlockSoundness.Rope.gatesChunk3_0": "b2b8bfc888c4ecf0",
+    "FlockSoundness.Rope.gatesChunk3_1": "9d9614b738df6dcc",
+    "FlockSoundness.Rope.gatesChunk4": "8b73c7bc5f86ccf4",
+    "FlockSoundness.Rope.gatesChunk4_0": "dede3991057591fe",
+    "FlockSoundness.Rope.gatesChunk4_1": "983ccf76728271fb",
+    "FlockSoundness.Rope.gatesChunk5": "d61e396f0809390c",
+    "FlockSoundness.Rope.gatesChunk5_0": "2135e83657f17150",
+    "FlockSoundness.Rope.gatesChunk5_1": "0541d05a4bdb8a09",
+    "FlockSoundness.Rope.gatesChunk6": "7d0268cf2d7ef9cf",
+    "FlockSoundness.Rope.gatesChunk6_0": "e3c740dd96a3cb69",
+    "FlockSoundness.Rope.gatesChunk6_1": "537b12bcaceed3be",
+    "FlockSoundness.Rope.gatesChunk7": "a00de0ff631d09b3",
+    "FlockSoundness.Rope.gatesChunk7_0": "c63853e6223892a6",
+    "FlockSoundness.Rope.gatesChunk7_1": "7219a1d45a72919d",
+    "FlockSoundness.Rope.gatesChunk8": "549102e2ef6a1382",
+    "FlockSoundness.Rope.gatesChunk8_0": "10f828999b749767",
+    "FlockSoundness.Rope.gatesChunk8_1": "5feb2c1a46b68cde",
+    "FlockSoundness.Rope.gatesChunk9": "56c546d28a3d6f76",
+    "FlockSoundness.Rope.gatesChunk9_0": "2ecc7500bd84acf1",
+    "FlockSoundness.Rope.gatesChunk9_1": "ace1ac94c51245a9",
+    "FlockSoundness.Rope.nIn": "1c335152cc1b7125",
+    "FlockSoundness.Rope.outCodes": "8096a8e034588f5d"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Lowering": {
+   "digest": "f90b5834ad7a996e466e5a117a377947",
+   "definitions": {
+    "FlockSoundness.Rope.SatList": "f90b5834ad7a996e"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Rope.Pinned": {
+   "digest": "ac24c81017e6c20b8994783eebd382ff",
+   "definitions": {
+    "FlockSoundness.Rope.pinAnd0": "06d1ff54ad33d816",
+    "FlockSoundness.Rope.pinAnd0_0": "c0f8e579da050b3f",
+    "FlockSoundness.Rope.pinAnd0_1": "dbeda9799fec69ba",
+    "FlockSoundness.Rope.pinAnd1": "bc4ac95fc03c9aab",
+    "FlockSoundness.Rope.pinAnd10": "5f64aea27c373fdd",
+    "FlockSoundness.Rope.pinAnd10_0": "dbc511bddf91fa91",
+    "FlockSoundness.Rope.pinAnd10_1": "d35fcdebb47bcb0e",
+    "FlockSoundness.Rope.pinAnd11": "51c667483b45f208",
+    "FlockSoundness.Rope.pinAnd11_0": "c20109b65348db94",
+    "FlockSoundness.Rope.pinAnd11_1": "6d07b86ca5359976",
+    "FlockSoundness.Rope.pinAnd12": "d25d3d8f15618d0c",
+    "FlockSoundness.Rope.pinAnd12_0": "9b4628cb2e55eafb",
+    "FlockSoundness.Rope.pinAnd12_1": "3b60aa0849e58c82",
+    "FlockSoundness.Rope.pinAnd13": "f909d23f855aeed9",
+    "FlockSoundness.Rope.pinAnd13_0": "a1e11abc76bd556a",
+    "FlockSoundness.Rope.pinAnd13_1": "8db73944d1277f2a",
+    "FlockSoundness.Rope.pinAnd14": "169b36bba0fa2f8c",
+    "FlockSoundness.Rope.pinAnd14_0": "73cc0f7ff0dea11c",
+    "FlockSoundness.Rope.pinAnd14_1": "adf95110a0597e9f",
+    "FlockSoundness.Rope.pinAnd15": "fc6acce5ebc66419",
+    "FlockSoundness.Rope.pinAnd15_0": "ccfaacc755ce1135",
+    "FlockSoundness.Rope.pinAnd15_1": "2db1b27588fa4edd",
+    "FlockSoundness.Rope.pinAnd16": "b2ccff6c725be040",
+    "FlockSoundness.Rope.pinAnd16_0": "a6c2aecc901b1239",
+    "FlockSoundness.Rope.pinAnd16_1": "56ce9232d70e23ac",
+    "FlockSoundness.Rope.pinAnd17": "b863ab0b14e9a45f",
+    "FlockSoundness.Rope.pinAnd1_0": "1d4cfb187b711ad0",
+    "FlockSoundness.Rope.pinAnd1_1": "34623cfc7d87f261",
+    "FlockSoundness.Rope.pinAnd2": "d9905d593f689a09",
+    "FlockSoundness.Rope.pinAnd2_0": "0af4457ff64a2f60",
+    "FlockSoundness.Rope.pinAnd2_1": "6c87e15f02252f94",
+    "FlockSoundness.Rope.pinAnd3": "fa87fc02a351afcc",
+    "FlockSoundness.Rope.pinAnd3_0": "9182b027ad69c3ef",
+    "FlockSoundness.Rope.pinAnd3_1": "a032f3c70b9e70c8",
+    "FlockSoundness.Rope.pinAnd4": "c530cb002df437cf",
+    "FlockSoundness.Rope.pinAnd5": "2efdac29a1412dad",
+    "FlockSoundness.Rope.pinAnd5_0": "2f806986d305db3b",
+    "FlockSoundness.Rope.pinAnd5_1": "f7c5a52fe63af7ed",
+    "FlockSoundness.Rope.pinAnd6": "e12d928d72c199f6",
+    "FlockSoundness.Rope.pinAnd6_0": "8679781c9481966c",
+    "FlockSoundness.Rope.pinAnd6_1": "2fb37dbd6b2d36c7",
+    "FlockSoundness.Rope.pinAnd7": "8cbadb8ec18b3cc0",
+    "FlockSoundness.Rope.pinAnd7_0": "ecad31c7d5ea4260",
+    "FlockSoundness.Rope.pinAnd7_1": "a293ee402c1f3873",
+    "FlockSoundness.Rope.pinAnd8": "ced7f365c7c2ea7d",
+    "FlockSoundness.Rope.pinAnd8_0": "e5971635ca08ca7a",
+    "FlockSoundness.Rope.pinAnd8_1": "08ae259d41ed5c35",
+    "FlockSoundness.Rope.pinAnd9": "1c031d2943b8d6e2",
+    "FlockSoundness.Rope.pinAnd9_0": "2c9c1ef317ca715d",
+    "FlockSoundness.Rope.pinAnd9_1": "f2401b1245417007",
+    "FlockSoundness.Rope.pinConst": "b8c974c8eb2f5f9d",
+    "FlockSoundness.Rope.pinIn": "e4fb21f09fca9847",
+    "FlockSoundness.Rope.pinOut": "a5dfb7b38215c4ef",
+    "FlockSoundness.Rope.pinnedCodes": "05868213389d218a"
+   },
+   "pins": ["FlockSoundness.Rope.rope_sound"]
+  },
+  "FlockSoundness.Session": {
+   "digest": "8344410d7ebde5b556090193ed67f9b5",
+   "definitions": {
+    "FlockSoundness.SessRel": "cd141a7ff20d7005",
+    "FlockSoundness.advRS": "366b5d8563f7c5e6",
+    "FlockSoundness.adv₀S": "04710bae36b3cc4e",
+    "FlockSoundness.dfltOut": "ab58d31e21552549",
+    "FlockSoundness.epsS": "7c47392ec06f60e6",
+    "FlockSoundness.extractTableS": "8f01247a37509339",
+    "FlockSoundness.lockAfter": "0da5ffe368897c0f",
+    "FlockSoundness.lockSess": "639db54e298c22b8",
+    "FlockSoundness.orcOut": "1c964ebe2d63a032",
+    "FlockSoundness.orcSess": "6164cc1f9af2e92e",
+    "FlockSoundness.plurS": "e7a0cdead025f4e3",
+    "FlockSoundness.sessAfter": "a3005511b23a8923",
+    "FlockSoundness.tableAfter": "dc1b64f7332d10b6",
+    "FlockSoundness.tableOrcAfter": "a633e796bf11a195"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.SessionBatch": {
+   "digest": "528c2a066bc7ab8c6584ddb4959ed2f2",
+   "definitions": {
+    "FlockSoundness.TabSpec": "4bcade2ae7643c64",
+    "FlockSoundness.TabSpec.S": "fcfc51289b012983",
+    "FlockSoundness.TabSpec.after": "6ccccaace4e4bd10",
+    "FlockSoundness.TabSpec.ext": "3c2e3c50fd51e6c7",
+    "FlockSoundness.TabSpec.k0": "717742fcf9660791",
+    "FlockSoundness.TabSpec.l₀": "c02f36e7f03c968f",
+    "FlockSoundness.TabSpec.l₁": "224869dc768a60fa",
+    "FlockSoundness.TabSpec.m": "03945e909285e3df",
+    "FlockSoundness.TabSpec.ptLocal": "6fc8a105422f374a",
+    "FlockSoundness.TabSpec.rest": "e8664de3f817ce24",
+    "FlockSoundness.TabSpec.sch": "cecd28932a30414f",
+    "FlockSoundness.acceptedB": "6c55ac3c919d276f",
+    "FlockSoundness.gamesB": "d137b21f6ef88972",
+    "FlockSoundness.sessAfterB": "965800793877fe3a",
+    "FlockSoundness.sessionB": "d829da73421b5324",
+    "FlockSoundness.stratB": "75fa3c3ba8472b03"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.SessionBatchAcc": {
+   "digest": "90a3be4b69cf70f5ed360f98a2d7252b",
+   "definitions": {
+    "FlockSoundness.ksBoundAccB": "0d373391d5252a3a",
+    "FlockSoundness.rateB": "1467e969687a7192"
+   },
+   "pins": ["FlockSoundness.Audit.Partition.flock_e2e_count", "FlockSoundness.Audit.Partition.flock_e2e_drawn"]
+  },
+  "FlockSoundness.Types.Dag": {
+   "digest": "0fff8415afc66039f079e4209c110060",
+   "definitions": {
+    "FlockSoundness.Types.Dag.SatAt": "9c20b67c303103f7",
+    "FlockSoundness.Types.Dag.bitsIdx": "8631b04cad3c3907",
+    "FlockSoundness.Types.Dag.evalT": "670068c95066aee5",
+    "FlockSoundness.Types.Dag.itemOut": "93565a17d492dc9e",
+    "FlockSoundness.Types.Dag.runT": "d4cbf85202cccd40"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound"
+   ]
+  },
+  "FlockSoundness.Types.Flat": {
+   "digest": "e2aa14726fee06a1623d37ada4bbb718",
+   "definitions": {
+    "FlockSoundness.Types.Sat": "63ea6d65eed6f206",
+    "FlockSoundness.Types.eval": "c2ba7ace50108d3b",
+    "FlockSoundness.Types.formVal": "641e77cb5e7878bf",
+    "FlockSoundness.Types.honest": "0df472bb1d85074d",
+    "FlockSoundness.Types.itemVal": "eea953cd787b21b4",
+    "FlockSoundness.Types.run": "3db25427c60d5a29"
+   },
+   "pins": [
+    "FlockSoundness.Rows.compose_eval",
+    "FlockSoundness.Rows.compose_eval_unit",
+    "FlockSoundness.Types.Dag.layout_sound",
+    "FlockSoundness.Types.Dag.unit_sound",
+    "FlockSoundness.Types.compose_complete",
+    "FlockSoundness.Types.compose_sound"
+   ]
   }
+ },
+ "dependencies": {
+  "Arklib": "417b789a788241bc6520a6706a018bd85f082fc96a942bccbcbfd332278816af",
+  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
+  "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
+  "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
+  "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
+  "VCVio": "d8c0d42db31325df600f165e6fc5fd1ad5fb38da84ea81d52fcb92cc4dd73d22",
+  "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
+  "batteries": "c740e4e87c84be5620831f0f7039a9663569bf8e4af8a14fa76d039ee42a3a39",
+  "cslib": "4fbda9ca9a3ebb5d9e1215ea17eca3ef36fb846b72ef716232fca52747cbfdb1",
+  "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
+  "mathlib": "565ec6d05aec545e2ee95cd0a86757ec1a3aa649f821589b10349a906aeca31d",
+  "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "95b3bfafe36c13bf8ce9fdcadbaba110ccda625bbdcce5c302b373436fa1afb5"
  }
 }

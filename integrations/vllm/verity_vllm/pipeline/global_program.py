@@ -32,23 +32,11 @@ from verity.ir.defs import REGISTRY
 from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
-# [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
-# (the fused-MoE Definitions and the ref_prims they use, e.g. F32Sub_v1 -- an OLMoE component failed to decode without it) + hopper if present.
-from verity_vllm.program.registry import b1, dense, moe, pad_prims, serve3  # noqa: F401  (dense: [R15] unfused norm chain / GeGLU / softcap)
-from verity_vllm.program.registry import sampling  # noqa: F401  [R15 stoch] the stochastic select families
-try:
-    from verity_vllm.program.registry import hopper  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] hopper registry unavailable ({_e!r}): Hopper-target components will not decode", file=sys.stderr)
-try:  # [R15 fp8] block-scaled FP8 components (Fp8GroupQuant_v1 / ScaledMmFp8Block_v1 and their primitives)
-    from verity_vllm.program.registry import fp8  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] fp8 registry unavailable ({_e!r}): FP8 components will not decode", file=sys.stderr)
-try:  # [R17-42 route A (3)] the PADDED MoE construction's Definitions (MoeFfnFixedL_v1 per token + the lifted twins): a component derived
-    # under `target.moe_construction = padded` does not decode without them ("MoeFfnFixedL_v1 is not in the registry"), exactly as moe/fp8
-    from verity_vllm.program.registry import moe_pad  # noqa: F401
-except Exception as _e:  # noqa: BLE001
-    print(f"[global_program] moe_pad registry unavailable ({_e!r}): padded-construction components will not decode", file=sys.stderr)
+from verity_vllm.program.registry.catalog import load as _load_registry
+
+# the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
+for _e in _load_registry()[1]:
+    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
 
 from verity_vllm.check.match.batch_decomp import derived_shape
 
@@ -229,6 +217,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
 
 #: [R17-42] the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
 _MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
+                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
                            "padded": ("MoeFfnFixedL_v1",)}
 
 
@@ -246,7 +235,7 @@ def component_spec_histogram(d: str) -> dict | None:
 
 def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     """[R17-42 / R17-45 (a) route A (3)] The workload Program's `moe_construction` header block: the fused-MoE construction the row's
-    declared target binds (`TargetProfile.effective_moe_construction()`: `indexed-read` = MOE-01, `padded` = one `MoeFfnFixedL_v1` per token),
+    declared target binds (`TargetProfile.effective_moe_construction()`: `indexed-read[-ordered]` = MOE-01, `padded` = one `MoeFfnFixedL_v1` per token),
     a Program STATIC that is declared-and-bound and NEVER attested (the record is construction-agnostic; two Programs of the same trace differ
     in digest by construction).  Coupling checks (fail closed, named): every component's derive-time `target.declared` resolves to the SAME
     construction as the manifest's target, and every component that binds a fused-MoE block binds it with THAT construction's Definitions
@@ -257,8 +246,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     try:
         tp = workload_target(manifest)
     except (TypeError, ValueError) as e:
-        return {"schema": "verity/workload-program/v1/moe_construction", "value": None,
-                "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
+        return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()
     out = {"schema": "verity/workload-program/v1/moe_construction", **decl,
            "rule": "R17-42 / R17-45 (a): the fused-MoE construction is a declared-and-bound Program static (TargetProfile.moe_construction; "
@@ -266,7 +254,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
                    "binds the declared construction only, the digest differs by construction on the same trace, GP-01 refuses components of "
                    "another construction by name; never attested by the record, never inferred from it (moe M-1066 (2a))",
            "components": {}, "moe_block_present": False, "refusal": None}
-    own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], [s for k, v in _MOE_CONSTRUCTION_SPECS.items() if k != decl["value"] for s in v]
+    own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], {s for v in _MOE_CONSTRUCTION_SPECS.values() for s in v} - set(_MOE_CONSTRUCTION_SPECS[decl["value"]])
     for s, d in sorted(shapes.items()):
         key = f"{s[0]},{s[1]}"
         ct = component_declared_target(d)
@@ -294,7 +282,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
             comp["note"] = "component carries no target.declared (pre-v3 derive): the construction is read from its Definitions only"
         if has_other:
             out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} binds the fused-MoE block with {has_other} -- the "
-                              f"{'indexed-read' if decl['value'] == 'padded' else 'padded'} construction -- while the workload declares "
+                              f"{'/'.join(k for k, v in _MOE_CONSTRUCTION_SPECS.items() if set(has_other) & set(v))} construction -- while the workload declares "
                               f"{decl['value']!r}: refused by name (a Program is of one construction; the digest would be another row's)")
             out["components"][key] = comp
             return out
@@ -305,7 +293,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
                           "an idle declaration is not a construction -- refused (a dense workload has nothing to pad; do not declare it)")
         return out
     out["population_label"] = (("padded fixed-slot MoE: |Q(Lift(P_fixed-slot))|, labelled with its ACTUAL population (R17-45 (1))" if decl["value"] == "padded"
-                                else "indexed-read MoE (MOE-01): |Q(P)|") if out["moe_block_present"] else "no fused-MoE block (dense workload)")
+                                else f"{decl['value']} MoE (MOE-01): |Q(P)|") if out["moe_block_present"] else "no fused-MoE block (dense workload)")
     return out
 
 
@@ -493,15 +481,16 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
     the Program of ONE request: compose must not reuse it for a request with the same shape (LP, T) but another arrival (its S-schedule
     differs and its Match would fail for the wrong reason).  Checked here per binding: (a) every request bound to the component arrives
     at the step the component declares; (b) a list schedule has T+1 entries; (c) the component's declared live counts are the manifest's
-    (a component derived against another manifest of the same shape does not compose).  Refusal is named; a component without a
-    per-request geometry (greedy, or S constant over the live counts) binds by shape as before."""
+    (a component derived against another manifest of the same shape does not compose); (d) a constant S (the single-request form,
+    SplitsFor_v1(1, num_SMs)) binds only in a manifest of one request.  Refusal is named; greedy and derived-S components bind by shape."""
     out = {"checked": {}, "refusal": None}
-    n_live = None
     for s, d in shapes.items():
         samp = component_sampling(d)
-        geom = (samp or {}).get("geometry") or {}
+        geom, splits = samp.get("geometry") or {}, samp.get("splits")
         req = geom.get("request")
-        splits = (samp or {}).get("splits")
+        if type(splits) is int and len(reqs) != 1:
+            out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S = {splits} is the single-request constant, but this manifest has {len(reqs)} requests (S_t follows the live set: the derived-S component)"
+            return out
         if not req and not isinstance(splits, list):
             continue
         bound = [r for r in reqs if (r["prompt_len"], r["cap"] - 1) == s]
@@ -519,12 +508,10 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
             out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S-schedule has {len(splits)} entries, the request has T+1 = {s[1] + 1} sampling events"
             return out
         dl = geom.get("declared_live_counts")
-        if dl is not None:
-            n_live = n_live if n_live is not None else declared_live_counts(reqs)
-            if [int(x) for x in dl] != n_live:
-                out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d}: its S-schedule was computed from live counts {list(dl)[:12]}... but this "
-                                  f"manifest's declared chronology has {n_live[:12]}...: the component was derived against another workload")
-                return out
+        if dl is not None and [int(x) for x in dl] != (n_live := declared_live_counts(reqs)):
+            out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d}: its S-schedule was computed from live counts {list(dl)[:12]}... but this "
+                              f"manifest's declared chronology has {n_live[:12]}...: the component was derived against another workload")
+            return out
     return out
 
 

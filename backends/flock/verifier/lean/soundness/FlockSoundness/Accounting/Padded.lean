@@ -28,8 +28,8 @@ noncomputable def padRate (l : Level) (t : ℕ) : ℝ := ((2 ^ l.logCols + t : �
 /-- The padded code's proximity radius `γ' = 1 − √ρ' − η`. -/
 noncomputable def padRadius (l : Level) (t : ℕ) : ℝ := 1 - Real.sqrt (l.padRate t) - eta
 
-/-- ArkLib's Johnson bound at the padded rate: `⌊1/(2ηρ')⌋ = ⌊25·2^d/(2^cols + t)⌋`. -/
-def padListBound (l : Level) (t : ℕ) : ℕ := 25 * 2 ^ l.logLen / (2 ^ l.logCols + t)
+/-- ArkLib's Johnson bound at the padded rate: `⌊1/(2ηρ')⌋ = ⌊100·2^d/(2^cols + t)⌋`. -/
+def padListBound (l : Level) (t : ℕ) : ℕ := 100 * 2 ^ l.logLen / (2 ^ l.logCols + t)
 
 /-- The level's queries on the padded code: `(√ρ' + η)^Q`. -/
 noncomputable def padQueryError (l : Level) (t : ℕ) : ℝ := (Real.sqrt (l.padRate t) + eta) ^ l.queries

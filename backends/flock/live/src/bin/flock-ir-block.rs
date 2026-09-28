@@ -99,7 +99,7 @@ impl StatementVerifier for IrVerifier {
 
 fn config(st: &IrStmt, sigma: [u8; 32]) -> SessionConfig {
     let mut cfg = SessionConfig::flock_128_r2(vec![TableSpec { name: TABLE.into(), binding: Binding::R1cs { statement_digest: st.digest } }]);
-    cfg.link = Some(LinkSpec { sigma, m: st.m_pts, points: 2 });
+    cfg.link = Some(LinkSpec { sigma: sigma.to_vec(), m: st.m_pts, points: 2 });
     cfg
 }
 

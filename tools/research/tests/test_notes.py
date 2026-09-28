@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -629,6 +630,7 @@ def test_push_sends_the_lane_branch_never_main_and_never_forces(tmp_path, repo):
     assert notes.push_branch(root, "nobranch", repo) == (f"REFUSED nobranch: no local branch lane/nobranch in {repo}", 2)
 
 
+@pytest.mark.slow
 def test_branches_lists_what_origin_lacks_and_blocks_only_on_open_lanes(tmp_path, repo):
     root = tmp_path / "notes"
     origin = tmp_path / "origin.git"
@@ -1012,6 +1014,73 @@ def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path)
     assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
 
 
+FRESH = ["--on", "vy-lean", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_audit", "--",
+         "python", "tools/lean/audit.py", "--all", "--build", "--fresh"]
+
+
+def _run_toml(*entries: str) -> str:
+    return "\n".join(f"[[run]]\n{e}\n" for e in entries)
+
+
+def test_scheduled_runs_launch_once_per_utc_day_or_iso_week_at_or_after_their_time(tmp_path):
+    (tmp_path / "steward.toml").write_text(_run_toml(
+        f'name = "lean-fresh"\nat = "20:30Z"\nsource = "~/src"\nargs = {json.dumps(FRESH)}',
+        'name = "lean-upstream"\nat = "10:00Z"\nweekday = "thu"\nsource = "/src"\nargs = ["--on=vy-small", "--project", "verity", "--", "true"]',
+        'name = "later"\nat = "22:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]'))
+    calls, ids = [], iter(f"r{i}" for i in range(1, 99))
+
+    def run(cmd, env, cwd, timeout):
+        calls.append((cmd, env["PYTHONPATH"], cwd, timeout))
+        return (3, "", "research run --on vy-x: refused: machine 'vy-x' is not listed") if "vy-x" in cmd else (0, "", "research: run launched")
+
+    def at(days: float = 0, minutes: float = 0, state: dict | None = None) -> list[str]:
+        return notes.run_lines(tmp_path, NOW + dt.timedelta(days=days, minutes=minutes), state, run=run, new_id=lambda: next(ids))
+
+    state, home = {}, Path.home()                                  # NOW: Wednesday 2026-09-23 21:00Z, ISO week 39
+    assert at(state=state) == ["21:00Z LAUNCHED lean-fresh r1 on vy-lean"]
+    assert calls == [([sys.executable, "-m", "research", "run", "--id", "r1", *FRESH], f"{home}/src", home / "src", notes.RUN_LAUNCH_TIMEOUT_S)]
+    assert state["run"]["lean-fresh"] == {"period": "2026-09-23", "run": "r1", "rc": 0}
+    assert at(minutes=50, state=state) == []                       # once a day; `later` is not due before 22:00Z
+    assert at(minutes=60, state=state) == ["22:00Z RUN-FAILED later r2: research run --on vy-x: refused: machine 'vy-x' is not listed"]
+    assert at(minutes=70, state=state) == [] and len(calls) == 2   # a failed launch waits for the next period
+    assert at(days=1, state=state) == ["21:00Z LAUNCHED lean-fresh r3 on vy-lean", "21:00Z LAUNCHED lean-upstream r4 on vy-small"]
+    assert at(days=2, state=state) == ["21:00Z LAUNCHED lean-fresh r5 on vy-lean"]             # the weekly one: once in week 39
+    assert at(days=7, state=state) == ["21:00Z LAUNCHED lean-fresh r6 on vy-lean"]             # week 40, before its Thursday
+    assert at(days=8, state=state)[1] == "21:00Z LAUNCHED lean-upstream r8 on vy-small"
+    assert at(days=3, minutes=-11 * 60, state={}) == ["10:00Z LAUNCHED lean-upstream r9 on vy-small"]   # a steward down on Thursday: Saturday
+    lines = notes.run_lines(tmp_path, NOW, {}, run=lambda *a: (None, "", "timeout after 600s"), new_id=lambda: "r0")
+    assert lines[0] == "21:00Z RUN-FAILED lean-fresh r0: timeout after 600s"
+
+
+def test_an_invalid_run_entry_is_one_line_until_it_changes(tmp_path):
+    ok = 'at = "20:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]'
+    (tmp_path / "steward.toml").write_text(_run_toml(
+        'name = "no-args"\nat = "20:00Z"\nsource = "/src"', 'name = "nine"\nat = "9am"\nsource = "/src"\nargs = ["--on", "vy-x", "--", "true"]',
+        f'name = "monday"\nweekday = "monday"\n{ok}', 'name = "local"\nat = "20:00Z"\nsource = "/src"\nargs = ["--project", "p", "--", "research", "--on", "x"]',
+        'name = "named"\nat = "20:00Z"\nsource = "/src"\nargs = ["--on", "vy-x", "--id", "r1", "--", "true"]',
+        f'name = "twice"\n{ok}', f'name = "twice"\n{ok}'))
+    calls, state = [], {}
+
+    def run(*a):
+        calls.append(a)
+        return 0, "", ""
+
+    assert notes.run_lines(tmp_path, NOW, state, run=run, new_id=lambda: "r9") == [
+        '21:00Z RUN-FAILED no-args: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
+        '21:00Z RUN-FAILED nine: an entry needs name, at = "HH:MMZ", source and args (a list of strings)',
+        "21:00Z RUN-FAILED monday: weekday = 'monday': one of mon, tue, wed, thu, fri, sat, sun",
+        '21:00Z RUN-FAILED local: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]',
+        "21:00Z RUN-FAILED named: args set --id: the steward names the run",
+        "21:00Z LAUNCHED twice r9 on vy-x", "21:00Z RUN-FAILED twice: name 'twice' is used by another entry"]
+    assert len(calls) == 1 and notes.run_lines(tmp_path, NOW, state, run=run) == []             # each said once
+    (tmp_path / "steward.toml").write_text(_run_toml(f'name = "monday"\nweekday = "mon"\n{ok}'))
+    assert notes.run_lines(tmp_path, NOW, state, run=run, new_id=lambda: "r10") == ["21:00Z LAUNCHED monday r10 on vy-x"]   # fixed: it runs
+    (tmp_path / "steward.toml").write_text("[[run]\n")
+    assert notes.run_lines(tmp_path, NOW, state, run=run)[0].startswith("21:00Z RUN-FAILED steward.toml: ")
+    assert notes.run_lines(tmp_path, NOW, state, run=run) == []                                 # a broken file is said once
+    assert notes.run_lines(tmp_path / "nowhere", NOW, {}, run=run) == [] and len(calls) == 2
+
+
 def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):
     root, log, wt = tmp_path / "notes", tmp_path / "mem_guardian.log", tmp_path / "wt" / "tables-fix"
     for lane in ("sp1-formats", "agkr-table", "tables-fix", "tables-fix-2"):
@@ -1110,7 +1179,8 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
     (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["backends/numerical"]\n')
     (src / "backends" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
-    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n')
+    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n\n'
+                                       f'[[run]]\nname = "here"\nat = "00:00Z"\nsource = "{src}"\nargs = ["--", "true"]\n')
     log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")
     notes.save_state(root, {"guardian": {"path": str(log), "offset": 0, "ino": log.stat().st_ino}})
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", str(log)]) == 1    # late is STALE
@@ -1119,6 +1189,7 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     rendered = sorted((root / "render").iterdir())
     assert [p.name[-10:] for p in rendered] == ["-tables.md"] and rendered[0].read_text() == f"# tables --root {tmp_path / 'store'} --format md\n"
     assert f" RENDERED {rendered[0]}" in out and " RENDER-FAILED render@00:00Z (drilldown): " in out and "No module named" in out
+    assert ' RUN-FAILED here: args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' in out
     state = notes.load_state(root)
     assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")}
     assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", "none"]) == 1

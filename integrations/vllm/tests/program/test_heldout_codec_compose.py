@@ -53,6 +53,7 @@ def _roundtrip(P, schema):
 
 @pytest.mark.parametrize("label", list(PROGRAMS))
 @pytest.mark.parametrize("schema", [None, SCHEMA_V0], ids=["v1", "v0"])
+@pytest.mark.slow
 def test_codec_round_trip_is_equivalent(label, schema):
     P = Program(PROGRAMS[label]())
     desc, raw, D = _roundtrip(P, schema)
