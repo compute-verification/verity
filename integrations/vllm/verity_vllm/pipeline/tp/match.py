@@ -288,11 +288,22 @@ def _check_main(args) -> int:
     else:
         tk["note"] = "no control arm"
     res["tokens"] = tk
-    res["recorder"] = tok.get("recorder")
+    res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
     res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
     _write(run, res)
     print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
     return 0 if res["pass"] else 1
+
+
+def _ruled_out_sites(cap: Path, ranks: list[int]) -> dict | None:
+    """The mid-module collective calls the recorder did not expect because the instance's flags rule them out (`coll_meta.rank<r>.json`,
+    `collective_sites.mid_module_site_census`); None when no rank's meta lists them."""
+    ruled = {r: json.loads(p.read_text()).get("mid_module_sites_ruled_out", []) for r in ranks if (p := cap / f"coll_meta.rank{r}.json").exists()}
+    if not ruled:
+        return None
+    first = ruled[min(ruled)]
+    same = len(ruled) == len(ranks) and all(v == first for v in ruled.values())
+    return {"n": len(first), "same_on_all_ranks": same, "sites": first, **({} if same else {"per_rank": {str(r): v for r, v in ruled.items()}})}
 
 
 def _build_dirs(args) -> list[str]:

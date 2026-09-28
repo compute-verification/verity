@@ -41,6 +41,41 @@ class PlainMlp(_Mod):
         return x
 
 
+class Qwen3MoeSparseMoeBlockLike(_Mod):
+    """vLLM qwen3_moe.py's shape: the block all-gathers its output only under sequence-parallel MoE, which plain TP leaves off."""
+
+    tp_size = 2
+
+    def __init__(self, is_sequence_parallel: bool) -> None:
+        super().__init__()
+        self.is_sequence_parallel = is_sequence_parallel
+
+    def forward(self, x):
+        if self.is_sequence_parallel:
+            x = tensor_model_parallel_all_gather(x, 0)
+        return x
+
+
+class FlagBranches(_Mod):
+    tp_size = 2
+
+    def __init__(self, flag) -> None:
+        super().__init__()
+        self.flag = flag
+
+    def forward(self, x, already=False):
+        if not self.flag:
+            x = tensor_model_parallel_all_gather(x)
+        else:
+            x = tensor_model_parallel_all_gather(x)
+            x = tensor_model_parallel_all_gather(x)
+        if self.flag and not already:                    # vLLM deepseek_v2.py / qwen3_next.py's MoE blocks
+            x = tensor_model_parallel_all_gather(x)
+        else:
+            x = tensor_model_parallel_all_gather(x)
+        return x
+
+
 def test_class_collective_calls_reads_the_class_source_under_the_model_prefix():
     assert CS.class_collective_calls(OlmoeAttentionLike, model_prefix=THIS) == {"all_gather": 2}
     assert CS.class_collective_calls(PlainMlp, model_prefix=THIS) == {}
@@ -56,6 +91,38 @@ def test_mid_module_sites_and_patch_targets():
     assert CS.mid_module_sites(m, 1, model_prefix=THIS) == []                    # TP1: no collective
     tgts = CS.patch_targets(sites)
     assert [(mod.__name__, attr, kind) for mod, attr, kind in tgts] == [(THIS, "tensor_model_parallel_all_gather", "all_gather")]
+
+
+def test_a_call_under_an_instance_flag_counts_only_when_the_flag_allows_it():
+    """Qwen3-30B-A3B TP2 Commit r20261003-085103-4792: the finder counted Qwen3MoeSparseMoeBlock's sequence-parallel all-gather at all
+    48 `model.layers.N.mlp` blocks, the run issued none, and identity_check failed every step on both ranks (`tp_sites_bad` 48)."""
+    off, on = Qwen3MoeSparseMoeBlockLike(False), Qwen3MoeSparseMoeBlockLike(True)
+    assert CS.class_collective_calls(Qwen3MoeSparseMoeBlockLike, model_prefix=THIS) == {"all_gather": 1}
+    assert CS.class_collective_calls(Qwen3MoeSparseMoeBlockLike, model_prefix=THIS, instance=off) == {}
+    assert CS.class_collective_calls(Qwen3MoeSparseMoeBlockLike, model_prefix=THIS, instance=on) == {"all_gather": 1}
+    sites = CS.mid_module_sites(_model({"model.layers.0.mlp": off, "model.layers.1.mlp": on}), 2, model_prefix=THIS)
+    assert [(s["name"], s["per_step"]) for s in sites] == [("model.layers.1.mlp", 1)]
+    # `not self.flag` and its `else`, and a flag conjunct of an `and` (its `else` concludes nothing); a flag of another type, or one the
+    # instance lacks, rules nothing out
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS) == {"all_gather": 5}
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS, instance=FlagBranches(False)) == {"all_gather": 2}
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS, instance=FlagBranches(None)) == {"all_gather": 2}
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS, instance=FlagBranches(True)) == {"all_gather": 4}
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS, instance=FlagBranches("x")) == {"all_gather": 5}
+    assert CS.class_collective_calls(FlagBranches, model_prefix=THIS, instance=types.SimpleNamespace()) == {"all_gather": 5}
+    # a condition other than a bare flag is not evaluated: OLMoE's `if self.tp_size > 1:` keeps both gathers, whatever tp_size holds
+    attn = OlmoeAttentionLike()
+    attn.tp_size = 1
+    assert CS.class_collective_calls(OlmoeAttentionLike, model_prefix=THIS, instance=attn) == {"all_gather": 2}
+
+
+def test_source_on_a_plain_tp_qwen3_moe_layer_declares_only_the_runner_site(monkeypatch):
+    monkeypatch.setattr(CS, "MODEL_MODULE_PREFIX", THIS)
+    src = tps.TPPartialSource(_Committer(), _model({"model.layers.0.mlp": Qwen3MoeSparseMoeBlockLike(False),
+                                                    "model.layers.0.mlp.experts": _make("MoERunner")}), rank=0, world=2)
+    assert src.site_names() == ["model.layers.0.mlp.experts"]
+    assert src.received_site_names() == ["model.layers.0.mlp.experts"]
+    assert src.site_counts() == {"model.layers.0.mlp.experts": 1}
 
 
 def test_source_binds_shard_and_received_output_per_call_and_declares_two_per_step(monkeypatch):
