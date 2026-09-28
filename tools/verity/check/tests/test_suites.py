@@ -793,6 +793,34 @@ def test_explain_names_what_a_miss_changed(tmp_path):
     assert "pkg/tests/test_uses.py: it reaches pkg/tests/test_shared.py, which changed" in p.stdout, p.stdout
 
 
+def test_each_suite_that_runs_says_what_forced_it(tmp_path):
+    """`--json`'s `forced_by`, which check's reuse report reads: no pass to compare, then the input that moved against the
+    nearest kept pass (whose run and commit it names), and `--fresh`; a cached suite has none."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    _git(root, "commit", "-qam", "passing")
+    out = tmp_path / "suites.json"
+
+    def forced(*args: str) -> dict | None:
+        p = _run_suite(root, tmp_path, "--json", str(out), *args)
+        assert p.returncode == 0, p.stdout
+        [doc] = json.loads(out.read_text())
+        assert (doc["forced_by"] is None) == (doc["status"] == "cached")
+        assert doc["forced_by"] is None or f"ran because: {doc['forced_by']['why'][0]}"[:60] in p.stdout, p.stdout
+        return doc["forced_by"]
+
+    assert forced()["why"] == ["no pass of it kept here records its key's components (passes kept before `--explain` don't)"]
+    assert forced() is None
+    (tests / "helpers.py").write_text("VALUE = 1  # moved\n")
+    got = forced()
+    assert got["why"][0].startswith("input pkg changed") and "pkg/tests/helpers.py" in got["why"][0], got
+    assert got["nearest"]["commit"] == _git(root, "rev-parse", "HEAD") and set(got["nearest"]) == {"run", "commit", "when"}
+    assert forced("--fresh") == {"why": ["--fresh"]}
+
+
 def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, bytes]:
     """(whether something was written to ``fifo`` before ``p`` closed its stdout, ``p``'s output read meanwhile), never waiting
     on a bare blocking ``open``: a runner that dies before the writer starts would leave that waiting forever."""
