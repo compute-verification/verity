@@ -5,7 +5,9 @@
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
                                                             inputs when the commit changes backends/flock/ against --base REF
-                                                            (default origin/main)
+                                                            (default origin/main), and presigned URLs for the pinned Lean
+                                                            dependency bundles
+    uv run python tools/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
 
 Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
@@ -34,7 +36,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     a read the tracer cannot see (a program it starts) is not stored (`circuit_check.cache`)
     lean-audit      per package (`lean_audit.py`): a pass is reused while the package, its path dependencies, `tools/lean/`
                     and its toolchain and manifest are unchanged; a miss is audited on a scratch tree holding only those, so a
-                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain
+                    read outside them fails there; fetched dependencies stay warm on the machine under manifest + toolchain,
+                    and a machine without them restores the bundle `lean-deps.json` pins from the store, not from GitHub
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: backends/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the environment)
 
@@ -50,6 +53,8 @@ import os
 import platform
 import re
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -119,7 +124,34 @@ def agreement_files(out: Path) -> dict[str, Path]:
     return found
 
 
-def lean_steps(out: Path, cache: bool = True) -> list[tuple[str, list[str] | str, Path]]:
+#: the presigned URLs of the pinned Lean dependency bundles (`lean_audit.py`), among a recorded run's inputs, or named by this
+#: variable for a local one
+LEAN_DEPS_URLS = "lean-deps-urls.json"
+LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
+
+
+def take_lean_deps_urls(out: Path) -> Path | None:
+    """The presigned URLs sent with the run, moved out of the run directory before any step starts: each grants a read until it
+    expires, and the run's record keeps every file left there."""
+    sent = out / "inputs" / LEAN_DEPS_URLS
+    if not sent.is_file():
+        return Path(os.environ[LEAN_DEPS_URLS_ENV]) if os.environ.get(LEAN_DEPS_URLS_ENV) else None
+    fd, tmp = tempfile.mkstemp(prefix="lean-deps-urls-", suffix=".json")
+    with os.fdopen(fd, "wb") as f:
+        f.write(sent.read_bytes())
+    sent.unlink()
+    return Path(tmp)
+
+
+def lean_deps_url_file(dest: Path) -> Path | None:
+    """`lean-deps-urls.json` for this tree's pinned Lean dependency bundles, signed by this machine's store remote."""
+    spec = importlib.util.spec_from_file_location("check_lean_audit_urls", ROOT / "tools" / "check" / "lean_audit.py")
+    la = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(la)
+    return la.url_file(dest)
+
+
+def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ir.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
@@ -142,7 +174,7 @@ def lean_steps(out: Path, cache: bool = True) -> list[tuple[str, list[str] | str
                                "--out", str(out / "lean-unit-cut")], ROOT),
             ("lean-audit", [sys.executable, str(ROOT / "tools" / "check" / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
-                            *([] if cache else ["--fresh"])], ROOT),
+                            *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -177,9 +209,39 @@ def _version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
 
-def agreement_preflight(pin: dict, bins: list[Path]) -> str | None:
+def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
+    """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
+    (its PR #83 commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    import argparse
+
+    spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
+    agree = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agree)
+
+    def fetch(art: str) -> Path:                        # ci.py's layout: art:<id>[/path] under inputs/<id>/
+        ref, _, path = art.partition("/")
+        d = w / "inputs" / ref.split(":", 1)[1]
+        return d / path if path else sorted(d.iterdir())[0]
+
+    out: dict[str, tuple] = {}
+    for s in json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]:
+        st = s.get("statement", {})
+        if s["pr83"] in out or not s.get("sessions") or "tables" in st:
+            continue
+        honest = fetch(s["sessions"][0]["dir"])
+        a = argparse.Namespace(upstream=str(w / "upstream" / f"upstream-{s['pr83']}"), statement=s["lean_statement"],
+                               circuit=str(fetch(st["circuit"])), tables=None)
+        public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
+        extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+    return list(out.values())
+
+
+def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> str | None:
     """Why this machine cannot run the agreement (None when it can): too little memory, a glibc older than the pinned build
-    needs, or a binary the loader refuses.  Seconds, where the job itself would take an hour to disagree on every session."""
+    needs, a binary the loader refuses, or (with ``w``, the unpacked build and inputs) one that cannot replay a stored honest
+    session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
+    Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
         return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
@@ -197,6 +259,26 @@ def agreement_preflight(pin: dict, bins: list[Path]) -> str | None:
         err = r.stderr + r.stdout
         if "error while loading shared libraries" in err or re.search(r"version `GLIBC_[\d.]+' not found", err):
             return f"{b.name} does not start here: {err.strip().splitlines()[0]}"
+    if w is None:
+        return None
+    smoke = upstream_smoke(w)
+    if not smoke:
+        return "vectors.json gives no stored honest session to replay, so nothing shows the upstream build runs here"
+    flags = pin["upstream"].get("rustflags", "the build host's own (target-cpu=native)")
+    for c, cmd, expect in smoke:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except subprocess.TimeoutExpired:
+            return f"upstream-{c} did not finish replaying its stored honest session in 600 s"
+        if r.returncode < 0:
+            sig = signal.Signals(-r.returncode).name
+            return (f"upstream-{c} was killed by {sig} replaying its stored honest session"
+                    + (f": this CPU lacks an instruction the build uses (target flags: {flags}); rebuild for a CPU every check "
+                       f"machine has (upstream-build.sh) and re-pin" if sig == "SIGILL" else ""))
+        got = [json.loads(line.split("\t", 1)[1])["verdict"] for line in r.stdout.splitlines() if line.startswith("UPSTREAM\t")]
+        if r.returncode or not got or got[0]["accepted"] != expect["accepted"]:
+            return (f"upstream-{c} replayed its stored honest session with exit {r.returncode} and verdict "
+                    f"{got[0] if got else 'none'} (expected {expect}): {(r.stderr or r.stdout).strip()[-300:]}")
     return None
 
 
@@ -221,7 +303,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
-    if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])]):
+    if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])], w):
         print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
@@ -273,10 +355,20 @@ def record(argv: list[str]) -> int:
             for k, f in files.items():
                 (d / f"{k}.tar.gz").symlink_to(f)
             env[AGREEMENT_DIR_ENV] = str(d)
+    d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
+    if urls := lean_deps_url_file(d):
+        print(f"check: sending presigned URLs for {len(json.loads(urls.read_text()))} pinned Lean dependency bundle(s)")
+        if on:
+            cmd += ["--send", str(urls)]
+        else:
+            env[LEAN_DEPS_URLS_ENV] = str(urls)
     if on:
         cmd += ["--on", on, "--source", "."]
     cmd += ["--", *tool.CHECK.command, *rest]
-    return subprocess.run(cmd, cwd=ROOT, env=env).returncode
+    try:
+        return subprocess.run(cmd, cwd=ROOT, env=env).returncode
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 #: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-audit` has
@@ -286,7 +378,7 @@ def record(argv: list[str]) -> int:
 AFTER_LEAN = ("verity-flock", "verity-lean-audit")
 
 
-def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
+def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd)."""
     py = sys.executable
     a = max(1, n // 2)
@@ -295,7 +387,7 @@ def groups(out: Path, n: int, cache: bool = True) -> list[list[tuple[str, list[s
     commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
     suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
     tail = [*commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
-    lean = lean_steps(out, cache)
+    lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
@@ -420,6 +512,7 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list[dict]]:
     n = n or cores()
+    urls = take_lean_deps_urls(out)
     subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
 
     def group(g: list) -> list[dict]:
@@ -430,8 +523,12 @@ def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list
                 break
         return done
 
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        results = [r for rs in ex.map(group, groups(out, n, cache)) for r in rs]
+    try:
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            results = [r for rs in ex.map(group, groups(out, n, cache, urls)) for r in rs]
+    finally:
+        if urls and urls.name.startswith("lean-deps-urls-"):
+            urls.unlink(missing_ok=True)
     return not any(r["status"] == "failed" for r in results), results
 
 
@@ -463,6 +560,10 @@ def main(argv: list[str]) -> int:
 
         pin = json.loads(UPSTREAM_PIN.read_text())
         print(" ".join(f"--send {LocalStore().fetch(pin[k]['art'])}" for k in ("upstream", "inputs")))
+        return 0
+    if argv == ["--lean-deps-files"]:
+        urls = lean_deps_url_file(Path(tempfile.mkdtemp(prefix="check-lean-deps-")))
+        print(f"--send {urls}" if urls else "")
         return 0
     if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
         return lean_agreement(*map(Path, argv[1:]))
