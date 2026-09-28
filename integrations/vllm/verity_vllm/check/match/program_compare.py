@@ -41,14 +41,14 @@ from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
 _T_RE = re.compile(r"\{T=\d+,")
 # [R16 stoch/global, COORD M-0169 (4)] the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
-# (index 5) of `GumbelTopPTokenSelect_v1{V}` (patterns.TokenSelectGumbelTopP._stage3); the request Program takes it as the request-owned
-# INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).  compare BINDS the two:
-# the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised ("SPLITS", s, s+1) on both
-# sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step relation check
-# (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the Definition.
+# (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
+# takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
+# compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
+# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step
+# relation check (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the
+# Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
 SPLITS_OPERAND = 5
-_TOPP_SELECT = "GumbelTopPTokenSelect_v1"
 
 
 def const_value(spec: str) -> tuple[int, int] | None:
@@ -202,7 +202,7 @@ class Prog:
             cands: set[int] = set()
             for r in self.inst:
                 sp = r["spec"].split(":", 1)[-1]
-                if not sp.startswith(_TOPP_SELECT) or len(r["args"]) <= SPLITS_OPERAND:
+                if not _is_sampling_event(sp) or len(r["args"]) <= SPLITS_OPERAND:
                     continue
                 a = r["args"][SPLITS_OPERAND]
                 if len(a) == 1 and a[0][0] == "n" and a[0][3] == 1 and a[0][1][0] not in self.inputs:
@@ -225,7 +225,7 @@ class Prog:
                                 i += 1
         for i, r in enumerate(self.inst):
             sp = r["spec"].split(":", 1)[-1]
-            if not sp.startswith(_TOPP_SELECT) or len(r["args"]) <= SPLITS_OPERAND:
+            if not _is_sampling_event(sp) or len(r["args"]) <= SPLITS_OPERAND:
                 continue
             a = r["args"][SPLITS_OPERAND]
             if len(a) != 1 or a[0][0] != "n":

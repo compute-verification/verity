@@ -37,12 +37,12 @@ EVALUATORS = {
     # `Gemm_v2{K,N,DOT}` -- the SAME VU as Gemm_v1 (one token row: x[K] @ W[N,K]^T -> [N], the instance row Q(P) selects; the registry's
     # GemmCoordinate is its interior), with the k16 accumulator step read from the DOT static of THIS row's spec: HopperBF16WgmmaDot16_v1
     # (wgmma m64nNk16: one group of 16 + acc, 26-bit adder, floor -133, the H100 measurement of record) -> derived_rows.dot_bf16_hopper;
-    # AmpereBF16TcDot16_v1 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`Declined`), never another adder.
+    # AmpereBF16TcDot16_v2 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`Declined`), never another adder.
     # The ascending-from-0 chain is the cuBLASLt-without-split-K GEMM of a VLLM_BATCH_INVARIANT=1 step on cc 9.0 (vLLM keeps cuBLASLt there,
     # split-K off by workspace config), pinned word for word on the H100 at every Qwen2.5-1.5B shape x M (0 / 27.2M words; derived_rows).
     "Gemm_v2": "verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}: ascending k16 chain of the DOT static's step from 0 -- "
                "HopperBF16WgmmaDot16_v1 = tc_dot16_hopper (16:26:-133, silicon_total.HOPPER_BF16_WGMMA_K16; cuBLASLt split-K off = the "
-               "batch-invariant Linear of record), AmpereBF16TcDot16_v1 = tc_dot16) + f2fp_bf16 (GemmCoordinate_v2); "
+               "batch-invariant Linear of record), AmpereBF16TcDot16_v2 = tc_dot16) + f2fp_bf16 (GemmCoordinate_v2); "
                "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     # [R17 dense, ruling R17-9] the NeoX rotation of one token row's q / k heads with ONE bf16 cos/sin cache row (a `weights` field slice
     # the Program's args name by position): b1.RoPE{NHEADS,D} = NHEADS x RoPEHead{D} = prims.RopeOut / RopeOutAdd per coordinate.
@@ -60,7 +60,7 @@ EVALUATORS = {
                     "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
     "Attention_v2": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v2{T,NH,KVH,D,BN,DOT,INV}: the DOT / INV statics resolved by name "
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.program.kernels.fa3_model.fa3_rows); "
-                    "AmpereBF16TcDot16_v1 + Fa2InvSum_v1 = FA2 under the lifted name); "
+                    "AmpereBF16TcDot16_v2 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # [revb M-0148 (5) / rev] the silicon envelope of the FA3 relation, stated with the evaluator
                     "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves, "
                     "hopper-profile.md s1b); rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
@@ -68,7 +68,7 @@ EVALUATORS = {
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     "Attention_v4": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
                     "with block b guarding a running max of -inf only when b >= MASKED_FROM -- FA3's per-iteration Check_inf, "
-                    "registry.fa3_check_inf; opt-in, TargetProfile.fa3_construction)",
+                    "registry.fa3_check_inf; TargetProfile.fa3_construction)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
@@ -81,11 +81,15 @@ EVALUATORS = {
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
     "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity.evaluation.evaluate (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
+    "GumbelTopPTokenSelectSharedGreedy_v1": "GumbelTopPTokenSelect_v1's row (the same function, registry.sampling.SHARED_GREEDY; "
+                                            "TargetProfile.sampler_construction = shared-greedy)",
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
     "ScaledMmFp8Block_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
+    "ScaledMmFp8BlockSharedScale_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
+                                      "each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale)",
     # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity_vllm.program.registry.moe bodies; R13 moe_kernel_xcheck = the reference against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
     "MoeRouterTopK_v1": "verity_vllm.program.registry.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
@@ -141,7 +145,8 @@ _FP8_TWIN_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
-EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE}
+EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
+                                          "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
@@ -291,7 +296,7 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     if family in ("Attention_v2", "Attention_v4"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
-        dot_id, inv_id = "AmpereBF16TcDot16_v1", "Fa2InvSum_v1"
+        dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
     masked_from = int(statics["MASKED_FROM"]) if family == "Attention_v4" else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
@@ -697,8 +702,10 @@ def _check_targets() -> dict[str, list]:
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
+        "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
+        "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
         "MoeRouterTopKOrdered_v1": [bind(moe.MoeRouterTopKOrdered, **router)],
@@ -731,8 +738,10 @@ _row("BiasAdd_v1", bias_add, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
+_row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
+_row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
 _row("MoeRouterTopKNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeRouterTopKOrdered_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
