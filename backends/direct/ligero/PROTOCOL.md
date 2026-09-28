@@ -170,7 +170,7 @@ setting (no subfield/extension assumption is needed here, since the combinations
 The opened columns dominate (Ligero's `t * m`); `m` is what a cheaper range-check realisation would shrink.
 Chain (m = 3516, + `q`: D (2l - 1) * 4 = 197 KB): 3.14 MB per 42 VUs (75 KB/VU).
 
-## 7b. The chain: the verification unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
+## 7b. The chain: the proof unit (`chain.py`, `vu.py`; `compile_unit(chain=True)`)
 
 A VU is 96 units from `c_0 = +0` plus the `Epilogue` (RN-even cast to BF16). Column `j = 96 v + i` holds unit `i` of
 VU `v`; a proof of `l` columns holds `floor(l / 96)` VUs (`l = 4096`: 42 VUs, 64 pad columns = trivial units).

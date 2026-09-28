@@ -1,7 +1,7 @@
 """Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1), and the
 reference normalisation of `concat`.
 
-Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over the production registry (B1
+Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over veritor's model registry (B1
 attention padding, KV-cache aliasing, the pinned v0 digests) stayed behind; the one `b1.Gemm` reference became a local
 composite."""
 

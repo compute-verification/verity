@@ -371,7 +371,7 @@ wires). The field-operation column now favours B by \(\approx2\times\) under A's
 ## 12. The K=1536 VU as one AIR: the chain (`ChainAir`, implemented 2026-09-22) **[implemented, diagnostic PCS]**
 
 The wave-1 diagnostic proved independent transition units (one row each, no relation between rows). The
-verification unit is 96 word-chained units from \(c_0 = +0\) followed by the epilogue (`step.py::gen_vu`,
+proof unit is 96 word-chained units from \(c_0 = +0\) followed by the epilogue (`step.py::gen_vu`,
 `accepts_vu`; `Epilogue` contract in `checker/gadgets.py`). This section fixes how the chain and the epilogue
 enter the AIR. The relation is unchanged: every WP2 contract of the unit is emitted per row exactly as in 4.1,
 the `Epilogue` contract is added, and the only new constraints are the linkage and boundary constraints below.

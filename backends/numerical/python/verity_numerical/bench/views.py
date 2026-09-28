@@ -81,7 +81,7 @@ ALGEBRAIC_FLAG = "algebraic hash, not for highest-stakes use"
 REASON_LETTERS: dict[str, str] = {
     "R": "weaker statement than the full relation", "Z": "not the family's declared class",
     "S": "commitments on a scheme verity.commitments does not define", "L": "fails the view's security filter",
-    "U": "not independently verified", "F": "proof files not preserved", "I": "another instance set", "K": "prover not on the line's GPU",
+    "U": "not independently verified", "F": "proof files not preserved", "I": "another input set", "K": "prover not on the line's GPU",
     "P": "phase-sum", "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
 _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
 
@@ -1148,9 +1148,9 @@ def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_:
     fp = ctx.meta["workload_fingerprint"]
     want, inst = T.frozen_instances(ctx.target), fp.get("instances")
     if want is None:
-        return [("I", f"target {ctx.target.name!r} has no frozen instance set yet")]
+        return [("I", f"target {ctx.target.name!r} has no frozen input set yet")]
     if not isinstance(inst, Mapping):
-        return [("I", "instances is null: not measured on the frozen instance set")]
+        return [("I", "instances is null: not measured on the frozen input set")]
     diff = T.instances_diff(inst, want)
     if not diff:
         return []
