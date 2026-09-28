@@ -610,6 +610,22 @@ useful    U/(α_A·α_B), glue
     the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
+- **Registered weights (`check_registration`):**
+  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
+    registers only from the curated list, the fallback.
+  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+    heads. They are never applied on an unrotated checkpoint, curated or not.
+  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+    because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
+    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded (research store
+    `docs/pouw/keyed-transforms.md` §14). The rotation folds γ, so its stacks pass as they are. An unrotated, curated
+    checkpoint declares `gamma-fold` (every RMSNorm scale folded into the linears it feeds), and takes no V/O or
+    interleave.
+  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
+    registration's own.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
   row needs:
@@ -619,13 +635,17 @@ useful    U/(α_A·α_B), glue
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
-  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192. Its shortcuts are in every report: the draws' beacon is
-  Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label, and the transcript tree and the records
-  are built on the host after timing.
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
+  once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
+  sharing, at twice that). Its shortcuts
+  are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
+  the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
+  not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
-  and one 64 × 1,024 × 64 NVFP4 tile.
+  and one 64 × 1,024 × 64 NVFP4 tile, each with its replayed debit and cap, and A row 0's F1′ inputs (the noise law's
+  digest, the modal bytes, p_t) and charge.
 
 ## Not here yet
 
