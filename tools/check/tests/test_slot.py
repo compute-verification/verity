@@ -163,6 +163,54 @@ def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_t
     assert "slot: 1 check(s) ahead in line; retrying every 20 s" in capsys.readouterr().err
 
 
+def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_its_reason_changes(tmp_path, monkeypatch, capsys):
+    """A check's log says whom it waits behind, not only how many (proofs, 2 Oct: "3-4 check(s) ahead in line" for 45 min)."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = _hold(tmp_path / "check-a.lock")
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": os.getpid(), "run": "r-train", "tree": "/src/6b3d704c8", "by": "lander"}))
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    ahead = line / f"{int((NOW.timestamp() - 600) * 1e9):020d}-11"
+    ahead.write_text(json.dumps({"pid": 11, "run": "r-ahead", "tree": "/src/740daff33", "by": "proofs"}))
+    afd = _hold(ahead)
+    real_join = SLOT.join
+
+    def join(d, priority=False, who=None):
+        ticket, fd = real_join(d, priority, who)
+        later = line / f"{int(ticket.name.split('-')[0]) + 1:020d}-12"
+        later.write_text(json.dumps({"pid": 12, "run": "r-later"}))
+        fds.append(_hold(later))
+        return ticket, fd
+
+    fds, polls = [], []
+
+    def sleep(_s):
+        polls.append(1)
+        if len(polls) == 1:
+            ahead.unlink()                                                   # the waiter ahead takes the slot when it frees
+            os.close(afd)
+        elif len(polls) == 2:
+            os.close(held)
+
+    def execvpe(f, argv, env):
+        raise Exec
+
+    monkeypatch.setattr(SLOT, "join", join)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=sleep)
+    err = capsys.readouterr().err.splitlines()
+    assert err[0] == "slot: 1 check(s) ahead in line; retrying every 20 s"
+    assert err[1].startswith("slot:   a  cores 0  held by pid ") and "(run r-train, tree 6b3d704c8, by lander)" in err[1]
+    assert err[2] == "slot:   waiting since 2026-10-01T08:50Z (10 min): pid 11 (run r-ahead, tree 740daff33, by proofs)"
+    assert err[3].startswith("slot: every check slot is taken (a: busy)") and err[4].startswith("slot:   a  cores 0  held by pid ")
+    assert not any("r-later" in ln for ln in err) and err[5] == "slot: check slot a (cores 0)"
+    for fd in fds:
+        os.close(fd)
+
+
 def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
 
