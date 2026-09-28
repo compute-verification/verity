@@ -670,8 +670,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 rec["broke"] = {"at": "prover", "why": f"{type(e).__name__}: {e}"[:400]}
             for f in d.glob("*.bin"):
                 f.unlink()
-            if (d / "circuit.txt").exists() and (d / "circuit.txt").stat().st_size > 1 << 28:
-                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte
+            if (d / "circuit.txt").exists():
+                (d / "circuit.txt").unlink()                    # the record keeps its digest; restaging rebuilds it byte for byte, and
+                                                                # the run's custody stays the proofs and records (a list's circuits are tens of GB)
         rec["seconds"] = round(time.time() - t0, 3)
         with results.open("a") as f:
             f.write(json.dumps(rec, sort_keys=True) + "\n")
