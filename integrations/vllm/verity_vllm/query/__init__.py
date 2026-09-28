@@ -6,7 +6,8 @@
                    the descriptor's `node_hints` / the instance names, and the Program-path -> implementation-path map
     module_body    `Q_module_body_v1(P, correspondence)`: units = module bodies; `module_body_boundary` = its crossing Values minus
                    the Program's literals (Calls that read no Value: the descriptor's, never acquired)
-    required       required values under Q_module_body_v1 spelt as v1 IDENTITY_KEY rows (+ the named residuals)
+    required       required values under the query of record (Q_word v1: every Call boundary; Q_module_body_v1 for A/B) spelt as v1
+                   IDENTITY_KEY rows (+ the named residuals); the partition of record (`partition_of`)
     compare        identity-set comparison against a v1 manifest, every difference classified
     (the CLI)      `verity-vllm manifest build|build-global ... --out manifest.json`
 

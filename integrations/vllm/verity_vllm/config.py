@@ -50,7 +50,8 @@ class UsageError(ValueError):
 def option(*flags: str, env: str | None = None, env_empty: bool = False, **kw: Any) -> Any:
     """One command-line option of a subcommand's options dataclass.
 
-    ``flags`` and ``kw`` are ``argparse`` ``add_argument`` arguments, applied by ``pipeline/cli.py``.  ``kw["default"]``
+    ``flags`` and ``kw`` are ``argparse`` ``add_argument`` arguments, applied by ``pipeline/cli.py``, which also takes
+    ``action="boolean_optional"`` (``argparse.BooleanOptionalAction``: ``--flag`` / ``--no-flag``).  ``kw["default"]``
     is also the field's default; a field without one is required (a required flag, or a positional).  ``env`` names the
     environment variable whose value the CLI takes as the default, converted by ``type`` like a flag value; an empty
     variable counts as unset unless ``env_empty``.
@@ -289,21 +290,21 @@ class CommitConfig:
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every RoPE head in M0's serving row format "
                                            "(verity_vllm.commit.serving_rows) over this partition file, fixed before serving")
-    norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
-                           help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
-                                "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
-    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="0",
-                                  help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
-                                       "first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written by the "
-                                       "guarded-max FA2/FA3 tap build; the manifest and the run root then differ from the record")
-    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
-                             help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
-                                  "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "
-                                  "root then differ from the record")
-    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="0",
-                            help="1 opts in, never the record: commit each TP rank's vocabulary-range values per token row (verity_vllm.query."
-                                 "vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source); the manifest and run "
-                                 "root then differ from the record")
+    norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
+                           help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
+                                "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
+    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
+                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
+                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
+                                       "by the guarded-max FA2/FA3 tap build")
+    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
+                             help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
+                                  "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "
+                                  "when its manifest names MoE routers")
+    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="1",
+                            help="0 opts out, for A/B only: by default each TP rank commits its vocabulary-range values per token row "
+                                 "(verity_vllm.query.vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source) "
+                                 "when its manifest names vocabulary ranges")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs
@@ -329,10 +330,10 @@ class RunEnv:
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
     hidden_so_fa2: str = option("--hidden-so-fa2")
     hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build, used when --guarded-max-tap 1")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build, used when --guarded-max-tap 1")
-    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used when --norm-tap 1")
-    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used when --router-tap 1")
+    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
+    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     hot_root: str = option("--hot-root", env="HOT_ROOT")
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,

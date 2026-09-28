@@ -95,9 +95,11 @@ class TargetProfile:
                            inferred from the trace.  Omitted from `to_json()` when None so every pre-R17 profile digest is unchanged.
     moe_construction    -> [R17-42 / R17-45 (a) route A (3)] HOW the fused-MoE block of a mixture-of-experts model is CONSTRUCTED in the
                            Program (a Program STATIC, declared-and-bound, NEVER attested: the record is construction-agnostic -- the same
-                           trace serves both constructions; MOE-PAD-SPEC s3/A12, moe M-1066 (2a)).  `"indexed-read"` (the default when
-                           None) = MOE-01: router -> TOPK indexed pair rows `MoeExpertGemm_v1` / `MoeExpertGemmW_v1` -> `MoeSum_v1`, the
-                           expert id an ordinary value operand (`verity_vllm.program.frontend.rules.vllm_moe` MOE-01 rules).  `"padded"` = the
+                           trace serves both constructions; MOE-PAD-SPEC s3/A12, moe M-1066 (2a)).  `"indexed-read"` = MOE-01: router ->
+                           TOPK indexed pair rows `MoeExpertGemm_v1` / `MoeExpertGemmW_v1` -> `MoeSum_v1`, the expert id an ordinary value
+                           operand (`verity_vllm.program.frontend.rules.vllm_moe` MOE-01 rules).  `"indexed-read-ordered"` (the default when
+                           None) = MOE-01 with the router stated in its selection order over one committed softmax
+                           (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
                            weights, the TOPK slot outputs selected by the router ids (`verity_vllm.program.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
@@ -106,15 +108,25 @@ class TargetProfile:
                            population is reported as what it is (R17-45 (1): no forced #Q correspondence).  A dense model ignores the
                            field (no MoE block to construct).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
     fa3_construction    -> HOW FA3's attention rows are constructed (a Program static, declared-and-bound, never attested).
-                           `"guard-every-block"` (the default when None) binds `Attention_v2`, whose blocks all guard a running max of -inf;
-                           `"check-inf-per-iteration"` binds `Attention_v4` (`registry.fa3_check_inf`), which guards only the kernel's
-                           `Check_inf` iterations (the first and the causal-masked ones) as FA3's mainloop does.  Opt-in until the
-                           re-baseline epoch; only an effective FA3 target reads it.  Omitted from `to_json()` when None.
+                           `"guard-every-block"` binds `Attention_v2`, whose blocks all guard a running max of -inf;
+                           `"check-inf-per-iteration"` (the default when None) binds `Attention_v4` (`registry.fa3_check_inf`), which
+                           guards only the kernel's `Check_inf` iterations (the first and the causal-masked ones) as FA3's mainloop does.
+                           Only an effective FA3 target reads it.  Omitted from `to_json()` when None.
     weight_only_calls   -> how often the Program issues a Call that reads only weights (a Program static, declared-and-bound, never
-                           attested).  `"per-forward"` (the default when None) = as vLLM executes it: every forward issues its own, so a
-                           request Program of T+1 forwards computes the same value T+1 times (Gemma's `GemmaRMSNorm` weight + 1).
-                           `"once"` = the Build issues it at its first forward and every later forward reads that value (the
-                           `vllm_bindings.norm_chain` rules).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
+                           attested).  `"per-forward"` = as vLLM executes it: every forward issues its own, so a request Program of T+1
+                           forwards computes the same value T+1 times (Gemma's `GemmaRMSNorm` weight + 1).  `"once"` (the default when
+                           None) = the Program issues it at its first forward and every later forward reads that value (Build: the
+                           `vllm_bindings.norm_chain` rules; Match: the fold issues each weight-only Call once per run).  Omitted from
+                           `to_json()` when None so every earlier profile digest is unchanged.
+    sampler_construction -> how the stochastic token select is constructed (a Program static, declared-and-bound, never attested).
+                           `"greedy-check-per-stage"` binds `GumbelTokenSelect_v1` / `GumbelTopPTokenSelect_v1`, whose temperature scale
+                           and Gumbel select each compute `temp == 0`; `"shared-greedy"` (the default when None) binds their
+                           `registry.sampling.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
+                           `to_json()` when None.
+    fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
+                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
+                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
+                           `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -147,15 +159,24 @@ class TargetProfile:
     fp8_block_gemm: str | None = None
     #: [R17-1] the resolved async-scheduling configuration the Program is specialized for (None = the pinned resolver's value, see the doc)
     async_scheduling: bool | None = None
-    #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read", MOE-01; see the doc); never attested
+    #: [R17-42 route A (3)] the fused-MoE block's construction in the Program (None = "indexed-read-ordered"; see the doc); never attested
     moe_construction: str | None = None
-    #: FA3's attention construction (None = "guard-every-block", `Attention_v2`; see the doc)
+    #: FA3's attention construction (None = "check-inf-per-iteration", `Attention_v4`; see the doc)
     fa3_construction: str | None = None
-    #: how often the Program issues a weight-only Call (None = "per-forward"; see the doc); never attested
+    #: how often the Program issues a weight-only Call (None = "once"; see the doc); never attested
     weight_only_calls: str | None = None
+    #: the stochastic token select's construction (None = "shared-greedy"; see the doc); never attested
+    sampler_construction: str | None = None
+
+    #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
+    fp8_scale_construction: str | None = None
 
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
-    DEFAULT_WEIGHT_ONLY_CALLS = "per-forward"
+    DEFAULT_WEIGHT_ONLY_CALLS = "once"
+    SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
+    DEFAULT_SAMPLER_CONSTRUCTION = "shared-greedy"
+    FP8_SCALE_CONSTRUCTIONS = ("per-coordinate", "shared-per-block")
+    DEFAULT_FP8_SCALE_CONSTRUCTION = "shared-per-block"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
@@ -176,13 +197,13 @@ class TargetProfile:
                                                  "definitions": ("MoeRouterTopKOrdered_v1{E,TOPK,VPT}", "MoeExpertGemm_v1{E,K,N}", "MoeExpertGemmW_v1{E,K,N}",
                                                                  "SiluMul_v1{I}", "MoeSum_v1{TOPK,H}"),
                                                  "population": "indexed-read's; the router commits its softmax once (2E+2 values per token), not the rounds' masked scores"}}
-    DEFAULT_MOE_CONSTRUCTION = "indexed-read"
+    DEFAULT_MOE_CONSTRUCTION = "indexed-read-ordered"
     #: the registered FA3 attention constructions: value -> the attention Definition every FA3 row binds
     FA3_CONSTRUCTIONS = {"guard-every-block": {"definition": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}",
                                                "rule": "every block guards a running max of -inf (AttnBlock_v2)"},
                          "check-inf-per-iteration": {"definition": "Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}",
                                                      "rule": "block b guards iff b >= the tile's n_block_min_causal_local_mask (AttnBlock_v4{CHECK})"}}
-    DEFAULT_FA3_CONSTRUCTION = "guard-every-block"
+    DEFAULT_FA3_CONSTRUCTION = "check-inf-per-iteration"
 
     #: [R17-1] the pinned vLLM's resolution of `SchedulerConfig.async_scheduling is None` (d9105ea80 `VllmConfig.__post_init__`,
     #: config/vllm.py:1273-1322): True unless the model is a pooling runner, a speculative method other than EAGLE/MTP/draft-model/
@@ -230,20 +251,33 @@ class TargetProfile:
         if self.weight_only_calls is not None and self.weight_only_calls not in self.WEIGHT_ONLY_CALLS:
             raise ValueError(f"weight_only_calls must be None ({self.DEFAULT_WEIGHT_ONLY_CALLS}) or one of {list(self.WEIGHT_ONLY_CALLS)}; "
                              f"got {self.weight_only_calls!r}")
+        if self.sampler_construction is not None and self.sampler_construction not in self.SAMPLER_CONSTRUCTIONS:
+            raise ValueError(f"sampler_construction must be None ({self.DEFAULT_SAMPLER_CONSTRUCTION}) or one of "
+                             f"{list(self.SAMPLER_CONSTRUCTIONS)}; got {self.sampler_construction!r}")
+        if self.fp8_scale_construction is not None and self.fp8_scale_construction not in self.FP8_SCALE_CONSTRUCTIONS:
+            raise ValueError(f"fp8_scale_construction must be None ({self.DEFAULT_FP8_SCALE_CONSTRUCTION}) or one of "
+                             f"{list(self.FP8_SCALE_CONSTRUCTIONS)}; got {self.fp8_scale_construction!r}")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
-        """[R17-42 route A (3)] The fused-MoE construction the Program is built with: the declared knob, else `indexed-read` (MOE-01).  A
+        """[R17-42 route A (3)] The fused-MoE construction the Program is built with: the declared knob, else `indexed-read-ordered`.  A
         Program static, declared-and-bound (`moe_construction_declaration()` is what GP-01 writes; the frontend's MoE rules read it through
         `vllm_bindings.active_target_profile()` and each family applies only under its own construction) -- never attested by a record."""
         return self.moe_construction if self.moe_construction is not None else self.DEFAULT_MOE_CONSTRUCTION
 
     def effective_fa3_construction(self) -> str:
-        """The construction FA3's attention rows are built with: the declared knob, else `guard-every-block` (`Attention_v2`)."""
+        """The construction FA3's attention rows are built with: the declared knob, else `check-inf-per-iteration` (`Attention_v4`)."""
         return self.fa3_construction if self.fa3_construction is not None else self.DEFAULT_FA3_CONSTRUCTION
     def effective_weight_only_calls(self) -> str:
-        """How often the Program issues a weight-only Call: the declared knob, else `per-forward` (as vLLM executes it)."""
+        """How often the Program issues a weight-only Call: the declared knob, else `once`."""
         return self.weight_only_calls if self.weight_only_calls is not None else self.DEFAULT_WEIGHT_ONLY_CALLS
+    def effective_sampler_construction(self) -> str:
+        """The stochastic token select's construction: the declared knob, else `shared-greedy`."""
+        return self.sampler_construction if self.sampler_construction is not None else self.DEFAULT_SAMPLER_CONSTRUCTION
+
+    def effective_fp8_scale_construction(self) -> str:
+        """The blockwise FP8 GEMM's scale-product construction: the declared knob, else `shared-per-block`."""
+        return self.fp8_scale_construction if self.fp8_scale_construction is not None else self.DEFAULT_FP8_SCALE_CONSTRUCTION
 
     def moe_construction_declaration(self) -> dict:
         """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
@@ -366,11 +400,15 @@ class TargetProfile:
         if d.get("async_scheduling") is None:
             d.pop("async_scheduling", None)   # [R17-1] absent = the pinned resolver's value (effective_async_scheduling); pre-R17 digests unchanged
         if d.get("moe_construction") is None:
-            d.pop("moe_construction", None)   # [R17-42] absent = indexed-read (MOE-01); every earlier profile digest unchanged
+            d.pop("moe_construction", None)   # [R17-42] absent = DEFAULT_MOE_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("fa3_construction") is None:
-            d.pop("fa3_construction", None)   # absent = guard-every-block (Attention_v2); every earlier profile digest unchanged
+            d.pop("fa3_construction", None)   # absent = DEFAULT_FA3_CONSTRUCTION; every earlier profile digest unchanged
         if d.get("weight_only_calls") is None:
-            d.pop("weight_only_calls", None)  # absent = per-forward; every earlier profile digest unchanged
+            d.pop("weight_only_calls", None)  # absent = DEFAULT_WEIGHT_ONLY_CALLS; every earlier profile digest unchanged
+        if d.get("sampler_construction") is None:
+            d.pop("sampler_construction", None)
+        if d.get("fp8_scale_construction") is None:
+            d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

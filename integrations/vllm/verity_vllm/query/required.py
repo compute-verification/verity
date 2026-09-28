@@ -24,7 +24,7 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   read, the residual slot of the final fused norm nobody consumes).  Switch (b)+(c) off (`return_slots=False`) to see the
   pure-dataflow population;
 * TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial (`Population`); the
-  row's rank manifests merge by `merge_ranks` (rows keep their rank's digest, `tp_peer_binding` binds every output to each peer's partial).
+  row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest, `tp_peer_binding` binds every output to each peer's partial).
 
 What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted in the header, counted per row):
 
@@ -41,24 +41,42 @@ membership decisions.
 from __future__ import annotations
 
 import bisect
+import functools
 import hashlib
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import reduce
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.proofs.query import Policy, RequiredValues, ValueRef, required_values
+from verity.ir import partition_object as PO
+from verity.proofs.query import Policy, RequiredValues, ValueRef, boundary, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
-
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
-from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary
+from verity_vllm.query import word as word_query
+from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary,
+                                           without_literals)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "collective_kind",
-           "member_name", "shared_instances", "collective_sites", "request_manifest", "compose_global", "merge_ranks", "BridgeResult", "under",
-           "CallMember", "Population", "population"]
+           "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
+           "CallMember", "Population", "population", "Q_WORD_ID", "Q_WORD_TEXT", "QUERY_OF_RECORD", "QUERIES", "partition_of"]
+
+#: the query of record: every Call cut into word units (`verity.ir.cut`); the Program's partition is the `verity/partition/v1` object
+#: naming it (`partition_of`).  `Q_module_body_v1` stays selectable, for A/B only.
+Q_WORD_ID = word_query.query_id(16, 32)
+Q_WORD_TEXT = (f"{Q_WORD_ID}: units = the word units of every Call's cut (verity.ir.cut; {PO.FORMAT} names the partition as Q_word v1 "
+               "{X: 16, W: 32}); committed = every Value one Call produces and another Call reads or the Program returns, and the prescribed "
+               "inputs a Call reads (U_C (in(C) u out(C)) over the Calls), minus the Program's literals (the Values of Calls that read no "
+               "Value: written in the descriptor, never acquired); plus each Call's committed interior words (the tap families)")
+QUERY_OF_RECORD = Q_WORD_ID
+QUERIES = (Q_WORD_ID, Q_MODULE_BODY_ID)
+
+
+def partition_of(program_sha512: str) -> dict[str, Any]:
+    """The Program's partition of record: the `verity/partition/v1` object (Q_word v1, X = 16, W = 32) and its digest."""
+    obj = {"format": PO.FORMAT, "program": program_sha512, "query": PO.query(16, 32)}
+    return {"object": obj, "digest": PO.digest(obj)}
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # protocol declarations: exact Definition ids (what a Definition IS for the protocol; never a pattern over names)
@@ -67,7 +85,7 @@ __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLIN
 #: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
-STOCHASTIC_SAMPLING_EVENTS = frozenset({"GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v1"})
+STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
 FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
@@ -108,6 +126,7 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("Gemm_v2", "out", "0", _LINEAR_WHY, condition="own_parameter"),
     Residual("BiasAdd_v1", "out", "0", _LINEAR_WHY + " (the biased linear's epilogue is the returned tensor)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
              "world takes the slot of its rank-local operand when that operand is a Linear's reading its own weight)", condition="operand_own_parameter"),
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "
@@ -278,7 +297,7 @@ _RANK_OPERAND = next(r for r in NAMED_RESIDUALS if r.structural == "<rank operan
 
 
 class Population:
-    """The required values of one request Program under `Q_module_body_v1` and the policy (module docstring), with the facts every reader
+    """The required values of one request Program under the query of record and the policy (module docstring), with the facts every reader
     of them needs: the step of a Call (sampling events end steps), the record-typed parameters, the boundary, and -- per Call -- the
     required Values it produces under their manifest member names (`members_of`).  `request_manifest` groups these into identity rows;
     the Commit's replay (`sampled_replay.ProgramIndex`) addresses a Call's committed output by the same members, so the rows a manifest
@@ -288,10 +307,19 @@ class Population:
     protocol-required, and so is its rank-local PARTIAL -- the one Value of this rank the collective reads (its other operands are
     `peers_<k>` Program inputs read by collectives only: the peer ranks' partials, received).  A partial produced in the collective's own
     module body is that producer's required Value, spelt `part_rank<r>` / `shard_rank<r>`; a collective whose operand another body produced
-    (a collective site reading a slice of it) names the partial itself, beside its output."""
+    (a collective site reading a slice of it) names the partial itself, beside its output.
 
-    def __init__(self, P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None) -> None:
-        self.P, self.corr, self.return_slots = P, corr, return_slots
+    `query` is the query of record (`Q_WORD_ID`: the boundary is every Call's) or `Q_MODULE_BODY_ID` (A/B only: module bodies).  Under
+    Q_word a Value two Calls of one module body exchange is required too (`interior`, family `call_boundaries`; a fused-MoE block row's
+    Values are committed as its `moe_block_stream` plane, `format.moe_plane_kind`), spelt under
+    `<module>/<fx node>` with its structural member: serving acquires module outputs, so such a Value needs a source of its own.  TENSOR-RETURN reads the module-body boundary under
+    either query: it is what a module returns."""
+
+    def __init__(self, P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None,
+                 query: str = QUERY_OF_RECORD) -> None:
+        if query not in QUERIES:
+            raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
+        self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
             raise ValueError("Program has no sampling event: no step boundary")
@@ -313,9 +341,14 @@ class Population:
         self.tp_faults: list[str] = []
         if self.world > 1:
             self._rank_partials()
-        self.Q = Q_module_body_v1(P, corr)
         self.literals = literals = literal_calls(P)
-        self.B = B = module_body_boundary(P, corr, literals)
+        self.B_module = B_module = module_body_boundary(P, corr, literals)
+        if query == Q_WORD_ID:
+            self.Q = partition_by(lambda c: c.id)
+            self.B = B = without_literals(boundary(P, self.Q), literals)
+        else:
+            self.Q = Q_module_body_v1(P, corr)
+            self.B = B = B_module
         step_of = self.step_of
         protocol: set[ValueRef] = set()
         if return_slots:
@@ -324,7 +357,7 @@ class Population:
             # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
             # never read, the residual slot of a fused norm nobody consumes).
             returned_nodes: set[tuple[int, str, str]] = set()
-            for v in B.values:
+            for v in B_module.values:
                 if v.call >= 0:
                     n = corr.name(v.call)
                     returned_nodes.add((step_of(v.call), n.module, n.node))
@@ -340,6 +373,8 @@ class Population:
         protocol.update(self.partial_of)                                        # TP-04: the rank-local partials
         self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
         self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
+        self.interior = frozenset(v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required
+                                  and fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is None)   # a MoE block row: its plane
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)
         for v in self.policy.prescribed_inputs:
@@ -395,9 +430,17 @@ class Population:
         return bisect.bisect_left(self.events, cid)
 
     def program_path(self, cid: int) -> str:
-        """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, else its
-        owning module.  `collective_sites` aliases a site path to its (enclosing module, k)."""
+        """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx
+        node>` for a Call whose required Values are all Call boundaries inside its module body, else its owning module.
+        `collective_sites` aliases a site path to its (enclosing module, k)."""
+        if cid in self.interior_calls:
+            return f"{self.corr.module_of(cid)}/{self.corr.name(cid).node}"
         return self.site.get(cid) or self.corr.module_of(cid)
+
+    @functools.cached_property
+    def interior_calls(self) -> frozenset[int]:
+        """The Calls all of whose required Values are `interior`."""
+        return frozenset({v.call for v in self.interior} - {v.call for v in self.required.values if v.call >= 0 and v not in self.interior})
 
     def member(self, v: ValueRef) -> CallMember:
         """The manifest member of the required Value `v` of a (non-sampling) Call."""
@@ -406,6 +449,9 @@ class Population:
         coll = self.partial_of.get(v)
         if coll is not None:
             return self._partial(port.name, self.collectives[coll], port.elems, _dtype(port.width))
+        if v in self.interior:
+            structural = member_name(c, port, self.corr.name(c.id), own_parameter=False)[1]
+            return CallMember(port.name, structural, port.elems, _dtype(port.width), structural, None, "call_boundaries")
         kind = self.collectives.get(c.id)
         own = self.own_param[c.id]
         if kind is not None:
@@ -446,9 +492,10 @@ class Population:
         return out
 
 
-def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None) -> Population:
-    """`Population(P, corr)`: the required values of one request Program under `Q_module_body_v1` + the policy (+ TP-04 on a rank Program)."""
-    return Population(P, corr, return_slots=return_slots, tp=tp)
+def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True, tp: Mapping[str, Any] | None = None,
+               query: str = QUERY_OF_RECORD) -> Population:
+    """`Population(P, corr)`: the required values of one request Program under `query` + the policy (+ TP-04 on a rank Program)."""
+    return Population(P, corr, return_slots=return_slots, tp=tp, query=query)
 
 
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None, dict]:
@@ -463,13 +510,19 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
     return profile, fa, attn_obs
 
 
-def query_header(profile: str, hidden_family: str, *, return_slots: bool) -> dict[str, Any]:
-    text = Q_MODULE_BODY_TEXT + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
-        (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the body boundary)"
+def query_header(profile: str, hidden_family: str, *, return_slots: bool, query: str = QUERY_OF_RECORD,
+                 partition: Mapping[str, Any] | None = None, call_boundaries: bool = False) -> dict[str, Any]:
+    """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
+    and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
+    word = query == Q_WORD_ID
+    text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
+        (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
          if return_slots else "") + f"; hidden = {hidden_family}; profile = {profile}"
-    return {"query_id": Q_MODULE_BODY_ID, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
-            "engine": "v2-query", "boundary": "module-body", "profile": profile, "attention_hidden_family": hidden_family,
-            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights", hidden_family],
+    return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
+            **({"partition": dict(partition)} if word and partition else {}),
+            "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
+            "attention_hidden_family": hidden_family,
+            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights", hidden_family] + (["call_boundaries"] if call_boundaries else []),
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
                        "protocol_required": ["sampling-event outputs"] +
                        (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)"]
@@ -479,8 +532,8 @@ def query_header(profile: str, hidden_family: str, *, return_slots: bool) -> dic
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
                      workload: Mapping[str, Any] | None = None, artifact: Mapping[str, Any] | None = None, program_dir: str | None = None,
-                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = ()) -> BridgeResult:
-    """The v1-shaped manifest of ONE request Program (B=1 component) under Q_module_body_v1 (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY)."""
+                     rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = (), query: str = QUERY_OF_RECORD, program_sha512: str | None = None) -> BridgeResult:
+    """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_sha512`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
     hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
@@ -499,7 +552,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     arrive = int(arr[k_req] if k_req < len(arr) else (arr[0] if arr else 0)) if sweep else 0
     n_seq = 1
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
-    pop = (norm_scales.population if norm_scales else population)(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None))
+    pop = (norm_scales.population if norm_scales else population)(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None), query=query)
     events, step_of, record_fields, record_params = pop.events, pop.step_of, pop.record_fields, pop.record_params
     B, policy, req, literals = pop.B, pop.policy, pop.required, pop.literals
 
@@ -636,7 +689,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     scales = norm_scales.kernel_rows(pop, add, impl, aliases) if norm_scales else None     # the norm-scale tap's rows: interior to the kernel norms
     tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
-    q = query_header(profile, hidden_family, return_slots=return_slots)
+    q = query_header(profile, hidden_family, return_slots=return_slots, query=query, partition=partition_of(program_sha512) if program_sha512 and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
     if prog_world > 1:
         q["required_families"].append("tp_rank_partials")
         q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial")
@@ -664,139 +717,3 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
            "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
     return BridgeResult(man, req, residual_counts)
-
-
-# ---------------------------------------------------------------------------------------------------------------------------------
-# the global (B >= 2) composition -- v1's reading (TABLE-RULES global), over v2 components
-# ---------------------------------------------------------------------------------------------------------------------------------
-
-def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any]], reqs: list[dict[str, Any]], *, workload_digest: str | None,
-                   rank: int = 0, ranks: int = 1) -> dict[str, Any]:
-    """`parts` = {request label: component manifest}; `reqs` = the declared requests in (arrive_step, index) order with `request_id` = label."""
-    component_digests = sorted({p["program_digest"] for p in parts.values()})
-    pdig = str(workload_digest) if workload_digest else fmt.components_fold_digest(component_digests)
-    pdig_kind = "workload" if workload_digest else "components-fold"
-    by_engine: dict[int, list[tuple[str, int]]] = {}
-    for r in reqs:
-        for s in range(int(r["max_tokens"])):
-            by_engine.setdefault(int(r.get("arrive_step", 0)) + s, []).append((r["request_id"], s))
-    hidden_family = parts[reqs[0]["request_id"]]["query"]["attention_hidden_family"]
-    ids: list[dict[str, Any]] = []
-    seen_w: set = set()
-    for rid, p in parts.items():
-        for row in p["identities"]:
-            if row["family"] == "weights":
-                if (row["rank"], row["op_path"]) in seen_w:
-                    continue
-                seen_w.add((row["rank"], row["op_path"]))
-                ids.append(dict(row, program_digest=pdig, component_digest=row["program_digest"]))
-    engine_steps_out: list[dict[str, Any]] = []
-    for e in sorted(by_engine):
-        members = by_engine[e]
-        rows_of: dict[str, int] = {}
-        for rid, s in members:
-            emb = next((x for x in parts[rid]["identities"] if x["family"] == "input_token_ids" and x["step"] == s), None)
-            rows_of[rid] = int(emb["rows"]) if emb else 0
-        attn_union: dict[str, dict[str, Any]] = {}
-        for rid, s in members:
-            for row in parts[rid]["identities"]:
-                if row["step"] != s or row["family"] == "weights":
-                    continue
-                g = dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=e)
-                if row["family"] == hidden_family:
-                    a = attn_union.setdefault(row["op_path"], {"requests": [], "n_seq": 0, "max_rows": 0, "T_max": 0, "module": row.get("attention_module")})
-                    a["requests"].append(rid); a["n_seq"] += 1
-                    a["max_rows"] = max(a["max_rows"], int(row["geometry"]["rows"])); a["T_max"] = max(a["T_max"], int(row["geometry"]["seqlen_k"]))
-                else:
-                    ids.append(g)
-        for op, a in sorted(attn_union.items()):
-            comp = parts[a["requests"][0]]
-            pre = next(x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 0)
-            dec = next((x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 1), None)
-            D = int(pre["geometry"]["D"])
-            NH = int(pre["geometry"]["HB"])
-            KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
-            fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
-            HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
-            ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
-                        "op_path": op, "output_member": gname, "element_range": [0, fmt.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
-                        "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": a["T_max"], "rows": a["max_rows"] * a["n_seq"], "n_seq": a["n_seq"]},
-                        "attention_module": a["module"]})
-        engine_steps_out.append({"engine_step": e, "members": [{"request_id": rid, "step": s, "rows": rows_of[rid]} for rid, s in members],
-                                 "rows": sum(rows_of.values()), "n_seq": len(members)})
-    ids.sort(key=fmt.row_key)
-    fam: Counter = Counter(r["family"] for r in ids)
-    ref: dict[str, Any] = {}
-    for r in ids:
-        if r["family"] in ("input_token_ids", "sampled_token_ids") and r["family"] not in ref:
-            ref[r["family"]] = {"op_path": r["op_path"], "output_member": r["output_member"], "per_row": 1}
-    q0 = parts[reqs[0]["request_id"]]["query"]
-    applied: Counter = Counter()
-    for p in parts.values():
-        applied.update(p["query"].get("residuals_applied") or {})
-    return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
-            "global": True, "addressing": "request-local", "composition_reference": ref,
-            "fixture": {k: v for k, v in fixture.items() if k in ("schema", "fixture", "model", "revision", "sampling", "expected_engine_steps", "case")}
-                       | ({"row_id": fixture["sweep"].get("row_id"), "seed": fixture["sweep"].get("seed")} if isinstance(fixture.get("sweep"), dict) else {}),
-            "requests_declared": [{k: r.get(k) for k in ("request_id", "workload_request_id", "index", "prompt_len", "max_tokens", "arrive_step")} for r in reqs],
-            "components": {rid: {"program_digest": p["program_digest"], "steps": len(p["steps"]), "LP": p["program"]["LP"], "T": p["program"]["T"],
-                                 "workload_request_id": next(r.get("workload_request_id") for r in reqs if r["request_id"] == rid),
-                                 "correspondence": p.get("correspondence")} for rid, p in parts.items()},
-            # the source of the owning modules across the components: one source (the record on every component, or the fallback on every one)
-            "correspondence": {"source": sorted({(p.get("correspondence") or {}).get("source", "v1_annotations") for p in parts.values()}),
-                               "digests": sorted({d for p in parts.values() if (d := (p.get("correspondence") or {}).get("digest"))})},
-            "complete": all(p.get("complete", True) for p in parts.values()),
-            "unmodelled": {k: v for p in parts.values() for k, v in (p.get("unmodelled") or {}).items()},
-            "query": dict(q0, residuals_applied=dict(sorted(applied.items()))), "op_path_aliases": parts[reqs[0]["request_id"]]["op_path_aliases"],
-            "ranks": ranks, "rank": rank,
-            "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
-            "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}
-
-
-def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """The manifest of a TP row from its W rank manifests (TP-04, v1's rank rule): ranks 0..W-1 each exactly once under one world, one
-    Program digest per rank, the same engine-step composition on every rank.  Every row keeps its rank's digest (`program_digest_per_rank`);
-    the header digest is the labelled fold of the rank digests (`tp-ranks-fold`).  `tp_peer_binding`: every collective output and rank-local
-    partial of rank r has each peer's partial at the same (request, step, invocation, module) -- an unbound one makes the merge incomplete."""
-    worlds = sorted({int(p.get("ranks") or 1) for p in parts})
-    world = worlds[-1]
-    ranks = [int(p.get("rank", 0)) for p in parts]
-    if len(worlds) != 1 or world < 2:
-        raise ValueError(f"merge_ranks: the parts declare worlds {worlds} (one world W >= 2 on every rank part)")
-    if sorted(ranks) != list(range(world)):
-        raise ValueError(f"merge_ranks: parts cover ranks {ranks}, world {world} needs every rank 0..{world - 1} exactly once")
-    per_rank = {str(r): p["program_digest"] for r, p in zip(ranks, parts)}
-    if len(set(per_rank.values())) != world:
-        raise ValueError(f"merge_ranks: two ranks carry one Program digest ({per_rank}); a rank Program is specific to its rank")
-    if len({json.dumps(p.get("engine_steps") if p.get("global") else p.get("steps"), sort_keys=True) for p in parts}) != 1:
-        raise ValueError("merge_ranks: the rank parts declare different step compositions (not the same workload on every rank)")
-    aliases: dict[str, list] = {}
-    for p in parts:
-        for k, v in (p.get("op_path_aliases") or {}).items():
-            want = [str(v[0]), int(v[1])]
-            if aliases.setdefault(k, want) != want:
-                raise ValueError(f"merge_ranks: the parts disagree on alias {k!r} ({aliases[k]} vs {want})")
-    comp = sorted(per_rank.values())
-    ids = sorted((r for p in parts for r in p["identities"]), key=fmt.row_key)
-    binding = fmt.tp_peer_binding(parts, collective_kind)
-    unmodelled = {k: v for p in parts for k, v in (p.get("unmodelled") or {}).items()}
-    if binding["unbound"]:
-        unmodelled[f"tp peer binding: {binding['n_unbound']} collective output(s) / partial(s) without the peer identity "
-                   f"(first: {binding['unbound'][0]})"] = binding["n_unbound"]
-    p0 = parts[ranks.index(0)]
-    applied: Counter = Counter()
-    for p in parts:
-        applied.update(p["query"].get("residuals_applied") or {})
-    return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": fmt.tp_ranks_fold_digest(comp),
-            "program_digest_kind": "tp-ranks-fold", "component_digests": comp, "program_digest_per_rank": per_rank,
-            "parts": [{"program_digest": p["program_digest"], "request_id": p["requests"], "steps": p["steps"], "rank": r} for r, p in zip(ranks, parts)],
-            **{k: p0[k] for k in ("global", "addressing", "composition_reference", "fixture", "requests_declared", "components", "engine_steps") if k in p0},
-            "correspondence": {"source": sorted({s for p in parts for s in _as_list((p.get("correspondence") or {}).get("source", "v1_annotations"))}),
-                               "digests": sorted({d for p in parts for d in _as_list((p.get("correspondence") or {}).get("digest") or
-                                                                                        (p.get("correspondence") or {}).get("digests") or [])})},
-            "query": dict(p0["query"], residuals_applied=dict(sorted(applied.items()))), "op_path_aliases": aliases, "ranks": world,
-            "steps": sorted({s for p in parts for s in p["steps"]}), "requests": list(dict.fromkeys(rq for p in parts for rq in p["requests"])),
-            "complete": all(p.get("complete", True) for p in parts) and not binding["unbound"], "unmodelled": unmodelled,
-            "populations": {"identities": len(ids), "by_family": dict(Counter(r["family"] for r in ids))},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding}

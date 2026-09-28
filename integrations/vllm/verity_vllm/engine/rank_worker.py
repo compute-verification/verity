@@ -635,10 +635,10 @@ class TP2CaptureWorkerExtension:
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
         if hidden_so:
-            from pathlib import Path as _P
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source
-            src_cls = getattr(com, "hidden_source_cls", HiddenM1Source)
-            com.attach_source(src_cls(com, hidden_so, ns=(hidden_ns or _P(hidden_so).stem)))
+            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
+            man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+            com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
+                                                 fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
         # [R15 moe TP-MOE-SRC] the fused-MoE block source (R13 MOE-03: router_w/ids, up, act, down, sum per MoE layer per step, class
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
@@ -656,7 +656,7 @@ class TP2CaptureWorkerExtension:
                 res["moe_source"] = None
         except Exception as e:  # noqa: BLE001 -- a model without vLLM's fused_moe modules; the rank reports it and binds no MoE plane
             res["moe_source"] = {"error": repr(e)[:200]}
-        if tap_sources is not None:                   # opt-in, never the record: `acquire.sources.taps.for_ranks`, bound by the TP driver
+        if tap_sources is not None:                   # the taps the row's manifest names: `acquire.sources.taps.for_ranks`, bound by the TP driver
             res["tap_sources"] = tap_sources(com, model, required_manifest, rank)
         if tp_partials_omit_rank is not None and int(tp_partials_omit_rank) == rank:
             tp_partials = False          # NEGATIVE (R15 TP-04): THIS rank binds collective outputs only; its manifest partials must go unbound
