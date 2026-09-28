@@ -64,6 +64,7 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setenv("LEASE_DIR", "/run/lease")
+    monkeypatch.setenv(SLOT.SLOT_MEM_ENV, "560")
     held = [_hold(tmp_path / "check-a.lock")]
     ran = {}
 
@@ -81,7 +82,7 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["cpus"] == {0}
     env = ran["env"]
     assert "LEASE_DIR" not in env and env["LEASE_DEADLINE_FILE"] == "/nonexistent/research-deadline" and env["CHECK_SLOT"] == "a"
-    assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a")
+    assert env["VERITY_TEST_CACHE"].endswith("/.cache/verity/tests-slot-a") and SLOT.SLOT_MEM_ENV not in env
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
@@ -579,14 +580,14 @@ def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, 
     ran = {}
 
     def execvpe(f, argv, env):
-        ran.update(slot=env["CHECK_SLOT"])
+        ran.update(slot=env["CHECK_SLOT"], mem=env.get(SLOT.SLOT_MEM_ENV))
         raise Exec
 
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
     with pytest.raises(Exec):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: free.pop(0))
-    assert ran["slot"] == "a" and free == [600]
+    assert ran == {"slot": "a", "mem": "560"} and free == [600]
     assert "a: 300 GB of memory free, under the 560 GB a check here may peak at" in capsys.readouterr().err
 
 
