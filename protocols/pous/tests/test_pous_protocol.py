@@ -17,6 +17,7 @@ from verity_pous import band, dense, protocol, schemes
 from verity_pous.codec import Geometry
 from verity_pous.layout import Layout
 from verity_pous.params import Params
+from verity_pous.schemes.p2 import EXPERIMENTAL, P2Params
 from verity_pous.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -24,6 +25,7 @@ SMALL = {
     "band": lambda segments=3: schemes.Band(band.BandParams(16, 64, 4, segments)),
     "dense": lambda segments=3: schemes.Dense(dense.DenseParams(8, 64, segments)),
     "p3": lambda segments=2: schemes.P3(Params(8, 64, 3, segments)),
+    "p2": lambda segments=2: schemes.P2(P2Params(128, 173, 8, segments)),   # 2^128 − 173 is prime, ≡ 3 mod 4
 }
 
 
@@ -98,18 +100,18 @@ def test_audit_through_the_interface(name):
     blocks = [b for seg in c for b in seg]
     key = protocol.challenge_key(b"audit secret", vk)
     with pytest.raises(ValueError, match="no certificate"):
-        protocol.Verifier(sch, vk, key, k=20)
-    v = protocol.Verifier(sch, vk, key, k=20, research=True, clock=_ticks())
+        protocol.Verifier(sch, vk, key, k=20, experimental=True)
+    v = protocol.Verifier(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.Verifier(sch, vk, key, k=20, research=True, clock=_ticks())
+    wrong = protocol.Verifier(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
     with pytest.raises(ValueError, match="accepted"):
         wrong.profile()
 
 
-@pytest.mark.parametrize("name", ["band", "dense", "p3"])
+@pytest.mark.parametrize("name", ["band", "dense", "p3", "p2"])
 def test_decode_tensor(name):
     base = SMALL[name]()
     layout = Layout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
@@ -132,8 +134,10 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v0"}
     assert schemes.DEFAULT == band.BAND12.name
+    assert schemes.EXPERIMENTAL == {"p2-16448/v0"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
     assert schemes.get(segments=30).params.segments == 30
@@ -156,10 +160,11 @@ def test_pinned_scheme_vectors(name):
     import pous_scheme_vectors as sv
 
     pinned = json.loads(sv.path(name).read_text())
-    assert pinned["name"] == name and pinned == sv.vector(name)
+    slow = name in sv.SLOW_ENCODE and not os.environ.get("VERITY_POUS_SLOW")
+    assert pinned["name"] == name and pinned == sv.vector(name, sv.pinned_blocks(pinned) if slow else None)
     small = schemes.get(name, params=sv.SMALL[name])
     w, salt = sv.small_inputs(name)
-    c = protocol.encode(small, w, salt)
+    c = sv.pinned_blocks(pinned) if slow else protocol.encode(small, w, salt)
     assert protocol.decode(small, salt, c) == w
     public = protocol.verifier_key(small, protocol.commit(small, w), salt, mode=protocol.PUBLIC, encoded=c)
     assert public.root.hex() == pinned["small"]["root"]
@@ -219,11 +224,13 @@ def test_a_shared_domain_breaks_the_audit(name):
     shared = [sch.encode_segment(SALT, 0, seg) for _ in range(3)]
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
-    v = protocol.Verifier(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True, clock=_ticks())
+    v = protocol.Verifier(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
+                          experimental=True, clock=_ticks())
     assert v.run(lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
-    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, clock=_ticks())
+    v = protocol.Verifier(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
+                          clock=_ticks())
     assert not v.run(lambda i: own[0][i % b]).accepted
 
 
@@ -321,11 +328,57 @@ def test_many_segments_are_a_gap_not_a_refusal():
 
 
 def test_claims_resolve_and_local_ones_are_not_in_core():
-    for sch in (schemes.get(), schemes.get("dense-chain/v1")):
-        for c in sch.certificate.claims:
+    for name in schemes.REGISTRY:
+        cert = schemes.get(name).certificate
+        for c in cert.claims if cert else ():
             assert protocol.claim(c).id == c
     for c in protocol.LOCAL_CLAIMS:
         with pytest.raises(KeyError):
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-256").kind == "assumption"
+
+
+def test_p2_is_experimental_and_says_so():
+    """P2 (`p2-16448/v0`) is registered but experimental: the verifier refuses it unless asked, never makes it the
+    default, and its profile states "abstract-M1 result; instantiation assumption pending Daniel"."""
+    sch = schemes.get("p2-16448/v0", segments=128)
+    assert sch.experimental == EXPERIMENTAL == "abstract-M1 result; instantiation assumption pending Daniel"
+    cert = sch.certificate
+    assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.segments, cert.hypotheses) == ("P2MeetsM1Uncond", 88, 0,
+                                                                                              1 << 20, 128, ())
+    assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root"} <= set(cert.claims)
+    one = schemes.get("p2-16448/v0")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(32)] * one.params.blocks)
+    key = protocol.challenge_key(b"\x00" * 32, vk)
+    with pytest.raises(ValueError, match="experimental"):
+        protocol.Verifier(one, vk, key)
+    v = protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
+    assert v.k == 88 and v.gaps == ("W has 1 segments; P2MeetsM1Uncond is about 128",)
+    with pytest.raises(ValueError, match="covers 0"):
+        protocol.Verifier(one, vk, key, experimental=True, rtt_allowance_ns=2_400_000)
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 88, 536_800, cert,
+                                experimental=sch.experimental)
+    assert p.certified and p.statement().startswith("EXPERIMENTAL (abstract-M1 result; instantiation assumption pending "
+                                                    "Daniel). ")
+    assert "P2MeetsM1Uncond" in p.statement() and p.to_json()["experimental"] == EXPERIMENTAL
+    assert p.state_bound_bits == (1 << 23) * 16448 * 18 // 19
+
+
+def test_p2_arithmetic():
+    """sq inverts the parity-canonical root, σ is an involution on [0, p), and a block that is not a codeword is refused."""
+    from verity_pous.schemes.p2 import _Field, block_keys
+
+    f, rng = _Field(128, 173), random.Random(9)
+    for _ in range(300):
+        y, k = rng.randrange(f.p), rng.getrandbits(128)
+        assert f.sq(f.rho(y)) == y and f.sigma(f.sigma(y, k), k) == y < f.p
+    params = P2Params(128, 173, 8, 2)
+    assert block_keys(params, SALT, 0, 1) != block_keys(params, SALT, 1, 1) != block_keys(params, SALT, 0, 2)
+    sch = schemes.P2(params)
+    c = sch.encode_segment(SALT, 1, bytes(range(112)))
+    with pytest.raises(ValueError, match="below p"):
+        sch.decode_segment(SALT, 1, [(f.p).to_bytes(16, "little")] + c[1:])
+    with pytest.raises(ValueError, match="codeword"):
+        sch.decode_segment(SALT, 1, [bytes([7]) + bytes(15)] + c[1:])
+    assert sch.decode_segment(SALT, 1, c) == bytes(range(112))

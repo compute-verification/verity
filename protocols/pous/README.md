@@ -6,6 +6,8 @@ A spec-level reference for POUS, proof of useful space for model weights, with t
   an overwrite chain on a double-width permutation (Lean's `chainBand`). Deploy it only while the effective round
   budget stays at or below 12 calls (the cliff);
 - **the dense scheme** (`verity_pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
+- **P2** (`verity_pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1
+  (`P2MeetsM1Uncond`), with its instantiation assumption pending Daniel; never the default;
 - **P3** (`verity_pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
   connector and a tweakable `P` (Lean's `p3Scheme`).
 

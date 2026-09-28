@@ -55,6 +55,15 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("feistel-indifferentiability", "assumption",
           "A 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound "
           "(indifferentiability is not known to compose in storage games)", "Feistel-SHAKE256 as ideal", "conjectured"),
+    Entry("m1-ideal-permutations", "model",
+          "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
+          "data", "M1"),
+    Entry("sms-m1-instantiation", "assumption",
+          "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
+          "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
+    Entry("seq-root", "assumption",
+          "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core "
+          "(cooperating cores excluded)", "SeqRoot", "conjectured"),
 )}
 """Claims a certificate cites that `verity.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""
@@ -94,8 +103,8 @@ class Certificate:
     claims: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if min(self.k, self.rounds, self.work, self.call_ns) < 1:
-            raise ValueError("a certificate's k, rounds, work and call time are positive")
+        if min(self.k, self.work, self.call_ns) < 1 or self.rounds < 0:
+            raise ValueError("a certificate's k, work and call time are positive, and its rounds nonnegative")
         if not (0 < self.rho < 1 and 0 < self.delta < 1):
             raise ValueError("a certificate needs 0 < rho < 1 and 0 < delta < 1")
         if self.cliff is not None and self.rounds > self.cliff:
@@ -144,6 +153,9 @@ class Scheme(ABC):
     certificates' hypothesis).  The conformance suite checks it for every registered scheme."""
 
     name: ClassVar[str] = ""
+    experimental: ClassVar[str | None] = None
+    """Why the scheme is experimental, or None.  An experimental scheme is never the default; the verifier audits it
+    only when asked to (`Verifier(..., experimental=True)`), and its profile states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -261,6 +273,7 @@ class StorageProfile:
     limit_ns: int
     certificate: Certificate | None
     gaps: tuple[str, ...] = field(default=())
+    experimental: str | None = None
 
     @property
     def certified(self) -> bool:
@@ -281,19 +294,20 @@ class StorageProfile:
 
     def statement(self) -> str:
         cert = self.certificate
+        head = f"EXPERIMENTAL ({self.experimental}). " if self.experimental else ""
         if not self.certified:
-            return f"{self.scheme}, {self.k} challenges within {self.limit_ns:,} ns: not certified ({'; '.join(self.gaps)})."
+            return f"{head}{self.scheme}, {self.k} challenges within {self.limit_ns:,} ns: not certified ({'; '.join(self.gaps)})."
         given = f", given {', '.join(cert.hypotheses)}" if cert.hypotheses else ""
-        return (f"A server holding fewer than {self.state_bound_bits:,} bits of state passes {self.k} challenges within "
-                f"{self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2} ({cert.theorem}{given}; "
-                f"under {', '.join(cert.claims)}).")
+        return (f"{head}A server holding fewer than {self.state_bound_bits:,} bits of state passes {self.k} challenges "
+                f"within {self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2} "
+                f"({cert.theorem}{given}; under {', '.join(cert.claims)}).")
 
     def to_json(self) -> dict[str, Any]:
         return {"schema": "verity-pous/storage-profile/v1", "scheme": self.scheme, "params": self.manifest,
                 "blocks": self.blocks, "block_bits": self.block_bits, "k": self.k, "limit_ns": self.limit_ns,
                 "effective_rounds": self.effective_rounds, "state_bound_bits": self.state_bound_bits,
                 "certificate": None if self.certificate is None else self.certificate.to_json(),
-                "gaps": list(self.gaps), "certified": self.certified}
+                "gaps": list(self.gaps), "certified": self.certified, "experimental": self.experimental}
 
 
 class Verifier:
@@ -301,15 +315,18 @@ class Verifier:
     deadline per answer.
 
     It refuses any `k` or deadline outside the scheme's certificate, and a scheme with no certificate at its
-    parameters.  `research=True` runs such an audit anyway, and its profile lists the refusals as gaps.  The band's
+    parameters.  `research=True` runs such an audit anyway, and its profile lists the refusals as gaps.  An experimental
+    scheme is refused unless `experimental=True`.  The band's
     cliff is refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
 
     def __init__(self, scheme: Scheme, vk: VerifierKey, key: Key, *, k: int | None = None,
                  deadline_ns: int = audit.DEADLINE_NS, rtt_allowance_ns: int = audit.RTT_ALLOWANCE_NS,
                  clock: Callable[[], int] = time.perf_counter_ns, root_only: bool = False,
-                 research: bool = False) -> None:
+                 research: bool = False, experimental: bool = False) -> None:
         if vk.params != scheme.params:
             raise ValueError("vk was built for other parameters than the scheme's")
+        if scheme.experimental and not experimental:
+            raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
         cert, limit = scheme.certificate, deadline_ns + rtt_allowance_ns
         uncovered: tuple[str, ...] = ()
         if cert is None:
@@ -362,7 +379,7 @@ class Verifier:
             raise ValueError("only an accepted audit has a storage profile")
         p = self.scheme.params
         return StorageProfile(self.scheme.name, p.manifest(), p.blocks, p.m, self.k, self.limit_ns, self.certificate,
-                              self.gaps)
+                              self.gaps, self.scheme.experimental)
 
 
 __all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "Verifier", "challenge_key",

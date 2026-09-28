@@ -128,7 +128,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   `params=` of the same name. Each scheme is one module, `schemes/<name>.py`:
   - `band-chain/d12/v1`, the default;
   - `dense-chain/v1`;
-  - `p3/v1`.
+  - `p3/v1`;
+  - `p2-16448/v0`, **experimental**.
 - **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
   - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
@@ -145,7 +146,16 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     one permutation serves every segment.
   - Other segment counts are gaps in the storage profile.
 
-  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P3 has no certificate for the
+  Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
+  - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, fresh per-block keys,
+    and no hash call.
+  - Its certificate is `P2MeetsM1Uncond`: k 88 at 2^23 blocks (128 segments of 2^16), with no hypothesis. That is an
+    abstract-M1 result, and the SMS-to-M1 instantiation assumption is pending Daniel.
+  - SeqRoot sets `call_ns`, half the fastest 16,448-bit root, and no root may fit within `Δ + RTT`.
+  - `Scheme.experimental` carries that reason. The verifier audits an experimental scheme only with
+    `experimental=True`, and its profile's statement begins with it. No experimental scheme is ever the default.
+
+  P3 has no certificate for the
   implemented `H`. Lean's `p3_meets_64_D10_final` and `p3_meets_multi_64_D10_final` (k 117, D 10, 64 KB and 971
   segments) are about a random-oracle `H` and an ideal tweakable `P`, while the code's `H` is the overwrite chain.
 - **`protocol.Verifier`** is `audit.TimedVerifier` at the certificate's `k`. It refuses:
@@ -201,7 +211,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 | `audit` | `challenge_key`, `HonestResponder`, `TimedVerifier` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 483 µs); `TimedVerifier` refuses a band deadline past the cliff |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `Verifier` (refuses what its certificate doesn't cover), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
-| `schemes` | `band.Band`, `dense.Dense`, `p3.P3` (one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
+| `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
 segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to
