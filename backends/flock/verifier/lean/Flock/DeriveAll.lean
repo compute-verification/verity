@@ -100,8 +100,8 @@ structure Ctx where
   done : Array D
 
 /-- `Flock.Lookup.decode`: minterm `i` of the leaves, committing every block of two or more bits; and its first row. -/
-partial def decode (b : Build) (leaves : Array CF) : Build × Array CF × Nat :=
-  if leaves.size ≤ 1 then
+def decode (b : Build) (leaves : Array CF) : Build × Array CF × Nat :=
+  if _hs : leaves.size ≤ 1 then
     let f := leaves.getD 0 ([], 0)
     (b, #[(f.1, (f.2 + 1) % 2), f], b.rows.size)
   else
@@ -113,6 +113,8 @@ partial def decode (b : Build) (leaves : Array CF) : Build × Array CF × Nat :=
       let (bb, col) := acc.1.row (ent (lo.getD (i % 2 ^ h) default)) (ent (hi.getD (i / 2 ^ h) default))
       (bb, acc.2.push ([col], 0))) (b2, #[])
     (b3, outs, first)
+termination_by leaves.size
+decreasing_by all_goals simp only [Array.size_extract]; omega
 
 /-- A read's product rows and outputs at the builder's end (`table/v2`): `k·nh` products (the hi minterm in A, the
 table's side folded table-direct), then an output row per live bit; a constant bit is the constant. -/
@@ -140,9 +142,12 @@ structure Inst where
   deriving Inhabited
 
 /-- Lay `t`'s items out under `l` into `b`, the wires given; a placed call's entry comes from `insts`. Returns the
-builder, the wires and the placed entries with their argument forms. Inline calls recurse (`fuel` bounds the depth). -/
-partial def items (cx : Ctx) (t : CircuitType) (l : Layout) (b0 : Build) (wire0 : Array CF) (insts0 : Array Inst) :
-    Except String (Build × Array CF × Array Inst) := do
+builder, the wires and the placed entries with their argument forms. Inline calls recurse (`fuel` bounds the depth: an
+inlined callee's layout is listed before its caller's, so the number of layouts is enough). -/
+def items (cx : Ctx) : Nat → CircuitType → Layout → Build → Array CF → Array Inst →
+    Except String (Build × Array CF × Array Inst)
+  | 0, _, _, _, _, _ => throw "derive: calls inlined deeper than the layouts"
+  | fuel + 1, t, l, b0, wire0, insts0 => do
   let mut b := b0
   let mut wire := wire0
   let mut insts := insts0
@@ -161,7 +166,7 @@ partial def items (cx : Ctx) (t : CircuitType) (l : Layout) (b0 : Build) (wire0 
       match e.offset with
       | none =>
         let some u := (t.calls[k]?).bind cx.types | throw s!"derive: a callee of item {i} is not held"
-        let (b', w', _) ← items cx u (cx.ls.getD e.layout default) b fs #[]
+        let (b', w', _) ← items cx fuel u (cx.ls.getD e.layout default) b fs #[]
         b := b'
         let outs := u.outputs.map (formOf w')
         wire := wire ++ outs
@@ -297,7 +302,7 @@ def deriveOne (cx : Ctx) (j : Nat) (unitLevel : Bool) : Except String D := do
   for (w, col) in exports do
     inCols := inCols.set! w col
     wire := wire.set! w ([col], 0)
-  let (b1, wire1, insts) ← items cx t l b wire insts0
+  let (b1, wire1, insts) ← items cx (cx.ls.size + 1) t l b wire insts0
   b := b1
   let outs := t.outputs.map (formOf wire1)
   let obits := Layout.portBits t.outs
@@ -385,18 +390,21 @@ def deltaText (ls : Array Layout) (digests : Array String) (u : D) : String :=
   let _ := ls
   "\n".intercalate (parts ++ ds) ++ "\n"
 
-/-- A placed entry's segment in logical order: its constant, its binding copies, its items, its output copies. -/
-partial def segment (done : Array D) (d : D) (base : Nat) (exported : List Nat) (top : Bool) : List Nat :=
-  let head := [base + d.const] ++ (if top then [] else
-    ((List.range d.inCols.size).filter (!exported.contains ·)).map fun i => base + d.inCols[i]!)
-  let body := d.items.toList.flatMap fun r => match r with
-    | .row c => [base + c]
-    | .seg j b ex => segment done (done.getD j default) (base + b) ex false
-  head ++ body ++ d.outCols.toList.map (base + ·)
+/-- A placed entry's segment in logical order: its constant, its binding copies, its items, its output copies (`fuel`
+bounds the nesting: a placed entry's layout is listed before its caller's). -/
+def segment (done : Array D) : Nat → D → Nat → List Nat → Bool → List Nat
+  | 0, _, _, _, _ => []
+  | fuel + 1, d, base, exported, top =>
+    let head := [base + d.const] ++ (if top then [] else
+      ((List.range d.inCols.size).filter (!exported.contains ·)).map fun i => base + d.inCols[i]!)
+    let body := d.items.toList.flatMap fun r => match r with
+      | .row c => [base + c]
+      | .seg j b ex => segment done fuel (done.getD j default) (base + b) ex false
+    head ++ body ++ d.outCols.toList.map (base + ·)
 
 /-- The logical list: the unit's inputs, its segment, then `one`; each row as the block holds it (Δ applied). -/
 def logicalText (done : Array D) (u : D) : String :=
-  let order := u.inCols.toList ++ segment done u 0 [] true
+  let order := u.inCols.toList ++ segment done (done.size + 1) u 0 [] true
   let deltaAt := fun (c : Nat) => u.delta.find? (·.1 == c)
   let rowStr := fun (c : Nat) => match deltaAt c with
     | some (_, none) => line [toString c, "1", "one", "1", "one"]
